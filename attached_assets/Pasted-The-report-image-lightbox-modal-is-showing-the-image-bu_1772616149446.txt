@@ -1,0 +1,46 @@
+The report image lightbox modal is showing the image but it's 
+completely unreadable — blurry and low quality. Fix this:
+
+1. The report images are base64 encoded screenshots stored in 
+   portal_data. They are full-page screenshots of SSRS reports 
+   and should be high resolution.
+
+2. In the lightbox modal, the image is being scaled/stretched 
+   incorrectly. Fix the img tag to:
+   - Use max-width: none when zoomed (so it shows actual pixels)
+   - Default view: width: 100% to fit the modal width
+   - When user zooms to 100% or higher: show actual pixel 
+     dimensions, allow scrolling both horizontally and vertically
+   - Set image-rendering: auto (not pixelated)
+   - Make sure the src is the full base64 string with proper 
+     data URI prefix: "data:image/png;base64,..." 
+
+3. Check how the screenshot is stored in the database. In 
+   portal_data.tabs.reports.pdfs[] each PDF object should have 
+   a screenshot field. Make sure the full base64 string is being 
+   used, not a truncated version.
+
+4. The modal container should be:
+   - position: fixed, inset: 0
+   - overflow: auto (both x and y scrollable)
+   - The image inside should be draggable or at minimum scrollable 
+     when zoomed beyond viewport
+   - Default zoom should show the image fitting the viewport WIDTH 
+     so text is as large as possible
+
+5. Add a zoom default of "fit-width" instead of "fit-screen". 
+   This means the image width matches the modal width, and user 
+   scrolls vertically to read. This makes text much more readable 
+   since these are tall, narrow report pages.
+
+6. If the image is still blurry at 100% zoom, the issue is likely 
+   that the original screenshot was captured at low resolution. 
+   In that case, check scraper-service/server.js where screenshots 
+   are taken — find the page.screenshot() call and ensure it uses:
+   - fullPage: true
+   - type: "png"
+   - No downscaling or quality reduction
+   - Consider adding deviceScaleFactor: 2 in the viewport settings 
+     for higher DPI capture
+
+Do NOT change any data logic or other functionality.

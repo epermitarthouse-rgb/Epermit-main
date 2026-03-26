@@ -1,0 +1,127 @@
+IMPORTANT: Do NOT change any functionality, API calls, data logic, 
+authentication, routing, or component behavior. ONLY change visual 
+styling and the landing/home page.
+
+Task 1: Replace the public landing page / home page (the page users 
+see BEFORE logging in) with the following React component. This is 
+the new Commun-ET marketing page. Keep the existing route structure 
+— just replace whatever is currently rendered at "/" or "/home" for 
+unauthenticated users.
+
+The component code is provided below. Save it as a new file like 
+src/pages/LandingPage.tsx and update the router to use it as the 
+public home page. Make sure the "REQUEST ACCESS" and "EXPLORE" 
+buttons navigate to /auth (the login/signup page). The "VIEW CASE 
+RESULTS" button can scroll to the results section on the same page.
+
+Task 2: Update the global color theme across the ENTIRE app 
+(dashboard, sidebar, response matrix, portal data viewer, settings, 
+all pages) to match this new design system. Here are the exact colors:
+
+Primary Background (obsidian): #050E1F
+Secondary Background (slate): #091428  
+Panel Background: #0D1E38
+Border: #1A3055
+Primary Accent (gold): #FF6B2B
+Gold Light: #FF8C55
+Gold Dim: #C44D14
+Steel: #1D4A7A
+Fog (secondary text): #6B9AC4
+White: #F0F6FF
+Off-white: #B8D4F0
+Teal (success/secondary accent): #38BDF8
+Teal Dim: #0A5A8C
+Red (error/warning): #FF4040
+
+Task 3: Update typography across the app to use these fonts:
+- Headings: 'Cormorant Garamond', Georgia, serif (font-weight: 300-400)
+- Monospace labels/tags/eyebrows: 'DM Mono', 'Courier New', monospace
+- Body text: 'Barlow', 'Trebuchet MS', sans-serif (font-weight: 300-400)
+
+Add this Google Fonts import to the index.html or main CSS:
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600&display=swap');
+
+Task 4: Apply these specific styling patterns to the existing 
+dashboard and internal pages (WITHOUT changing any functionality):
+
+SIDEBAR:
+- Background: #050E1F (obsidian)
+- Active item: left border 2px solid #FF6B2B, background #FF6B2B10
+- Hover: background #0D1E38
+- Text: #6B9AC4 (fog), active text: #F0F6FF (white)
+- Section headers: DM Mono, 0.6rem, letter-spacing 0.2em, color #C44D14
+- Logo area: border-bottom 1px solid #1A3055
+
+MAIN CONTENT AREA:
+- Background: #091428 (slate)
+- Cards/panels: background #0D1E38, border 1px solid #1A3055
+- Card hover: border-color #C44D14
+
+PAGE HEADERS:
+- Title: Cormorant Garamond, font-weight 300, color #F0F6FF
+- Subtitle: Barlow, font-weight 300, color #6B9AC4
+- Section eyebrows: DM Mono, 0.65rem, letter-spacing 0.25em, 
+  color #FF6B2B, uppercase
+
+BUTTONS:
+- Primary: background #FF6B2B, color #050E1F, DM Mono, 
+  letter-spacing 0.15em, no border-radius (square corners)
+- Secondary: background transparent, border 1px solid #1D4A7A, 
+  color #6B9AC4
+- Hover: Primary gets subtle brightness increase, Secondary 
+  border-color changes to #FF6B2B
+
+TABLES:
+- Header: DM Mono, 0.6rem, letter-spacing 0.2em, color #C44D14, 
+  border-bottom 1px solid #1A3055
+- Rows: border-bottom 1px solid #1A3055
+- Row hover: background #FF6B2B08
+- Text: Barlow, color #F0F6FF for primary, #6B9AC4 for secondary
+
+BADGES/TAGS:
+- DM Mono, 0.6rem, letter-spacing 0.15em
+- Background: color + 18 opacity (e.g. #FF6B2B18)
+- Border: color + 44 opacity
+- Square corners (border-radius: 2px max)
+
+INPUTS/FORMS:
+- Background: #050E1F
+- Border: 1px solid #1A3055
+- Focus: border-color #FF6B2B, box-shadow 0 0 0 1px #FF6B2B44
+- Text: #F0F6FF
+- Placeholder: #1D4A7A
+
+STATUS INDICATORS:
+- Success/Complete: #38BDF8 (teal)
+- Warning/Pending: #FF6B2B (gold)
+- Error/Failed: #FF4040 (red)
+- Neutral/Waiting: #6B9AC4 (fog)
+
+SCROLLBAR:
+- Track: #050E1F
+- Thumb: #FF6B2B44, border-radius 2px
+
+ANIMATIONS (add to global CSS):
+- Cards: transition all 0.4s cubic-bezier(0.16,1,0.3,1)
+- Card hover: transform translateY(-2px)
+- Buttons: transition all 0.3s ease
+- Page transitions: fade-up with translateY(32px) → translateY(0)
+
+Task 5: Make sure the existing shadcn/ui components (if used) are 
+also restyled to match. Update the CSS variables or Tailwind config 
+to use the new color palette.
+
+CRITICAL RULES:
+- Do NOT change any API calls, database queries, or data logic
+- Do NOT change authentication flow
+- Do NOT change routing structure (just update the landing page route)
+- Do NOT remove any features or components
+- Do NOT change any state management logic
+- ONLY change colors, fonts, spacing, and visual presentation
+- Keep all existing Tailwind classes working by updating the config
+- Test that login, dashboard, scraper, response matrix all still 
+  work after the visual update
+
+Here is the landing page component code to use:
+
+[PASTE THE ENTIRE REACT COMPONENT CODE FROM THE ARTIFACT HERE]

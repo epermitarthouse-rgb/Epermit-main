@@ -1,0 +1,85 @@
+[1/1] D2500488 (ID: 11854)
+   📑 Files...
+
+🕵️ Extracting Files tab (download + grid)...
+     WebUI base for downloads: https://washington-dc-us-projectdoxwebui.avolvecloud.com
+     📁 Found 2 folders
+     📁 [1/2] "Drawings" (32 files)
+       ⏳ Waiting for file grid...
+       🔍 Grid debug: {
+  "headers": [],
+  "cells": [
+    {
+      "col": 0,
+      "text": "",
+      "links": [
+        {
+          "text": "",
+          "onclick": "",
+          "href": "javascript:viewInfo(367957)",
+          "id": "",
+          "data-fileid": ""
+        }
+      ]
+    },
+    {
+      "col": 1,
+      "text": "A0001-REFERENCE SHEET.pdf",
+      "links": [
+        {
+          "text": "A0001-REFERENCE SHEET.pdf",
+          "onclick": "",
+          "href": "javascript:viewFile(367957)",
+          "id": "",
+          "data-fileid": ""
+        }
+      ]
+    },
+    {
+      "col": 2,
+      "text": "",
+      "links": []
+    },
+    {
+      "col": 3,
+      "text": "",
+      "links": []
+    },
+    {
+      "col": 4,
+      "text": "Jeffrey Owens",
+      "links": []
+    },
+    {
+      "col": 5,
+      "text": "9/2/25 11:32 AM",
+      "links": []
+    }
+  ],
+  "rowAttrs": {
+    "id": "",
+    "data-id": "367957"
+  }
+}
+       ✅ Found 32 files in grid
+       📋 Sample files: [{"name":"A0001-REFERENCE SHEET.pdf","id":"367957","status":""},{"name":"A0401-DEMOLITION PLANS.pdf","id":"367984","status":""},{"name":"A0402-DEMOLITION PLANS.pdf","id":"367983","status":""}]
+       🔑 Files with IDs: 32/32
+       📥 [1/32] Downloading via FileHandler: 367957_A0001-REFERENCE SHEET.pdf
+      📥 Downloading file ID 367957: 367957_A0001-REFERENCE SHEET.pdf
+      ❌ All download URL patterns failed for file ID 367957
+       📥 [1/32] Downloading via click: A0001-REFERENCE SHEET.pdf
+       ⚠️ No download or popup triggered for A0001-REFERENCE SHEET.pdf
+       📥 [2/32] Downloading via FileHandler: 367984_A0401-DEMOLITION PLANS.pdf
+      📥 Downloading file ID 367984: 367984_A0401-DEMOLITION PLANS.pdf
+      ❌ All download URL patterns failed for file ID 367984
+       📥 [2/32] Downloading via click: A0401-DEMOLITION PLANS.pdf
+       ⚠️ No download or popup triggered for A0401-DEMOLITION PLANS.pdf
+       📥 [3/32] Downloading via FileHandler: 367983_A0402-DEMOLITION PLANS.pdf
+      📥 Downloading file ID 367983: 367983_A0402-DEMOLITION PLANS.pdf
+      ❌ All download URL patterns failed for file ID 367983
+       📥 [3/32] Downloading via click: A0402-DEMOLITION PLANS.pdf
+       ⚠️ No download or popup triggered for A0402-DEMOLITION PLANS.pdf
+       📥 [4/32] Downloading via FileHandler: 367964_A0403-DEMOLITION PLANS.pdf
+      📥 Downloading file ID 367964: 367964_A0403-DEMOLITION PLANS.pdf
+      ❌ All download URL patterns failed for file ID 367964
+       📥 [4/32] Downloading via click: A0403-DEMOLITION PLANS.pdf

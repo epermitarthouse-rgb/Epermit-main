@@ -1,0 +1,67 @@
+The light/dark mode toggle is not working. When I click the 
+theme toggle button, nothing changes visually. Debug and fix this.
+
+Check these specific things:
+
+1. Is the toggle button actually updating state? Add a 
+   console.log to confirm the click handler fires and the 
+   theme value changes.
+
+2. Is the "dark" class being added/removed from the <html> 
+   element? Open browser console and run 
+   document.documentElement.classList to verify. The dark mode 
+   strategy requires adding/removing class="dark" on <html>.
+
+3. Check tailwind.config.ts — does it have darkMode: "class"? 
+   If not, add it. Without this, Tailwind dark: prefixes do nothing.
+
+4. The most likely issue: the components use INLINE STYLES with 
+   hardcoded dark colors (like style={{ background: "#091428" }}) 
+   instead of Tailwind classes. Inline styles IGNORE the dark: 
+   prefix entirely.
+
+   FIX: Create a useThemeColors() hook that returns the correct 
+   color set based on current theme:
+
+   const useThemeColors = () => {
+     const { theme } = useTheme(); // or however theme is stored
+     const isDark = theme === "dark";
+     return {
+       bg: isDark ? "#050E1F" : "#FAFBFD",
+       bgSecondary: isDark ? "#091428" : "#F2F4F8",
+       panel: isDark ? "#0D1E38" : "#FFFFFF",
+       border: isDark ? "#1A3055" : "#E2E8F0",
+       text: isDark ? "#F0F6FF" : "#0F172A",
+       textSecondary: isDark ? "#B8D4F0" : "#334155",
+       textMuted: isDark ? "#6B9AC4" : "#64748B",
+       gold: "#FF6B2B",
+       goldDim: "#C44D14",
+       teal: isDark ? "#38BDF8" : "#0EA5E9",
+       red: isDark ? "#FF4040" : "#EF4444",
+       steel: isDark ? "#1D4A7A" : "#CBD5E1",
+       inputBg: isDark ? "#050E1F" : "#FFFFFF",
+       cardHover: isDark ? "#FF6B2B08" : "#FFF7ED",
+     };
+   };
+
+5. Then update EVERY component that uses inline styles to use 
+   this hook instead of hardcoded colors. For example change:
+   
+   style={{ background: "#091428", color: "#F0F6FF" }}
+   to:
+   const colors = useThemeColors();
+   style={{ background: colors.bgSecondary, color: colors.text }}
+
+6. For the sidebar, header, main layout, and all page components — 
+   replace every hardcoded color reference with the hook values.
+
+7. For Tailwind class based components, make sure they use the 
+   dark: prefix pattern: className="bg-white dark:bg-[#0D1E38]"
+
+8. The landing page component (CommunETLanding or similar) uses 
+   all inline styles — update it to use useThemeColors() throughout.
+
+Start with the main layout (sidebar + header + content area) first, 
+then the landing page, then individual pages. 
+
+Do NOT change any functionality or data logic.

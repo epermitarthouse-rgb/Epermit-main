@@ -1,0 +1,74 @@
+Two issues to fix:
+
+ISSUE 1: Selected project resets when running agents
+
+When a user selects a project in the sidebar (Permit # field or 
+Link to Project dropdown), it should STAY SELECTED throughout the 
+entire agent pipeline — from Run Manual Check through all 5 agent 
+steps. Currently the selected project disappears/resets as soon as 
+Run Manual Check starts, and the user has to re-select the project 
+for every subsequent step.
+
+Find where the selected project state is managed (likely in a 
+context provider, zustand store, or parent component state). The 
+issue is probably one of:
+a) The state is being reset when the page re-renders after scraping
+b) A useEffect is clearing the selection when data updates
+c) The agent workflow component re-mounts and loses the selection
+
+Fix: Persist the selected project in the state/store so it survives 
+re-renders and data refreshes. The selected project should only 
+change when the user explicitly selects a different project. Do NOT 
+clear it on data refresh, agent completion, or component re-render.
+
+Check these files:
+- src/components/dashboard/AgentWorkflowStatus.tsx
+- src/components/layout/AppSidebar.tsx  
+- Any project context/store (useProjects hook, project store, etc.)
+- Check if the sidebar's permit number input or Link to Project 
+  dropdown has an onChange or useEffect that resets when projects 
+  data refetches
+
+ISSUE 2: Discipline Classifier puts all comments in "Unclassified"
+
+The Discipline Classifier Agent is categorizing all 8 comments as 
+"Unclassified" instead of assigning proper disciplines (Zoning, 
+Structural, Architectural, MEP, Fire, etc.)
+
+Debug the classifier edge function:
+- File: supabase/functions/discipline-classifier-agent/index.ts
+- Check what prompt is being sent to the AI model
+- Check if the comment text is actually being passed to the model 
+  or if it's receiving empty/null text
+- Check the model response — is it returning disciplines that 
+  don't match the expected categories?
+- Check if there's a parsing issue where the model returns valid 
+  disciplines but the code fails to extract them
+
+The classifier should categorize each comment into one of these 
+disciplines based on the comment content:
+- Zoning (land use, setbacks, height limits, density, zoning code)
+- Structural (load bearing, foundation, framing, seismic)
+- Architectural (egress, accessibility, building envelope, finishes)
+- Mechanical/MEP (HVAC, plumbing, electrical systems)
+- Electrical (wiring, panels, circuits, lighting)
+- Fire (fire rating, sprinklers, smoke detectors, fire access)
+- Civil (grading, drainage, stormwater, utilities)
+- Environmental (erosion control, wetlands, environmental impact)
+- General (administrative, procedural, documentation)
+
+If a comment clearly mentions code sections or topics related to 
+a specific discipline, it should be classified accordingly — NOT 
+as Unclassified. Unclassified should only be used if the comment 
+is truly ambiguous and doesn't match any discipline.
+
+Common issue: the AI model prompt might not be specific enough, 
+or the response parsing expects a specific format that the model 
+isn't returning. Check both the prompt and the response parser.
+
+Also check: is the edge function deployed? If the code was changed 
+locally but not deployed to Supabase, the old version is still 
+running. The edge function needs to be redeployed with:
+supabase functions deploy discipline-classifier-agent
+
+Do NOT change any other functionality or components.

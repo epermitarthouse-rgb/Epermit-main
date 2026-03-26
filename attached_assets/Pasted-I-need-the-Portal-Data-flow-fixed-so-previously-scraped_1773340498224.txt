@@ -1,0 +1,70 @@
+I need the Portal Data flow fixed so previously scraped data shows immediately when the user selects a project, permit, and portal credential. The user should NOT have to re-run a scrape every time just to view already-saved data.
+
+Current desired behavior:
+1. When a project is selected in the sidebar, and that project already has valid portal_data saved in the database for its currently selected credential/portal type, the Portal Data page should load and display that saved data immediately.
+2. Re-scrape should only be needed when:
+   - there is no saved portal_data yet for that project
+   - or the saved portal_data is stale/mismatched with the currently selected credential type
+   - or the user explicitly runs a new scrape
+3. Switching between projects/permits/portal credentials should fetch the matching saved row and render it without requiring a fresh scrape.
+
+Please patch both the data-loading logic and rendering logic accordingly.
+
+Requirements:
+
+1. Source of truth
+- Use the selected project row in `projects` as the primary source of truth.
+- When user selects a project, fetch that exact row by project id and user id.
+- Do not fall back to “most recent” project or any other row.
+
+2. Immediate display of saved data
+- If the selected project row already contains `portal_data` and it matches the currently selected credential’s expected portal type, display it immediately.
+- Do not clear/hide valid saved data just because the user changed selection.
+- Only clear displayed data while loading the newly selected project, then render the fetched saved data if valid.
+
+3. Credential-aware validation
+- Derive `expectedPortalType` from the selected project’s linked credential (via credential_id and login_url).
+- If saved `portal_data.portalType` matches `expectedPortalType`, render it immediately.
+- If it mismatches, treat it as stale:
+  - do not render wrong UI/data
+  - show empty state
+  - optionally clear stale DB data if that logic already exists
+
+4. UI selection logic
+- Render the UI based on the selected credential’s expected portal type, not on stale `portal_data.portalType`.
+- If expected portal type is `accela`, render Accela UI.
+- If expected portal type is `projectdox`, render Washington/ProjectDox UI.
+- Inside that UI, show:
+  - saved valid data immediately, if available
+  - otherwise a portal-specific empty state
+
+5. Do not require scrape to view existing data
+- The page should not say “Run Manual Check” when valid saved data already exists.
+- The page should only prompt for scrape when there is truly no valid saved data for the selected project + credential.
+
+6. Keep realtime/polling behavior
+- Realtime subscription and silent refetch should still update the page when new scrape data arrives.
+- But they must not overwrite the current view with stale data from a different project or portal type.
+
+7. Add DEV logs
+Log these on selection/fetch/render:
+- selected project id
+- permit number
+- credential id
+- credential login_url
+- expectedPortalType
+- fetched row id
+- actual portal_data.portalType
+- whether saved data was rendered immediately
+- whether empty state was shown and why
+
+8. Empty state rules
+- If expected type is accela and there is no valid saved accela data: show “No Accela data yet”
+- If expected type is projectdox and there is no valid saved ProjectDox data: show “No ProjectDox data yet”
+- Do not show stale data from another portal type
+
+Important:
+- Do not rewrite the whole page.
+- Make minimal targeted changes in `PortalDataViewer`.
+- Preserve existing refresh/realtime logic where possible.
+- The key outcome is: selecting an already-scraped project should immediately show its saved portal data without forcing the user to scrape again.

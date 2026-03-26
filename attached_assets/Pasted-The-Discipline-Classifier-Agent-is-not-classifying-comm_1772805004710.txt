@@ -1,0 +1,68 @@
+The Discipline Classifier Agent is not classifying comments — all 
+comments end up as "Unclassified". This was working before. Debug 
+and fix.
+
+Step-by-step debugging needed:
+
+1. FIRST check the frontend trigger. Open 
+   src/components/dashboard/AgentWorkflowStatus.tsx and find where 
+   the Discipline Classifier step is triggered. Add console.log 
+   statements to trace:
+   - Is the edge function being called at all?
+   - What project_id is being passed?
+   - What is the response from the edge function?
+   - Is there an error being caught silently?
+
+2. CHECK the edge function invocation. The classifier is a Supabase 
+   Edge Function at supabase/functions/discipline-classifier-agent/index.ts
+   Find the exact code that calls it — it should be something like:
+   
+   const { data, error } = await supabase.functions.invoke(
+     "discipline-classifier-agent", 
+     { body: { project_id: projectId } }
+   );
+   
+   Console.log both data and error to see what's happening.
+
+3. CHECK if the edge function is actually deployed. Run in Shell:
+   curl -s "https://eeqxyjrcldivtpikcpvk.supabase.co/functions/v1/discipline-classifier-agent" \
+     -H "Authorization: Bearer [anon-key]" \
+     -H "Content-Type: application/json" \
+     -d '{"project_id":"test"}' | head -200
+   
+   Replace [anon-key] with the actual anon key. This tests if the 
+   function responds at all.
+
+4. CHECK if the issue is in the frontend code. Maybe a recent 
+   change broke the classifier step. Look at recent git changes:
+   git log --oneline -10
+   git diff HEAD~5 -- src/components/dashboard/AgentWorkflowStatus.tsx
+   
+   See if anything changed in how the classifier is triggered.
+
+5. CHECK the parsed_comments table. The classifier reads comments 
+   from parsed_comments and updates the discipline column. Verify 
+   comments exist for the project:
+   - Query parsed_comments where project_id matches
+   - Check if discipline column is null, empty, or "Unclassified"
+   - Check if the classifier is even running (look for updated_at 
+     changes after clicking the classify button)
+
+6. MOST LIKELY CAUSE: The classifier edge function makes an API 
+   call to OpenAI/Anthropic to classify each comment. Check:
+   - Is the API key still valid and set in Supabase secrets?
+   - Is the function timing out?
+   - Is the AI response being parsed correctly?
+   - Did the prompt or response format change?
+
+7. If the edge function code looks correct but isn't deployed, 
+   it needs redeployment:
+   npx supabase functions deploy discipline-classifier-agent
+   
+   Check if Supabase CLI is available. If not, the function may 
+   need to be redeployed from a local machine with Supabase CLI.
+
+Print ALL console.log output and share what you find. Fix whatever 
+is broken.
+
+Do NOT change any other functionality or components.

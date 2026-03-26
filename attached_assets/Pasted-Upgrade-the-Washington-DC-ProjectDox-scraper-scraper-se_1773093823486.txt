@@ -1,0 +1,111 @@
+Upgrade the Washington DC ProjectDox scraper (scraper-service/server.js) 
+to also scrape the Files tab. Currently the scraper extracts Info, 
+Status, Tasks, and Reports tabs but SKIPS the Files tab.
+
+ADD FILES TAB SCRAPING:
+
+1. NAVIGATE TO FILES TAB:
+   - Click the "Files" tab in the project view
+   - Wait for the file list to load
+   - The Files tab shows folders like "Approved Drawings (42 - 0 New)" 
+     and "Approved Supporting Documents (20 - 0 New)"
+
+2. EXTRACT FOLDER LIST:
+   For each folder on the left sidebar:
+   - Click the folder name to expand/show its files
+   - Wait for file list to load
+   - Extract the folder name and file count
+
+3. EXTRACT FILE LIST:
+   For each file in the current folder, extract:
+   - File name (e.g. "CS.1 Code Summary.pdf")
+   - Status column value
+   - Reviewed by (e.g. "SHAUN BASKERVILLE")
+   - Uploaded date (e.g. "12/17/25 3:56 P")
+   
+   Store as array of file objects in portal_data.
+
+4. OPEN EACH PDF FILE AND CHECK FOR COMMENTS:
+   For each PDF file in the list:
+   a) Click the file name link to open the Avolve file viewer
+   b) The viewer opens at: washington-dc-us-projectdoxwebui.avolvecloud.com/File/FileViewer?fileID=XXXXX
+   c) Wait for the viewer to load
+   d) Look at the right panel — it shows "Comments (N)" where N 
+      is the comment count
+   e) If comments exist (N > 0):
+      - The comments panel shows each comment with text, author, 
+        position, and date
+      - Extract ALL comments: comment text, author, date, page number
+      - Store comments associated with the file name
+   f) If no comments (N = 0), just note "0 comments"
+   g) Take a screenshot of the file viewer (optional, skip if 
+      too many files to keep payload small)
+   h) Navigate back to the files list
+   i) Wait for the list to reload before clicking the next file
+
+5. HANDLE THE FILE VIEWER:
+   The file viewer may open in a new tab/popup or in the same page.
+   - If it opens in a popup: switch to the popup, extract data, 
+     close popup, return to main page
+   - If it opens in same page: extract data, click back button
+   - The viewer URL pattern is: /File/FileViewer?fileID=XXXXX
+
+6. DATA STRUCTURE:
+   Add the files data to portal_data under a new key:
+   
+   portal_data.tabs.files = {
+     folders: [
+       {
+         name: "Approved Drawings",
+         fileCount: 42,
+         files: [
+           {
+             name: "CS.1 Code Summary.pdf",
+             status: "",
+             reviewedBy: "SHAUN BASKERVILLE",
+             uploadedDate: "12/17/25 3:56 P",
+             fileId: "688153",  // from the URL
+             comments: [
+               {
+                 text: "Comment text here",
+                 author: "Reviewer Name",
+                 date: "01/15/2026",
+                 page: 1
+               }
+             ],
+             commentCount: 0
+           },
+           // ... more files
+         ]
+       },
+       {
+         name: "Approved Supporting Documents",
+         fileCount: 20,
+         files: [...]
+       }
+     ]
+   }
+
+7. PERFORMANCE CONSIDERATIONS:
+   - There could be 42+ files — opening each one takes time
+   - Add a progress log for each file: "Opening file 1/42: CS.1 Code Summary.pdf"
+   - If a file has 0 comments (which most will), skip the screenshot 
+     and move to the next file quickly
+   - Only extract full comment details for files that have comments > 0
+   - Increase the scraper timeout to handle the extra files 
+     (this could take 5-10 minutes for 42+ files)
+   - Consider adding a configuration option to skip files without 
+     comments to speed up scraping
+
+8. ERROR HANDLING:
+   - If a file fails to open, log the error and continue to next file
+   - If the file viewer doesn't load within 15 seconds, skip that file
+   - If navigating back to the file list fails, try clicking the 
+     Files tab again
+
+Add this as a new function extractFilesTab(page, projectData) 
+called after the existing tab extraction in scrapeAll().
+
+Do NOT modify the existing Info, Status, Tasks, or Reports 
+extraction. Only ADD the Files tab extraction.
+Do NOT modify the Accela scraper.

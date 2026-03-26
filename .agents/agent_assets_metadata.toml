@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Nxv_58bZ7iJS-6fWqoCuR"
+uri = "file://.local/platform-one-pager.md"
+type = "text"
+title = "Insight|DesignCheck — Platform One-Pager"

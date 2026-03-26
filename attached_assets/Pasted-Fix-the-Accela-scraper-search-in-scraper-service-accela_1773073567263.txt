@@ -1,0 +1,58 @@
+Fix the Accela scraper search in scraper-service/accela-scraper.js.
+Three problems found from the debug screenshot:
+
+PROBLEM 1: Session lost — page shows "Sign In" not logged in.
+The scraper navigates to a direct URL which loses the ASP.NET 
+session. Fix: After login, DO NOT navigate to a new URL. Instead 
+click through the navigation on the current page:
+a) Click "Permits and Inspections" tab
+b) Click "Search Applications" sub-tab
+c) The search form will appear while maintaining the session
+
+PROBLEM 2: The permit number field strips dashes.
+The scraper fills the "Record Number" field but Accela's field 
+ID is "txtGSPermitNumber" which is actually labeled "Record Number" 
+on the page. The permit number MUST include dashes (BCCM-25-000172 
+not BCCM25000172). Make sure the permitNumber is passed as-is 
+without any formatting changes.
+
+PROBLEM 3: Date range filter blocks results.
+The search form has Start Date and End Date fields that default 
+to a 3-month window. If the permit is older, it won't appear.
+After filling the permit number, CLEAR both date fields before 
+clicking Search:
+
+// Clear date fields to avoid filtering out older permits
+const endDateField = await page.$('input[id*="EndDate"], input[id*="txtGSEndDate"]');
+if (endDateField) {
+  await endDateField.fill('');
+  console.log("  Cleared End Date filter");
+}
+const startDateField = await page.$('input[id*="StartDate"], input[id*="txtGSStartDate"]');
+if (startDateField) {
+  await startDateField.fill('');
+  console.log("  Cleared Start Date filter");
+}
+
+Also check the "Search All Records" checkbox if present:
+const searchAllCheckbox = await page.$('input[id*="SearchAll"], input[type="checkbox"][id*="chkSearchAllRecords"]');
+if (searchAllCheckbox) {
+  const isChecked = await searchAllCheckbox.isChecked().catch(() => false);
+  if (!isChecked) {
+    await searchAllCheckbox.check();
+    console.log("  Checked 'Search All Records'");
+  }
+}
+
+UPDATED SEARCH FLOW:
+1. After login, click "Permits and Inspections" tab on current page
+2. Click "Search Applications" 
+3. Wait for search form
+4. Check "Search All Records" checkbox
+5. Fill permit number in Record Number field (with dashes)
+6. Clear Start Date and End Date fields
+7. Click Search button
+8. Wait for results
+9. Find and click the matching result link
+
+Do NOT change any other files or the ProjectDox scraper.

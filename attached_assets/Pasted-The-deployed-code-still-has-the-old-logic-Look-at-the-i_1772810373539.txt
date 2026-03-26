@@ -1,0 +1,56 @@
+The deployed code still has the old logic. Look at the if/else around line 180:
+if (isShadowMode) {
+  // only shadow log — NO update to parsed_comments
+} else {
+  // update parsed_comments — NO shadow log
+}
+Your redeployment didn't include the fix. You need to change this section. Replace the if (isShadowMode) { ... } else { ... } block with code that ALWAYS updates AND additionally logs shadow predictions.
+Here's the exact fixed code. Find this section (starts around line 178):
+typescript      if (isShadowMode) {
+        const portalDiscipline = row.discipline ?? null;
+        ...
+      } else {
+        const { error: updateError } = await supabase
+          .from("parsed_comments")
+          .update({ discipline })
+          .eq("id", row.id);
+
+        if (!updateError) classifiedCount++;
+      }
+Replace it with:
+typescript      // ALWAYS update discipline on parsed_comments
+      const { error: updateError } = await adminClient
+        .from("parsed_comments")
+        .update({ discipline })
+        .eq("id", row.id);
+      if (!updateError) classifiedCount++;
+
+      // ADDITIONALLY log shadow prediction if shadow mode is on
+      if (isShadowMode) {
+        const portalDiscipline = row.discipline ?? null;
+        const matchStatus = portalDiscipline && portalDiscipline !== "General" && portalDiscipline !== ""
+          ? (discipline === portalDiscipline ? "match" : "mismatch")
+          : "pending";
+        try {
+          const { error: shadowErr } = await adminClient
+            .from("shadow_predictions")
+            .insert({
+              project_id: row.project_id,
+              comment_id: row.id,
+              agent_name: "Discipline Classifier",
+              prediction_data: {
+                ai_discipline: discipline,
+                portal_discipline: portalDiscipline,
+              },
+              confidence_score: confidenceScore,
+              match_status: matchStatus,
+            });
+          if (shadowErr) {
+            console.warn("shadow_predictions insert failed for comment", row.id, shadowErr.message);
+          } else {
+            shadowLoggedCount++;
+          }
+        } catch (err) {
+          console.warn("shadow_predictions insert exception for comment", row.id, err);
+        }
+      }

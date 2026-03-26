@@ -1,0 +1,35 @@
+Extracting Files tab (download + grid)...
+     WebUI base for downloads: https://washington-dc-us-projectdoxwebui.avolvecloud.com
+     📁 Found 2 folders
+     📁 [1/2] "Drawings" (32 files)
+       ⏳ Waiting for file grid...
+       ✅ Found 32 files in grid
+       📋 Sample files: [{"name":"A0001-REFERENCE SHEET.pdf","id":"367957","status":""},{"name":"A0401-DEMOLITION PLANS.pdf","id":"367984","status":""},{"name":"A0402-DEMOLITION PLANS.pdf","id":"367983","status":""}]
+       🔑 Files with IDs: 32/32
+       📥 [1/32] Downloading via FileHandler: 367957_A0001-REFERENCE SHEET.pdf
+      📥 Downloading file ID 367957: 367957_A0001-REFERENCE SHEET.pdf
+      🔗 No popup, but captured 1 file-like responses from main page
+      ✅ Downloaded via main-page captured response: 367957_A0001-REFERENCE SHEET.pdf (0.03 MB)
+       📥 [2/32] Downloading via FileHandler: 367984_A0401-DEMOLITION PLANS.pdf
+      📥 Downloading file ID 367984: 367984_A0401-DEMOLITION PLANS.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367984)
+       📥 [3/32] Downloading via FileHandler: 367983_A0402-DEMOLITION PLANS.pdf
+      📥 Downloading file ID 367983: 367983_A0402-DEMOLITION PLANS.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367983)
+       📥 [4/32] Downloading via FileHandler: 367964_A0403-DEMOLITION PLANS.pdf
+      📥 Downloading file ID 367964: 367964_A0403-DEMOLITION PLANS.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367964)
+       📥 [5/32] Downloading via FileHandler: 367958_E0000-ELECTRICAL GENERAL NOTES, SYMBOLS AND ABBREVIATIONS.pdf
+      📥 Downloading file ID 367958: 367958_E0000-ELECTRICAL GENERAL NOTES, SYMBOLS AND ABBREVIATIONS.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367958)
+       📥 [6/32] Downloading via FileHandler: 367965_E0400-ELECTRICAL DEMOLITION PLAN-GROUND FLOOR.pdf
+      📥 Downloading file ID 367965: 367965_E0400-ELECTRICAL DEMOLITION PLAN-GROUND FLOOR.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367965)
+       📥 [7/32] Downloading via FileHandler: 367967_E0401-ELECTRICAL DEMOLITION PLAN-1ST FLOOR.pdf
+      📥 Downloading file ID 367967: 367967_E0401-ELECTRICAL DEMOLITION PLAN-1ST FLOOR.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367967)
+       📥 [8/32] Downloading via FileHandler: 367970_E0402-ELECTRICAL DEMOLITION PLAN-2ND FLOOR.pdf
+      📥 Downloading file ID 367970: 367970_E0402-ELECTRICAL DEMOLITION PLAN-2ND FLOOR.pdf
+      ⚠️ No viewer popup and no captured responses for viewFile(367970)
+       📥 [9/32] Downloading via FileHandler: 367963_E0403-ELECTRICAL DEMOLITION PLAN-3RD FLOOR.pdf
+      📥 Downloading file ID 367963: 367963_E0403-ELECTRICAL DEMOLITION PLAN-3RD FLOOR.pdf

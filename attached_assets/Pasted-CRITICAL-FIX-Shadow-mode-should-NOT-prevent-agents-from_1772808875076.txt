@@ -1,0 +1,67 @@
+CRITICAL FIX: Shadow mode should NOT prevent agents from doing 
+their actual work. Shadow mode means "do the normal work AND 
+ADDITIONALLY log predictions for comparison." Currently all edge 
+functions treat shadow mode as "only observe, don't classify/update" 
+which is wrong.
+
+Fix ALL agent edge functions in supabase/functions/:
+
+1. discipline-classifier-agent/index.ts
+2. comment-parser-agent/index.ts  
+3. context-reference-engine/index.ts (or whatever the code 
+   reference agent is called)
+4. auto-router-agent/index.ts
+
+For EACH edge function, find any if/else block that says:
+
+  if (isShadowMode) {
+    // only log shadow predictions, skip actual work
+  } else {
+    // do actual work
+  }
+
+Change it to:
+
+  // ALWAYS do the actual work (update parsed_comments, classify, 
+  // route, enrich — whatever this agent does)
+  const { error: updateError } = await supabase
+    .from("parsed_comments")
+    .update({ discipline })  // or whatever field this agent updates
+    .eq("id", row.id);
+  if (!updateError) classifiedCount++;
+
+  // ADDITIONALLY log shadow prediction if shadow mode is on
+  if (isShadowMode) {
+    try {
+      await adminClient.from("shadow_predictions").insert({
+        project_id: row.project_id,
+        comment_id: row.id,
+        agent_name: "Agent Name Here",
+        prediction_data: { /* agent-specific prediction data */ },
+        confidence_score: confidenceScore,
+        match_status: matchStatus,
+      });
+      shadowLoggedCount++;
+    } catch (err) {
+      console.warn("shadow insert failed", row.id, err);
+    }
+  }
+
+The key principle: Shadow mode = normal operation + extra logging.
+NOT shadow mode = skip normal operation.
+
+Also fix the query filter in the discipline classifier. Currently 
+in shadow mode it fetches ALL comments (including already classified 
+ones). In live mode it only fetches unclassified ones. Since we now 
+ALWAYS classify, ALWAYS use the live mode filter:
+  .or("discipline.is.null,discipline.eq.General,discipline.eq.Unclassified")
+  .eq("status", "Pending")
+
+Remove the if (isShadowMode) branch that changes the query filter.
+Shadow mode should not change WHAT gets processed, only WHETHER 
+shadow predictions are additionally logged.
+
+After making these changes, ALL edge functions need to be 
+redeployed to Supabase. Show me the deploy commands needed.
+
+Do NOT change any other functionality, UI, or frontend code.

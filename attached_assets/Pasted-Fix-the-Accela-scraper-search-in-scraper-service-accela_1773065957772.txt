@@ -1,0 +1,58 @@
+Fix the Accela scraper search in scraper-service/accela-scraper.js.
+
+TWO ISSUES:
+
+ISSUE 1: Session lost when navigating to search page
+
+After login, the scraper navigates directly to:
+/Cap/CapHome.aspx?module=Building&TabName=Building
+
+But the page shows "Sign In" which means the session was lost.
+The debug output shows the page text starts with "Sign In" and 
+"Create An Account" — this is a logged-out page.
+
+Fix: Instead of navigating directly to the search URL, navigate 
+through the portal's own navigation:
+
+a) After login, stay on the current page
+b) Click the "Permits and Inspections" tab/link on the page
+c) Wait for the page to load
+d) Then click "Search Applications" 
+e) Wait for the search form to appear
+
+This preserves the ASP.NET session cookies because you're 
+navigating through the site naturally instead of jumping to URLs.
+
+If that doesn't work, try an alternative approach:
+- After login, use the GLOBAL search bar (id="txtSearchCondition") 
+  that's visible on every page
+- Type the permit number there and click the search icon
+- This might be simpler and avoid the session issue entirely
+
+ISSUE 2: Result link detection
+
+Even if search results load, the scraper looks for links with 
+href containing "CapDetail" but found 0 CapDetail URLs. Accela 
+search results use JavaScript onclick handlers, not regular href 
+links. The result rows are typically in a GridView table.
+
+Fix the result detection to look for:
+a) Table rows in the results grid: 
+   'table[id*="GridView"] tr' or 'div.ACA_Grid_OverFlow table tr'
+b) Links within those rows that contain the permit number text
+c) Or cells that are clickable via onclick/javascript
+d) The permit number link typically has class "ACA_FLinkFontDark" 
+   or similar
+
+Try these selectors for finding the result link:
+- a[id*="PermitNumber"], a[class*="FLink"]
+- td a:has-text("BCCM-25-000172")
+- The link text will contain the permit number
+
+After clicking the result, wait for the CapDetail page to load 
+(URL should contain "CapDetail").
+
+Add console.log debug output at every step so we can see exactly 
+what's happening.
+
+Do NOT change the ProjectDox scraper or any other files.

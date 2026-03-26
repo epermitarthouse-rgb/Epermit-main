@@ -1,0 +1,128 @@
+The Accela scraper's searchPermit function is broken because 
+navigating directly to the search URL loses the login session. 
+The page shows "Sign In" after navigation, meaning the user 
+is logged out.
+
+COMPLETE REWRITE of the searchPermit function needed. Replace 
+the entire searchPermit function with this approach:
+
+async function searchPermit(page, portalUrl, permitNumber) {
+  console.log("  Searching for permit:", permitNumber);
+  
+  // Step 1: Use the global search bar on the CURRENT page
+  // (don't navigate away — that breaks the session)
+  // The global search bar with id="txtSearchCondition" is 
+  // available on every Accela page after login
+  
+  let globalSearch = await page.$('#txtSearchCondition');
+  if (!globalSearch || !(await globalSearch.isVisible().catch(() => false))) {
+    // If not found, we might need to go to the home page first
+    // Use the "Home" link on the page, not a direct URL
+    const homeLink = await page.$('a:has-text("Home"), a[id*="Home"]');
+    if (homeLink) {
+      await homeLink.click();
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+    globalSearch = await page.$('#txtSearchCondition');
+  }
+  
+  if (globalSearch && await globalSearch.isVisible().catch(() => false)) {
+    console.log("  Using global search bar");
+    await globalSearch.fill(permitNumber);
+    
+    // Find and click the search button next to global search
+    const searchIcon = await page.$('img[id*="btnSearch"], a[id*="btnSearch"], #btnGlobalSearch, a.global_search_button, img.search_icon');
+    if (searchIcon) {
+      await Promise.all([
+        page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {}),
+        searchIcon.click(),
+      ]);
+    } else {
+      // Try pressing Enter
+      await globalSearch.press("Enter");
+      await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+    }
+    await page.waitForTimeout(3000);
+    
+  } else {
+    // Fallback: Click through navigation
+    console.log("  Global search not found, clicking through nav");
+    const permitsTab = await page.$('a:has-text("Permits and Inspections")');
+    if (permitsTab) {
+      await permitsTab.click();
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+    
+    const searchLink = await page.$('a:has-text("Search Applications")');
+    if (searchLink) {
+      await searchLink.click();
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+    
+    // Now try to find permit number field
+    const permitField = await page.$('#ctl00_PlaceHolderMain_generalSearchForm_txtGSPermitNumber, input[id*="txtGSPermitNumber"]');
+    if (permitField) {
+      await permitField.fill(permitNumber);
+      const searchBtn = await page.$('#ctl00_PlaceHolderMain_btnNewSearch, a[id*="btnNewSearch"]');
+      if (searchBtn) await searchBtn.click();
+      else await permitField.press("Enter");
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(3000);
+    } else {
+      throw new Error("Cannot find search field");
+    }
+  }
+  
+  // Debug: check if we're still logged in
+  const pageText = await page.innerText('body').catch(() => '');
+  console.log("  Page after search (first 200):", pageText.substring(0, 200));
+  console.log("  Logged in check:", !pageText.includes('Sign In') || pageText.includes('Logged in'));
+  
+  // Step 2: Find and click the permit in results
+  // Accela results are in a GridView table or list
+  await page.screenshot({ path: 'debug_accela_search.png', fullPage: true });
+  
+  // Try multiple selectors for the result link
+  const resultSelectors = [
+    `a:has-text("${permitNumber}")`,
+    `td a:has-text("${permitNumber}")`,
+    'a.ACA_FLinkFontDark',
+    'a[id*="PermitNumber"]',
+    'table[id*="GridView"] a',
+    'div.ACA_Grid_OverFlow a',
+  ];
+  
+  for (const sel of resultSelectors) {
+    const links = await page.$$(sel);
+    for (const link of links) {
+      const text = await link.innerText().catch(() => '');
+      if (text.includes(permitNumber) || links.length === 1) {
+        console.log("  Found result link:", text.trim());
+        await Promise.all([
+          page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {}),
+          link.click(),
+        ]);
+        await page.waitForTimeout(3000);
+        console.log("  Navigated to:", page.url());
+        return;
+      }
+    }
+  }
+  
+  // Last resort: check if we're already on the detail page
+  if (page.url().includes('CapDetail')) {
+    console.log("  Already on detail page");
+    return;
+  }
+  
+  throw new Error("No clickable result found for permit: " + permitNumber);
+}
+
+Replace the ENTIRE existing searchPermit function with this new 
+version. The key change is: use the global search bar on the 
+current page instead of navigating to a new URL.
+
+Do NOT change any other functions or files.

@@ -1,0 +1,70 @@
+Role: You are a Senior Database Administrator.
+CRITICAL INSTRUCTION: Do NOT modify any existing .ts or .tsx files. You are ONLY allowed to generate a new Supabase SQL migration file.
+
+We are implementing a "Shadow Mode" testing framework for our AI pipeline. I need you to create a new SQL migration file (e.g., supabase/migrations/XXXXXXXXXXXXXX_shadow_mode_schema.sql) that safely adds the required infrastructure without altering our existing production tables.
+
+Please write the SQL to execute the following:
+
+1. Update Existing projects Table:
+
+Add a boolean column is_shadow_mode (default false).
+
+Add a text column data_classification (default 'Confidential').
+
+2. Create shadow_predictions Table:
+This table will log background AI predictions without affecting the main parsed_comments table.
+
+id (UUID, Primary Key, gen_random_uuid())
+
+project_id (UUID, Foreign Key to projects(id) ON DELETE CASCADE)
+
+comment_id (UUID, Foreign Key to parsed_comments(id) ON DELETE CASCADE)
+
+agent_name (TEXT - e.g., 'Comment Parser', 'Discipline Classifier', 'Guardian Agent')
+
+prediction_data (JSONB - to store the raw output)
+
+confidence_score (NUMERIC - between 0.00 and 1.00)
+
+match_status (TEXT - check constraint: 'match', 'partial', 'mismatch', 'pending'. Default 'pending')
+
+created_at (TIMESTAMPTZ, default now())
+
+3. Create baseline_actions Table:
+This tracks human performance to establish our baseline metrics.
+
+id (UUID, Primary Key, gen_random_uuid())
+
+project_id (UUID, Foreign Key to projects(id) ON DELETE CASCADE)
+
+expeditor_id (UUID, Foreign Key to auth.users(id))
+
+comment_id (UUID, nullable, Foreign Key to parsed_comments(id))
+
+action_type (TEXT)
+
+duration_minutes (NUMERIC)
+
+created_at (TIMESTAMPTZ, default now())
+
+4. Create audit_trail Table:
+To comply with our ESG framework for immutable logging.
+
+id (UUID, Primary Key, gen_random_uuid())
+
+project_id (UUID, Foreign Key to projects(id) ON DELETE CASCADE)
+
+actor_id (TEXT - either a user UUID or an Agent Name)
+
+action_type (TEXT)
+
+input_hash (TEXT - to store hashed privacy data)
+
+routing_decision (TEXT)
+
+created_at (TIMESTAMPTZ, default now())
+
+5. RLS Policies:
+Add standard Row Level Security (RLS) policies for these three new tables allowing authenticated users to insert and select data.
+
+Output: Please output the complete, raw SQL script so I can review it before we apply it via the Supabase CLI.

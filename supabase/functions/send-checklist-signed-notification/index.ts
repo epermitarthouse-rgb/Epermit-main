@@ -1,0 +1,478 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+interface ChecklistItem {
+  id: string;
+  category: string;
+  item: string;
+  requirement: string;
+  checked: boolean;
+  notes: string;
+  status: 'pending' | 'pass' | 'fail' | 'na';
+}
+
+interface ChecklistSignedRequest {
+  projectId?: string;
+  inspectionId?: string;
+  projectName: string;
+  projectAddress: string;
+  inspectionType: string;
+  inspectorName: string;
+  permitNumber?: string;
+  inspectionDate: string;
+  inspectorSignedAt: string;
+  contractorSignedAt: string;
+  recipientEmails: string[];
+  checklistSummary: {
+    total: number;
+    passed: number;
+    failed: number;
+    na: number;
+    pending: number;
+  };
+  generalNotes?: string;
+  // PDF attachment data
+  attachPDF?: boolean;
+  checklistItems?: ChecklistItem[];
+  customItems?: ChecklistItem[];
+  weather?: string;
+  temperature?: string;
+}
+
+const INSPECTION_TYPE_LABELS: Record<string, string> = {
+  foundation: "Foundation",
+  framing: "Framing",
+  electrical_rough: "Electrical Rough",
+  electrical_final: "Electrical Final",
+  plumbing_rough: "Plumbing Rough",
+  plumbing_final: "Plumbing Final",
+  mechanical_rough: "Mechanical Rough",
+  mechanical_final: "Mechanical Final",
+  insulation: "Insulation",
+  drywall: "Drywall",
+  fire_safety: "Fire Safety",
+  final: "Final",
+  other: "Other",
+};
+
+function getInspectionTypeLabel(type: string): string {
+  return INSPECTION_TYPE_LABELS[type] || type;
+}
+
+function getOverallStatus(summary: ChecklistSignedRequest["checklistSummary"]): string {
+  if (summary.failed > 0) {
+    return "FAILED - Corrections Required";
+  }
+  if (summary.pending > 0) {
+    return "INCOMPLETE - Items Pending Review";
+  }
+  return "PASSED";
+}
+
+function getStatusColor(summary: ChecklistSignedRequest["checklistSummary"]): string {
+  if (summary.failed > 0) return "#dc2626";
+  if (summary.pending > 0) return "#f59e0b";
+  return "#16a34a";
+}
+
+// Generate PDF using a simple text-based approach for edge functions
+function generateChecklistPDFContent(data: ChecklistSignedRequest): string {
+  const allItems = [...(data.checklistItems || []), ...(data.customItems || [])];
+  const inspectionTypeLabel = getInspectionTypeLabel(data.inspectionType);
+  const overallStatus = getOverallStatus(data.checklistSummary);
+  const currentDate = new Date().toLocaleString();
+  
+  // Group items by category
+  const itemsByCategory = allItems.reduce((acc, item) => {
+    const cat = item.category || 'Other';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {} as Record<string, ChecklistItem[]>);
+
+  // Build PDF content as base64-encoded simple PDF
+  // Using a minimal PDF structure
+  let content = '';
+  
+  content += `INSPECTION CHECKLIST\n`;
+  content += `${'='.repeat(50)}\n\n`;
+  content += `Generated: ${currentDate}\n`;
+  content += `Status: ${overallStatus}\n\n`;
+  
+  content += `PROJECT DETAILS\n`;
+  content += `${'-'.repeat(30)}\n`;
+  content += `Project Name: ${data.projectName || 'N/A'}\n`;
+  content += `Address: ${data.projectAddress || 'N/A'}\n`;
+  content += `Permit Number: ${data.permitNumber || 'N/A'}\n`;
+  content += `Inspection Type: ${inspectionTypeLabel}\n`;
+  content += `Inspection Date: ${data.inspectionDate}\n`;
+  content += `Inspector: ${data.inspectorName || 'N/A'}\n`;
+  if (data.weather) content += `Weather: ${data.weather}\n`;
+  if (data.temperature) content += `Temperature: ${data.temperature}\n`;
+  content += `\n`;
+
+  content += `SUMMARY\n`;
+  content += `${'-'.repeat(30)}\n`;
+  content += `Total Items: ${data.checklistSummary.total}\n`;
+  content += `Passed: ${data.checklistSummary.passed}\n`;
+  content += `Failed: ${data.checklistSummary.failed}\n`;
+  content += `Pending: ${data.checklistSummary.pending}\n`;
+  content += `N/A: ${data.checklistSummary.na}\n\n`;
+
+  content += `CHECKLIST ITEMS\n`;
+  content += `${'='.repeat(50)}\n\n`;
+
+  Object.entries(itemsByCategory).forEach(([category, items]) => {
+    content += `\n${category.toUpperCase()}\n`;
+    content += `${'-'.repeat(30)}\n`;
+    items.forEach((item, index) => {
+      const statusLabel = item.status.toUpperCase();
+      content += `${index + 1}. [${statusLabel}] ${item.item}\n`;
+      content += `   Requirement: ${item.requirement}\n`;
+      if (item.notes) {
+        content += `   Notes: ${item.notes}\n`;
+      }
+      content += `\n`;
+    });
+  });
+
+  if (data.generalNotes) {
+    content += `\nGENERAL NOTES\n`;
+    content += `${'-'.repeat(30)}\n`;
+    content += `${data.generalNotes}\n\n`;
+  }
+
+  content += `\nSIGNATURES\n`;
+  content += `${'-'.repeat(30)}\n`;
+  content += `Inspector Signed: ${data.inspectorSignedAt}\n`;
+  content += `Contractor/Owner Signed: ${data.contractorSignedAt}\n\n`;
+
+  content += `${'='.repeat(50)}\n`;
+  content += `Generated by PermitFlow\n`;
+
+  // Convert to base64 for attachment
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(content);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+const handler = async (req: Request): Promise<Response> => {
+  console.log("Checklist signed notification function called");
+
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const data: ChecklistSignedRequest = await req.json();
+    console.log("Request data:", JSON.stringify({
+      ...data,
+      checklistItems: data.checklistItems?.length || 0,
+      customItems: data.customItems?.length || 0,
+      attachPDF: data.attachPDF,
+    }, null, 2));
+
+    const {
+      projectName,
+      projectAddress,
+      inspectionType,
+      inspectorName,
+      permitNumber,
+      inspectionDate,
+      inspectorSignedAt,
+      contractorSignedAt,
+      recipientEmails,
+      checklistSummary,
+      generalNotes,
+      attachPDF,
+    } = data;
+
+    if (!recipientEmails || recipientEmails.length === 0) {
+      console.log("No recipient emails provided");
+      return new Response(
+        JSON.stringify({ error: "No recipient emails provided" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const overallStatus = getOverallStatus(checklistSummary);
+    const statusColor = getStatusColor(checklistSummary);
+    const inspectionTypeLabel = getInspectionTypeLabel(inspectionType);
+
+    const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspection Checklist Signed</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #1e293b; padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">
+                ✅ Inspection Checklist Completed
+              </h1>
+              <p style="color: #94a3b8; margin: 10px 0 0; font-size: 14px;">
+                Both parties have signed the checklist${attachPDF ? ' - PDF attached' : ''}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Status Banner -->
+          <tr>
+            <td style="padding: 0;">
+              <div style="background-color: ${statusColor}; color: white; padding: 15px 30px; text-align: center; font-weight: 600; font-size: 16px;">
+                ${overallStatus}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 30px;">
+              <!-- Project Info -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                <tr>
+                  <td style="padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+                    <h2 style="margin: 0; font-size: 18px; color: #1e293b;">Project Details</h2>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top: 15px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; font-size: 14px; width: 40%;">Project Name:</td>
+                        <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 500;">${projectName || "N/A"}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Address:</td>
+                        <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 500;">${projectAddress || "N/A"}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Permit Number:</td>
+                        <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 500;">${permitNumber || "N/A"}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Inspection Type:</td>
+                        <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 500;">${inspectionTypeLabel}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Inspection Date:</td>
+                        <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 500;">${inspectionDate}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Inspector:</td>
+                        <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 500;">${inspectorName || "N/A"}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Checklist Summary -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                <tr>
+                  <td style="padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+                    <h2 style="margin: 0; font-size: 18px; color: #1e293b;">Checklist Summary</h2>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top: 15px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="padding: 10px;">
+                          <div style="background-color: #f0fdf4; border-radius: 8px; padding: 15px 10px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #16a34a;">${checklistSummary.passed}</div>
+                            <div style="font-size: 12px; color: #16a34a; font-weight: 500;">PASSED</div>
+                          </div>
+                        </td>
+                        <td align="center" style="padding: 10px;">
+                          <div style="background-color: #fef2f2; border-radius: 8px; padding: 15px 10px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #dc2626;">${checklistSummary.failed}</div>
+                            <div style="font-size: 12px; color: #dc2626; font-weight: 500;">FAILED</div>
+                          </div>
+                        </td>
+                        <td align="center" style="padding: 10px;">
+                          <div style="background-color: #fefce8; border-radius: 8px; padding: 15px 10px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #ca8a04;">${checklistSummary.pending}</div>
+                            <div style="font-size: 12px; color: #ca8a04; font-weight: 500;">PENDING</div>
+                          </div>
+                        </td>
+                        <td align="center" style="padding: 10px;">
+                          <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px 10px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #71717a;">${checklistSummary.na}</div>
+                            <div style="font-size: 12px; color: #71717a; font-weight: 500;">N/A</div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="text-align: center; color: #64748b; font-size: 14px; margin-top: 10px;">
+                      Total Items: ${checklistSummary.total}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Signatures -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                <tr>
+                  <td style="padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+                    <h2 style="margin: 0; font-size: 18px; color: #1e293b;">Signatures</h2>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top: 15px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td width="50%" style="padding: 10px;">
+                          <div style="background-color: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                              <span style="color: #16a34a; font-size: 16px; margin-right: 8px;">✓</span>
+                              <span style="font-weight: 600; color: #1e293b;">Inspector</span>
+                            </div>
+                            <div style="color: #64748b; font-size: 13px;">
+                              Signed: ${inspectorSignedAt}
+                            </div>
+                          </div>
+                        </td>
+                        <td width="50%" style="padding: 10px;">
+                          <div style="background-color: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                              <span style="color: #16a34a; font-size: 16px; margin-right: 8px;">✓</span>
+                              <span style="font-weight: 600; color: #1e293b;">Contractor/Owner</span>
+                            </div>
+                            <div style="color: #64748b; font-size: 13px;">
+                              Signed: ${contractorSignedAt}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              ${generalNotes ? `
+              <!-- General Notes -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                <tr>
+                  <td style="padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+                    <h2 style="margin: 0; font-size: 18px; color: #1e293b;">General Notes</h2>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top: 15px;">
+                    <div style="background-color: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0; color: #334155; font-size: 14px; line-height: 1.6;">
+                      ${generalNotes.replace(/\n/g, '<br>')}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
+
+              ${attachPDF ? `
+              <div style="background-color: #eff6ff; border-radius: 8px; padding: 15px; border: 1px solid #bfdbfe; margin-bottom: 15px;">
+                <p style="margin: 0; color: #1e40af; font-size: 14px;">
+                  📎 <strong>PDF Attached:</strong> The complete inspection checklist is attached to this email.
+                </p>
+              </div>
+              ` : ''}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
+                This is an automated notification from PermitFlow.
+              </p>
+              <p style="margin: 0; color: #94a3b8; font-size: 12px;">
+                © ${new Date().getFullYear()} PermitFlow. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    console.log("Sending email to:", recipientEmails);
+
+    // Build email payload
+    const emailPayload: Record<string, unknown> = {
+      from: "PermitFlow <notifications@resend.dev>",
+      to: recipientEmails,
+      subject: `✅ Inspection Checklist Signed - ${projectName || "Project"} (${inspectionTypeLabel})`,
+      html: emailHtml,
+    };
+
+    // Add PDF attachment if requested
+    if (attachPDF && data.checklistItems) {
+      console.log("Generating PDF attachment...");
+      const pdfContent = generateChecklistPDFContent(data);
+      const fileName = `inspection-checklist-${(projectName || 'project').replace(/[^a-zA-Z0-9]/g, '-')}-${inspectionDate}.txt`;
+      
+      emailPayload.attachments = [
+        {
+          filename: fileName,
+          content: pdfContent,
+        }
+      ];
+      console.log("PDF attachment added:", fileName);
+    }
+
+    const emailResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify(emailPayload),
+    });
+
+    const emailData = await emailResponse.json();
+    
+    if (!emailResponse.ok) {
+      console.error("Error sending email:", emailData);
+      throw new Error(emailData.message || "Failed to send email");
+    }
+
+    console.log("Email sent successfully:", emailData);
+
+    return new Response(
+      JSON.stringify({ success: true, data: emailData }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      }
+    );
+  } catch (error: any) {
+    console.error("Error in send-checklist-signed-notification:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      }
+    );
+  }
+};
+
+serve(handler);

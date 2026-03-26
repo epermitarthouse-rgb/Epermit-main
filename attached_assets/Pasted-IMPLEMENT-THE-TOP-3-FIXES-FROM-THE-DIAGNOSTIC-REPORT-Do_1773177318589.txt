@@ -1,0 +1,133 @@
+IMPLEMENT THE TOP 3 FIXES FROM THE DIAGNOSTIC REPORT.
+Do them in order. Test after each one.
+
+============================================================
+FIX T001: Stop loading portal_data on every page (CRITICAL)
+============================================================
+
+In src/hooks/useProjects.ts, find the .select('*') call (around 
+line 57) and replace it with an explicit column list that EXCLUDES 
+portal_data:
+
+.select('id, name, permit_number, jurisdiction, status, user_id, 
+  portal_status, last_checked_at, created_at, updated_at, 
+  is_shadow_mode, address, selected_project_id')
+
+If there are other columns needed by the sidebar or dashboard, 
+include them — but NEVER include portal_data in the default fetch.
+
+Then create a NEW hook: src/hooks/useProjectPortalData.ts
+
+This hook fetches portal_data ONLY when needed (Portal Data Viewer 
+page only):
+
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+
+export function useProjectPortalData(projectId: string | null) {
+  const [portalData, setPortalData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!projectId) { setPortalData(null); return; }
+    setLoading(true);
+    supabase
+      .from("projects")
+      .select("portal_data")
+      .eq("id", projectId)
+      .single()
+      .then(({ data, error }) => {
+        if (error) setError(error);
+        else setPortalData(data?.portal_data);
+        setLoading(false);
+      });
+  }, [projectId]);
+
+  return { portalData, loading, error };
+}
+
+Then update the Portal Data Viewer page to use this new hook 
+instead of getting portal_data from useProjects.
+
+Also update AgentWorkflowStatus.tsx — if it reads portal_data 
+for the comment parser, have it fetch portal_data only when the 
+parser step runs, not on component mount.
+
+Search the ENTIRE codebase for any component that accesses 
+project.portal_data and make sure it uses the new hook or a 
+targeted fetch instead of the useProjects data.
+
+============================================================
+FIX T002: Fix all other .select('*') calls (HIGH)
+============================================================
+
+For each of these hooks, replace .select('*') with explicit 
+columns. Only include columns that the component actually uses:
+
+1. src/hooks/useAnalytics.ts (line 57)
+   → select only: id, permit_number, jurisdiction, status, 
+     portal_status, created_at, last_checked_at, is_shadow_mode
+   → Move any aggregation to the query level if possible
+
+2. src/hooks/useProjectDocuments.ts (line 34)
+   → select only the document metadata columns needed
+
+3. src/hooks/useProjectActivity.ts (line 23)
+   → select only: id, project_id, action, actor, created_at, details
+
+4. src/hooks/useProjectTeam.ts (lines 40, 76)
+   → select only: id, project_id, user_id, role, invited_at
+
+5. src/hooks/useJurisdictions.ts (line 20)
+   → select only columns used in the UI, exclude amendments 
+     JSONB unless specifically viewing a jurisdiction detail
+
+6. src/hooks/useInspections.ts (lines 55, 60)
+   → select only needed columns, exclude checklist_data unless 
+     viewing a specific inspection
+
+7. src/hooks/useDocumentComments.ts (lines 38, 54)
+   → select only: id, document_id, user_id, text, created_at
+
+For each hook, check what columns the consuming components 
+actually use. Only select those columns.
+
+============================================================
+FIX T003: Add missing database indexes (HIGH)
+============================================================
+
+Create a new Supabase migration file or provide the SQL for me 
+to run in the Supabase SQL Editor:
+
+CREATE INDEX IF NOT EXISTS idx_audit_trail_project_id 
+  ON audit_trail(project_id);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_created_at 
+  ON audit_trail(created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_filing_id 
+  ON agent_runs(filing_id);
+CREATE INDEX IF NOT EXISTS idx_baseline_actions_project_id 
+  ON baseline_actions(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_activity_project_id 
+  ON project_activity(project_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_predictions_created_at 
+  ON shadow_predictions(created_at);
+CREATE INDEX IF NOT EXISTS idx_parsed_comments_discipline 
+  ON parsed_comments(discipline);
+
+Save these as a migration file AND provide as standalone SQL 
+so the user can run them in Supabase SQL Editor.
+
+============================================================
+TESTING
+============================================================
+
+After implementing all three fixes:
+1. Verify the dashboard loads WITHOUT fetching portal_data 
+   (check Network tab — the projects query should be small)
+2. Verify the Portal Data Viewer still works using the new hook
+3. Verify the agent pipeline still works
+4. Verify no TypeScript errors
+
+Do NOT change any scraper code, edge functions, or other features.
+Only optimize data fetching and add indexes.

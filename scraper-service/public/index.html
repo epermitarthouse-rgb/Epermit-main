@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC Portal Scraper</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; color: #1a1a2e; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 8px 0 20px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.1em; }
+        button:hover { background: #1d4ed8; }
+        #logs { margin-top: 20px; padding: 15px; background: #1e1e1e; color: #4ade80; border-radius: 8px; font-family: monospace; height: 300px; overflow-y: auto; font-size: 0.9em; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="card" id="loginCard">
+        <h1>🏛️ DC Portal Report Tool</h1>
+        <p>Enter your credentials to generate the "Work by Employee" report.</p>
+        
+        <label>Email</label>
+        <input type="email" id="email" placeholder="name@company.com" />
+        
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" />
+        
+        <button onclick="startLogin()" id="loginBtn">Launch Scraper</button>
+    </div>
+
+    <div class="card hidden" id="progressCard">
+        <h2 id="statusText">Running...</h2>
+        <div id="logs">Initializing...</div>
+        <button onclick="downloadReport()" id="downloadBtn" class="hidden" style="margin-top: 20px; background: #059669;">📥 Download Excel Report</button>
+    </div>
+
+    <script>
+        let sessionId = null;
+        const logEl = document.getElementById('logs');
+
+        function log(msg) {
+            logEl.innerHTML += `<div>> ${msg}</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        async function startLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if(!email || !password) return alert("Missing credentials");
+
+            document.getElementById('loginCard').classList.add('hidden');
+            document.getElementById('progressCard').classList.remove('hidden');
+            log("🚀 Launching secure browser...");
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: email, password })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+                
+                sessionId = data.sessionId;
+                log(`✅ Login Success! Found ${data.projectCount} projects.`);
+                startScrape();
+            } catch (err) {
+                log(`❌ Error: ${err.message}`);
+            }
+        }
+
+        async function startScrape() {
+            log("🔍 Scraping reports & tasks...");
+            const evtSource = new EventSource(`/api/progress/${sessionId}`);
+            evtSource.onmessage = function(e) {
+                const d = JSON.parse(e.data);
+                if(d.message) log(d.message);
+                if(d.status === 'done') {
+                    evtSource.close();
+                    document.getElementById('downloadBtn').classList.remove('hidden');
+                    document.getElementById('statusText').innerText = "✅ Complete";
+                }
+            };
+            await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId })
+            });
+        }
+
+        function downloadReport() {
+            window.location.href = `/api/export/${sessionId}`;
+        }
+    </script>
+</body>
+</html>

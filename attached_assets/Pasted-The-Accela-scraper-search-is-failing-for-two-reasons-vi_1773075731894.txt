@@ -1,0 +1,58 @@
+The Accela scraper search is failing for two reasons visible in 
+the debug screenshot. Fix BOTH in accela-scraper.js:
+
+FIX 1: The Record Number field shows "BCCM25000172" without dashes.
+The permit number is being stripped somewhere. Find where the 
+permit number gets modified before filling the field and STOP it.
+Search for any .replace() calls that remove dashes or special 
+characters from the permit number. The permitNumber must be passed 
+exactly as received: "BCCM-25-000172" with dashes.
+
+FIX 2: Clear the date fields and check Search All Records.
+After filling the Record Number field but BEFORE clicking Search:
+
+// Clear End Date
+const endDate = await page.$('input[id*="EndDate"]');
+if (endDate && await endDate.isVisible().catch(() => false)) {
+  await endDate.click({ clickCount: 3 });
+  await endDate.press('Backspace');
+  await page.waitForTimeout(300);
+  console.log("  Cleared End Date");
+}
+
+// Clear Start Date  
+const startDate = await page.$('input[id*="StartDate"]');
+if (startDate && await startDate.isVisible().catch(() => false)) {
+  await startDate.click({ clickCount: 3 });
+  await startDate.press('Backspace');
+  await page.waitForTimeout(300);
+  console.log("  Cleared Start Date");
+}
+
+// Check "Search All Records"
+const searchAll = await page.$('input[type="checkbox"]');
+const allCheckboxes = await page.$$('input[type="checkbox"]');
+for (const cb of allCheckboxes) {
+  const id = await cb.getAttribute('id').catch(() => '');
+  const nearby = await cb.evaluate(el => el.parentElement?.textContent?.trim() || '').catch(() => '');
+  if (id.includes('SearchAll') || id.includes('chkSearchAll') || nearby.includes('Search All')) {
+    const checked = await cb.isChecked().catch(() => false);
+    if (!checked) {
+      await cb.check();
+      console.log("  Checked Search All Records");
+      await page.waitForTimeout(1000);
+    }
+    break;
+  }
+}
+
+FIX 3: The login session is lost when navigating to search page.
+This might be because Baltimore Accela search is PUBLIC (no login 
+needed to search). If that's the case, the search might work fine 
+without login — we just need login for accessing the DETAIL page.
+
+Test: after the search returns results and the scraper clicks on 
+a result to go to the detail page — if it redirects to login, 
+THEN re-authenticate on that page before continuing extraction.
+
+Do NOT change any other files.

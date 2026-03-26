@@ -1,0 +1,96 @@
+Fix the Accela scraper searchPermit function in 
+scraper-service/accela-scraper.js.
+
+The permit BCCM-25-000172 IS visible in the "My Records" list 
+but the scraper's page.evaluate scan fails to find it.
+
+The problem is in step 4 where it scans elements. The permit 
+number link in the Accela grid might have extra whitespace, 
+newlines, or be inside nested elements. The current code does:
+  const text = el.textContent.trim();
+  return isVisible && text.includes(targetPermit);
+
+This fails because:
+1. textContent on a parent element might include other text 
+   around the permit number
+2. The permit number link is inside a table cell with class 
+   links — textContent grabs everything
+3. The link text might have \n or \t characters
+
+Replace the entire step 4 scan with this approach:
+
+// Step 4: Find the permit link in the records grid
+// The Accela grid uses anchor tags with the permit number as text
+// They link to CapDetail pages
+
+// First try: find an anchor whose text matches the permit number
+const permitLink = await page.$(`a:has-text("${permitNumber}")`);
+if (permitLink && await permitLink.isVisible().catch(() => false)) {
+  console.log("  Found permit link via has-text selector");
+  await Promise.all([
+    page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {}),
+    permitLink.click(),
+  ]);
+  await page.waitForTimeout(3000);
+  console.log("  Navigated to:", page.url());
+  return;
+}
+
+// Second try: find by href containing the permit-related URL
+const allLinks = await page.$$('a');
+for (const link of allLinks) {
+  const text = (await link.innerText().catch(() => '')).trim();
+  const href = (await link.getAttribute('href') || '').toLowerCase();
+  // Normalize: remove extra whitespace and newlines
+  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  if (normalizedText === permitNumber || normalizedText.includes(permitNumber)) {
+    console.log("  Found permit link by scanning anchors:", normalizedText);
+    await Promise.all([
+      page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {}),
+      link.click(),
+    ]);
+    await page.waitForTimeout(3000);
+    console.log("  Navigated to:", page.url());
+    return;
+  }
+}
+
+// Third try: use page.evaluate with normalized text matching
+const found = await page.evaluate((target) => {
+  const anchors = document.querySelectorAll('a');
+  for (const a of anchors) {
+    const text = a.textContent.replace(/\s+/g, ' ').trim();
+    if (text.includes(target)) {
+      a.click();
+      return true;
+    }
+  }
+  return false;
+}, permitNumber);
+
+if (found) {
+  console.log("  Found and clicked permit via evaluate");
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+  console.log("  Navigated to:", page.url());
+  return;
+}
+
+// Debug: list what's actually on the page
+const visibleTexts = await page.evaluate(() => {
+  return Array.from(document.querySelectorAll('a'))
+    .filter(a => a.offsetWidth > 0)
+    .slice(0, 20)
+    .map(a => a.textContent.replace(/\s+/g, ' ').trim().substring(0, 60));
+});
+console.log("  Visible anchor texts:", JSON.stringify(visibleTexts));
+
+await page.screenshot({ path: "grid_not_found.png", fullPage: true });
+throw new Error(`Permit ${permitNumber} not visible in the current list.`);
+
+Also remove the "about:blank" session check at the start of 
+searchPermit. The page should already be on the portal after 
+login — don't navigate to about:blank or reload the portal URL 
+as that can break the session.
+
+Do NOT change any other functions or files.

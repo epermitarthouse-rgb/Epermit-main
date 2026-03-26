@@ -1,0 +1,135 @@
+Create a new Accela portal scraper module alongside the existing 
+ProjectDox scraper. This is for Baltimore MD's Accela Citizen 
+Access portal at aca-prod.accela.com/BALTIMORE.
+
+Create a new file: scraper-service/accela-scraper.js
+
+The existing scraper-service/server.js should detect the portal 
+type from the portal URL and route to the correct scraper:
+- If URL contains "avolvecloud.com" or "projectdox" → use existing 
+  ProjectDox scraper (server.js performLogin + scrapeAll)
+- If URL contains "accela.com" → use new Accela scraper
+- Otherwise → return error "Unsupported portal type"
+
+Add this routing logic to the /api/scrape endpoint in server.js.
+
+THE ACCELA SCRAPER MODULE should handle:
+
+1. LOGIN:
+   - Navigate to the Accela login page (e.g. https://aca-prod.accela.com/BALTIMORE/Login.aspx)
+   - Fill username and password into the login form
+   - Click the login/sign-in button
+   - Wait for redirect to the dashboard
+   - Accela uses simple form login — NO SSO, no B2C, no Okta
+
+2. SEARCH FOR PERMIT:
+   - After login, navigate to "Permits and Inspections" tab
+   - Click "Search Applications"
+   - Enter the permit number in the search field
+   - Click search
+   - Click on the matching record in the results table
+
+3. EXTRACT RECORD DETAILS:
+   From the record detail page, extract data from these sections:
+   
+   a) RECORD INFO HEADER:
+      - Record number (e.g. "BCCM-25-000172")
+      - Record type (e.g. "Commercial and Multifamily Combo Permit")
+      - Record status (e.g. "Closed - Expired")
+      - Expiration date
+   
+   b) RECORD DETAILS (under Record Info dropdown):
+      - Applicant name, company, phone, email, address
+      - Licensed Professional name, company, phone
+      - Work Location
+      - Click "More Details" to expand if present
+   
+   c) PROCESSING STATUS (under Record Info dropdown):
+      - List of review departments with status icons:
+        * Active (blue icon)
+        * Complete (green checkmark)
+        * Previously Active (orange icon)
+      - For each department: name, due date, status text
+      - Click expand arrow on each to get details
+      - Departments include: Application Intake, Initial Zoning 
+        Review, Architectural and Structural Review, Electrical 
+        Review, Mech and Plmb Review, Fire Review, Zoning Review,
+        Health Department Review, Dept of Planning Review, CHAP 
+        Review, Design Review, etc.
+   
+   d) PLAN REVIEW tab (if present):
+      - This is where review comments live
+      - Extract all review comments with reviewer name, department,
+        comment text, date
+      - Take a screenshot of this section
+   
+   e) RELATED RECORDS:
+      - Table with Record Number, Record Type, Project Name, Date
+      - Click "View Entire Tree" if present
+   
+   f) ATTACHMENTS:
+      - Table with Name, Record ID, Record Type, Entity Type, 
+        Type, Size, Latest Update
+      - List all attachments (do not download)
+   
+   g) INSPECTIONS:
+      - Upcoming and Completed inspections
+   
+   h) PAYMENTS (under Payments tab):
+      - Payment summary if accessible
+
+4. SCREENSHOT EACH SECTION:
+   - Take a full-page screenshot of each major section
+   - Store as base64 in the portal_data structure
+
+5. SAVE TO SUPABASE:
+   Structure the extracted data in portal_data format compatible 
+   with the existing frontend Portal Data Viewer:
+   
+   {
+     portalType: "accela",
+     tabs: {
+       info: {
+         tables: [...],  // Record details as key-value tables
+         fields: {...}    // Parsed record header fields
+       },
+       status: {
+         departments: [
+           { name: "Zoning Review", status: "Complete", 
+             date: "...", details: "..." },
+           ...
+         ]
+       },
+       reports: {
+         pdfs: [
+           { name: "Processing Status", text: "...", 
+             screenshot: "base64...", source: "accela" },
+           { name: "Plan Review Comments", text: "...",
+             screenshot: "base64...", source: "accela" }
+         ]
+       },
+       attachments: [...],
+       inspections: [...]
+     }
+   }
+
+6. ERROR HANDLING:
+   - If permit not found in search results, return clear error
+   - If a section/tab doesn't exist for this record type, skip it
+   - Timeout after 3 minutes total
+   - Log progress for each step
+
+IMPORTANT NOTES:
+- Accela pages load with ASP.NET postbacks — use proper waits 
+  (waitForNavigation, waitForSelector) not just timeouts
+- The "Record Info" is a dropdown menu — need to hover/click to 
+  expand it, then click sub-items
+- Processing Status items are expandable — click the arrow to 
+  see details inside each department
+- Use the same Playwright browser instance as the ProjectDox 
+  scraper (shared browser launch logic)
+- Use the same Supabase sync logic to save data
+
+Do NOT modify the existing ProjectDox scraper logic.
+Do NOT change any frontend code.
+Only create the new accela-scraper.js and add routing in server.js.

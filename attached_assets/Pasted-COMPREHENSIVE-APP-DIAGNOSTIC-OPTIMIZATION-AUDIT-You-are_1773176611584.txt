@@ -1,0 +1,90 @@
+COMPREHENSIVE APP DIAGNOSTIC & OPTIMIZATION AUDIT
+
+You are acting as a senior full-stack developer performing a 
+complete infrastructure audit of this application. The goal is 
+to identify ALL current and future performance issues, data 
+flow problems, and optimization opportunities.
+
+DO NOT make any changes yet. First ANALYZE everything and produce 
+a detailed diagnostic report. Only after I review the report will 
+we implement fixes.
+
+============================================================
+PART 1: DATA FLOW MAPPING
+============================================================
+
+Map every piece of data in the system and where it lives:
+
+A) SUPABASE DATABASE — Audit every table:
+   For each table in the Supabase schema, document:
+   - Table name
+   - Row count (query: SELECT count(*) FROM table_name)
+   - Estimated size (query: SELECT pg_total_relation_size('table_name'))
+   - Column types and which columns contain large data (JSON, text, bytea)
+   - Which columns are indexed
+   - Foreign key relationships
+   - RLS (Row Level Security) policies — are they enabled? What rules?
+   - Any triggers or functions attached
+   
+   Key tables to audit:
+   - projects (portal_data column is JSONB — how large per row?)
+   - parsed_comments
+   - shadow_predictions
+   - audit_trail
+   - portal_credentials
+   - profiles
+   - sessions
+   - Any other tables
+
+   Run these diagnostic queries:
+   ```sql
+   -- Table sizes
+   SELECT schemaname, tablename, 
+          pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as total_size,
+          pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) as table_size,
+          pg_size_pretty(pg_indexes_size(schemaname||'.'||tablename)) as index_size
+   FROM pg_tables 
+   WHERE schemaname = 'public'
+   ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+   
+   -- Row counts per table
+   SELECT relname as table_name, n_live_tup as row_count
+   FROM pg_stat_user_tables
+   WHERE schemaname = 'public'
+   ORDER BY n_live_tup DESC;
+   
+   -- Largest portal_data entries
+   SELECT id, permit_number, 
+          pg_column_size(portal_data) as portal_data_bytes,
+          pg_size_pretty(pg_column_size(portal_data)::bigint) as portal_data_size
+   FROM projects 
+   WHERE portal_data IS NOT NULL
+   ORDER BY pg_column_size(portal_data) DESC
+   LIMIT 20;
+   
+   -- Check for duplicate projects
+   SELECT permit_number, count(*) as duplicates
+   FROM projects 
+   GROUP BY permit_number 
+   HAVING count(*) > 1
+   ORDER BY duplicates DESC;
+   
+   -- Shadow predictions growth rate
+   SELECT date_trunc('day', created_at) as day, count(*) as predictions
+   FROM shadow_predictions
+   GROUP BY day
+   ORDER BY day DESC
+   LIMIT 30;
+   
+   -- Audit trail growth rate
+   SELECT date_trunc('day', created_at) as day, count(*) as entries
+   FROM audit_trail
+   GROUP BY day
+   ORDER BY day DESC
+   LIMIT 30;
+   
+   -- Indexes check
+   SELECT tablename, indexname, indexdef
+   FROM pg_indexes
+   WHERE schemaname = 'public'
+   ORDER BY tablename;

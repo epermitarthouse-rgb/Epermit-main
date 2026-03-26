@@ -1,0 +1,78 @@
+I need you to refactor and fix my Accela Playwright scraper login/search flow.
+
+Goal:
+The scraper is producing false login success, then later throws:
+AUTHENTICATION_LOST: Reached Dashboard but session landmark is missing.
+
+What is happening now:
+- It fills username/password and clicks login
+- It treats URL /Login.aspx or forced /Default.aspx as login success too early
+- Then in searchPermit() it waits for the records grid before properly navigating into the authenticated My Records / Permits view
+- If grid is not found, it reloads the page
+- After reload it often thinks auth is lost
+- The target permit may exist, but the session/state machine is wrong
+
+I do NOT want a full rewrite from scratch.
+I want a careful refactor that preserves existing scraping tabs/extraction logic, but fixes the login/search state machine.
+
+What to fix:
+1. Fix accelaLogin():
+- Remove premature success detection
+- Remove early return that makes later auth checks dead code
+- Do not treat Login.aspx or Default.aspx alone as proof of login
+- Do not force breakout to Default.aspx as the main success path
+- Only return success after real authenticated signals are confirmed
+- Make auth detection frame-aware, not only main page aware
+- Use strong logged-in checks such as:
+  - login form no longer visible
+  - authenticated navigation visible
+  - logout / my records / dashboard / account area visible
+- If login fails, throw a clear error with page evidence
+
+2. Fix searchPermit():
+- Do NOT wait for records grid before navigating into the authenticated records area
+- Correct order should be:
+  a) verify logged-in state
+  b) navigate through authenticated UI to Permits / My Records
+  c) wait for records grid to appear
+  d) scan rows/anchors for permit number
+  e) click the matching record
+- Remove automatic page reload as default recovery behavior
+- If grid is missing, first capture diagnostics instead of refreshing immediately
+- Make checks frame-aware
+
+3. Improve diagnostics:
+- Add structured debug logs for:
+  - current URL
+  - page title
+  - whether login form is still visible
+  - whether authenticated landmarks are visible
+  - number of frames
+  - frame URLs/names if possible
+  - number of anchors/rows found in records area
+  - first few extracted record texts
+- On failure, save screenshot and optionally page HTML snapshot
+
+4. Keep these constraints:
+- Keep existing helper/extraction functions as much as possible
+- Do not change unrelated tabs like attachments, inspections, payments unless necessary
+- Do not introduce over-engineered abstractions
+- Keep code readable and production-safe
+- Prefer minimal but robust changes
+
+5. Important code issues to address:
+- There appears to be an early return in accelaLogin() that makes later checks unreachable
+- There may be inconsistent variable usage such as loggedInLandmark not being defined correctly
+- Clean up flow control so the login and search steps are deterministic
+
+Deliverables:
+- Updated accelaLogin()
+- Updated searchPermit()
+- Any small helper functions needed, such as:
+  - find authenticated landmark across frames
+  - detect visible login form across frames
+  - dump diagnostics
+  - wait for authenticated app shell
+- Brief explanation of what changed and why
+
+Please modify the code directly and return the improved code sections clearly.

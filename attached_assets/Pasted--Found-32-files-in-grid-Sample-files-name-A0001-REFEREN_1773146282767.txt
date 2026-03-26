@@ -1,0 +1,82 @@
+✅ Found 32 files in grid
+       📋 Sample files: [{"name":"A0001-REFERENCE SHEET.pdf","id":"367957","status":""},{"name":"A0401-DEMOLITION PLANS.pdf","id":"367984","status":""},{"name":"A0402-DEMOLITION PLANS.pdf","id":"367983","status":""}]
+       🔑 Files with IDs: 32/32
+       📥 [1/32] Downloading via FileHandler: 367957_A0001-REFERENCE SHEET.pdf
+      📥 Downloading via FileHandler: 367957_A0001-REFERENCE SHEET.pdf
+      ❌ Download failed for 367957_A0001-REFERENCE SHEET.pdf: page.evaluate: Error: HTTP 404
+    at eval (eval at evaluate (:290:30), <anonymous>:3:24)
+    at async <anonymous>:316:30
+       📥 [1/32] Downloading via click: A0001-REFERENCE SHEET.pdf
+       ⚠️ No download or popup triggered for A0001-REFERENCE SHEET.pdf
+       📥 [2/32] Downloading via FileHandler: 367984_A0401-DEMOLITION PLANS.pdf
+      📥 Downloading via FileHandler: 367984_A0401-DEMOLITION PLANS.pdf
+      ❌ Download failed for 367984_A0401-DEMOLITION PLANS.pdf: page.evaluate: Error: HTTP 404
+    at eval (eval at evaluate (:290:30), <anonymous>:3:24)
+    at async <anonymous>:316:30
+       📥 [2/32] Downloading via click: A0401-DEMOLITION PLANS.pdf
+       ⚠️ Click-download failed for A0401-DEMOLITION PLANS.pdf: elementHandle.click: Timeout 30000ms exceeded.
+Call log:
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <span class="ui-igdialog-headertext ui-dialog-title">Task Assignment</span> from <div tabindex="0" id="dlgTaskAccept" class="dialog-border ui-igdialog ui-dialog ui-widget ui-widget-content ui-corner-all ui-draggable ui-resizable">…</div> subtree intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <span class="ui-igdialog-headertext ui-dialog-title">Task Assignment</span> from <div tabindex="0" id="dlgTaskAccept" class="dialog-border ui-igdialog ui-dialog ui-widget ui-widget-content ui-corner-all ui-draggable ui-resizable">…</div> subtree intercepts pointer events
+  2 × retrying click action
+      - waiting 100ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div zindex="-1" unselectable="on" class="ui-igdialog-overlay ui-widget-overlay"></div> intercepts pointer events
+  14 × retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <span class="ui-igdialog-headertext ui-dialog-title">Task Assignment</span> from <div tabindex="0" id="dlgTaskAccept" class="dialog-border ui-igdialog ui-dialog ui-widget ui-widget-content ui-corner-all ui-draggable ui-resizable">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <span class="ui-igdialog-headertext ui-dialog-title">Task Assignment</span> from <div tabindex="0" id="dlgTaskAccept" class="dialog-border ui-igdialog ui-dialog ui-widget ui-widget-content ui-corner-all ui-draggable ui-resizable">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div zindex="-1" unselectable="on" class="ui-igdialog-overlay ui-widget-overlay"></div> intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div zindex="-1" unselectable="on" class="ui-igdialog-overlay ui-widget-overlay"></div> intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <span class="ui-igdialog-headertext ui-dialog-title">Task Assignment</span> from <div tabindex="0" id="dlgTaskAccept" class="dialog-border ui-igdialog ui-dialog ui-widget ui-widget-content ui-corner-all ui-draggable ui-resizable">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+
+       📥 [3/32] Downloading via FileHandler: 367983_A0402-DEMOLITION PLANS.pdf
+      📥 Downloading via FileHandler: 367983_A0402-DEMOLITION PLANS.pdf
+      ❌ Download failed for 367983_A0402-DEMOLITION PLANS.pdf: page.evaluate: Error: HTTP 404
+    at eval (eval at evaluate (:290:30), <anonymous>:3:24)
+    at async <anonymous>:316:30
+       📥 [3/32] Downloading via click: A0402-DEMOLITION PLANS.pdf

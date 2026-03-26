@@ -1,0 +1,125 @@
+The app currently only works in dark mode with the Commun-ET theme. 
+Add a fully functional light mode that maintains the same premium, 
+luxury aesthetic but with light backgrounds. The theme toggle 
+(sun/moon icon in the header) should switch between modes.
+
+LIGHT MODE COLOR MAPPING:
+
+Backgrounds:
+- obsidian (#050E1F) → #FAFBFD (very light cool gray)
+- slate (#091428) → #F2F4F8 (light gray)
+- panel (#0D1E38) → #FFFFFF (white)
+- border (#1A3055) → #E2E8F0 (light border)
+
+Text:
+- white (#F0F6FF) → #0F172A (dark navy, near black)
+- offwhite (#B8D4F0) → #334155 (dark gray)
+- fog (#6B9AC4) → #64748B (medium gray)
+
+Accents (STAY THE SAME in both modes):
+- gold (#FF6B2B) → #FF6B2B (unchanged)
+- goldLight (#FF8C55) → #FF8C55 (unchanged)
+- goldDim (#C44D14) → #C44D14 (unchanged)
+- teal (#38BDF8) → #0EA5E9 (slightly darker for contrast on white)
+- red (#FF4040) → #EF4444 (slightly adjusted for white bg)
+
+Secondary elements:
+- steel (#1D4A7A) → #CBD5E1 (light steel for borders/dividers)
+- tealDim (#0A5A8C) → #0284C7 (darker teal for light bg)
+
+IMPLEMENTATION:
+
+1. Use a ThemeProvider or context that stores "dark" | "light" mode.
+   Check if one already exists — if so, extend it. If not, create one.
+
+2. Store preference in localStorage so it persists across sessions.
+
+3. The existing theme toggle button (likely a sun/moon icon in the 
+   top header bar) should work to switch modes. If no toggle exists, 
+   add one next to the settings gear icon in the header.
+
+4. For Tailwind-based components: add a "dark" class strategy. 
+   Update tailwind.config to use darkMode: "class". Add "dark" class 
+   to the html element when dark mode is active.
+   
+   Then update components to use patterns like:
+   bg-white dark:bg-[#0D1E38]
+   text-slate-800 dark:text-[#F0F6FF]
+   border-slate-200 dark:border-[#1A3055]
+
+5. For inline-styled components (like the landing page): read the 
+   current theme from context and swap color values accordingly.
+   Create a useThemeColors() hook that returns the correct color 
+   set based on current mode.
+
+SPECIFIC COMPONENT UPDATES:
+
+SIDEBAR (light mode):
+- Background: #FFFFFF
+- Border-right: 1px solid #E2E8F0
+- Active item: left border #FF6B2B, background #FFF7ED
+- Text: #64748B, active text: #0F172A
+- Section headers: #C44D14
+
+HEADER BAR (light mode):
+- Background: #FFFFFF
+- Border-bottom: 1px solid #E2E8F0
+- Search input: background #F2F4F8, border #E2E8F0
+- Icons: #64748B
+
+CARDS/PANELS (light mode):
+- Background: #FFFFFF
+- Border: 1px solid #E2E8F0
+- Hover: border-color #FF6B2B40, box-shadow 0 2px 8px rgba(0,0,0,0.06)
+
+TABLES (light mode):
+- Header bg: #F8FAFC
+- Header text: #C44D14
+- Row border: 1px solid #F1F5F9
+- Row hover: background #FFF7ED
+- Cell text: #0F172A primary, #64748B secondary
+
+BUTTONS (light mode):
+- Primary: background #FF6B2B, color #FFFFFF (white text on orange)
+- Secondary: background transparent, border #CBD5E1, color #64748B
+- Secondary hover: border-color #FF6B2B
+
+INPUTS (light mode):
+- Background: #FFFFFF
+- Border: 1px solid #E2E8F0
+- Focus: border-color #FF6B2B, ring #FF6B2B20
+- Text: #0F172A
+- Placeholder: #94A3B8
+
+BADGES/TAGS (light mode):
+- Use same accent colors but with lighter backgrounds
+- e.g. gold badge: bg #FFF7ED, border #FFEDD5, text #C44D14
+
+STATUS COLORS (light mode):
+- Success: #0EA5E9 (teal)
+- Warning: #F59E0B (amber, better contrast than orange on white)
+- Error: #EF4444
+- Neutral: #94A3B8
+
+LANDING PAGE (light mode):
+- Hero background: linear-gradient(180deg, #FAFBFD, #F2F4F8)
+- Grid background lines: rgba(15,23,42,0.04) instead of rgba(56,189,248,0.04)
+- Scan line: rgba(255,107,43,0.15) 
+- Stats bar: background rgba(255,255,255,0.9), backdrop-blur
+- Nav: background rgba(255,255,255,0.95)
+- All text colors inverted to dark equivalents
+- Gold accent stays #FF6B2B throughout
+
+SCROLLBAR (light mode):
+- Track: #F2F4F8
+- Thumb: #FF6B2B44
+
+CRITICAL RULES:
+- Do NOT change any functionality, API calls, or data logic
+- Both modes must look polished and professional
+- The gold/orange accent (#FF6B2B) is the brand color — it stays 
+  prominent in BOTH modes
+- Default to dark mode for new users (matches current state)
+- Ensure ALL pages work in both modes — test dashboard, portal data, 
+  response matrix, settings, landing page
+- shadcn/ui components must also respect the theme toggle
