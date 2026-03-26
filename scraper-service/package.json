@@ -6,8 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "install-browsers": "npx playwright install chromium",
-    "postinstall": "npx playwright install chromium"
+    "install-browsers": "npx playwright install chromium --with-deps",
+    "postinstall": "npx playwright install chromium --with-deps"
   },
   "keywords": [],
   "author": "",
