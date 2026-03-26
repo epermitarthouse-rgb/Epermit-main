@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.git
+.gitignore
+.env
+.env.*
+*.log
+logs
+debug
+downloads
+.cache
+.DS_Store
+check_iframe.js
+.baltimore-merge.tmp.js

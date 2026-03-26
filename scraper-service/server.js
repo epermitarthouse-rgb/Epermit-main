@@ -4504,7 +4504,7 @@ async function startServer() {
     console.log("Server will start anyway; login/scrape will return 503 until Chromium is installed.");
   }
 
-  app.listen(PORT, () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║  🏛️  ProjectDox Data Extractor                        ║
