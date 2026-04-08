@@ -35,6 +35,7 @@ import {
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
+import { isProjectDoxUrl } from "@/lib/portalView";
 import {
   Select,
   SelectContent,
@@ -273,34 +274,69 @@ export function AppSidebar() {
   >([]);
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>("");
 
-  useEffect(() => {
+  const fetchSidebarCredentials = useCallback(async () => {
     if (!user) {
       setSidebarCredentials([]);
       return;
     }
-    supabase
+    const { data, error } = await supabase
       .from("portal_credentials")
       .select("id, jurisdiction, portal_username, login_url")
       .eq("user_id", user.id)
-      .order("jurisdiction", { ascending: true })
-      .then(({ data }) => setSidebarCredentials(data || []));
-  }, [user?.id]);
+      .order("jurisdiction", { ascending: true });
+    if (error) {
+      console.error("[AppSidebar] Failed to load portal credentials:", error);
+      return;
+    }
+    setSidebarCredentials(data || []);
+  }, [user]);
 
   useEffect(() => {
-    if (!selectedProject?.selectedProjectId || loading || projects.length === 0)
+    void fetchSidebarCredentials();
+  }, [fetchSidebarCredentials, location.pathname]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`portal_credentials_sidebar_${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "portal_credentials",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void fetchSidebarCredentials();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchSidebarCredentials]);
+
+  useEffect(() => {
+    if (!selectedProject?.selectedProjectId) {
+      setSelectedCredentialId("");
       return;
+    }
+    if (loading) return;
     const p = projects.find(
       (pr) => pr.id === selectedProject.selectedProjectId,
     );
-    setSelectedCredentialId((p as any)?.credential_id ?? "");
+    if (!p) return;
+    const cid = p.credential_id;
+    setSelectedCredentialId(cid ? String(cid) : "");
   }, [selectedProject?.selectedProjectId, projects, loading]);
 
   const detectPortalTypeFromUrl = (
     url?: string | null,
   ): "accela" | "projectdox" | "unknown" => {
-    const lower = (url || "").toLowerCase();
-    if (lower.includes("avolvecloud.com") || lower.includes("projectdox"))
-      return "projectdox";
+    if (!url) return "unknown";
+    if (isProjectDoxUrl(url)) return "projectdox";
+    const lower = url.toLowerCase();
     if (lower.includes("accela.com")) return "accela";
     return "unknown";
   };

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +28,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useScrape } from "@/contexts/ScrapeContext";
 import { supabase } from "@/lib/supabase";
+import {
+  normalizePgcFlattenedReviewCommentsText,
+  shouldNormalizePgcReviewCommentsDisplayText,
+} from "@/lib/pgcReviewCommentsText";
+import {
+  groupPgcWorkflowRowsIntoReviewItems,
+  sanitizePgcWorkflowRows,
+} from "@/lib/pgcReviewRowViewModel";
 import { formatDistanceToNow } from "date-fns";
 import {
   RefreshCw,
@@ -39,8 +53,12 @@ import {
   Loader2,
 } from "lucide-react";
 import AccelaProjectView from "@/components/portal/AccelaProjectView";
+import {
+  PgcStatusTab,
+  type PgcStatusTabData,
+} from "@/components/portal/PgcStatusTab";
 import { BaltimorePortalDataView } from "@/components/baltimore/BaltimorePortalDataView";
-import { isBaltimorePortal } from "@/lib/portalView";
+import { isBaltimorePortal, isProjectDoxUrl } from "@/lib/portalView";
 
 class TabErrorBoundary extends React.Component<
   { tabName: string; children: React.ReactNode },
@@ -85,6 +103,7 @@ interface TableData {
   headers: string[];
   rows: Record<string, string>[];
   tableIndex?: number;
+  title?: string;
 }
 
 interface FileComment {
@@ -112,6 +131,9 @@ interface FolderEntry {
   name: string;
   fileCount: number;
   files: FileEntry[];
+  folderName?: string;
+  parentFolder?: string;
+  filesCount?: number;
 }
 
 interface FilesTabData {
@@ -122,10 +144,48 @@ interface FilesTabData {
   folders?: FolderEntry[];
 }
 
+interface ReportEntryDownload {
+  fileSlug?: string;
+  reportName: string;
+  reportType?: string;
+  reportDescription?: string;
+  reportUrl?: string;
+  /** PGC ePlan: ReportViewer.aspx URL when exports are not yet uploaded */
+  viewerUrl?: string | null;
+  viewerReady?: boolean;
+  pdfUrl?: string | null;
+  excelUrl?: string | null;
+  excelDownloaded?: boolean;
+  pdfDownloaded?: boolean;
+  /** PGC: no navigate URL / export path (e.g. missing WFlowInstanceID and no live link) */
+  exportUnavailable?: boolean;
+}
+
+interface ReviewCorrectionRow {
+  correctionID?: string;
+  referenceNumber?: string | null;
+  department?: string | null;
+  reviewerName?: string | null;
+  statusName?: string | null;
+  statusCompleted?: boolean | null;
+  correctionType?: string | null;
+  commentText?: string | null;
+  responseText?: string | null;
+  fileID?: string | null;
+  fileName?: string | null;
+  markupPdfUrl?: string | null;
+  markupPdfPublicUrl?: string;
+  reviewCycle?: string | null;
+  isLatestCycle?: boolean | null;
+  dateCreated?: string | null;
+}
+
 interface TabData {
   keyValues?: KeyValue[];
   projectInfo?: KeyValue[];
   tables?: TableData[];
+  /** PGC ePlan: scraper diagnostics when Info tab is guarded or fails. */
+  info_debug?: unknown;
   links?: { text: string; href: string }[];
   error?: string;
   pdfs?: {
@@ -135,8 +195,23 @@ interface TabData {
     pages?: number;
     error?: string;
     url?: string;
+    pdfUrl?: string;
+    excelUrl?: string;
+    info?: { source?: string };
   }[];
   folders?: FolderEntry[];
+  reportEntries?: ReportEntryDownload[];
+}
+
+interface ReviewTabData extends TabData {
+  workflow?: Record<string, unknown> | null;
+  reviewProbe?: Record<string, unknown> | null;
+  summary?: Record<string, unknown>;
+  latestCycleCorrections?: ReviewCorrectionRow[];
+  workflowBuckets?: {
+    workflowName: string;
+    rows: Record<string, string>[];
+  }[];
 }
 
 interface PortalData {
@@ -146,12 +221,15 @@ interface PortalData {
   description: string;
   location: string;
   dashboardStatus: string;
+  portalSubtype?: string;
+  jurisdiction?: string;
   tabs: {
     info?: TabData;
     reports?: TabData;
     files?: FilesTabData;
     status?: TabData;
     tasks?: TabData;
+    review?: ReviewTabData;
     attachments?: TabData;
     inspections?: TabData;
     payments?: TabData;
@@ -162,9 +240,8 @@ interface PortalData {
 
 function detectPortalTypeFromUrl(url: string | null | undefined): string {
   if (!url) return "unknown";
+  if (isProjectDoxUrl(url)) return "projectdox";
   const lower = url.toLowerCase();
-  if (lower.includes("avolvecloud.com") || lower.includes("projectdox"))
-    return "projectdox";
   if (lower.includes("accela.com")) return "accela";
   return "unknown";
 }
@@ -203,7 +280,35 @@ export default function PortalDataViewer() {
     alt: string;
   } | null>(null);
   const [lightboxZoom, setLightboxZoom] = useState(100);
+  const [selectedReviewWorkflow, setSelectedReviewWorkflow] = useState<string | null>(
+    null,
+  );
   const fetchIdRef = useRef(0);
+
+  useEffect(() => {
+    if (portalData?.portalSubtype !== "pgc-eplan") return;
+    const rt = portalData.tabs?.review as ReviewTabData | undefined;
+    const buckets =
+      rt?.workflowBuckets
+        ?.map((w) => {
+          const rawRows = (w.rows ?? []) as Record<string, string>[];
+          const rows = sanitizePgcWorkflowRows(rawRows);
+          const groupedItems = groupPgcWorkflowRowsIntoReviewItems(
+            rows,
+            w.workflowName,
+            { rawRowCount: rawRows.length },
+          );
+          return { workflowName: w.workflowName, rows, groupedItems };
+        })
+        .filter((w) => w.rows.length > 0) ?? [];
+    if (!buckets.length) return;
+    if (
+      selectedReviewWorkflow == null ||
+      !buckets.some((b) => b.workflowName === selectedReviewWorkflow)
+    ) {
+      setSelectedReviewWorkflow(buckets[0].workflowName);
+    }
+  }, [portalData?.portalSubtype, portalData?.tabs?.review, selectedReviewWorkflow]);
 
   useEffect(() => {
     if (!lightboxImage) return;
@@ -506,6 +611,20 @@ export default function PortalDataViewer() {
     return () => clearInterval(interval);
   }, [scrape.isScraping, resolvedProjectId, silentRefetch]);
 
+  /** Must run before any early return — same hook count on every render (PGC report row → download links). */
+  const reportEntryByReportName = useMemo(() => {
+    const m = new Map<string, ReportEntryDownload>();
+    const list = portalData?.tabs?.reports?.reportEntries;
+    if (!Array.isArray(list)) return m;
+    for (const e of list) {
+      const name = e?.reportName;
+      if (name != null && String(name).length > 0) {
+        m.set(String(name), e);
+      }
+    }
+    return m;
+  }, [portalData]);
+
   if (authLoading || (loading && !portalData)) {
     return (
       <section className="py-6 px-4 sm:px-6 max-w-5xl">
@@ -652,9 +771,66 @@ export default function PortalDataViewer() {
   const infoTab = portalData.tabs?.info;
   const reportsTab = portalData.tabs?.reports;
   const filesTab = portalData.tabs?.files;
+  const isPgcEplan = portalData.portalSubtype === "pgc-eplan";
+  const foldersForRender = (() => {
+    const folders = filesTab?.folders ?? [];
+    if (!isPgcEplan) return folders;
+    return folders.filter(
+      (f) => (f.filesCount ?? 0) > 0 || (f.files?.length ?? 0) > 0,
+    );
+  })();
+  const statusTabData = portalData.tabs?.status;
+  const statusSectionsList = (
+    statusTabData as { sections?: unknown[] } | undefined
+  )?.sections;
+  const tasksTabData = portalData.tabs?.tasks;
+  const reviewTab = portalData.tabs?.review as ReviewTabData | undefined;
   const reportsTable = reportsTab?.tables?.[0];
   const reportsRows = reportsTable?.rows ?? [];
-  const pdfs = reportsTab?.pdfs ?? [];
+  const rawPdfs = reportsTab?.pdfs;
+  const pdfs = Array.isArray(rawPdfs) ? rawPdfs : [];
+  const reportEntries = reportsTab?.reportEntries ?? [];
+  const showWashingtonReportsTable =
+    !!reportsTable && (reportsRows?.length ?? 0) > 0;
+
+  const hasStatusTab =
+    !!statusTabData &&
+    ((statusTabData.keyValues?.length ?? 0) > 0 ||
+      (statusTabData.tables?.length ?? 0) > 0 ||
+      (Array.isArray(statusSectionsList) && statusSectionsList.length > 0) ||
+      !!statusTabData.error);
+  const hasTasksTab =
+    !!tasksTabData &&
+    ((tasksTabData.keyValues?.length ?? 0) > 0 ||
+      (tasksTabData.tables?.length ?? 0) > 0 ||
+      !!tasksTabData.error);
+  const corrections = reviewTab?.latestCycleCorrections ?? [];
+  /** PGC: sanitize DOM rows, then group into logical review items (one card per comment). */
+  const reviewWorkflowBuckets = isPgcEplan
+    ? (reviewTab?.workflowBuckets ?? [])
+        .map((w) => {
+          const rawRows = (w.rows ?? []) as Record<string, string>[];
+          const rows = sanitizePgcWorkflowRows(rawRows);
+          const groupedItems = groupPgcWorkflowRowsIntoReviewItems(
+            rows,
+            w.workflowName,
+            { rawRowCount: rawRows.length },
+          );
+          return { workflowName: w.workflowName, rows, groupedItems };
+        })
+        .filter((w) => w.rows.length > 0)
+    : [];
+  const activePgcReviewWorkflow =
+    reviewWorkflowBuckets.find((w) => w.workflowName === selectedReviewWorkflow) ||
+    reviewWorkflowBuckets[0] ||
+    null;
+  const hasReviewTab =
+    !!reviewTab &&
+    (reviewWorkflowBuckets.length > 0 ||
+      corrections.length > 0 ||
+      !!reviewTab.summary ||
+      !!reviewTab.workflow ||
+      !!reviewTab.error);
   const PROJECT_INFO_LABELS = [
     "Project name",
     "Description",
@@ -834,15 +1010,17 @@ export default function PortalDataViewer() {
     );
     return hasProjectNameHeader || hasVeryLongHeader || hasLabelLikeHeaders;
   };
-  const filteredInfoTables = infoTables.filter(
-    (table) => !isMalformedInfoTable(table),
-  );
+  const filteredInfoTables = isPgcEplan
+    ? infoTables
+    : infoTables.filter((table) => !isMalformedInfoTable(table));
 
   let displayProjectInfo: KeyValue[] = [];
   const weirdTable = infoTables.find((t) =>
     isWeirdProjectInfoTable(t, portalData?.projectNum ?? ""),
   );
-  if (isProjectInfoMalformed() || weirdTable) {
+  if (isPgcEplan) {
+    displayProjectInfo = projectInfoFromTab;
+  } else if (isProjectInfoMalformed() || weirdTable) {
     displayProjectInfo = buildProjectInfoFromPortalAndTable();
   } else if (projectInfoFromTab.length > 2) {
     displayProjectInfo = projectInfoFromTab;
@@ -917,10 +1095,101 @@ export default function PortalDataViewer() {
     }
   }
 
-  const hasInfoData =
-    displayProjectInfo.length > 0 ||
-    (infoTab?.keyValues?.length ?? 0) > 0 ||
-    filteredInfoTables.length > 0;
+  const hasInfoData = isPgcEplan
+    ? (filteredInfoTables.length > 0 || (infoTab?.keyValues?.length ?? 0) > 0)
+    : (displayProjectInfo.length > 0 ||
+        (infoTab?.keyValues?.length ?? 0) > 0 ||
+        filteredInfoTables.length > 0);
+  const pgcInfoFallbackRows: KeyValue[] = isPgcEplan
+    ? [
+        { key: "Permit Number", value: portalData.projectNum ?? "" },
+        {
+          key: "Project Title",
+          value: portalData.description || portalData.name || "",
+        },
+        { key: "Address", value: portalData.location ?? "" },
+        { key: "Portal Type", value: portalData.portalSubtype || portalData.portalType || "" },
+        {
+          key: "Last Checked",
+          value: lastCheckedAt ? new Date(lastCheckedAt).toLocaleString() : "",
+        },
+        {
+          key: "Workflow Instance",
+          value:
+            (reviewTab?.workflow as Record<string, unknown> | undefined)
+              ?.wflowInstanceID != null
+              ? String(
+                  (reviewTab?.workflow as Record<string, unknown>).wflowInstanceID,
+                )
+              : "",
+        },
+        { key: "Project ID", value: resolvedProjectId ?? "" },
+      ].filter((kv) => (kv.value || "").trim() !== "")
+    : [];
+  const hasInfoFallbackForPgc = false;
+
+  const pgcTaskTablesForRender = (() => {
+    const sourceTables = tasksTabData?.tables ?? [];
+    if (!isPgcEplan) return sourceTables;
+    return sourceTables.map((tbl) => {
+      const headers = (tbl.headers ?? []).map((h) => String(h || "").trim());
+      const lower = headers.join(" ").toLowerCase();
+      const isWorkflow =
+        /coordinator group|integration mode|version|started|completed/.test(lower);
+      if (isWorkflow) {
+        const wfHeaders = [
+          "Name",
+          "Coordinator Group",
+          "State",
+          "Integration Mode",
+          "Version",
+          "Started",
+          "Completed",
+        ];
+        const rows = (tbl.rows ?? []).map((row) => ({
+          Name: String(row["Name"] ?? row["name"] ?? ""),
+          "Coordinator Group": String(
+            row["Coordinator Group"] ?? row["coordinatorGroup"] ?? "",
+          ),
+          State: String(row["State"] ?? row["state"] ?? ""),
+          "Integration Mode": String(
+            row["Integration Mode"] ?? row["integrationMode"] ?? "",
+          ),
+          Version: String(row["Version"] ?? row["version"] ?? ""),
+          Started: String(row["Started"] ?? row["started"] ?? ""),
+          Completed: String(row["Completed"] ?? row["completed"] ?? ""),
+        }));
+        return { headers: wfHeaders, rows, title: "Workflows" };
+      }
+      const taskHeaders = [
+        "Action",
+        "Task",
+        "Project",
+        "Group",
+        "Status",
+        "Priority",
+        "Due Date",
+        "Created",
+        "Case Type",
+        "Description",
+      ];
+      const rows = (tbl.rows ?? []).map((row) => ({
+        Action: String(row["Action"] ?? row["action"] ?? ""),
+        Task: String(row["Task"] ?? row["taskName"] ?? row["Name"] ?? ""),
+        Project: String(row["Project"] ?? row["project"] ?? ""),
+        Group: String(row["Group"] ?? row["Assignee"] ?? row["assignee"] ?? ""),
+        Status: String(row["Status"] ?? row["State"] ?? row["state"] ?? ""),
+        Priority: String(row["Priority"] ?? row["priority"] ?? ""),
+        "Due Date": String(
+          row["Due Date"] ?? row["Due"] ?? row["dueDate"] ?? "",
+        ),
+        Created: String(row["Created"] ?? row["created"] ?? ""),
+        "Case Type": String(row["Case Type"] ?? row["caseType"] ?? ""),
+        Description: String(row["Description"] ?? row["rawText"] ?? ""),
+      }));
+      return { headers: taskHeaders, rows, title: "Tasks" };
+    });
+  })();
 
   const findPdfForReport = (reportName: string) =>
     pdfs.find(
@@ -1357,6 +1626,49 @@ export default function PortalDataViewer() {
     return <>{elements}</>;
   }
 
+  /** When SSRS/Excel text is tab-separated rows (typical PGC export) and structured parse fails. */
+  function renderTabularReportPreview(raw: string): React.ReactNode {
+    const rows = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const dataRows = rows.filter((r) => r.includes("\t"));
+    if (dataRows.length < 2) return null;
+    const splitRow = (r: string) => r.split("\t").map((c) => c.trim());
+    const maxCols = Math.max(...dataRows.map((r) => splitRow(r).length), 1);
+    const cap = 400;
+    const slice = dataRows.length > cap ? dataRows.slice(0, cap) : dataRows;
+    return (
+      <div className="overflow-x-auto rounded border border-[#1A3055] my-2">
+        <table className="text-xs w-full border-collapse min-w-[480px]">
+          <tbody>
+            {slice.map((row, ri) => (
+              <tr
+                key={ri}
+                className={ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"}
+              >
+                {Array.from({ length: maxCols }, (_, ci) => {
+                  const cells = splitRow(row);
+                  const cell = cells[ci] ?? "";
+                  return (
+                    <td
+                      key={ci}
+                      className="border border-[#1A3055] px-2 py-1.5 align-top text-[#F0F6FF] whitespace-pre-wrap max-w-[min(280px,40vw)] break-words"
+                    >
+                      {cell}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {dataRows.length > cap ? (
+          <p className="text-xs text-muted-foreground px-2 py-1">
+            Showing first {cap} of {dataRows.length} rows.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderReviewComments(text: string): React.ReactNode {
     if (!text) return null;
 
@@ -1383,9 +1695,30 @@ export default function PortalDataViewer() {
     if (comments.length === 0) {
       elements.push(
         <p key={keyInc++} className="text-sm text-[#6B9AC4] italic py-2">
-          No comments parsed.
+          No structured comment blocks found (expected Washington-style STATUS
+          section). Showing tabular or formatted preview when available.
         </p>,
       );
+      const tabular = renderTabularReportPreview(text);
+      if (tabular) {
+        elements.push(<div key={keyInc++}>{tabular}</div>);
+        elements.push(
+          <details key={keyInc++} className="mt-2 text-xs">
+            <summary className="cursor-pointer text-[#6B9AC4] hover:text-[#F0F6FF]">
+              Show raw extracted text
+            </summary>
+            <pre className="mt-2 p-3 bg-[#091428] rounded border border-[#1A3055] overflow-auto max-h-64 whitespace-pre-wrap text-[#F0F6FF]">
+              {text.length > 120_000 ? `${text.slice(0, 120_000)}\n\n[truncated]` : text}
+            </pre>
+          </details>,
+        );
+      } else {
+        elements.push(
+          <div key={keyInc++} className="max-h-96 overflow-y-auto">
+            {renderReportContent(text)}
+          </div>,
+        );
+      }
     }
 
     comments.forEach((comment) => {
@@ -1555,6 +1888,31 @@ export default function PortalDataViewer() {
           >
             Info
           </TabsTrigger>
+          {hasStatusTab && (
+            <TabsTrigger
+              value="status"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+            >
+              Status
+            </TabsTrigger>
+          )}
+          {hasTasksTab && (
+            <TabsTrigger
+              value="tasks"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+            >
+              Tasks
+            </TabsTrigger>
+          )}
+          {hasReviewTab && (
+            <TabsTrigger
+              value="review"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+              data-testid="tab-review"
+            >
+              Review
+            </TabsTrigger>
+          )}
           <TabsTrigger
             value="reports"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
@@ -1576,14 +1934,15 @@ export default function PortalDataViewer() {
           <Card>
             <CardContent className="p-0">
               <TabErrorBoundary tabName="Info">
+                <>
                 {infoTab?.error ? (
                   <div className="p-4 text-destructive flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     {infoTab?.error}
                   </div>
-                ) : hasInfoData ? (
+                ) : hasInfoData || hasInfoFallbackForPgc ? (
                   <div>
-                    {displayProjectInfo.length > 0 && (
+                    {!isPgcEplan && displayProjectInfo.length > 0 && (
                       <div className="p-4 pb-0">
                         <p className="text-sm font-bold mb-2">Project Info</p>
                         <div className="border border-border rounded-md overflow-hidden">
@@ -1612,14 +1971,51 @@ export default function PortalDataViewer() {
                                     : ""
                                 }`}
                               >
-                                {kv.value.trim() !== "" ? kv.value : "-"}
+                                {isPgcEplan
+                                  ? kv.value
+                                  : kv.value.trim() !== ""
+                                    ? kv.value
+                                    : "-"}
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
-                    {infoTab?.keyValues &&
+                    {!isPgcEplan &&
+                      displayProjectInfo.length === 0 &&
+                      hasInfoFallbackForPgc && (
+                        <div className="p-4 pb-0">
+                          <p className="text-sm font-bold mb-2">Project Summary</p>
+                          <div className="border border-border rounded-md overflow-hidden">
+                            <div className="grid grid-cols-3 border-b border-border bg-muted/30">
+                              <div className="col-span-1 px-3 py-2 text-sm font-semibold">
+                                Field
+                              </div>
+                              <div className="col-span-2 px-3 py-2 text-sm font-semibold">
+                                Value
+                              </div>
+                            </div>
+                            {pgcInfoFallbackRows.map((kv, i) => (
+                              <div
+                                key={`${kv.key}-${i}`}
+                                className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
+                                  i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                                }`}
+                              >
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold bg-[#091428] border-r border-[#1A3055]">
+                                  {kv.key}
+                                </div>
+                                <div className="col-span-2 px-3 py-2 text-sm">
+                                  {kv.value.trim() !== "" ? kv.value : "-"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    {!isPgcEplan &&
+                      infoTab?.keyValues &&
                       infoTab?.keyValues?.length > 0 &&
                       displayProjectInfo.length === 0 && (
                         <div className="border-0">
@@ -1692,10 +2088,445 @@ export default function PortalDataViewer() {
                     No info data available.
                   </p>
                 )}
+                {isPgcEplan && infoTab?.info_debug != null && (
+                  <details className="p-4 border-t border-border text-xs">
+                    <summary className="cursor-pointer text-muted-foreground select-none">
+                      Info extraction debug
+                    </summary>
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/30 p-2 font-mono">
+                      {JSON.stringify(infoTab.info_debug, null, 2)}
+                    </pre>
+                  </details>
+                )}
+                </>
               </TabErrorBoundary>
             </CardContent>
           </Card>
         </TabsContent>
+
+        {hasStatusTab && (
+          <TabsContent value="status" className="mt-4">
+            <Card
+              className={
+                isPgcEplan
+                  ? "border-border/50 bg-transparent shadow-none"
+                  : undefined
+              }
+            >
+              <CardContent className={isPgcEplan ? "p-4 pt-2" : "p-0"}>
+                <TabErrorBoundary tabName="Status">
+                  {statusTabData?.error ? (
+                    <div className="p-4 text-destructive flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      {statusTabData.error}
+                    </div>
+                  ) : isPgcEplan ? (
+                    <PgcStatusTab
+                      status={statusTabData as PgcStatusTabData}
+                    />
+                  ) : (
+                    <div className="p-4 space-y-4">
+                      {statusTabData?.keyValues &&
+                        statusTabData.keyValues.length > 0 && (
+                          <div className="border border-border rounded-md overflow-hidden">
+                            {statusTabData.keyValues.map((kv, i) => (
+                              <div
+                                key={`${kv.key}-${i}`}
+                                className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
+                                  i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                                }`}
+                              >
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-[#1A3055]">
+                                  {kv.key}
+                                </div>
+                                <div className="col-span-2 px-3 py-2 text-sm">
+                                  {kv.value || "—"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      {(statusTabData?.tables ?? []).map((tbl, ti) => (
+                        <div key={ti} className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-[#091428]">
+                                {tbl.headers?.map((h, hi) => (
+                                  <TableHead key={hi}>{h}</TableHead>
+                                ))}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {tbl.rows?.map((row, ri) => (
+                                <TableRow
+                                  key={ri}
+                                  className={
+                                    ri % 2 === 1
+                                      ? "bg-[#091428]"
+                                      : "bg-[#0D1E38]"
+                                  }
+                                >
+                                  {tbl.headers?.map((h) => (
+                                    <TableCell key={h}>{row[h] ?? ""}</TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabErrorBoundary>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {hasTasksTab && (
+          <TabsContent value="tasks" className="mt-4">
+            <Card>
+              <CardContent className="p-0">
+                <TabErrorBoundary tabName="Tasks">
+                  {tasksTabData?.error ? (
+                    <div className="p-4 text-destructive flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      {tasksTabData.error}
+                    </div>
+                  ) : (
+                    <div className="p-4 space-y-4">
+                      {tasksTabData?.keyValues &&
+                        tasksTabData.keyValues.length > 0 && (
+                          <div className="border border-border rounded-md overflow-hidden">
+                            {tasksTabData.keyValues.map((kv, i) => (
+                              <div
+                                key={`${kv.key}-${i}`}
+                                className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
+                                  i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                                }`}
+                              >
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-[#1A3055]">
+                                  {kv.key}
+                                </div>
+                                <div className="col-span-2 px-3 py-2 text-sm whitespace-pre-wrap">
+                                  {kv.value || "—"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      {pgcTaskTablesForRender.map((tbl, ti) => (
+                        <div key={ti} className="overflow-x-auto">
+                          {isPgcEplan && tbl.title && (
+                            <p className="text-sm font-semibold mb-2">{tbl.title}</p>
+                          )}
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-[#091428]">
+                                {tbl.headers?.map((h, hi) => (
+                                  <TableHead key={hi}>{h}</TableHead>
+                                ))}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {tbl.rows?.map((row, ri) => (
+                                <TableRow
+                                  key={ri}
+                                  className={
+                                    ri % 2 === 1
+                                      ? "bg-[#091428]"
+                                      : "bg-[#0D1E38]"
+                                  }
+                                >
+                                  {tbl.headers?.map((h) => (
+                                    <TableCell key={h}>{row[h] ?? ""}</TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabErrorBoundary>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {hasReviewTab && (
+          <TabsContent value="review" className="mt-4">
+            <Card>
+              <CardContent className="p-4">
+                <TabErrorBoundary tabName="Review">
+                  {reviewTab?.error ? (
+                    <div className="text-destructive flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      {reviewTab.error}
+                    </div>
+                  ) : isPgcEplan && reviewWorkflowBuckets.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-muted-foreground shrink-0">
+                          Workflow
+                        </span>
+                        {reviewWorkflowBuckets.map((wf) => {
+                          const active =
+                            (activePgcReviewWorkflow?.workflowName || "") ===
+                            wf.workflowName;
+                          return (
+                            <Button
+                              key={wf.workflowName}
+                              type="button"
+                              size="sm"
+                              variant={active ? "default" : "outline"}
+                              className="max-w-[min(100%,20rem)] truncate"
+                              title={wf.workflowName}
+                              onClick={() =>
+                                setSelectedReviewWorkflow(wf.workflowName)
+                              }
+                            >
+                              {wf.workflowName}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      {activePgcReviewWorkflow &&
+                        (activePgcReviewWorkflow.groupedItems?.length ?? 0) >
+                          0 && (
+                          <div className="rounded-lg border border-border/50 bg-[#091428]/60 px-3 py-2.5">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Active workflow
+                            </p>
+                            <p className="text-base font-semibold leading-snug text-foreground">
+                              {activePgcReviewWorkflow.workflowName}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {activePgcReviewWorkflow.groupedItems?.length ?? 0}{" "}
+                              review
+                              {(activePgcReviewWorkflow.groupedItems?.length ??
+                                0) === 1
+                                ? ""
+                                : "s"}{" "}
+                              in this workflow
+                            </p>
+                          </div>
+                        )}
+                      {!activePgcReviewWorkflow ||
+                      (activePgcReviewWorkflow.groupedItems?.length ?? 0) ===
+                        0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No review rows for the selected workflow.
+                        </p>
+                      ) : (
+                        <div className="space-y-3 max-w-full">
+                          {activePgcReviewWorkflow.groupedItems.map((vm, i) => {
+                            const link =
+                              vm.fileOrMarkupUrl &&
+                              /^https?:\/\//i.test(vm.fileOrMarkupUrl.trim())
+                                ? vm.fileOrMarkupUrl.trim()
+                                : null;
+                            return (
+                              <div
+                                  key={`${activePgcReviewWorkflow.workflowName}-${i}`}
+                                className="rounded-lg border border-border/60 bg-[#0D1E38] p-3 shadow-sm space-y-3"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2 gap-y-2">
+                                  <div className="flex flex-wrap gap-x-5 gap-y-2 min-w-0 flex-1">
+                                    <div className="min-w-[5.5rem]">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        Ref #
+                                      </div>
+                                      <div className="text-xs font-medium tabular-nums">
+                                        {vm.refNumber || "—"}
+                                      </div>
+                                    </div>
+                                    <div className="min-w-[5.5rem]">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        Changemark
+                                      </div>
+                                      <div className="text-xs font-medium">
+                                        {vm.changemarkNumber || "—"}
+                                      </div>
+                                    </div>
+                                    <div className="min-w-[5.5rem]">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        Cycle
+                                      </div>
+                                      <div className="text-xs font-medium">
+                                        {vm.cycle || "—"}
+                                      </div>
+                                    </div>
+                                    <div className="min-w-[7rem]">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        Reviewer
+                                      </div>
+                                      <div className="text-xs font-medium break-words">
+                                        {vm.reviewer || "—"}
+                                      </div>
+                                    </div>
+                                    <div className="min-w-[8rem]">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        Date / time
+                                      </div>
+                                      <div className="text-xs font-medium break-words">
+                                        {vm.datetime || "—"}
+                                      </div>
+                                    </div>
+                                    <div className="min-w-[7rem]">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        Department
+                                      </div>
+                                      <div className="text-xs font-medium break-words">
+                                        {vm.department || "—"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {vm.status ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="shrink-0 text-xs font-normal max-w-[12rem] truncate"
+                                      title={vm.status}
+                                    >
+                                      {vm.status}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                {vm.fileName ? (
+                                  <div className="text-xs">
+                                    <span className="text-muted-foreground">
+                                      File:{" "}
+                                    </span>
+                                    <span className="break-all font-medium">
+                                      {vm.fileName}
+                                    </span>
+                                  </div>
+                                ) : null}
+                                <div className="border-t border-border/40 pt-2">
+                                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                                    Comment
+                                  </div>
+                                  <div className="text-sm text-foreground/95 whitespace-pre-wrap break-words leading-relaxed">
+                                    {vm.commentText || "—"}
+                                  </div>
+                                </div>
+                                {vm.responseText ? (
+                                  <div className="border-t border-border/40 pt-2 bg-[#091428]/40 -mx-3 px-3 pb-0.5 rounded-b-md">
+                                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                                      Response
+                                    </div>
+                                    <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                                      {vm.responseText}
+                                    </div>
+                                  </div>
+                                ) : null}
+                                {link ? (
+                                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/30 text-xs">
+                                    <a
+                                      href={link}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[#6B9AC4] hover:underline inline-flex items-center gap-1"
+                                    >
+                                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                                      Open file / markup
+                                    </a>
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : corrections.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No review corrections in the latest cycle for this project.
+                    </p>
+                  ) : !isPgcEplan || reviewWorkflowBuckets.length === 0 ? (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-[#091428]">
+                            <TableHead>Ref</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Department</TableHead>
+                            <TableHead>File</TableHead>
+                            {!isPgcEplan && <TableHead>Markup</TableHead>}
+                            <TableHead>Comment</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {corrections.map((c, i) => {
+                            const ctype = (c.correctionType || "").toLowerCase();
+                            const typeLabel =
+                              ctype.includes("change") ||
+                              ctype.includes("markup")
+                                ? "Changemark"
+                                : ctype.includes("comment")
+                                  ? "Comment"
+                                  : c.correctionType || "—";
+                            const markupHref =
+                              c.markupPdfPublicUrl ||
+                              (c.markupPdfUrl &&
+                              String(c.markupPdfUrl).startsWith("http")
+                                ? c.markupPdfUrl
+                                : null);
+                            const snippet = (c.commentText || "").slice(0, 200);
+                            return (
+                              <TableRow
+                                key={c.correctionID || i}
+                                className={
+                                  i % 2 === 1 ? "bg-[#091428]" : "bg-[#0D1E38]"
+                                }
+                              >
+                                <TableCell className="whitespace-nowrap">
+                                  {c.referenceNumber || c.correctionID || "—"}
+                                </TableCell>
+                                <TableCell>{typeLabel}</TableCell>
+                                <TableCell>{c.statusName || "—"}</TableCell>
+                                <TableCell className="max-w-[140px] truncate">
+                                  {c.department || "—"}
+                                </TableCell>
+                                <TableCell className="max-w-[160px] truncate text-xs">
+                                  {c.fileName || "—"}
+                                </TableCell>
+                                {!isPgcEplan && (
+                                  <TableCell>
+                                    {markupHref ? (
+                                      <a
+                                        href={markupHref}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-[#6B9AC4] hover:underline text-sm"
+                                      >
+                                        PDF
+                                      </a>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </TableCell>
+                                )}
+                                <TableCell className="max-w-xs text-xs whitespace-pre-wrap">
+                                  {snippet || "—"}
+                                  {(c.commentText || "").length > 200
+                                    ? "…"
+                                    : ""}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : null}
+                </TabErrorBoundary>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="reports" className="mt-4">
           <p className="text-sm text-muted-foreground mb-3">
@@ -1710,7 +2541,10 @@ export default function PortalDataViewer() {
                     <AlertCircle className="h-4 w-4" />
                     {reportsTab?.error}
                   </div>
-                ) : reportsTable ? (
+                ) : showWashingtonReportsTable ||
+                  reportEntries.length > 0 ? (
+                  <>
+                    {showWashingtonReportsTable ? (
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-[#091428] hover:bg-[#091428]">
@@ -1795,7 +2629,52 @@ export default function PortalDataViewer() {
                                                 </Badge>
                                               )}
                                             </CardTitle>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                              {isPgcEplan
+                                                ? (() => {
+                                                    const ent =
+                                                      reportEntryByReportName.get(
+                                                        reportName,
+                                                      );
+                                                    return (
+                                                      <>
+                                                        {ent?.pdfUrl ? (
+                                                          <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="default"
+                                                          >
+                                                            <a
+                                                              href={ent.pdfUrl}
+                                                              target="_blank"
+                                                              rel="noreferrer"
+                                                            >
+                                                              <FileText className="h-4 w-4 mr-2" />
+                                                              Download PDF
+                                                            </a>
+                                                          </Button>
+                                                        ) : null}
+                                                        {ent?.excelUrl ? (
+                                                          <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="secondary"
+                                                          >
+                                                            <a
+                                                              href={
+                                                                ent.excelUrl
+                                                              }
+                                                              target="_blank"
+                                                              rel="noreferrer"
+                                                            >
+                                                              Download Excel
+                                                            </a>
+                                                          </Button>
+                                                        ) : null}
+                                                      </>
+                                                    );
+                                                  })()
+                                                : null}
                                               {reportName &&
                                                 reportName.includes(
                                                   "Review Comments",
@@ -1862,7 +2741,16 @@ export default function PortalDataViewer() {
                                               {pdf.fileName?.includes(
                                                 "Review Comments",
                                               )
-                                                ? renderReviewComments(pdf.text)
+                                                ? renderReviewComments(
+                                                    shouldNormalizePgcReviewCommentsDisplayText(
+                                                      pdf.fileName,
+                                                      pdf.info,
+                                                    )
+                                                      ? normalizePgcFlattenedReviewCommentsText(
+                                                          pdf.text,
+                                                        )
+                                                      : pdf.text,
+                                                  )
                                                 : renderReportContent(pdf.text)}
                                             </div>
                                           ) : (
@@ -1882,6 +2770,74 @@ export default function PortalDataViewer() {
                       })}
                     </TableBody>
                   </Table>
+                    ) : (
+                      <div className="p-4 space-y-4">
+                        {reportEntries.map((entry, idx) => (
+                          <Card
+                            key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
+                            className="bg-muted/20 border-border"
+                          >
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-base">
+                                {entry.reportName}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex flex-wrap gap-2 pt-0">
+                              {entry.pdfUrl ? (
+                                <Button asChild size="sm" variant="default">
+                                  <a
+                                    href={entry.pdfUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    Download PDF
+                                  </a>
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground self-center">
+                                  PDF not available
+                                </span>
+                              )}
+                              {entry.excelUrl ? (
+                                <Button asChild size="sm" variant="secondary">
+                                  <a
+                                    href={entry.excelUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Download Excel
+                                  </a>
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground self-center">
+                                  Excel not available
+                                </span>
+                              )}
+                              {isPgcEplan &&
+                              !entry.pdfUrl &&
+                              !entry.excelUrl &&
+                              (entry.viewerUrl || entry.reportUrl) ? (
+                                <Button asChild size="sm" variant="outline">
+                                  <a
+                                    href={
+                                      entry.viewerUrl ||
+                                      entry.reportUrl ||
+                                      "#"
+                                    }
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Open portal viewer (debug)
+                                  </a>
+                                </Button>
+                              ) : null}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="p-4 text-muted-foreground">
                     No reports data available.
@@ -1906,13 +2862,13 @@ export default function PortalDataViewer() {
                       <AlertCircle className="h-4 w-4" />
                       {filesTab?.error}
                     </div>
-                  ) : (filesTab?.folders ?? []).length === 0 ? (
+                  ) : foldersForRender.length === 0 ? (
                     <p className="p-4 text-muted-foreground">
                       No files data available.
                     </p>
                   ) : (
                     <div className="divide-y divide-border">
-                      {(filesTab?.folders ?? []).map((folder, fi) => {
+                      {foldersForRender.map((folder, fi) => {
                         const folderKey = `${folder.name}-${fi}`;
                         const isOpen = expandedFolders.has(folderKey);
                         const totalComments =
@@ -1945,7 +2901,14 @@ export default function PortalDataViewer() {
                                 )}
                                 <FolderOpen className="h-4 w-4 shrink-0 text-[#FF6B2B]" />
                                 <span className="font-medium text-sm flex-1">
-                                  {folder.name}
+                                  {isPgcEplan
+                                    ? [
+                                        folder.parentFolder || "",
+                                        folder.folderName || folder.name || "",
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" \u2192 ")
+                                    : folder.folderName || folder.name}
                                 </span>
                                 <Badge variant="secondary" className="text-xs">
                                   {folder.fileCount ??

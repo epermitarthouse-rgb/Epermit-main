@@ -33,6 +33,35 @@ export function isBaltimorePortal(
 export type PortalViewVariant = "baltimore" | "accela" | "projectdox" | "generic";
 
 /**
+ * True when login_url appears to be a ProjectDox-style portal (Avolve-hosted, /ProjectDox paths,
+ * or known jurisdiction ePlan hosts such as Prince George's County).
+ */
+export function isProjectDoxUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("avolvecloud.com") ||
+    lower.includes("projectdox") ||
+    lower.includes("eplans.princegeorgescountymd.gov")
+  );
+}
+
+/**
+ * True when the sidebar-selected portal credential is Prince George's County ePlan (PGC).
+ * Used to show PGC-specific scrape modes; other portals keep Washington/general options.
+ */
+export function isPgcEplanPortalCredential(
+  credential: PortalCredentialLike | null | undefined,
+): boolean {
+  if (!credential) return false;
+  const url = (credential.login_url ?? "").toLowerCase();
+  if (url.includes("eplans.princegeorgescountymd.gov")) return true;
+  const j = (credential.jurisdiction ?? "").trim().toLowerCase();
+  if (j.includes("prince george") && j.includes("eplan")) return true;
+  return false;
+}
+
+/**
  * Resolves which portal view variant to use given credential and optional portalData.portalType.
  * Baltimore is only returned when the credential is Baltimore Accela; other Accela stays "accela".
  */
@@ -45,6 +74,6 @@ export function resolvePortalView(
   if (portalTypeFromData === "projectdox") return "projectdox";
   const url = (credential?.login_url ?? "").toLowerCase();
   if (url.includes("accela.com")) return "accela";
-  if (url.includes("avolvecloud.com") || url.includes("projectdox")) return "projectdox";
+  if (isProjectDoxUrl(credential?.login_url)) return "projectdox";
   return "generic";
 }

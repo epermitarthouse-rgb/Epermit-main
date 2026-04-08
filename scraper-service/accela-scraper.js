@@ -1422,11 +1422,11 @@ async function extractRecordDetails(page) {
       page,
       [
         '[id*="TabDataList"] a:has-text("Record Details")',
-        'a:has-text("Record Details")',
-        'a:has-text("Record Detail")',
-        'a[id*="RecordDetail"]',
-      ],
-      "Record Details",
+      'a:has-text("Record Details")',
+      'a:has-text("Record Detail")',
+      'a[id*="RecordDetail"]',
+    ],
+    "Record Details",
       { expandRecordInfoFirst: true, checkpointLabel: "after_record_details" },
     );
 
@@ -1618,19 +1618,19 @@ async function extractProcessingStatus(page) {
       page,
       [
         '[id*="TabDataList"] a:has-text("Processing Status")',
-        'a:has-text("Processing Status")',
-        'a[id*="ProcessingStatus"]',
-        'a:has-text("Workflow")',
+      'a:has-text("Processing Status")',
+      'a[id*="ProcessingStatus"]',
+      'a:has-text("Workflow")',
         'a:has-text("Workflow Status")',
         '[id*="TabDataList"] a:has-text("Status")',
-      ],
-      "Processing Status",
+    ],
+    "Processing Status",
       { expandRecordInfoFirst: true, checkpointLabel: "after_processing_status" },
-    );
+  );
 
-    if (!found) {
+  if (!found) {
       console.log("     [panel] Processing Status: link not found");
-      return { departments: [], screenshot: null };
+    return { departments: [], screenshot: null };
     }
   }
 
@@ -2519,7 +2519,7 @@ async function extractRelatedRecords(page) {
         page,
         frames,
         ctx,
-        "Related Records",
+    "Related Records",
       );
       if (!navOk) {
         console.log(
@@ -2548,11 +2548,11 @@ async function extractRelatedRecords(page) {
       ],
       "Related Records",
       { expandRecordInfoFirst: true, checkpointLabel: "after_related_records" },
-    );
+  );
 
-    if (!found) {
+  if (!found) {
       console.log("     [panel] Related Records: link not found");
-      return { records: [], screenshot: null };
+    return { records: [], screenshot: null };
     }
   }
 
@@ -2649,15 +2649,15 @@ function accelaExtractAttachmentRowsInPage(baltimoreIframeTable) {
     "#ctl00_PlaceHolderMain_uploadedFiles",
     '[id*="uploadedFiles"]',
     '[id*="AttachmentList"]',
-    "#ctl00_PlaceHolderMain_PermitDetailList",
-    "#ctl00_PlaceHolderMain_CAPDetail",
-    '[id*="PlaceHolderMain"][id*="Detail"]',
-    '[id*="PlaceHolderMain"][id*="Permit"]',
-    '[id*="PlaceHolderMain"][id*="Record"]',
-    '[id*="PlaceHolderMain"][id*="Cap"]',
-    "#ctl00_PlaceHolderMain_TabDataList",
-    "#ctl00_PlaceHolderMain_pnlContent",
-    "#ctl00_PlaceHolderMain",
+      "#ctl00_PlaceHolderMain_PermitDetailList",
+      "#ctl00_PlaceHolderMain_CAPDetail",
+      '[id*="PlaceHolderMain"][id*="Detail"]',
+      '[id*="PlaceHolderMain"][id*="Permit"]',
+      '[id*="PlaceHolderMain"][id*="Record"]',
+      '[id*="PlaceHolderMain"][id*="Cap"]',
+      "#ctl00_PlaceHolderMain_TabDataList",
+      "#ctl00_PlaceHolderMain_pnlContent",
+      "#ctl00_PlaceHolderMain",
   ];
   const _cSels = baltimoreIframeTable
     ? [
@@ -2670,18 +2670,18 @@ function accelaExtractAttachmentRowsInPage(baltimoreIframeTable) {
         ".document_status_list",
         '[class*="document_status"]',
         ..._cSelsTail,
-      ];
-  let container = document.body;
-  for (const s of _cSels) {
-    const e = document.querySelector(s);
-    if (e && e.textContent.trim().length > 10) {
-      container = e;
-      break;
+    ];
+    let container = document.body;
+    for (const s of _cSels) {
+      const e = document.querySelector(s);
+      if (e && e.textContent.trim().length > 10) {
+        container = e;
+        break;
+      }
     }
-  }
   if (!container || !container.querySelectorAll) container = document.body;
 
-  const results = [];
+    const results = [];
   const rowSel = baltimoreIframeTable
     ? "tr"
     : '[id*="Attachment"] tr, [id*="Document"] tr';
@@ -2690,10 +2690,10 @@ function accelaExtractAttachmentRowsInPage(baltimoreIframeTable) {
       ? container.querySelectorAll(rowSel)
       : [];
   rowNodes.forEach((row) => {
-    const cells = row.querySelectorAll("td");
+        const cells = row.querySelectorAll("td");
     if (cells.length < 2) return;
 
-    const name = cells[0].textContent.trim();
+          const name = cells[0].textContent.trim();
 
     // Skip pagination and action rows
     if (
@@ -2717,23 +2717,23 @@ function accelaExtractAttachmentRowsInPage(baltimoreIframeTable) {
 
     if (name.length >= 200) return;
 
-    const actionLinks = row.querySelectorAll("a");
-    let hasDownload = false;
-    for (const a of actionLinks) {
-      const t = a.textContent.trim().toLowerCase();
+            const actionLinks = row.querySelectorAll("a");
+            let hasDownload = false;
+            for (const a of actionLinks) {
+              const t = a.textContent.trim().toLowerCase();
       if (t.includes("download") || t.includes("view")) hasDownload = true;
-    }
-    results.push({
-      name,
-      record_id: cells.length > 1 ? cells[1].textContent.trim() : "",
-      record_type: cells.length > 2 ? cells[2].textContent.trim() : "",
-      entity_type: cells.length > 3 ? cells[3].textContent.trim() : "",
-      type: cells.length > 4 ? cells[4].textContent.trim() : "",
-      size: cells.length > 5 ? cells[5].textContent.trim() : "",
+            }
+            results.push({
+              name,
+              record_id: cells.length > 1 ? cells[1].textContent.trim() : "",
+              record_type: cells.length > 2 ? cells[2].textContent.trim() : "",
+              entity_type: cells.length > 3 ? cells[3].textContent.trim() : "",
+              type: cells.length > 4 ? cells[4].textContent.trim() : "",
+              size: cells.length > 5 ? cells[5].textContent.trim() : "",
       latest_update: cells.length > 6 ? cells[6].textContent.trim() : "",
-      rowIndex: Array.from(row.parentElement.children).indexOf(row),
-      hasDownload,
-    });
+              rowIndex: Array.from(row.parentElement.children).indexOf(row),
+              hasDownload,
+            });
   });
   return results;
 }
@@ -2914,7 +2914,7 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
   if (!found) {
     att.downloadStatus = "failed";
     att.downloadError = "link_not_found";
-    console.log(
+  console.log(
       `[Baltimore Attach] FAIL ${att.name} link_not_found filesOnPage=${JSON.stringify(visibleFilenamesForLog.slice(0, 12))}`,
     );
     return;
@@ -3614,129 +3614,69 @@ async function extractAttachments(
   );
 
   if (!baltimoreAttachmentFrame) {
-    for (let ai = 0; ai < attachments.length; ai++) {
-      const att = attachments[ai];
-      if (session)
-        session.message = `Attachments → downloading ${ai + 1}/${attachments.length}: ${att.name}`;
-      console.log(
-        `       📥 [${ai + 1}/${attachments.length}] Downloading: ${att.name}`,
-      );
+  for (let ai = 0; ai < attachments.length; ai++) {
+    const att = attachments[ai];
+    if (session)
+      session.message = `Attachments → downloading ${ai + 1}/${attachments.length}: ${att.name}`;
+    console.log(
+      `       📥 [${ai + 1}/${attachments.length}] Downloading: ${att.name}`,
+    );
 
-      try {
+    try {
         const rows = await rowHost.$$(
           '[id*="Attachment"] tr, [id*="Document"] tr',
         );
-        let targetRow = null;
-        const dataRows = [];
-        for (const row of rows) {
+      let targetRow = null;
+      const dataRows = [];
+      for (const row of rows) {
+        const firstCell = await row.$("td");
+        if (firstCell) dataRows.push(row);
+      }
+      if (att.rowIndex !== undefined && att.rowIndex < dataRows.length) {
+        targetRow = dataRows[att.rowIndex];
+      } else {
+        for (const row of dataRows) {
           const firstCell = await row.$("td");
-          if (firstCell) dataRows.push(row);
-        }
-        if (att.rowIndex !== undefined && att.rowIndex < dataRows.length) {
-          targetRow = dataRows[att.rowIndex];
-        } else {
-          for (const row of dataRows) {
-            const firstCell = await row.$("td");
-            if (!firstCell) continue;
-            const text = (await firstCell.textContent().catch(() => "")).trim();
-            if (text === att.name) {
-              targetRow = row;
-              break;
-            }
+          if (!firstCell) continue;
+          const text = (await firstCell.textContent().catch(() => "")).trim();
+          if (text === att.name) {
+            targetRow = row;
+            break;
           }
         }
-  
-        if (!targetRow) {
-          console.log(
-            `       ⚠️ Could not re-locate row for "${att.name}" (index ${att.rowIndex}), skipping download`,
-          );
-          att.downloadStatus = "failed";
-          att.downloadError = "row_not_found";
-          continue;
-        }
-  
-        const actionsLink = await targetRow.$(
-          'a:has-text("Actions"), a:has-text("View"), a[id*="Action"]',
+      }
+
+      if (!targetRow) {
+        console.log(
+          `       ⚠️ Could not re-locate row for "${att.name}" (index ${att.rowIndex}), skipping download`,
         );
-        if (!actionsLink) {
-          const downloadLink = await targetRow.$(
-            'a[href*="Download"], a[href*="download"], a[onclick*="download"]',
-          );
-          if (downloadLink) {
-            try {
-              const [download] = await Promise.all([
-                page.waitForEvent("download", { timeout: 30000 }),
-                downloadLink.click(),
-              ]);
-              const safeDlName = (
-                download.suggestedFilename() || att.name
-              ).replace(/[^a-zA-Z0-9._-]/g, "_");
-              const filePath = path.join(DOWNLOADS_DIR, safeDlName);
-              await download.saveAs(filePath);
-  
-              const viewUrl = await tryUploadAccelaFile(
-                filePath,
-                safeDlName,
-                supabaseProjectId,
-                uploadFn,
-                sanitizeFn,
-                downloadedHashes,
-              );
-              att.viewUrl = viewUrl;
-              att.downloadStatus = viewUrl ? "success" : "uploaded_no_url";
-              console.log(
-                `       ✅ Downloaded: ${att.name} → ${viewUrl || "(local)"}`,
-              );
-            } catch (dlErr) {
-              console.log(
-                `       ⚠️ Download failed for ${att.name}: ${dlErr.message}`,
-              );
-              att.downloadStatus = "failed";
-              att.downloadError = dlErr.message;
-            }
-            continue;
-          }
-  
-          console.log(
-            `       ⚠️ No Actions/Download link found for "${att.name}"`,
-          );
-          att.downloadStatus = "failed";
-          att.downloadError = "no_download_link";
-          continue;
-        }
-  
-        await actionsLink.click().catch(() => {});
-        await page.waitForTimeout(1000);
-  
-        const viewDetailsLink = await page.$(
-          'a:has-text("View Details"), a:has-text("Detail"), [id*="ViewDetail"]',
+        att.downloadStatus = "failed";
+        att.downloadError = "row_not_found";
+        continue;
+      }
+
+      const actionsLink = await targetRow.$(
+        'a:has-text("Actions"), a:has-text("View"), a[id*="Action"]',
+      );
+      if (!actionsLink) {
+        const downloadLink = await targetRow.$(
+          'a[href*="Download"], a[href*="download"], a[onclick*="download"]',
         );
-        if (
-          viewDetailsLink &&
-          (await viewDetailsLink.isVisible().catch(() => false))
-        ) {
-          await viewDetailsLink.click().catch(() => {});
-          await waitForAccelaLoad(page);
-        }
-  
-        const downloadBtn = await page.$(
-          'a:has-text("Download"), input[value*="Download"], button:has-text("Download"), a[href*="Download"]',
-        );
-  
-        if (downloadBtn && (await downloadBtn.isVisible().catch(() => false))) {
+        if (downloadLink) {
           try {
             const [download] = await Promise.all([
               page.waitForEvent("download", { timeout: 30000 }),
-              downloadBtn.click(),
+              downloadLink.click(),
             ]);
-            const suggestedName = download.suggestedFilename() || att.name;
-            const safeName = suggestedName.replace(/[^a-zA-Z0-9._-]/g, "_");
-            const filePath = path.join(DOWNLOADS_DIR, safeName);
+            const safeDlName = (
+              download.suggestedFilename() || att.name
+            ).replace(/[^a-zA-Z0-9._-]/g, "_");
+            const filePath = path.join(DOWNLOADS_DIR, safeDlName);
             await download.saveAs(filePath);
-  
+
             const viewUrl = await tryUploadAccelaFile(
               filePath,
-              safeName,
+              safeDlName,
               supabaseProjectId,
               uploadFn,
               sanitizeFn,
@@ -3745,7 +3685,7 @@ async function extractAttachments(
             att.viewUrl = viewUrl;
             att.downloadStatus = viewUrl ? "success" : "uploaded_no_url";
             console.log(
-              `       ✅ Downloaded: ${safeName} → ${viewUrl || "(local)"}`,
+              `       ✅ Downloaded: ${att.name} → ${viewUrl || "(local)"}`,
             );
           } catch (dlErr) {
             console.log(
@@ -3754,28 +3694,88 @@ async function extractAttachments(
             att.downloadStatus = "failed";
             att.downloadError = dlErr.message;
           }
-        } else {
-          console.log(`       ⚠️ No Download button found for "${att.name}"`);
-          att.downloadStatus = "failed";
-          att.downloadError = "no_download_button";
+          continue;
         }
-  
-        const backLink = await page.$(
-          'a:has-text("Back"), a:has-text("Return"), a:has-text("Attachments")',
-        );
-        if (backLink && (await backLink.isVisible().catch(() => false))) {
-          await backLink.click().catch(() => {});
-          await waitForAccelaLoad(page);
-        } else {
-          await page.goBack().catch(() => {});
-          await waitForAccelaLoad(page);
-        }
-      } catch (err) {
+
         console.log(
-          `       ❌ Attachment error for "${att.name}": ${err.message}`,
+          `       ⚠️ No Actions/Download link found for "${att.name}"`,
         );
         att.downloadStatus = "failed";
-        att.downloadError = err.message;
+        att.downloadError = "no_download_link";
+        continue;
+      }
+
+      await actionsLink.click().catch(() => {});
+      await page.waitForTimeout(1000);
+
+      const viewDetailsLink = await page.$(
+        'a:has-text("View Details"), a:has-text("Detail"), [id*="ViewDetail"]',
+      );
+      if (
+        viewDetailsLink &&
+        (await viewDetailsLink.isVisible().catch(() => false))
+      ) {
+        await viewDetailsLink.click().catch(() => {});
+        await waitForAccelaLoad(page);
+      }
+
+      const downloadBtn = await page.$(
+        'a:has-text("Download"), input[value*="Download"], button:has-text("Download"), a[href*="Download"]',
+      );
+
+      if (downloadBtn && (await downloadBtn.isVisible().catch(() => false))) {
+        try {
+          const [download] = await Promise.all([
+            page.waitForEvent("download", { timeout: 30000 }),
+            downloadBtn.click(),
+          ]);
+          const suggestedName = download.suggestedFilename() || att.name;
+          const safeName = suggestedName.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const filePath = path.join(DOWNLOADS_DIR, safeName);
+          await download.saveAs(filePath);
+
+          const viewUrl = await tryUploadAccelaFile(
+            filePath,
+            safeName,
+            supabaseProjectId,
+            uploadFn,
+            sanitizeFn,
+            downloadedHashes,
+          );
+          att.viewUrl = viewUrl;
+          att.downloadStatus = viewUrl ? "success" : "uploaded_no_url";
+          console.log(
+            `       ✅ Downloaded: ${safeName} → ${viewUrl || "(local)"}`,
+          );
+        } catch (dlErr) {
+          console.log(
+            `       ⚠️ Download failed for ${att.name}: ${dlErr.message}`,
+          );
+          att.downloadStatus = "failed";
+          att.downloadError = dlErr.message;
+        }
+      } else {
+        console.log(`       ⚠️ No Download button found for "${att.name}"`);
+        att.downloadStatus = "failed";
+        att.downloadError = "no_download_button";
+      }
+
+      const backLink = await page.$(
+        'a:has-text("Back"), a:has-text("Return"), a:has-text("Attachments")',
+      );
+      if (backLink && (await backLink.isVisible().catch(() => false))) {
+        await backLink.click().catch(() => {});
+        await waitForAccelaLoad(page);
+      } else {
+        await page.goBack().catch(() => {});
+        await waitForAccelaLoad(page);
+      }
+    } catch (err) {
+      console.log(
+        `       ❌ Attachment error for "${att.name}": ${err.message}`,
+      );
+      att.downloadStatus = "failed";
+      att.downloadError = err.message;
       }
     }
   }
@@ -3905,17 +3905,17 @@ async function extractInspections(page) {
       page,
       [
         '[id*="TabDataList"] a:has-text("Inspections")',
-        'a:has-text("Inspections")',
-        'a:has-text("Inspection")',
-        'a[id*="Inspection"]',
-      ],
-      "Inspections",
+      'a:has-text("Inspections")',
+      'a:has-text("Inspection")',
+      'a[id*="Inspection"]',
+    ],
+    "Inspections",
       { expandRecordInfoFirst: true, checkpointLabel: "after_inspections" },
-    );
+  );
 
-    if (!found) {
+  if (!found) {
       console.log("     [panel] Inspections: link not found");
-      return { inspections: [], upcoming: [], completed: [], screenshot: null };
+    return { inspections: [], upcoming: [], completed: [], screenshot: null };
     }
   }
 
@@ -4125,18 +4125,18 @@ async function extractPayments(page) {
         '[id*="TabDataList"] a:has-text("Fees")',
         'a:has-text("Fees")',
         '[id*="TabDataList"] a:has-text("Payments")',
-        'a:has-text("Payments")',
-        'a:has-text("Payment")',
-        'a[id*="Payment"]',
+      'a:has-text("Payments")',
+      'a:has-text("Payment")',
+      'a[id*="Payment"]',
         'a[id*="Fee"]',
-      ],
+    ],
       "Payments / Fees",
       { expandPaymentsFirst: true, checkpointLabel: "after_fees" },
-    );
+  );
 
-    if (!found) {
+  if (!found) {
       console.log("     [panel] Payments/Fees: link not found");
-      return { payments: [], screenshot: null };
+    return { payments: [], screenshot: null };
     }
   }
 
@@ -4300,7 +4300,7 @@ async function scrapeAccelaRecord(
 
     let details = { fields: {}, tables: [], screenshot: null };
     try {
-      session.message = `${permitNumber} → Record Details`;
+    session.message = `${permitNumber} → Record Details`;
       details = await extractRecordDetails(page);
     } catch (err) {
       console.log(`  [scrape] Record Details section error: ${err.message}`);
@@ -4310,7 +4310,7 @@ async function scrapeAccelaRecord(
     let processingStatus = { departments: [], screenshot: null };
     if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
       try {
-        session.message = `${permitNumber} → Processing Status`;
+    session.message = `${permitNumber} → Processing Status`;
         processingStatus = await extractProcessingStatus(page);
       } catch (err) {
         console.log(`  [scrape] Processing Status section error: ${err.message}`);
@@ -4331,7 +4331,7 @@ async function scrapeAccelaRecord(
     };
     if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
       try {
-        session.message = `${permitNumber} → Plan Review`;
+    session.message = `${permitNumber} → Plan Review`;
         planReview = await extractPlanReview(page);
       } catch (err) {
         console.log(`  [scrape] Plan Review section error: ${err.message}`);
@@ -4344,7 +4344,7 @@ async function scrapeAccelaRecord(
     let relatedRecords = { records: [], screenshot: null };
     if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
       try {
-        session.message = `${permitNumber} → Related Records`;
+    session.message = `${permitNumber} → Related Records`;
         relatedRecords = await extractRelatedRecords(page);
       } catch (err) {
         console.log(`  [scrape] Related Records section error: ${err.message}`);
@@ -4358,15 +4358,15 @@ async function scrapeAccelaRecord(
 
     let attachments = { attachments: [], screenshot: null };
     try {
-      session.message = `${permitNumber} → Attachments`;
+    session.message = `${permitNumber} → Attachments`;
       attachments = await extractAttachments(
-        page,
-        session,
-        supabaseProjectId,
-        supabase,
-        uploadToSupabaseStorage,
-        sanitizeStorageKey,
-      );
+      page,
+      session,
+      supabaseProjectId,
+      supabase,
+      uploadToSupabaseStorage,
+      sanitizeStorageKey,
+    );
     } catch (err) {
       console.log(`  [scrape] Attachments section error: ${err.message}`);
     }
@@ -4380,7 +4380,7 @@ async function scrapeAccelaRecord(
     };
     if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
       try {
-        session.message = `${permitNumber} → Inspections`;
+    session.message = `${permitNumber} → Inspections`;
         inspections = await extractInspections(page);
       } catch (err) {
         console.log(`  [scrape] Inspections section error: ${err.message}`);
@@ -4395,7 +4395,7 @@ async function scrapeAccelaRecord(
     let payments = { payments: [], screenshot: null };
     if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
       try {
-        session.message = `${permitNumber} → Payments`;
+    session.message = `${permitNumber} → Payments`;
         payments = await extractPayments(page);
       } catch (err) {
         console.log(`  [scrape] Payments section error: ${err.message}`);
@@ -4460,22 +4460,22 @@ async function scrapeAccelaRecord(
           fields: header,
           keyValues: (() => {
             const rows = [
-              ...(header.record_number
-                ? [{ key: "Record Number", value: header.record_number }]
-                : []),
-              ...(header.record_type
-                ? [{ key: "Record Type", value: header.record_type }]
-                : []),
-              ...(header.record_status
-                ? [{ key: "Record Status", value: header.record_status }]
-                : []),
-              ...(header.expiration_date
-                ? [{ key: "Expiration Date", value: header.expiration_date }]
-                : []),
-              ...Object.entries(details.fields).map(([key, value]) => ({
-                key,
-                value,
-              })),
+            ...(header.record_number
+              ? [{ key: "Record Number", value: header.record_number }]
+              : []),
+            ...(header.record_type
+              ? [{ key: "Record Type", value: header.record_type }]
+              : []),
+            ...(header.record_status
+              ? [{ key: "Record Status", value: header.record_status }]
+              : []),
+            ...(header.expiration_date
+              ? [{ key: "Expiration Date", value: header.expiration_date }]
+              : []),
+            ...Object.entries(details.fields).map(([key, value]) => ({
+              key,
+              value,
+            })),
             ];
             if (!isBaltimore) return rows;
 
@@ -4723,20 +4723,20 @@ async function scrapeAccelaRecord(
           );
         }
       } else {
-        if (supabaseProjectId) {
-          const { data: rows } = await supabase
-            .from("projects")
+      if (supabaseProjectId) {
+        const { data: rows } = await supabase
+          .from("projects")
             .select(selectFields)
-            .eq("id", supabaseProjectId);
-          existingRow = rows && rows.length > 0 ? rows[0] : null;
-        }
-        if (!existingRow) {
-          const { data: rows } = await supabase
-            .from("projects")
+          .eq("id", supabaseProjectId);
+        existingRow = rows && rows.length > 0 ? rows[0] : null;
+      }
+      if (!existingRow) {
+        const { data: rows } = await supabase
+          .from("projects")
             .select(selectFields)
-            .eq("permit_number", permitNumber)
-            .eq("user_id", userId);
-          existingRow = rows && rows.length > 0 ? rows[0] : null;
+          .eq("permit_number", permitNumber)
+          .eq("user_id", userId);
+        existingRow = rows && rows.length > 0 ? rows[0] : null;
         }
       }
 

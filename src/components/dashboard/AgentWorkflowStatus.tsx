@@ -32,8 +32,11 @@ import {
   MessageSquare,
   Layers,
   FileBox,
+  FileText,
+  ClipboardList,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { isPgcEplanPortalCredential } from "@/lib/portalView";
 
 function getScraperBaseUrl() {
   const raw =
@@ -43,6 +46,24 @@ function getScraperBaseUrl() {
   return `https://${raw}`;
 }
 const SCRAPER_URL = getScraperBaseUrl();
+
+/** Washington / general ProjectDox–style scraper modes */
+type GeneralScrapeMode =
+  | "standard"
+  | "all"
+  | "files"
+  | "comments"
+  | "supporting_docs";
+
+/** Prince George's County ePlan modes (sent as scrapeMode to /api/scrape) */
+type PgcScrapeMode =
+  | "scrape_without_files"
+  | "scrape_files_only"
+  | "scrape_comments_only"
+  | "scrape_review_tab"
+  | "scrape_all";
+
+type ScrapeModeParam = GeneralScrapeMode | PgcScrapeMode;
 
 type PipelineResult = {
   comment_parser?: {
@@ -504,6 +525,32 @@ export function AgentWorkflowStatus() {
     loadDashboardData();
   }, [loadDashboardData]);
 
+  const { data: linkedPortalCredential } = useQuery({
+    queryKey: ["sidebar_portal_credential", selectedProjectId, user?.id],
+    enabled: !!selectedProjectId && !!user?.id,
+    queryFn: async () => {
+      const { data: proj, error: projErr } = await supabase
+        .from("projects")
+        .select("credential_id")
+        .eq("id", selectedProjectId!)
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (projErr || !proj?.credential_id) return null;
+      const { data: cred, error: credErr } = await supabase
+        .from("portal_credentials")
+        .select("id, login_url, jurisdiction")
+        .eq("id", proj.credential_id as string)
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (credErr) return null;
+      return cred;
+    },
+  });
+
+  const isPgcEplanCred = isPgcEplanPortalCredential(
+    linkedPortalCredential ?? null,
+  );
+
   const runChainedPipeline = useCallback(
     async (projectId: string) => {
       console.log("[CHAIN DEBUG] runChainedPipeline called with projectId:", projectId);
@@ -912,7 +959,11 @@ export function AgentWorkflowStatus() {
     }
   }, [scrape.lastScrapeOutcome, scrape.clearLastScrapeOutcome]);
 
-  const runManualCheck = async (scrapeMode: "standard" | "all" | "files" | "comments" | "supporting_docs" = "standard") => {
+  const runManualCheck = async (
+    scrapeMode: ScrapeModeParam = isPgcEplanCred
+      ? "scrape_without_files"
+      : "standard",
+  ) => {
     const projectIdToUse = projectBySelectedId?.id ?? latestProjectId;
     const permitNumberToUse =
       projectBySelectedId?.permit_number ?? latestPermitNumber;
@@ -1096,7 +1147,13 @@ export function AgentWorkflowStatus() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => runManualCheck("standard")}
+                onClick={() =>
+                  runManualCheck(
+                    isPgcEplanCred
+                      ? "scrape_without_files"
+                      : "standard",
+                  )
+                }
                 disabled={chainRunning}
                 data-testid="button-run-manual-check"
                 className="group/btn transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] rounded-r-none border-r-0"
@@ -1117,41 +1174,83 @@ export function AgentWorkflowStatus() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => runManualCheck("standard")}
-                    data-testid="menu-scrape-standard"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Quick Scrape
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runManualCheck("all")}
-                    data-testid="menu-scrape-all"
-                  >
-                    <Layers className="h-4 w-4 mr-2" />
-                    Full Scrape (with files)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runManualCheck("files")}
-                    data-testid="menu-scrape-files"
-                  >
-                    <FolderOpen className="h-4 w-4 mr-2" />
-                    Files Only
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runManualCheck("comments")}
-                    data-testid="menu-scrape-comments"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Comments Only
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runManualCheck("supporting_docs")}
-                    data-testid="menu-scrape-supporting-docs"
-                  >
-                    <FileBox className="h-4 w-4 mr-2" />
-                    Scrape Supporting Docs Only
-                  </DropdownMenuItem>
+                  {isPgcEplanCred ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("scrape_without_files")}
+                        data-testid="menu-scrape-pgc-without-files"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Scrape without files
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("scrape_files_only")}
+                        data-testid="menu-scrape-pgc-files-only"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Scrape files only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("scrape_comments_only")}
+                        data-testid="menu-scrape-pgc-reports-only"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Scrape comments only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("scrape_review_tab")}
+                        data-testid="menu-scrape-pgc-review-tab"
+                      >
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Scrape review tab
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("scrape_all")}
+                        data-testid="menu-scrape-pgc-all"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Scrape all
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("standard")}
+                        data-testid="menu-scrape-standard"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Quick Scrape
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("all")}
+                        data-testid="menu-scrape-all"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Full Scrape (with files)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("files")}
+                        data-testid="menu-scrape-files"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Files Only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("comments")}
+                        data-testid="menu-scrape-comments"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Comments Only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("supporting_docs")}
+                        data-testid="menu-scrape-supporting-docs"
+                      >
+                        <FileBox className="h-4 w-4 mr-2" />
+                        Scrape Supporting Docs Only
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

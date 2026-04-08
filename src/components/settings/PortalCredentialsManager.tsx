@@ -62,7 +62,7 @@ const JURISDICTION_PORTALS = [
   { jurisdiction: "Montgomery County MD - ePlans", url: "https://eplans.montgomerycountymd.gov/ProjectDox/Frame.aspx" },
   { jurisdiction: "Montgomery County MD - Avolve", url: "https://montgomeryco-md-us.avolvecloud.com/ProjectDox/index.html" },
   { jurisdiction: "Montgomery County MD - Permitting", url: "https://permittingservices.montgomerycountymd.gov/" },
-  { jurisdiction: "Prince George's County MD", url: "https://eplans.princegeorgescountymd.gov/ProjectDox/ViewProjects.aspx" },
+  { jurisdiction: "Prince George's County ePlan", url: "https://eplans.princegeorgescountymd.gov/Portal/Login/Index/PGC-Prod" },
   { jurisdiction: "Frederick County MD - ProjectDox", url: "https://frederickco-md-us.avolvecloud.com/ProjectDox/ViewProjects.aspx" },
   { jurisdiction: "Frederick County MD - Planning", url: "https://planningandpermitting.frederickcountymd.gov/my-dashboard" },
   { jurisdiction: "Howard County MD", url: "https://howardb2cprod.b2clogin.com/" },

@@ -64,6 +64,11 @@ export default function CommentReview() {
 
   const [loadingFromPortal, setLoadingFromPortal] = useState(false);
   const [noCommentsInPortal, setNoCommentsInPortal] = useState(false);
+  const [parserDetail, setParserDetail] = useState<{
+    reason?: string;
+    message?: string;
+    parsed_count?: number;
+  } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadRows, setUploadRows] = useState<ParsedRow[]>([]);
@@ -96,6 +101,7 @@ export default function CommentReview() {
     if (!projectId || !user?.id) return;
     setLoadingFromPortal(true);
     setNoCommentsInPortal(false);
+    setParserDetail(null);
     const pollIntervalMs = 2500;
     const maxRounds = 60;
     let cursor: { pdfIndex: number } | undefined;
@@ -107,17 +113,52 @@ export default function CommentReview() {
         });
         if (error) {
           toast.error("Pipeline failed");
+          setParserDetail({ message: error.message || "Pipeline invoke failed" });
           break;
         }
         const cp = data?.comment_parser;
         if (cp?.reason === "no_comments_in_portal") {
           setNoCommentsInPortal(true);
+          setParserDetail({
+            reason: cp.reason,
+            message: cp.message,
+            parsed_count: cp.parsed_count,
+          });
           await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
           break;
         }
         if (cp?.done === true && !cp?.error) {
           await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
-          toast.success("Comments loaded from portal");
+          const pc = typeof cp.parsed_count === "number" ? cp.parsed_count : 0;
+          if (pc > 0) {
+            toast.success(`Loaded ${pc} comment(s) from portal`);
+          } else {
+            setParserDetail({
+              reason: cp.reason,
+              message: cp.message,
+              parsed_count: pc,
+            });
+            toast.info(
+              typeof cp.message === "string" && cp.message.length > 0
+                ? cp.message
+                : "Parser finished but no comments were saved.",
+            );
+          }
+          break;
+        }
+        if (cp?.error && cp.error !== "timeout") {
+          setParserDetail({
+            reason: cp.reason,
+            message:
+              typeof cp.message === "string" && cp.message.length > 0
+                ? cp.message
+                : String(cp.error),
+          });
+          toast.error(
+            typeof cp.message === "string" && cp.message.length > 0
+              ? cp.message
+              : String(cp.error),
+          );
           break;
         }
         if (cp?.error === "timeout" || (cp?.next_cursor != null && !cp?.done)) {
@@ -300,8 +341,16 @@ export default function CommentReview() {
           <Card>
             <CardHeader>
               <CardTitle>No comments loaded</CardTitle>
-              <CardDescription>
-                Load comments from the portal report &quot;Plan Review - Review Comments&quot; for this project.
+              <CardDescription className="space-y-2">
+                <span>
+                  Load comments from the portal report &quot;Plan Review - Review Comments&quot; for this project.
+                </span>
+                {(parserDetail?.message || parserDetail?.reason) && (
+                  <p className="text-sm text-amber-700 dark:text-amber-200/90 rounded-md border border-amber-900/30 bg-amber-950/20 px-3 py-2 whitespace-pre-wrap">
+                    {parserDetail.message ||
+                      (parserDetail.reason ? `Reason: ${parserDetail.reason}` : "")}
+                  </p>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -317,8 +366,15 @@ export default function CommentReview() {
           </Card>
         ) : noCommentsInPortal && portalComments.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No comments found in the portal for this project. The &quot;Plan Review - Review Comments&quot; report may be empty or not yet available.
+            <CardContent className="py-8 text-center text-muted-foreground space-y-2">
+              <p>
+                No comments found in the portal for this project. The &quot;Plan Review - Review Comments&quot; report may be empty or not yet available.
+              </p>
+              {parserDetail?.message && (
+                <p className="text-sm text-amber-700 dark:text-amber-200/90 whitespace-pre-wrap">
+                  {parserDetail.message}
+                </p>
+              )}
             </CardContent>
           </Card>
         ) : (
