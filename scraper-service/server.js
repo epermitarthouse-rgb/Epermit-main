@@ -13,6 +13,7 @@ const {
   accelaLogin: accelaScraperLogin,
   scrapeAccelaRecord,
 } = require("./accela-scraper");
+const pgcEplan = require("./pgc-eplan-scraper");
 const {
   permitWizardLogin,
   getSession: getPWSession,
@@ -173,9 +174,15 @@ async function runPlaywrightStartupDiagnostics() {
 function detectPortalType(url) {
   if (!url) return "projectdox";
   const lower = url.toLowerCase();
-  if (lower.includes("avolvecloud.com") || lower.includes("projectdox"))
+  if (
+    lower.includes("avolvecloud.com") ||
+    lower.includes("projectdox") ||
+    lower.includes("eplans.princegeorgescountymd.gov")
+  ) {
     return "projectdox";
+  }
   if (lower.includes("accela.com")) return "accela";
+  console.log(`[detectPortalType] no match for url: "${url}" lower: "${lower}"`);
   return "unknown";
 }
 
@@ -737,6 +744,7 @@ Provide a comprehensive analysis with specific code citations. Return ONLY valid
 // ─── Login endpoint ──────────────────────────────────────────────────────────
 app.post("/api/login", async (req, res) => {
   const { username, password, portalUrl } = req.body;
+  console.log(`[login] raw portalUrl from body: ${JSON.stringify(req.body.portalUrl)}`);
   const dashboardUrl =
     portalUrl && portalUrl.trim()
       ? portalUrl
@@ -807,6 +815,96 @@ app.post("/api/login", async (req, res) => {
         portalType: "accela",
         message:
           "Logged in to Accela. Use /api/scrape with permitNumber to search.",
+      });
+    }
+
+    if (portalType === "projectdox" && pgcEplan.isPgcEplanHost(dashboardUrl)) {
+      if (
+        !String(username || "").trim() ||
+        password == null ||
+        String(password) === ""
+      ) {
+        if (browser) await browser.close().catch(() => {});
+        return res.status(400).json({
+          error: "pgc_saved_portal_credentials_missing",
+        });
+      }
+      const loginUrlResolved = pgcEplan.resolvePgcLoginUrl(dashboardUrl);
+      console.log("🟣 PGC ePlan login URL:", loginUrlResolved);
+      await pgcEplan.performPgcLogin(page, username, password, loginUrlResolved, {
+        credentialsSource: "saved_portal_settings",
+      });
+      console.log("✅ PGC login successful!");
+      const postLoginUrl = page.url();
+      const postLoginTitle = (await page.title().catch(() => "")) || "";
+      console.log("[PGC] Post-login URL:", postLoginUrl);
+      console.log("[PGC] Post-login title:", postLoginTitle);
+      if (/\/Portal\/Home\/Index/i.test(postLoginUrl)) {
+        console.log("[PGC] Skipping redundant Home navigation after successful login");
+      } else {
+        console.log(
+          "[PGC] Login succeeded; continuing from current page context without forced Home navigation",
+        );
+      }
+      const dashboardTarget = postLoginUrl || dashboardUrl.trim() || pgcEplan.PGC_DASHBOARD_URL;
+      await pgcEplan.waitForProjectGrid(page);
+
+      const pagerGuess = await pgcEplan.detectPaginationMode(page);
+      const collection = await pgcEplan.collectAllProjects(page, {
+        initialMode: pagerGuess.mode,
+        viewAllVisible: pagerGuess.viewAllVisible,
+      });
+
+      const projects = collection.projects.map((p) => ({
+        id: p.projectID,
+        name: p.projectNumber,
+        projectNum: p.projectNumber,
+        projectId: p.projectID,
+        description: p.description || "",
+        location: p.location || "",
+        status: p.status || "",
+        tasks: "",
+        href: "",
+      }));
+
+      console.log(`📋 PGC: found ${projects.length} projects`);
+
+      await page.screenshot({
+        path: path.join(__dirname, "debug_dashboard.png"),
+        fullPage: true,
+      });
+
+      const bases = await pgcEplan.resolvePgcWebUiBases(page);
+      const sessionId =
+        Date.now().toString(36) + Math.random().toString(36).slice(2);
+      sessions[sessionId] = {
+        status: "logged_in",
+        portalType: "projectdox",
+        portalSubtype: "pgc-eplan",
+        projects,
+        browser,
+        context,
+        page,
+        username,
+        password,
+        dashboardUrl: dashboardTarget,
+        webUiBase: bases[0] || deriveWebUiBase(dashboardTarget),
+        pgcWebUiBases: bases,
+        message: `PGC: found ${projects.length} projects`,
+        progress: 0,
+        total: 0,
+        data: {},
+      };
+      sessions[sessionId]._timeout = setTimeout(
+        () => cleanupSession(sessionId),
+        15 * 60 * 1000,
+      );
+      return res.json({
+        sessionId,
+        projectCount: projects.length,
+        projects,
+        portalType: "projectdox",
+        portalSubtype: "pgc-eplan",
       });
     }
 
@@ -945,6 +1043,9 @@ app.post("/api/login", async (req, res) => {
     if (isBrowserLaunchError(err)) {
       return sendBrowserLaunchError(res, err);
     }
+    if (err.message === "pgc_saved_portal_credentials_missing") {
+      return res.status(400).json({ error: "pgc_saved_portal_credentials_missing" });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -1041,6 +1142,61 @@ app.post("/api/scrape", async (req, res) => {
     return;
   }
 
+  if (session.portalSubtype === "pgc-eplan") {
+    if (
+      !String(session.username || "").trim() ||
+      session.password == null ||
+      String(session.password) === ""
+    ) {
+      return res.status(400).json({ error: "pgc_saved_portal_credentials_missing" });
+    }
+    console.log("[PGC] Credentials source: saved_portal_settings (session)");
+    console.log("[PGC] Env credential fallback: disabled (server)");
+    let targets;
+    if (permitNumber != null && String(permitNumber).trim() !== "") {
+      targets = session.projects.filter(
+        (p) =>
+          String(p.projectNum || "").trim() === String(permitNumber).trim(),
+      );
+      if (targets.length === 0) {
+        return res.status(404).json({
+          error: "No project found matching permit number: " + permitNumber,
+        });
+      }
+    } else {
+      const ids = Array.isArray(projectIds) ? projectIds : [];
+      targets =
+        ids.length > 0
+          ? session.projects.filter((p) =>
+              ids.some((pid) => String(pid) === String(p.id)),
+            )
+          : session.projects;
+    }
+    session.status = "scraping";
+    session.total = targets.length;
+    session.progress = 0;
+    session.data = {};
+    res.json({
+      message: "PGC ePlan scraping started",
+      total: session.total,
+      portalType: "projectdox",
+      portalSubtype: "pgc-eplan",
+    });
+    scrapePgcAll(
+      session,
+      targets,
+      sessionId,
+      projectId,
+      userId,
+      scrapeMode || "all",
+    ).catch((err) => {
+      session.status = "error";
+      session.message = `Error: ${err.message}`;
+      console.error("❌ PGC scrape error:", err);
+      });
+    return;
+  }
+
   // permitNumber takes priority over projectIds
   let targets;
   if (permitNumber != null && String(permitNumber).trim() !== "") {
@@ -1121,6 +1277,927 @@ const TAB_DEFS = [
   { key: "info", label: "Info", param: "infoTab" },
   { key: "reports", label: "Reports", param: "reportsTab" },
 ];
+
+async function syncPortalDataToSupabase(
+  session,
+  projects,
+  supabaseProjectId,
+  userId,
+  targetFolder = null,
+) {
+  for (let i = 0; i < projects.length; i++) {
+    const project = projects[i];
+    const projectNum = project.projectNum;
+    const currentData = session.data[project.id];
+    if (!currentData) continue;
+    let actualProjectId = null;
+
+    const newHash = hashPortalData(currentData);
+
+    try {
+      console.log(`    🔄 Syncing ${projectNum} to Supabase...`);
+      console.log(
+        `    📌 projectId=${supabaseProjectId || "(none)"}, userId=${userId}, portalType=${currentData.portalType || "(none)"}`,
+      );
+
+      let existingRow = null;
+      if (supabaseProjectId) {
+        const { data: rows } = await supabase
+          .from("projects")
+          .select("id, portal_data_hash, portal_data")
+          .eq("id", supabaseProjectId);
+        existingRow = rows && rows.length > 0 ? rows[0] : null;
+      }
+      if (!existingRow) {
+        const { data: rows } = await supabase
+          .from("projects")
+          .select("id, portal_data_hash, portal_data")
+          .eq("permit_number", projectNum)
+          .eq("user_id", userId);
+        existingRow = rows && rows.length > 0 ? rows[0] : null;
+      }
+
+      if (existingRow && existingRow.portal_data_hash === newHash) {
+        actualProjectId = existingRow.id;
+        console.log(
+          `    ⏭️  Data unchanged for ${projectNum} (hash match), skipping update for row ${actualProjectId}`,
+        );
+        await supabase
+          .from("projects")
+          .update({ last_checked_at: new Date().toISOString() })
+          .eq("id", actualProjectId);
+      } else if (existingRow) {
+        let mergedData = currentData;
+        if (
+          existingRow.portal_data &&
+          existingRow.portal_data.tabs &&
+          currentData.tabs
+        ) {
+          const existingTabs = existingRow.portal_data.tabs;
+          const newTabs = currentData.tabs;
+
+          if (targetFolder && newTabs.files && existingTabs.files) {
+            const existingFolders = existingTabs.files.folders || [];
+            const newFolders = newTabs.files.folders || [];
+            const newFolderNames = new Set(newFolders.map((f) => f.name));
+            const keptFolders = existingFolders.filter(
+              (f) => !newFolderNames.has(f.name),
+            );
+            const mergedFolders = [...keptFolders, ...newFolders];
+            newTabs.files = {
+              ...existingTabs.files,
+              ...newTabs.files,
+              folders: mergedFolders,
+            };
+            console.log(
+              `    🔀 Folder-level merge: kept [${keptFolders.map((f) => f.name).join(", ")}], updated [${[...newFolderNames].join(", ")}]`,
+            );
+          }
+
+          const merged = { ...existingTabs, ...newTabs };
+          mergedData = {
+            ...existingRow.portal_data,
+            ...currentData,
+            tabs: merged,
+          };
+          const keptKeys = Object.keys(existingTabs).filter((k) => !newTabs[k]);
+          if (keptKeys.length > 0) {
+            console.log(
+              `    🔀 Merged tabs: kept existing [${keptKeys.join(", ")}], updated [${Object.keys(newTabs).join(", ")}]`,
+            );
+          }
+        }
+        const mergedHash = hashPortalData(mergedData);
+        actualProjectId = existingRow.id;
+        const updatePayload = {
+          portal_status:
+            currentData.dashboardStatus ||
+            mergedData.dashboardStatus ||
+            "Scraped",
+          last_checked_at: new Date().toISOString(),
+          portal_data: mergedData,
+          portal_data_hash: mergedHash,
+          permit_number: projectNum,
+        };
+
+        console.log(
+          `    📝 DB WRITE: supabaseProjectId=${supabaseProjectId || "(none)"}, permit=${projectNum}, portalType=${mergedData.portalType || "(none)"}, targetRow=${actualProjectId}`,
+        );
+
+        const { data, error } = await supabase
+          .from("projects")
+          .update(updatePayload)
+          .eq("id", actualProjectId)
+          .select("id, portal_data");
+
+        if (error) {
+          console.error("    ❌ Supabase error:", error.message, error.details);
+          continue;
+        }
+
+        if (data && Array.isArray(data) && data.length > 0) {
+          const writtenType = data[0].portal_data?.portalType || "(none)";
+          console.log(
+            `    ✅ Updated project row=${data[0].id}, written portalType=${writtenType}`,
+          );
+        }
+      } else {
+        if (!userId) {
+          console.error("    ❌ Cannot create project: userId not provided");
+          continue;
+        }
+        const { data: created, error: createError } = await supabase
+          .from("projects")
+          .insert({
+            user_id: userId,
+            name: currentData.projectNum || projectNum,
+            permit_number: projectNum,
+            description: currentData.description || "",
+            address: currentData.location || "",
+            jurisdiction: currentData.jurisdiction || "Washington DC",
+            status: "draft",
+            portal_status: currentData.dashboardStatus || "Unknown",
+            last_checked_at: new Date().toISOString(),
+            portal_data: currentData,
+            portal_data_hash: newHash,
+          })
+          .select("id, portal_data");
+        if (createError) {
+          console.error(
+            "    ❌ Supabase create error:",
+            createError.message,
+            createError.details,
+          );
+          continue;
+        }
+        if (created && created.length > 0) {
+          actualProjectId = created[0].id;
+          const writtenType = created[0].portal_data?.portalType || "(none)";
+          console.log(
+            `    📝 Created new project row=${actualProjectId}, written portalType=${writtenType}`,
+          );
+        }
+      }
+
+      if (actualProjectId) {
+        const { data: verify } = await supabase
+          .from("projects")
+          .select("id, permit_number, credential_id, portal_data")
+          .eq("id", actualProjectId)
+          .maybeSingle();
+        if (verify) {
+          console.log(
+            `    🔍 DB verify: row=${verify.id}, permit=${verify.permit_number}, credential=${verify.credential_id || "(none)"}, portalType=${verify.portal_data?.portalType || "(none)"}`,
+          );
+        }
+      }
+
+      if (actualProjectId) {
+        const { error: credErr } = await supabase
+          .from("portal_credentials")
+          .update({ project_id: actualProjectId, permit_number: projectNum })
+          .or(
+            `project_id.eq.${actualProjectId},permit_number.eq.${projectNum}`,
+          );
+        if (credErr) {
+          console.warn(
+            "    ⚠️ Could not update portal_credentials project_id:",
+            credErr.message,
+          );
+        }
+      }
+    } catch (dbErr) {
+      console.error("    ❌ DB Error:", dbErr.message);
+    }
+  }
+}
+
+const MAX_PGC_REPORT_PDF_TEXT_CHARS = 800_000;
+
+function isPgcReviewCommentsReportName(reportName) {
+  const n = String(reportName || "").toLowerCase();
+  return (
+    n.includes("review comments") &&
+    !n.includes("review details") &&
+    !n.includes("routing slip")
+  );
+}
+
+function capPgcReportText(text) {
+  let t = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+  if (t.length > MAX_PGC_REPORT_PDF_TEXT_CHARS) {
+    t = t.slice(0, MAX_PGC_REPORT_PDF_TEXT_CHARS) + "\n\n[truncated]";
+  }
+  return t;
+}
+
+async function fetchUrlToBuffer(url) {
+  const res = await fetch(String(url).trim(), {
+    redirect: "follow",
+    headers: { "User-Agent": "EpermitScraper/1.0" },
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const ab = await res.arrayBuffer();
+  return Buffer.from(ab);
+}
+
+/**
+ * @param {Buffer} buf
+ * @returns {Promise<{ text: string, numpages: number, parseError: string | null }>}
+ */
+async function extractTextFromPgcExportedPdfBuffer(buf) {
+  if (!buf || !buf.length) {
+    return { text: "", numpages: 0, parseError: null };
+  }
+  let pdfParse;
+  try {
+    pdfParse = require("pdf-parse");
+  } catch (e) {
+    console.warn("[PGC] pdf-parse require failed:", e.message || e);
+    return { text: "", numpages: 0, parseError: "pdf-parse unavailable" };
+  }
+  try {
+    const data = await pdfParse(buf);
+    let text = capPgcReportText(data && data.text ? String(data.text) : "");
+    const numpages =
+      data && typeof data.numpages === "number" ? data.numpages : 0;
+    return { text, numpages, parseError: null };
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    console.warn("[PGC] PDF buffer text extract failed:", msg);
+    return { text: "", numpages: 0, parseError: msg };
+  }
+}
+
+/**
+ * Read plain text from a locally exported PGC report PDF for portal_data.tabs.reports.pdfs[].text
+ * (Washington / comment-parser-agent compatible).
+ * @param {string} pdfPath
+ * @returns {Promise<{ text: string, numpages: number, parseError: string | null }>}
+ */
+async function extractTextFromPgcExportedPdf(pdfPath) {
+  if (!pdfPath || !fs.existsSync(pdfPath)) {
+    return { text: "", numpages: 0, parseError: null };
+  }
+  return extractTextFromPgcExportedPdfBuffer(fs.readFileSync(pdfPath));
+}
+
+/**
+ * SSRS Excel export often has extractable text when PDF text layer is empty.
+ * @param {Buffer} buf
+ */
+async function extractTextFromPgcExcelBuffer(buf) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  const lines = [];
+  wb.eachSheet((sheet) => {
+    sheet.eachRow((row) => {
+      const vals = [];
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        const v = cell.value;
+        if (v == null) return;
+        const s =
+          typeof v === "object" && v != null && "text" in v
+            ? String(v.text)
+            : String(v);
+        const t = s.replace(/\s+/g, " ").trim();
+        if (t) vals.push(t);
+      });
+      if (vals.length) lines.push(vals.join("\t"));
+    });
+  });
+  return capPgcReportText(lines.join("\n"));
+}
+
+async function extractTextFromPgcExcelFile(excelPath) {
+  if (!excelPath || !fs.existsSync(excelPath)) return "";
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(excelPath);
+  const lines = [];
+  wb.eachSheet((sheet) => {
+    sheet.eachRow((row) => {
+      const vals = [];
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        const v = cell.value;
+        if (v == null) return;
+        const s =
+          typeof v === "object" && v != null && "text" in v
+            ? String(v.text)
+            : String(v);
+        const t = s.replace(/\s+/g, " ").trim();
+        if (t) vals.push(t);
+      });
+      if (vals.length) lines.push(vals.join("\t"));
+    });
+  });
+  return capPgcReportText(lines.join("\n"));
+}
+
+/**
+ * Best-effort text for reports.pdfs[] (local PDF → public PDF URL → Excel for Review Comments).
+ * @param {object} r — raw report from PGC pipeline
+ */
+async function buildPgcReportPdfEntryText(r) {
+  let text = "";
+  let numpages = 0;
+  let parseError = null;
+
+  if (r.pdfPath && fs.existsSync(r.pdfPath)) {
+    const ex = await extractTextFromPgcExportedPdf(r.pdfPath);
+    text = ex.text;
+    numpages = ex.numpages;
+    parseError = ex.parseError;
+  }
+
+  if (!String(text).trim() && r.pdfPublicUrl) {
+    try {
+      const buf = await fetchUrlToBuffer(r.pdfPublicUrl);
+      const ex = await extractTextFromPgcExportedPdfBuffer(buf);
+      if (String(ex.text).trim()) {
+        text = ex.text;
+        numpages = ex.numpages;
+        parseError = null;
+      }
+    } catch (e) {
+      console.warn(
+        "[PGC] fetch PDF for text extract failed:",
+        (e && e.message) || e,
+      );
+    }
+  }
+
+  if (!String(text).trim() && isPgcReviewCommentsReportName(r.reportName)) {
+    if (r.excelPath && fs.existsSync(r.excelPath)) {
+      try {
+        const xt = await extractTextFromPgcExcelFile(r.excelPath);
+        if (String(xt).trim()) {
+          text = xt;
+          parseError = null;
+        }
+      } catch (e) {
+        console.warn(
+          "[PGC] Excel local text extract failed:",
+          (e && e.message) || e,
+        );
+      }
+    }
+    if (!String(text).trim() && r.excelPublicUrl) {
+      try {
+        const xbuf = await fetchUrlToBuffer(r.excelPublicUrl);
+        const xt = await extractTextFromPgcExcelBuffer(xbuf);
+        if (String(xt).trim()) {
+          text = xt;
+          parseError = null;
+        }
+      } catch (e) {
+        console.warn(
+          "[PGC] fetch Excel for text extract failed:",
+          (e && e.message) || e,
+        );
+      }
+    }
+  }
+
+  return { text, numpages, parseError };
+}
+
+async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
+  const detail = pipelineResult.detailResult?.out;
+  const info = detail?.info;
+  const projectInfo = [];
+  const infoTables = Array.isArray(info?.tables) ? info.tables : [];
+  if (info) {
+    const add = (k, v) => {
+      if (v != null) projectInfo.push({ key: k, value: String(v) });
+    };
+    if (Array.isArray(info.projectInfo) && info.projectInfo.length) {
+      info.projectInfo.forEach((kv) =>
+        projectInfo.push({
+          key: String(kv.key ?? kv.label ?? ""),
+          value: String(kv.value ?? ""),
+        }),
+      );
+    } else {
+      add("Project #", info.projectNumber);
+      add("Case name", info.caseName);
+      add("Location", info.location);
+      add("Case type", info.caseType);
+      add("Contact email", info.contactEmail);
+      add("Status", info.status);
+      add("Project start", info.projectStart);
+      add("Project end", info.projectEnd);
+    }
+  }
+
+  const statusTab = detail?.statusTab;
+  const statusKeyValues = Array.isArray(statusTab?.keyValues)
+    ? statusTab.keyValues.map((kv) => ({
+        key: String(kv.key ?? ""),
+        value: String(kv.value ?? ""),
+      }))
+    : [];
+  const statusTables = Array.isArray(statusTab?.tables) ? statusTab.tables : [];
+  let statusSections = [];
+  let statusLinksFlat = [];
+  let statusMeta = null;
+  try {
+    if (Array.isArray(statusTab?.sections)) {
+      statusSections = JSON.parse(JSON.stringify(statusTab.sections));
+    }
+    if (Array.isArray(statusTab?.links)) {
+      statusLinksFlat = statusTab.links.map((L) => ({
+        text: String(L.text ?? ""),
+        href: String(L.href ?? ""),
+        target: L.target != null ? String(L.target) : undefined,
+        ...(L.onclick != null && String(L.onclick).trim()
+          ? { onclick: String(L.onclick) }
+          : {}),
+      }));
+    }
+    if (statusTab?.meta && typeof statusTab.meta === "object") {
+      statusMeta = JSON.parse(JSON.stringify(statusTab.meta));
+    }
+  } catch (e) {
+    console.warn("[PGC] mapPgcPipelineToPortalData status clone:", e.message || e);
+  }
+
+  const tasksTab = detail?.tasksTab;
+  const tasksKeyValues = [];
+  if (tasksTab?.workflowState)
+    tasksKeyValues.push({
+      key: "Workflow state",
+      value: tasksTab.workflowState,
+    });
+  if (Array.isArray(tasksTab?.workflowKeyValues)) {
+    tasksTab.workflowKeyValues.forEach((kv) =>
+      tasksKeyValues.push({
+        key: String(kv.key ?? ""),
+        value: String(kv.value ?? ""),
+      }),
+    );
+  }
+  const taskRows = (tasksTab?.tasks || []).map((t) => ({
+    Task: t.taskName || "",
+    Assignee: t.assignee || "",
+    State: t.state || "",
+    Due: t.dueDate || "",
+  }));
+  const tasksTables = Array.isArray(tasksTab?.tables) && tasksTab.tables.length
+    ? tasksTab.tables
+    : taskRows.length
+      ? [{ headers: ["Task", "Assignee", "State", "Due"], rows: taskRows }]
+      : [];
+
+  const wf = pipelineResult.workflowPack;
+  const reviewOut = pipelineResult.reviewOut;
+  const filesOut = pipelineResult.filesOut;
+  const reportsPayload = pipelineResult.reportsPayload;
+
+  const folders = (filesOut?.folders || []).map((fol) => ({
+    folderID: fol.folderID ?? null,
+    folderName: fol.folderName || null,
+    parentFolder: fol.parentFolder || null,
+    filesCount: fol.filesCount ?? (fol.files?.length ?? 0),
+    name: fol.folderName || `Folder ${fol.folderID}`,
+    fileCount: fol.filesCount || (fol.files?.length ?? 0),
+    files: (fol.files || []).map((f) => ({
+      name: f.name || "file",
+      fileId: f.fileId,
+      folderName: f.folderName,
+      parentFolder: fol.parentFolder || null,
+      status: f.status || "",
+      reviewedBy: f.reviewedBy || "",
+      uploadedDate: f.uploadedDate || "",
+      commentCount: f.commentCount ?? 0,
+      viewUrl: f.viewUrl,
+      publicUrl: f.publicUrl || f.viewUrl || null,
+      downloadUrl: f.downloadUrl || null,
+      fileSizeKB: f.fileSizeKB ?? null,
+      version: f.version ?? null,
+      hasMarkups: f.hasMarkups ?? false,
+    })),
+  }));
+
+  const reviewTab = {
+    workflow: wf?.workflow || null,
+    reviewProbe: wf?.reviewProbe || null,
+    summary: {
+      reviewGroupsCount: reviewOut?.reviewGroupsCount,
+      rawCorrectionsCount: reviewOut?.rawCorrectionsCount,
+      latestCycleCorrectionsCount: reviewOut?.latestCycleCorrectionsCount,
+      changemarkCount: reviewOut?.changemarkCount,
+      commentCount: reviewOut?.commentCount,
+      unresolvedCount: reviewOut?.unresolvedCount,
+      resolvedCount: reviewOut?.resolvedCount,
+      statusCounts: reviewOut?.statusCounts,
+    },
+    workflowBuckets: (reviewOut?.workflowBuckets || []).map((wf) => ({
+      workflowName: wf.workflowName || "",
+      rows: Array.isArray(wf.rows)
+        ? wf.rows.map((r) => ({
+            workflowName: r.workflowName || "",
+            refNumber: r.refNumber || "",
+            changemarkNumber: r.changemarkNumber || "",
+            department: r.department || "",
+            reviewer: r.reviewer || "",
+            datetime: r.datetime || "",
+            cycle: r.cycle || "",
+            status: r.status || "",
+            fileName: r.fileName || "",
+            commentText: r.commentText || "",
+          }))
+        : [],
+    })),
+    latestCycleCorrections: (reviewOut?.latestCycleCorrections || []).map((c) => ({
+      correctionID: c.correctionID || "",
+      referenceNumber: c.referenceNumber || "",
+      department: c.department || "",
+      reviewerName: c.reviewerName || "",
+      statusName: c.statusName || "",
+      correctionType: c.correctionType || "",
+      commentText: c.commentText || "",
+      responseText: c.responseText || "",
+      fileID: c.fileID || "",
+      fileName: c.fileName || "",
+      reviewCycle: c.reviewCycle || "",
+      dateCreated: c.dateCreated || "",
+    })),
+  };
+
+  const reportEntries = (reportsPayload?.reports || []).map((r) => {
+    const hasArtifact = !!(r.pdfPublicUrl || r.excelPublicUrl);
+    const exportUnavailable = !!r.exportUnavailable;
+    return {
+      fileSlug: r.fileSlug,
+      reportName: r.reportName,
+      reportType: r.reportType || "",
+      reportDescription: r.reportDescription || "",
+      reportUrl: hasArtifact ? null : r.reportUrl || r.viewUrl || null,
+      viewerUrl: hasArtifact ? null : r.viewUrl || r.reportUrl || null,
+      viewerReady: r.viewerReady,
+      pdfUrl: r.pdfPublicUrl || null,
+      excelUrl: r.excelPublicUrl || null,
+      excelDownloaded: r.excelDownloaded,
+      pdfDownloaded: r.pdfDownloaded,
+      exportUnavailable,
+    };
+  });
+
+  const reportsTableRows = reportEntries.map((r) => ({
+    "REPORT NAME": r.reportName,
+    Status: r.viewerReady ? "Ready" : "Not ready",
+  }));
+  /** Washington-compatible pdfs[]: fileName, text, pages, url, pdfUrl, excelUrl, error, info */
+  const reportsRaw = reportsPayload?.reports || [];
+  const reportsPdfs = [];
+  for (let i = 0; i < reportsRaw.length; i++) {
+    const r = reportsRaw[i];
+    const pdfEntry = {
+      fileName: r.reportName,
+      url: r.pdfPublicUrl || r.excelPublicUrl || undefined,
+      pdfUrl: r.pdfPublicUrl || undefined,
+      excelUrl: r.excelPublicUrl || undefined,
+      pages: 0,
+      text: "",
+      info: { source: "pgc-export" },
+    };
+    if (typeof r.screenshot === "string" && r.screenshot.length > 0) {
+      pdfEntry.screenshot = r.screenshot;
+    }
+    const { text, numpages, parseError } = await buildPgcReportPdfEntryText(r);
+    pdfEntry.text = text;
+    pdfEntry.pages = numpages;
+    if (!String(text || "").trim()) {
+      if (parseError) {
+        pdfEntry.error = parseError;
+      } else {
+        pdfEntry.error = "No text extracted from PDF or Excel";
+      }
+    }
+    reportsPdfs.push(pdfEntry);
+  }
+
+  const omit = pipelineResult._pgcOmitTabs || {};
+  const skipTab = (k) => omit[k] === true;
+  /** @type {Record<string, unknown>} */
+  const tabs = {};
+  if (!skipTab("info")) {
+    tabs.info = {
+      projectInfo,
+      keyValues: projectInfo.map((kv) => ({ key: kv.key, value: kv.value })),
+      tables: infoTables,
+      info_debug: detail?.info_debug ?? null,
+    };
+  }
+  if (!skipTab("status")) {
+    tabs.status = {
+      keyValues: statusKeyValues,
+      tables: statusTables,
+      sections: statusSections,
+      links: statusLinksFlat,
+      meta: statusMeta,
+    };
+  }
+  if (!skipTab("tasks")) {
+    tabs.tasks = { keyValues: tasksKeyValues, tables: tasksTables };
+  }
+  if (!skipTab("files")) {
+    tabs.files = { folders, keyValues: [], tables: [] };
+  }
+  if (!skipTab("review")) {
+    tabs.review = reviewTab;
+  }
+  if (!skipTab("reports")) {
+    tabs.reports = {
+      tables: reportsTableRows.length
+        ? [{ headers: ["REPORT NAME", "Status"], rows: reportsTableRows }]
+        : [],
+      pdfs: reportsPdfs,
+      reportEntries,
+    };
+  }
+
+  return {
+    name: projectRow.name,
+    projectNum: projectRow.projectNum,
+    description: projectRow.description || "",
+    location: projectRow.location || "",
+    dashboardStatus: projectRow.status || "",
+    portalType: "projectdox",
+    portalSubtype: "pgc-eplan",
+    jurisdiction: "Prince George's County, MD",
+    tabs,
+  };
+}
+
+async function pgcUploadLocalToSupabase(session, localPath, storagePath) {
+  if (!fs.existsSync(localPath)) return null;
+  const stat = fs.statSync(localPath);
+  if (stat.size < MIN_FILE_SIZE) {
+    console.warn(`      ⚠️ PGC upload skip (tiny file): ${storagePath}`);
+    return null;
+  }
+  if (stat.size > MAX_FILE_SIZE) {
+    console.warn(`      ⚠️ PGC upload skip (oversize): ${storagePath}`);
+    return null;
+  }
+  if (session) {
+    const cumulative =
+      (session._scrapeCumulativeBytes || 0) + stat.size;
+    if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
+      console.warn(
+        `      ⚠️ PGC upload skipped (cumulative ${(cumulative / 1024 / 1024).toFixed(0)} MB cap)`,
+      );
+      return null;
+    }
+    session._scrapeCumulativeBytes = cumulative;
+  }
+  const buf = fs.readFileSync(localPath);
+  const contentHash = crypto.createHash("sha256").update(buf).digest("hex");
+  if (session?._downloadedHashes?.has(contentHash)) {
+    const prev = session._downloadedHashes.get(contentHash);
+    return prev?.viewUrl || null;
+  }
+  const url = await uploadToSupabaseStorage(localPath, storagePath);
+  if (url && session?._downloadedHashes) {
+    session._downloadedHashes.set(contentHash, {
+      fileName: path.basename(storagePath),
+      viewUrl: url || "",
+    });
+  }
+  return url;
+}
+
+/**
+ * Map UI scrapeMode (PGC-specific strings from dashboard) to runPgcProductionPipeline skips.
+ * Omits unchanged tabs in mapPgcPipelineToPortalData so Supabase merge keeps prior data.
+ */
+function pgcPipelineOptsFromScrapeMode(scrapeMode) {
+  const m = String(scrapeMode ?? "all").trim();
+  const none = {
+    skipDetail: false,
+    skipWorkflow: false,
+    skipReview: false,
+    skipFiles: false,
+    skipReports: false,
+  };
+  if (m === "scrape_without_files") {
+    return { ...none, skipFiles: true };
+  }
+  if (m === "scrape_files_only") {
+    return {
+      skipDetail: true,
+      skipWorkflow: true,
+      skipReview: true,
+      skipFiles: false,
+      skipReports: true,
+    };
+  }
+  if (m === "scrape_comments_only") {
+    return {
+      skipDetail: true,
+      skipWorkflow: true,
+      skipReview: true,
+      skipFiles: true,
+      skipReports: false,
+    };
+  }
+  if (m === "scrape_review_tab") {
+    return {
+      skipDetail: true,
+      skipWorkflow: false,
+      skipReview: false,
+      skipFiles: true,
+      skipReports: true,
+    };
+  }
+  if (m === "scrape_all" || m === "all") return { ...none };
+  if (m === "standard") {
+    return { ...none, skipFiles: true };
+  }
+  if (m === "files") {
+    return {
+      skipDetail: true,
+      skipWorkflow: true,
+      skipReview: true,
+      skipFiles: false,
+      skipReports: true,
+    };
+  }
+  if (m === "comments" || m === "supporting_docs") {
+    return {
+      skipDetail: true,
+      skipWorkflow: true,
+      skipReview: true,
+      skipFiles: true,
+      skipReports: false,
+    };
+  }
+  return { ...none };
+}
+
+async function scrapePgcAll(
+  session,
+  projects,
+  _sessionId,
+  supabaseProjectId,
+  userId,
+  scrapeMode,
+) {
+  const pgcOpts = pgcPipelineOptsFromScrapeMode(scrapeMode);
+
+  session._scrapeCumulativeBytes = 0;
+  session._downloadedHashes = new Map();
+
+  let bases = session.pgcWebUiBases;
+  if (!bases || !bases.length) {
+    bases = await pgcEplan.resolvePgcWebUiBases(session.page);
+    session.pgcWebUiBases = bases;
+  }
+
+  const dash = session.dashboardUrl || pgcEplan.PGC_DASHBOARD_URL;
+
+  const permitSanitize = (s) => {
+    const t = String(s || "")
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .slice(0, 120);
+    return t || "permit";
+  };
+
+  for (let i = 0; i < projects.length; i++) {
+    if (session._cancelRequested) {
+      console.log("   🛑 PGC scrape cancelled");
+      return;
+    }
+    const project = projects[i];
+    session.message = `${project.projectNum} → PGC harvest`;
+    console.log(
+      `\n🟣 [PGC] [${i + 1}/${projects.length}] ${project.projectNum} (ID ${project.projectId})`,
+    );
+    let page;
+    try {
+      page = await session.context.newPage();
+      const storagePrefix = `drawings/${supabaseProjectId || "pending"}/pgc/${permitSanitize(project.projectNum)}`;
+      const uploadLocal = (localPath, key) =>
+        pgcUploadLocalToSupabase(session, localPath, key);
+
+      const loginUrlResolved = pgcEplan.resolvePgcLoginUrl(dash);
+      const relaunchBrowserAndRecover = async ({
+        projectID: _pid,
+        project: _proj,
+        dashboardUrl: dashUrl,
+        reason,
+      }) => {
+        try {
+          if (session.browser) await session.browser.close().catch(() => {});
+        } catch (_) {}
+        const browser = await launchChromiumForScraper({
+          label: "pgc-task6-relaunch",
+          file: "server.js",
+        });
+        const context = await browser.newContext({
+          viewport: { width: 1440, height: 900 },
+          acceptDownloads: true,
+        });
+        const relPage = await context.newPage();
+        session.browser = browser;
+        session.context = context;
+        session.page = relPage;
+        await pgcEplan.performPgcLogin(
+          relPage,
+          session.username,
+          session.password,
+          pgcEplan.resolvePgcLoginUrl(dashUrl || dash),
+          { credentialsSource: "saved_portal_settings" },
+        );
+        await pgcEplan.waitForProjectGrid(relPage).catch(() => {});
+        session.pgcWebUiBases = await pgcEplan.resolvePgcWebUiBases(relPage);
+        console.log(`[PGC] Browser relaunched (${reason || "task6"})`);
+        return relPage;
+      };
+      const pipelineResult = await pgcEplan.runPgcProductionPipeline(
+        page,
+        {
+          projectID: String(project.projectId),
+          projectNumber: project.projectNum,
+          description: project.description,
+          location: project.location,
+          status: project.status,
+        },
+        bases,
+        dash,
+        {
+          skipReports: pgcOpts.skipReports,
+          skipFiles: pgcOpts.skipFiles,
+          skipDetail: pgcOpts.skipDetail,
+          skipWorkflow: pgcOpts.skipWorkflow,
+          skipReview: pgcOpts.skipReview,
+          uploadLocal,
+          storagePrefix,
+          recoveryCredentials:
+            session.username &&
+            session.password != null &&
+            String(session.password) !== ""
+              ? {
+                  email: String(session.username).trim(),
+                  password: session.password,
+                  loginUrl: loginUrlResolved,
+                  credentialsSource: "saved_portal_settings",
+                }
+              : null,
+          relaunchBrowserAndRecover,
+        },
+      );
+
+      session.data[project.id] = await mapPgcPipelineToPortalData(
+        project,
+        pipelineResult,
+      );
+    } catch (err) {
+      console.error(`   ❌ [PGC] ${project.projectNum}:`, err.message);
+      session.data[project.id] = {
+        name: project.name,
+        projectNum: project.projectNum,
+        description: project.description || "",
+        location: project.location || "",
+        dashboardStatus: project.status || "",
+        portalType: "projectdox",
+        portalSubtype: "pgc-eplan",
+        jurisdiction: "Prince George's County, MD",
+        tabs: {
+          info: { error: err.message, keyValues: [], tables: [] },
+        },
+      };
+    } finally {
+      if (page) await page.close().catch(() => {});
+    }
+    session.progress++;
+  }
+
+  session.message = `PGC scraping complete! Syncing...`;
+  console.log(`\n✅ [PGC] Done! Syncing to Supabase...`);
+  await syncPortalDataToSupabase(
+    session,
+    projects,
+    supabaseProjectId,
+    userId,
+    null,
+  );
+
+  if (session._cancelRequested) {
+    console.log("   🛑 PGC scrape cancelled — not marking as done");
+    return;
+  }
+  session.status = "done";
+  session.message = `PGC complete: ${projects.length} project(s) synced.`;
+  console.log(`    ✅ PGC Supabase sync complete — session status set to "done"`);
+}
 
 async function scrapeAll(
   session,
@@ -1425,172 +2502,13 @@ async function scrapeAll(
   session.message = `Scraping complete! Syncing to database...`;
   console.log(`\n✅ Done! Syncing to Supabase...`);
 
-  // ─── 💾 SYNC TO SUPABASE (after scraping completes) ─────────────────────────
-  for (let i = 0; i < projects.length; i++) {
-    const project = projects[i];
-    const projectNum = project.projectNum;
-    const currentData = session.data[project.id];
-    if (!currentData) continue;
-    let actualProjectId = null;
-
-    const newHash = hashPortalData(currentData);
-
-    try {
-      console.log(`    🔄 Syncing ${projectNum} to Supabase...`);
-      console.log(`    📌 projectId=${supabaseProjectId || "(none)"}, userId=${userId}, portalType=${currentData.portalType || "(none)"}`);
-
-      let existingRow = null;
-      if (supabaseProjectId) {
-        const { data: rows } = await supabase
-          .from("projects")
-          .select("id, portal_data_hash, portal_data")
-          .eq("id", supabaseProjectId);
-        existingRow = rows && rows.length > 0 ? rows[0] : null;
-      }
-      if (!existingRow) {
-        const { data: rows } = await supabase
-          .from("projects")
-          .select("id, portal_data_hash, portal_data")
-          .eq("permit_number", projectNum)
-          .eq("user_id", userId);
-        existingRow = rows && rows.length > 0 ? rows[0] : null;
-      }
-
-      if (existingRow && existingRow.portal_data_hash === newHash) {
-        actualProjectId = existingRow.id;
-        console.log(
-          `    ⏭️  Data unchanged for ${projectNum} (hash match), skipping update for row ${actualProjectId}`,
-        );
-        await supabase
-          .from("projects")
-          .update({ last_checked_at: new Date().toISOString() })
-          .eq("id", actualProjectId);
-      } else if (existingRow) {
-        let mergedData = currentData;
-        if (
-          existingRow.portal_data &&
-          existingRow.portal_data.tabs &&
-          currentData.tabs
-        ) {
-          const existingTabs = existingRow.portal_data.tabs;
-          const newTabs = currentData.tabs;
-
-          if (targetFolder && newTabs.files && existingTabs.files) {
-            const existingFolders = existingTabs.files.folders || [];
-            const newFolders = newTabs.files.folders || [];
-            const newFolderNames = new Set(newFolders.map((f) => f.name));
-            const keptFolders = existingFolders.filter((f) => !newFolderNames.has(f.name));
-            const mergedFolders = [...keptFolders, ...newFolders];
-            newTabs.files = { ...existingTabs.files, ...newTabs.files, folders: mergedFolders };
-            console.log(`    🔀 Folder-level merge: kept [${keptFolders.map(f => f.name).join(", ")}], updated [${[...newFolderNames].join(", ")}]`);
-          }
-
-          const merged = { ...existingTabs, ...newTabs };
-          mergedData = {
-            ...existingRow.portal_data,
-            ...currentData,
-            tabs: merged,
-          };
-          const keptKeys = Object.keys(existingTabs).filter((k) => !newTabs[k]);
-          if (keptKeys.length > 0) {
-            console.log(
-              `    🔀 Merged tabs: kept existing [${keptKeys.join(", ")}], updated [${Object.keys(newTabs).join(", ")}]`,
-            );
-          }
-        }
-        const mergedHash = hashPortalData(mergedData);
-        actualProjectId = existingRow.id;
-        const updatePayload = {
-          portal_status:
-            currentData.dashboardStatus ||
-            mergedData.dashboardStatus ||
-            "Scraped",
-          last_checked_at: new Date().toISOString(),
-          portal_data: mergedData,
-          portal_data_hash: mergedHash,
-          permit_number: projectNum,
-        };
-
-        console.log(`    📝 DB WRITE: supabaseProjectId=${supabaseProjectId || "(none)"}, permit=${projectNum}, portalType=${mergedData.portalType || "(none)"}, targetRow=${actualProjectId}`);
-
-        const { data, error } = await supabase
-          .from("projects")
-          .update(updatePayload)
-          .eq("id", actualProjectId)
-          .select("id, portal_data");
-
-        if (error) {
-          console.error("    ❌ Supabase error:", error.message, error.details);
-          continue;
-        }
-
-        if (data && Array.isArray(data) && data.length > 0) {
-          const writtenType = data[0].portal_data?.portalType || "(none)";
-          console.log(
-            `    ✅ Updated project row=${data[0].id}, written portalType=${writtenType}`,
-          );
-        }
-      } else {
-        if (!userId) {
-          console.error("    ❌ Cannot create project: userId not provided");
-          continue;
-        }
-        const { data: created, error: createError } = await supabase
-          .from("projects")
-          .insert({
-            user_id: userId,
-            name: currentData.projectNum || projectNum,
-            permit_number: projectNum,
-            description: currentData.description || "",
-            address: currentData.location || "",
-            jurisdiction: currentData.jurisdiction || "Washington DC",
-            status: "draft",
-            portal_status: currentData.dashboardStatus || "Unknown",
-            last_checked_at: new Date().toISOString(),
-            portal_data: currentData,
-            portal_data_hash: newHash,
-          })
-          .select("id, portal_data");
-        if (createError) {
-          console.error("    ❌ Supabase create error:", createError.message, createError.details);
-          continue;
-        }
-        if (created && created.length > 0) {
-          actualProjectId = created[0].id;
-          const writtenType = created[0].portal_data?.portalType || "(none)";
-          console.log(`    📝 Created new project row=${actualProjectId}, written portalType=${writtenType}`);
-        }
-      }
-
-      if (actualProjectId) {
-        const { data: verify } = await supabase
-          .from("projects")
-          .select("id, permit_number, credential_id, portal_data")
-          .eq("id", actualProjectId)
-          .maybeSingle();
-        if (verify) {
-          console.log(`    🔍 DB verify: row=${verify.id}, permit=${verify.permit_number}, credential=${verify.credential_id || "(none)"}, portalType=${verify.portal_data?.portalType || "(none)"}`);
-        }
-      }
-
-      if (actualProjectId) {
-        const { error: credErr } = await supabase
-          .from("portal_credentials")
-          .update({ project_id: actualProjectId, permit_number: projectNum })
-          .or(
-            `project_id.eq.${actualProjectId},permit_number.eq.${projectNum}`,
-          );
-        if (credErr) {
-          console.warn(
-            "    ⚠️ Could not update portal_credentials project_id:",
-            credErr.message,
-          );
-        }
-      }
-    } catch (dbErr) {
-      console.error("    ❌ DB Error:", dbErr.message);
-    }
-  }
+  await syncPortalDataToSupabase(
+    session,
+    projects,
+    supabaseProjectId,
+    userId,
+    targetFolder,
+  );
 
   if (session._cancelRequested) {
     console.log("   🛑 Scrape was cancelled — not marking as done");
@@ -1637,18 +2555,41 @@ async function reinitializeBrowser(session) {
   const loginPage = await context.newPage();
   if (session.portalType === 'accela') {
     await accelaScraperLogin(loginPage, session.username, session.password, session.dashboardUrl);
+  } else if (session.portalSubtype === 'pgc-eplan') {
+    const loginUrlResolved = pgcEplan.resolvePgcLoginUrl(session.dashboardUrl);
+    await pgcEplan.performPgcLogin(
+      loginPage,
+      session.username,
+      session.password,
+      loginUrlResolved,
+      { credentialsSource: "saved_portal_settings" },
+    );
+    const dash = session.dashboardUrl || pgcEplan.PGC_DASHBOARD_URL;
+    await loginPage.goto(dash, { waitUntil: 'networkidle', timeout: 90000 }).catch(() => {});
+    await pgcEplan.waitForProjectGrid(loginPage).catch(() => {});
+    try {
+      const bases = await pgcEplan.resolvePgcWebUiBases(loginPage);
+      if (bases?.length) session.pgcWebUiBases = bases;
+    } catch (_) {}
   } else {
     await performLogin(loginPage, session.username, session.password, session.dashboardUrl);
   }
-  if (session.webUiBase && session.projects && session.projects.length > 0) {
+  if (session.projects && session.projects.length > 0) {
     const firstProjectId = session.projects[0].projectId;
     if (firstProjectId) {
       const testPage = await context.newPage();
-      await testPage.goto(
-        `${session.webUiBase}/WebForms/Frame.aspx?tab=projectStatusTab&ProjectID=${firstProjectId}`,
-        { waitUntil: 'networkidle', timeout: 90000 }
-      ).catch(() => {});
+      let warmupUrl = null;
+      if (session.portalSubtype === "pgc-eplan") {
+        warmupUrl = pgcEplan.buildPgcTabUrl(firstProjectId, "projectStatusTab");
+      } else if (session.webUiBase) {
+        warmupUrl = `${session.webUiBase}/WebForms/Frame.aspx?tab=projectStatusTab&ProjectID=${firstProjectId}`;
+      }
+      if (warmupUrl) {
+        await testPage
+          .goto(warmupUrl, { waitUntil: "networkidle", timeout: 90000 })
+          .catch(() => {});
       await testPage.waitForTimeout(2000);
+      }
       await testPage.close();
     }
   }
@@ -4504,8 +5445,17 @@ async function startServer() {
     console.log("Server will start anyway; login/scrape will return 503 until Chromium is installed.");
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`
+  const server = app.listen(PORT, "0.0.0.0", () => {
+  const envName =
+    process.env.NODE_ENV ||
+    (process.env.RAILWAY_ENVIRONMENT ? "railway" : "development");
+  console.log(
+    `[SCRAPER SERVER] PID=${process.pid}, PORT=${PORT}, ENV=${envName}, READY`,
+  );
+  console.log(
+    "[SCRAPER SERVER] Do not run multiple scraper server instances at the same time.",
+  );
+  console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║  🏛️  ProjectDox Data Extractor                        ║
 ║  Server running at: http://localhost:${PORT}          ║
@@ -4513,11 +5463,22 @@ async function startServer() {
 ║  Automatic PDF Downloading Enabled (Option A)        ║
 ╚══════════════════════════════════════════════════════╝
   `);
-    // ✅ Only open browser on your local machine
-    if (!process.env.RAILWAY_ENVIRONMENT) {
-      import("open")
-        .then((mod) => mod.default(`http://localhost:${PORT}`))
-        .catch(() => {});
+  // ✅ Only open browser on your local machine
+  if (!process.env.RAILWAY_ENVIRONMENT) {
+    import("open")
+      .then((mod) => mod.default(`http://localhost:${PORT}`))
+      .catch(() => {});
+  }
+  });
+
+  server.on("error", (err) => {
+    if (err && err.code === "EADDRINUSE") {
+      console.error(
+        `[SCRAPER SERVER] PID=${process.pid}, PORT=${PORT}, BIND_FAILED=EADDRINUSE`,
+      );
+      console.error(
+        "[SCRAPER SERVER] Another scraper instance is already running on this port.",
+      );
     }
   });
 }
