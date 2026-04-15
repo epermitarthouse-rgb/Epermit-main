@@ -62,6 +62,19 @@ export function isPgcEplanPortalCredential(
 }
 
 /**
+ * Montgomery County MD — Avolve ProjectDox (montgomeryco-md-us.avolvecloud.com).
+ * Distinct from PGC ePlan; used for Montgomery-specific scrape modes in the dashboard.
+ */
+export function isMontgomeryProjectDoxPortalCredential(
+  credential: PortalCredentialLike | null | undefined,
+): boolean {
+  if (!credential) return false;
+  return (credential.login_url ?? "")
+    .toLowerCase()
+    .includes("montgomeryco-md-us.avolvecloud.com");
+}
+
+/**
  * Resolves which portal view variant to use given credential and optional portalData.portalType.
  * Baltimore is only returned when the credential is Baltimore Accela; other Accela stays "accela".
  */

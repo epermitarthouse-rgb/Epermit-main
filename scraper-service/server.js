@@ -14,6 +14,9 @@ const {
   scrapeAccelaRecord,
 } = require("./accela-scraper");
 const pgcEplan = require("./pgc-eplan-scraper");
+const montgomeryProjectDox = require("./montgomery-projectdox-scraper");
+const montgomeryDashboardDiscovery = require("./montgomery-dashboard-discovery");
+const { performMontgomeryPortalLogin } = require("./montgomery-portal-login");
 const {
   permitWizardLogin,
   getSession: getPWSession,
@@ -220,7 +223,7 @@ const DEFAULT_DASHBOARD_URL = "https://washington-dc-us.avolvecloud.com";
 
 const MIN_FILE_SIZE = 1024;
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
-const MAX_SCRAPE_CUMULATIVE_SIZE = 500 * 1024 * 1024;
+const MAX_SCRAPE_CUMULATIVE_SIZE = 1000 * 1024 * 1024;
 const MAX_DOWNLOADS_DIR_SIZE = 1 * 1024 * 1024 * 1024;
 
 function getDownloadsDir() {
@@ -805,8 +808,8 @@ app.post("/api/login", async (req, res) => {
         data: {},
       };
       sessions[sessionId]._timeout = setTimeout(
-        () => cleanupSession(sessionId),
-        15 * 60 * 1000,
+        () => cleanupSession(sessionId, "idle_timeout"),
+        SESSION_IDLE_TIMEOUT_MS,
       );
       return res.json({
         sessionId,
@@ -896,8 +899,8 @@ app.post("/api/login", async (req, res) => {
         data: {},
       };
       sessions[sessionId]._timeout = setTimeout(
-        () => cleanupSession(sessionId),
-        15 * 60 * 1000,
+        () => cleanupSession(sessionId, "idle_timeout"),
+        SESSION_IDLE_TIMEOUT_MS,
       );
       return res.json({
         sessionId,
@@ -908,7 +911,23 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    await performLogin(page, username, password, dashboardUrl);
+    const isMontgomeryProjectDox =
+      montgomeryProjectDox.isMontgomeryProjectDoxHost(dashboardUrl);
+
+    if (isMontgomeryProjectDox) {
+      await performMontgomeryPortalLogin(
+        page,
+        username,
+        password,
+        dashboardUrl,
+      );
+      await montgomeryDashboardDiscovery.ensureMontgomeryPostLoginDashboard(
+        page,
+        dashboardUrl,
+      );
+    } else {
+      await performLogin(page, username, password, dashboardUrl);
+    }
     console.log("✅ Login successful!");
 
     if (
@@ -927,96 +946,152 @@ app.post("/api/login", async (req, res) => {
       fullPage: true,
     });
 
-    // Extract projects — also grab ProjectID from the javascript:launchRemote hrefs
-    const projects = await page.evaluate(() => {
-      const results = [];
-      const seen = new Set();
-      document.querySelectorAll("table tr").forEach((tr) => {
-        const cells = tr.querySelectorAll("td");
-        if (cells.length >= 2) {
-          const link = cells[0]?.querySelector("a");
-          if (link) {
-            const num = link.textContent.trim();
-            const href = link.getAttribute("href") || "";
-            // Extract ProjectID from javascript:launchRemote('Frame.aspx?tab=projectStatusTab&ProjectID=9187')
-            const pidMatch = href.match(/ProjectID=(\d+)/);
-            const projectId = pidMatch ? pidMatch[1] : "";
+    /** @type {Array<{ id: string, name: string, projectNum: string, projectId: string, description: string, location: string, status: string, tasks: string, href: string }>} */
+    let projects;
+    if (isMontgomeryProjectDox) {
+      console.log(
+        `[Montgomery][discovery] dashboard URL (main frame): ${page.url()}`,
+      );
+      await montgomeryDashboardDiscovery.waitForMontgomeryDashboardReady(
+        page,
+        dashboardUrl,
+      );
+      projects =
+        await montgomeryDashboardDiscovery.collectMontgomeryDashboardProjects(
+          page,
+        );
+      console.log(
+        `[Montgomery][discovery] main DOM project rows: ${projects.length}`,
+      );
+      if (projects.length) {
+        console.log(
+          `[Montgomery][discovery] parsed ProjectIDs: ${projects
+            .map((p) => p.projectId)
+            .filter(Boolean)
+            .join(", ")}`,
+        );
+      }
+      if (projects.length > 0) {
+        const firstProject = projects[0];
+        console.log(
+          `\n🔗 [Montgomery] Establishing WebUI session via ${firstProject.projectNum || firstProject.projectId}…`,
+        );
+        const warm = await montgomeryDashboardDiscovery.warmWebUiAfterLogin(
+          context,
+          page,
+          firstProject,
+          webUiBase,
+        );
+        console.log(
+          `[Montgomery][discovery] open result: strategy=${warm.strategy} finalUrl=${warm.finalUrl}`,
+        );
+      }
+    } else {
+      // Extract projects — also grab ProjectID from the javascript:launchRemote hrefs (non-Montgomery portals)
+      projects = await page.evaluate(() => {
+        const results = [];
+        const seen = new Set();
+        document.querySelectorAll("table tr").forEach((tr) => {
+          const cells = tr.querySelectorAll("td");
+          if (cells.length >= 2) {
+            const link = cells[0]?.querySelector("a");
+            if (link) {
+              const num = link.textContent.trim();
+              const href = link.getAttribute("href") || "";
+              // Extract ProjectID from javascript:launchRemote('Frame.aspx?tab=projectStatusTab&ProjectID=9187')
+              const pidMatch = href.match(/ProjectID=(\d+)/);
+              const projectId = pidMatch ? pidMatch[1] : "";
 
-            if (num && !seen.has(num)) {
-              seen.add(num);
-              let status = (() => {
-                const cell = cells[3];
-                if (!cell) return "";
-                const btn = cell.querySelector("button, a.btn, span.badge, a");
-                if (btn) return btn.textContent.trim();
-                return cell.textContent.trim();
-              })();
-              if (status && status.length > 2 && status.length % 2 === 0) {
-                const half = status.substring(0, status.length / 2);
-                if (status === half + half) status = half;
+              if (num && !seen.has(num)) {
+                seen.add(num);
+                let status = (() => {
+                  const cell = cells[3];
+                  if (!cell) return "";
+                  const btn = cell.querySelector("button, a.btn, span.badge, a");
+                  if (btn) return btn.textContent.trim();
+                  return cell.textContent.trim();
+                })();
+                if (status && status.length > 2 && status.length % 2 === 0) {
+                  const half = status.substring(0, status.length / 2);
+                  if (status === half + half) status = half;
+                }
+                results.push({
+                  id: projectId || num,
+                  name: num,
+                  projectNum: num,
+                  projectId,
+                  description: cells[1]?.textContent?.trim() || "",
+                  location: cells[2]?.textContent?.trim() || "",
+                  status: status || "",
+                  tasks: cells[4]?.textContent?.trim() || "",
+                  href,
+                });
               }
-              results.push({
-                id: projectId || num,
-                name: num,
-                projectNum: num,
-                projectId,
-                description: cells[1]?.textContent?.trim() || "",
-                location: cells[2]?.textContent?.trim() || "",
-                status: status || "",
-                tasks: cells[4]?.textContent?.trim() || "",
-                href,
-              });
             }
           }
-        }
+        });
+        return results;
       });
-      return results;
-    });
+
+      // ── CRITICAL: Establish WebUI session by navigating through a project link ──
+      if (projects.length > 0) {
+        const firstProject = projects[0];
+        console.log(
+          `\n🔗 Establishing WebUI session via project ${firstProject.projectNum}...`,
+        );
+
+        const [popup] = await Promise.all([
+          context.waitForEvent("page", { timeout: 15000 }).catch(() => null),
+          page.click(`a:has-text("${firstProject.projectNum}")`),
+        ]);
+
+        if (popup) {
+          console.log(`   Popup opened: ${popup.url()}`);
+          await popup.waitForLoadState("networkidle").catch(() => {});
+          await popup.waitForTimeout(2000);
+          console.log(`   Popup final URL: ${popup.url()}`);
+          await popup.close();
+        } else {
+          console.log(
+            "   No popup detected. Checking for iframe or navigation...",
+          );
+          await page.waitForTimeout(3000);
+          const testPage = await context.newPage();
+          await testPage.goto(
+            `${webUiBase}/WebForms/Frame.aspx?tab=projectStatusTab&ProjectID=${firstProject.projectId}`,
+            {
+              waitUntil: "networkidle",
+              timeout: 30000,
+            },
+          );
+          await testPage.waitForTimeout(2000);
+          await testPage.close();
+        }
+      }
+    }
 
     console.log(`📋 Found ${projects.length} projects`);
     projects.forEach((p) =>
       console.log(`   ${p.projectNum} (ID: ${p.projectId})`),
     );
 
-    // ── CRITICAL: Establish WebUI session by navigating through a project link ──
-    if (projects.length > 0) {
-      const firstProject = projects[0];
-      console.log(
-        `\n🔗 Establishing WebUI session via project ${firstProject.projectNum}...`,
-      );
-
-      const [popup] = await Promise.all([
-        context.waitForEvent("page", { timeout: 15000 }).catch(() => null),
-        page.click(`a:has-text("${firstProject.projectNum}")`),
-      ]);
-
-      if (popup) {
-        console.log(`   Popup opened: ${popup.url()}`);
-        await popup.waitForLoadState("networkidle").catch(() => {});
-        await popup.waitForTimeout(2000);
-        console.log(`   Popup final URL: ${popup.url()}`);
-        await popup.close();
-      } else {
+    let montgomeryWebUiBases = null;
+    if (isMontgomeryProjectDox) {
+      try {
+        montgomeryWebUiBases = await montgomeryProjectDox.resolveMontgomeryWebUiBases(page);
         console.log(
-          "   No popup detected. Checking for iframe or navigation...",
+          "🟢 Montgomery Avolve ProjectDox — web UI bases:",
+          montgomeryWebUiBases,
         );
-        await page.waitForTimeout(3000);
-        const testPage = await context.newPage();
-        await testPage.goto(
-          `${webUiBase}/WebForms/Frame.aspx?tab=projectStatusTab&ProjectID=${firstProject.projectId}`,
-          {
-            waitUntil: "networkidle",
-            timeout: 30000,
-          },
-        );
-        await testPage.waitForTimeout(2000);
-        await testPage.close();
+      } catch (e) {
+        console.warn("[Montgomery] resolveMontgomeryWebUiBases:", e?.message || e);
       }
     }
 
     const sessionId =
       Date.now().toString(36) + Math.random().toString(36).slice(2);
-    sessions[sessionId] = {
+    /** @type {Record<string, unknown>} */
+    const projectDoxSession = {
       status: "logged_in",
       portalType: "projectdox",
       projects,
@@ -1032,11 +1107,24 @@ app.post("/api/login", async (req, res) => {
       total: 0,
       data: {},
     };
+    if (isMontgomeryProjectDox) {
+      projectDoxSession.portalSubtype = "montgomery-projectdox";
+      if (montgomeryWebUiBases?.length) {
+        projectDoxSession.montgomeryWebUiBases = montgomeryWebUiBases;
+      }
+    }
+    sessions[sessionId] = projectDoxSession;
     sessions[sessionId]._timeout = setTimeout(
-      () => cleanupSession(sessionId),
-      15 * 60 * 1000,
+      () => cleanupSession(sessionId, "idle_timeout"),
+      SESSION_IDLE_TIMEOUT_MS,
     );
-    res.json({ sessionId, projectCount: projects.length, projects });
+    res.json({
+      sessionId,
+      projectCount: projects.length,
+      projects,
+      portalType: "projectdox",
+      ...(isMontgomeryProjectDox && { portalSubtype: "montgomery-projectdox" }),
+    });
   } catch (err) {
     console.error("❌ Login error:", err.message);
     if (browser) await browser.close().catch(() => {});
@@ -1050,15 +1138,37 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-function cleanupSession(sid) {
+const SESSION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+
+function rearmSessionIdleTimeout(sid) {
   const s = sessions[sid];
-  if (s) {
-    if (s._timeout) clearTimeout(s._timeout);
-    if (s.browser) s.browser.close().catch(() => {});
-    s.browser = null;
-    s.context = null;
-    s.page = null;
+  if (!s) return;
+  if (s._timeout) clearTimeout(s._timeout);
+  s._timeout = setTimeout(
+    () => cleanupSession(sid, "idle_timeout"),
+    SESSION_IDLE_TIMEOUT_MS,
+  );
+  console.log(`[Session][cleanup] rearmed sid=${sid} minutes=15`);
+}
+
+function cleanupSession(sid, reason = "unknown") {
+  const s = sessions[sid];
+  if (!s) return;
+  if (reason === "idle_timeout" && s._scrapeActive === true) {
+    console.log(
+      `[Session][cleanup] skipped sid=${sid} reason=idle_timeout scrapeActive=true`,
+    );
+    rearmSessionIdleTimeout(sid);
+    return;
   }
+  console.log(
+    `[Session][cleanup] sid=${sid} at=${new Date().toISOString()} browser=${!!s.browser} context=${!!s.context} reason=${reason}`,
+  );
+  if (s._timeout) clearTimeout(s._timeout);
+  if (s.browser) s.browser.close().catch(() => {});
+  s.browser = null;
+  s.context = null;
+  s.page = null;
 }
 
 // ─── Scrape endpoint ─────────────────────────────────────────────────────────
@@ -1079,8 +1189,8 @@ app.post("/api/scrape", async (req, res) => {
     return res.status(400).json({ error: "Session expired." });
   if (session._timeout) clearTimeout(session._timeout);
   session._timeout = setTimeout(
-    () => cleanupSession(sessionId),
-    15 * 60 * 1000,
+    () => cleanupSession(sessionId, "idle_timeout"),
+    SESSION_IDLE_TIMEOUT_MS,
   );
 
   if (session.portalType === "accela") {
@@ -1197,6 +1307,61 @@ app.post("/api/scrape", async (req, res) => {
     return;
   }
 
+  if (session.portalSubtype === "montgomery-projectdox") {
+    if (
+      !String(session.username || "").trim() ||
+      session.password == null ||
+      String(session.password) === ""
+    ) {
+      return res.status(400).json({
+        error: "montgomery_saved_portal_credentials_missing",
+      });
+    }
+    let targets;
+    if (permitNumber != null && String(permitNumber).trim() !== "") {
+      targets = session.projects.filter(
+        (p) =>
+          String(p.projectNum || "").trim() === String(permitNumber).trim(),
+      );
+      if (targets.length === 0) {
+        return res.status(404).json({
+          error: "No project found matching permit number: " + permitNumber,
+        });
+      }
+    } else {
+      const ids = Array.isArray(projectIds) ? projectIds : [];
+      targets =
+        ids.length > 0
+          ? session.projects.filter((p) =>
+              ids.some((pid) => String(pid) === String(p.id)),
+            )
+          : session.projects;
+    }
+    session.status = "scraping";
+    session.total = targets.length;
+    session.progress = 0;
+    session.data = {};
+    res.json({
+      message: "Montgomery ProjectDox scraping started",
+      total: session.total,
+      portalType: "projectdox",
+      portalSubtype: "montgomery-projectdox",
+    });
+    scrapeMontgomeryAll(
+      session,
+      targets,
+      sessionId,
+      projectId,
+      userId,
+      scrapeMode || "montgomery_quick",
+    ).catch((err) => {
+      session.status = "error";
+      session.message = `Error: ${err.message}`;
+      console.error("❌ Montgomery scrape error:", err);
+    });
+    return;
+  }
+
   // permitNumber takes priority over projectIds
   let targets;
   if (permitNumber != null && String(permitNumber).trim() !== "") {
@@ -1278,6 +1443,143 @@ const TAB_DEFS = [
   { key: "reports", label: "Reports", param: "reportsTab" },
 ];
 
+function isMontgomeryPortalSubtypePayload(data) {
+  return (
+    data &&
+    typeof data === "object" &&
+    data.portalSubtype === "montgomery-projectdox"
+  );
+}
+
+function montgomeryDebugPortalDataStructuralSummary(pd) {
+  if (!pd || typeof pd !== "object") {
+    return { error: "portal_data missing or not an object" };
+  }
+  const tabs = pd.tabs && typeof pd.tabs === "object" ? pd.tabs : null;
+  const tabKeys = tabs ? Object.keys(tabs) : [];
+  return {
+    portalType: pd.portalType,
+    portalSubtype: pd.portalSubtype,
+    topLevelKeys: Object.keys(pd),
+    tabsKeys: tabKeys,
+    tabsInfo: tabs ? tabs.info : "(tabs.info missing)",
+    tabsStatus: tabs ? tabs.status : "(tabs.status missing)",
+    tabsTasks: tabs ? tabs.tasks : "(tabs.tasks missing)",
+    tabsReports: tabs ? tabs.reports : "(tabs.reports missing)",
+  };
+}
+
+/** Long strings (e.g. report PDF text) truncated in debug JSON only. */
+function stringifyMontgomeryPortalDataForDebugLog(data) {
+  return JSON.stringify(
+    data,
+    (key, value) => {
+      if (key === "text" && typeof value === "string" && value.length > 4000) {
+        return `[truncated len=${value.length}] ${value.slice(0, 240)}…`;
+      }
+      if (key === "screenshot" && typeof value === "string" && value.length > 200) {
+        return `[screenshot base64 len=${value.length}]`;
+      }
+      return value;
+    },
+    2,
+  );
+}
+
+function logMontgomeryDebugInfoDupTabs(infoTab, phase) {
+  console.log(`[Montgomery][debug][info-dup] phase=${phase}`);
+  if (!infoTab || typeof infoTab !== "object") {
+    console.log("[Montgomery][debug][info-dup] tabs.info missing or not object");
+    return;
+  }
+  const pi = infoTab.projectInfo;
+  const kv = infoTab.keyValues;
+  const tbls = infoTab.tables;
+  const piN = Array.isArray(pi) ? pi.length : 0;
+  const kvN = Array.isArray(kv) ? kv.length : 0;
+  const tbN = Array.isArray(tbls) ? tbls.length : 0;
+  console.log(
+    `[Montgomery][debug][info-dup] counts projectInfo=${piN} keyValues=${kvN} tables=${tbN}`,
+  );
+  (tbls || []).forEach((t, i) => {
+    const hdrs = Array.isArray(t?.headers) ? t.headers : [];
+    const rc = Array.isArray(t?.rows) ? t.rows.length : 0;
+    console.log(
+      `[Montgomery][debug][info-dup] tables[${i}] headers=${JSON.stringify(hdrs)} rowCount=${rc} origin=DOM pairs in extractMontgomeryInfoTab → normalizeMontgomeryInfoPairs → buildMontgomeryInfoFieldValueTable (synthesized Field/Value table, not a second DOM scrape)`,
+    );
+  });
+  console.log(
+    "[Montgomery][debug][info-dup] mapper: mapMontgomeryPipelineToPortalData sets tabs.info.projectInfo and tabs.info.keyValues as the SAME pairs (duplicate arrays) plus tabs.info.tables from scraper.",
+  );
+  console.log(
+    "[Montgomery][debug][info-dup] UI (PortalDataViewer, non-PGC): renders Project Info from tabs.info.projectInfo when displayProjectInfo.length>0 AND also renders filteredInfoTables — both can show the same logical fields → duplicate display.",
+  );
+  console.log(
+    "[Montgomery][debug][info-dup] UI: tabs.info.keyValues block only renders when displayProjectInfo.length===0, so keyValues vs projectInfo is usually mutually exclusive; duplication is projectInfo/table overlap.",
+  );
+}
+
+function logMontgomeryDebugStatusDupTabs(statusTab, phase) {
+  console.log(`[Montgomery][debug][status-dup] phase=${phase}`);
+  if (!statusTab || typeof statusTab !== "object") {
+    console.log("[Montgomery][debug][status-dup] tabs.status missing or not object");
+    return;
+  }
+  const kvc = Array.isArray(statusTab.keyValues) ? statusTab.keyValues.length : 0;
+  const tbc = Array.isArray(statusTab.tables) ? statusTab.tables.length : 0;
+  const lkc = Array.isArray(statusTab.links) ? statusTab.links.length : 0;
+  console.log(
+    `[Montgomery][debug][status-dup] counts keyValues=${kvc} tables=${tbc} links=${lkc}`,
+  );
+  (statusTab.tables || []).forEach((t, i) => {
+    const hdrs = Array.isArray(t?.headers) ? t.headers : [];
+    const rc = Array.isArray(t?.rows) ? t.rows.length : 0;
+    console.log(
+      `[Montgomery][debug][status-dup] tables[${i}] headers=${JSON.stringify(hdrs)} rowCount=${rc} origin=synthesized in extractMontgomeryStatusTab from filtered keyValues (Field/Value), same source as keyValues array`,
+    );
+  });
+  const sampleLink = (statusTab.links || [])[0];
+  console.log(
+    `[Montgomery][debug][status-dup] links sample: text=${JSON.stringify(sampleLink?.text ?? "")} hrefLen=${String(sampleLink?.href ?? "").length} hasOnclick=${!!(sampleLink?.onclick && String(sampleLink.onclick).trim())} hasResolved=${!!(sampleLink?.resolvedViewerUrl && String(sampleLink.resolvedViewerUrl).trim())}`,
+  );
+  console.log(
+    "[Montgomery][debug][status-dup] UI (PortalDataViewer, non-PGC): renders BOTH keyValues block AND tables block with no mutual exclusion → duplicate rows when both non-empty.",
+  );
+}
+
+function logMontgomeryDebugPreSync(tag, portalDataPayload) {
+  console.log(`[Montgomery][debug][pre-sync] ${tag} — compact structural summary:`);
+  console.log(
+    JSON.stringify(
+      montgomeryDebugPortalDataStructuralSummary(portalDataPayload),
+      null,
+      2,
+    ),
+  );
+  console.log(`[Montgomery][debug][pre-sync] ${tag} — full portal_data (truncated long text fields):`);
+  console.log(stringifyMontgomeryPortalDataForDebugLog(portalDataPayload));
+  if (isMontgomeryPortalSubtypePayload(portalDataPayload)) {
+    logMontgomeryDebugInfoDupTabs(portalDataPayload.tabs?.info, `pre-sync:${tag}`);
+    logMontgomeryDebugStatusDupTabs(portalDataPayload.tabs?.status, `pre-sync:${tag}`);
+  }
+}
+
+function logMontgomeryDebugPostSyncReadback(verifyRow) {
+  const pd = verifyRow?.portal_data;
+  console.log(
+    `[Montgomery][debug][post-sync-readback] projects.id=${verifyRow?.id} — compact:`,
+  );
+  console.log(JSON.stringify(montgomeryDebugPortalDataStructuralSummary(pd), null, 2));
+  console.log(
+    `[Montgomery][debug][post-sync-readback] projects.id=${verifyRow?.id} — full portal_data from DB (truncated long text):`,
+  );
+  console.log(stringifyMontgomeryPortalDataForDebugLog(pd));
+  if (isMontgomeryPortalSubtypePayload(pd)) {
+    logMontgomeryDebugInfoDupTabs(pd.tabs?.info, "post-readback-db");
+    logMontgomeryDebugStatusDupTabs(pd.tabs?.status, "post-readback-db");
+  }
+}
+
 async function syncPortalDataToSupabase(
   session,
   projects,
@@ -1295,6 +1597,13 @@ async function syncPortalDataToSupabase(
     const newHash = hashPortalData(currentData);
 
     try {
+      if (isMontgomeryPortalSubtypePayload(currentData)) {
+        logMontgomeryDebugPreSync(
+          `session.data scrape output (before DB merge/write) permit=${projectNum}`,
+          currentData,
+        );
+      }
+
       console.log(`    🔄 Syncing ${projectNum} to Supabase...`);
       console.log(
         `    📌 projectId=${supabaseProjectId || "(none)"}, userId=${userId}, portalType=${currentData.portalType || "(none)"}`,
@@ -1322,6 +1631,11 @@ async function syncPortalDataToSupabase(
         console.log(
           `    ⏭️  Data unchanged for ${projectNum} (hash match), skipping update for row ${actualProjectId}`,
         );
+        if (isMontgomeryPortalSubtypePayload(currentData)) {
+          console.log(
+            `[Montgomery][debug][pre-sync] HASH MATCH — portal_data column not updated (only last_checked_at); scraped payload was logged above`,
+          );
+        }
         await supabase
           .from("projects")
           .update({ last_checked_at: new Date().toISOString() })
@@ -1355,6 +1669,28 @@ async function syncPortalDataToSupabase(
           }
 
           const merged = { ...existingTabs, ...newTabs };
+          if (
+            currentData.portalSubtype === "montgomery-projectdox" &&
+            merged.status &&
+            existingTabs.status
+          ) {
+            const ns = merged.status;
+            const es = existingTabs.status;
+            const newStatusEmpty =
+              (!Array.isArray(ns.keyValues) || ns.keyValues.length === 0) &&
+              (!Array.isArray(ns.links) || ns.links.length === 0) &&
+              (!Array.isArray(ns.tables) || ns.tables.length === 0);
+            const oldStatusHas =
+              (Array.isArray(es.keyValues) && es.keyValues.length > 0) ||
+              (Array.isArray(es.links) && es.links.length > 0) ||
+              (Array.isArray(es.tables) && es.tables.length > 0);
+            if (newStatusEmpty && oldStatusHas) {
+              merged.status = JSON.parse(JSON.stringify(es));
+              console.log(
+                "[Montgomery][status] merge kept existing tabs.status (new scrape had empty status)",
+              );
+            }
+          }
           mergedData = {
             ...existingRow.portal_data,
             ...currentData,
@@ -1379,6 +1715,13 @@ async function syncPortalDataToSupabase(
           portal_data_hash: mergedHash,
           permit_number: projectNum,
         };
+
+        if (isMontgomeryPortalSubtypePayload(mergedData)) {
+          logMontgomeryDebugPreSync(
+            `exact portal_data for DB UPDATE row id=${actualProjectId} permit=${projectNum}`,
+            mergedData,
+          );
+        }
 
         console.log(
           `    📝 DB WRITE: supabaseProjectId=${supabaseProjectId || "(none)"}, permit=${projectNum}, portalType=${mergedData.portalType || "(none)"}, targetRow=${actualProjectId}`,
@@ -1405,6 +1748,12 @@ async function syncPortalDataToSupabase(
         if (!userId) {
           console.error("    ❌ Cannot create project: userId not provided");
           continue;
+        }
+        if (isMontgomeryPortalSubtypePayload(currentData)) {
+          logMontgomeryDebugPreSync(
+            `exact portal_data for DB INSERT (new project) permit=${projectNum}`,
+            currentData,
+          );
         }
         const { data: created, error: createError } = await supabase
           .from("projects")
@@ -1449,6 +1798,9 @@ async function syncPortalDataToSupabase(
           console.log(
             `    🔍 DB verify: row=${verify.id}, permit=${verify.permit_number}, credential=${verify.credential_id || "(none)"}, portalType=${verify.portal_data?.portalType || "(none)"}`,
           );
+          if (isMontgomeryPortalSubtypePayload(currentData)) {
+            logMontgomeryDebugPostSyncReadback(verify);
+          }
         }
       }
 
@@ -1628,6 +1980,35 @@ async function buildPgcReportPdfEntryText(r) {
         "[PGC] fetch PDF for text extract failed:",
         (e && e.message) || e,
       );
+    }
+  }
+
+  if (!String(text).trim() && r._montgomeryAllowViewerHttpText) {
+    const base = String(r.viewUrl || r.reportUrl || "").trim();
+    if (base && /ReportViewer\.aspx/i.test(base)) {
+      const pdfGet = pgcEplan.pgcReportViewerUrlWithFormat(base, "PDF");
+      try {
+        const buf = await fetchUrlToBuffer(pdfGet);
+        const ex = await extractTextFromPgcExportedPdfBuffer(buf);
+        if (String(ex.text).trim()) {
+          text = ex.text;
+          numpages = ex.numpages;
+          parseError = null;
+        }
+      } catch (_) {
+        /* Needs portal session cookies; scraper-local pdfPath / uploads are authoritative */
+      }
+      if (!String(text).trim()) {
+        const xlGet = pgcEplan.pgcReportViewerUrlWithFormat(base, "EXCELOPENXML");
+        try {
+          const xbuf = await fetchUrlToBuffer(xlGet);
+          const xt = await extractTextFromPgcExcelBuffer(xbuf);
+          if (String(xt).trim()) {
+            text = xt;
+            parseError = null;
+          }
+        } catch (_) {}
+      }
     }
   }
 
@@ -1933,6 +2314,644 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
     jurisdiction: "Prince George's County, MD",
     tabs,
   };
+}
+
+/**
+ * Map Montgomery pipeline result → portal_data (same broad contract as PGC / ProjectDox).
+ */
+async function mapMontgomeryPipelineToPortalData(projectRow, pipelineResult) {
+  const detail = pipelineResult.detailResult?.out;
+  const info = detail?.info;
+  const projectInfo = [];
+  const infoTables = Array.isArray(info?.tables) ? info.tables : [];
+  if (info) {
+    const add = (k, v) => {
+      if (v != null) projectInfo.push({ key: k, value: String(v) });
+    };
+    if (Array.isArray(info.projectInfo) && info.projectInfo.length) {
+      info.projectInfo.forEach((kv) =>
+        projectInfo.push({
+          key: String(kv.key ?? kv.label ?? ""),
+          value: String(kv.value ?? ""),
+        }),
+      );
+    } else {
+      add("Project #", info.projectNumber);
+      add("Case name", info.caseName);
+      add("Location", info.location);
+      add("Case type", info.caseType);
+      add("Contact email", info.contactEmail);
+      add("Status", info.status);
+      add("Project start", info.projectStart);
+      add("Project end", info.projectEnd);
+    }
+  }
+
+  const statusTab = detail?.statusTab;
+  const statusKeyValues = Array.isArray(statusTab?.keyValues)
+    ? statusTab.keyValues.map((kv) => ({
+        key: String(kv.key ?? ""),
+        value: String(kv.value ?? ""),
+      }))
+    : [];
+  const statusTables = Array.isArray(statusTab?.tables) ? statusTab.tables : [];
+  let statusSections = [];
+  let statusLinksFlat = [];
+  let statusMeta = null;
+  try {
+    if (Array.isArray(statusTab?.sections)) {
+      statusSections = JSON.parse(JSON.stringify(statusTab.sections));
+    }
+    if (Array.isArray(statusTab?.links)) {
+      statusLinksFlat = statusTab.links.map((L) => {
+        const hrefDirect = String(L.href ?? "").trim();
+        const resolved = String(L.resolvedViewerUrl ?? "").trim();
+        const viewerU = String(L.viewerUrl ?? resolved).trim();
+        const reportU = String(L.reportUrl ?? resolved).trim();
+        return {
+          text: String(L.text ?? ""),
+          href: hrefDirect || viewerU || reportU,
+          target: L.target != null ? String(L.target) : undefined,
+          ...(L.onclick != null && String(L.onclick).trim()
+            ? { onclick: String(L.onclick) }
+            : {}),
+          ...(resolved ? { resolvedViewerUrl: resolved } : {}),
+          ...(viewerU ? { viewerUrl: viewerU } : {}),
+          ...(reportU ? { reportUrl: reportU } : {}),
+          ...(typeof L.hasResolved === "boolean" ? { hasResolved: L.hasResolved } : {}),
+          ...(L.reportName != null && String(L.reportName).trim()
+            ? { reportName: String(L.reportName) }
+            : {}),
+          ...(L.linkWflowInstanceID != null && String(L.linkWflowInstanceID).trim()
+            ? { linkWflowInstanceID: String(L.linkWflowInstanceID) }
+            : {}),
+        };
+      });
+    }
+    if (statusTab?.meta && typeof statusTab.meta === "object") {
+      statusMeta = JSON.parse(JSON.stringify(statusTab.meta));
+    }
+  } catch (e) {
+    console.warn("[Montgomery] map status clone:", e.message || e);
+  }
+
+  const tasksTab = detail?.tasksTab;
+  const tasksKeyValues = [];
+  if (tasksTab?.workflowState)
+    tasksKeyValues.push({
+      key: "Workflow state",
+      value: tasksTab.workflowState,
+    });
+  if (Array.isArray(tasksTab?.workflowKeyValues)) {
+    tasksTab.workflowKeyValues.forEach((kv) =>
+      tasksKeyValues.push({
+        key: String(kv.key ?? ""),
+        value: String(kv.value ?? ""),
+      }),
+    );
+  }
+  const taskRows = (tasksTab?.tasks || []).map((t) => ({
+    Task: t.taskName || "",
+    Assignee: t.assignee || "",
+    State: t.state || "",
+    Due: t.dueDate || "",
+  }));
+  const tasksTables =
+    Array.isArray(tasksTab?.tables) && tasksTab.tables.length
+      ? tasksTab.tables
+      : taskRows.length
+        ? [{ headers: ["Task", "Assignee", "State", "Due"], rows: taskRows }]
+        : [];
+
+  const wf = pipelineResult.workflowPack;
+  const reviewOut = pipelineResult.reviewOut;
+  const filesOut = pipelineResult.filesOut;
+  const reportsPayload = pipelineResult.reportsPayload;
+
+  const folders = (filesOut?.folders || []).map((fol) => ({
+    folderID: fol.folderID ?? null,
+    folderName: fol.folderName || null,
+    parentFolder: fol.parentFolder || null,
+    filesCount: fol.filesCount ?? (fol.files?.length ?? 0),
+    name: fol.folderName || `Folder ${fol.folderID}`,
+    fileCount: fol.filesCount || (fol.files?.length ?? 0),
+    files: (fol.files || []).map((f) => ({
+      name: f.name || "file",
+      fileId: f.fileId,
+      folderName: f.folderName,
+      parentFolder: fol.parentFolder || null,
+      status: f.status || "",
+      reviewedBy: f.reviewedBy || "",
+      uploadedDate: f.uploadedDate || "",
+      commentCount: f.commentCount ?? 0,
+      viewUrl: f.viewUrl,
+      publicUrl: f.publicUrl || f.viewUrl || null,
+      downloadUrl: f.downloadUrl || null,
+      fileSizeKB: f.fileSizeKB ?? null,
+      version: f.version ?? null,
+      hasMarkups: f.hasMarkups ?? false,
+    })),
+  }));
+
+  const reviewTab = {
+    workflow: wf?.workflow || null,
+    reviewProbe: wf?.reviewProbe || null,
+    summary: {
+      reviewGroupsCount: reviewOut?.reviewGroupsCount,
+      rawCorrectionsCount: reviewOut?.rawCorrectionsCount,
+      latestCycleCorrectionsCount: reviewOut?.latestCycleCorrectionsCount,
+      changemarkCount: reviewOut?.changemarkCount,
+      commentCount: reviewOut?.commentCount,
+      unresolvedCount: reviewOut?.unresolvedCount,
+      resolvedCount: reviewOut?.resolvedCount,
+      statusCounts: reviewOut?.statusCounts,
+    },
+    workflowBuckets: (reviewOut?.workflowBuckets || []).map((wfb) => ({
+      workflowName: wfb.workflowName || "",
+      rows: Array.isArray(wfb.rows)
+        ? wfb.rows.map((r) => ({
+            workflowName: r.workflowName || "",
+            refNumber: r.refNumber || "",
+            changemarkNumber: r.changemarkNumber || "",
+            department: r.department || "",
+            reviewer: r.reviewer || "",
+            datetime: r.datetime || "",
+            cycle: r.cycle || "",
+            status: r.status || "",
+            fileName: r.fileName || "",
+            commentText: r.commentText || "",
+          }))
+        : [],
+    })),
+    latestCycleCorrections: (reviewOut?.latestCycleCorrections || []).map((c) => ({
+      correctionID: c.correctionID || "",
+      referenceNumber: c.referenceNumber || "",
+      department: c.department || "",
+      reviewerName: c.reviewerName || "",
+      statusName: c.statusName || "",
+      correctionType: c.correctionType || "",
+      commentText: c.commentText || "",
+      responseText: c.responseText || "",
+      fileID: c.fileID || "",
+      fileName: c.fileName || "",
+      reviewCycle: c.reviewCycle || "",
+      dateCreated: c.dateCreated || "",
+    })),
+  };
+
+  const _mdcReportsRaw = reportsPayload?.reports || [];
+  console.log(
+    `[Montgomery][debug][reports] mapMontgomery pipeline reports count=${_mdcReportsRaw.length} skipped=${!!reportsPayload?.skipped}`,
+  );
+  console.log(
+    `[Montgomery][reports-deep] mapper-input ${JSON.stringify(
+      _mdcReportsRaw.map((r) => ({
+        name: r.reportName,
+        viewUrlLen: String(r.viewUrl || "").length,
+        reportUrlLen: String(r.reportUrl || "").length,
+        viewerReady: !!r.viewerReady,
+        pdfHttpUrl: !!r.pdfHttpUrl,
+        excelHttpUrl: !!r.excelHttpUrl,
+        pdfPublicUrl: !!r.pdfPublicUrl,
+        excelPublicUrl: !!r.excelPublicUrl,
+        pdfDownloaded: !!r.pdfDownloaded,
+        excelDownloaded: !!r.excelDownloaded,
+      })),
+    )}`,
+  );
+  _mdcReportsRaw.forEach((r, i) => {
+    const vu = String(r.viewUrl || "").trim();
+    const ru = String(r.reportUrl || "").trim();
+    console.log(
+      `[Montgomery][debug][reports] pipelineRaw[${i}] name=${JSON.stringify(r.reportName)} viewUrlLen=${vu.length} reportUrlLen=${ru.length} viewerReady=${!!r.viewerReady} exportUnavailable=${!!r.exportUnavailable} pdfDownloaded=${!!r.pdfDownloaded} excelDownloaded=${!!r.excelDownloaded} pdfPublicUrl=${r.pdfPublicUrl ? "yes" : "no"} excelPublicUrl=${r.excelPublicUrl ? "yes" : "no"}`,
+    );
+  });
+
+  const reportEntries = _mdcReportsRaw.map((r) => {
+    const exportUnavailable = !!r.exportUnavailable;
+    const reportUrl = r.reportUrl || r.viewUrl || null;
+    const viewerUrl = r.viewUrl || r.reportUrl || null;
+    const wf =
+      r.wflowInstanceIDInViewerUrl != null && String(r.wflowInstanceIDInViewerUrl).trim()
+        ? String(r.wflowInstanceIDInViewerUrl).trim()
+        : null;
+    return {
+      fileSlug: r.fileSlug,
+      reportName: r.reportName,
+      reportType: r.reportType || "",
+      reportDescription: r.reportDescription || "",
+      reportUrl,
+      viewerUrl,
+      viewerReady: !!r.viewerReady,
+      pdfUrl: r.pdfPublicUrl || r.pdfHttpUrl || null,
+      excelUrl: r.excelPublicUrl || r.excelHttpUrl || null,
+      excelDownloaded: r.excelDownloaded,
+      pdfDownloaded: r.pdfDownloaded,
+      exportUnavailable,
+      ...(r.exportError ? { exportError: String(r.exportError) } : {}),
+      flags: {
+        viewerUrlResolved: !!(viewerUrl && /^https?:\/\//i.test(String(viewerUrl))),
+        ...(wf ? { wflowInstanceID: wf } : {}),
+      },
+    };
+  });
+  reportEntries.forEach((e, i) => {
+    const vu = String(e.viewerUrl || "");
+    const ru = String(e.reportUrl || "");
+    console.log(
+      `[Montgomery][debug][reports] portalDataReportEntry[${i}] name=${JSON.stringify(e.reportName)} viewerUrlHttp=${/^https?:\/\//i.test(vu)} reportUrlHttp=${/^https?:\/\//i.test(ru)} flags.viewerUrlResolved=${e.flags?.viewerUrlResolved} exportUnavailable=${e.exportUnavailable}`,
+    );
+  });
+  console.log(
+    `[Montgomery][reports-deep] mapper-output ${JSON.stringify(
+      reportEntries.map((e) => ({
+        name: e.reportName,
+        viewerUrlLen: String(e.viewerUrl || "").length,
+        reportUrlLen: String(e.reportUrl || "").length,
+        viewerReady: e.viewerReady,
+        pdfUrlLen: String(e.pdfUrl || "").length,
+        excelUrlLen: String(e.excelUrl || "").length,
+        viewerUrlResolved: !!(e.flags && e.flags.viewerUrlResolved),
+        exportUnavailable: e.exportUnavailable,
+      })),
+    )}`,
+  );
+
+  const reportsTableRows = reportEntries.map((r) => {
+    let status = "Not ready";
+    if (r.pdfUrl || r.excelUrl) status = "Exported";
+    else if (r.viewerReady || r.viewerUrl || r.reportUrl) status = "Ready";
+    return {
+      "REPORT NAME": r.reportName,
+      Status: status,
+    };
+  });
+
+  const reportsRaw = reportsPayload?.reports || [];
+  const reportsPdfs = [];
+  for (let i = 0; i < reportsRaw.length; i++) {
+    const r = reportsRaw[i];
+    const viewerFallback = r.viewUrl || r.reportUrl;
+    const pdfEntry = {
+      fileName: r.reportName,
+      url:
+        r.pdfPublicUrl ||
+        r.excelPublicUrl ||
+        r.pdfHttpUrl ||
+        r.excelHttpUrl ||
+        viewerFallback ||
+        undefined,
+      pdfUrl: r.pdfPublicUrl || r.pdfHttpUrl || undefined,
+      excelUrl: r.excelPublicUrl || r.excelHttpUrl || undefined,
+      pages: 0,
+      text: "",
+      info: { source: "montgomery-export" },
+    };
+    if (typeof r.screenshot === "string" && r.screenshot.length > 0) {
+      pdfEntry.screenshot = r.screenshot;
+    }
+    const { text, numpages, parseError } = await buildPgcReportPdfEntryText(r);
+    pdfEntry.text = text;
+    pdfEntry.pages = numpages;
+    const textLen = String(text || "").length;
+    console.log(
+      `[Montgomery][reports-fix] extracted text chars = ${textLen} | ${r.reportName || ""}`,
+    );
+    console.log(
+      `[Montgomery][reports-deep] export report=${JSON.stringify(r.reportName || "")} mapper-pdfEntry-parse textChars=${textLen} pages=${numpages} parseError=${parseError || "null"} pdfEntryWillSetError=${!String(text || "").trim() ? (parseError || "no-text-generic") : "none"}`,
+    );
+    if (!String(text || "").trim()) {
+      if (parseError) {
+        pdfEntry.error = parseError;
+      } else if (
+        (r.pdfHttpUrl || r.excelHttpUrl || viewerFallback) &&
+        /^https?:\/\//i.test(String(viewerFallback || r.pdfHttpUrl || r.excelHttpUrl || ""))
+      ) {
+        pdfEntry.error =
+          "No text extracted; viewer/export URL present (session may be required for fetch)";
+      } else if (r.exportUnavailable && !(r.pdfPath && fs.existsSync(r.pdfPath))) {
+        pdfEntry.error = "No text extracted; export unavailable after viewer attempt";
+      } else {
+        pdfEntry.error = "No text extracted from PDF or Excel";
+      }
+    }
+    console.log(
+      `[Montgomery][debug][reports] pdfTextExtract i=${i} name=${JSON.stringify(r.reportName)} textLen=${textLen} parseError=${parseError || "(none)"} pdfEntry.error=${pdfEntry.error || "(none)"} hadLocalPdf=${!!(r.pdfPath && fs.existsSync(r.pdfPath))} hadLocalExcel=${!!(r.excelPath && fs.existsSync(r.excelPath))}`,
+    );
+    reportsPdfs.push(pdfEntry);
+  }
+
+  const omit = pipelineResult._montgomeryOmitTabs || {};
+  const skipTab = (k) => omit[k] === true;
+  /** @type {Record<string, unknown>} */
+  const tabs = {};
+  if (!skipTab("info")) {
+    const infoHadSynthTables = Array.isArray(infoTables) && infoTables.length > 0;
+    tabs.info = {
+      projectInfo: projectInfo.map((kv) => ({ key: kv.key, value: kv.value })),
+      keyValues: projectInfo.map((kv) => ({ key: kv.key, value: kv.value })),
+      // Montgomery UI already renders projectInfo; omit duplicate Field/Value tables from scraper.
+      tables: [],
+      info_debug: detail?.info?.info_debug ?? null,
+    };
+    console.log(
+      `[Montgomery][dedupe-fix] info tables suppressed: ${infoHadSynthTables ? "yes" : "no"}`,
+    );
+  }
+  if (!skipTab("status")) {
+    const statusHadSynthTables = Array.isArray(statusTables) && statusTables.length > 0;
+    tabs.status = {
+      keyValues: statusKeyValues,
+      // Montgomery UI already renders keyValues; omit duplicate Field/Value tables from scraper.
+      tables: [],
+      sections: statusSections,
+      links: statusLinksFlat,
+      meta: statusMeta,
+    };
+    console.log(
+      `[Montgomery][dedupe-fix] status tables suppressed: ${statusHadSynthTables ? "yes" : "no"}`,
+    );
+  }
+  if (!skipTab("tasks")) {
+    tabs.tasks = { keyValues: tasksKeyValues, tables: tasksTables };
+  }
+  if (!skipTab("files")) {
+    tabs.files = { folders, keyValues: [], tables: [] };
+  }
+  if (!skipTab("review")) {
+    tabs.review = reviewTab;
+  }
+  if (!skipTab("reports")) {
+    tabs.reports = {
+      tables: reportsTableRows.length
+        ? [{ headers: ["REPORT NAME", "Status"], rows: reportsTableRows }]
+        : [],
+      pdfs: reportsPdfs,
+      reportEntries,
+    };
+  }
+
+  if (!skipTab("status")) {
+    const st = tabs.status;
+    const hasPayload =
+      (Array.isArray(st?.keyValues) && st.keyValues.length > 0) ||
+      (Array.isArray(st?.links) && st.links.length > 0);
+    console.log(
+      `[Montgomery][status] preserved through final payload = ${hasPayload ? "yes" : "no"}`,
+    );
+  }
+
+  const infFinal = tabs.info;
+  const stFinal = tabs.status;
+  console.log(
+    `[Montgomery][dedupe-fix] final info counts projectInfo=${Array.isArray(infFinal?.projectInfo) ? infFinal.projectInfo.length : 0} keyValues=${Array.isArray(infFinal?.keyValues) ? infFinal.keyValues.length : 0} tables=${Array.isArray(infFinal?.tables) ? infFinal.tables.length : 0}`,
+  );
+  console.log(
+    `[Montgomery][dedupe-fix] final status counts keyValues=${Array.isArray(stFinal?.keyValues) ? stFinal.keyValues.length : 0} tables=${Array.isArray(stFinal?.tables) ? stFinal.tables.length : 0} links=${Array.isArray(stFinal?.links) ? stFinal.links.length : 0}`,
+  );
+
+  if (tabs.info) logMontgomeryDebugInfoDupTabs(tabs.info, "mapper-output");
+  if (tabs.status) logMontgomeryDebugStatusDupTabs(tabs.status, "mapper-output");
+
+  return {
+    name: projectRow.name,
+    projectNum: projectRow.projectNum,
+    description: projectRow.description || "",
+    location: projectRow.location || "",
+    dashboardStatus: projectRow.status || "",
+    portalType: "projectdox",
+    portalSubtype: "montgomery-projectdox",
+    jurisdiction: "Montgomery County, MD",
+    tabs,
+  };
+}
+
+/**
+ * Omit tabs when value is true (same convention as PGC _pgcOmitTabs).
+ * Reviews tab is always omitted (Montgomery corrections pipeline deferred).
+ */
+function montgomeryPipelineOptsFromScrapeMode(scrapeMode) {
+  const m = String(scrapeMode ?? "montgomery_quick").trim();
+  /** @type {Record<string, boolean>} */
+  const reviewOmitted = { review: true };
+
+  if (m === "montgomery_quick") {
+    return {
+      info: false,
+      status: false,
+      tasks: false,
+      files: true,
+      reports: true,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_without_files") {
+    return {
+      info: false,
+      status: false,
+      tasks: false,
+      files: true,
+      reports: false,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_files_only") {
+    return {
+      info: true,
+      status: true,
+      tasks: true,
+      files: false,
+      reports: true,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_reports_only") {
+    return {
+      info: true,
+      status: true,
+      tasks: true,
+      files: true,
+      reports: false,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_status_only") {
+    return {
+      info: true,
+      status: false,
+      tasks: true,
+      files: true,
+      reports: true,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_tasks_only") {
+    return {
+      info: true,
+      status: true,
+      tasks: false,
+      files: true,
+      reports: true,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_info_only") {
+    return {
+      info: false,
+      status: true,
+      tasks: true,
+      files: true,
+      reports: true,
+      ...reviewOmitted,
+    };
+  }
+  if (m === "montgomery_all") {
+    return {
+      info: false,
+      status: false,
+      tasks: false,
+      files: false,
+      reports: false,
+      ...reviewOmitted,
+    };
+  }
+  return {
+    info: false,
+    status: false,
+    tasks: false,
+    files: true,
+    reports: true,
+    ...reviewOmitted,
+  };
+}
+
+async function scrapeMontgomeryAll(
+  session,
+  projects,
+  _sessionId,
+  supabaseProjectId,
+  userId,
+  scrapeMode,
+) {
+  const sid = String(_sessionId || "");
+  try {
+    session._scrapeActive = true;
+    console.log(`[Session][scrape] active=true sid=${sid} flow=montgomery`);
+
+  const omitTabs = montgomeryPipelineOptsFromScrapeMode(scrapeMode);
+
+  session._scrapeCumulativeBytes = 0;
+  console.log(`[Montgomery] session._scrapeCumulativeBytes reset to 0 at pipeline start`);
+  session._downloadedHashes = new Map();
+
+  let bases = session.montgomeryWebUiBases;
+  if (!bases || !bases.length) {
+    bases = await montgomeryProjectDox.resolveMontgomeryWebUiBases(session.page);
+    session.montgomeryWebUiBases = bases;
+  }
+
+  const dash =
+    session.dashboardUrl && String(session.dashboardUrl).trim()
+      ? String(session.dashboardUrl).trim()
+      : "https://montgomeryco-md-us.avolvecloud.com/Home/Index";
+  const permitSanitize = (s) => {
+    const t = String(s || "")
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .slice(0, 120);
+    return t || "permit";
+  };
+
+  for (let i = 0; i < projects.length; i++) {
+    if (session._cancelRequested) {
+      console.log("   🛑 Montgomery scrape cancelled");
+      return;
+    }
+    const project = projects[i];
+    session.message = `${project.projectNum} → Montgomery harvest`;
+    console.log(
+      `\n🟢 [Montgomery] [${i + 1}/${projects.length}] ${project.projectNum} (ID ${project.projectId})`,
+    );
+    let page;
+    try {
+      page = await session.context.newPage();
+      const storagePrefix = `drawings/${supabaseProjectId || "pending"}/montgomery/${permitSanitize(project.projectNum)}`;
+      const uploadLocal = (localPath, key) =>
+        pgcUploadLocalToSupabase(session, localPath, key);
+
+      const pipelineResult = await montgomeryProjectDox.runMontgomeryProductionPipeline(
+        page,
+        {
+          projectID: String(project.projectId),
+          projectNumber: project.projectNum,
+          description: project.description,
+          location: project.location,
+          status: project.status,
+        },
+        bases,
+        dash,
+        {
+          _montgomeryOmitTabs: omitTabs,
+          uploadLocal,
+          storagePrefix,
+          harvestFiles: async (pipelinePage, pipelineProj, pipelineWebUiBase) =>
+            extractMontgomeryFilesTabLightweight(
+              pipelinePage,
+              pipelinePage.context(),
+              session,
+              pipelineProj,
+              pipelineWebUiBase,
+              supabaseProjectId,
+            ),
+        },
+      );
+
+      session.data[project.id] = await mapMontgomeryPipelineToPortalData(
+        project,
+        pipelineResult,
+      );
+    } catch (err) {
+      console.error(`   ❌ [Montgomery] ${project.projectNum}:`, err.message);
+      session.data[project.id] = {
+        name: project.name,
+        projectNum: project.projectNum,
+        description: project.description || "",
+        location: project.location || "",
+        dashboardStatus: project.status || "",
+        portalType: "projectdox",
+        portalSubtype: "montgomery-projectdox",
+        jurisdiction: "Montgomery County, MD",
+        tabs: {
+          info: { error: err.message, keyValues: [], tables: [] },
+        },
+      };
+    } finally {
+      if (page) await page.close().catch(() => {});
+    }
+    session.progress++;
+  }
+
+  session.message = `Montgomery scraping complete! Syncing...`;
+  console.log(`\n✅ [Montgomery] Done! Syncing to Supabase...`);
+  await syncPortalDataToSupabase(
+    session,
+    projects,
+    supabaseProjectId,
+    userId,
+    null,
+  );
+
+  if (session._cancelRequested) {
+    console.log("   🛑 Montgomery scrape cancelled — not marking as done");
+    return;
+  }
+  session.status = "done";
+  session.message = `Montgomery complete: ${projects.length} project(s) synced.`;
+  console.log(`    ✅ Montgomery Supabase sync complete — session status set to "done"`);
+  } finally {
+    session._scrapeActive = false;
+    console.log(`[Session][scrape] active=false sid=${sid} flow=montgomery`);
+  }
 }
 
 async function pgcUploadLocalToSupabase(session, localPath, storagePath) {
@@ -2571,6 +3590,26 @@ async function reinitializeBrowser(session) {
       const bases = await pgcEplan.resolvePgcWebUiBases(loginPage);
       if (bases?.length) session.pgcWebUiBases = bases;
     } catch (_) {}
+  } else if (session.portalSubtype === "montgomery-projectdox") {
+    await performMontgomeryPortalLogin(
+      loginPage,
+      session.username,
+      session.password,
+      session.dashboardUrl,
+    );
+    await montgomeryDashboardDiscovery
+      .ensureMontgomeryPostLoginDashboard(loginPage, session.dashboardUrl)
+      .catch((e) => {
+        console.warn(
+          "[Montgomery][post-login] reinit:",
+          (e && e.message) || e,
+        );
+      });
+    await loginPage.waitForTimeout(500);
+    try {
+      const bases = await montgomeryProjectDox.resolveMontgomeryWebUiBases(loginPage);
+      if (bases?.length) session.montgomeryWebUiBases = bases;
+    } catch (_) {}
   } else {
     await performLogin(loginPage, session.username, session.password, session.dashboardUrl);
   }
@@ -2581,6 +3620,15 @@ async function reinitializeBrowser(session) {
       let warmupUrl = null;
       if (session.portalSubtype === "pgc-eplan") {
         warmupUrl = pgcEplan.buildPgcTabUrl(firstProjectId, "projectStatusTab");
+      } else if (
+        session.portalSubtype === "montgomery-projectdox" &&
+        session.webUiBase
+      ) {
+        warmupUrl = montgomeryProjectDox.buildMontgomeryProjectTabUrl(
+          session.webUiBase,
+          firstProjectId,
+          "projectStatusTab",
+        );
       } else if (session.webUiBase) {
         warmupUrl = `${session.webUiBase}/WebForms/Frame.aspx?tab=projectStatusTab&ProjectID=${firstProjectId}`;
       }
@@ -2641,12 +3689,1208 @@ async function recoverPage(context, session, webUiBase, pdxProjectId, folderInfo
   }
 }
 
+const MONTGOMERY_FILES_FOLDER_ALLOWLIST = [
+  "Drawings",
+  "Zoning Drawings",
+  "Documents",
+  "Supporting Documentation",
+  "Approved",
+  "Rejected",
+  "Revisions",
+  "Inspection Reports",
+];
+
+function normalizeProjectDoxFolderLabel(label) {
+  return String(label || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*\((?:\d+(?:\s*-\s*\d+\s*New)?)\)\s*$/i, "")
+    .trim();
+}
+
+function normalizeProjectDoxDisplayLabel(label) {
+  return String(label || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeProjectDoxFileKeyPart(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isMontgomeryKnownFolderName(name) {
+  return MONTGOMERY_FILES_FOLDER_ALLOWLIST.some(
+    (allowed) =>
+      normalizeProjectDoxFileKeyPart(allowed) ===
+      normalizeProjectDoxFileKeyPart(name),
+  );
+}
+
+function extractMontgomeryFolderExpectedCount(displayLabel) {
+  const m = String(displayLabel || "").match(/\((\d+)(?:\s*-\s*\d+\s*New)?\)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function isMontgomeryRootFolderCandidate(folder, project) {
+  const key = normalizeProjectDoxFolderLabel(
+    folder?.displayName || folder?.name || "",
+  );
+  const projectNum = normalizeProjectDoxFolderLabel(
+    project?.projectNumber || project?.projectNum || "",
+  );
+  if (!key || !projectNum) return false;
+  return key === projectNum;
+}
+
+function isMontgomeryPlaceholderFileRow(file, folderDisplayName = "") {
+  const name = normalizeProjectDoxDisplayLabel(file?.name || "");
+  if (!name) return true;
+  if (
+    /^(upload files|upload|refresh|download selected version|open file for viewing|view file|select version)$/i.test(
+      name,
+    )
+  ) {
+    return true;
+  }
+  if (
+    normalizeProjectDoxFolderLabel(name) ===
+      normalizeProjectDoxFolderLabel(folderDisplayName) &&
+    !String(file?.id || "").trim() &&
+    !String(file?.status || "").trim() &&
+    !String(file?.version || "").trim() &&
+    !String(file?.reviewedBy || "").trim() &&
+    !String(file?.uploadedDate || "").trim()
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function pickValueByPatterns(record, patterns) {
+  if (!record || typeof record !== "object") return "";
+  const keys = Object.keys(record);
+  for (const pattern of patterns) {
+    const key = keys.find((k) => pattern.test(k));
+    if (key && record[key] != null && String(record[key]).trim()) {
+      return String(record[key]).trim();
+    }
+  }
+  return "";
+}
+
+function buildMontgomeryFilesDedupeKey(file, folderName) {
+  if (file?.id) return `id:${String(file.id).trim()}`;
+  const name = normalizeProjectDoxFileKeyPart(file?.name);
+  if (!name) return "";
+  const version = normalizeProjectDoxFileKeyPart(file?.version);
+  const status = normalizeProjectDoxFileKeyPart(file?.status);
+  const uploadedDate = normalizeProjectDoxFileKeyPart(file?.uploadedDate);
+  const parts = [`name:${name}`];
+  if (version) parts.push(`version:${version}`);
+  else if (status) parts.push(`status:${status}`);
+  if (uploadedDate) parts.push(`date:${uploadedDate}`);
+  if (!version && !status && !uploadedDate) {
+    parts.push(`folder:${normalizeProjectDoxFileKeyPart(folderName)}`);
+  }
+  return parts.join("|");
+}
+
+async function readMontgomeryFilesGridState(page) {
+  return await page.evaluate(() => {
+    function norm(s) {
+      return String(s || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    function cleanLabel(s) {
+      return norm(s)
+        .replace(/\s*\((?:\d+(?:\s*-\s*\d+\s*New)?)\)\s*$/i, "")
+        .trim();
+    }
+    function isVisible(el) {
+      if (!el || !(el instanceof Element)) return false;
+      const st = window.getComputedStyle(el);
+      return st.display !== "none" && st.visibility !== "hidden";
+    }
+    function isPlaceholderName(s) {
+      return /^(upload files|upload|refresh|download selected version|open file for viewing|view file|select version)$/i.test(
+        norm(s),
+      );
+    }
+    const rowNodes = Array.from(
+      document.querySelectorAll(
+        "#filesTab .ui-iggrid-table tbody tr, .ui-iggrid-table tbody tr, #filesTab table tbody tr",
+      ),
+    ).filter((tr) => isVisible(tr) && tr.querySelectorAll("td").length > 0);
+    const rowSample = rowNodes
+      .slice(0, 5)
+      .map((tr) =>
+        norm(
+          Array.from(tr.querySelectorAll("td"))
+            .map((td) => td.textContent || "")
+            .join("|"),
+        ),
+      )
+      .join("||");
+    const selectedNode = Array.from(
+      document.querySelectorAll("#folderTree li.ui-igtree-node, #folderTree .ui-igtree-node"),
+    ).find((node) => {
+      const cls = node.className || "";
+      return (
+        node.getAttribute("aria-selected") === "true" ||
+        /selected|active|current/i.test(cls)
+      );
+    });
+    const loading = !!document.querySelector(
+      ".ui-iggrid-loading, .ui-igloading, .ui-iggrid .ui-widget-overlay, [aria-busy='true']",
+    );
+    let dataSourceCount = 0;
+    try {
+      const grid = Array.from(document.querySelectorAll(".ui-iggrid")).find(isVisible);
+      const $ = window.jQuery || window.$;
+      if ($ && grid && $(grid).data("igGrid")) {
+        const gridApi = $(grid).data("igGrid");
+        const raw =
+          (gridApi?.dataSource?.dataView && gridApi.dataSource.dataView()) ||
+          $(grid).igGrid("option", "dataSource") ||
+          [];
+        if (Array.isArray(raw)) {
+          dataSourceCount = raw.filter((row) => {
+            const name =
+              norm(row?.FileName || row?.DocumentName || row?.Name || row?.File || "");
+            return name && !isPlaceholderName(name);
+          }).length;
+        }
+      }
+    } catch (_) {}
+    return {
+      rowCount: rowNodes.length,
+      dataSourceCount,
+      selectedFolder: cleanLabel(selectedNode?.textContent || ""),
+      loading,
+      signature: `${rowNodes.length}::${dataSourceCount}::${rowSample}`,
+    };
+  });
+}
+
+async function waitForMontgomeryFilesGridToSettle(
+  page,
+  folder,
+  previousSignature = "",
+  timeoutMs = 12000,
+) {
+  const expected = normalizeProjectDoxFolderLabel(
+    folder?.displayName || folder?.name || "",
+  );
+  const expectedCount = extractMontgomeryFolderExpectedCount(
+    folder?.displayName || folder?.name || "",
+  );
+  const started = Date.now();
+  let lastSignature = "";
+  let stablePasses = 0;
+  let lastState = null;
+
+  while (Date.now() - started < timeoutMs) {
+    const state = await readMontgomeryFilesGridState(page);
+    const folderMatches =
+      !expected || !state.selectedFolder || state.selectedFolder === expected;
+    const changed =
+      !previousSignature ||
+      state.signature !== previousSignature ||
+      state.selectedFolder === expected;
+    const hasRealRows =
+      (state.dataSourceCount || 0) > 0 || (state.rowCount || 0) > 0;
+    const rowsReady =
+      expectedCount == null || expectedCount === 0 ? true : hasRealRows;
+    if (!state.loading && folderMatches && changed && rowsReady) {
+      if (state.signature === lastSignature) stablePasses += 1;
+      else stablePasses = 1;
+      if (stablePasses >= 2) return state;
+    } else {
+      stablePasses = 0;
+    }
+    lastSignature = state.signature;
+    lastState = state;
+    await page.waitForTimeout(350);
+  }
+
+  return lastState || (await readMontgomeryFilesGridState(page));
+}
+
+async function discoverMontgomeryFilesFolders(page) {
+  const allowed = MONTGOMERY_FILES_FOLDER_ALLOWLIST.map((name) => name.toLowerCase());
+  const discovered = await page.evaluate((allowedNames) => {
+    function norm(s) {
+      return String(s || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    function cleanLabel(s) {
+      return norm(s)
+        .replace(/\s*\((?:\d+(?:\s*-\s*\d+\s*New)?)\)\s*$/i, "")
+        .trim();
+    }
+    function isVisible(el) {
+      if (!el || !(el instanceof Element)) return false;
+      const st = window.getComputedStyle(el);
+      return st.display !== "none" && st.visibility !== "hidden";
+    }
+    const nodes = Array.from(
+      document.querySelectorAll("#folderTree li.ui-igtree-node, #folderTree .ui-igtree-node"),
+    );
+    const out = [];
+    const seen = new Set();
+    nodes.forEach((node, index) => {
+      if (!isVisible(node)) return;
+      const anchor =
+        node.querySelector("a") ||
+        node.querySelector(".ui-igtree-text") ||
+        node.querySelector("span");
+      const text = norm(anchor?.textContent || node.textContent || "");
+      const name = cleanLabel(text);
+      if (!name) return;
+      const key = `${String(node.getAttribute("data-value") || "").trim()}::${name.toLowerCase()}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({
+        index,
+        name,
+        displayName: text,
+        folderId: String(node.getAttribute("data-value") || node.dataset?.value || "").trim(),
+        dataPath: String(node.getAttribute("data-path") || "").trim(),
+        allowed: allowedNames.includes(name.toLowerCase()),
+      });
+    });
+    return out;
+  }, allowed);
+
+  const allowedFolders = discovered.filter((folder) => folder.allowed);
+  const otherFolders = discovered.filter((folder) => !folder.allowed);
+  return allowedFolders.length > 0
+    ? [...allowedFolders, ...otherFolders]
+    : discovered;
+}
+
+async function clickMontgomeryFilesFolder(page, folder) {
+  const previousState = await readMontgomeryFilesGridState(page);
+  const responsePromise = page
+    .waitForResponse(
+      (response) => {
+        const url = response.url();
+        if (!/\/File\/GetFolderFiles\?/i.test(url)) return false;
+        if (folder.folderId && !url.includes(`folderID=${folder.folderId}`)) return false;
+        return true;
+      },
+      { timeout: 8000 },
+    )
+    .catch(() => null);
+
+  const clicked = await page.evaluate((target) => {
+    function norm(s) {
+      return String(s || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    function cleanLabel(s) {
+      return norm(s)
+        .replace(/\s*\((?:\d+(?:\s*-\s*\d+\s*New)?)\)\s*$/i, "")
+        .trim();
+    }
+    const nodes = Array.from(
+      document.querySelectorAll("#folderTree li.ui-igtree-node, #folderTree .ui-igtree-node"),
+    );
+    const exact = nodes.find((node) => {
+      const nodeId = String(node.getAttribute("data-value") || node.dataset?.value || "").trim();
+      const name = cleanLabel(node.textContent || "");
+      return (
+        (target.folderId && nodeId === String(target.folderId)) ||
+        name === target.name
+      );
+    });
+    const node = exact || nodes[target.index] || null;
+    if (!node) return false;
+    const clickTarget =
+      node.querySelector("a") ||
+      node.querySelector(".ui-igtree-text") ||
+      node.querySelector("span") ||
+      node;
+    ["mouseover", "mousedown", "mouseup", "click"].forEach((type) => {
+      clickTarget.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+    });
+    if (typeof clickTarget.click === "function") clickTarget.click();
+    return true;
+  }, folder);
+
+  if (!clicked) {
+    throw new Error(`folder_click_failed:${folder.name}`);
+  }
+
+  const response = await responsePromise;
+  let ajaxPayload = null;
+  if (response) {
+    ajaxPayload = await response.json().catch(() => null);
+    await response.finished().catch(() => {});
+  } else {
+    await page.waitForTimeout(500);
+  }
+
+  const settled = await waitForMontgomeryFilesGridToSettle(
+    page,
+    folder,
+    previousState.signature,
+  );
+  const selected = await getMontgomerySelectedFolderSnapshot(page);
+  return { settled, ajaxPayload, selected };
+}
+
+function shapeMontgomeryAjaxFileRows(payload, folderDisplayName) {
+  const items = Array.isArray(payload?.Items)
+    ? payload.Items
+    : Array.isArray(payload?.items)
+      ? payload.items
+      : [];
+  return items.map((item) => ({
+    name:
+      pickValueByPatterns(item, [/^FileName$/i, /^DocumentName$/i, /^Name$/i]) ||
+      "",
+    id:
+      pickValueByPatterns(item, [
+        /^FileID$/i,
+        /^fileId$/i,
+        /^DocumentID$/i,
+        /^ID$/i,
+      ]) || "",
+    status:
+      pickValueByPatterns(item, [/^Status$/i, /ReviewStatus/i, /State/i]) || "",
+    version:
+      pickValueByPatterns(item, [/^Version$/i, /^Revision$/i]) || "",
+    reviewedBy:
+      pickValueByPatterns(item, [/^OrigAuthor$/i, /^UploadedBy$/i, /Reviewer/i]) ||
+      "",
+    uploadedDate:
+      pickValueByPatterns(item, [/^UploadDate$/i, /^CreatedDate$/i, /Date/i]) ||
+      "",
+    fileSizeKB:
+      Number(
+        pickValueByPatterns(item, [/^FileSizeKB$/i, /^SizeKB$/i, /^Size$/i]) ||
+          "",
+      ) || null,
+    downloadUrl:
+      pickValueByPatterns(item, [/^URL$/i, /^DownloadURL$/i, /^ViewURL$/i]) ||
+      "",
+    folderName: folderDisplayName,
+  }));
+}
+
+function mergeMontgomeryFileRows(sources, folderDisplayName) {
+  const merged = new Map();
+  let placeholderCount = 0;
+
+  for (const source of sources) {
+    for (const candidate of source || []) {
+      const row = {
+        name: normalizeProjectDoxDisplayLabel(candidate?.name || ""),
+        id: String(candidate?.id || "").trim(),
+        status: normalizeProjectDoxDisplayLabel(candidate?.status || ""),
+        version: normalizeProjectDoxDisplayLabel(candidate?.version || ""),
+        reviewedBy: normalizeProjectDoxDisplayLabel(candidate?.reviewedBy || ""),
+        uploadedDate: normalizeProjectDoxDisplayLabel(candidate?.uploadedDate || ""),
+        fileSizeKB:
+          candidate?.fileSizeKB != null && candidate.fileSizeKB !== ""
+            ? Number(candidate.fileSizeKB) || null
+            : null,
+        downloadUrl: String(candidate?.downloadUrl || "").trim(),
+      };
+
+      if (isMontgomeryPlaceholderFileRow(row, folderDisplayName)) {
+        placeholderCount += 1;
+        continue;
+      }
+
+      const key = buildMontgomeryFilesDedupeKey(row, folderDisplayName);
+      if (!key) continue;
+
+      const prev = merged.get(key) || {
+        name: "",
+        id: "",
+        status: "",
+        version: "",
+        reviewedBy: "",
+        uploadedDate: "",
+        fileSizeKB: null,
+        downloadUrl: "",
+      };
+
+      merged.set(key, {
+        name: prev.name || row.name,
+        id: prev.id || row.id,
+        status: prev.status || row.status,
+        version: prev.version || row.version,
+        reviewedBy: prev.reviewedBy || row.reviewedBy,
+        uploadedDate: prev.uploadedDate || row.uploadedDate,
+        fileSizeKB: prev.fileSizeKB ?? row.fileSizeKB,
+        downloadUrl: prev.downloadUrl || row.downloadUrl,
+      });
+    }
+  }
+
+  return { rows: [...merged.values()], placeholderCount };
+}
+
+function countMontgomeryFolderPayloadRows(payload) {
+  return Array.isArray(payload?.Items)
+    ? payload.Items.length
+    : Array.isArray(payload?.items)
+      ? payload.items.length
+      : 0;
+}
+
+async function fetchMontgomeryFolderFilesPayload(page, projectID, folderId) {
+  if (!projectID || !folderId) return null;
+  return await page.evaluate(
+    async ({ projectID: pid, folderId: fid }) => {
+      const url = new URL("/File/GetFolderFiles", window.location.origin);
+      url.searchParams.set("folderID", String(fid));
+      url.searchParams.set("projectID", String(pid));
+      url.searchParams.set("pageIndex", "0");
+      url.searchParams.set("pageSize", "999");
+      url.searchParams.set("listMode", "3");
+      const r = await fetch(url.toString(), {
+        credentials: "include",
+        cache: "no-store",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    },
+    { projectID, folderId },
+  ).catch(() => null);
+}
+
+async function getMontgomerySelectedFolderSnapshot(page) {
+  return await page
+    .evaluate(() => {
+      function norm(s) {
+        return String(s || "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+      function cleanLabel(s) {
+        return norm(s)
+          .replace(/\s*\((?:\d+(?:\s*-\s*\d+\s*New)?)\)\s*$/i, "")
+          .trim();
+      }
+      const node = Array.from(
+        document.querySelectorAll("#folderTree li.ui-igtree-node, #folderTree .ui-igtree-node"),
+      ).find((el) => {
+        const cls = el.className || "";
+        return (
+          el.getAttribute("aria-selected") === "true" ||
+          /selected|active|current/i.test(cls)
+        );
+      });
+      return {
+        folderId: String(
+          node?.getAttribute("data-value") || node?.dataset?.value || "",
+        ).trim(),
+        name: cleanLabel(node?.textContent || ""),
+      };
+    })
+    .catch(() => ({ folderId: "", name: "" }));
+}
+
+async function waitForMontgomeryFolderPayload(page, projectID, folder, initialPayload = null) {
+  const expectedCount = extractMontgomeryFolderExpectedCount(folder?.displayName || "");
+  let payload = initialPayload;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (attempt > 0 || !payload) {
+      payload = await fetchMontgomeryFolderFilesPayload(page, projectID, folder.folderId);
+    }
+    const rows = countMontgomeryFolderPayloadRows(payload);
+    console.log(
+      `[Montgomery Files] GetFolderFiles observed | ${folder.displayName} | rows=${rows}`,
+    );
+    if (expectedCount == null || expectedCount === 0 || rows > 0) {
+      return payload;
+    }
+    await page.waitForTimeout(400);
+  }
+  return payload;
+}
+
+async function extractProjectDoxFilesGridRows(page, folder, ajaxPayload = null) {
+  const harvested = await page.evaluate((folderDisplayName) => {
+    function norm(s) {
+      return String(s || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    function isVisible(el) {
+      if (!el || !(el instanceof Element)) return false;
+      const st = window.getComputedStyle(el);
+      return st.display !== "none" && st.visibility !== "hidden";
+    }
+    function lowerList(values) {
+      return values.map((value) => norm(value).toLowerCase());
+    }
+    function findIndex(headers, rxList) {
+      return headers.findIndex((header) => rxList.some((rx) => rx.test(header)));
+    }
+    function pickField(record, patterns) {
+      if (!record || typeof record !== "object") return "";
+      const keys = Object.keys(record);
+      for (const pattern of patterns) {
+        const key = keys.find((k) => pattern.test(k));
+        if (key && record[key] != null && String(record[key]).trim()) {
+          return norm(record[key]);
+        }
+      }
+      return "";
+    }
+    function mapRecord(record) {
+      return {
+        name:
+          pickField(record, [/^file(name)?$/i, /^document(name)?$/i, /^name$/i]) ||
+          "",
+        id:
+          pickField(record, [
+            /^fileid$/i,
+            /^file_id$/i,
+            /^fileId$/i,
+            /^id$/i,
+            /^documentid$/i,
+            /^documentId$/i,
+            /^versionid$/i,
+          ]) || "",
+        status:
+          pickField(record, [/^status$/i, /ReviewStatus/i, /State/i]) || "",
+        version:
+          pickField(record, [/^version$/i, /^revision$/i]) || "",
+        reviewedBy:
+          pickField(record, [/reviewedby/i, /reviewer/i, /uploadedby/i, /^OrigAuthor$/i]) ||
+          "",
+        uploadedDate:
+          pickField(record, [/uploadeddate/i, /createddate/i, /^UploadDate$/i, /date/i]) ||
+          "",
+        fileSizeKB:
+          Number(
+            pickField(record, [/^FileSizeKB$/i, /^SizeKB$/i, /^Size$/i]) || "",
+          ) || null,
+        downloadUrl:
+          pickField(record, [/^URL$/i, /^DownloadURL$/i, /^ViewURL$/i]) || "",
+        folderName: folderDisplayName,
+      };
+    }
+
+    const grids = Array.from(document.querySelectorAll(".ui-iggrid")).filter(isVisible);
+    const grid = grids[0] || null;
+    const headerTexts = grid
+      ? Array.from(
+          grid.querySelectorAll(
+            ".ui-iggrid-headtable th, thead th, .ui-iggrid-header th, .ui-iggrid-headertext",
+          ),
+        ).map((el) => norm(el.textContent))
+      : [];
+    const headers = lowerList(headerTexts);
+
+    let dataSource = [];
+    try {
+      const $ = window.jQuery || window.$;
+      if ($ && grid && $(grid).data("igGrid")) {
+        const gridApi = $(grid).data("igGrid");
+        const ds =
+          (gridApi?.dataSource?.dataView && gridApi.dataSource.dataView()) ||
+          $(grid).igGrid("option", "dataSource");
+        if (Array.isArray(ds)) dataSource = ds;
+      }
+    } catch (_) {}
+
+    const nameIndex = findIndex(headers, [/^name$/, /file/i, /document/i, /drawing/i]);
+    const statusIndex = findIndex(headers, [/status/i]);
+    const versionIndex = findIndex(headers, [/version/i, /revision/i]);
+    const reviewedByIndex = findIndex(headers, [/reviewed/i, /reviewer/i, /uploaded by/i]);
+    const uploadedDateIndex = findIndex(headers, [/upload/i, /created/i, /date/i]);
+
+    const rows = Array.from(
+      document.querySelectorAll(
+        "#filesTab .ui-iggrid-table tbody tr, .ui-iggrid-table tbody tr, #filesTab table tbody tr",
+      ),
+    ).filter((tr) => isVisible(tr) && tr.querySelectorAll("td").length > 0);
+
+    const out = [];
+    const seen = new Set();
+
+    rows.forEach((row, rowIdx) => {
+      const cells = Array.from(row.querySelectorAll("td"));
+      const cellTexts = cells.map((cell) => norm(cell.textContent));
+      if (!cellTexts.some(Boolean)) return;
+
+      const links = Array.from(row.querySelectorAll("a[href], a[onclick]"));
+      let fileLink =
+        row.querySelector('a[onclick*="viewFile"], a[onclick*="viewVersion"], a[onclick*="viewInfo"]') ||
+        links.find((a) => {
+          const text = norm(a.textContent);
+          return text.length > 1 && !/view|download/i.test(text);
+        }) ||
+        links[0] ||
+        null;
+
+      const dsRow = dataSource[rowIdx] || null;
+      const dsName = pickField(dsRow, [/^file(name)?$/i, /^document(name)?$/i, /^name$/i]);
+      const name =
+        norm(fileLink?.textContent) ||
+        dsName ||
+        (nameIndex >= 0 ? cellTexts[nameIndex] : "") ||
+        cellTexts[0] ||
+        "";
+      if (!name) return;
+
+      const rawPool = [fileLink?.getAttribute("onclick"), fileLink?.getAttribute("href")]
+        .filter(Boolean)
+        .join(" ");
+      let fileId =
+        pickField(dsRow, [
+          /^fileid$/i,
+          /^file_id$/i,
+          /^fileId$/i,
+          /^id$/i,
+          /^documentid$/i,
+          /^documentId$/i,
+          /^versionid$/i,
+        ]) ||
+        String(row.getAttribute("data-id") || "").trim() ||
+        String(fileLink?.getAttribute("data-fileid") || fileLink?.getAttribute("data-id") || "").trim();
+      if (!/^\d+$/.test(fileId)) {
+        const idMatch =
+          rawPool.match(/fileID[=:](\d+)/i) ||
+          rawPool.match(/viewFile\(\s*['"]?(\d+)/i) ||
+          rawPool.match(/viewVersion\(\s*['"]?(\d+)/i) ||
+          rawPool.match(/viewInfo\(\s*['"]?(\d+)/i) ||
+          rawPool.match(/(\d{4,})/);
+        fileId = idMatch ? String(idMatch[1]) : "";
+      }
+
+      const status =
+        pickField(dsRow, [/^status$/i]) ||
+        (statusIndex >= 0 ? cellTexts[statusIndex] : "") ||
+        "";
+      const version =
+        pickField(dsRow, [/^version$/i, /^revision$/i]) ||
+        (versionIndex >= 0 ? cellTexts[versionIndex] : "") ||
+        "";
+      const reviewedBy =
+        pickField(dsRow, [/reviewedby/i, /reviewer/i, /uploadedby/i]) ||
+        (reviewedByIndex >= 0 ? cellTexts[reviewedByIndex] : "") ||
+        "";
+      const uploadedDate =
+        pickField(dsRow, [/uploadeddate/i, /createddate/i, /date/i]) ||
+        (uploadedDateIndex >= 0 ? cellTexts[uploadedDateIndex] : "") ||
+        "";
+
+      const dedupeKey = `${fileId || `${name}|${version}|${uploadedDate}|${folderDisplayName}`}`;
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+
+      out.push({
+        name,
+        id: fileId || "",
+        status,
+        version,
+        reviewedBy,
+        uploadedDate,
+        fileSizeKB:
+          Number(
+            pickField(dsRow, [/^FileSizeKB$/i, /^SizeKB$/i, /^Size$/i]) || "",
+          ) || null,
+        downloadUrl:
+          pickField(dsRow, [/^URL$/i, /^DownloadURL$/i, /^ViewURL$/i]) || "",
+        folderName: folderDisplayName,
+      });
+    });
+
+    return {
+      domRows: out,
+      dataSourceRows: Array.isArray(dataSource) ? dataSource.map(mapRecord) : [],
+    };
+  }, folder.displayName);
+
+  const payloadRows = shapeMontgomeryAjaxFileRows(ajaxPayload, folder.displayName);
+  const merged = mergeMontgomeryFileRows(
+    payloadRows.length > 0
+      ? [payloadRows]
+      : [harvested?.dataSourceRows || [], harvested?.domRows || []],
+    folder.displayName,
+  );
+  return {
+    ...merged,
+    datasourceRowsBeforeCleanup: Math.max(
+      harvested?.dataSourceRows?.length || 0,
+      payloadRows.length,
+    ),
+    domRowsBeforeCleanup: harvested?.domRows?.length || 0,
+  };
+}
+
+function montgomeryProjectFilesTabUrlMatches(url, projectID) {
+  const u = String(url || "");
+  const pid = String(projectID || "").trim();
+  if (!pid) return false;
+  if (!/\/Project\/Index/i.test(u)) return false;
+  if (!/tab=filesTab/i.test(u)) return false;
+  const esc = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`[?&]ProjectID=${esc}(?:&|$)`, "i").test(u);
+}
+
+async function resolveMontgomeryFilesTabPage(context, existingPage, webUiBase, projectID) {
+  const pid = String(projectID || "").trim();
+  const filesTabUrl = montgomeryProjectDox.buildMontgomeryProjectTabUrl(
+    webUiBase,
+    pid,
+    "filesTab",
+  );
+
+  const classify = (p) => {
+    if (!p || p.isClosed()) return null;
+    let u = "";
+    try {
+      u = p.url();
+    } catch (_) {
+      return null;
+    }
+    if (!montgomeryProjectFilesTabUrlMatches(u, pid)) return null;
+    return u;
+  };
+
+  const uExisting = classify(existingPage);
+  if (uExisting) {
+    console.log(
+      `[Montgomery][page-recover] using existing files page projectID=${pid} url=${uExisting.slice(0, 200)}`,
+    );
+    return existingPage;
+  }
+
+  for (const p of context.pages()) {
+    const u = classify(p);
+    if (u) {
+      console.log(
+        `[Montgomery][page-recover] found replacement files page projectID=${pid} url=${u.slice(0, 200)}`,
+      );
+      return p;
+    }
+  }
+
+  console.log(
+    `[Montgomery][page-recover] reopened files page projectID=${pid} url=${filesTabUrl.slice(0, 200)}`,
+  );
+  const fresh = await context.newPage();
+  await fresh.goto(filesTabUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+  await fresh.waitForSelector("#folderTree, .ui-igtree", { timeout: 20000 }).catch(() => {});
+  await fresh.waitForTimeout(1000);
+  return fresh;
+}
+
+function montgomeryFilesShouldReacquireWorkPage(workPage, { reason, errMessage }) {
+  try {
+    if (workPage && typeof workPage.isClosed === "function" && workPage.isClosed()) {
+      return true;
+    }
+  } catch (_) {}
+  const r = String(reason || "");
+  if (r === "main_files_page_closed" || r === "viewer_missing_file_config") return true;
+  const m = String(errMessage || "");
+  if (/Target page, context or browser has been closed/i.test(m)) return true;
+  return false;
+}
+
+async function extractMontgomeryFilesTabLightweight(
+  page,
+  context,
+  session,
+  project,
+  webUiBase,
+  supabaseProjectId = null,
+) {
+  cleanupDownloadsDir();
+
+  const projectID = String(project?.projectID || project?.projectId || "");
+  const filesTabUrl = montgomeryProjectDox.buildMontgomeryProjectTabUrl(
+    webUiBase,
+    projectID,
+    "filesTab",
+  );
+  await page.goto(filesTabUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+  await page.waitForSelector("#folderTree, .ui-igtree", { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+
+  let workPage = page;
+
+  const folders = await discoverMontgomeryFilesFolders(workPage);
+  console.log(
+    `[Montgomery][files] folders discovered = ${folders.map((folder) => folder.displayName).join(", ") || "(none)"}`,
+  );
+
+  const result = {
+    projectID,
+    foldersCount: 0,
+    filesCount: 0,
+    sampledDownloadsCount: 0,
+    folders: [],
+    sampleFiles: [],
+    downloadedFiles: [],
+    _meta: {
+      fileApiFailures: 0,
+      largeFilesSkipped: 0,
+      downloadAttempts: 0,
+      downloadsOk: 0,
+      uploadsOk: 0,
+      failures: 0,
+    },
+  };
+
+  const uniqueFiles = new Map();
+
+  for (const folder of folders) {
+    if (isMontgomeryRootFolderCandidate(folder, project)) {
+      console.log(`[Montgomery][files-fix] root skipped = ${folder.displayName}`);
+      continue;
+    }
+
+    console.log(
+      `[Montgomery][files-fix] selecting folder "${folder.displayName}"`,
+    );
+    try {
+      workPage = await resolveMontgomeryFilesTabPage(
+        context,
+        workPage,
+        webUiBase,
+        projectID,
+      );
+      // For non-Drawings folders, try direct API fetch first
+      // since the page state may be stale after processing many files
+      const isDrawings = folder.displayName.toLowerCase().includes("drawing");
+      let ajaxPayload = null;
+      let selected = null;
+
+      if (!isDrawings) {
+        const directApiPayload = await fetchMontgomeryFolderFilesPayload(
+          workPage,
+          projectID,
+          folder.folderId,
+        );
+        const directRows = countMontgomeryFolderPayloadRows(directApiPayload);
+        if (directRows > 0) {
+          ajaxPayload = directApiPayload;
+          console.log(
+            `[Montgomery Files] direct payload used | ${folder.displayName} | folderId=${folder.folderId || "none"} | rows=${directRows}`,
+          );
+        }
+      }
+
+      if (!ajaxPayload) {
+        const clickedFolderResult = await clickMontgomeryFilesFolder(workPage, folder);
+        ajaxPayload = clickedFolderResult.ajaxPayload;
+        selected = clickedFolderResult.selected;
+        console.log(
+          `[Montgomery Files] folder selected | ${folder.displayName} | folderId=${folder.folderId || selected?.folderId || "none"}`,
+        );
+      }
+
+      const directPayload = await waitForMontgomeryFolderPayload(
+        workPage,
+        projectID,
+        folder,
+        ajaxPayload,
+      );
+      const effectivePayload =
+        countMontgomeryFolderPayloadRows(directPayload) > 0
+          ? directPayload
+          : ajaxPayload;
+      if (countMontgomeryFolderPayloadRows(effectivePayload) > 0) {
+        console.log(`[Montgomery Files] datasource refreshed | ${folder.displayName}`);
+      }
+      const {
+        rows: filesFound,
+        placeholderCount,
+        datasourceRowsBeforeCleanup,
+      } = await extractProjectDoxFilesGridRows(workPage, folder, effectivePayload);
+      console.log(
+        `[Montgomery][files-final] folder "${folder.displayName}" datasource rows before cleanup = ${datasourceRowsBeforeCleanup}`,
+      );
+      if (placeholderCount > 0) {
+        console.log(
+          `[Montgomery][files-fix] placeholder skipped = ${placeholderCount}`,
+        );
+      }
+      console.log(
+        `[Montgomery][files-final] folder "${folder.displayName}" real rows after cleanup = ${filesFound.length}`,
+      );
+      console.log(
+        `[Montgomery][files-fix] folder "${folder.displayName}" real rows after cleanup = ${filesFound.length}`,
+      );
+      console.log(
+        `[Montgomery Files] harvested rows | ${folder.displayName} | realRows=${filesFound.length}`,
+      );
+
+      const folderFiles = [];
+      let needMontgomeryFolderReselect = false;
+      for (const file of filesFound) {
+        workPage = await resolveMontgomeryFilesTabPage(
+          context,
+          workPage,
+          webUiBase,
+          projectID,
+        );
+        if (needMontgomeryFolderReselect) {
+          needMontgomeryFolderReselect = false;
+          try {
+            const clickedFolderResult = await clickMontgomeryFilesFolder(
+              workPage,
+              folder,
+            );
+            await waitForMontgomeryFolderPayload(
+              workPage,
+              projectID,
+              folder,
+              clickedFolderResult.ajaxPayload,
+            );
+            console.log(
+              `[Montgomery][page-recover] re-selected folder after page recovery | ${folder.displayName}`,
+            );
+          } catch (reassertErr) {
+            console.log(
+              `[Montgomery][page-recover] folder re-select failed | ${reassertErr?.message || reassertErr}`,
+            );
+          }
+        }
+        const dedupeKey = buildMontgomeryFilesDedupeKey(
+          file,
+          folder.name || folder.displayName,
+        );
+        const prior = dedupeKey ? uniqueFiles.get(dedupeKey) : null;
+        if (prior) {
+          folderFiles.push({
+            name: file.name,
+            fileId: file.id || undefined,
+            folderName: folder.displayName,
+            status: file.status || "",
+            version: file.version || null,
+            reviewedBy: file.reviewedBy || "",
+            uploadedDate: file.uploadedDate || "",
+            commentCount: 0,
+            comments: [],
+            viewUrl: prior.viewUrl || prior.downloadUrl || "",
+            publicUrl: prior.publicUrl || null,
+            downloadUrl: prior.downloadUrl || null,
+            fileSizeKB: prior.fileSizeKB ?? file.fileSizeKB ?? null,
+            downloadStatus: "skipped_duplicate",
+          });
+          continue;
+        }
+
+        let viewUrl = "";
+        let publicUrl = null;
+        let downloadUrl = file.downloadUrl || null;
+        let fileSizeKB = file.fileSizeKB ?? null;
+        let downloadStatus = null;
+        let downloadError = null;
+
+        if (file.id) {
+          result._meta.downloadAttempts += 1;
+          const safeName = `${file.id}_${file.name.replace(/[/\\?%*:|"<>]/g, "-")}`;
+          let dlResult = null;
+          try {
+            dlResult = await downloadMontgomeryProjectDoxFile(
+              workPage,
+              context,
+              file.id,
+              safeName,
+              webUiBase,
+              session,
+              supabaseProjectId,
+              folder.displayName,
+            );
+            if (dlResult.success) {
+              publicUrl = dlResult.publicUrl || null;
+              downloadUrl = dlResult.downloadUrl || downloadUrl || null;
+              fileSizeKB = dlResult.fileSizeKB ?? fileSizeKB;
+              viewUrl = publicUrl || downloadUrl || dlResult.viewUrl || "";
+              downloadStatus = dlResult.skippedDuplicate
+                ? "skipped_duplicate"
+                : "success";
+              result._meta.downloadsOk += 1;
+              if (publicUrl) result._meta.uploadsOk += 1;
+              if (dlResult.reason === "too_large") {
+                result._meta.largeFilesSkipped += 1;
+              }
+              console.log(
+                `[Montgomery][files-fix] file "${file.name}" resolved real file url = ${downloadUrl || "none"}`,
+              );
+              console.log(
+                `[Montgomery][files-final] resolved file source = ${downloadUrl || "none"}`,
+              );
+              console.log(
+                `[Montgomery][files-fix] file "${file.name}" upload ${publicUrl ? "success" : "fail"}`,
+              );
+              console.log(
+                `[Montgomery][files-final] upload ${publicUrl ? "success" : "fail"} "${file.name}"`,
+              );
+            } else {
+              downloadStatus = "failed";
+              downloadError = dlResult.reason || "download_failed";
+              console.log(
+                `[Montgomery][files-fix] file "${file.name}" dlResult.success=false reason="${dlResult.reason}" keys=${Object.keys(dlResult).join(",")}`,
+              );
+              result._meta.failures += 1;
+              if (downloadError === "too_large") {
+                result._meta.largeFilesSkipped += 1;
+              }
+              console.log(
+                `[Montgomery][files-fix] file "${file.name}" resolved real file url = none`,
+              );
+              console.log(
+                `[Montgomery][files-fix] file "${file.name}" upload fail`,
+              );
+              console.log(`[Montgomery][files-final] resolved file source = none`);
+              console.log(`[Montgomery][files-final] upload fail "${file.name}"`);
+            }
+          } catch (err) {
+            downloadStatus = "failed";
+            downloadError = err.message;
+            result._meta.failures += 1;
+            console.log(
+              `[Montgomery][files-fix] file "${file.name}" resolved real file url = none`,
+            );
+            console.log(
+              `[Montgomery][files-fix] file "${file.name}" upload fail`,
+            );
+            console.log(`[Montgomery][files-final] resolved file source = none`);
+            console.log(`[Montgomery][files-final] upload fail "${file.name}"`);
+          }
+          const failReason =
+            dlResult && dlResult.success === false ? dlResult.reason : null;
+          if (
+            montgomeryFilesShouldReacquireWorkPage(workPage, {
+              reason: failReason,
+              errMessage: downloadError,
+            })
+          ) {
+            console.log(
+              `[Montgomery][page-recover] recovering after failure reason=${failReason || downloadError || "unknown"} fileId=${file.id}`,
+            );
+            workPage = await resolveMontgomeryFilesTabPage(
+              context,
+              workPage,
+              webUiBase,
+              projectID,
+            );
+            needMontgomeryFolderReselect = true;
+          }
+        }
+
+        const shapedFile = {
+          name: file.name,
+          fileId: file.id || undefined,
+          folderName: folder.displayName,
+          status: file.status || "",
+          version: file.version || null,
+          reviewedBy: file.reviewedBy || "",
+          uploadedDate: file.uploadedDate || "",
+          commentCount: 0,
+          comments: [],
+          viewUrl,
+          publicUrl,
+          downloadUrl,
+          fileSizeKB,
+          ...(downloadStatus && { downloadStatus }),
+          ...(downloadError && { downloadError }),
+        };
+        folderFiles.push(shapedFile);
+        if (dedupeKey) {
+          uniqueFiles.set(dedupeKey, {
+            viewUrl,
+            publicUrl,
+            downloadUrl,
+            fileSizeKB,
+            downloadStatus,
+          });
+        }
+        if (downloadStatus === "success") {
+          result.downloadedFiles.push({
+            name: file.name,
+            fileId: file.id || undefined,
+            folderName: folder.displayName,
+            viewUrl,
+          });
+        }
+      }
+
+      result.folders.push({
+        folderID: folder.folderId || null,
+        folderName: folder.displayName,
+        parentFolder: null,
+        filesCount: folderFiles.length,
+        name: folder.displayName,
+        fileCount: folderFiles.length,
+        files: folderFiles,
+      });
+    } catch (err) {
+      result._meta.fileApiFailures += 1;
+      console.log(`[Montgomery][files-fix] folder "${folder.displayName}" FAILED: ${err.message}`);
+      console.log(
+        `[Montgomery][files-fix] folder error stack: ${err.stack?.split("\n").slice(0, 3).join(" | ")}`,
+      );
+      result.folders.push({
+        folderID: folder.folderId || null,
+        folderName: folder.displayName,
+        parentFolder: null,
+        filesCount: 0,
+        name: folder.displayName,
+        fileCount: 0,
+        files: [],
+        folderError: err.message,
+      });
+    }
+  }
+
+  result.foldersCount = result.folders.length;
+  result.filesCount = result.folders.reduce(
+    (sum, folder) => sum + (folder.files?.length || 0),
+    0,
+  );
+  result.sampledDownloadsCount = result.downloadedFiles.length;
+  result.sampleFiles = result.folders
+    .flatMap((folder) => folder.files || [])
+    .slice(0, 5)
+    .map((file) => ({
+      name: file.name,
+      fileId: file.fileId,
+      folderName: file.folderName,
+    }));
+
+  console.log(
+    `[Montgomery][files-fix] final folder output names = ${result.folders.map((folder) => folder.name).join(", ") || "(none)"}`,
+  );
+  console.log(`[Montgomery][files] total unique files = ${uniqueFiles.size}`);
+  return result;
+}
+
 async function extractFilesTab(_page, _context, session, commentsOnly = false, supabaseProjectId = null, targetFolder = null) {
   let page = _page;
   let context = _context;
   cleanupDownloadsDir();
 
-  if (!session._scrapeCumulativeBytes) session._scrapeCumulativeBytes = 0;
+  session._scrapeCumulativeBytes = 0;
+  console.log(`[Montgomery Files] cumulative bytes reset to 0 at files scrape start`);
   if (!session._downloadedHashes) session._downloadedHashes = new Map();
 
   const currentUrl = page.url();
@@ -3373,12 +5617,56 @@ async function extractPDFsFromPage(page, context) {
   return pdfData;
 }
 
-async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase, session, projectId) {
+async function downloadMontgomeryProjectDoxFile(
+  page,
+  context,
+  fileId,
+  fileName,
+  webUiBase,
+  session,
+  projectId,
+  folderDisplayName = "",
+) {
+  const isDrawingsFolder = String(folderDisplayName || "")
+    .toLowerCase()
+    .includes("drawing");
+  return await downloadProjectDoxFile(
+    page,
+    context,
+    fileId,
+    fileName,
+    webUiBase,
+    session,
+    projectId,
+    {
+      adapter: "montgomery",
+      preferDirectRetrieve: false,
+      preferViewerRuntime: isDrawingsFolder,
+      montgomeryWebApiNonDrawingsDirect: !isDrawingsFolder,
+    },
+  );
+}
+
+async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase, session, projectId, options = {}) {
   const downloadDir = getDownloadsDir();
+  const adapter = String(options?.adapter || "").trim().toLowerCase();
+  const preferDirectRetrieve = options?.preferDirectRetrieve === true;
+  const preferViewerRuntime = options?.preferViewerRuntime === true;
+  const montgomeryWebApiNonDrawingsDirect =
+    options?.montgomeryWebApiNonDrawingsDirect === true;
+  const origin = String(webUiBase || "").replace(/\/$/, "");
+  const isMontgomeryAdapter = adapter === "montgomery";
+  const logMontgomeryFinal = (message) => {
+    if (isMontgomeryAdapter) console.log(`[Montgomery][files-final] ${message}`);
+  };
 
   if (session && session._scrapeCumulativeBytes >= MAX_SCRAPE_CUMULATIVE_SIZE) {
     console.log(`      ⚠️ Cumulative download limit reached (${(session._scrapeCumulativeBytes / 1024 / 1024).toFixed(0)} MB / ${(MAX_SCRAPE_CUMULATIVE_SIZE / 1024 / 1024).toFixed(0)} MB). Skipping file: ${fileName}`);
-    return { success: false, reason: "cumulative_limit" };
+    const earlyResult = { success: false, reason: "cumulative_limit" };
+    console.log(
+      `[Montgomery Files] early return pre-popup | fileId=${fileId} | fileName="${fileName}" | result=${JSON.stringify(earlyResult)}`,
+    );
+    return earlyResult;
   }
 
   console.log(`      📥 Downloading file ID ${fileId}: ${fileName}`);
@@ -3412,16 +5700,42 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     return JUNK_URL_PATTERNS.test(url);
   }
 
-  const tryUploadAndClean = async (filePath, sizeMB, contentHash) => {
+  const tryUploadAndClean = async (filePath, sizeMB, contentHash, meta = {}) => {
+    const fileSizeKB =
+      meta.fileSizeKB != null
+        ? meta.fileSizeKB
+        : Math.max(1, Math.round(Number(sizeMB || 0) * 1024));
     const dupCheck = isDuplicate(contentHash);
     if (dupCheck.dup) {
+      console.log(
+        `[Montgomery Files] skipped as duplicate hash | fileId=${fileId} | fileName="${fileName}" | hash=${contentHash}`,
+      );
       try { fs.unlinkSync(filePath); } catch (_) {}
-      return { success: true, path: filePath, sizeMB, viewUrl: dupCheck.aliasUrl, contentHash, skippedDuplicate: true };
+      return {
+        success: true,
+        path: filePath,
+        sizeMB,
+        viewUrl: dupCheck.aliasUrl,
+        publicUrl: dupCheck.aliasUrl || null,
+        downloadUrl: meta.downloadUrl || null,
+        fileSizeKB,
+        contentHash,
+        skippedDuplicate: true,
+      };
     }
     if (!projectId) {
       console.log(`      ⚠️ No projectId — keeping file locally: ${fileName}`);
       registerHash(contentHash, "");
-      return { success: true, path: filePath, sizeMB, viewUrl: "", contentHash };
+      return {
+        success: true,
+        path: filePath,
+        sizeMB,
+        viewUrl: meta.downloadUrl || "",
+        publicUrl: null,
+        downloadUrl: meta.downloadUrl || null,
+        fileSizeKB,
+        contentHash,
+      };
     }
     const storagePath = `drawings/${projectId}/${fileName}`;
     const publicUrl = await uploadToSupabaseStorage(filePath, storagePath);
@@ -3429,18 +5743,42 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       console.log(`      ☁️  Uploaded to Supabase Storage: ${storagePath}`);
       try { fs.unlinkSync(filePath); } catch (_) {}
       registerHash(contentHash, publicUrl);
-      return { success: true, path: filePath, sizeMB, viewUrl: publicUrl, contentHash };
+      return {
+        success: true,
+        path: filePath,
+        sizeMB,
+        viewUrl: publicUrl,
+        publicUrl,
+        downloadUrl: meta.downloadUrl || null,
+        fileSizeKB,
+        contentHash,
+      };
     }
     console.log(`      ⚠️ Supabase upload failed — keeping local copy: ${fileName}`);
     registerHash(contentHash, "");
-    return { success: true, path: filePath, sizeMB, viewUrl: "", contentHash };
+    return {
+      success: true,
+      path: filePath,
+      sizeMB,
+      viewUrl: meta.downloadUrl || "",
+      publicUrl: null,
+      downloadUrl: meta.downloadUrl || null,
+      fileSizeKB,
+      contentHash,
+    };
   };
 
-  const existingPages = context.pages();
-  for (const p of existingPages) {
-    if (p !== page) {
-      await p.close().catch(() => {});
+  if (!isMontgomeryAdapter) {
+    const existingPages = context.pages();
+    for (const p of existingPages) {
+      if (p !== page) {
+        await p.close().catch(() => {});
+      }
     }
+  } else {
+    console.log(
+      `[Montgomery][page-recover] skipping pre-download page sweep | fileId=${fileId} | fileName="${fileName}"`,
+    );
   }
 
   const PDF_MAGIC = Buffer.from("%PDF");
@@ -3453,11 +5791,182 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
 
   function isFileUrl(url) {
     return /\.(pdf|dwg|doc|docx|xlsx|jpg|png|zip)(\?|$)/i.test(url) ||
-      /filehandler|filedownload|getfile|viewfile/i.test(url);
+      /filehandler|filedownload|getfile|viewfile|retrievefile/i.test(url);
   }
 
   function hasValidPdfHeader(buffer) {
     return buffer && buffer.length >= 4 && buffer.slice(0, 4).equals(PDF_MAGIC);
+  }
+
+  function isViewerShellUrl(url) {
+    return /\/File\/FileViewer\b|\/Scripts\/File\/WebViewer\/|\/ui\/index\.html\b/i.test(
+      String(url || ""),
+    );
+  }
+
+  function isHtmlLikeContentType(ct) {
+    return /text\/html|text\/javascript|text\/css|application\/json/i.test(
+      String(ct || ""),
+    );
+  }
+
+  function isMontgomeryIconNoiseUrl(url) {
+    return /\/Media\/img\/icons\/|ico_copy\.png/i.test(String(url || ""));
+  }
+
+  async function fetchBinaryViaPage(targetPage, rawUrl) {
+    const fetchResult = await targetPage.evaluate(async (url) => {
+      const r = await fetch(url, { credentials: "include", cache: "no-store" });
+      const ct = r.headers.get("content-type") || "";
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const chunks = [];
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+        let binary = "";
+        for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
+        chunks.push(btoa(binary));
+      }
+      return {
+        ok: r.ok,
+        status: r.status,
+        finalUrl: r.url || url,
+        contentType: ct,
+        chunks,
+        size: bytes.length,
+      };
+    }, rawUrl);
+
+    if (!fetchResult?.ok) {
+      throw new Error(`HTTP ${fetchResult?.status || "fetch_failed"}`);
+    }
+    if (
+      isHtmlLikeContentType(fetchResult.contentType) ||
+      isJunkUrl(fetchResult.finalUrl) ||
+      isViewerShellUrl(fetchResult.finalUrl)
+    ) {
+      throw new Error("viewer_shell");
+    }
+
+    return {
+      ...fetchResult,
+      buffer: Buffer.concat((fetchResult.chunks || []).map((c) => Buffer.from(c, "base64"))),
+    };
+  }
+
+  async function extractMontgomeryWebViewerFileFromPopup(targetPopup, metadata = {}) {
+    await targetPopup.waitForLoadState("domcontentloaded", { timeout: 20000 }).catch(() => {});
+    await targetPopup.waitForLoadState("load", { timeout: 20000 }).catch(() => {});
+
+    console.log(`[Montgomery Files] viewer popup page found | ${targetPopup.url() || "none"}`);
+    logMontgomeryFinal(`viewer popup page = ${targetPopup.url() || "none"}`);
+
+    const viewerFrame = await (async () => {
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) {
+        for (const frame of targetPopup.frames()) {
+          const url = frame.url();
+          if (url.includes("WebViewer") && url.includes("index.html")) {
+            return frame;
+          }
+        }
+        await targetPopup.waitForTimeout(500).catch(() => {});
+      }
+      return null;
+    })();
+
+    if (!viewerFrame) {
+      throw new Error("viewer_frame_not_found");
+    }
+    console.log(
+      `[Montgomery Files] viewer iframe found: ${viewerFrame.url().substring(0, 80)}`,
+    );
+
+    const fileConfig = await viewerFrame
+      .evaluate(() => {
+        try {
+          const hash = window.location.hash;
+          const customMatch = hash.match(/[?&#]custom=([^&#]+)/);
+          if (!customMatch) return null;
+          return JSON.parse(decodeURIComponent(customMatch[1]));
+        } catch (_) {
+          return null;
+        }
+      })
+      .catch(() => null);
+
+    console.log(
+      `[Montgomery Files] fileConfig from hash: ${JSON.stringify(fileConfig)}`,
+    );
+
+    if (!fileConfig?.fileID) {
+      throw new Error("viewer_missing_file_config");
+    }
+
+    const context = targetPopup.context();
+    const allCookies = await context.cookies([
+      "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com",
+    ]);
+
+    const sessionCookie = allCookies.find((c) => c.name === "SessionID");
+    if (!sessionCookie) {
+      throw new Error("SessionID cookie not found");
+    }
+
+    const sessionId = sessionCookie.value;
+    console.log(`[Montgomery Files] SessionID cookie found, length: ${sessionId.length}`);
+
+    const webApiBase = "https://montgomeryco-md-us-projectdoxwebapi.avolvecloud.com";
+    const retrieveUrl = `${webApiBase}/File/RetrieveFile?convertToPDF=true&inline=true&blackCADBackground=false&fileID=${fileConfig.fileID}`;
+    console.log(`[Montgomery Files] fetching PDF: ${retrieveUrl}`);
+
+    const response = await context.request.get(retrieveUrl, {
+      headers: {
+        sessionid: sessionId,
+        Referer: "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com/",
+        Origin: "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+
+    console.log(
+      `[Montgomery Files] PDF response: ${response.status()} ${response.headers()["content-type"]}`,
+    );
+
+    if (response.ok()) {
+      const ct = response.headers()["content-type"] || "";
+      if (ct.includes("pdf")) {
+        const buffer = await response.body();
+        if (
+          buffer[0] === 0x25 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x44 &&
+          buffer[3] === 0x46
+        ) {
+          console.log(`[Montgomery Files] valid PDF extracted, size: ${buffer.length}`);
+          return {
+            viewerIndex: 0,
+            viewersCount: 1,
+            filename: fileConfig.fileName || metadata?.fileName || "",
+            fileType: "pdf",
+            pages: 0,
+            fileSize: buffer.length,
+            downloadLink: retrieveUrl,
+            buffer,
+          };
+        }
+      }
+      console.log(
+        `[Montgomery Files] unexpected response body start: ${JSON.stringify(
+          Array.from((await response.body()).slice(0, 20)),
+        )}`,
+      );
+    }
+
+    throw new Error(
+      `PDF fetch failed: status=${response.status()} ct=${response.headers()["content-type"]}`,
+    );
   }
 
   const capturedResponses = [];
@@ -3465,13 +5974,29 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     const url = response.url();
     const ct = response.headers()["content-type"] || "";
     const status = response.status();
+    if (isMontgomeryAdapter && isMontgomeryIconNoiseUrl(url)) return;
     if (status === 200 && (isFileContentType(ct) || isFileUrl(url))) {
-      if (isJunkUrl(url)) return;
+      logMontgomeryFinal(
+        `candidate real file response = ${url.substring(0, 180)} (${ct || "unknown"})`,
+      );
+      if (isJunkUrl(url)) {
+        logMontgomeryFinal(`rejected candidate reason = junk_url ${url.substring(0, 160)}`);
+        return;
+      }
+      if (isViewerShellUrl(url)) {
+        logMontgomeryFinal(`rejected candidate reason = viewer_shell ${url.substring(0, 160)}`);
+        return;
+      }
       try {
         const body = await response.body().catch(() => null);
         if (body && body.length >= MIN_FILE_SIZE) {
-          if (ct.includes("text/html") || ct.includes("text/javascript") || ct.includes("text/css")) return;
+          if (isHtmlLikeContentType(ct)) {
+            logMontgomeryFinal(`rejected candidate reason = html_like_content_type ${ct}`);
+            return;
+          }
           capturedResponses.push({ url, contentType: ct, body });
+        } else {
+          logMontgomeryFinal(`rejected candidate reason = too_small ${body ? body.length : 0} bytes`);
         }
       } catch (e) {}
     }
@@ -3503,7 +6028,229 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
   context.on("page", onNewPageCapture);
   let popup = null;
 
+  let montgomeryPageLifeFrameNavHandler = null;
+  let montgomeryPageLifeContextPageHandler = null;
+  let montgomeryPageLifeOnClose = null;
+  let montgomeryPageLifeOnCrash = null;
+  let montgomeryPageLifeContextOnClose = null;
+
+  function logMontgomeryPageLife(tag) {
+    if (!isMontgomeryAdapter) return;
+    let url = "";
+    try {
+      url = page.url();
+    } catch (e) {
+      url = `(url_error:${e?.message || e})`;
+    }
+    let nPages = -1;
+    let pagesUrls = "";
+    try {
+      const pages = context.pages();
+      nPages = pages.length;
+      pagesUrls = pages
+        .map((p, i) => {
+          try {
+            return `[${i}]=${p.url().slice(0, 160)}`;
+          } catch (_) {
+            return `[${i}]=(url_err)`;
+          }
+        })
+        .join(" | ");
+    } catch (e2) {
+      pagesUrls = `(context.pages error: ${e2?.message || e2})`;
+    }
+    let browserHint = "unknown";
+    try {
+      const b = context.browser();
+      if (!b) browserHint = "browser_null";
+      else browserHint = b.isConnected() ? "browser_connected" : "browser_disconnected";
+    } catch (e3) {
+      browserHint = `browser_check_error:${e3?.message || e3}`;
+    }
+    console.log(
+      `[Montgomery][page-life] ${tag} fileId=${fileId} fileName="${fileName}" isClosed=${page.isClosed()} url=${String(url).slice(0, 280)} contextPages=${nPages} browserHint=${browserHint} pages=${pagesUrls.slice(0, 500)}`,
+    );
+  }
+
   try {
+    if (isMontgomeryAdapter) {
+      montgomeryPageLifeOnClose = () => {
+        console.log(
+          `[Montgomery][page-life] page closed fileId=${fileId} fileName="${fileName}"`,
+        );
+      };
+      page.once("close", montgomeryPageLifeOnClose);
+      montgomeryPageLifeOnCrash = () => {
+        console.log(
+          `[Montgomery][page-life] page crashed fileId=${fileId} fileName="${fileName}"`,
+        );
+      };
+      page.once("crash", montgomeryPageLifeOnCrash);
+      montgomeryPageLifeFrameNavHandler = (frame) => {
+        try {
+          if (frame === page.mainFrame()) {
+            let u = "";
+            try {
+              u = frame.url();
+            } catch (_) {
+              u = "(frame_url_err)";
+            }
+            console.log(
+              `[Montgomery][page-life] main-frame navigated fileId=${fileId} fileName="${fileName}" url=${String(u).slice(0, 220)}`,
+            );
+          }
+        } catch (_) {}
+      };
+      page.on("framenavigated", montgomeryPageLifeFrameNavHandler);
+      montgomeryPageLifeContextOnClose = () => {
+        console.log(
+          `[Montgomery][page-life] context closed fileId=${fileId} fileName="${fileName}"`,
+        );
+      };
+      context.once("close", montgomeryPageLifeContextOnClose);
+      montgomeryPageLifeContextPageHandler = (newPage) => {
+        let u = "";
+        try {
+          u = newPage.url();
+        } catch (_) {
+          u = "(new_page_url_err)";
+        }
+        console.log(
+          `[Montgomery][page-life] context new page fileId=${fileId} fileName="${fileName}" url=${String(u).slice(0, 220)}`,
+        );
+      };
+      context.on("page", montgomeryPageLifeContextPageHandler);
+    }
+
+    if (montgomeryWebApiNonDrawingsDirect) {
+      const MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS = 120000;
+      console.log(
+        `[Montgomery][non-drawings] direct retrieve start | fileId=${fileId} | timeoutMs=${MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS} | fileName="${fileName}"`,
+      );
+      const webApiBase = "https://montgomeryco-md-us-projectdoxwebapi.avolvecloud.com";
+      const retrieveUrl =
+        `${webApiBase}/File/RetrieveFile?convertToPDF=true&inline=true&blackCADBackground=false&fileID=${encodeURIComponent(String(fileId))}`;
+      let nonDrawingsResult = null;
+      try {
+        const allCookies = await context.cookies([
+          "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com",
+        ]);
+        const sessionCookie = allCookies.find((c) => c.name === "SessionID");
+        if (!sessionCookie) {
+          console.log(
+            `[Montgomery][non-drawings] direct retrieve fail | status=0 | contentType=missing_SessionID`,
+          );
+          nonDrawingsResult = { success: false, reason: "no_session_id" };
+        } else {
+          const sessionIdVal = sessionCookie.value;
+          const response = await context.request.get(retrieveUrl, {
+            timeout: MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS,
+            headers: {
+              sessionid: sessionIdVal,
+              Referer: "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com/",
+              Origin: "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+          const status = response.status();
+          const ct = response.headers()["content-type"] || "";
+          if (!response.ok()) {
+            console.log(
+              `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=${ct}`,
+            );
+            nonDrawingsResult = { success: false, reason: "montgomery_webapi_http_error" };
+          } else {
+            let buffer;
+            try {
+              buffer = await response.body();
+            } catch (bodyErr) {
+              const bmsg = String(bodyErr?.message || bodyErr || "");
+              if (/timeout|timed out|\d+ms exceeded/i.test(bmsg)) {
+                console.log(
+                  `[Montgomery][non-drawings] direct retrieve fail | reason=montgomery_webapi_timeout | fileId=${fileId} | fileName="${fileName}" | timeoutMs=${MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS}`,
+                );
+                nonDrawingsResult = { success: false, reason: "montgomery_webapi_timeout" };
+              } else {
+                console.log(
+                  `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=${bmsg} (body_error)`,
+                );
+                nonDrawingsResult = { success: false, reason: "montgomery_webapi_error" };
+              }
+            }
+            if (!nonDrawingsResult) {
+              if (!buffer || buffer.length < MIN_FILE_SIZE) {
+                console.log(
+                  `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=${ct} | bytes=${buffer?.length ?? 0}`,
+                );
+                nonDrawingsResult = { success: false, reason: "too_small" };
+              } else if (isHtmlLikeContentType(ct)) {
+                console.log(
+                  `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=${ct} (html_like)`,
+                );
+                nonDrawingsResult = { success: false, reason: "html_response" };
+              } else if (
+                fileName.toLowerCase().endsWith(".pdf") &&
+                !hasValidPdfHeader(buffer)
+              ) {
+                console.log(
+                  `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=${ct} (invalid_pdf)`,
+                );
+                nonDrawingsResult = { success: false, reason: "invalid_pdf_header" };
+              } else if (buffer.length > MAX_FILE_SIZE) {
+                console.log(
+                  `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=${ct} (too_large)`,
+                );
+                nonDrawingsResult = { success: false, reason: "too_large" };
+              } else {
+                const cumulative = (session?._scrapeCumulativeBytes || 0) + buffer.length;
+                if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
+                  console.log(
+                    `[Montgomery][non-drawings] direct retrieve fail | status=${status} | contentType=cumulative_cap`,
+                  );
+                  nonDrawingsResult = { success: false, reason: "cumulative_cap" };
+                } else {
+                  console.log(
+                    `[Montgomery][non-drawings] direct retrieve success | status=${status} | contentType=${ct} | bytes=${buffer.length}`,
+                  );
+                  fs.writeFileSync(downloadPath, buffer);
+                  if (session) session._scrapeCumulativeBytes = cumulative;
+                  const contentHash = computeHash(buffer);
+                  const sizeMB = (buffer.length / 1024 / 1024).toFixed(2);
+                  nonDrawingsResult = await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
+                    downloadUrl: retrieveUrl,
+                    fileSizeKB: Math.max(1, Math.round(buffer.length / 1024)),
+                  });
+                  if (nonDrawingsResult?.publicUrl) {
+                    console.log(
+                      `[Montgomery][non-drawings] upload success | fileId=${fileId} | fileName="${fileName}" | publicUrl=${nonDrawingsResult.publicUrl}`,
+                    );
+                  } else if (nonDrawingsResult?.success) {
+                    console.log(
+                      `[Montgomery][non-drawings] upload success | fileId=${fileId} | fileName="${fileName}" | publicUrl=(none)`,
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        const emsg = String(err?.message || err || "");
+        if (/timeout|timed out|\d+ms exceeded/i.test(emsg)) {
+          console.log(
+            `[Montgomery][non-drawings] direct retrieve fail | reason=montgomery_webapi_timeout | fileId=${fileId} | fileName="${fileName}" | timeoutMs=${MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS}`,
+          );
+          nonDrawingsResult = { success: false, reason: "montgomery_webapi_timeout" };
+        } else {
+          console.log(
+            `[Montgomery][non-drawings] direct retrieve fail | status=0 | contentType=${emsg}`,
+          );
+          nonDrawingsResult = { success: false, reason: "montgomery_webapi_error" };
+        }
+      }
+      return nonDrawingsResult || { success: false, reason: "montgomery_non_drawings_direct_failed" };
+    }
+
     const popupPromise = context.waitForEvent("page", { timeout: 20000 }).catch(() => null);
 
     const realResponsePromise = new Promise((resolve) => {
@@ -3512,8 +6259,9 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         if (resolved) return;
         const ct = response.headers()["content-type"] || "";
         const url = response.url();
+        if (isMontgomeryAdapter && isMontgomeryIconNoiseUrl(url)) return;
         if (response.status() === 200 && (isFileContentType(ct) || isFileUrl(url))) {
-          if (!ct.includes("text/html") && !ct.includes("text/javascript") && !ct.includes("text/css")) {
+          if (!isHtmlLikeContentType(ct) && !isViewerShellUrl(url)) {
             resolved = true;
             console.log(`      📡 Real file response for fileId ${fileId}: ${url.substring(0, 120)} (${ct})`);
             resolve(true);
@@ -3533,6 +6281,104 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       }, 20000);
     });
 
+    async function tryMontgomeryDirectRetrieve(targetPage, sourceLabel = "page") {
+      if (!(adapter === "montgomery" && preferDirectRetrieve && origin && targetPage)) {
+        return null;
+      }
+      const directCandidates = [
+        `${origin}/File/RetrieveFile?inline=true&fileID=${encodeURIComponent(String(fileId))}&${cacheBuster}`,
+        `${origin}/File/RetrieveFile?fileID=${encodeURIComponent(String(fileId))}&${cacheBuster}`,
+      ];
+      for (const candidate of directCandidates) {
+        try {
+          logMontgomeryFinal(`candidate real file response = ${candidate} [${sourceLabel}]`);
+          const fetched = await fetchBinaryViaPage(targetPage, candidate);
+          const buffer = fetched.buffer;
+          if (buffer.length < MIN_FILE_SIZE) {
+            logMontgomeryFinal(`rejected candidate reason = too_small ${buffer.length} bytes`);
+            continue;
+          }
+          if (
+            fileName.toLowerCase().endsWith(".pdf") &&
+            !hasValidPdfHeader(buffer)
+          ) {
+            logMontgomeryFinal("rejected candidate reason = invalid_pdf_header");
+            continue;
+          }
+          if (buffer.length > MAX_FILE_SIZE) {
+            logMontgomeryFinal("rejected candidate reason = too_large");
+            const earlyResult = { success: false, reason: "too_large" };
+            console.log(
+              `[Montgomery Files] early return pre-popup direct-retrieve | fileId=${fileId} | fileName="${fileName}" | result=${JSON.stringify(earlyResult)}`,
+            );
+            return earlyResult;
+          }
+          const cumulative = (session?._scrapeCumulativeBytes || 0) + buffer.length;
+          if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
+            console.log(
+              `[Montgomery Files] cumulative cap hit after ${typeof result !== "undefined" ? result._meta.downloadsOk : "unknown"} files, total bytes: ${cumulative}`,
+            );
+            logMontgomeryFinal("rejected candidate reason = cumulative_cap");
+            const earlyResult = { success: false, reason: "cumulative_cap" };
+            console.log(
+              `[Montgomery Files] early return pre-popup direct-retrieve | fileId=${fileId} | fileName="${fileName}" | result=${JSON.stringify(earlyResult)}`,
+            );
+            return earlyResult;
+          }
+          fs.writeFileSync(downloadPath, buffer);
+          if (session) session._scrapeCumulativeBytes = cumulative;
+          const contentHash = computeHash(buffer);
+          const sizeMB = (buffer.length / 1024 / 1024).toFixed(2);
+          logMontgomeryFinal(`resolved file source = ${String(fetched.finalUrl || candidate).substring(0, 180)}`);
+          const earlyResult = await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
+            downloadUrl: String(fetched.finalUrl || candidate).replace(
+              /([?&])_nocache=[^&]*/g,
+              "$1",
+            ).replace(/[?&]$/, ""),
+            fileSizeKB: Math.max(1, Math.round(buffer.length / 1024)),
+          });
+          console.log(
+            `[Montgomery Files] early return pre-popup direct-retrieve | fileId=${fileId} | fileName="${fileName}" | result=${JSON.stringify({
+              success: earlyResult?.success ?? null,
+              reason: earlyResult?.reason || null,
+              publicUrl: earlyResult?.publicUrl || null,
+              downloadUrl: earlyResult?.downloadUrl || null,
+              skippedDuplicate: !!earlyResult?.skippedDuplicate,
+            })}`,
+          );
+          return earlyResult;
+        } catch (err) {
+          logMontgomeryFinal(`rejected candidate reason = ${err?.message || "fetch_failed"} [${sourceLabel}]`);
+        }
+      }
+      return null;
+    }
+
+    if (adapter === "montgomery" && preferDirectRetrieve && origin) {
+      const directRetrieveResult = await tryMontgomeryDirectRetrieve(page, "pre_popup");
+      if (directRetrieveResult) {
+        console.log(
+          `[Montgomery Files] early return pre-popup main-flow | fileId=${fileId} | fileName="${fileName}" | result=${JSON.stringify({
+            success: directRetrieveResult?.success ?? null,
+            reason: directRetrieveResult?.reason || null,
+            publicUrl: directRetrieveResult?.publicUrl || null,
+            downloadUrl: directRetrieveResult?.downloadUrl || null,
+            skippedDuplicate: !!directRetrieveResult?.skippedDuplicate,
+          })}`,
+        );
+        return directRetrieveResult;
+      }
+    }
+
+    if (isMontgomeryAdapter && page.isClosed()) {
+      console.log(
+        `[Montgomery Files] main files page closed before viewFile | fileId=${fileId} | fileName="${fileName}"`,
+      );
+      return { success: false, reason: "main_files_page_closed" };
+    }
+
+    logMontgomeryPageLife("before viewFile");
+
     await page.evaluate(() => { window.name = ""; });
 
     await page.evaluate((fid) => {
@@ -3546,11 +6392,56 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       }
     }, parseInt(fileId));
 
+    logMontgomeryPageLife("after viewFile");
+
     const gotRealResponse = await realResponsePromise;
     if (!gotRealResponse) {
       console.log(`      ⚠️ No real file response received within 20s for fileId ${fileId}, falling back to captured responses`);
     }
-    await page.waitForTimeout(1000);
+    logMontgomeryPageLife("before page.waitForTimeout");
+    if (isMontgomeryAdapter) {
+      try {
+        await page.waitForTimeout(1000);
+      } catch (e) {
+        let url = "";
+        try {
+          url = page.url();
+        } catch (_) {
+          url = "(url_err)";
+        }
+        let nPages = -1;
+        let pagesUrls = "";
+        try {
+          const pages = context.pages();
+          nPages = pages.length;
+          pagesUrls = pages
+            .map((p, i) => {
+              try {
+                return `[${i}]=${p.url().slice(0, 160)}`;
+              } catch (_) {
+                return `[${i}]=(url_err)`;
+              }
+            })
+            .join(" | ");
+        } catch (e2) {
+          pagesUrls = `context.pages:${e2?.message || e2}`;
+        }
+        let browserHint = "unknown";
+        try {
+          const b = context.browser();
+          if (!b) browserHint = "browser_null";
+          else browserHint = b.isConnected() ? "browser_connected" : "browser_disconnected";
+        } catch (e3) {
+          browserHint = `browser_check:${e3?.message || e3}`;
+        }
+        console.log(
+          `[Montgomery][page-life] page.waitForTimeout threw fileId=${fileId} fileName="${fileName}" err=${e?.message || e} isClosed=${page.isClosed()} url=${String(url).slice(0, 280)} contextPages=${nPages} browserHint=${browserHint} allPages=${pagesUrls.slice(0, 800)}`,
+        );
+        throw e;
+      }
+    } else {
+      await page.waitForTimeout(1000);
+    }
     popup = await popupPromise;
 
     if (popup) {
@@ -3558,7 +6449,182 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       console.log(`      🔗 Viewer popup opened: ${popup.url()}`);
 
       await popup.waitForLoadState("domcontentloaded", { timeout: 20000 }).catch(() => {});
-      await popup.waitForTimeout(3000);
+      if (isMontgomeryAdapter && preferViewerRuntime) {
+        try {
+          console.log("[Montgomery Files] viewer runtime detected");
+          logMontgomeryFinal("viewer runtime detected");
+          const runtimeFile = await extractMontgomeryWebViewerFileFromPopup(popup, {
+            fileId,
+            fileName,
+          });
+          const runtimeBuffer = runtimeFile.buffer;
+          logMontgomeryFinal(
+            `document detected | viewerIndex=${runtimeFile.viewerIndex ?? -1} | ${runtimeFile.filename || fileName} | type=${runtimeFile.fileType || "unknown"} | pages=${runtimeFile.pages || 0}`,
+          );
+          logMontgomeryFinal("getDocumentCompletePromise resolved");
+          logMontgomeryFinal(`getFileData success | bytes=${runtimeBuffer.length}`);
+          if (runtimeBuffer.length <= 0) {
+            throw new Error("empty_runtime_buffer");
+          }
+          if (
+            fileName.toLowerCase().endsWith(".pdf") &&
+            !hasValidPdfHeader(runtimeBuffer)
+          ) {
+            throw new Error("invalid_pdf_header");
+          }
+          if (runtimeBuffer.length > MAX_FILE_SIZE) {
+            return { success: false, reason: "too_large" };
+          }
+          const cumulative = (session?._scrapeCumulativeBytes || 0) + runtimeBuffer.length;
+          if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
+            console.log(
+              `[Montgomery Files] cumulative cap hit after ${typeof result !== "undefined" ? result._meta.downloadsOk : "unknown"} files, total bytes: ${cumulative}`,
+            );
+            return { success: false, reason: "cumulative_cap" };
+          }
+          fs.writeFileSync(downloadPath, runtimeBuffer);
+          if (session) session._scrapeCumulativeBytes = cumulative;
+          const contentHash = computeHash(runtimeBuffer);
+          const sizeMB = (runtimeBuffer.length / 1024 / 1024).toFixed(2);
+          console.log(
+            `[Montgomery Files] document detected | viewerIndex=${runtimeFile.viewerIndex ?? -1} | ${runtimeFile.filename || fileName} | type=${runtimeFile.fileType || "unknown"} | pages=${runtimeFile.pages || 0}`,
+          );
+          console.log("[Montgomery Files] getDocumentCompletePromise resolved");
+          console.log(
+            `[Montgomery Files] getFileData success | bytes=${runtimeBuffer.length}`,
+          );
+          const runtimeDownloadUrl =
+            /^https?:\/\//i.test(runtimeFile.downloadLink || "") &&
+            !isViewerShellUrl(runtimeFile.downloadLink)
+              ? runtimeFile.downloadLink
+              : null;
+          logMontgomeryFinal(
+            `resolved file source = ${runtimeDownloadUrl || "runtime:getFileData"}`,
+          );
+          const uploadResult = await tryUploadAndClean(
+            downloadPath,
+            sizeMB,
+            contentHash,
+            {
+              downloadUrl: runtimeDownloadUrl,
+              fileSizeKB:
+                runtimeFile.fileSize > 0
+                  ? Math.max(1, Math.round(runtimeFile.fileSize / 1024))
+                  : Math.max(1, Math.round(runtimeBuffer.length / 1024)),
+            },
+          );
+          console.log(
+            `[Montgomery Files] tryUploadAndClean result | fileId=${fileId} | success=${uploadResult?.success} | publicUrl=${uploadResult?.publicUrl || null} | reason=${uploadResult?.reason || null}`,
+          );
+          console.log(
+            `[Montgomery Files] upload ${uploadResult?.publicUrl ? "success" : "fail"} | ${runtimeFile.filename || fileName}`,
+          );
+          return uploadResult;
+        } catch (err) {
+          console.log(
+            `[Montgomery Files] runtime extraction failed | ${err?.message || err}`,
+          );
+          if (err && err.message === "viewer_missing_file_config") {
+            logMontgomeryFinal("rejected candidate reason = viewer_missing_file_config");
+            return { success: false, reason: "viewer_missing_file_config" };
+          }
+          logMontgomeryFinal(
+            `rejected candidate reason = runtime_extraction_failed:${err?.message || err}`,
+          );
+        }
+      } else {
+        await popup.waitForTimeout(3000);
+      }
+      const viewerIframeSrc = await popup
+        .evaluate(() => {
+          const iframe = document.querySelector("iframe[src]");
+          return iframe ? iframe.getAttribute("src") || "" : "";
+        })
+        .catch(() => "");
+      logMontgomeryFinal(`viewer iframe src = ${viewerIframeSrc || "none"}`);
+
+      const viewerCandidates = await popup
+        .evaluate(() => {
+          function abs(u) {
+            try {
+              return new URL(u, window.location.href).toString();
+            } catch (_) {
+              return "";
+            }
+          }
+          function pushCandidate(out, raw) {
+            const s = String(raw || "").trim();
+            if (!s) return;
+            const url = abs(s);
+            if (url) out.push(url);
+          }
+          const out = [];
+          pushCandidate(out, document.querySelector("iframe[src]")?.getAttribute("src"));
+          document.querySelectorAll("embed[src], object[data], a[href]").forEach((el) => {
+            pushCandidate(out, el.getAttribute("src") || el.getAttribute("data") || el.getAttribute("href"));
+          });
+          document.querySelectorAll("script").forEach((s) => {
+            const text = s.textContent || "";
+            const matches = text.match(/(?:https?:\/\/|\/)[^'"\s]+(?:RetrieveFile|File\/Download|GetFile|\.pdf|\.dwg|\.docx?|\.xlsx?)[^'"\s]*/gi) || [];
+            matches.forEach((m) => pushCandidate(out, m));
+          });
+          return [...new Set(out)];
+        })
+        .catch(() => []);
+      console.log(
+        `[Montgomery Files] popup candidate urls | count=${Array.isArray(viewerCandidates) ? viewerCandidates.length : 0} | sample=${JSON.stringify((viewerCandidates || []).slice(0, 8))}`,
+      );
+
+      for (const candidate of viewerCandidates) {
+        logMontgomeryFinal(`candidate real file response = ${candidate.substring(0, 180)}`);
+        if (isJunkUrl(candidate)) {
+          logMontgomeryFinal("rejected candidate reason = junk_url");
+          continue;
+        }
+        if (isViewerShellUrl(candidate)) {
+          logMontgomeryFinal("rejected candidate reason = viewer_shell");
+          continue;
+        }
+        try {
+          const fetched = await fetchBinaryViaPage(popup, candidate);
+          const buffer = fetched.buffer;
+          if (buffer.length < MIN_FILE_SIZE) {
+            logMontgomeryFinal(`rejected candidate reason = too_small ${buffer.length} bytes`);
+            continue;
+          }
+          if (
+            fileName.toLowerCase().endsWith(".pdf") &&
+            !hasValidPdfHeader(buffer)
+          ) {
+            logMontgomeryFinal("rejected candidate reason = invalid_pdf_header");
+            continue;
+          }
+          if (buffer.length > MAX_FILE_SIZE) {
+            logMontgomeryFinal("rejected candidate reason = too_large");
+            return { success: false, reason: "too_large" };
+          }
+          const cumulative = (session?._scrapeCumulativeBytes || 0) + buffer.length;
+          if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
+            console.log(
+              `[Montgomery Files] cumulative cap hit after ${typeof result !== "undefined" ? result._meta.downloadsOk : "unknown"} files, total bytes: ${cumulative}`,
+            );
+            logMontgomeryFinal("rejected candidate reason = cumulative_cap");
+            return { success: false, reason: "cumulative_cap" };
+          }
+          fs.writeFileSync(downloadPath, buffer);
+          if (session) session._scrapeCumulativeBytes = cumulative;
+          const contentHash = computeHash(buffer);
+          const sizeMB = (buffer.length / 1024 / 1024).toFixed(2);
+          logMontgomeryFinal(`resolved file source = ${String(fetched.finalUrl || candidate).substring(0, 180)}`);
+          await popup.close().catch(() => {});
+          return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
+            downloadUrl: String(fetched.finalUrl || candidate).replace(/([?&])_nocache=[^&]*/g, "$1").replace(/[?&]$/, ""),
+            fileSizeKB: Math.max(1, Math.round(buffer.length / 1024)),
+          });
+        } catch (err) {
+          logMontgomeryFinal(`rejected candidate reason = ${err?.message || "fetch_failed"}`);
+        }
+      }
 
       const [download] = await Promise.all([
         popup.waitForEvent("download", { timeout: 20000 }).catch(() => null),
@@ -3603,6 +6669,9 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         }
         const cumulative = (session?._scrapeCumulativeBytes || 0) + stat.size;
         if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
+          console.log(
+            `[Montgomery Files] cumulative cap hit after ${typeof result !== "undefined" ? result._meta.downloadsOk : "unknown"} files, total bytes: ${cumulative}`,
+          );
           console.log(`      ⚠️ Would exceed cumulative cap (${(cumulative / 1024 / 1024).toFixed(0)} MB). Rejected: ${fileName}`);
           fs.unlinkSync(downloadPath);
           await popup.close().catch(() => {});
@@ -3613,7 +6682,10 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
         console.log(`      ✅ Downloaded via viewer download button: ${fileName} (${sizeMB} MB, md5: ${contentHash})`);
         await popup.close().catch(() => {});
-        return await tryUploadAndClean(downloadPath, sizeMB, contentHash);
+        return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
+          downloadUrl: isViewerShellUrl(popup.url()) ? null : popup.url(),
+          fileSizeKB: Math.max(1, Math.round(stat.size / 1024)),
+        });
       }
 
       const fileSourceUrl = await popup.evaluate(() => {
@@ -3638,7 +6710,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         return "";
       });
 
-      if (fileSourceUrl) {
+      if (fileSourceUrl && !isViewerShellUrl(fileSourceUrl) && !isJunkUrl(fileSourceUrl)) {
         console.log(`      🔗 Found file source URL in viewer: ${fileSourceUrl.substring(0, 150)}`);
         try {
           const fetchUrlWithBust = fileSourceUrl + (fileSourceUrl.includes("?") ? "&" : "?") + cacheBuster;
@@ -3679,7 +6751,10 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
               const sizeMB = (buffer.length / 1024 / 1024).toFixed(2);
               console.log(`      ✅ Downloaded via viewer source URL: ${fileName} (${sizeMB} MB, md5: ${contentHash})`);
               await popup.close().catch(() => {});
-              return await tryUploadAndClean(downloadPath, sizeMB, contentHash);
+              return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
+                downloadUrl: fileSourceUrl.replace(/([?&])_nocache=[^&]*/g, "$1").replace(/[?&]$/, ""),
+                fileSizeKB: Math.max(1, Math.round(buffer.length / 1024)),
+              });
             }
           }
         } catch (srcErr) {
@@ -3758,7 +6833,10 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           const contentHash = computeHash(best.body);
           const sizeMB = (best.body.length / 1024 / 1024).toFixed(2);
           console.log(`      ✅ Downloaded via captured response: ${fileName} (${sizeMB} MB, md5: ${contentHash}, url: ${best.url.substring(0, 150)})`);
-          return await tryUploadAndClean(downloadPath, sizeMB, contentHash);
+          return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
+            downloadUrl: best.url,
+            fileSizeKB: Math.max(1, Math.round(best.body.length / 1024)),
+          });
         }
       } else if (best) {
         console.log(`      ⚠️ Captured file too large (${(best.body.length / 1024 / 1024).toFixed(2)} MB > ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)} MB max). Rejected: ${fileName}`);
@@ -3769,6 +6847,23 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
   } catch (err) {
     console.log(`      ❌ Download error for ${fileName}: ${err.message}`);
   } finally {
+    if (isMontgomeryAdapter) {
+      try {
+        if (montgomeryPageLifeFrameNavHandler) page.off("framenavigated", montgomeryPageLifeFrameNavHandler);
+      } catch (_) {}
+      try {
+        if (montgomeryPageLifeContextPageHandler) context.removeListener("page", montgomeryPageLifeContextPageHandler);
+      } catch (_) {}
+      try {
+        if (montgomeryPageLifeOnClose) page.off("close", montgomeryPageLifeOnClose);
+      } catch (_) {}
+      try {
+        if (montgomeryPageLifeOnCrash) page.off("crash", montgomeryPageLifeOnCrash);
+      } catch (_) {}
+      try {
+        if (montgomeryPageLifeContextOnClose) context.off("close", montgomeryPageLifeContextOnClose);
+      } catch (_) {}
+    }
     try { await context.unroute("**/*", cacheRouteHandler); } catch (_) {}
     try { context.removeListener("page", onNewPageCapture); } catch (_) {}
     try {
@@ -5243,12 +8338,12 @@ app.post("/api/scrape/cancel/:sessionId", (req, res) => {
   s.status = "cancelled";
   s.message = "Scrape cancelled by user";
   console.log(`   🛑 Cancel requested for session ${req.params.sessionId}`);
-  cleanupSession(req.params.sessionId);
+  cleanupSession(req.params.sessionId, "http_cancel");
   res.json({ message: "Scrape cancelled", sessionId: req.params.sessionId });
 });
 
 app.post("/api/logout/:sessionId", (req, res) => {
-  cleanupSession(req.params.sessionId);
+  cleanupSession(req.params.sessionId, "http_logout");
   res.json({ message: "Closed" });
 });
 
@@ -5434,7 +8529,7 @@ function styleSheet(sheet) {
 
 process.on("SIGINT", () => {
   console.log("\n🛑 Shutting down...");
-  for (const sid of Object.keys(sessions)) cleanupSession(sid);
+  for (const sid of Object.keys(sessions)) cleanupSession(sid, "sigint");
   process.exit(0);
 });
 

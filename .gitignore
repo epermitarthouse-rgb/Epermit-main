@@ -27,6 +27,9 @@ dist-ssr
 *.sw?
 .vercel
 
+# Supabase CLI local cache
+supabase/.temp/
+
 # Local config / cache (browser, etc.)
 .config
 
@@ -35,4 +38,13 @@ scraper-service/debug/
 scraper-service/PROBE_*.png
 scraper-service/grid_not_found.png
 scraper-service/debug_dashboard.png
+scraper-service/pgc-login-failed.png
+scraper-service/pgc-project-detail-failed-*.png
+scraper-service/pgc-workflow-failed-*.png
+scraper-service/pgc-files-failed-*.png
+scraper-service/pgc-downloads/
+scraper-service/pgc-markups/
+scraper-service/pgc-reviews-failed-*.png
+scraper-service/pgc-reports/
+scraper-service/pgc-reports-failed-*.png
 scraper-service/check_iframe.js

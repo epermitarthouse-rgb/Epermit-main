@@ -15639,4 +15639,15 @@ module.exports = {
   resolvePgcWebUiBases,
   runPgcProductionPipeline,
   scrapeSingleProjectDetails,
+  /** Shared SSRS helpers for Montgomery (and other ProjectDox tenants) — PGC behavior unchanged. */
+  extractWFlowInstanceIdFromViewerUrl,
+  waitForPgcReportViewerHandle,
+  exportReportFormat,
+  capturePgcReportScreenshotBase64,
+  tryPgcReportExportViaHttp,
+  normalizeReportName,
+  pgcReportViewerUrlWithFormat,
+  waitForPgcReportsGridReady,
+  pgcReportRowMatchesAnyTarget,
+  pgcReportNamesLooselyMatch,
 };

@@ -180,13 +180,29 @@ interface ReviewCorrectionRow {
   dateCreated?: string | null;
 }
 
+/** Status tab links (Montgomery: resolvedViewerUrl, viewerUrl, reportUrl, pdfUrl, excelUrl). */
+interface StatusTabLink {
+  text?: string;
+  href?: string;
+  onclick?: string;
+  target?: string;
+  resolvedViewerUrl?: string;
+  viewerUrl?: string;
+  reportUrl?: string;
+  reportName?: string;
+  pdfUrl?: string;
+  excelUrl?: string;
+  hasResolved?: boolean;
+  linkWflowInstanceID?: string;
+}
+
 interface TabData {
   keyValues?: KeyValue[];
   projectInfo?: KeyValue[];
   tables?: TableData[];
   /** PGC ePlan: scraper diagnostics when Info tab is guarded or fails. */
   info_debug?: unknown;
-  links?: { text: string; href: string }[];
+  links?: StatusTabLink[];
   error?: string;
   pdfs?: {
     fileName: string;
@@ -236,6 +252,168 @@ interface PortalData {
     relatedRecords?: TabData;
     [key: string]: TabData | FilesTabData | undefined;
   };
+}
+
+function isHttpUrlCandidate(s: unknown): boolean {
+  const t = String(s ?? "").trim();
+  return t.length > 8 && /^https?:\/\//i.test(t);
+}
+
+function pickMontgomeryStatusPrimaryViewerUrl(link: StatusTabLink): string | null {
+  if (isHttpUrlCandidate(link.resolvedViewerUrl))
+    return String(link.resolvedViewerUrl).trim();
+  if (isHttpUrlCandidate(link.viewerUrl)) return String(link.viewerUrl).trim();
+  if (isHttpUrlCandidate(link.reportUrl)) return String(link.reportUrl).trim();
+  const href = String(link.href ?? "").trim();
+  if (href && href !== "#" && isHttpUrlCandidate(href)) return href;
+  return null;
+}
+
+function pickMontgomeryStatusPdfExcelUrls(link: StatusTabLink): {
+  pdf: string | null;
+  excel: string | null;
+} {
+  return {
+    pdf: isHttpUrlCandidate(link.pdfUrl) ? String(link.pdfUrl).trim() : null,
+    excel: isHttpUrlCandidate(link.excelUrl)
+      ? String(link.excelUrl).trim()
+      : null,
+  };
+}
+
+function montgomeryStatusLinksActionable(links: StatusTabLink[]): StatusTabLink[] {
+  return links.filter((L) => {
+    const v = pickMontgomeryStatusPrimaryViewerUrl(L);
+    const { pdf, excel } = pickMontgomeryStatusPdfExcelUrls(L);
+    return !!(v || pdf || excel);
+  });
+}
+
+function normalizeMontgomeryReportNameKey(s: string): string {
+  return String(s || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function findMontgomeryReportEntryForRow(
+  byExactName: Map<string, ReportEntryDownload>,
+  entries: ReportEntryDownload[],
+  reportName: string,
+): ReportEntryDownload | null {
+  const exact = byExactName.get(reportName);
+  if (exact) return exact;
+  const k = normalizeMontgomeryReportNameKey(reportName);
+  if (!k) return null;
+  for (const e of entries) {
+    const nk = normalizeMontgomeryReportNameKey(e.reportName || "");
+    if (nk === k) return e;
+    if (
+      nk.length >= 12 &&
+      k.length >= 12 &&
+      (nk.includes(k) || k.includes(nk))
+    ) {
+      return e;
+    }
+  }
+  return null;
+}
+
+function montgomeryReportStatusLabelFromEntry(
+  entry: ReportEntryDownload,
+): string {
+  const exported =
+    !!entry.pdfDownloaded ||
+    !!entry.excelDownloaded ||
+    isHttpUrlCandidate(entry.pdfUrl) ||
+    isHttpUrlCandidate(entry.excelUrl);
+  if (exported) return "Exported";
+  const ready =
+    !!entry.viewerReady ||
+    isHttpUrlCandidate(entry.viewerUrl) ||
+    isHttpUrlCandidate(entry.reportUrl);
+  if (ready) return "Ready";
+  return "Not ready";
+}
+
+function montgomeryReportStatusForRow(
+  tableStatus: string,
+  entry: ReportEntryDownload | null,
+): { text: string; source: "table" | "entry" } {
+  if (entry) {
+    return {
+      text: montgomeryReportStatusLabelFromEntry(entry),
+      source: "entry",
+    };
+  }
+  const t = String(tableStatus || "").trim();
+  return { text: t || "Not ready", source: "table" };
+}
+
+/** True when viewer and PDF point at the same document (exact URL or same origin+pathname). */
+function montgomeryUrlsMateriallySameForViewerVsPdf(
+  viewerUrl: string,
+  pdfUrl: string,
+): boolean {
+  const v = String(viewerUrl || "").trim();
+  const p = String(pdfUrl || "").trim();
+  if (!v || !p) return false;
+  if (v === p) return true;
+  try {
+    const uv = new URL(v);
+    const up = new URL(p);
+    if (uv.origin !== up.origin) return false;
+    const pv = uv.pathname.replace(/\/+$/, "");
+    const pp = up.pathname.replace(/\/+$/, "");
+    return pv === pp;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Montgomery Reports: viewer = viewerUrl ?? reportUrl; PDF/Excel only from their fields.
+ * Open viewer is hidden when it matches the PDF target (redundant SSRS viewer vs Format=PDF).
+ */
+function getMontgomeryReportEntryActionUrls(entry: ReportEntryDownload): {
+  viewerUrl: string | null;
+  pdfUrl: string | null;
+  excelUrl: string | null;
+  showOpenViewer: boolean;
+} {
+  const viewerUrl =
+    (isHttpUrlCandidate(entry.viewerUrl)
+      ? String(entry.viewerUrl).trim()
+      : null) ||
+    (isHttpUrlCandidate(entry.reportUrl)
+      ? String(entry.reportUrl).trim()
+      : null);
+  const pdfUrl = isHttpUrlCandidate(entry.pdfUrl)
+    ? String(entry.pdfUrl).trim()
+    : null;
+  const excelUrl = isHttpUrlCandidate(entry.excelUrl)
+    ? String(entry.excelUrl).trim()
+    : null;
+  const showOpenViewer =
+    !!viewerUrl &&
+    (!pdfUrl || !montgomeryUrlsMateriallySameForViewerVsPdf(viewerUrl, pdfUrl));
+  return { viewerUrl, pdfUrl, excelUrl, showOpenViewer };
+}
+
+function getMontgomeryStatusLinkActionUrls(link: StatusTabLink): {
+  viewerUrl: string | null;
+  pdfUrl: string | null;
+  excelUrl: string | null;
+  showOpenViewer: boolean;
+} {
+  const viewerUrl = pickMontgomeryStatusPrimaryViewerUrl(link);
+  const { pdf: pdfUrl, excel: excelUrl } =
+    pickMontgomeryStatusPdfExcelUrls(link);
+  const showOpenViewer =
+    !!viewerUrl &&
+    (!pdfUrl || !montgomeryUrlsMateriallySameForViewerVsPdf(viewerUrl, pdfUrl));
+  return { viewerUrl, pdfUrl, excelUrl, showOpenViewer };
 }
 
 function detectPortalTypeFromUrl(url: string | null | undefined): string {
@@ -623,6 +801,68 @@ export default function PortalDataViewer() {
       }
     }
     return m;
+  }, [portalData?.tabs?.reports?.reportEntries]);
+
+  const montgomeryStatusActionLinks = useMemo(() => {
+    if (portalData?.portalSubtype !== "montgomery-projectdox") return [];
+    const links = (portalData.tabs?.status?.links ?? []) as StatusTabLink[];
+    return montgomeryStatusLinksActionable(links);
+  }, [portalData?.portalSubtype, portalData?.tabs?.status?.links]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (portalData?.portalSubtype !== "montgomery-projectdox") return;
+    const stLinks = (portalData.tabs?.status?.links ?? []) as StatusTabLink[];
+    console.log(
+      `[Montgomery][ui][status] links parsed = ${stLinks.length}`,
+    );
+    console.log(
+      `[Montgomery][ui][status] actionable buttons = ${montgomeryStatusLinksActionable(stLinks).length}`,
+    );
+    const entries = portalData.tabs?.reports?.reportEntries ?? [];
+    console.log(
+      `[Montgomery][ui][reports] reportEntries count = ${entries.length}`,
+    );
+    for (const e of entries) {
+      const a = getMontgomeryReportEntryActionUrls(e);
+      console.log(
+        `[Montgomery][ui][reports-actions] ${e.reportName} viewer=${a.viewerUrl ? "set" : "none"} pdf=${a.pdfUrl ? "set" : "none"} excel=${a.excelUrl ? "set" : "none"}`,
+      );
+    }
+    const pdfArtifacts = portalData.tabs?.reports?.pdfs ?? [];
+    if (Array.isArray(pdfArtifacts)) {
+      for (const p of pdfArtifacts) {
+        const fn = String(p.fileName ?? "");
+        console.log(
+          `[Montgomery][ui][reports-render] ${fn} renderer=generic`,
+        );
+      }
+    }
+    const rows = portalData.tabs?.reports?.tables?.[0]?.rows ?? [];
+    for (const row of rows) {
+      const name = String(
+        row["REPORT NAME"] ?? row["Report Name"] ?? "",
+      ).trim();
+      if (!name) continue;
+      const m = new Map<string, ReportEntryDownload>();
+      for (const e of entries) {
+        if (e?.reportName) m.set(String(e.reportName), e);
+      }
+      const ent = findMontgomeryReportEntryForRow(m, entries, name);
+      const tableSt = String(row["Status"] ?? "");
+      const { text, source } = montgomeryReportStatusForRow(tableSt, ent);
+      const viewer = ent
+        ? isHttpUrlCandidate(ent.viewerUrl) || isHttpUrlCandidate(ent.reportUrl)
+        : false;
+      const pdf = ent ? isHttpUrlCandidate(ent.pdfUrl) : false;
+      const xl = ent ? isHttpUrlCandidate(ent.excelUrl) : false;
+      console.log(
+        `[Montgomery][ui][reports] row ${name} statusSource = ${source}`,
+      );
+      console.log(
+        `[Montgomery][ui][reports] row ${name} buttons viewer=${viewer ? "yes" : "no"} pdf=${pdf ? "yes" : "no"} excel=${xl ? "yes" : "no"} displayStatus=${text}`,
+      );
+    }
   }, [portalData]);
 
   if (authLoading || (loading && !portalData)) {
@@ -772,6 +1012,8 @@ export default function PortalDataViewer() {
   const reportsTab = portalData.tabs?.reports;
   const filesTab = portalData.tabs?.files;
   const isPgcEplan = portalData.portalSubtype === "pgc-eplan";
+  const isMontgomeryProjectDox =
+    portalData.portalSubtype === "montgomery-projectdox";
   const foldersForRender = (() => {
     const folders = filesTab?.folders ?? [];
     if (!isPgcEplan) return folders;
@@ -798,7 +1040,8 @@ export default function PortalDataViewer() {
     ((statusTabData.keyValues?.length ?? 0) > 0 ||
       (statusTabData.tables?.length ?? 0) > 0 ||
       (Array.isArray(statusSectionsList) && statusSectionsList.length > 0) ||
-      !!statusTabData.error);
+      !!statusTabData.error ||
+      (isMontgomeryProjectDox && montgomeryStatusActionLinks.length > 0));
   const hasTasksTab =
     !!tasksTabData &&
     ((tasksTabData.keyValues?.length ?? 0) > 0 ||
@@ -2126,6 +2369,74 @@ export default function PortalDataViewer() {
                     />
                   ) : (
                     <div className="p-4 space-y-4">
+                      {isMontgomeryProjectDox &&
+                        montgomeryStatusActionLinks.length > 0 && (
+                          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+                            <p className="text-sm font-medium text-foreground">
+                              Report actions
+                            </p>
+                            <div className="flex flex-col gap-3">
+                              {montgomeryStatusActionLinks.map((L, mi) => {
+                                const {
+                                  viewerUrl,
+                                  pdfUrl,
+                                  excelUrl,
+                                  showOpenViewer,
+                                } = getMontgomeryStatusLinkActionUrls(L);
+                                const label =
+                                  (L.reportName && String(L.reportName).trim()) ||
+                                  (L.text && String(L.text).trim()) ||
+                                  `Link ${mi + 1}`;
+                                return (
+                                  <div
+                                    key={`mdc-st-${mi}`}
+                                    className="flex flex-wrap items-center gap-2"
+                                  >
+                                    <span className="text-xs text-muted-foreground min-w-[8rem] max-w-[20rem] truncate">
+                                      {label}
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                      {showOpenViewer && viewerUrl ? (
+                                        <Button asChild size="sm" variant="default">
+                                          <a
+                                            href={viewerUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            <FileText className="h-4 w-4 mr-2" />
+                                            Open viewer
+                                          </a>
+                                        </Button>
+                                      ) : null}
+                                      {pdfUrl ? (
+                                        <Button asChild size="sm" variant="secondary">
+                                          <a
+                                            href={pdfUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            Open PDF
+                                          </a>
+                                        </Button>
+                                      ) : null}
+                                      {excelUrl ? (
+                                        <Button asChild size="sm" variant="outline">
+                                          <a
+                                            href={excelUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            Open Excel
+                                          </a>
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       {statusTabData?.keyValues &&
                         statusTabData.keyValues.length > 0 && (
                           <div className="border border-border rounded-md overflow-hidden">
@@ -2567,6 +2878,13 @@ export default function PortalDataViewer() {
                         const isExpanded = expandedReport === reportName;
                         const pdf = findPdfForReport(reportName);
                         const hasError = pdf?.error;
+                        const rowEntry = isMontgomeryProjectDox
+                          ? findMontgomeryReportEntryForRow(
+                              reportEntryByReportName,
+                              reportEntries,
+                              reportName,
+                            )
+                          : null;
 
                         return (
                           <Collapsible
@@ -2585,9 +2903,24 @@ export default function PortalDataViewer() {
                                   )
                                 }
                               >
-                                {reportsTable.headers?.map((h) => (
-                                  <TableCell key={h}>{row[h] ?? ""}</TableCell>
-                                ))}
+                                {reportsTable.headers?.map((h) => {
+                                  const raw = row[h] ?? "";
+                                  if (
+                                    isMontgomeryProjectDox &&
+                                    /^status$/i.test(String(h).trim())
+                                  ) {
+                                    const { text } = montgomeryReportStatusForRow(
+                                      String(raw),
+                                      rowEntry,
+                                    );
+                                    return (
+                                      <TableCell key={h}>{text}</TableCell>
+                                    );
+                                  }
+                                  return (
+                                    <TableCell key={h}>{raw}</TableCell>
+                                  );
+                                })}
                                 <TableCell className="w-12 min-w-[3rem] text-right align-middle">
                                   <div className="flex justify-end">
                                     <CollapsibleTrigger asChild>
@@ -2620,14 +2953,38 @@ export default function PortalDataViewer() {
                                           <div className="flex flex-wrap items-center justify-between gap-2">
                                             <CardTitle className="text-base flex items-center gap-2">
                                               {reportName}
-                                              {hasError && (
-                                                <Badge
-                                                  variant="destructive"
-                                                  className="text-xs"
-                                                >
-                                                  Error
-                                                </Badge>
-                                              )}
+                                              {hasError &&
+                                                (() => {
+                                                  const soft =
+                                                    isMontgomeryProjectDox &&
+                                                    rowEntry &&
+                                                    (isHttpUrlCandidate(
+                                                      rowEntry.viewerUrl,
+                                                    ) ||
+                                                      isHttpUrlCandidate(
+                                                        rowEntry.reportUrl,
+                                                      ) ||
+                                                      isHttpUrlCandidate(
+                                                        rowEntry.pdfUrl,
+                                                      ) ||
+                                                      isHttpUrlCandidate(
+                                                        rowEntry.excelUrl,
+                                                      ));
+                                                  return (
+                                                    <Badge
+                                                      variant={
+                                                        soft
+                                                          ? "outline"
+                                                          : "destructive"
+                                                      }
+                                                      className="text-xs"
+                                                    >
+                                                      {soft
+                                                        ? "No preview text"
+                                                        : "Error"}
+                                                    </Badge>
+                                                  );
+                                                })()}
                                             </CardTitle>
                                             <div className="flex flex-wrap items-center justify-end gap-2">
                                               {isPgcEplan
@@ -2675,7 +3032,80 @@ export default function PortalDataViewer() {
                                                     );
                                                   })()
                                                 : null}
-                                              {reportName &&
+                                              {isMontgomeryProjectDox
+                                                ? (() => {
+                                                    const ent =
+                                                      findMontgomeryReportEntryForRow(
+                                                        reportEntryByReportName,
+                                                        reportEntries,
+                                                        reportName,
+                                                      );
+                                                    if (!ent) return null;
+                                                    const {
+                                                      viewerUrl: viewerHref,
+                                                      pdfUrl: pdfHref,
+                                                      excelUrl: xlHref,
+                                                      showOpenViewer,
+                                                    } =
+                                                      getMontgomeryReportEntryActionUrls(
+                                                        ent,
+                                                      );
+                                                    return (
+                                                      <>
+                                                        {showOpenViewer &&
+                                                        viewerHref ? (
+                                                          <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="default"
+                                                          >
+                                                            <a
+                                                              href={viewerHref}
+                                                              target="_blank"
+                                                              rel="noreferrer"
+                                                            >
+                                                              <FileText className="h-4 w-4 mr-2" />
+                                                              Open viewer
+                                                            </a>
+                                                          </Button>
+                                                        ) : null}
+                                                        {pdfHref ? (
+                                                          <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="secondary"
+                                                          >
+                                                            <a
+                                                              href={pdfHref}
+                                                              target="_blank"
+                                                              rel="noreferrer"
+                                                            >
+                                                              <FileText className="h-4 w-4 mr-2" />
+                                                              Open PDF
+                                                            </a>
+                                                          </Button>
+                                                        ) : null}
+                                                        {xlHref ? (
+                                                          <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="outline"
+                                                          >
+                                                            <a
+                                                              href={xlHref}
+                                                              target="_blank"
+                                                              rel="noreferrer"
+                                                            >
+                                                              Open Excel
+                                                            </a>
+                                                          </Button>
+                                                        ) : null}
+                                                      </>
+                                                    );
+                                                  })()
+                                                : null}
+                                              {!isMontgomeryProjectDox &&
+                                                reportName &&
                                                 reportName.includes(
                                                   "Review Comments",
                                                 ) && (
@@ -2738,7 +3168,8 @@ export default function PortalDataViewer() {
                                             </div>
                                           ) : pdf?.text ? (
                                             <div className="max-h-96 overflow-y-auto rounded border border-[#1A3055] bg-[#0D1E38] p-4">
-                                              {pdf.fileName?.includes(
+                                              {!isMontgomeryProjectDox &&
+                                              pdf.fileName?.includes(
                                                 "Review Comments",
                                               )
                                                 ? renderReviewComments(
@@ -2755,7 +3186,22 @@ export default function PortalDataViewer() {
                                             </div>
                                           ) : (
                                             <p className="text-sm text-muted-foreground">
-                                              No content available.
+                                              {isMontgomeryProjectDox &&
+                                              rowEntry &&
+                                              (isHttpUrlCandidate(
+                                                rowEntry.viewerUrl,
+                                              ) ||
+                                                isHttpUrlCandidate(
+                                                  rowEntry.reportUrl,
+                                                ) ||
+                                                isHttpUrlCandidate(
+                                                  rowEntry.pdfUrl,
+                                                ) ||
+                                                isHttpUrlCandidate(
+                                                  rowEntry.excelUrl,
+                                                ))
+                                                ? "No extracted preview in portal data. Use the buttons above to open the viewer or files."
+                                                : "No content available."}
                                             </p>
                                           )}
                                         </CardContent>
@@ -2772,69 +3218,155 @@ export default function PortalDataViewer() {
                   </Table>
                     ) : (
                       <div className="p-4 space-y-4">
-                        {reportEntries.map((entry, idx) => (
-                          <Card
-                            key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                            className="bg-muted/20 border-border"
-                          >
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-base">
-                                {entry.reportName}
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex flex-wrap gap-2 pt-0">
-                              {entry.pdfUrl ? (
-                                <Button asChild size="sm" variant="default">
-                                  <a
-                                    href={entry.pdfUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
+                        {reportEntries.map((entry, idx) => {
+                          if (isMontgomeryProjectDox) {
+                            const {
+                              viewerUrl: viewerCardHref,
+                              pdfUrl: pdfCardHref,
+                              excelUrl: xlCardHref,
+                              showOpenViewer: showViewerCard,
+                            } = getMontgomeryReportEntryActionUrls(entry);
+                            return (
+                              <Card
+                                key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
+                                className="bg-muted/20 border-border"
+                              >
+                                <CardHeader className="pb-2">
+                                  <CardTitle className="text-base">
+                                    {entry.reportName}
+                                  </CardTitle>
+                                  <p className="text-xs text-muted-foreground font-normal pt-1">
+                                    {montgomeryReportStatusLabelFromEntry(
+                                      entry,
+                                    )}
+                                  </p>
+                                </CardHeader>
+                                <CardContent className="flex flex-wrap gap-2 pt-0">
+                                  {showViewerCard && viewerCardHref ? (
+                                    <Button asChild size="sm" variant="default">
+                                      <a
+                                        href={viewerCardHref}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Open viewer
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                  {pdfCardHref ? (
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      variant="secondary"
+                                    >
+                                      <a
+                                        href={pdfCardHref}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Download PDF
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                  {xlCardHref ? (
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      variant="outline"
+                                    >
+                                      <a
+                                        href={xlCardHref}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Download Excel
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                  {!(
+                                    (showViewerCard && viewerCardHref) ||
+                                    pdfCardHref ||
+                                    xlCardHref
+                                  ) ? (
+                                    <span className="text-xs text-muted-foreground self-center">
+                                      No viewer or export URLs in saved data
+                                      yet.
+                                    </span>
+                                  ) : null}
+                                </CardContent>
+                              </Card>
+                            );
+                          }
+                          return (
+                            <Card
+                              key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
+                              className="bg-muted/20 border-border"
+                            >
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-base">
+                                  {entry.reportName}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="flex flex-wrap gap-2 pt-0">
+                                {entry.pdfUrl ? (
+                                  <Button asChild size="sm" variant="default">
+                                    <a
+                                      href={entry.pdfUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      <FileText className="h-4 w-4 mr-2" />
+                                      Download PDF
+                                    </a>
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground self-center">
+                                    PDF not available
+                                  </span>
+                                )}
+                                {entry.excelUrl ? (
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    variant="secondary"
                                   >
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    Download PDF
-                                  </a>
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground self-center">
-                                  PDF not available
-                                </span>
-                              )}
-                              {entry.excelUrl ? (
-                                <Button asChild size="sm" variant="secondary">
-                                  <a
-                                    href={entry.excelUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    Download Excel
-                                  </a>
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground self-center">
-                                  Excel not available
-                                </span>
-                              )}
-                              {isPgcEplan &&
-                              !entry.pdfUrl &&
-                              !entry.excelUrl &&
-                              (entry.viewerUrl || entry.reportUrl) ? (
-                                <Button asChild size="sm" variant="outline">
-                                  <a
-                                    href={
-                                      entry.viewerUrl ||
-                                      entry.reportUrl ||
-                                      "#"
-                                    }
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    Open portal viewer (debug)
-                                  </a>
-                                </Button>
-                              ) : null}
-                            </CardContent>
-                          </Card>
-                        ))}
+                                    <a
+                                      href={entry.excelUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      Download Excel
+                                    </a>
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground self-center">
+                                    Excel not available
+                                  </span>
+                                )}
+                                {isPgcEplan &&
+                                !entry.pdfUrl &&
+                                !entry.excelUrl &&
+                                (entry.viewerUrl || entry.reportUrl) ? (
+                                  <Button asChild size="sm" variant="outline">
+                                    <a
+                                      href={
+                                        entry.viewerUrl ||
+                                        entry.reportUrl ||
+                                        "#"
+                                      }
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      Open portal viewer (debug)
+                                    </a>
+                                  </Button>
+                                ) : null}
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
                       </div>
                     )}
                   </>

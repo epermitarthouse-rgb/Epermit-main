@@ -19,6 +19,41 @@ interface PortalPdf {
   text?: string;
   pages?: number;
   error?: string;
+  info?: { source?: string };
+}
+
+/** Keep aligned with src/lib/pgcReviewCommentsText.ts */
+function normalizePgcFlattenedReviewCommentsText(raw: string): string {
+  let s = String(raw || "").replace(/\r\n/g, "\n");
+  s = s.replace(
+    /\.pdf\s*(UnResolved|Resolved|Info\s*Only|InfoOnly)\b/gi,
+    ".pdf $1",
+  );
+  s = s.replace(/\.pdf(?=[A-Za-z])/g, ".pdf\n");
+  s = s.replace(/REF\s*#\s*CYCLE(?=REVIEWED)/gi, "REF # CYCLE\n");
+  s = s.replace(/CYCLE(?=REVIEWED)/gi, "CYCLE\n");
+  s = s.replace(/REVIEWED\s*BY(?=TYPE)/gi, "REVIEWED BY\n");
+  s = s.replace(/TYPE(?=FILENAME)/gi, "TYPE\n");
+  s = s.replace(/FILENAME(?=DISCUSSION)/gi, "FILENAME\n");
+  s = s.replace(/DISCUSSION(?=STATUS)/gi, "DISCUSSION\n");
+  s = s.replace(/STATUS(?=REF)/gi, "STATUS\n");
+  s = s.replace(/REF#\s*/gi, "REF # ");
+  s = s.replace(/([^\n])(?=(?:REF\s*#\s*\d+|REF\s*#\s*CYCLE))/gi, "$1\n");
+  s = s.replace(
+    /\b(UnResolved|Resolved|Info\s*Only|InfoOnly)\b\s*(?=(?:REF\s*#))/gi,
+    "$1\n\n",
+  );
+  return s.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function isPgcExportReviewCommentsPdf(p: PortalPdf): boolean {
+  const src = String(p.info?.source ?? "");
+  return (
+    (src === "pgc-export" || src === "montgomery-export") &&
+    String(p.fileName ?? "").toLowerCase().includes("review comments") &&
+    !String(p.fileName ?? "").toLowerCase().includes("review details") &&
+    !String(p.fileName ?? "").toLowerCase().includes("routing slip")
+  );
 }
 
 interface PortalData {
@@ -28,6 +63,17 @@ interface PortalData {
   meta?: {
     comment_parse_cursor?: { pdfIndex: number };
   };
+}
+
+/** True when scraped report text is an empty/placeholder payload (not whole-doc rejection). */
+function isNoCommentsPlaceholderText(t: string): boolean {
+  const s = t.trim();
+  if (!s) return true;
+  if (/^No data found\.?$/i.test(s)) return true;
+  if (s.length < 120 && /^No data found\.?/i.test(s) && !/\bSTATUS\b/i.test(s)) {
+    return true;
+  }
+  return false;
 }
 
 /** Known report titles to exclude (exact match). */
@@ -144,10 +190,60 @@ function isNoiseBlock(block: string): boolean {
   return false;
 }
 
+/** Spreadsheet-style rows: one tab-separated row per line (common for SSRS Excel exports, e.g. PGC). */
+function splitTabularLinesIntoBlocks(normalized: string): string[] | null {
+  const lines = normalized.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length < 5) return null;
+  const tabLines = lines.filter((l) => l.includes("\t"));
+  if (tabLines.length < 8) return null;
+  if (tabLines.length < Math.ceil(lines.length * 0.55)) return null;
+  const filtered = tabLines.filter((l) => l.length >= 15 && !isNoiseBlock(l));
+  if (filtered.length < 1) return null;
+  return filtered;
+}
+
+/** Row looks like a data row from a review grid (let LLM trim to real comment text). */
+function isTabularCommentRow(b: string): boolean {
+  const parts = b.split("\t").map((p) => p.trim()).filter((p) => p.length > 0);
+  return parts.length >= 4 && b.trim().length >= 28;
+}
+
+/**
+ * PGC SSRS PDF extract: few tabs, many logical rows; split normalized lines into blocks.
+ */
+function splitPgcFlattenedRowBlocks(normalized: string): string[] | null {
+  const lines = normalized.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length < 4) return null;
+  const tabLines = lines.filter((l) => l.includes("\t")).length;
+  if (tabLines >= 5 && tabLines / lines.length >= 0.35) return null;
+  const markers = lines.filter(
+    (l) =>
+      /\.pdf\b/i.test(l) ||
+      /\b(UnResolved|Resolved|Info\s*Only|InfoOnly)\b/i.test(l) ||
+      /^REF\s*#\s*\d+/i.test(l) ||
+      /^REF\s*#\s*CYCLE\b/i.test(l),
+  );
+  if (markers.length < 1) return null;
+  if (markers.length < 2 && lines.length < 10) return null;
+  const out = lines.filter((l) => l.length >= 15 && !isNoiseBlock(l));
+  if (out.length < 2) return null;
+  return out;
+}
+
 /** Split document text into candidate comment blocks (regex fallback). */
-function splitIntoCommentBlocks(text: string): string[] {
+function splitIntoCommentBlocks(text: string, opts?: { pgcFlattened?: boolean }): string[] {
   const normalized = text.replace(/\r\n/g, "\n").trim();
   const blocks: string[] = [];
+
+  const tabular = splitTabularLinesIntoBlocks(normalized);
+  if (tabular != null && tabular.length >= 1) {
+    return tabular;
+  }
+
+  if (opts?.pgcFlattened === true) {
+    const pgc = splitPgcFlattenedRowBlocks(normalized);
+    if (pgc != null && pgc.length >= 1) return pgc;
+  }
 
   // Numbered items: 1. 2. or 1) 2) or • or -
   const numbered = normalized.split(/\n\s*(?:\d+[.)]\s*|\d+\s*[-)]\s*|[•\-*]\s+)/).map((s) => s.trim()).filter((s) => s.length > 15);
@@ -175,12 +271,30 @@ function looksLikeRealComment(block: string): boolean {
   return REAL_COMMENT_SIGNALS.some((signal) => lower.includes(signal.toLowerCase()));
 }
 
+/** PGC flattened PDF row: file + status, REF line, or long discussion with reviewer vocabulary. */
+function isPgcFlattenedCommentRow(b: string): boolean {
+  const t = b.trim();
+  if (t.length < 20) return false;
+  if (/\.pdf\b/i.test(t)) return true;
+  if (/\b(unresolved|resolved|info\s*only|infoonly)\b/i.test(t)) return true;
+  if (/^REF\s*#\s*\d+/i.test(t)) return true;
+  if (/^REF\s*#\s*CYCLE\b/i.test(t)) return true;
+  if (t.length >= 40 && looksLikeRealComment(t)) return true;
+  return false;
+}
+
 /** Filter out report titles, metadata, table headers, and other noise before LLM. Only keep blocks that look like real comments. */
-function filterNoiseBlocks(blocks: string[]): string[] {
+function filterNoiseBlocks(
+  blocks: string[],
+  opts?: { allowPgcFlattenedRows?: boolean },
+): string[] {
   return blocks
     .filter((b) => b.trim().length >= 15)
     .filter((b) => !isNoiseBlock(b))
-    .filter((b) => looksLikeRealComment(b));
+    .filter((b) => {
+      const pgcRow = opts?.allowPgcFlattenedRows === true && isPgcFlattenedCommentRow(b);
+      return looksLikeRealComment(b) || isTabularCommentRow(b) || pgcRow;
+    });
 }
 
 /** Classify comment text using same schema as parse-permit-comments (LLM). */
@@ -351,6 +465,7 @@ serve(async (req) => {
           next_cursor: { pdfIndex: 0 },
           done: true,
           total_pdfs: 0,
+          reason: "no_matching_pdf",
           message: "No PDFs with 'Review Comments' in fileName",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -374,6 +489,7 @@ serve(async (req) => {
           next_cursor: { pdfIndex: 0 },
           done: true,
           total_pdfs: 0,
+          reason: "no_pdf_text",
           message: "No PDFs with text in portal_data.tabs.reports.pdfs",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -382,7 +498,7 @@ serve(async (req) => {
 
     const firstPdf = pdfsToProcess[0];
     const firstText = (firstPdf.text ?? "").trim();
-    if (firstText === "" || firstText.includes("No data found.")) {
+    if (isNoCommentsPlaceholderText(firstText)) {
       const mergedPortalData = {
         ...portalData,
         meta: { ...portalData.meta, comment_parse_cursor: null },
@@ -397,6 +513,7 @@ serve(async (req) => {
           done: true,
           total_pdfs: totalPdfs,
           reason: "no_comments_in_portal",
+          message: "Plan Review - Review Comments text is empty or a no-data placeholder.",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -424,12 +541,34 @@ serve(async (req) => {
     let insertErrorCount = 0;
     let processedPdfCount = 0;
     let nextPdfIndex = safeStart;
+    let everHadSplitBlocks = false;
+    let everHadFilteredBlocks = false;
 
     for (let i = 0; i < maxPdfs && safeStart + i < totalPdfs; i++) {
       const pdfIndex = safeStart + i;
       const pdf = pdfsToProcess[pdfIndex];
       const pageNumber = pdfIndex + 1;
-      const blocks = filterNoiseBlocks(splitIntoCommentBlocks(pdf.text));
+      const usePgc = isPgcExportReviewCommentsPdf(pdf);
+      const rawPdfText = pdf.text ?? "";
+      const textForParse = usePgc
+        ? normalizePgcFlattenedReviewCommentsText(rawPdfText)
+        : rawPdfText;
+      const splitBlocks = splitIntoCommentBlocks(textForParse, { pgcFlattened: usePgc });
+      if (splitBlocks.length > 0) everHadSplitBlocks = true;
+      let blocks = filterNoiseBlocks(splitBlocks, {
+        allowPgcFlattenedRows: usePgc,
+      });
+      if (blocks.length > 0) everHadFilteredBlocks = true;
+      const MAX_BLOCKS_PER_PDF = 100;
+      if (blocks.length > MAX_BLOCKS_PER_PDF) {
+        console.log(
+          "[DEBUG] comment-parser: capping blocks",
+          blocks.length,
+          "->",
+          MAX_BLOCKS_PER_PDF,
+        );
+        blocks = blocks.slice(0, MAX_BLOCKS_PER_PDF);
+      }
       console.log("[DEBUG] comment-parser: PDF index", pdfIndex + 1, "/", totalPdfs, "blocks extracted:", blocks.length);
 
       if (blocks.length === 0) {
@@ -518,6 +657,24 @@ serve(async (req) => {
     const nextCursor = { pdfIndex: nextPdfIndex };
     console.log("[DEBUG] comment-parser: chunk done parsed:", parsedCount, "skipped:", skippedCount, "insert_error:", insertErrorCount, "next_cursor:", nextCursor, "done:", done);
 
+    let doneReason: string | undefined;
+    let doneMessage: string | undefined;
+    if (done && parsedCount === 0) {
+      if (!everHadSplitBlocks) {
+        doneReason = "no_comment_blocks";
+        doneMessage =
+          "Review Comments text did not yield candidate line blocks after split.";
+      } else if (!everHadFilteredBlocks) {
+        doneReason = "no_comment_blocks";
+        doneMessage =
+          "Split produced lines but all were removed by the noise filter (headers/metadata).";
+      } else {
+        doneReason = "no_new_inserts";
+        doneMessage =
+          "Classifier ran on blocks but no new parsed_comments rows were inserted (empty LLM output, post-filters, or duplicates).";
+      }
+    }
+
     return new Response(
       JSON.stringify({
         parsed_count: parsedCount,
@@ -526,6 +683,7 @@ serve(async (req) => {
         next_cursor: nextCursor,
         done,
         total_pdfs: totalPdfs,
+        ...(doneReason ? { reason: doneReason, message: doneMessage } : {}),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

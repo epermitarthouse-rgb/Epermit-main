@@ -39,8 +39,9 @@ export function shouldNormalizePgcReviewCommentsDisplayText(
   fileName: string | undefined,
   info: { source?: string } | undefined,
 ): boolean {
+  const src = String(info?.source ?? "");
   return (
-    String(info?.source ?? "") === "pgc-export" &&
+    src === "pgc-export" &&
     String(fileName ?? "").includes("Review Comments")
   );
 }

@@ -36,7 +36,10 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { isPgcEplanPortalCredential } from "@/lib/portalView";
+import {
+  isMontgomeryProjectDoxPortalCredential,
+  isPgcEplanPortalCredential,
+} from "@/lib/portalView";
 
 function getScraperBaseUrl() {
   const raw =
@@ -63,7 +66,21 @@ type PgcScrapeMode =
   | "scrape_review_tab"
   | "scrape_all";
 
-type ScrapeModeParam = GeneralScrapeMode | PgcScrapeMode;
+/** Montgomery County Avolve ProjectDox modes (sent as scrapeMode to /api/scrape) */
+type MontgomeryScrapeMode =
+  | "montgomery_quick"
+  | "montgomery_without_files"
+  | "montgomery_files_only"
+  | "montgomery_reports_only"
+  | "montgomery_status_only"
+  | "montgomery_tasks_only"
+  | "montgomery_info_only"
+  | "montgomery_all";
+
+type ScrapeModeParam =
+  | GeneralScrapeMode
+  | PgcScrapeMode
+  | MontgomeryScrapeMode;
 
 type PipelineResult = {
   comment_parser?: {
@@ -548,6 +565,9 @@ export function AgentWorkflowStatus() {
   });
 
   const isPgcEplanCred = isPgcEplanPortalCredential(
+    linkedPortalCredential ?? null,
+  );
+  const isMontgomeryCred = isMontgomeryProjectDoxPortalCredential(
     linkedPortalCredential ?? null,
   );
 
@@ -1151,7 +1171,9 @@ export function AgentWorkflowStatus() {
                   runManualCheck(
                     isPgcEplanCred
                       ? "scrape_without_files"
-                      : "standard",
+                      : isMontgomeryCred
+                        ? "montgomery_quick"
+                        : "standard",
                   )
                 }
                 disabled={chainRunning}
@@ -1207,6 +1229,69 @@ export function AgentWorkflowStatus() {
                       <DropdownMenuItem
                         onClick={() => runManualCheck("scrape_all")}
                         data-testid="menu-scrape-pgc-all"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Scrape all
+                      </DropdownMenuItem>
+                    </>
+                  ) : isMontgomeryCred ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("montgomery_quick")}
+                        data-testid="menu-scrape-montgomery-quick"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Quick Scrape
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runManualCheck("montgomery_without_files")
+                        }
+                        data-testid="menu-scrape-montgomery-without-files"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Scrape without files
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("montgomery_files_only")}
+                        data-testid="menu-scrape-montgomery-files-only"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Scrape files only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runManualCheck("montgomery_reports_only")
+                        }
+                        data-testid="menu-scrape-montgomery-reports-only"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Scrape reports only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("montgomery_status_only")}
+                        data-testid="menu-scrape-montgomery-status-only"
+                      >
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Scrape status only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("montgomery_tasks_only")}
+                        data-testid="menu-scrape-montgomery-tasks-only"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Scrape tasks only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("montgomery_info_only")}
+                        data-testid="menu-scrape-montgomery-info-only"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Scrape info only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("montgomery_all")}
+                        data-testid="menu-scrape-montgomery-all"
                       >
                         <Layers className="h-4 w-4 mr-2" />
                         Scrape all

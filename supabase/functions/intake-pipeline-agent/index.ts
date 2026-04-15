@@ -96,6 +96,8 @@ serve(async (req) => {
       next_cursor?: { pdfIndex: number };
       done?: boolean;
       total_pdfs?: number;
+      reason?: string;
+      message?: string;
     };
 
     let commentParserResult: ParserResult = {};
@@ -122,6 +124,8 @@ serve(async (req) => {
         commentParserResult = {
           error: (commentParserJson.message ?? commentParserJson.error ?? commentParserRes.statusText) as string,
           code: (commentParserJson.code as number) ?? commentParserRes.status,
+          reason: commentParserJson.reason as string | undefined,
+          message: commentParserJson.message as string | undefined,
         };
       } else {
         commentParserResult = {
@@ -131,6 +135,8 @@ serve(async (req) => {
           next_cursor: commentParserJson.next_cursor as { pdfIndex: number } | undefined,
           done: commentParserJson.done === true,
           total_pdfs: commentParserJson.total_pdfs as number | undefined,
+          reason: commentParserJson.reason as string | undefined,
+          message: commentParserJson.message as string | undefined,
         };
       }
     } catch (err) {
