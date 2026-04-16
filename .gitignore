@@ -49,4 +49,8 @@ scraper-service/pgc-markups/
 scraper-service/pgc-reviews-failed-*.png
 scraper-service/pgc-reports/
 scraper-service/pgc-reports-failed-*.png
+# PGC progress logger output (regenerated each run; do not commit)
+scraper-service/pgc-progress-events.jsonl
+scraper-service/pgc-run-summary.json
+scraper-service/pgc-debug-detail.log
 scraper-service/check_iframe.js

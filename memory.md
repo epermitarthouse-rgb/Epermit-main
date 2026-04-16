@@ -1,168 +1,176 @@
-# Project memory — Epermit (PermitPilot)
+# Engineering handbook — Epermit (PermitPilot / DesignCheck)
 
-Long-term memory for work performed on this repository. **Keep this file updated with everything done in sessions:** new features, fixes, audits, refactors, and key decisions. Append new entries; do not overwrite. No secrets or env values.
-
----
-
-## 2026-03-18 — Repo cleanup audit (no deletions)
-
-**Action:** Safe cleanup audit of the full repository. No files were deleted.
-
-**Scope:**
-- Scanned repository tree for suspicious files: debug screenshots, temp exports, test artifacts, duplicate assets, unused images/media, orphan components/pages, dead scripts, unused SQL/docs, backup/empty files.
-- Checked references via imports, routes, config (vite, package.json), and grep across frontend and scraper-service.
-
-**Key findings:**
-- **Safe to delete (4):** Root file `Untitled` (scratch git instructions), `scraper-service/0_DISK_TEST.txt`, `scraper-service/debug_accela_search.png`, `scraper-service/login_stuck.png` — none referenced.
-- **Likely safe / manual review (95+):** 57 `scraper-service/PROBE_*` PNGs (probe/debug screenshots, unreferenced); entire `attached_assets/` folder (78+ files: Screenshots, Pasted-*.txt, videos, docx — not referenced in code); 3 `public/data/*.csv`; `scripts/run_parsed_comments_discipline_nullable.sql` (redundant with migration); `scripts/DISCIPLINE_CLASSIFIER_DEBUG_REPORT.md`; orphan page `src/pages/Index.tsx` (not in router; App uses LandingPage for `/`).
-- **Must keep:** All `public/` assets referenced in index.html/vite.config (placeholder.svg, PWA icons, og-image, etc.); supabase/migrations; scripts referenced in docs (test-intake-pipeline.js, DEPLOY_AND_VERIFY.md); root docs (README, PROJECT_KNOWLEDGE_BASE, TECHNICAL_AUDIT_REPORT, ADMIN_PANEL_ANALYSIS, APP_SUMMARY, SPEC_COMPLIANCE_REPORT, replit.md); dev.sh; scraper code that writes debug PNGs (no dependency on existing files).
-
-**Files produced:**
-- `REPO_CLEANUP_AUDIT.md` — Full audit with tables, batches, and warnings.
-
-**Risks / warnings:**
-- Do not delete supabase/migrations, referenced public assets, or .env.
-- attached_assets may contain conversation/design context; review before bulk delete.
-- Index.tsx imports many home components; if removed, confirm LandingPage or others still use them.
-
-**Next recommended step:** Await approval for deletion. Then execute in order: Batch 1 (4 items) → Batch 2 (57 PROBE_* PNGs) → Batches 3–4 after manual review of attached_assets, public/data CSV, scripts, and Index.tsx.
+Long-term technical memory for this repository. **No secrets or env values** — document names only. Update when scraper or contract behavior changes.
 
 ---
 
-## 2026-03-18 — Safe deletion Batch 1 completed
+## 1. What this product is
 
-**Timestamp:** 2026-03-18
+**Permit intelligence / permit-management web app** for architects, contractors, and owners: projects and team sharing, **portal scraping** (ProjectDox/Avolve, PGC ePlans, Accela), **portal_data** viewing, AI comment parsing and response drafting (Supabase Edge Functions), e-permit flows, inspections, checklists, subscriptions (Stripe), and jurisdiction tooling.
 
-**Action:** Permanently deleted the four files listed as "Safe to delete now" in REPO_CLEANUP_AUDIT.md (Batch 1 only).
+- **Frontend:** Vite 5 + React 18 + TypeScript, `src/main.tsx` → `src/App.tsx`, React Router, TanStack Query, shadcn/ui, Supabase JS client.
+- **Backend:** **Supabase only** for app API (Postgres, Auth, RLS, Storage, Edge Functions). There is no separate Node “app server” besides the scraper.
+- **Scraper:** Node **Express** + Playwright in `scraper-service/server.js` (default port **3001**, `process.env.PORT`). The Vite dev server (**5000**) proxies `/api` and `/view-file` to 3001 (`vite.config.ts`).
 
-**Files deleted:**
-- `Untitled` (root scratch file)
-- `scraper-service/0_DISK_TEST.txt`
-- `scraper-service/debug_accela_search.png`
-- `scraper-service/login_stuck.png`
-
-**Verification:** Confirmed all four paths no longer exist (ls returned "No such file or directory" for each). No directories were removed. No other files were modified.
-
-**Confirmation:** No errors occurred during deletion.
-
-**Next recommended step:** If desired, proceed with Batch 2 (delete all 57 `scraper-service/PROBE_1_BEFORE_*.png` and `scraper-service/PROBE_2_AFTER_*.png` files). Otherwise, leave Batches 3–4 for manual review as in the audit.
+**Supabase project ref** (from `supabase/config.toml`): `eeqxyjrcldivtpikcpvk`.
 
 ---
 
-## 2026-03-18 — Baltimore portal view routing and UI
+## 2. Database and auth (summary)
 
-**Action:** Baltimore-specific UI on `/portal-data` when the selected credential is Baltimore Accela; generic Accela UI for other credentials.
+Schema is **migration-only** under `supabase/migrations/`. No Prisma/Drizzle.
 
-**Key changes:**
-- **`src/lib/portalView.ts`:** `isBaltimorePortal(cred)` — true when login_url contains `/BALTIMORE` or jurisdiction "Baltimore" + accela.com. `resolvePortalView()` for view selection.
-- **`PortalDataViewer.tsx`:** Stores `credentialForView`, derives `isBaltimore` at render; when Accela + Baltimore credential, renders `BaltimorePortalDataView` instead of `AccelaProjectView`.
-- **`BaltimorePortalDataView`:** New component; receives `portalData`, optional `projectId`, `permitNumber`, `credentialLoginUrl`; when `projectId` set, uses `showSearchApplicationsLink={false}` (no "Search Applications" on `/portal-data`).
-- **BaltimoreNav / BaltimoreLayout:** `showSearchApplicationsLink` (default true) so embedded view can hide Search Applications link.
-- **Plan Review mapping fix:** Plan Review panel uses scraper shape: comment from `item.comment ?? item.text`; optional line with reviewer, department, date when present. Removed DEV debug card from UI.
+- **Auth:** Supabase Auth; profiles in `public.profiles` (trigger on `auth.users` creates profile).
+- **Roles:** `app_role` enum (`admin`, `moderator`, `user`); `user_roles`; `has_role(uid, role)` (SECURITY DEFINER).
+- **Projects:** `projects` includes **`portal_data` JSONB** (scraper + optional `check-portal-status` updates), `portal_status`, `last_checked_at`, `project_url`, etc. RLS: owner `user_id = auth.uid()` unless extended via team access.
+- **Access:** `has_project_access(uid, project_id)` / `has_project_admin_access` for team rows (`project_team_members`, invitations).
+- **Portal credentials:** `portal_credentials` — username/password, `login_url`, optional **`project_id`** link to `projects` (used so scrapes can target the right Supabase project and enforce Baltimore rules).
+- **Comments:** `parsed_comments` (+ response matrix columns in later migrations); consumed by UI and **intake-pipeline-agent** style flows.
 
-**Docs produced:** `BALTIMORE_PORTAL_VIEW_ROUTING.md`, `BALTIMORE_PORTAL_DATA_BINDING.md`, `BALTIMORE_PORTAL_DATA_DIAGNOSIS.md`, `BALTIMORE_FIXES_IMPLEMENTED.md`.
-
----
-
-## 2026-03-18 — Baltimore scraper completeness (diagnosis only)
-
-**Action:** Diagnosis-only pass to identify why Baltimore Accela scraper output was sparse for some sections. No code changes.
-
-**Scope:** Sections investigated in `scraper-service/accela-scraper.js`: Record Details, Processing Status, Related Records, Attachments, Inspections, Fees/Payments, Plan Review.
-
-**Findings:**
-- **Record Details:** Panel opened but only 1 field — parser table filter too strict (keyword list; Baltimore may use different labels).
-- **Processing Status, Related Records, Attachments, Fees/Payments:** "Link not found" — submenu items not found in record frame; dropdown may render in main page/other frame or need longer wait.
-- **Inspections:** Panel opened but 0 extracted — parser relies on Upcoming/Completed section IDs or `[id*="Inspection"] tr`; Baltimore may use different structure.
-- **Plan Review:** Working (direct tab; frontend mapping fixed separately).
-
-**Doc produced:** `BALTIMORE_SCRAPER_COMPLETENESS_DIAGNOSIS.md` — section-by-section report, extractor names, selectors, likely failure points, top 3 prioritized fixes.
+Frontend route guards: `ProtectedRoute`, `PublicOnlyRoute` (`src/components/auth/`).
 
 ---
 
-## 2026-03-18 — Baltimore scraper completeness (implementation)
+## 3. Portal type detection (`scraper-service/server.js`)
 
-**Action:** Implemented Baltimore scraper fixes from diagnosis. **File changed:** `scraper-service/accela-scraper.js` only. No frontend changes.
+`detectPortalType(url)`:
 
-**1. Record Info & Payments submenu click-flow**
-- **Baltimore detection:** `page._isBaltimore = portalUrl.toUpperCase().includes("BALTIMORE")` set in `scrapeAccelaRecord`; log when Baltimore detected.
-- **expandRecordInfoDropdown:** Baltimore: 1200 ms wait after click; then `waitForSubmenuVisible()` for submenu links in record frame then main page (up to 3500 ms). Logs: dropdown expanded, submenu visible in record frame / main page / not detected.
-- **expandPaymentsDropdown:** Same for Payments → Fees/Payments submenu.
-- **clickAccelaNavPanel:** Replaced ctx-only search with `findPanelLinkMultiContext()`: try ctx, then (if Baltimore) main frame, then other frames. Log where link found; click in that frame. New helpers: `findLinkInFrame`, `waitForSubmenuVisible`, `findPanelLinkMultiContext`, `isBaltimorePortal`.
+- **`projectdox`** if URL contains `avolvecloud.com`, `projectdox`, or **`eplans.princegeorgescountymd.gov`** (PGC host string).
+- **`accela`** if URL contains `accela.com`.
+- Otherwise **`unknown`** (login returns 400 with supported types message).
 
-**2. Record Details parser**
-- Broader keyword list for candidate tables (e.g. project #, application #, permit #, location, record number, type, status, expiration, issued, submitted, received).
-- Fallback: if no keyword table has ≥2 label-value rows, use any table with ≥1 valid label-value row and enough text. Output shape unchanged.
-
-**3. Inspections parser**
-- Fallback when Upcoming/Completed and `[id*="Inspection"] tr` yield 0: scan all tables; if header row contains "inspection" or ("type" and "status"/"date"), parse as inspection table. Same output shape.
-
-**4. Baltimore selector fallbacks**
-- Processing Status: `a:has-text("Workflow Status")`, `[id*="TabDataList"] a:has-text("Status")`.
-- Related Records: `a:has-text("Related Record")`, `a[id*="Related"]`.
-- Attachments: `a:has-text("Document")`.
-- Payments/Fees: `a[id*="Fee"]`.
-
-**Doc produced:** `BALTIMORE_SCRAPER_FIXES_IMPLEMENTED.md` — functions changed, submenu/context fix, parser fallbacks, validation notes.
-
-**Safety:** Non-Baltimore behavior unchanged; extended waits and multi-context search only when `isBaltimorePortal(page)`. Plan Review extraction not modified.
+Default dashboard if `portalUrl` omitted on login: **`https://washington-dc-us.avolvecloud.com`** (DC Avolve).
 
 ---
 
-## 2026-03-18 — Baltimore Plan Review extraction & persistence (diagnosis only)
+## 4. Scraper-by-scraper reference
 
-**Action:** Strict diagnosis-only pass for Baltimore Plan Review extraction and persistence. No code or frontend changes.
+### 4.1 Washington, DC — ProjectDox (generic Avolve)
 
-**Findings:**
-- **Extractor:** `extractPlanReview` (accela-scraper.js). Clicks "Plan Review" tab; in ctx.evaluate() selects first **table** whose innerText contains "reviewer"|"department"|"comment"|"review status"; parses every tr with ≥3 td as reviewer/department/comment/date. Output → `portalData.tabs.reports.pdfs[]` entry with `fileName: "Plan Review - Review Comments"`, `comments: planReview.comments`.
-- **Baltimore reality:** Plan Review tab is a **summary/status** page (Review Type, Total Number of Files, Time Elapsed, Prescreen Review Comments, Time with Jurisdiction/Applicant, Status, Current Non-Completed Tasks, Download Approved Plans) in **divs/spans** (pil-section, pil-subsection-title, pil-subsection-value), **no table** for that content. Processing Status tab is a **table** (workflow tasks with Due/Status) in the same frame DOM. First table matching "review status" (e.g. "Status" in cells) = Processing Status table → 32 rows parsed as "plan review comments."
-- **Root cause:** Wrong scraper model — table-based first-match captures **workflow/task rows** (Processing Status), not Plan Review summary. Real summary fields never extracted. Hash-skip occurs because each run produces the same wrong payload; hash includes full portalData. Frontend correctly reads `reports.pdfs[].comments`; it shows workflow entries because that is what was stored.
-- **Doc produced:** `BALTIMORE_PLAN_REVIEW_DIAGNOSIS.md` — extractor logic, Baltimore DOM evidence, portalData shape, hash/persistence flow, single root-cause statement.
+- **Portal type:** `projectdox` (not the PGC ePlan subtype).
+- **Login:** `POST /api/login` with `portalUrl` (or default DC URL), username/password. Playwright session stores `webUiBase` from `deriveWebUiBase(dashboardUrl)`, project list, browser/context/page.
+- **Flow:** Standard ProjectDox scrape path in `server.js` (tabs, extraction, sync to Supabase). Session idle timeout and cleanup are defined in the same file (`SESSION_IDLE_TIMEOUT_MS`, etc.).
+- **Export:** `GET /api/export/:sessionId` can build an Excel export (temp file under `scraper-service`, then download).
+- **Files:** Downloaded attachments land under `scraper-service/downloads/`; served to the UI via **`/view-file`** static mount.
 
----
-
-## 2026-03-18 — Baltimore comprehensive extraction fix (evidence-driven)
-
-**Action:** Implemented full Baltimore Accela extraction fix so all sections reflect actual portal content. No generic Accela assumptions; used BALTIMORE_SCRAPER_COMPLETENESS_DIAGNOSIS.md and BALTIMORE_PLAN_REVIEW_DIAGNOSIS.md.
-
-**Scraper (accela-scraper.js):**
-- **Plan Review (Baltimore):** New `extractPlanReviewSummaryBaltimore(ctx)` — finds "Plan Review Status" container (.pil-section), extracts label/value from .pil-subsection-title / .pil-subsection-value and download links; no table; returns planReviewSummary + empty comments. `extractPlanReview` uses this when isBaltimorePortal(page); stores under tabs.reports.planReviewSummary.
-- **Record Details:** Baltimore-only div/span fallback after table extraction: .pil-subsection-title / .pil-subsection-value merged into details.fields.
-- **portalData:** schemaVersion: 2 for Baltimore; tabs.reports.planReviewSummary when Baltimore; Plan Review pdf entry only when comments.length > 0 (so Baltimore summary-only does not add wrong comments).
-- **Persistence:** When Baltimore, select portal_data for existing row; if hash match but existing has no or old schemaVersion (legacy), force overwrite and log "Baltimore: forcing overwrite (legacy schema, corrected Plan Review)".
-- **Navigation:** Extra 500 ms wait + "panel load confirmed" log for Baltimore after panel click.
-- **Validation:** Single log line with extraction counts (info, status, related, attachments, inspections, payments, planReviewSummary fields).
-
-**Frontend (BaltimorePortalDataView.tsx):** reports.planReviewSummary type and usage; Plan Review panel shows planReviewSummary.rawFields when present, else comments, else "No plan review data."
-
-**Doc produced:** `BALTIMORE_COMPREHENSIVE_FIX_IMPLEMENTATION.md` — files changed, dropdown/Plan Review/persistence summary, sections that now extract, limitations.
+**Recreation notes:** Use an Avolve ProjectDox dashboard URL; ensure `webUiBase` derivation matches the host. Montgomery and PGC branch *before* or *instead of* this path when their hosts match first.
 
 ---
 
-## 2026-03-18 — Project architecture document
+### 4.2 Prince George’s County (PGC) — ePlans / ProjectDox subtype
 
-**Action:** Created a single architecture document covering the full project with minor details.
+- **Detection:** `portalType === "projectdox"` **and** `pgcEplan.isPgcEplanHost(dashboardUrl)` in `server.js`.
+- **Login:** `pgcEplan.performPgcLogin`, `waitForProjectGrid`, `collectAllProjects`, `resolvePgcWebUiBases`. Session gets **`portalSubtype: "pgc-eplan"`** and `pgcWebUiBases`.
+- **Critical credential rule:** PGC scrape requires **saved portal credentials on the linked Supabase project** (server returns **`pgc_saved_portal_credentials_missing`** if not). Same error can surface from login path when credentials are missing.
+- **Scrape orchestration:** `scrapePgcAll` in `server.js` drives the pipeline in `pgc-eplan-scraper.js` (large module): project detail, files grid, SSRS-style reports, uploads to Supabase storage, mapping to `portal_data`.
+- **Local directories (gitignored):** `scraper-service/pgc-downloads/<safePid>/`, `scraper-service/pgc-reports/<safePid>/`, `scraper-service/pgc-markups/`. Failure screenshots follow patterns like `pgc-*-failed-*.png` (see `.gitignore`).
+- **Progress logging (non-functional):** `pgc-progress-logger.js` appends **`pgc-progress-events.jsonl`**, writes **`pgc-run-summary.json`**, and may write **`pgc-debug-detail.log`**. These are **runtime diagnostics only** — must not be committed (see `.gitignore`).
 
-**Doc produced:** `ARCHITECTURE.md` — overview; high-level diagram (client ↔ scraper ↔ Supabase); tech stack; repo structure (src, scraper-service, supabase); frontend (entry, App routes, providers, layout, contexts, portal/Baltimore view, Vite config); scraper (server, API routes table, Accela/Baltimore flow, hash/persistence, other scrapers); database (core tables, migrations, edge functions); data flows (auth, projects, scrape, portal view selection); env and config; PWA/offline; security; deployment; index of related docs.
+**Recreation notes:** Implement host detection in one place (`isPgcEplanHost`), keep login URL resolution (`resolvePgcLoginUrl`) and WebUI base resolution aligned with PGC’s Avolve + ePlans topology. Do not strip “saved credentials” checks without understanding DB writes and permit integrity.
+
+---
+
+### 4.3 Montgomery County, MD — ProjectDox subtype
+
+- **Detection:** `montgomeryProjectDox.isMontgomeryProjectDoxHost(dashboardUrl)` before generic ProjectDox project collection.
+- **Login:** Montgomery-specific dashboard discovery and project collection (`montgomery-dashboard-discovery`, `montgomery-portal-login` as used in `server.js`). Session sets **`portalSubtype: "montgomery-projectdox"`** and may store **`montgomeryWebUiBases`** from `resolveMontgomeryWebUiBases`.
+- **Scrape:** `scrapeMontgomeryAll` calls **`montgomeryProjectDox.runMontgomeryProductionPipeline`** (module header states it **clones the PGC pipeline shell** and reuses PGC SSRS helpers). Optional lightweight files harvest via `extractMontgomeryFilesTabLightweight`. Results mapped with **`mapMontgomeryPipelineToPortalData`**.
+- **Credential rule:** Montgomery path can return **`montgomery_saved_portal_credentials_missing`** if username/password empty when required.
+- **Report specs:** `montgomery-projectdox-scraper.js` defines **`MONTGOMERY_REPORT_SPECS`** (SSRS paths under `/MontgomeryCountyProd/ProjectDox/...`). Names must match grid labels.
+
+**Recreation notes:** Keep host marker and WebUI base resolution in sync with Avolve URLs; changing report names/paths without checking the live grid will break Task 8-style exports.
 
 ---
 
-## 2026-03-26 — Baltimore temporary “minimal portal” (Record Details + Attachments only)
+### 4.4 Baltimore (and generic Accela)
 
-**Action:** Temporary mode for the **Baltimore** Accela flow: API returns only record details and attachments; UI shows only those two sections. Other section **code is kept** (backend: skipped/trimmed; frontend: hidden). Attachment download and Supabase upload logic were **not** changed.
+- **Portal type:** `accela` (`accela-scraper.js` + `accelaLogin`).
+- **Baltimore detection:** `portalUrl.toUpperCase().includes("BALTIMORE")` in `server.js` and `page._isBaltimore` in `accela-scraper.js`.
+- **Critical API rule:** For Baltimore Accela, **`projectId` (Supabase `projects.id`) is required** on scrape — server returns 400 explaining Baltimore needs it for **permit integrity and DB write**. Non-Baltimore Accela may omit `projectId` in some flows.
+- **Behavior:** Baltimore uses **extended submenu waits and multi-context link search** (see log line in `scrapeAccelaRecord`). Many extractors are shared with other Accela tenants; Baltimore UI quirks drove wait/link-search hardening.
+- **Login artifact:** On successful Accela login, `server.js` saves **`debug_dashboard.png`** (full-page) under `scraper-service/` — useful for debugging; **gitignored**.
 
-**Backend (`scraper-service/accela-scraper.js`):**
-- **Flag:** `BALTIMORE_MINIMAL_PORTAL_TABS = true` (near other Baltimore helpers). Set to `false` to restore full tabs payload and extraction runs for Baltimore.
-- When Baltimore + flag: skip navigating/extracting Processing Status, Plan Review, Related Records, Inspections, Payments (logged as `(skip) … BALTIMORE_MINIMAL_PORTAL_TABS`). Still run record details and attachments.
-- After building `portalData`, if Baltimore + flag: `portalData.tabs = { info: …, attachments: … }` only. Tab keys remain **`info`** (Record Details) and **`attachments`** — not `recordInfo`.
-- **Log:** `console.log("[PortalData] sections returned:", Object.keys(portalData.tabs), "(info = Record Details)");` — expect `["info","attachments"]` for Baltimore minimal.
-
-**Frontend:**
-- **Flag:** `BALTIMORE_MINIMAL_SECTIONS_UI = true` in `src/components/baltimore/BaltimoreRecordTabBar.tsx`. Set to `false` to restore Record Info / Payments / Plan Review chrome.
-- **`BaltimoreRecordTabBar`:** In minimal mode, two inline buttons (Record Details, Attachments) instead of dropdowns + Plan Review.
-- **`BaltimorePortalDataView.tsx`:** `showFullSections = !BALTIMORE_MINIMAL_SECTIONS_UI`; hidden panels wrapped with `showFullSections &&` (Processing Status, Related Records, Inspections, Fees, Plan Review); derived data for those sections only read when `showFullSections`; `useEffect` resets `activePanel` to `record_details` if it is not allowed in minimal mode.
-- **`BaltimoreRecordDetailPage.tsx`:** Same `minimalSections` prop, `showFullSections` gates, and panel reset `useEffect` (mock `/baltimore/records/:id` stays consistent with portal-data UI).
-
-**Revert:** `BALTIMORE_MINIMAL_PORTAL_TABS = false` in scraper; `BALTIMORE_MINIMAL_SECTIONS_UI = false` in `BaltimoreRecordTabBar.tsx`.
+**Recreation notes:** Do not remove Baltimore `projectId` guard without a replacement integrity strategy. Treat `page._isBaltimore` branches as production requirements, not dead code.
 
 ---
+
+## 5. `portal_data` contract (high level)
+
+Shape varies by **`portalType`** / **`portalSubtype`** and scraper version. Consumers include:
+
+- **Generic / ProjectDox viewers** — tabs with key-values, tables, PDFs.
+- **`AccelaProjectView`** (`src/components/portal/AccelaProjectView.tsx`) when `portalData.portalType === "accela"` — expects structures such as `tabs.status`, `tabs.attachments`, `tabs.inspections`, `tabs.relatedRecords`, `tabs.payments`, `tabs.reports.pdfs`, etc. (see component for exact keys).
+- **Baltimore** — `PortalDataViewer` may route to **`BaltimorePortalDataView`** when credential resolves as Baltimore (`src/lib/portalView.ts`).
+
+**Hashing:** `server.js` uses `hashPortalData` (stable stringify + SHA-256) when merging/updating stored JSON to avoid blind overwrites.
+
+When extending scrapers, **update the viewer mapping** or document new keys here; the DB column is JSONB and the UI will not auto-discover fields.
+
+---
+
+## 6. Scraper HTTP API (essentials)
+
+From `server.js` (not exhaustive):
+
+- **`POST /api/login`** — body: `username`, `password`, `portalUrl?`; returns `sessionId`, `portalType`, optional `portalSubtype`, project list.
+- **`POST /api/scrape`** — starts scrape for selected projects / permit number; behavior branches on `portalType` and `portalSubtype` (PGC, Montgomery, Accela).
+- **`GET /api/data/:sessionId`** — session status and accumulated data (frontend polls via `ScrapeContext`).
+- **`GET /api/progress/:sessionId`** — progress stream (SSE).
+- **`POST /api/logout/:sessionId`** — cleanup.
+- **`GET /view-file/...`** — static files from `scraper-service/downloads/`.
+
+---
+
+## 7. Runtime artifacts and cleanup (do not commit)
+
+Under **`scraper-service/`**:
+
+| Artifact | Purpose |
+|----------|---------|
+| `downloads/` | Session downloads; served via `/view-file` |
+| `debug/` | Accela checkpoint screenshots (`accela-scraper.js` `getAccelaDebugDir`) |
+| `debug_dashboard.png` | Post-Accela-login screenshot |
+| `PROBE_*.png`, `grid_not_found.png`, `pgc-*-failed-*.png` | Debug / failure captures |
+| `pgc-downloads/`, `pgc-reports/`, `pgc-markups/` | PGC/Montgomery pipeline local cache |
+| `latest-run.log` | Created by root `package.json` `dev:scraper` (`tee`) |
+| `pgc-progress-events.jsonl`, `pgc-run-summary.json`, `pgc-debug-detail.log` | PGC progress logger output |
+
+**Gitignore** in `.gitignore` must stay aligned with these paths. Deleting folders **during an active scrape** can break sessions or downloads.
+
+---
+
+## 8. Edge Functions — deploy and agent pipeline (operations)
+
+**Link project** (Supabase CLI):
+
+```bash
+supabase link --project-ref eeqxyjrcldivtpikcpvk
+```
+
+**Deploy example (intake / comment / discipline agents):**
+
+```bash
+supabase functions deploy intake-pipeline-agent
+supabase functions deploy comment-parser-agent
+supabase functions deploy discipline-classifier-agent
+```
+
+**Secrets (typical):** `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — set via `supabase secrets set ...`. List with `supabase secrets list`.
+
+**Smoke test:** Invoke `intake-pipeline-agent` with `{ project_id }` for a project that already has report PDFs in `portal_data`; confirm `parsed_comments` rows. See `scripts/test-intake-pipeline.js` for a scripted option.
+
+**Classifier debugging:** If `discipline` counts stay at zero, inspect `discipline-classifier-agent` and `comment-parser-agent` in `supabase/functions/`, and whether `parsed_comments.discipline` nullable migration matches agent expectations (historical issue documented in former `scripts/DISCIPLINE_CLASSIFIER_DEBUG_REPORT.md`).
+
+---
+
+## 9. Known codebase caveats (from prior audits)
+
+- Frontend Supabase URL/anon key live in `src/lib/supabase.ts` (intentional for deployment stability per comments — still a concentration risk).
+- `README.md` was historically Lovable boilerplate; replaced by project-specific docs.
+- ROI calculator and other UI copy may still contain placeholders — verify before marketing use.
+
+---
+
+## 10. Changelog (high level)
+
+- **2026-04:** Repo documentation consolidated into this file + `README.md`. Removed duplicate markdown guides; PGC progress JSON/JSONL removed from version control and gitignored. Prior session notes that lived only in `memory.md` append-only format are superseded by sections above — recover old detail via git history if needed.
