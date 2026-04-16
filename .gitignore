@@ -19,6 +19,8 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .idea
+# Cursor / IDE chat attachments (prompts, screenshots, ad-hoc media); not app assets
+attached_assets/
 .DS_Store
 *.suo
 *.ntvs*
