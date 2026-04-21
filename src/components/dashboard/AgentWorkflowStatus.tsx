@@ -10,8 +10,11 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,17 +40,15 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  isBaltimorePortal,
+  isFairfaxPortal,
   isMontgomeryProjectDoxPortalCredential,
+  isHowardProjectDoxPortalCredential,
   isPgcEplanPortalCredential,
+  isWashingtonStyleProjectDoxCredential,
 } from "@/lib/portalView";
+import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 
-function getScraperBaseUrl() {
-  const raw =
-    import.meta.env.VITE_API_BASE_URL || "https://epermit-production.up.railway.app";
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (/localhost|127\.0\.0\.1/i.test(raw)) return `http://${raw}`;
-  return `https://${raw}`;
-}
 const SCRAPER_URL = getScraperBaseUrl();
 
 /** Washington / general ProjectDox–style scraper modes */
@@ -77,10 +78,54 @@ type MontgomeryScrapeMode =
   | "montgomery_info_only"
   | "montgomery_all";
 
+/** Howard County Avolve ProjectDox modes (same omit-tab matrix as Montgomery) */
+type HowardScrapeMode =
+  | "howard_quick"
+  | "howard_without_files"
+  | "howard_without_reports"
+  | "howard_files_only"
+  | "howard_reports_only"
+  | "howard_status_only"
+  | "howard_tasks_only"
+  | "howard_info_only"
+  | "howard_all";
+
 type ScrapeModeParam =
   | GeneralScrapeMode
   | PgcScrapeMode
-  | MontgomeryScrapeMode;
+  | MontgomeryScrapeMode
+  | HowardScrapeMode;
+
+const WASHINGTON_SCRAPE_TAB_DEFS = [
+  { key: "info", label: "Info" },
+  { key: "status", label: "Status" },
+  { key: "tasks", label: "Tasks" },
+  { key: "reports", label: "Reports" },
+  { key: "files", label: "Files" },
+] as const;
+
+type WashingtonTabKey = (typeof WASHINGTON_SCRAPE_TAB_DEFS)[number]["key"];
+
+const BALTIMORE_SCRAPE_TAB_DEFS = [
+  { key: "info", label: "Info" },
+  { key: "attachments", label: "Attachments" },
+] as const;
+
+type BaltimoreTabKey = (typeof BALTIMORE_SCRAPE_TAB_DEFS)[number]["key"];
+
+const FAIRFAX_SCRAPE_TAB_DEFS = [
+  { key: "info", label: "Info" },
+  { key: "attachments", label: "Attachments" },
+] as const;
+
+type FairfaxTabKey = (typeof FAIRFAX_SCRAPE_TAB_DEFS)[number]["key"];
+
+const WASHINGTON_FILE_FOLDER_OPTIONS = [
+  { key: "drawings", label: "Drawings" },
+  { key: "supporting_documents", label: "Supporting Documents" },
+  { key: "approved_drawings", label: "Approved Drawings" },
+  { key: "approved_supporting_documents", label: "Approved Supporting Documents" },
+] as const;
 
 type PipelineResult = {
   comment_parser?: {
@@ -570,6 +615,69 @@ export function AgentWorkflowStatus() {
   const isMontgomeryCred = isMontgomeryProjectDoxPortalCredential(
     linkedPortalCredential ?? null,
   );
+  const isHowardCred = isHowardProjectDoxPortalCredential(
+    linkedPortalCredential ?? null,
+  );
+  const isWashingtonProjectDoxCred = isWashingtonStyleProjectDoxCredential(
+    linkedPortalCredential ?? null,
+  );
+  const isBaltimoreCred = isBaltimorePortal(linkedPortalCredential ?? null);
+  const isFairfaxCred = isFairfaxPortal(linkedPortalCredential ?? null);
+  const isMinimalTabsCred = isBaltimoreCred || isFairfaxCred;
+
+  const [washingtonScrapeTabs, setWashingtonScrapeTabs] = useState<
+    Record<WashingtonTabKey, boolean>
+  >({
+    info: true,
+    status: true,
+    tasks: true,
+    reports: true,
+    files: true,
+  });
+  const [washingtonFileFolders, setWashingtonFileFolders] = useState<string[]>(
+    [],
+  );
+
+  const clearWashingtonFileFolders = () => setWashingtonFileFolders([]);
+
+  const [baltimoreScrapeTabs, setBaltimoreScrapeTabs] = useState<
+    Record<BaltimoreTabKey, boolean>
+  >({
+    info: true,
+    attachments: true,
+  });
+
+  const [fairfaxScrapeTabs, setFairfaxScrapeTabs] = useState<
+    Record<FairfaxTabKey, boolean>
+  >({
+    info: true,
+    attachments: true,
+  });
+
+  const getBaltimoreScrapeOptions = () => {
+    const allKeys = BALTIMORE_SCRAPE_TAB_DEFS.map((t) => t.key);
+    const picked = allKeys.filter((k) => baltimoreScrapeTabs[k]);
+    const tabsPayload = picked.length > 0 ? picked : allKeys;
+    return { tabs: tabsPayload as string[] };
+  };
+
+  const getFairfaxScrapeOptions = () => {
+    const allKeys = FAIRFAX_SCRAPE_TAB_DEFS.map((t) => t.key);
+    const picked = allKeys.filter((k) => fairfaxScrapeTabs[k]);
+    const tabsPayload = picked.length > 0 ? picked : allKeys;
+    return { tabs: tabsPayload as string[] };
+  };
+
+  const getWashingtonScrapeOptions = () => {
+    const allKeys = WASHINGTON_SCRAPE_TAB_DEFS.map((t) => t.key);
+    const picked = allKeys.filter((k) => washingtonScrapeTabs[k]);
+    const tabsPayload = picked.length > 0 ? picked : allKeys;
+    const targetFolders =
+      tabsPayload.includes("files") && washingtonFileFolders.length > 0
+        ? washingtonFileFolders
+        : undefined;
+    return { tabs: tabsPayload, targetFolders };
+  };
 
   const runChainedPipeline = useCallback(
     async (projectId: string) => {
@@ -982,7 +1090,14 @@ export function AgentWorkflowStatus() {
   const runManualCheck = async (
     scrapeMode: ScrapeModeParam = isPgcEplanCred
       ? "scrape_without_files"
-      : "standard",
+      : isMontgomeryCred
+        ? "montgomery_quick"
+        : isHowardCred
+          ? "howard_quick"
+          : "standard",
+    washingtonOpts?: { tabs: string[]; targetFolders?: string[] },
+    baltimoreOpts?: { tabs: string[] },
+    fairfaxOpts?: { tabs: string[] },
   ) => {
     const projectIdToUse = projectBySelectedId?.id ?? latestProjectId;
     const permitNumberToUse =
@@ -1080,21 +1195,66 @@ export function AgentWorkflowStatus() {
         );
       }
 
-      const loginData = (await loginRes.json()) as { sessionId: string };
+      const loginData = (await loginRes.json()) as { sessionId?: string };
       const { sessionId } = loginData;
+      if (!sessionId || String(sessionId).trim() === "") {
+        throw new Error(
+          "Login succeeded but response had no sessionId — cannot start scrape.",
+        );
+      }
 
       toast.success("Scraping started — you can continue using the app.");
+
+      const useWashingtonCustomTabs =
+        isWashingtonProjectDoxCred &&
+        !!washingtonOpts?.tabs &&
+        washingtonOpts.tabs.length > 0;
+
+      const useBaltimoreCustomTabs =
+        isBaltimoreCred &&
+        !!baltimoreOpts?.tabs &&
+        baltimoreOpts.tabs.length > 0;
+
+      const useFairfaxCustomTabs =
+        isFairfaxCred &&
+        !!fairfaxOpts?.tabs &&
+        fairfaxOpts.tabs.length > 0;
+
+      const scrapeBody: Record<string, unknown> = {
+        sessionId,
+        permitNumber: String(permitNumberToUse).trim(),
+        userId: user!.id,
+        projectId: projectIdToUse,
+      };
+
+      if (useBaltimoreCustomTabs) {
+        scrapeBody.tabs = baltimoreOpts!.tabs;
+      } else if (useFairfaxCustomTabs) {
+        scrapeBody.tabs = fairfaxOpts!.tabs;
+      } else if (useWashingtonCustomTabs) {
+        scrapeBody.tabs = washingtonOpts!.tabs;
+        if (
+          washingtonOpts!.tabs.includes("files") &&
+          washingtonOpts!.targetFolders &&
+          washingtonOpts!.targetFolders.length > 0
+        ) {
+          scrapeBody.targetFolders = washingtonOpts!.targetFolders;
+        }
+      } else {
+        scrapeBody.scrapeMode = scrapeMode;
+      }
+
+      console.info("[portal chain] login OK; calling /api/scrape", {
+        sessionIdPrefix: String(sessionId).slice(0, 12),
+        projectId: projectIdToUse,
+        permit: String(permitNumberToUse).trim(),
+        tabs: scrapeBody.tabs ?? "(default scrapeMode)",
+      });
 
       const scrapeRes = await fetch(`${SCRAPER_URL}/api/scrape`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          permitNumber: String(permitNumberToUse).trim(),
-          scrapeMode,
-          userId: user!.id,
-          projectId: projectIdToUse,
-        }),
+        body: JSON.stringify(scrapeBody),
       });
 
       if (!scrapeRes.ok) {
@@ -1167,15 +1327,39 @@ export function AgentWorkflowStatus() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() =>
-                  runManualCheck(
+                onClick={() => {
+                  if (isWashingtonProjectDoxCred) {
+                    const o = getWashingtonScrapeOptions();
+                    return runManualCheck("standard", {
+                      tabs: o.tabs,
+                      targetFolders: o.targetFolders,
+                    });
+                  }
+                  if (isBaltimoreCred) {
+                    return runManualCheck(
+                      "standard",
+                      undefined,
+                      getBaltimoreScrapeOptions(),
+                    );
+                  }
+                  if (isFairfaxCred) {
+                    return runManualCheck(
+                      "standard",
+                      undefined,
+                      undefined,
+                      getFairfaxScrapeOptions(),
+                    );
+                  }
+                  return runManualCheck(
                     isPgcEplanCred
                       ? "scrape_without_files"
                       : isMontgomeryCred
                         ? "montgomery_quick"
-                        : "standard",
-                  )
-                }
+                        : isHowardCred
+                          ? "howard_quick"
+                          : "standard",
+                  );
+                }}
                 disabled={chainRunning}
                 data-testid="button-run-manual-check"
                 className="group/btn transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] rounded-r-none border-r-0"
@@ -1195,7 +1379,23 @@ export function AgentWorkflowStatus() {
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent
+                  align="end"
+                  data-testid={
+                    isBaltimoreCred
+                      ? "baltimore-scrape-tab-picker"
+                      : isFairfaxCred
+                        ? "fairfax-scrape-tab-picker"
+                        : isWashingtonProjectDoxCred
+                          ? "washington-scrape-tab-picker"
+                          : undefined
+                  }
+                  className={
+                    isWashingtonProjectDoxCred || isMinimalTabsCred
+                      ? "max-h-[min(80vh,22rem)] w-[min(100vw-2rem,17rem)] overflow-y-auto"
+                      : undefined
+                  }
+                >
                   {isPgcEplanCred ? (
                     <>
                       <DropdownMenuItem
@@ -1295,6 +1495,307 @@ export function AgentWorkflowStatus() {
                       >
                         <Layers className="h-4 w-4 mr-2" />
                         Scrape all
+                      </DropdownMenuItem>
+                    </>
+                  ) : isHowardCred ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("howard_quick")}
+                        data-testid="menu-scrape-howard-quick"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Quick Scrape
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runManualCheck("howard_without_files")
+                        }
+                        data-testid="menu-scrape-howard-without-files"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Scrape without files
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("howard_files_only")}
+                        data-testid="menu-scrape-howard-files-only"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Scrape files only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runManualCheck("howard_reports_only")
+                        }
+                        data-testid="menu-scrape-howard-reports-only"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Scrape reports only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runManualCheck("howard_without_reports")
+                        }
+                        data-testid="menu-scrape-howard-without-reports"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Scrape without reports
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("howard_status_only")}
+                        data-testid="menu-scrape-howard-status-only"
+                      >
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Scrape status only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("howard_tasks_only")}
+                        data-testid="menu-scrape-howard-tasks-only"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Scrape tasks only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("howard_info_only")}
+                        data-testid="menu-scrape-howard-info-only"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Scrape info only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("howard_all")}
+                        data-testid="menu-scrape-howard-all"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Scrape all
+                      </DropdownMenuItem>
+                    </>
+                  ) : isMinimalTabsCred ? (
+                    <>
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                        Tabs
+                      </DropdownMenuLabel>
+                      {(isBaltimoreCred
+                        ? BALTIMORE_SCRAPE_TAB_DEFS
+                        : FAIRFAX_SCRAPE_TAB_DEFS
+                      ).map(({ key, label }) => (
+                        <DropdownMenuCheckboxItem
+                          key={key}
+                          checked={
+                            isBaltimoreCred
+                              ? baltimoreScrapeTabs[key]
+                              : fairfaxScrapeTabs[key]
+                          }
+                          onCheckedChange={(c) =>
+                            isBaltimoreCred
+                              ? setBaltimoreScrapeTabs((prev) => ({
+                                  ...prev,
+                                  [key]: !!c,
+                                }))
+                              : setFairfaxScrapeTabs((prev) => ({
+                                  ...prev,
+                                  [key]: !!c,
+                                }))
+                          }
+                          onSelect={(e) => e.preventDefault()}
+                          data-testid={
+                            isBaltimoreCred
+                              ? `baltimore-tab-${key}`
+                              : `fairfax-tab-${key}`
+                          }
+                        >
+                          {label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                        Presets (single run)
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (isBaltimoreCred) {
+                            setBaltimoreScrapeTabs({
+                              info: true,
+                              attachments: true,
+                            });
+                            return runManualCheck("standard", undefined, {
+                              tabs: ["info", "attachments"],
+                            });
+                          }
+                          setFairfaxScrapeTabs({
+                            info: true,
+                            attachments: true,
+                          });
+                          return runManualCheck("standard", undefined, undefined, {
+                            tabs: ["info", "attachments"],
+                          });
+                        }}
+                        data-testid={
+                          isBaltimoreCred
+                            ? "menu-scrape-baltimore-both"
+                            : "menu-scrape-fairfax-both"
+                        }
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Quick scrape (both)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (isBaltimoreCred) {
+                            setBaltimoreScrapeTabs({
+                              info: true,
+                              attachments: false,
+                            });
+                            return runManualCheck("standard", undefined, {
+                              tabs: ["info"],
+                            });
+                          }
+                          setFairfaxScrapeTabs({
+                            info: true,
+                            attachments: false,
+                          });
+                          return runManualCheck("standard", undefined, undefined, {
+                            tabs: ["info"],
+                          });
+                        }}
+                        data-testid={
+                          isBaltimoreCred
+                            ? "menu-scrape-baltimore-info-only"
+                            : "menu-scrape-fairfax-info-only"
+                        }
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Info only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (isBaltimoreCred) {
+                            setBaltimoreScrapeTabs({
+                              info: false,
+                              attachments: true,
+                            });
+                            return runManualCheck("standard", undefined, {
+                              tabs: ["attachments"],
+                            });
+                          }
+                          setFairfaxScrapeTabs({
+                            info: false,
+                            attachments: true,
+                          });
+                          return runManualCheck("standard", undefined, undefined, {
+                            tabs: ["attachments"],
+                          });
+                        }}
+                        data-testid={
+                          isBaltimoreCred
+                            ? "menu-scrape-baltimore-attachments-only"
+                            : "menu-scrape-fairfax-attachments-only"
+                        }
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Attachments only
+                      </DropdownMenuItem>
+                    </>
+                  ) : isWashingtonProjectDoxCred ? (
+                    <>
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                        Tabs
+                      </DropdownMenuLabel>
+                      {WASHINGTON_SCRAPE_TAB_DEFS.map(({ key, label }) => (
+                        <DropdownMenuCheckboxItem
+                          key={key}
+                          checked={washingtonScrapeTabs[key]}
+                          onCheckedChange={(c) =>
+                            setWashingtonScrapeTabs((prev) => ({
+                              ...prev,
+                              [key]: !!c,
+                            }))
+                          }
+                          onSelect={(e) => e.preventDefault()}
+                          data-testid={`washington-tab-${key}`}
+                        >
+                          {label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      {washingtonScrapeTabs.files ? (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                            Files — folders
+                          </DropdownMenuLabel>
+                          <DropdownMenuCheckboxItem
+                            checked={washingtonFileFolders.length === 0}
+                            onCheckedChange={(c) => {
+                              if (c) clearWashingtonFileFolders();
+                            }}
+                            onSelect={(e) => e.preventDefault()}
+                            className="pl-10"
+                            data-testid="washington-files-all-folders"
+                          >
+                            All folders
+                          </DropdownMenuCheckboxItem>
+                          {WASHINGTON_FILE_FOLDER_OPTIONS.map(
+                            ({ key: fk, label: fl }) => (
+                              <DropdownMenuCheckboxItem
+                                key={fk}
+                                checked={washingtonFileFolders.includes(fk)}
+                                onCheckedChange={(c) => {
+                                  setWashingtonFileFolders((prev) => {
+                                    if (c) {
+                                      return prev.includes(fk)
+                                        ? prev
+                                        : [...prev, fk];
+                                    }
+                                    return prev.filter((k) => k !== fk);
+                                  });
+                                }}
+                                onSelect={(e) => e.preventDefault()}
+                                className="pl-10"
+                                data-testid={`washington-folder-${fk}`}
+                              >
+                                {fl}
+                              </DropdownMenuCheckboxItem>
+                            ),
+                          )}
+                        </>
+                      ) : null}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                        Presets (single run)
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("standard")}
+                        data-testid="menu-scrape-standard"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Quick Scrape (no files)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("all")}
+                        data-testid="menu-scrape-all"
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Full Scrape (with files)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("files")}
+                        data-testid="menu-scrape-files"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Files Only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("comments")}
+                        data-testid="menu-scrape-comments"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Comments Only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => runManualCheck("supporting_docs")}
+                        data-testid="menu-scrape-supporting-docs"
+                      >
+                        <FileBox className="h-4 w-4 mr-2" />
+                        Scrape Supporting Docs Only
                       </DropdownMenuItem>
                     </>
                   ) : (

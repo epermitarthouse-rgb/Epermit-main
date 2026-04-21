@@ -7,7 +7,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const pgc = require("./pgc-eplan-scraper");
+const pgc = require("../../pgc-eplan-scraper");
 
 const MONTGOMERY_HOST_MARKER = "montgomeryco-md-us.avolvecloud.com";
 
@@ -324,7 +324,14 @@ async function getMontgomeryDomTarget(page, which) {
   for (const f of frames) {
     try {
       const score = await f.evaluate((selHints) => {
-        function pickPanel() {
+        function isVisible(el) {
+          if (!el || !(el instanceof Element)) return false;
+          const st = window.getComputedStyle(el);
+          if (!st || st.display === "none" || st.visibility === "hidden") return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        }
+        function pickPanelAny() {
           for (const h of selHints) {
             try {
               const el = document.querySelector(h);
@@ -333,11 +340,30 @@ async function getMontgomeryDomTarget(page, which) {
           }
           return null;
         }
-        const panel = pickPanel() || document.body;
+        function pickVisiblePanel() {
+          for (const h of selHints) {
+            try {
+              const el = document.querySelector(h);
+              if (el && isVisible(el)) return el;
+            } catch (_) {}
+          }
+          return null;
+        }
+        // Match extractMontgomeryStatusTab / tasks extract: inactive tab panels stay in the DOM with
+        // rows that are not visible. Scoring must not prefer those over a frame with real visible data.
+        const panel = pickVisiblePanel() || pickPanelAny() || document.body;
         if (!panel) return 0;
-        const tr = panel.querySelectorAll("tr, .ui-iggrid-table tbody tr, .ui-iggrid-row, [role='row']").length;
-        const dl = panel.querySelectorAll("dl dt, .form-group").length;
-        const txt = (panel.innerText || "").length;
+        let tr = 0;
+        panel
+          .querySelectorAll("tr, .ui-iggrid-table tbody tr, .ui-iggrid-row, [role='row']")
+          .forEach((row) => {
+            if (isVisible(row)) tr++;
+          });
+        let dl = 0;
+        panel.querySelectorAll("dl dt, .form-group").forEach((el) => {
+          if (isVisible(el)) dl++;
+        });
+        const txt = isVisible(panel) ? (panel.innerText || "").length : 0;
         return tr * 8 + dl * 6 + Math.min(txt, 12000) / 15;
       }, hints);
       ranked.push({ f, score });
@@ -2411,7 +2437,7 @@ async function processMontgomerySsrReportsForProject(
     };
   });
 
-  const outDir = path.join(__dirname, "mdc-reports", safePid);
+  const outDir = path.join(__dirname, "..", "..", "mdc-reports", safePid);
   await fs.promises.mkdir(outDir, { recursive: true });
 
   /** @type {any[]} */

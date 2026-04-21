@@ -27,6 +27,7 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const pgcProgress = require("./pgc-progress-logger");
+const { isScraperDebugArtifactsEnabled } = require("./artifacts/debug-artifacts");
 
 // Load .env from scraper-service first, then repo root (do not require server.js).
 require("dotenv").config({ path: path.join(__dirname, ".env") });
@@ -56,6 +57,7 @@ const PGC_SCREENSHOT_BEST_EFFORT_MS = 8000;
  * @param {boolean} [fullPage]
  */
 async function pgcScreenshotBestEffort(page, filePath, fullPage = false) {
+  if (!isScraperDebugArtifactsEnabled()) return;
   try {
     await page.screenshot({
       path: filePath,
@@ -1704,6 +1706,264 @@ function rowSignatureFromIds(ids) {
 }
 
 /**
+ * Infragistics project list grid — PGC live uses `#grdTasksResults` + `#grdTasksResults_pager` /
+ * `#grdTasksResults_pager_label`; some tenants use `#grdProjects`. AJAX only (URL unchanged).
+ * @param {import('playwright').Page} page
+ */
+async function readPgcGrdProjectsPagingSnapshot(page) {
+  return page.evaluate(() => {
+    const tasksGrid = document.getElementById("grdTasksResults");
+    const projectsGrid = document.getElementById("grdProjects");
+    const grid = tasksGrid || projectsGrid;
+    const gridId = tasksGrid
+      ? "grdTasksResults"
+      : projectsGrid
+        ? "grdProjects"
+        : "";
+
+    const labelEl = gridId
+      ? document.getElementById(`${gridId}_pager_label`)
+      : null;
+    const pagerLabel = labelEl
+      ? String(labelEl.textContent || "").replace(/\s+/g, " ").trim()
+      : "";
+
+    const pagerById =
+      gridId && document.getElementById(`${gridId}_pager`)
+        ? document.getElementById(`${gridId}_pager`)
+        : null;
+    const pager =
+      pagerById ||
+      grid?.closest(".ui-iggrid")?.querySelector(".ui-iggrid-paging") ||
+      grid?.parentElement?.querySelector(".ui-iggrid-paging");
+
+    const pagerDomId = pagerById?.id || "";
+
+    let currentPage = 1;
+    const curEl =
+      pager?.querySelector(".ui-iggrid-pagelinkcurrent") ||
+      grid?.querySelector(".ui-iggrid-pagelinkcurrent");
+    if (curEl) {
+      const t = (curEl.textContent || "").trim();
+      if (/^\d+$/.test(t)) currentPage = parseInt(t, 10);
+    }
+
+    /** @type {{ start: number, end: number, total: number } | null} */
+    let range = null;
+    const labelForRange = String(pagerLabel || "")
+      .replace(/\u2013|\u2014|\u2212/g, "-")
+      .replace(/\u00a0/g, " ");
+    const rm = labelForRange.match(/(\d+)\s*-\s*(\d+)\s+of\s+(\d+)/i);
+    if (rm) {
+      range = { start: +rm[1], end: +rm[2], total: +rm[3] };
+      const pageSize = range.end - range.start + 1;
+      if (
+        pageSize > 0 &&
+        (!curEl || !/^\d+$/.test((curEl.textContent || "").trim()))
+      ) {
+        currentPage = Math.floor((range.start - 1) / pageSize) + 1;
+      }
+    }
+
+    const ids = [];
+    let firstPermit = "";
+    let rowCount = 0;
+    if (grid) {
+      const trs = grid.querySelectorAll(
+        ".ui-iggrid-table tbody tr, table tbody tr",
+      );
+      for (const tr of trs) {
+        if (tr.closest("thead")) continue;
+        rowCount++;
+        const a = tr.querySelector(
+          'a[href^="javascript:"], a[href*="launchRemote"], a[href*="Frame.aspx"]',
+        );
+        if (rowCount === 1 && a) {
+          firstPermit = String(a.textContent || "")
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          const cells = tr.querySelectorAll("td, [role='gridcell']");
+          if (!firstPermit || firstPermit.length < 2) {
+            firstPermit = String(cells[0]?.textContent || "")
+              .replace(/\u00a0/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+          }
+        }
+        const href = a?.getAttribute("href") || "";
+        const raw = String(href).replace(/%27/g, "'").replace(/%22/g, '"');
+        const lr = raw.match(/launchRemote\s*\(\s*['"]([^'"]+)['"]\s*\)/i);
+        const payload = lr ? lr[1] : raw;
+        let decoded = payload;
+        try {
+          decoded = decodeURIComponent(payload);
+        } catch (_) {}
+        const m =
+          decoded.match(/ProjectID=(\d+)/i) ||
+          payload.match(/ProjectID=(\d+)/i) ||
+          decoded.match(/ProjectID%3D(\d+)/i);
+        if (m) ids.push(m[1]);
+      }
+    }
+
+    const hasScopedPager = !!grid && !!gridId && !!pagerById;
+
+    return {
+      hasGrid: !!grid,
+      gridId,
+      pagerDomId,
+      hasGrdProjectsPager: hasScopedPager,
+      pagerLabel,
+      currentPage,
+      range,
+      rowCount,
+      firstPermit,
+      rowSignature: [...ids].sort().join(","),
+    };
+  });
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} previousSignature from readProjectRows / rowSignatureFromIds
+ * @param {number} [timeoutMs]
+ */
+async function waitForPgcProjectRowSignatureChange(
+  page,
+  previousSignature,
+  timeoutMs = 22000,
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(220);
+    const pack = await readProjectRows(page);
+    const sig = rowSignatureFromIds(pack.rows.map((r) => r.projectID));
+    if (sig !== previousSignature) return true;
+  }
+  return false;
+}
+
+/**
+ * Advance igGrid project list via `#grdTasksResults_pager` (PGC) or `#grdProjects_pager` (fallback).
+ * Page links are often `javascript:void(0);` — use pagelink role / class. Wait for AJAX refresh.
+ * @param {import('playwright').Page} page
+ * @param {Awaited<ReturnType<typeof readPgcGrdProjectsPagingSnapshot>>} beforeSnap
+ */
+async function advancePgcGrdProjectsPagerWithAjaxWait(page, beforeSnap) {
+  const wantPage = beforeSnap.currentPage + 1;
+  const g = beforeSnap.gridId || "igGrid";
+  console.log(
+    `[PGC][${g}] pager click → dashboard page ${wantPage} (was ${beforeSnap.currentPage}) label="${beforeSnap.pagerLabel}" gridRows=${beforeSnap.rowCount} firstPermit=${beforeSnap.firstPermit || "n/a"}`,
+  );
+
+  const pagerRootSel = beforeSnap.pagerDomId
+    ? `#${beforeSnap.pagerDomId}`
+    : "#grdTasksResults_pager, #grdProjects_pager";
+  const pager = page.locator(pagerRootSel).first();
+  let clicked = false;
+
+  if ((await pager.count()) > 0) {
+    const byRole = pager
+      .getByRole("link", { name: new RegExp(`^\\s*${wantPage}\\s*$`) })
+      .first();
+    if (await byRole.isVisible().catch(() => false)) {
+      await byRole.click({ timeout: 12000 });
+      clicked = true;
+    } else {
+      const numLink = pager
+        .locator("a.ui-iggrid-pagelink, .ui-iggrid-pagelink")
+        .filter({ hasText: new RegExp(`^\\s*${wantPage}\\s*$`) })
+        .first();
+      if (await numLink.isVisible().catch(() => false)) {
+        await numLink.click({ timeout: 12000 });
+        clicked = true;
+      }
+    }
+  }
+
+  if (!clicked) {
+    const nextSelectors = beforeSnap.pagerDomId
+      ? `#${beforeSnap.pagerDomId} .ui-iggrid-nextpage:not(.ui-state-disabled), #${beforeSnap.pagerDomId} .ui-iggrid-paging-next:not(.ui-state-disabled)`
+      : "#grdTasksResults_pager .ui-iggrid-nextpage:not(.ui-state-disabled), #grdTasksResults_pager .ui-iggrid-paging-next:not(.ui-state-disabled), #grdProjects_pager .ui-iggrid-nextpage:not(.ui-state-disabled), #grdProjects_pager .ui-iggrid-paging-next:not(.ui-state-disabled)";
+    const nextLoc = page.locator(nextSelectors).first();
+    if (await nextLoc.isVisible().catch(() => false)) {
+      await nextLoc.click({ timeout: 12000 });
+      clicked = true;
+    }
+  }
+
+  if (!clicked) {
+    const fallback = page
+      .locator(".ui-iggrid-paging .ui-iggrid-nextpage:not(.ui-state-disabled)")
+      .first();
+    if (await fallback.isVisible().catch(() => false)) {
+      await fallback.click({ timeout: 12000 });
+      clicked = true;
+    }
+  }
+
+  if (!clicked) {
+    console.log(`[PGC][${g}] no pager control matched for advance`);
+    return false;
+  }
+
+  const prev = { ...beforeSnap };
+  const deadline = Date.now() + 22000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(220);
+    const snap = await readPgcGrdProjectsPagingSnapshot(page);
+    if (
+      snap.pagerLabel !== prev.pagerLabel ||
+      snap.rowSignature !== prev.rowSignature ||
+      snap.firstPermit !== prev.firstPermit ||
+      snap.currentPage !== prev.currentPage
+    ) {
+      console.log(
+        `[PGC][${snap.gridId || g}] grid refreshed dashboardPage=${snap.currentPage} label="${snap.pagerLabel}" rows=${snap.rowCount} firstPermit=${snap.firstPermit || "n/a"} sig=${snap.rowSignature.slice(0, 72)}`,
+      );
+      return true;
+    }
+  }
+
+  console.warn(
+    `[PGC][${g}] timeout waiting for AJAX grid refresh after pager click`,
+  );
+  return false;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {boolean} preferNum
+ * @param {string} previousPageRowSignature from rowSignatureFromIds(ids on this page)
+ */
+async function advancePgcProjectGridPage(
+  page,
+  preferNum,
+  previousPageRowSignature,
+) {
+  const beforeSnap = await readPgcGrdProjectsPagingSnapshot(page);
+  if (beforeSnap.hasGrdProjectsPager) {
+    return advancePgcGrdProjectsPagerWithAjaxWait(page, beforeSnap);
+  }
+
+  const clicked = await goToNextPage(page, preferNum);
+  if (!clicked) return false;
+
+  const changed = await waitForPgcProjectRowSignatureChange(
+    page,
+    previousPageRowSignature,
+  );
+  if (!changed) {
+    console.warn(
+      "[PGC][pagination] project row signature unchanged after goToNextPage (AJAX may not have updated)",
+    );
+    return false;
+  }
+  return true;
+}
+
+/**
  * @param {import('playwright').Page} page
  * @param {{ initialMode: PaginationMode, viewAllVisible: boolean, targetPermit?: string }} ctx
  */
@@ -1721,12 +1981,26 @@ async function collectAllProjects(page, ctx) {
   let lastSignature = "";
   /** First-page link histogram only (per-page counts, not summed across pagination). */
   let linkPatternSummary = "{}";
-  const targetPermit = normalizeText(
-    ctx.targetPermit || process.env.PGC_TARGET_PERMIT || "62227-2024-CIEU",
+
+  const hasExplicitTargetPermit =
+    ctx != null &&
+    Object.prototype.hasOwnProperty.call(ctx, "targetPermit") &&
+    String(ctx.targetPermit ?? "").trim() !== "";
+  const targetPermit = hasExplicitTargetPermit
+    ? normalizeText(String(ctx.targetPermit))
+    : "";
+  const fullEnumeration = !hasExplicitTargetPermit;
+
+  console.log(
+    `[PGC] collectAllProjects: explicitTargetPermit=${hasExplicitTargetPermit} fullEnumeration=${fullEnumeration} searchTarget=${targetPermit || "(none)"}`,
   );
+
   if (paginationMode === "view_all") {
     paginationMode = "next_button";
   }
+
+  /** @type {string} */
+  let loopExitReason = "completed_max_iterations";
 
   for (let i = 0; i < MAX_PAGER_PAGES; i++) {
     const pageNum = i + 1;
@@ -1750,8 +2024,30 @@ async function collectAllProjects(page, ctx) {
     const idsOnPage = pack.rows.map((r) => r.projectID);
     const sig = rowSignatureFromIds(idsOnPage);
 
+    const gridSnap = await readPgcGrdProjectsPagingSnapshot(page);
+    const labelShowsMore =
+      !!(gridSnap.range && gridSnap.range.end < gridSnap.range.total);
+    let canPaginate =
+      labelShowsMore ||
+      paginationMode === "next_button" ||
+      paginationMode === "numbered_pages" ||
+      paginationMode === "unknown";
+
+    if (labelShowsMore && paginationMode === "single_page") {
+      console.log(
+        `[PGC] Pagination — pager label "${gridSnap.pagerLabel}" shows more records; continuing despite single_page detection`,
+      );
+    }
+
+    console.log(
+      `[PGC] discovery page ${pageNum} grid=${gridSnap.gridId || "(none)"} fullEnumeration=${fullEnumeration} rowCount=${pack.rows.length} dashboardPage=${gridSnap.currentPage} label="${gridSnap.pagerLabel}" range=${gridSnap.range ? `${gridSnap.range.start}-${gridSnap.range.end}/${gridSnap.range.total}` : "null"} labelShowsMore=${labelShowsMore} canPaginate=${canPaginate} mode=${paginationMode} firstPermit=${gridSnap.firstPermit || "n/a"} sig=${sig.slice(0, 80)}`,
+    );
+
     if (i > 0 && sig === lastSignature && idsOnPage.length > 0) {
-      console.log("[PGC] Pagination — same row signature as previous page; stopping.");
+      loopExitReason = "duplicate_row_signature";
+      console.log(
+        `[PGC] Pagination exit: ${loopExitReason} — same row signature as previous page`,
+      );
       break;
     }
     lastSignature = sig;
@@ -1767,62 +2063,85 @@ async function collectAllProjects(page, ctx) {
       uniqueById.set(id, clean);
       newOnThisPage++;
     }
-    const foundTarget = targetPermit
-      ? pack.rows.some(
-          (r) =>
-            normalizeText(r.projectNumber).toLowerCase() ===
-            targetPermit.toLowerCase(),
-        )
-      : false;
+    const foundTarget =
+      hasExplicitTargetPermit &&
+      !!targetPermit &&
+      pack.rows.some(
+        (r) =>
+          normalizeText(r.projectNumber).toLowerCase() ===
+          targetPermit.toLowerCase(),
+      );
     if (foundTarget) {
-      console.log(`[PGC] Found target permit on page ${pageNum}`);
+      loopExitReason = "found_explicit_target_permit";
+      console.log(
+        `[PGC] Found explicit target permit ${targetPermit} on discovery page ${pageNum} (dashboardPage=${gridSnap.currentPage})`,
+      );
       break;
     }
 
     if (i > 0 && newOnThisPage === 0) {
-      console.log("[PGC] Pagination — no new project IDs on this page; stopping.");
+      loopExitReason = "no_new_project_ids_on_page";
+      console.log(
+        `[PGC] Pagination exit: ${loopExitReason} — no new project IDs on this page`,
+      );
       break;
     }
 
-    let canPaginate =
-      paginationMode === "next_button" ||
-      paginationMode === "numbered_pages" ||
-      paginationMode === "unknown";
-
-    if (!canPaginate || paginationMode === "single_page") break;
-
-    const preferNum = paginationMode === "numbered_pages";
-    const advanced = await goToNextPage(page, preferNum);
-    if (advanced) {
+    if (!canPaginate || (paginationMode === "single_page" && !labelShowsMore)) {
+      loopExitReason = "cannot_paginate";
       console.log(
-        `[PGC] Target not found on page ${pageNum}, moving to page ${pageNum + 1}`,
+        `[PGC] Pagination exit: ${loopExitReason} mode=${paginationMode} labelShowsMore=${labelShowsMore} rangeParsed=${!!gridSnap.range}`,
       );
+      break;
     }
+
+    const preferNum =
+      paginationMode === "numbered_pages" ||
+      (labelShowsMore && paginationMode === "single_page");
+    const nextDiscoveryPage = pageNum + 1;
+    console.log(
+      `[PGC] attempting dashboard page ${nextDiscoveryPage} (advance from discovery page ${pageNum}) preferNum=${preferNum} labelShowsMore=${labelShowsMore} canPaginate=${canPaginate}`,
+    );
+    const advanced = await advancePgcProjectGridPage(page, preferNum, sig);
     if (paginationMode === "unknown" && advanced) paginationMode = "next_button";
 
     if (!advanced) {
+      loopExitReason = "advance_failed";
       if (paginationMode === "numbered_pages" && i === 0) {
         console.log(
           "[PGC] Pagination — numbered mode detected but could not advance; stopping.",
         );
       }
+      console.log(`[PGC] Pagination exit: ${loopExitReason}`);
       break;
     }
+    console.log(
+      `[PGC] dashboard page ${nextDiscoveryPage} loaded after advance (discovery iteration complete for step ${pageNum}→${nextDiscoveryPage})`,
+    );
+    await waitForProjectGrid(page);
     pagesVisited++;
     if (pagesVisited >= MAX_PAGER_PAGES) {
-      console.log("[PGC] Pagination — max pages reached:", MAX_PAGER_PAGES);
+      loopExitReason = "max_pager_pages";
+      console.log(
+        `[PGC] Pagination exit: ${loopExitReason} (${MAX_PAGER_PAGES})`,
+      );
       break;
     }
   }
 
+  console.log(
+    `[PGC] collectAllProjects finished: exitReason=${loopExitReason} pagesVisited=${pagesVisited} uniqueCount=${uniqueById.size}`,
+  );
+
   const projects = Array.from(uniqueById.values());
-  const targetFound = targetPermit
-    ? projects.some(
-        (p) =>
-          normalizeText(p.projectNumber).toLowerCase() ===
-          targetPermit.toLowerCase(),
-      )
-    : false;
+  const targetFound =
+    hasExplicitTargetPermit &&
+    !!targetPermit &&
+    projects.some(
+      (p) =>
+        normalizeText(p.projectNumber).toLowerCase() ===
+        targetPermit.toLowerCase(),
+    );
   return {
     projects,
     paginationMode,
@@ -3616,6 +3935,19 @@ async function openProjectViaDashboardRow(page, dashboardUrl, projectId, opts = 
     .catch(() => {});
   await waitForProjectGrid(page);
 
+  const paging = await ensurePgcTargetRowVisibleOnDashboard(
+    page,
+    dashboardUrl,
+    permit,
+    { projectId: pid },
+  );
+  if (!paging.ok && !paging.skipped) {
+    return {
+      ok: false,
+      reason: paging.reason || "target row not found on paginated dashboard",
+    };
+  }
+
   /** @type {{ label: string, loc: import('playwright').Locator }[]} */
   const locatorAttempts = [];
   if (permit) {
@@ -3864,15 +4196,24 @@ async function openProjectViaDashboardRow(page, dashboardUrl, projectId, opts = 
 }
 
 /**
- * Paginate My Projects until a row matches the permit / project number text.
+ * Walk My Projects pager until a row matches permit text and/or ProjectID (same matching as row open).
  * @param {import('playwright').Page} page
  * @param {string} dashboardUrl
- * @param {string} targetPermitRaw e.g. 62227-2024-CIEU
+ * @param {string} [targetPermitRaw]
+ * @param {{ projectId?: string }} [opts]
  */
-async function findPgcPermitRowPaginated(page, dashboardUrl, targetPermitRaw) {
-  const targetPermit = normalizeText(targetPermitRaw);
-  if (!targetPermit) {
-    return { ok: false, reason: "empty target permit" };
+async function ensurePgcTargetRowVisibleOnDashboard(
+  page,
+  dashboardUrl,
+  targetPermitRaw,
+  opts = {},
+) {
+  const targetPermit = normalizeText(
+    targetPermitRaw != null ? String(targetPermitRaw) : "",
+  );
+  const targetPid = String(opts.projectId || "").trim();
+  if (!targetPermit && !targetPid) {
+    return { ok: true, skipped: true };
   }
 
   const current = page.url();
@@ -3901,43 +4242,135 @@ async function findPgcPermitRowPaginated(page, dashboardUrl, targetPermitRaw) {
   let paginationMode = pagerGuess.mode;
   if (paginationMode === "view_all") paginationMode = "next_button";
 
+  const targetLabel = [
+    targetPermit ? `permit=${targetPermit}` : null,
+    targetPid ? `projectId=${targetPid}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   let lastSignature = "";
   for (let i = 0; i < MAX_PAGER_PAGES; i++) {
+    const pageNum = i + 1;
     const pack = await readProjectRows(page);
-    const row = pack.rows.find(
-      (r) =>
+    const row = pack.rows.find((r) => {
+      if (
+        targetPermit &&
         normalizeText(r.projectNumber).toLowerCase() ===
-        targetPermit.toLowerCase(),
-    );
+          targetPermit.toLowerCase()
+      ) {
+        return true;
+      }
+      if (targetPid && String(r.projectID) === targetPid) return true;
+      return false;
+    });
     if (row) {
+      console.log(
+        `[PGC][discovery-paging] matched ${targetLabel} on discovery page ${pageNum}/${MAX_PAGER_PAGES} (mode=${paginationMode})`,
+      );
       return {
         ok: true,
         row,
-        pagesVisited: i + 1,
+        pagesVisited: pageNum,
         paginationMode,
       };
     }
 
     const idsOnPage = pack.rows.map((r) => r.projectID);
     const sig = rowSignatureFromIds(idsOnPage);
-    if (i > 0 && sig === lastSignature && idsOnPage.length > 0) break;
+    const gridSnap = await readPgcGrdProjectsPagingSnapshot(page);
+    const labelShowsMore =
+      !!(gridSnap.range && gridSnap.range.end < gridSnap.range.total);
+    if (labelShowsMore && paginationMode === "single_page") {
+      console.log(
+        `[PGC][discovery-paging] label "${gridSnap.pagerLabel}" shows more records; continuing despite single_page (${targetLabel})`,
+      );
+    }
+    console.log(
+      `[PGC][discovery-paging] ${targetLabel} not on discovery page ${pageNum}; grid=${gridSnap.gridId || "(none)"} rowCount=${pack.rows.length} dashboardPage=${gridSnap.currentPage} label="${gridSnap.pagerLabel}" firstPermit=${gridSnap.firstPermit || "n/a"} sig=${sig.slice(0, 80)} mode=${paginationMode}`,
+    );
+
+    if (i > 0 && sig === lastSignature && idsOnPage.length > 0) {
+      console.log(
+        `[PGC][discovery-paging] unchanged grid signature — stop paging (${targetLabel})`,
+      );
+      break;
+    }
     lastSignature = sig;
 
     const canPaginate =
+      labelShowsMore ||
       paginationMode === "next_button" ||
       paginationMode === "numbered_pages" ||
       paginationMode === "unknown";
-    if (!canPaginate || paginationMode === "single_page") break;
+    if (!canPaginate || (paginationMode === "single_page" && !labelShowsMore)) {
+      console.log(
+        `[PGC][discovery-paging] no more pages (mode=${paginationMode} labelShowsMore=${labelShowsMore}) for ${targetLabel}`,
+      );
+      break;
+    }
 
-    const preferNum = paginationMode === "numbered_pages";
-    const advanced = await goToNextPage(page, preferNum);
-    if (!advanced) break;
+    const preferNum =
+      paginationMode === "numbered_pages" ||
+      (labelShowsMore && paginationMode === "single_page");
+    console.log(
+      `[PGC][discovery-paging] advancing pager after page ${pageNum} (target ${targetLabel} preferNum=${preferNum})`,
+    );
+    const advanced = await advancePgcProjectGridPage(page, preferNum, sig);
+    if (!advanced) {
+      console.log(
+        `[PGC][discovery-paging] pager did not advance — stop (${targetLabel})`,
+      );
+      break;
+    }
+    if (paginationMode === "unknown" && advanced) paginationMode = "next_button";
     await waitForProjectGrid(page);
   }
 
   return {
     ok: false,
-    reason: `permit not found on My Projects: ${targetPermit}`,
+    reason: `target row not on My Projects after paging: ${targetLabel}`,
+    paginationMode,
+  };
+}
+
+/**
+ * Paginate My Projects until a row matches the permit / project number text.
+ * @param {import('playwright').Page} page
+ * @param {string} dashboardUrl
+ * @param {string} targetPermitRaw e.g. 62227-2024-CIEU
+ * @param {{ projectId?: string }} [opts]
+ */
+async function findPgcPermitRowPaginated(
+  page,
+  dashboardUrl,
+  targetPermitRaw,
+  opts = {},
+) {
+  const targetPermit = normalizeText(targetPermitRaw);
+  const optPid = String(opts.projectId || "").trim();
+  if (!targetPermit && !optPid) {
+    return { ok: false, reason: "empty target permit" };
+  }
+  const r = await ensurePgcTargetRowVisibleOnDashboard(
+    page,
+    dashboardUrl,
+    targetPermitRaw,
+    { projectId: optPid },
+  );
+  if (r.ok && r.row) {
+    return {
+      ok: true,
+      row: r.row,
+      pagesVisited: r.pagesVisited,
+      paginationMode: r.paginationMode,
+    };
+  }
+  return {
+    ok: false,
+    reason:
+      r.reason ||
+      `permit not found on My Projects: ${targetPermit || optPid}`,
   };
 }
 
@@ -4085,6 +4518,20 @@ async function openPgcDashboardRowWithTrace(page, dashboardUrl, projectId, opts 
     })
     .catch(() => {});
   await waitForProjectGrid(page);
+
+  const paging = await ensurePgcTargetRowVisibleOnDashboard(
+    page,
+    dashboardUrl,
+    permit,
+    { projectId: pid },
+  );
+  if (!paging.ok && !paging.skipped) {
+    return {
+      ok: false,
+      reason: paging.reason || "target row not found on paginated dashboard",
+      trace,
+    };
+  }
 
   /** @type {{ desc: string, loc: import('playwright').Locator }[]} */
   const locatorSpecs = [];
@@ -5219,7 +5666,7 @@ async function resolveWorkflowAndProbeReviews(page, project, _bases, dashboardUr
     );
   }
 
-  if (source === "missing") {
+  if (source === "missing" && isScraperDebugArtifactsEnabled()) {
     try {
       await page.screenshot({ path: workflowFailShot, fullPage: true });
       console.error("[PGC] Task 5 — Workflow screenshot:", workflowFailShot);
@@ -5294,6 +5741,16 @@ function parseGenericItemsArray(data) {
     if (Array.isArray(v)) return v;
   }
   const d = o.d;
+  if (typeof d === "string") {
+    const trimmed = d.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const inner = JSON.parse(trimmed);
+        const nested = parseGenericItemsArray(inner);
+        if (nested.length > 0) return nested;
+      } catch (_) {}
+    }
+  }
   if (d && typeof d === "object") {
     const dObj = /** @type {Record<string, unknown>} */ (d);
     for (const key of ["Items", "items", "Folders", "folders", "Data"]) {
@@ -5353,7 +5810,17 @@ function normalizeFileRow(raw, folderID, folderName) {
   if (!raw || typeof raw !== "object") return null;
   const o = /** @type {Record<string, unknown>} */ (raw);
   const fileID =
-    o.FileID ?? o.fileID ?? o.fileId ?? o.DocumentID ?? o.documentId ?? o.Id ?? o.id;
+    o.FileID ??
+    o.fileID ??
+    o.fileId ??
+    o.DocumentID ??
+    o.documentId ??
+    o.PDFileID ??
+    o.pdFileID ??
+    o.PdxFileID ??
+    o.pdxFileID ??
+    o.Id ??
+    o.id;
   if (fileID == null) return null;
   const nameRaw = pickPgcFolderFileDisplayName(o);
   let fileSizeKB = null;
@@ -5431,6 +5898,18 @@ function makeAbsolutePortalUrl(raw) {
   if (s.startsWith("//")) return `https:${s}`;
   if (s.startsWith("/")) return `${PGC_BASE}${s}`;
   return `${PGC_BASE}/${s.replace(/^\/+/, "")}`;
+}
+
+/**
+ * Canonical PGC viewer URL (same tab the scraper opens after viewFile). Used when no
+ * storage publicUrl exists so UI can still link every API-known file by FileID.
+ * @param {string | number | null | undefined} fileId
+ * @returns {string | null}
+ */
+function buildPgcActiveXViewerFileUrl(fileId) {
+  const id = String(fileId ?? "").trim();
+  if (!id || !/^\d+$/.test(id)) return null;
+  return `${PGC_BASE}/ProjectDox/ActiveXViewer.aspx?FileID=${encodeURIComponent(id)}`;
 }
 
 function extractUrlFromOnclick(onclick) {
@@ -9038,37 +9517,42 @@ async function openPgcBravaPublishMenu(frame, viewerPage, fileMeta) {
     }
   }
 
-  try {
-    await viewerPage.screenshot({
-      path: PGC_BRAVA_PUBLISH_MENU_FAIL_PAGE_SHOT,
-      fullPage: false,
-    });
-    pgcProgress.pgcLogDetail("brava_publish_menu_fail_shot_page", {
-      path: String(PGC_BRAVA_PUBLISH_MENU_FAIL_PAGE_SHOT),
-    });
-    pgcProgress.pgcLogDetail("brava_fail_screenshot_page", {
-      path: PGC_BRAVA_PUBLISH_MENU_FAIL_PAGE_SHOT,
-    });
-  } catch (e) {
-    console.warn("[PGC] Brava publish menu fail page screenshot failed:", e?.message || e);
-  }
-  if (frame) {
+  if (isScraperDebugArtifactsEnabled()) {
     try {
-      const body = await frame.$("body");
-      if (body) {
-        await body.screenshot({ path: PGC_BRAVA_PUBLISH_MENU_FAIL_FRAME_SHOT });
-        pgcProgress.pgcLogDetail("brava_publish_menu_fail_shot_frame", {
-          path: String(PGC_BRAVA_PUBLISH_MENU_FAIL_FRAME_SHOT),
-        });
-        pgcProgress.pgcLogDetail("brava_fail_screenshot_frame", {
-          path: PGC_BRAVA_PUBLISH_MENU_FAIL_FRAME_SHOT,
-        });
-      }
+      await viewerPage.screenshot({
+        path: PGC_BRAVA_PUBLISH_MENU_FAIL_PAGE_SHOT,
+        fullPage: false,
+      });
+      pgcProgress.pgcLogDetail("brava_publish_menu_fail_shot_page", {
+        path: String(PGC_BRAVA_PUBLISH_MENU_FAIL_PAGE_SHOT),
+      });
+      pgcProgress.pgcLogDetail("brava_fail_screenshot_page", {
+        path: PGC_BRAVA_PUBLISH_MENU_FAIL_PAGE_SHOT,
+      });
     } catch (e) {
       console.warn(
-        "[PGC] Brava publish menu fail frame screenshot failed:",
+        "[PGC] Brava publish menu fail page screenshot failed:",
         e?.message || e,
       );
+    }
+    if (frame) {
+      try {
+        const body = await frame.$("body");
+        if (body) {
+          await body.screenshot({ path: PGC_BRAVA_PUBLISH_MENU_FAIL_FRAME_SHOT });
+          pgcProgress.pgcLogDetail("brava_publish_menu_fail_shot_frame", {
+            path: String(PGC_BRAVA_PUBLISH_MENU_FAIL_FRAME_SHOT),
+          });
+          pgcProgress.pgcLogDetail("brava_fail_screenshot_frame", {
+            path: PGC_BRAVA_PUBLISH_MENU_FAIL_FRAME_SHOT,
+          });
+        }
+      } catch (e) {
+        console.warn(
+          "[PGC] Brava publish menu fail frame screenshot failed:",
+          e?.message || e,
+        );
+      }
     }
   }
 
@@ -12341,7 +12825,10 @@ async function harvestProjectFilesAndSampleDownloads(
       allFileRows.length > 0
     ) {
       try {
-        if (pgcIsPageAlive(page)) {
+        if (
+          isScraperDebugArtifactsEnabled() &&
+          pgcIsPageAlive(page)
+        ) {
           await page.screenshot({ path: failShot, fullPage: true });
           console.error(
             "[PGC] Task 6 — file-layer screenshot (0 downloads):",
@@ -12365,7 +12852,7 @@ async function harvestProjectFilesAndSampleDownloads(
       ),
     });
     try {
-      if (pgcIsPageAlive(page)) {
+      if (isScraperDebugArtifactsEnabled() && pgcIsPageAlive(page)) {
         await page.screenshot({ path: failShot, fullPage: true });
         console.error("[PGC] Task 6 — file-layer screenshot:", failShot);
       }
@@ -13364,7 +13851,7 @@ async function processProjectReviewsAndMarkups(
     console.log(
       `[PGC] Review | summary | workflows:${domWorkflowCount} rows:${domRowCount} api:unavailable`,
     );
-    if (domRowCount === 0) {
+    if (domRowCount === 0 && isScraperDebugArtifactsEnabled()) {
       try {
         await page.screenshot({ path: failShot, fullPage: true });
       } catch (_) {}
@@ -13512,10 +13999,12 @@ async function processProjectReviewsAndMarkups(
     } else {
       out.skipped = true;
       console.error("[PGC] Review | corrections enrichment failure:", msg);
-      try {
-        await page.screenshot({ path: failShot, fullPage: true });
-        console.error("[PGC] Review | screenshot:", failShot);
-      } catch (_) {}
+      if (isScraperDebugArtifactsEnabled()) {
+        try {
+          await page.screenshot({ path: failShot, fullPage: true });
+          console.error("[PGC] Review | screenshot:", failShot);
+        } catch (_) {}
+      }
     }
     console.log(
       `[PGC] Review | summary | workflows:${domWorkflowCount} rows:${domRowCount} api:${correctionsApiSummary}`,
@@ -13628,37 +14117,43 @@ async function capturePgcReportScreenshotBase64(page, viewerHandle) {
 async function waitForPgcReportViewerHandle(page, timeoutMs = 60000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    const elapsed = Date.now() - start;
+    const ignoreLoading = elapsed >= 10000;
     const frames = page.frames();
     for (const frame of frames) {
       try {
         if (frame.isDetached()) continue;
-        const hit = await frame.evaluate(() => {
-          const fn = /** @type {any} */ (window).$find;
-          if (typeof fn !== "function") return null;
-          /** @type {string[]} */
-          const ids = [];
-          ids.push("ReportViewer1", "ReportViewer");
-          try {
-            document.querySelectorAll("[id*='ReportViewer']").forEach((el) => {
-              if (el.id) ids.push(el.id);
-            });
-          } catch (_) {}
-          const uniq = [...new Set(ids)];
-          for (const clientId of uniq) {
+        const hit = await frame.evaluate(
+          ({ ignoreLoading: skipLoad }) => {
+            const fn = /** @type {any} */ (window).$find;
+            if (typeof fn !== "function") return null;
+            /** @type {string[]} */
+            const ids = [];
+            ids.push("ReportViewer1", "ReportViewer");
             try {
-              const rv = fn.call(window, clientId);
-              if (!rv || typeof rv.exportReport !== "function") continue;
-              if (
-                typeof rv.get_isLoading === "function" &&
-                rv.get_isLoading()
-              ) {
-                continue;
-              }
-              return { clientId };
+              document.querySelectorAll("[id*='ReportViewer']").forEach((el) => {
+                if (el.id) ids.push(el.id);
+              });
             } catch (_) {}
-          }
-          return null;
-        });
+            const uniq = [...new Set(ids)];
+            for (const clientId of uniq) {
+              try {
+                const rv = fn.call(window, clientId);
+                if (!rv || typeof rv.exportReport !== "function") continue;
+                if (
+                  !skipLoad &&
+                  typeof rv.get_isLoading === "function" &&
+                  rv.get_isLoading()
+                ) {
+                  continue;
+                }
+                return { clientId };
+              } catch (_) {}
+            }
+            return null;
+          },
+          { ignoreLoading },
+        );
         if (hit && hit.clientId) return { frame, clientId: hit.clientId };
       } catch (_) {}
     }
@@ -13828,33 +14323,55 @@ function pgcReportNamesLooselyMatch(a, b) {
 }
 
 /**
+ * #grdReports often lives inside Frame.aspx (tab content iframe), not the top document.
+ * @param {import('playwright').Page} page
+ * @returns {Promise<import('playwright').Frame>}
+ */
+async function pgcFindReportsGridFrame(page) {
+  await page.waitForTimeout(400);
+  for (const f of page.frames()) {
+    try {
+      if (f.isDetached()) continue;
+      const n = await f.locator("#grdReports tbody tr").count();
+      if (n > 0) return f;
+    } catch (_) {}
+  }
+  return page.mainFrame();
+}
+
+/**
  * Wait for igGrid report rows to have real body content (AJAX after domcontentloaded).
+ * Checks every frame — grid is often not in the main document.
  * @param {import('playwright').Page} page
  */
 async function waitForPgcReportsGridReady(page) {
-  await page.waitForSelector("#grdReports", { timeout: 20000 }).catch(() => {});
-  await page
-    .waitForSelector("#grdReports tbody tr", { timeout: 20000 })
-    .catch(() => {});
-  await page
-    .waitForFunction(
-      () => {
-        const trs = document.querySelectorAll("#grdReports tbody tr");
-        if (!trs.length) return false;
-        return Array.from(trs).some((tr) => {
-          const st = window.getComputedStyle(tr);
-          if (st.display === "none" || st.visibility === "hidden") return false;
-          const tds = tr.querySelectorAll("td");
-          if (tds.length < 1) return false;
-          const txt = Array.from(tds)
-            .map((td) => (td.textContent || "").replace(/\u00a0/g, " ").trim())
-            .join(" ");
-          return txt.length > 3;
+  const deadline = Date.now() + 45000;
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      if (frame.isDetached()) continue;
+      try {
+        const ready = await frame.evaluate(() => {
+          const trs = document.querySelectorAll("#grdReports tbody tr");
+          if (!trs.length) return false;
+          return Array.from(trs).some((tr) => {
+            const st = window.getComputedStyle(tr);
+            if (st.display === "none" || st.visibility === "hidden") return false;
+            const tds = tr.querySelectorAll("td");
+            if (tds.length < 1) return false;
+            const txt = Array.from(tds)
+              .map((td) => (td.textContent || "").replace(/\u00a0/g, " ").trim())
+              .join(" ");
+            return txt.length > 3;
+          });
         });
-      },
-      { timeout: 25000 },
-    )
-    .catch(() => {});
+        if (ready) {
+          await page.waitForTimeout(600);
+          return;
+        }
+      } catch (_) {}
+    }
+    await page.waitForTimeout(400);
+  }
   await page.waitForTimeout(600);
 }
 
@@ -13896,9 +14413,14 @@ async function scrapePgcReportsTabRows(page, projectID) {
   )}`;
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
   await waitForPgcReportsGridReady(page);
-  const targetNorm = PGC_TARGET_REPORT_NAMES.map((n) => normalizeReportName(n));
+  const gridFrame = await pgcFindReportsGridFrame(page);
+  /** Same shape as Montgomery scrapeMontgomeryReportsTabRows: whole-row match + icon-first rows. */
+  const targetSpecs = PGC_TARGET_REPORT_NAMES.map((name) => ({
+    norm: normalizeReportName(name),
+    name,
+  }));
   /** @type {{ rowIndex: number, reportName: string, reportType: string, reportDescription: string, viewUrl: string | null, actionText: string | null, stableRowKey: string, nameCellSample: string }[]} */
-  const rows = await page.evaluate((targets) => {
+  const rows = await gridFrame.evaluate((specs) => {
     function norm(s) {
       if (s == null) return "";
       return String(s).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -13919,8 +14441,8 @@ async function scrapePgcReportsTabRows(page, projectID) {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     }
-    const targetKeys = targets;
-    const targetSet = new Set(targetKeys);
+    /** @type {{ norm: string, name: string }[]} */
+    const targetSpecs = specs;
     /** @type {{ rowIndex: number, reportName: string, reportType: string, reportDescription: string, viewUrl: string | null, actionText: string | null, stableRowKey: string, nameCellSample: string }[]} */
     const out = [];
     const seen = new Set();
@@ -13933,63 +14455,62 @@ async function scrapePgcReportsTabRows(page, projectID) {
         .trim();
     }
 
-    function rowMatchesTargets(nameRaw) {
-      const k = reportCellKey(nameRaw);
-      if (!k) return false;
-      if (targetSet.has(k)) return true;
-      for (const t of targetKeys) {
-        if (t.length < 12) continue;
-        if (k.includes(t) || t.includes(k)) return true;
+    /**
+     * Match the whole row (Montgomery parity): title may not be in column 0 when col0 is icon/control.
+     * @param {HTMLTableRowElement} tr
+     * @returns {{ norm: string, name: string } | null}
+     */
+    function pickMatchingSpec(tr) {
+      const k = reportCellKey(tr.textContent || "");
+      if (!k) return null;
+      for (const spec of targetSpecs) {
+        const t = spec.norm;
+        if (k === t) return spec;
+        if (t.length >= 12 && (k.includes(t) || t.includes(k))) return spec;
       }
-      return false;
+      return null;
     }
 
-    function harvestFromTable(table, trList) {
-      const headers = Array.from(
-        table.querySelectorAll("thead th, thead tr th, tr:first-child th"),
-      ).map((th) => norm(th.textContent).toLowerCase());
-      const idxName = headers.findIndex((h) => /report.*name|^name$/.test(h));
-      const idxType = headers.findIndex((h) => /report.*type|^type$/.test(h));
-      const idxDesc = headers.findIndex((h) => /description|report.*desc/.test(h));
+    function harvestFromTable(_table, trList) {
       let localRowIndex = -1;
       for (const tr of trList) {
         if (!isVisible(tr)) continue;
-        if (tr.querySelector("th")) continue;
+        if (tr.querySelector("th") && trList.indexOf(tr) === 0) continue;
         localRowIndex += 1;
-        const tds = Array.from(tr.querySelectorAll("td"));
-        if (tds.length < 2) continue;
-        const cols = tds.map((td) => norm(td.textContent));
-        let reportName = "";
-        let reportType = "";
-        let reportDescription = "";
-        if (idxName >= 0 || idxType >= 0 || idxDesc >= 0) {
-          reportName = idxName >= 0 ? cols[idxName] || "" : cols[0] || "";
-          reportType = idxType >= 0 ? cols[idxType] || "" : cols[1] || "";
-          reportDescription = idxDesc >= 0 ? cols[idxDesc] || "" : cols[2] || "";
-        } else {
-          reportName = cols[0] || "";
-          reportType = cols[1] || "";
-          reportDescription = cols[2] || "";
-        }
+        const matched = pickMatchingSpec(tr);
+        if (!matched) continue;
+        const reportName = matched.name;
         const rnLower = reportName.toLowerCase().replace(/\s+/g, " ").trim();
-        if (!reportName || /^action|icon|run$/i.test(reportName)) continue;
-        if (reportName.length < 2) continue;
-        if (!rowMatchesTargets(reportName)) continue;
-        let nameCellSample = "";
-        const nameTd =
-          idxName >= 0 && tds[idxName]
-            ? tds[idxName]
-            : tds[0] || null;
-        if (nameTd) nameCellSample = norm(nameTd.textContent).slice(0, 200);
-        const nameAnchors = nameTd
-          ? Array.from(nameTd.querySelectorAll("a"))
-          : Array.from(tr.querySelectorAll("a"));
-        const reportNameAnchor =
-          nameAnchors.find(
-            (a) =>
-              norm(a.textContent).toLowerCase().includes(rnLower) ||
-              rnLower.includes(norm(a.textContent).toLowerCase()),
-          ) || nameAnchors[0];
+        let tds = Array.from(tr.querySelectorAll("td"));
+        if (!tds.length) {
+          tds = Array.from(tr.querySelectorAll('[role="gridcell"]'));
+        }
+        const cols = tds.map((td) => norm(td.textContent));
+        const reportType = cols.length > 1 ? cols[1] || "" : "";
+        const reportDescription = cols.length > 2 ? cols[2] || "" : "";
+        const anchors = Array.from(tr.querySelectorAll("a"));
+        let reportNameAnchor = null;
+        if (anchors.length >= 2) {
+          const second = anchors[1];
+          const st = norm(second.textContent).toLowerCase().replace(/\s+/g, " ").trim();
+          if (
+            st &&
+            (st.includes(rnLower) ||
+              (rnLower.length >= 12 && rnLower.includes(st)) ||
+              (st.length >= 12 && rnLower.includes(st)))
+          ) {
+            reportNameAnchor = second;
+          }
+        }
+        if (!reportNameAnchor) {
+          reportNameAnchor =
+            anchors.find((a) =>
+              norm(a.textContent).toLowerCase().replace(/\s+/g, " ").trim().includes(rnLower),
+            ) ||
+            anchors[1] ||
+            anchors[0] ||
+            null;
+        }
         const actionNode =
           reportNameAnchor ||
           tr.querySelector("a[href], a[onclick], button[onclick], [onclick]");
@@ -14000,9 +14521,12 @@ async function scrapePgcReportsTabRows(page, projectID) {
         const viewUrl =
           viewUrlRaw && !/^javascript:/i.test(viewUrlRaw) ? viewUrlRaw : null;
         const actionText = actionNode ? norm(actionNode.textContent) : null;
-        const sig = `${rnLower}::${reportType.toLowerCase()}::${reportDescription.toLowerCase()}`;
+        const sig = matched.norm;
         if (seen.has(sig)) continue;
         seen.add(sig);
+        let nameCellSample = "";
+        const nameTd = tds[0] || null;
+        if (nameTd) nameCellSample = norm(nameTd.textContent).slice(0, 200);
         out.push({
           rowIndex: localRowIndex,
           reportName,
@@ -14042,7 +14566,7 @@ async function scrapePgcReportsTabRows(page, projectID) {
       }
     }
     return out;
-  }, targetNorm);
+  }, targetSpecs);
   pgcProgress.pgcLogDetail("task8_reports_grid_scrape", {
     projectID,
     rowCount: rows.length,
@@ -14085,6 +14609,7 @@ async function captureReportActionUrlFromRow(page, projectID, reportName) {
 
   await page.goto(tabUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
   await waitForPgcReportsGridReady(page);
+  const gridFrame = await pgcFindReportsGridFrame(page);
 
   /** @type {string[]} */
   const captured = [];
@@ -14111,7 +14636,7 @@ async function captureReportActionUrlFromRow(page, projectID, reportName) {
       .waitForURL(/ReportViewer\.aspx/i, { timeout: 12000 })
       .catch(() => {});
 
-    const row = page
+    const row = gridFrame
       .locator("#grdReports tbody tr")
       .filter({ hasText: nameTrim })
       .first();
@@ -14125,7 +14650,7 @@ async function captureReportActionUrlFromRow(page, projectID, reportName) {
         await clickTarget.click({ timeout: 8000 }).catch(() => {});
       }
     } else {
-      await page
+      await gridFrame
         .evaluate((name) => {
           const want = String(name || "")
             .toLowerCase()
@@ -14417,13 +14942,15 @@ async function processPgcSsrReportsForProject(
               reportName: spec.reportName,
               error: xResHttp.error,
             });
-            try {
-              await activePage.screenshot({ path: failShot, fullPage: true });
-              pgcProgress.pgcLogDetail("task8_report_fail_shot", {
-                reportName: spec.reportName,
-                path: failShot,
-              });
-            } catch (_) {}
+            if (isScraperDebugArtifactsEnabled()) {
+              try {
+                await activePage.screenshot({ path: failShot, fullPage: true });
+                pgcProgress.pgcLogDetail("task8_report_fail_shot", {
+                  reportName: spec.reportName,
+                  path: failShot,
+                });
+              } catch (_) {}
+            }
             reports.push(entry);
             continue;
           }
@@ -14447,6 +14974,7 @@ async function processPgcSsrReportsForProject(
               error: pResHttp.error,
             });
           }
+          if (entry.excelDownloaded || entry.pdfDownloaded) entry.viewerReady = true;
           reports.push(entry);
           continue;
         }
@@ -14508,11 +15036,14 @@ async function processPgcSsrReportsForProject(
           error: (e && e.message) || String(e),
         });
         console.log(`[PGC] Reports | error | ${spec.reportName} | page`);
-        try {
-          await activePage.screenshot({ path: failShot, fullPage: true });
-        } catch (_) {}
+        if (isScraperDebugArtifactsEnabled()) {
+          try {
+            await activePage.screenshot({ path: failShot, fullPage: true });
+          } catch (_) {}
+        }
       }
 
+      if (entry.excelDownloaded || entry.pdfDownloaded) entry.viewerReady = true;
       reports.push(entry);
     }
 
@@ -14893,10 +15424,12 @@ async function scrapeSingleProjectDetails(page, project, bases, dashboardUrl) {
       out._meta.tabsOk.status ||
       out._meta.tabsOk.tasks;
     if (!anyTab) {
-      try {
-        await page.screenshot({ path: detailFailShot, fullPage: true });
-        console.error(`[PGC] Detail screenshot (no tabs): ${detailFailShot}`);
-      } catch (_) {}
+      if (isScraperDebugArtifactsEnabled()) {
+        try {
+          await page.screenshot({ path: detailFailShot, fullPage: true });
+          console.error(`[PGC] Detail screenshot (no tabs): ${detailFailShot}`);
+        } catch (_) {}
+      }
       return {
         ok: false,
         out,
@@ -14907,10 +15440,12 @@ async function scrapeSingleProjectDetails(page, project, bases, dashboardUrl) {
     return { ok: true, out };
   } catch (err) {
     out._meta.notes.push((err && err.message) || String(err));
-    try {
-      await page.screenshot({ path: detailFailShot, fullPage: true });
-      console.error(`[PGC] Detail screenshot: ${detailFailShot}`);
-    } catch (_) {}
+    if (isScraperDebugArtifactsEnabled()) {
+      try {
+        await page.screenshot({ path: detailFailShot, fullPage: true });
+        console.error(`[PGC] Detail screenshot: ${detailFailShot}`);
+      } catch (_) {}
+    }
     console.error(`[PGC] Detail scrape failed project ${projectID}:`, err.message || err);
     return { ok: false, out, error: err };
   } finally {
@@ -15116,12 +15651,31 @@ async function runPgcProductionPipeline(
       }
     }
   }
+  if (!skipFiles && filesOut.folders?.length) {
+    for (const folder of filesOut.folders) {
+      for (const f of folder.files || []) {
+        if (String(f.viewUrl || "").trim()) continue;
+        const portalView = buildPgcActiveXViewerFileUrl(f.fileId);
+        if (portalView) f.viewUrl = portalView;
+      }
+    }
+  }
 
   /** @type {{ skipped?: boolean, projectID?: string, wflowInstanceID?: string | null, reports?: any[] }} */
   let reportsPayload = { skipped: true, reports: [] };
   if (!skipReports) {
+    const dashboardUrlForReports = String(dashboardUrl || "").trim();
+    let pageUrlForLog = "";
+    try {
+      pageUrlForLog = page.url();
+    } catch (_) {
+      pageUrlForLog = "(unavailable)";
+    }
+    console.log(
+      `[PGC] Reports | pre-step skipDetail=${skipDetail} skipWorkflow=${skipWorkflow} skipReview=${skipReview} skipFiles=${skipFiles} dashboardUrlPresent=${!!dashboardUrlForReports} pageUrl=${pageUrlForLog}`,
+    );
     reportsPayload = await processPgcSsrReportsForProject(page, proj, wfid, {
-      dashboardUrl: skipDetail ? dashboardUrl : "",
+      dashboardUrl: dashboardUrlForReports,
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {
@@ -15634,6 +16188,7 @@ module.exports = {
   waitForProjectGrid,
   inspectDashboardStructure,
   detectPaginationMode,
+  goToNextPage,
   collectAllProjects,
   readProjectRows,
   resolvePgcWebUiBases,

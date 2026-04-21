@@ -54,3 +54,12 @@ scraper-service/pgc-progress-events.jsonl
 scraper-service/pgc-run-summary.json
 scraper-service/pgc-debug-detail.log
 scraper-service/check_iframe.js
+# Optional debug screenshots (enable with SCRAPER_DEBUG_ARTIFACTS=1)
+scraper-service/debug_report_popup.png
+scraper-service/pgc-login-initial-*.png
+scraper-service/pgc-post-login-*.png
+scraper-service/pgc-brava-publish-menu-failed-*.png
+scraper-service/login_failed.png
+scraper-service/record_not_loaded.png
+scraper-service/mdc-reports/
+scraper-service/downloads/

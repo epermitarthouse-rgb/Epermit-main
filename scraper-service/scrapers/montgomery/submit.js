@@ -1,4 +1,4 @@
-const { getMontgomerySession } = require("./montgomery-auth");
+const { getMontgomerySession } = require("./auth.js");
 
 const SUBMIT_TIMEOUT = 30000;
 const POSTBACK_WAIT_MS = 3000;

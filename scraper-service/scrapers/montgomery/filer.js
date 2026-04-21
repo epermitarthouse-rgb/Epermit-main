@@ -1,4 +1,4 @@
-const { getMontgomerySession } = require("./montgomery-auth");
+const { getMontgomerySession } = require("./auth.js");
 
 const MONTGOMERY_BASE_URL = "https://permittingservices.montgomerycountymd.gov";
 const WIZARD_TIMEOUT = 30000;

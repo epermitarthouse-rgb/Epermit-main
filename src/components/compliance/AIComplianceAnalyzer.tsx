@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import { exportComplianceReportPDF } from "@/lib/complianceReportPDF";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -871,13 +872,7 @@ export function AIComplianceAnalyzer() {
         if (authSession?.access_token) {
           headers["Authorization"] = `Bearer ${authSession.access_token}`;
         }
-        const raw =
-          import.meta.env.VITE_API_BASE_URL || "https://epermit-production.up.railway.app";
-        const API_BASE_URL = /^https?:\/\//i.test(raw)
-          ? raw
-          : /localhost|127\.0\.0\.1/i.test(raw)
-            ? `http://${raw}`
-            : `https://${raw}`;
+        const API_BASE_URL = getScraperBaseUrl();
         const response = await fetch(`${API_BASE_URL}/api/analyze-drawing`, {
           method: "POST",
           headers,

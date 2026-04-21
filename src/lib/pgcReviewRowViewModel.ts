@@ -449,6 +449,12 @@ const PGC_ROW_UTILITY_MARKERS = [
   "ask question",
 ] as const;
 
+/** True if `m` appears in toolbar heuristics; "resolved" uses a word boundary so "unresolved" is not double-counted. */
+function rowTextHasUtilityMarker(textLower: string, m: string): boolean {
+  if (m === "resolved") return /\bresolved\b/i.test(textLower);
+  return textLower.includes(m);
+}
+
 /** Raw DOM row text matches filter/toolbar strip (independent of column mapping). */
 function isToolbarChromeRawRow(row: Record<string, string>): boolean {
   const j = joinedRowTextLower(row);
@@ -461,7 +467,7 @@ function isToolbarChromeRawRow(row: Record<string, string>): boolean {
 
   let markerHits = 0;
   for (const m of PGC_ROW_UTILITY_MARKERS) {
-    if (j.includes(m)) markerHits += 1;
+    if (rowTextHasUtilityMarker(j, m)) markerHits += 1;
   }
 
   const hasSelectOne = /\[?\s*select\s*one\s*\]?/i.test(j);
@@ -514,16 +520,16 @@ export function isPgcUtilityRow(
 
   let markerHits = 0;
   for (const m of PGC_ROW_UTILITY_MARKERS) {
-    if (joined.includes(m)) markerHits += 1;
+    if (rowTextHasUtilityMarker(joined, m)) markerHits += 1;
   }
 
   const hasSelectOne = /\[?\s*select\s*one\s*\]?/i.test(joined);
-  const hasApply = joined.includes("apply");
+  const hasApply = /\bapply\b/i.test(joined);
   const hasStatusToken =
-    joined.includes("unresolved") ||
-    joined.includes("resolved") ||
+    /\bunresolved\b/i.test(joined) ||
+    /\bresolved\b/i.test(joined) ||
     joined.includes("info only") ||
-    joined.includes("question");
+    /\bquestion\b/i.test(joined);
   const addActionChrome =
     joined.includes("add comment") ||
     joined.includes("ask question") ||
@@ -555,7 +561,9 @@ export function isPgcUtilityRow(
   if (
     comment.includes("[select one]") &&
     (comment.includes("add comment") || comment.includes("ask question")) &&
-    (comment.includes("apply") || comment.includes("unresolved") || comment.includes("resolved")) &&
+    (/\bapply\b/i.test(comment) ||
+      /\bunresolved\b/i.test(comment) ||
+      /\bresolved\b/i.test(comment)) &&
     !hasRealIdentity
   ) {
     return true;
@@ -563,7 +571,7 @@ export function isPgcUtilityRow(
 
   if (
     /\[?\s*select\s*one\s*\]?/i.test(joined) &&
-    joined.includes("apply") &&
+    /\bapply\b/i.test(joined) &&
     markerHits >= 4 &&
     !hasRealIdentity &&
     !hasMeaningfulComment

@@ -24,6 +24,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useScrape } from "@/contexts/ScrapeContext";
@@ -32,6 +38,10 @@ import {
   normalizePgcFlattenedReviewCommentsText,
   shouldNormalizePgcReviewCommentsDisplayText,
 } from "@/lib/pgcReviewCommentsText";
+import {
+  parsePgcReviewComments,
+  type PgcReviewCommentsRow,
+} from "@/lib/pgcReviewCommentsStackedParse";
 import {
   groupPgcWorkflowRowsIntoReviewItems,
   sanitizePgcWorkflowRows,
@@ -44,9 +54,7 @@ import {
   FileText,
   AlertCircle,
   ListChecks,
-  X,
-  ZoomIn,
-  ZoomOut,
+  ExternalLink,
   FolderOpen,
   MessageSquare,
   ArrowLeft,
@@ -58,7 +66,13 @@ import {
   type PgcStatusTabData,
 } from "@/components/portal/PgcStatusTab";
 import { BaltimorePortalDataView } from "@/components/baltimore/BaltimorePortalDataView";
-import { isBaltimorePortal, isProjectDoxUrl } from "@/lib/portalView";
+import { FairfaxPortalDataView } from "@/components/fairfax/FairfaxPortalDataView";
+import {
+  isBaltimorePortal,
+  isFairfaxPortal,
+  isProjectDoxUrl,
+  resolvePortalView,
+} from "@/lib/portalView";
 
 class TabErrorBoundary extends React.Component<
   { tabName: string; children: React.ReactNode },
@@ -104,6 +118,28 @@ interface TableData {
   rows: Record<string, string>[];
   tableIndex?: number;
   title?: string;
+}
+
+/**
+ * ProjectDox extractPageData uses Col_0, Col_1, … when a table has no <th>/thead.
+ * Status tab UI iterated tbl.headers only, so those tables rendered with zero columns.
+ */
+function statusTableDisplayHeaders(tbl: TableData): string[] {
+  const headers = tbl.headers ?? [];
+  if (headers.length > 0) return headers;
+  const rows = tbl.rows ?? [];
+  if (!rows.length) return [];
+  const order: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    for (const k of Object.keys(row)) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      order.push(k);
+    }
+  }
+  return order;
 }
 
 interface FileComment {
@@ -416,11 +452,373 @@ function getMontgomeryStatusLinkActionUrls(link: StatusTabLink): {
   return { viewerUrl, pdfUrl, excelUrl, showOpenViewer };
 }
 
+/** Washington DC default ProjectDox: split label/value rows vs URL-only rows (actions). */
+function partitionWashingtonStatusKeyValues(kvs: KeyValue[]): {
+  fields: KeyValue[];
+  urlActions: KeyValue[];
+} {
+  const fields: KeyValue[] = [];
+  const urlActions: KeyValue[] = [];
+  for (const kv of kvs || []) {
+    const v = String(kv.value ?? "").trim();
+    if (isHttpUrlCandidate(v)) urlActions.push(kv);
+    else fields.push(kv);
+  }
+  return { fields, urlActions };
+}
+
+/**
+ * Generic extractPageData still builds tables from the same status DOM; those rows
+ * duplicate keyValues (values as fake labels). Omit tables when we already have the
+ * standard DC status summary in keyValues (covers legacy portal_data too).
+ */
+function shouldOmitWashingtonStatusTables(
+  fields: KeyValue[],
+  tables: TableData[] | undefined,
+): boolean {
+  if (!tables?.length) return true;
+  const keys = fields.map((f) => String(f.key ?? "").trim().toLowerCase());
+  const hasReviewType = keys.some((k) => /review\s+type/.test(k));
+  const hasOwnerOrFiles = keys.some(
+    (k) =>
+      /^owner$/.test(k) ||
+      /total\s+number\s+of\s+files/.test(k) ||
+      /files/i.test(k),
+  );
+  return fields.length >= 4 && hasReviewType && hasOwnerOrFiles;
+}
+
+/** Drop DC status noise: permit-as-key description rows; dedupe repeated workflow lines. */
+function filterWashingtonStatusFieldsForDisplay(
+  fields: KeyValue[],
+  projectNum: string | null | undefined,
+): KeyValue[] {
+  const pn = (projectNum ?? "").trim();
+  const seenWorkflowValue = new Set<string>();
+  const out: KeyValue[] = [];
+  for (const kv of fields) {
+    const k = String(kv.key ?? "").trim();
+    const v = String(kv.value ?? "").trim();
+    if (pn && k === pn && v.length > 80) continue;
+    if (/^workflow$/i.test(k) && v.length > 80) {
+      if (seenWorkflowValue.has(v)) continue;
+      seenWorkflowValue.add(v);
+    }
+    out.push(kv);
+  }
+  return out;
+}
+
+/** Long narrative fields: keep on-page but visually subordinate (portal-like compact summary). */
+function isWashingtonStatusLongField(kv: KeyValue): boolean {
+  const k = String(kv.key ?? "").toLowerCase();
+  if (
+    /description|workflow|comment|detail|summary|notes/i.test(k)
+  )
+    return true;
+  return String(kv.value ?? "").length > 180;
+}
+
+/**
+ * Two-column status tables → plain label/value lines (no HTML table chrome).
+ */
+function washingtonStatusTableAsLines(tbl: TableData): {
+  label: string;
+  value: string;
+}[] | null {
+  const displayHeaders = statusTableDisplayHeaders(tbl);
+  const rows = tbl.rows ?? [];
+  if (rows.length === 0) return null;
+  if (displayHeaders.length === 2) {
+    const h0 = displayHeaders[0];
+    const h1 = displayHeaders[1];
+    const out: { label: string; value: string }[] = [];
+    for (const row of rows) {
+      const a = String(row[h0] ?? "").trim();
+      const b = String(row[h1] ?? "").trim();
+      if (!a && !b) continue;
+      const isHeaderish =
+        /^field$/i.test(a) && /^value$/i.test(b) && out.length === 0;
+      if (isHeaderish) continue;
+      out.push({ label: a || "—", value: b });
+    }
+    return out.length ? out : null;
+  }
+  return null;
+}
+
+function WashingtonStatusFieldLine({
+  label,
+  value,
+  denseValue,
+}: {
+  label: string;
+  value: string;
+  denseValue?: boolean;
+}) {
+  const v = (value || "").trim() || "—";
+  return (
+    <div className="flex gap-3 py-1.5 items-start">
+      <div className="min-w-[11rem] max-w-[45%] shrink-0 text-right text-[12px] font-semibold text-foreground/95 leading-snug">
+        {label && label !== "—" ? `${label}:` : ""}
+      </div>
+      <div
+        className={
+          denseValue
+            ? "flex-1 text-xs leading-snug text-foreground/85 max-h-24 overflow-y-auto break-words"
+            : "flex-1 text-[13px] leading-snug text-foreground/95 break-words"
+        }
+      >
+        {v}
+      </div>
+    </div>
+  );
+}
+
+/** Portal-like: routing slip = link; View Report = outline button. */
+function WashingtonStatusActionControl({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  const isViewReport = /view\s*report/i.test(label);
+  if (isViewReport) {
+    return (
+      <Button asChild size="sm" variant="outline" className="h-auto py-1.5 px-3">
+        <a href={href} target="_blank" rel="noreferrer">
+          {label}
+        </a>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      asChild
+      size="sm"
+      variant="link"
+      className="h-auto py-1 px-1 text-[#6B9AC4]"
+    >
+      <a href={href} target="_blank" rel="noreferrer">
+        {label}
+      </a>
+    </Button>
+  );
+}
+
+/**
+ * Washington-only: lightweight centered summary (portal-like), dark theme preserved.
+ * PGC / Montgomery / Howard / Baltimore unchanged.
+ */
+function WashingtonStatusTabPanel({
+  tab,
+  projectNum,
+}: {
+  tab: TabData;
+  projectNum?: string | null;
+}) {
+  const partitioned = partitionWashingtonStatusKeyValues(tab.keyValues ?? []);
+  const fields = filterWashingtonStatusFieldsForDisplay(
+    partitioned.fields,
+    projectNum,
+  );
+  const { urlActions } = partitioned;
+  const rawLinks = Array.isArray(tab.links) ? tab.links : [];
+  const linkActions = montgomeryStatusLinksActionable(rawLinks);
+  const hasBottomActions =
+    linkActions.length > 0 ||
+    urlActions.length > 0 ||
+    rawLinks.some((L) => {
+      const h = String(L.href ?? "").trim();
+      return h && h !== "#" && isHttpUrlCandidate(h);
+    });
+
+  const omitTables = shouldOmitWashingtonStatusTables(
+    fields,
+    tab.tables ?? [],
+  );
+
+  return (
+    <div className="max-w-lg mx-auto space-y-3">
+      <div className="space-y-1">
+        {fields.map((kv, i) => (
+          <WashingtonStatusFieldLine
+            key={`${kv.key}-${i}`}
+            label={kv.key}
+            value={kv.value}
+            denseValue={isWashingtonStatusLongField(kv)}
+          />
+        ))}
+        {!omitTables &&
+          (tab.tables ?? []).map((tbl, ti) => {
+          const asLines = washingtonStatusTableAsLines(tbl);
+          if (asLines) {
+            return (
+              <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-border/40">
+                {tbl.title ? (
+                  <p className="text-[11px] text-muted-foreground/70 mb-1.5">
+                    {tbl.title}
+                  </p>
+                ) : null}
+                <div className="space-y-1">
+                  {asLines.map((line, li) => (
+                    <WashingtonStatusFieldLine
+                      key={`wst-tl-${ti}-${li}`}
+                      label={line.label}
+                      value={line.value}
+                      denseValue={isWashingtonStatusLongField({
+                        key: line.label,
+                        value: line.value,
+                      })}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          const displayHeaders = statusTableDisplayHeaders(tbl);
+          if (!displayHeaders.length && !(tbl.rows?.length ?? 0)) return null;
+          return (
+            <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-border/40">
+              {tbl.title ? (
+                <p className="text-[11px] text-muted-foreground/70 mb-1.5">
+                  {tbl.title}
+                </p>
+              ) : null}
+              <div className="space-y-2">
+                {(tbl.rows ?? []).map((row, ri) => (
+                  <p
+                    key={ri}
+                    className="text-[12px] leading-snug text-foreground/90"
+                  >
+                    {displayHeaders
+                      .map((h) => String(row[h] ?? "").trim())
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {hasBottomActions ? (
+        <div className="mt-8 pt-4 border-t border-border/50">
+          <p className="text-sm font-semibold text-foreground mb-3">
+            For more details:
+          </p>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            {linkActions.map((L, mi) => {
+              const {
+                viewerUrl,
+                pdfUrl,
+                excelUrl,
+                showOpenViewer,
+              } = getMontgomeryStatusLinkActionUrls(L);
+              const label =
+                (L.reportName && String(L.reportName).trim()) ||
+                (L.text && String(L.text).trim()) ||
+                `Action ${mi + 1}`;
+              const simpleDc =
+                !!showOpenViewer &&
+                !!viewerUrl &&
+                !pdfUrl &&
+                !excelUrl;
+              return (
+                <span
+                  key={`wst-lk-${mi}`}
+                  className="inline-flex flex-wrap gap-2 items-center"
+                >
+                  {showOpenViewer && viewerUrl ? (
+                    simpleDc ? (
+                      <WashingtonStatusActionControl
+                        href={viewerUrl}
+                        label={label}
+                      />
+                    ) : (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="link"
+                        className="h-auto py-1 px-1 text-[#6B9AC4]"
+                      >
+                        <a href={viewerUrl} target="_blank" rel="noreferrer">
+                          <FileText className="h-3.5 w-3.5 mr-1.5 inline" />
+                          {label}
+                        </a>
+                      </Button>
+                    )
+                  ) : null}
+                  {pdfUrl ? (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="link"
+                      className="h-auto py-1 px-1 text-[#6B9AC4]"
+                    >
+                      <a href={pdfUrl} target="_blank" rel="noreferrer">
+                        Open PDF
+                      </a>
+                    </Button>
+                  ) : null}
+                  {excelUrl ? (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="link"
+                      className="h-auto py-1 px-1 text-[#6B9AC4]"
+                    >
+                      <a href={excelUrl} target="_blank" rel="noreferrer">
+                        Open Excel
+                      </a>
+                    </Button>
+                  ) : null}
+                </span>
+              );
+            })}
+            {urlActions.map((kv, ui) => {
+              const href = String(kv.value ?? "").trim();
+              const label = kv.key || "Open link";
+              return (
+                <WashingtonStatusActionControl
+                  key={`wst-url-${ui}`}
+                  href={href}
+                  label={label}
+                />
+              );
+            })}
+            {rawLinks.map((L, ri) => {
+              if (linkActions.includes(L)) return null;
+              const href = String(L.href ?? "").trim();
+              if (!href || href === "#" || !isHttpUrlCandidate(href))
+                return null;
+              const label =
+                (L.text && String(L.text).trim()) ||
+                (L.reportName && String(L.reportName).trim()) ||
+                "Open link";
+              return (
+                <WashingtonStatusActionControl
+                  key={`wst-raw-${ri}`}
+                  href={href}
+                  label={label}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function detectPortalTypeFromUrl(url: string | null | undefined): string {
   if (!url) return "unknown";
   if (isProjectDoxUrl(url)) return "projectdox";
   const lower = url.toLowerCase();
   if (lower.includes("accela.com")) return "accela";
+  if (/\/citizenaccess\//i.test(lower)) return "accela";
   return "unknown";
 }
 
@@ -453,11 +851,11 @@ export default function PortalDataViewer() {
   const [expandedFileComments, setExpandedFileComments] = useState<Set<string>>(
     new Set(),
   );
-  const [lightboxImage, setLightboxImage] = useState<{
-    src: string;
-    alt: string;
+  /** Report reader: text / portal URL first; thumbnail only labeled as low-res (no full-screen image zoom). */
+  const [reportReaderOpen, setReportReaderOpen] = useState<{
+    reportName: string;
+    pdf: NonNullable<TabData["pdfs"]>[number];
   } | null>(null);
-  const [lightboxZoom, setLightboxZoom] = useState(100);
   const [selectedReviewWorkflow, setSelectedReviewWorkflow] = useState<string | null>(
     null,
   );
@@ -489,13 +887,13 @@ export default function PortalDataViewer() {
   }, [portalData?.portalSubtype, portalData?.tabs?.review, selectedReviewWorkflow]);
 
   useEffect(() => {
-    if (!lightboxImage) return;
+    if (!reportReaderOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightboxImage(null);
+      if (e.key === "Escape") setReportReaderOpen(null);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [lightboxImage]);
+  }, [reportReaderOpen]);
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -804,14 +1202,16 @@ export default function PortalDataViewer() {
   }, [portalData?.tabs?.reports?.reportEntries]);
 
   const montgomeryStatusActionLinks = useMemo(() => {
-    if (portalData?.portalSubtype !== "montgomery-projectdox") return [];
+    const st = portalData?.portalSubtype;
+    if (st !== "montgomery-projectdox" && st !== "howard-projectdox") return [];
     const links = (portalData.tabs?.status?.links ?? []) as StatusTabLink[];
     return montgomeryStatusLinksActionable(links);
   }, [portalData?.portalSubtype, portalData?.tabs?.status?.links]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    if (portalData?.portalSubtype !== "montgomery-projectdox") return;
+    const st = portalData?.portalSubtype;
+    if (st !== "montgomery-projectdox" && st !== "howard-projectdox") return;
     const stLinks = (portalData.tabs?.status?.links ?? []) as StatusTabLink[];
     console.log(
       `[Montgomery][ui][status] links parsed = ${stLinks.length}`,
@@ -953,12 +1353,17 @@ export default function PortalDataViewer() {
     expectedPortalType === "accela" ||
     (!expectedPortalType && portalData.portalType === "accela");
 
-  /** Derive Baltimore at render from stored credential; do not rely on a separate boolean. */
+  /** Derive Baltimore / Fairfax at render from stored credential; do not rely on a separate boolean. */
   const isBaltimore = renderAccelaUI && credentialForView !== null && isBaltimorePortal(credentialForView);
+  const isFairfax = renderAccelaUI && credentialForView !== null && isFairfaxPortal(credentialForView);
+  const accelaPortalView =
+    renderAccelaUI && credentialForView
+      ? resolvePortalView(credentialForView, portalData.portalType ?? null)
+      : null;
 
   if (import.meta.env.DEV)
     console.log(
-      `[PortalDataViewer] rendering UI: expectedPortalType=${expectedPortalType}, portalData.portalType=${portalData.portalType}, renderAccelaUI=${renderAccelaUI}, credentialForView=${credentialForView ? "set" : "null"}, isBaltimore=${isBaltimore}`,
+      `[PortalDataViewer] rendering UI: expectedPortalType=${expectedPortalType}, portalData.portalType=${portalData.portalType}, renderAccelaUI=${renderAccelaUI}, credentialForView=${credentialForView ? "set" : "null"}, isBaltimore=${isBaltimore}, isFairfax=${isFairfax}, accelaPortalView=${accelaPortalView}`,
     );
   if (renderAccelaUI) {
     return (
@@ -994,8 +1399,15 @@ export default function PortalDataViewer() {
             Refresh
           </Button>
         </div>
-        {isBaltimore ? (
+        {accelaPortalView === "baltimore" ? (
           <BaltimorePortalDataView
+            portalData={portalData as any}
+            projectId={resolvedProjectId}
+            permitNumber={portalData?.projectNum ?? portalData?.name ?? null}
+            credentialLoginUrl={credentialForView?.login_url ?? null}
+          />
+        ) : accelaPortalView === "fairfax" ? (
+          <FairfaxPortalDataView
             portalData={portalData as any}
             projectId={resolvedProjectId}
             permitNumber={portalData?.projectNum ?? portalData?.name ?? null}
@@ -1012,8 +1424,32 @@ export default function PortalDataViewer() {
   const reportsTab = portalData.tabs?.reports;
   const filesTab = portalData.tabs?.files;
   const isPgcEplan = portalData.portalSubtype === "pgc-eplan";
+
+  function getReviewCommentsDisplayTextForPortal(pdf: {
+    text?: string;
+    fileName?: string;
+    info?: { source?: string };
+  }): string {
+    const raw = pdf.text ?? "";
+    const useRawForPgcStacked =
+      isPgcEplan && String(pdf.fileName ?? "").includes("Review Comments");
+    if (useRawForPgcStacked) return raw;
+    return shouldNormalizePgcReviewCommentsDisplayText(pdf.fileName, pdf.info)
+      ? normalizePgcFlattenedReviewCommentsText(raw)
+      : raw;
+  }
+
   const isMontgomeryProjectDox =
     portalData.portalSubtype === "montgomery-projectdox";
+  const isHowardProjectDox =
+    portalData.portalSubtype === "howard-projectdox";
+  const isMdAvolveProjectDox =
+    isMontgomeryProjectDox || isHowardProjectDox;
+  /** Default DC Avolve / generic ProjectDox (not PGC, not Montgomery/Howard). */
+  const isWashingtonDcProjectDox =
+    portalData.portalType === "projectdox" &&
+    !isPgcEplan &&
+    !isMdAvolveProjectDox;
   const foldersForRender = (() => {
     const folders = filesTab?.folders ?? [];
     if (!isPgcEplan) return folders;
@@ -1041,7 +1477,7 @@ export default function PortalDataViewer() {
       (statusTabData.tables?.length ?? 0) > 0 ||
       (Array.isArray(statusSectionsList) && statusSectionsList.length > 0) ||
       !!statusTabData.error ||
-      (isMontgomeryProjectDox && montgomeryStatusActionLinks.length > 0));
+      (isMdAvolveProjectDox && montgomeryStatusActionLinks.length > 0));
   const hasTasksTab =
     !!tasksTabData &&
     ((tasksTabData.keyValues?.length ?? 0) > 0 ||
@@ -1442,6 +1878,30 @@ export default function PortalDataViewer() {
         (p.fileName.includes(reportName) || reportName.includes(p.fileName)),
     );
 
+  /** Skip "STATUS" when it is the PGC/SSRS table column header, not a Washington STATUS block. */
+  function findWashingtonStatusAnchorIndex(text: string): number {
+    let from = 0;
+    while (from < text.length) {
+      const i = text.indexOf("STATUS", from);
+      if (i === -1) return -1;
+      const lineStart = text.lastIndexOf("\n", i);
+      const lineStartIdx = lineStart === -1 ? 0 : lineStart + 1;
+      const lineEnd = text.indexOf("\n", i);
+      const line = text.slice(
+        lineStartIdx,
+        lineEnd === -1 ? undefined : lineEnd,
+      );
+      if (
+        /\bREF\s*#|CYCLE|REVIEWED BY|DISCUSSION|FILENAME|TYPE\b/i.test(line)
+      ) {
+        from = i + 6;
+        continue;
+      }
+      return i;
+    }
+    return -1;
+  }
+
   function parseReviewComments(originalText: string) {
     const comments: Array<{
       ref: string;
@@ -1453,7 +1913,7 @@ export default function PortalDataViewer() {
       body: string[];
     }> = [];
 
-    const rcIdx = originalText.indexOf("STATUS");
+    const rcIdx = findWashingtonStatusAnchorIndex(originalText);
     if (rcIdx === -1) return comments;
 
     const afterHeader = originalText.substring(rcIdx + "STATUS".length);
@@ -1869,6 +2329,168 @@ export default function PortalDataViewer() {
     return <>{elements}</>;
   }
 
+  function splitSsrsDataRow(line: string): string[] {
+    const t = line.replace(/\u00a0/g, " ");
+    if (t.includes("\t")) {
+      return t.split("\t").map((c) => c.trim()).filter((c) => c.length > 0);
+    }
+    return t.split(/\s{2,}/).map((c) => c.trim()).filter((c) => c.length > 0);
+  }
+
+  function renderSsrsColumnTable(
+    lines: string[],
+    startIdx: number,
+    headerCellsRaw: string[],
+    dataLineIndices: number[],
+  ): React.ReactNode {
+    const maxCols = Math.max(
+      headerCellsRaw.length,
+      ...dataLineIndices.map((i) => splitSsrsDataRow(lines[i]).length),
+      1,
+    );
+    const pad = (cells: string[]) => {
+      const out = [...cells];
+      while (out.length < maxCols) out.push("");
+      return out.slice(0, maxCols);
+    };
+    const headerCells = pad(headerCellsRaw);
+    const beforeText = lines.slice(0, startIdx).join("\n").trim();
+    const beforeNode = beforeText ? (
+      <div className="mb-4 text-sm space-y-1">{renderReportContent(beforeText)}</div>
+    ) : null;
+
+    const tableNode = (
+      <div className="overflow-x-auto rounded border border-[#1A3055] my-2">
+        <table className="text-xs w-full border-collapse min-w-[640px]">
+          <thead>
+            <tr className="bg-[#091428] border-b-2 border-[#1A3055]">
+              {headerCells.map((h, hi) => (
+                <th
+                  key={hi}
+                  className="text-left p-2 px-3 font-semibold text-[#C44D14] border-r border-[#1A3055] align-top whitespace-pre-wrap max-w-[min(200px,28vw)]"
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dataLineIndices.map((li, ri) => {
+              const line = lines[li];
+              return (
+                <tr
+                  key={`${li}-${ri}`}
+                  className={ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"}
+                >
+                  {pad(splitSsrsDataRow(line)).map((cell, ci) => (
+                    <td
+                      key={ci}
+                      className="border border-[#1A3055] px-2 py-1.5 align-top text-[#F0F6FF] whitespace-pre-wrap max-w-[min(320px,45vw)] break-words"
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+
+    return (
+      <>
+        {beforeNode}
+        {tableNode}
+      </>
+    );
+  }
+
+  /**
+   * PGC / SSRS "Review Comments" PDF text: one row per line; columns are tabs OR 2+ spaces.
+   * Stored extracts often have **no tab chars** (runtime logs: linesWithTab: 0) — use multi-space split.
+   * `renderReportContent` mis-builds tables from ALL-CAPS line runs + one cell per line.
+   */
+  function renderSsrsTabSeparatedTable(raw: string): React.ReactNode | null {
+    const normalized = raw.replace(/\r\n/g, "\n");
+    const lines = normalized.split("\n").map((l) => l.trim());
+
+    const firstTabIdx = lines.findIndex((l) => l.includes("\t"));
+    if (firstTabIdx !== -1) {
+      const tabLines = lines
+        .slice(firstTabIdx)
+        .filter((l) => l.length > 0 && l.includes("\t"));
+      if (tabLines.length >= 2) {
+        const splitRow = (r: string) =>
+          r.split("\t").map((c) => c.trim().replace(/\u00a0/g, " "));
+        const maxCols = Math.max(...tabLines.map((r) => splitRow(r).length), 1);
+        if (maxCols >= 2) {
+          const headerCells = splitRow(tabLines[0]);
+          const dataIndices: number[] = [];
+          for (let i = firstTabIdx + 1; i < lines.length; i++) {
+            const ln = lines[i];
+            if (!ln || !ln.includes("\t")) continue;
+            if (ln.includes("Created in ProjectDox")) break;
+            dataIndices.push(i);
+          }
+          if (dataIndices.length > 0) {
+            return renderSsrsColumnTable(
+              lines,
+              firstTabIdx,
+              headerCells,
+              dataIndices,
+            );
+          }
+        }
+      }
+    }
+
+    const nonEmpty = lines
+      .map((l, i) => ({ l, i }))
+      .filter((x) => x.l.length > 0);
+    let headerIdx = -1;
+    for (let k = 0; k < nonEmpty.length; k++) {
+      const { l, i } = nonEmpty[k];
+      const cells = splitSsrsDataRow(l);
+      if (
+        cells.length >= 4 &&
+        /REF|CYCLE|REVIEWED|STATUS|FILENAME|DISCUSSION|TYPE/i.test(l)
+      ) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) {
+      for (let k = 0; k < nonEmpty.length; k++) {
+        const { l, i } = nonEmpty[k];
+        if (splitSsrsDataRow(l).length >= 6) {
+          headerIdx = i;
+          break;
+        }
+      }
+    }
+    if (headerIdx === -1) return null;
+
+    const headerCells = splitSsrsDataRow(lines[headerIdx]);
+    const maxCols = headerCells.length;
+    if (maxCols < 4) return null;
+
+    const dataIndices: number[] = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const ln = lines[i];
+      if (!ln) continue;
+      if (ln.includes("Created in ProjectDox")) break;
+      if (/^REVIEW COMMENTS$/i.test(ln)) continue;
+      const cells = splitSsrsDataRow(ln);
+      if (cells.length >= Math.max(4, maxCols - 2)) {
+        dataIndices.push(i);
+      }
+    }
+    if (dataIndices.length === 0) return null;
+
+    return renderSsrsColumnTable(lines, headerIdx, headerCells, dataIndices);
+  }
+
   /** When SSRS/Excel text is tab-separated rows (typical PGC export) and structured parse fails. */
   function renderTabularReportPreview(raw: string): React.ReactNode {
     const rows = raw.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -1912,8 +2534,97 @@ export default function PortalDataViewer() {
     );
   }
 
-  function renderReviewComments(text: string): React.ReactNode {
+  type ReviewCommentsRenderVariant = "pgc" | "washington" | "generic";
+
+  function renderPgcStackedReviewCommentsTable(rows: PgcReviewCommentsRow[]) {
+    const thClass =
+      "text-left p-2 px-3 font-semibold text-[#C44D14] border-r border-[#1A3055] align-top whitespace-pre-wrap max-w-[min(200px,28vw)]";
+    const tdBase =
+      "border border-[#1A3055] px-2 py-1.5 align-top text-[#F0F6FF] whitespace-pre-wrap";
+    return (
+      <div className="overflow-x-auto rounded border border-[#1A3055] my-2">
+        <table className="text-xs w-full border-collapse min-w-[920px]">
+          <thead>
+            <tr className="bg-[#091428] border-b-2 border-[#1A3055]">
+              <th className={thClass}>Ref #</th>
+              <th className={thClass}>Cycle</th>
+              <th className={thClass}>Reviewed by</th>
+              <th className={thClass}>Date / time</th>
+              <th className={thClass}>Type</th>
+              <th className={thClass}>Filename</th>
+              <th className={`${thClass} max-w-[min(360px,45vw)]`}>
+                Discussion
+              </th>
+              <th className={`${thClass} whitespace-nowrap`}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr
+                key={ri}
+                className={ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"}
+              >
+                <td className={`${tdBase} whitespace-nowrap`}>{row.ref}</td>
+                <td className={`${tdBase} whitespace-nowrap`}>{row.cycle}</td>
+                <td className={`${tdBase} max-w-[min(240px,32vw)] break-words`}>
+                  {row.reviewedBy}
+                </td>
+                <td className={tdBase}>{row.dateTime}</td>
+                <td className={tdBase}>{row.type}</td>
+                <td className={`${tdBase} max-w-[min(200px,28vw)] break-words`}>
+                  {row.filename}
+                </td>
+                <td className={`${tdBase} max-w-[min(360px,45vw)] break-words`}>
+                  {row.discussion}
+                </td>
+                <td className={tdBase}>{row.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function renderReviewComments(
+    text: string,
+    variant: ReviewCommentsRenderVariant,
+    reviewCtx?: { fileName?: string | null },
+  ): React.ReactNode {
     if (!text) return null;
+
+    const isPgcReviewCommentsReport =
+      variant === "pgc" &&
+      isPgcEplan &&
+      String(reviewCtx?.fileName ?? "").includes("Review Comments");
+
+    if (isPgcReviewCommentsReport) {
+      const parsed = parsePgcReviewComments(text);
+      if (parsed.ok && parsed.rows.length > 0) {
+        return renderPgcStackedReviewCommentsTable(parsed.rows);
+      }
+      return (
+        <div className="space-y-2">
+          <p className="text-xs text-[#6B9AC4]">
+            Could not parse this PGC Review Comments layout into rows. Showing
+            raw extracted text.
+          </p>
+          <pre className="text-xs bg-[#091428] text-[#F0F6FF] p-3 rounded border border-[#1A3055] overflow-auto max-h-[min(60vh,520px)] whitespace-pre-wrap break-words">
+            {text.length > 120_000
+              ? `${text.slice(0, 120_000)}\n\n[truncated]`
+              : text}
+          </pre>
+        </div>
+      );
+    }
+
+    const comments = parseReviewComments(text);
+
+    /** PGC exports are often space-aligned, not tab-separated — renderTabularReportPreview returns null. Single renderReportContent avoids duplicate blocks + misleading italic. */
+    if (variant === "pgc" && comments.length === 0) {
+      const ssrsTable = renderSsrsTabSeparatedTable(text);
+      return ssrsTable ?? renderReportContent(text);
+    }
 
     const elements: React.ReactNode[] = [];
     let keyInc = 0;
@@ -1921,7 +2632,13 @@ export default function PortalDataViewer() {
     const rcSectionIdx = text.indexOf("REVIEW COMMENTS");
     if (rcSectionIdx > 0) {
       const beforeRC = text.substring(0, rcSectionIdx);
-      elements.push(<div key={keyInc++}>{renderReportContent(beforeRC)}</div>);
+      const skipBeforeDuplicate =
+        variant === "pgc" && beforeRC.includes("\t");
+      if (!skipBeforeDuplicate) {
+        elements.push(
+          <div key={keyInc++}>{renderReportContent(beforeRC)}</div>,
+        );
+      }
     }
 
     elements.push(
@@ -1933,16 +2650,23 @@ export default function PortalDataViewer() {
       </div>,
     );
 
-    const comments = parseReviewComments(text);
-
     if (comments.length === 0) {
-      elements.push(
-        <p key={keyInc++} className="text-sm text-[#6B9AC4] italic py-2">
-          No structured comment blocks found (expected Washington-style STATUS
-          section). Showing tabular or formatted preview when available.
-        </p>,
-      );
       const tabular = renderTabularReportPreview(text);
+      const showPgcTabularWithoutMisleadingNote =
+        variant === "pgc" && tabular != null;
+      if (!showPgcTabularWithoutMisleadingNote) {
+        const emptyParseMessage =
+          variant === "pgc"
+            ? "No structured comment blocks detected in this export. Showing tabular or formatted preview when available."
+            : variant === "washington"
+              ? "No structured comment blocks found (expected Washington-style STATUS section). Showing tabular or formatted preview when available."
+              : "No structured comment blocks detected. Showing tabular or formatted preview when available.";
+        elements.push(
+          <p key={keyInc++} className="text-sm text-[#6B9AC4] italic py-2">
+            {emptyParseMessage}
+          </p>,
+        );
+      }
       if (tabular) {
         elements.push(<div key={keyInc++}>{tabular}</div>);
         elements.push(
@@ -2351,12 +3075,18 @@ export default function PortalDataViewer() {
           <TabsContent value="status" className="mt-4">
             <Card
               className={
-                isPgcEplan
+                isPgcEplan || isWashingtonDcProjectDox
                   ? "border-border/50 bg-transparent shadow-none"
                   : undefined
               }
             >
-              <CardContent className={isPgcEplan ? "p-4 pt-2" : "p-0"}>
+              <CardContent
+                className={
+                  isPgcEplan || isWashingtonDcProjectDox
+                    ? "p-4 pt-2"
+                    : "p-0"
+                }
+              >
                 <TabErrorBoundary tabName="Status">
                   {statusTabData?.error ? (
                     <div className="p-4 text-destructive flex items-center gap-2">
@@ -2367,9 +3097,14 @@ export default function PortalDataViewer() {
                     <PgcStatusTab
                       status={statusTabData as PgcStatusTabData}
                     />
+                  ) : isWashingtonDcProjectDox ? (
+                    <WashingtonStatusTabPanel
+                      tab={statusTabData as TabData}
+                      projectNum={portalData?.projectNum ?? null}
+                    />
                   ) : (
                     <div className="p-4 space-y-4">
-                      {isMontgomeryProjectDox &&
+                      {isMdAvolveProjectDox &&
                         montgomeryStatusActionLinks.length > 0 && (
                           <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
                             <p className="text-sm font-medium text-foreground">
@@ -2457,35 +3192,40 @@ export default function PortalDataViewer() {
                             ))}
                           </div>
                         )}
-                      {(statusTabData?.tables ?? []).map((tbl, ti) => (
-                        <div key={ti} className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-[#091428]">
-                                {tbl.headers?.map((h, hi) => (
-                                  <TableHead key={hi}>{h}</TableHead>
-                                ))}
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {tbl.rows?.map((row, ri) => (
-                                <TableRow
-                                  key={ri}
-                                  className={
-                                    ri % 2 === 1
-                                      ? "bg-[#091428]"
-                                      : "bg-[#0D1E38]"
-                                  }
-                                >
-                                  {tbl.headers?.map((h) => (
-                                    <TableCell key={h}>{row[h] ?? ""}</TableCell>
+                      {(statusTabData?.tables ?? []).map((tbl, ti) => {
+                        const displayHeaders = statusTableDisplayHeaders(tbl);
+                        return (
+                          <div key={ti} className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-[#091428]">
+                                  {displayHeaders.map((h, hi) => (
+                                    <TableHead key={hi}>{h}</TableHead>
                                   ))}
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      ))}
+                              </TableHeader>
+                              <TableBody>
+                                {tbl.rows?.map((row, ri) => (
+                                  <TableRow
+                                    key={ri}
+                                    className={
+                                      ri % 2 === 1
+                                        ? "bg-[#091428]"
+                                        : "bg-[#0D1E38]"
+                                    }
+                                  >
+                                    {displayHeaders.map((h, ci) => (
+                                      <TableCell key={`${ri}-${ci}`}>
+                                        {row[h] ?? ""}
+                                      </TableCell>
+                                    ))}
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </TabErrorBoundary>
@@ -2878,7 +3618,7 @@ export default function PortalDataViewer() {
                         const isExpanded = expandedReport === reportName;
                         const pdf = findPdfForReport(reportName);
                         const hasError = pdf?.error;
-                        const rowEntry = isMontgomeryProjectDox
+                        const rowEntry = isMdAvolveProjectDox
                           ? findMontgomeryReportEntryForRow(
                               reportEntryByReportName,
                               reportEntries,
@@ -2906,7 +3646,7 @@ export default function PortalDataViewer() {
                                 {reportsTable.headers?.map((h) => {
                                   const raw = row[h] ?? "";
                                   if (
-                                    isMontgomeryProjectDox &&
+                                    isMdAvolveProjectDox &&
                                     /^status$/i.test(String(h).trim())
                                   ) {
                                     const { text } = montgomeryReportStatusForRow(
@@ -2956,7 +3696,7 @@ export default function PortalDataViewer() {
                                               {hasError &&
                                                 (() => {
                                                   const soft =
-                                                    isMontgomeryProjectDox &&
+                                                    isMdAvolveProjectDox &&
                                                     rowEntry &&
                                                     (isHttpUrlCandidate(
                                                       rowEntry.viewerUrl,
@@ -2993,8 +3733,40 @@ export default function PortalDataViewer() {
                                                       reportEntryByReportName.get(
                                                         reportName,
                                                       );
+                                                    const viewerHref =
+                                                      ent &&
+                                                      (isHttpUrlCandidate(
+                                                        ent.viewerUrl,
+                                                      )
+                                                        ? String(
+                                                            ent.viewerUrl,
+                                                          ).trim()
+                                                        : isHttpUrlCandidate(
+                                                            ent.reportUrl,
+                                                          )
+                                                          ? String(
+                                                              ent.reportUrl,
+                                                            ).trim()
+                                                          : null);
                                                     return (
                                                       <>
+                                                        {viewerHref ? (
+                                                          <Button
+                                                            asChild
+                                                            size="sm"
+                                                            variant="outline"
+                                                          >
+                                                            <a
+                                                              href={viewerHref}
+                                                              target="_blank"
+                                                              rel="noreferrer"
+                                                              title="Open SSRS ReportViewer in ePlan (original layout)"
+                                                            >
+                                                              <FileText className="h-4 w-4 mr-2" />
+                                                              Open viewer
+                                                            </a>
+                                                          </Button>
+                                                        ) : null}
                                                         {ent?.pdfUrl ? (
                                                           <Button
                                                             asChild
@@ -3005,6 +3777,7 @@ export default function PortalDataViewer() {
                                                               href={ent.pdfUrl}
                                                               target="_blank"
                                                               rel="noreferrer"
+                                                              title="PDF exported from SSRS and stored for this project (binary file)"
                                                             >
                                                               <FileText className="h-4 w-4 mr-2" />
                                                               Download PDF
@@ -3023,6 +3796,7 @@ export default function PortalDataViewer() {
                                                               }
                                                               target="_blank"
                                                               rel="noreferrer"
+                                                              title="Excel export from SSRS (not a substitute for the PDF)"
                                                             >
                                                               Download Excel
                                                             </a>
@@ -3032,7 +3806,7 @@ export default function PortalDataViewer() {
                                                     );
                                                   })()
                                                 : null}
-                                              {isMontgomeryProjectDox
+                                              {isMdAvolveProjectDox
                                                 ? (() => {
                                                     const ent =
                                                       findMontgomeryReportEntryForRow(
@@ -3104,7 +3878,7 @@ export default function PortalDataViewer() {
                                                     );
                                                   })()
                                                 : null}
-                                              {!isMontgomeryProjectDox &&
+                                              {!isMdAvolveProjectDox &&
                                                 reportName &&
                                                 reportName.includes(
                                                   "Review Comments",
@@ -3137,17 +3911,30 @@ export default function PortalDataViewer() {
                                             </p>
                                           ) : pdf?.screenshot ? (
                                             <div>
+                                              <p className="text-xs text-muted-foreground mb-2">
+                                                Compressed preview (storage-sized). Click
+                                                for full reading view — text or portal link
+                                                when available.
+                                              </p>
                                               <div
                                                 className="overflow-auto rounded border cursor-pointer transition-all duration-200 hover:border-[#FF6B2B40] hover:shadow-[0_0_8px_#FF6B2B40] hover:brightness-105"
-                                                style={{ maxHeight: "700px" }}
+                                                style={{ maxHeight: "420px" }}
                                                 onClick={() => {
-                                                  setLightboxImage({
-                                                    src: `data:image/png;base64,${pdf.screenshot}`,
-                                                    alt: reportName,
+                                                  setReportReaderOpen({
+                                                    reportName,
+                                                    pdf,
                                                   });
-                                                  setLightboxZoom(100);
                                                 }}
                                                 data-testid={`img-report-${reportName}`}
+                                                role="button"
+                                                tabIndex={0}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === "Enter" || e.key === " ")
+                                                    setReportReaderOpen({
+                                                      reportName,
+                                                      pdf,
+                                                    });
+                                                }}
                                               >
                                                 <img
                                                   src={`data:image/png;base64,${pdf.screenshot}`}
@@ -3167,26 +3954,51 @@ export default function PortalDataViewer() {
                                               )}
                                             </div>
                                           ) : pdf?.text ? (
-                                            <div className="max-h-96 overflow-y-auto rounded border border-[#1A3055] bg-[#0D1E38] p-4">
-                                              {!isMontgomeryProjectDox &&
-                                              pdf.fileName?.includes(
-                                                "Review Comments",
-                                              )
-                                                ? renderReviewComments(
-                                                    shouldNormalizePgcReviewCommentsDisplayText(
-                                                      pdf.fileName,
-                                                      pdf.info,
+                                            <div className="space-y-3">
+                                              <div className="max-h-96 overflow-y-auto rounded border border-[#1A3055] bg-[#0D1E38] p-4">
+                                                {!isMdAvolveProjectDox &&
+                                                pdf.fileName?.includes(
+                                                  "Review Comments",
+                                                )
+                                                  ? renderReviewComments(
+                                                      getReviewCommentsDisplayTextForPortal(
+                                                        pdf,
+                                                      ),
+                                                      isPgcEplan
+                                                        ? "pgc"
+                                                        : isWashingtonDcProjectDox
+                                                          ? "washington"
+                                                          : "generic",
+                                                      { fileName: pdf.fileName },
                                                     )
-                                                      ? normalizePgcFlattenedReviewCommentsText(
-                                                          pdf.text,
-                                                        )
-                                                      : pdf.text,
-                                                  )
-                                                : renderReportContent(pdf.text)}
+                                                  : renderReportContent(
+                                                      pdf.text,
+                                                    )}
+                                              </div>
+                                              {isPgcEplan &&
+                                                pdf.fileName?.includes(
+                                                  "Review Comments",
+                                                ) &&
+                                                String(pdf.text ?? "").trim() ? (
+                                                <details className="rounded border border-[#1A3055] bg-[#091428] p-2 text-xs">
+                                                  <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
+                                                    Raw extracted text (stored —
+                                                    copyable)
+                                                  </summary>
+                                                  <pre
+                                                    className="mt-2 max-h-[min(50vh,480px)] overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF]"
+                                                    data-testid="pgc-review-comments-raw-text"
+                                                  >
+                                                    {pdf.text.length > 120_000
+                                                      ? `${pdf.text.slice(0, 120_000)}\n\n[truncated]`
+                                                      : pdf.text}
+                                                  </pre>
+                                                </details>
+                                              ) : null}
                                             </div>
                                           ) : (
                                             <p className="text-sm text-muted-foreground">
-                                              {isMontgomeryProjectDox &&
+                                              {isMdAvolveProjectDox &&
                                               rowEntry &&
                                               (isHttpUrlCandidate(
                                                 rowEntry.viewerUrl,
@@ -3219,7 +4031,7 @@ export default function PortalDataViewer() {
                     ) : (
                       <div className="p-4 space-y-4">
                         {reportEntries.map((entry, idx) => {
-                          if (isMontgomeryProjectDox) {
+                          if (isMdAvolveProjectDox) {
                             const {
                               viewerUrl: viewerCardHref,
                               pdfUrl: pdfCardHref,
@@ -3310,12 +4122,32 @@ export default function PortalDataViewer() {
                                 </CardTitle>
                               </CardHeader>
                               <CardContent className="flex flex-wrap gap-2 pt-0">
+                                {isPgcEplan &&
+                                  (isHttpUrlCandidate(entry.viewerUrl) ||
+                                    isHttpUrlCandidate(entry.reportUrl)) && (
+                                    <Button asChild size="sm" variant="outline">
+                                      <a
+                                        href={
+                                          isHttpUrlCandidate(entry.viewerUrl)
+                                            ? String(entry.viewerUrl).trim()
+                                            : String(entry.reportUrl).trim()
+                                        }
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title="Open SSRS ReportViewer in ePlan (original layout)"
+                                      >
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Open viewer
+                                      </a>
+                                    </Button>
+                                  )}
                                 {entry.pdfUrl ? (
                                   <Button asChild size="sm" variant="default">
                                     <a
                                       href={entry.pdfUrl}
                                       target="_blank"
                                       rel="noreferrer"
+                                      title="PDF exported from SSRS and stored for this project (binary file)"
                                     >
                                       <FileText className="h-4 w-4 mr-2" />
                                       Download PDF
@@ -3336,6 +4168,7 @@ export default function PortalDataViewer() {
                                       href={entry.excelUrl}
                                       target="_blank"
                                       rel="noreferrer"
+                                      title="Excel export from SSRS (not a substitute for the PDF)"
                                     >
                                       Download Excel
                                     </a>
@@ -3345,24 +4178,6 @@ export default function PortalDataViewer() {
                                     Excel not available
                                   </span>
                                 )}
-                                {isPgcEplan &&
-                                !entry.pdfUrl &&
-                                !entry.excelUrl &&
-                                (entry.viewerUrl || entry.reportUrl) ? (
-                                  <Button asChild size="sm" variant="outline">
-                                    <a
-                                      href={
-                                        entry.viewerUrl ||
-                                        entry.reportUrl ||
-                                        "#"
-                                      }
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      Open portal viewer (debug)
-                                    </a>
-                                  </Button>
-                                ) : null}
                               </CardContent>
                             </Card>
                           );
@@ -3637,75 +4452,118 @@ export default function PortalDataViewer() {
         )}
       </Tabs>
 
-      {lightboxImage && (
-        <div
-          className="fixed inset-0 z-50"
-          style={{ backgroundColor: "#050E1FCC", backdropFilter: "blur(8px)" }}
-          onClick={() => setLightboxImage(null)}
-          data-testid="modal-lightbox"
+      <Dialog
+        open={!!reportReaderOpen}
+        onOpenChange={(open) => {
+          if (!open) setReportReaderOpen(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-3xl max-h-[90vh] overflow-y-auto border-border bg-[#091428] text-foreground"
+          data-testid="dialog-report-reader"
         >
-          <button
-            className="fixed top-4 right-4 z-[60] p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setLightboxImage(null);
-            }}
-            data-testid="button-lightbox-close"
-          >
-            <X className="h-6 w-6" style={{ color: "#F0F6FF" }} />
-          </button>
-
-          <div className="fixed bottom-4 right-4 z-[60] flex items-center gap-2">
-            <span
-              className="text-xs font-mono px-2 py-1 rounded bg-black/40"
-              style={{ color: "#F0F6FF" }}
-            >
-              {lightboxZoom}%
-            </span>
-            <button
-              className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors disabled:opacity-40"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxZoom((z) => Math.max(50, z - 25));
-              }}
-              disabled={lightboxZoom <= 50}
-              data-testid="button-lightbox-zoom-out"
-            >
-              <ZoomOut className="h-5 w-5" style={{ color: "#F0F6FF" }} />
-            </button>
-            <button
-              className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors disabled:opacity-40"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxZoom((z) => Math.min(200, z + 25));
-              }}
-              disabled={lightboxZoom >= 200}
-              data-testid="button-lightbox-zoom-in"
-            >
-              <ZoomIn className="h-5 w-5" style={{ color: "#F0F6FF" }} />
-            </button>
-          </div>
-
-          <div
-            className="absolute inset-0 overflow-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-center min-h-full px-4 py-8">
-              <img
-                src={lightboxImage.src}
-                alt={lightboxImage.alt}
-                className="block h-auto"
-                style={{
-                  width: `${lightboxZoom}%`,
-                  maxWidth: "none",
-                  imageRendering: "auto",
-                }}
-                data-testid="img-lightbox-full"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+          {reportReaderOpen ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-left pr-8">
+                  {reportReaderOpen.reportName}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-1">
+                {String(reportReaderOpen.pdf.text ?? "").trim() ? (
+                  <>
+                    {isPgcEplan &&
+                    reportReaderOpen.pdf.fileName?.includes(
+                      "Review Comments",
+                    ) ? (
+                      <details className="rounded border border-[#1A3055] bg-[#091428] p-2 text-xs">
+                        <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
+                          Raw extracted text (stored — copyable)
+                        </summary>
+                        <pre
+                          className="mt-2 max-h-[min(50vh,480px)] overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF]"
+                          data-testid="dialog-pgc-review-comments-raw-text"
+                        >
+                          {(reportReaderOpen.pdf.text || "").length > 120_000
+                            ? `${(reportReaderOpen.pdf.text || "").slice(0, 120_000)}\n\n[truncated]`
+                            : reportReaderOpen.pdf.text}
+                        </pre>
+                      </details>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No extracted text for this report in saved data.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {isHttpUrlCandidate(reportReaderOpen.pdf.url) ? (
+                    <Button asChild size="sm" variant="default">
+                      <a
+                        href={String(reportReaderOpen.pdf.url).trim()}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={
+                          isPgcEplan
+                            ? "Open SSRS ReportViewer in ePlan (original layout)"
+                            : "Open report viewer"
+                        }
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        {isPgcEplan
+                          ? "Open SSRS viewer"
+                          : "Open report in portal"}
+                      </a>
+                    </Button>
+                  ) : null}
+                  {isHttpUrlCandidate(reportReaderOpen.pdf.pdfUrl) ? (
+                    <Button asChild size="sm" variant="secondary">
+                      <a
+                        href={String(reportReaderOpen.pdf.pdfUrl).trim()}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={
+                          isPgcEplan
+                            ? "Binary PDF exported from SSRS and stored for this project (not generated from extracted text)"
+                            : "Open stored PDF"
+                        }
+                      >
+                        {isPgcEplan ? "Open stored PDF" : "Open PDF"}
+                      </a>
+                    </Button>
+                  ) : null}
+                  {isHttpUrlCandidate(reportReaderOpen.pdf.excelUrl) ? (
+                    <Button asChild size="sm" variant="outline">
+                      <a
+                        href={String(reportReaderOpen.pdf.excelUrl).trim()}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Excel export from SSRS"
+                      >
+                        Open Excel
+                      </a>
+                    </Button>
+                  ) : null}
+                </div>
+                {reportReaderOpen.pdf.screenshot ? (
+                  <div className="rounded-md border border-border/60 bg-muted/10 p-3">
+                    <p className="text-xs text-amber-200/90 mb-2">
+                      Low-resolution preview only (compressed for database
+                      storage). It is not full quality — use extracted text or
+                      portal links above when available.
+                    </p>
+                    <img
+                      src={`data:image/png;base64,${reportReaderOpen.pdf.screenshot}`}
+                      alt=""
+                      className="max-w-full max-h-64 w-auto mx-auto object-contain opacity-95"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

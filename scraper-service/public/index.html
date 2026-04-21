@@ -25,6 +25,15 @@
         
         <label>Password</label>
         <input type="password" id="password" placeholder="••••••••" />
+
+        <label>Portal URL (required for Accela / Citizen Access)</label>
+        <input type="text" id="portalUrl" placeholder="https://plus.fairfaxcounty.gov/CitizenAccess" />
+
+        <label>Permit # (required for Accela scrape after login)</label>
+        <input type="text" id="permitNumber" placeholder="e.g. BLD-2024-00000" />
+
+        <label>Project ID (Supabase projects.id — required for Baltimore/Fairfax Accela DB sync)</label>
+        <input type="text" id="projectId" placeholder="uuid from app sidebar project" />
         
         <button onclick="startLogin()" id="loginBtn">Launch Scraper</button>
     </div>
@@ -54,10 +63,13 @@
             log("🚀 Launching secure browser...");
 
             try {
+                const portalUrl = document.getElementById('portalUrl').value.trim();
+                const loginBody = { username: email, password };
+                if (portalUrl) loginBody.portalUrl = portalUrl;
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: email, password })
+                    body: JSON.stringify(loginBody)
                 });
                 const data = await res.json();
                 if(data.error) throw new Error(data.error);
@@ -72,6 +84,11 @@
 
         async function startScrape() {
             log("🔍 Scraping reports & tasks...");
+            const permitNumber = document.getElementById('permitNumber').value.trim();
+            const projectId = document.getElementById('projectId').value.trim();
+            const scrapePayload = { sessionId };
+            if (permitNumber) scrapePayload.permitNumber = permitNumber;
+            if (projectId) scrapePayload.projectId = projectId;
             const evtSource = new EventSource(`/api/progress/${sessionId}`);
             evtSource.onmessage = function(e) {
                 const d = JSON.parse(e.data);
@@ -82,11 +99,16 @@
                     document.getElementById('statusText').innerText = "✅ Complete";
                 }
             };
-            await fetch('/api/scrape', {
+            const scrapeRes = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId })
+                body: JSON.stringify(scrapePayload)
             });
+            if (!scrapeRes.ok) {
+                const err = await scrapeRes.json().catch(() => ({}));
+                log(`❌ /api/scrape failed (${scrapeRes.status}): ${err.error || scrapeRes.statusText}`);
+                evtSource.close();
+            }
         }
 
         function downloadReport() {

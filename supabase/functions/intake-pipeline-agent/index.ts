@@ -69,9 +69,19 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const projectId = body.project_id as string | undefined;
     const cursor = body.cursor as { pdfIndex?: number } | undefined;
+    const fullRefresh = body.full_refresh === true;
     const parserTimeout = (body.parser_timeout_ms as number | undefined) ?? PARSER_TIMEOUT_MS;
     const classifierTimeout = (body.classifier_timeout_ms as number | undefined) ?? CLASSIFIER_TIMEOUT_MS;
-    console.log("[intake-pipeline] project_id:", projectId ?? "(missing)", "user.id:", user.id, "cursor:", cursor ?? "none");
+    console.log(
+      "[intake-pipeline] project_id:",
+      projectId ?? "(missing)",
+      "user.id:",
+      user.id,
+      "cursor:",
+      cursor ?? "none",
+      "full_refresh:",
+      fullRefresh,
+    );
 
     if (!projectId) {
       return new Response(
@@ -90,7 +100,9 @@ serve(async (req) => {
     type ParserResult = {
       parsed_count?: number;
       skipped_count?: number;
+      skipped_breakdown?: Record<string, number>;
       insert_error_count?: number;
+      pipeline_evidence?: Record<string, unknown>;
       error?: string;
       code?: number;
       next_cursor?: { pdfIndex: number };
@@ -104,10 +116,17 @@ serve(async (req) => {
     const parserStart = Date.now();
     console.log("[intake-pipeline] comment-parser start");
     try {
+      const capturePipelineEvidence = body.capture_pipeline_evidence === true;
       const commentParserRes = await fetchWithTimeout(`${baseUrl}/comment-parser-agent`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ project_id: projectId, cursor, max_pdfs: 2 }),
+        body: JSON.stringify({
+          project_id: projectId,
+          cursor,
+          max_pdfs: 2,
+          ...(fullRefresh ? { full_refresh: true } : {}),
+          ...(capturePipelineEvidence ? { capture_pipeline_evidence: true } : {}),
+        }),
         timeoutMs: parserTimeout,
       });
       const commentParserText = await commentParserRes.text();
@@ -131,7 +150,13 @@ serve(async (req) => {
         commentParserResult = {
           parsed_count: (commentParserJson.parsed_count as number) ?? 0,
           skipped_count: (commentParserJson.skipped_count as number) ?? 0,
+          skipped_breakdown: commentParserJson.skipped_breakdown as
+            | Record<string, number>
+            | undefined,
           insert_error_count: (commentParserJson.insert_error_count as number) ?? 0,
+          pipeline_evidence: commentParserJson.pipeline_evidence as
+            | Record<string, unknown>
+            | undefined,
           next_cursor: commentParserJson.next_cursor as { pdfIndex: number } | undefined,
           done: commentParserJson.done === true,
           total_pdfs: commentParserJson.total_pdfs as number | undefined,

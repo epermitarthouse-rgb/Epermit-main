@@ -21,6 +21,8 @@
     "express": "^5.2.1",
     "open": "^11.0.0",
     "pdf-parse": "^1.1.1",
-    "playwright": "^1.58.2"
+    "pdfjs-dist": "^3.11.174",
+    "playwright": "^1.58.2",
+    "sharp": "^0.33.5"
   }
 }

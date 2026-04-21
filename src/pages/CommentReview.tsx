@@ -108,8 +108,19 @@ export default function CommentReview() {
     let round = 0;
     try {
       while (round < maxRounds) {
+        const capturePipelineEvidence =
+          typeof sessionStorage !== "undefined" &&
+          sessionStorage.getItem("ep_capture_pipeline_evidence") === "1";
         const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
-          body: { project_id: projectId, ...(cursor && { cursor }) },
+          body: {
+            project_id: projectId,
+            /** First round only: replace rows + clear cursor so re-parse is complete (continuation uses cursor). */
+            ...(!cursor ? { full_refresh: true } : {}),
+            ...(cursor && { cursor }),
+            ...(capturePipelineEvidence
+              ? { capture_pipeline_evidence: true }
+              : {}),
+          },
         });
         if (error) {
           toast.error("Pipeline failed");
@@ -128,6 +139,9 @@ export default function CommentReview() {
           break;
         }
         if (cp?.done === true && !cp?.error) {
+          if (cp.pipeline_evidence != null) {
+            console.info("[CommentReview pipeline_evidence]", cp.pipeline_evidence);
+          }
           await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
           const pc = typeof cp.parsed_count === "number" ? cp.parsed_count : 0;
           if (pc > 0) {
@@ -387,9 +401,20 @@ export default function CommentReview() {
                     {portalComments.length} comment{portalComments.length !== 1 ? "s" : ""} from the portal.
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => { refetchComments(); }}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingFromPortal}
+                  onClick={() => {
+                    void loadFromPortal();
+                  }}
+                >
+                  {loadingFromPortal ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Reload from portal
                 </Button>
               </div>
             </CardHeader>

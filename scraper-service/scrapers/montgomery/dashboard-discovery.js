@@ -411,11 +411,193 @@ async function waitForMontgomeryDashboardReady(page, dashboardUrl) {
   ]).catch(() => {});
 }
 
+/** @see pgc-eplan-scraper MAX_PAGER_PAGES */
+const MAX_MONTGOMERY_DISCOVERY_PAGES = 25;
+
 /**
- * Scrape project rows from the main document (not child frames). Parses ProjectID from launchRemote / Frame.aspx.
+ * Infragistics `grdProjects` paging + row fingerprint (AJAX; URL unchanged).
  * @param {import('playwright').Page} page
  */
-async function collectMontgomeryDashboardProjects(page) {
+async function readMontgomeryGrdProjectsPagingSnapshot(page) {
+  return page.evaluate(() => {
+    const grid = document.getElementById("grdProjects");
+    const labelEl = document.getElementById("grdProjects_pager_label");
+    const pagerLabel = labelEl
+      ? String(labelEl.textContent || "").replace(/\s+/g, " ").trim()
+      : "";
+
+    const pager =
+      document.getElementById("grdProjects_pager") ||
+      grid?.closest(".ui-iggrid")?.querySelector(".ui-iggrid-paging") ||
+      grid?.parentElement?.querySelector(".ui-iggrid-paging");
+
+    let currentPage = 1;
+    const curEl =
+      pager?.querySelector(".ui-iggrid-pagelinkcurrent") ||
+      grid?.querySelector(".ui-iggrid-pagelinkcurrent");
+    if (curEl) {
+      const t = (curEl.textContent || "").trim();
+      if (/^\d+$/.test(t)) currentPage = parseInt(t, 10);
+    }
+
+    /** @type {{ start: number, end: number, total: number } | null} */
+    let range = null;
+    const rm = pagerLabel.match(/(\d+)\s*-\s*(\d+)\s+of\s+(\d+)/i);
+    if (rm) {
+      range = { start: +rm[1], end: +rm[2], total: +rm[3] };
+      const pageSize = range.end - range.start + 1;
+      if (
+        pageSize > 0 &&
+        (!curEl || !/^\d+$/.test((curEl.textContent || "").trim()))
+      ) {
+        currentPage = Math.floor((range.start - 1) / pageSize) + 1;
+      }
+    }
+
+    const ids = [];
+    let firstPermit = "";
+    let rowCount = 0;
+    if (grid) {
+      const trs = grid.querySelectorAll(
+        ".ui-iggrid-table tbody tr, table tbody tr",
+      );
+      for (const tr of trs) {
+        if (tr.closest("thead")) continue;
+        rowCount++;
+        const a = tr.querySelector(
+          'a[href^="javascript:"], a[href*="launchRemote"], a[href*="Frame.aspx"]',
+        );
+        if (rowCount === 1 && a) {
+          firstPermit = String(a.textContent || "")
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          const cells = tr.querySelectorAll("td, [role='gridcell']");
+          if (!firstPermit || firstPermit.length < 2) {
+            firstPermit = String(cells[0]?.textContent || "")
+              .replace(/\u00a0/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+          }
+        }
+        const href = a?.getAttribute("href") || "";
+        const raw = String(href).replace(/%27/g, "'").replace(/%22/g, '"');
+        const lr = raw.match(/launchRemote\s*\(\s*['"]([^'"]+)['"]\s*\)/i);
+        const payload = lr ? lr[1] : raw;
+        let decoded = payload;
+        try {
+          decoded = decodeURIComponent(payload);
+        } catch (_) {}
+        const m =
+          decoded.match(/ProjectID=(\d+)/i) ||
+          payload.match(/ProjectID=(\d+)/i) ||
+          decoded.match(/ProjectID%3D(\d+)/i);
+        if (m) ids.push(m[1]);
+      }
+    }
+
+    return {
+      hasGrid: !!grid,
+      pagerLabel,
+      currentPage,
+      range,
+      rowCount,
+      firstPermit,
+      rowSignature: [...ids].sort().join(","),
+    };
+  });
+}
+
+/**
+ * Click igGrid page N or Next; wait until label / rows / current page indicator change.
+ * @param {import('playwright').Page} page
+ * @param {Awaited<ReturnType<typeof readMontgomeryGrdProjectsPagingSnapshot>>} beforeSnap
+ */
+async function advanceMontgomeryGrdProjectsPage(page, beforeSnap) {
+  const wantPage = beforeSnap.currentPage + 1;
+  console.log(
+    `[Montgomery][grdProjects] pager click → dashboard page ${wantPage} (was ${beforeSnap.currentPage}) label="${beforeSnap.pagerLabel}" gridRows=${beforeSnap.rowCount} firstPermit=${beforeSnap.firstPermit || "n/a"}`,
+  );
+
+  const pager = page.locator("#grdProjects_pager").first();
+  let clicked = false;
+
+  if ((await pager.count()) > 0) {
+    const byRole = pager
+      .getByRole("link", { name: new RegExp(`^\\s*${wantPage}\\s*$`) })
+      .first();
+    if (await byRole.isVisible().catch(() => false)) {
+      await byRole.click({ timeout: 12000 });
+      clicked = true;
+    } else {
+      const numLink = pager
+        .locator("a.ui-iggrid-pagelink, .ui-iggrid-pagelink")
+        .filter({ hasText: new RegExp(`^\\s*${wantPage}\\s*$`) })
+        .first();
+      if (await numLink.isVisible().catch(() => false)) {
+        await numLink.click({ timeout: 12000 });
+        clicked = true;
+      }
+    }
+  }
+
+  if (!clicked) {
+    const nextLoc = page
+      .locator(
+        "#grdProjects_pager .ui-iggrid-nextpage:not(.ui-state-disabled), #grdProjects_pager .ui-iggrid-paging-next:not(.ui-state-disabled)",
+      )
+      .first();
+    if (await nextLoc.isVisible().catch(() => false)) {
+      await nextLoc.click({ timeout: 12000 });
+      clicked = true;
+    }
+  }
+
+  if (!clicked) {
+    const fallback = page
+      .locator(".ui-iggrid-paging .ui-iggrid-nextpage:not(.ui-state-disabled)")
+      .first();
+    if (await fallback.isVisible().catch(() => false)) {
+      await fallback.click({ timeout: 12000 });
+      clicked = true;
+    }
+  }
+
+  if (!clicked) {
+    console.log("[Montgomery][grdProjects] no pager control matched for advance");
+    return false;
+  }
+
+  const prev = { ...beforeSnap };
+  const deadline = Date.now() + 22000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(220);
+    const snap = await readMontgomeryGrdProjectsPagingSnapshot(page);
+    if (
+      snap.pagerLabel !== prev.pagerLabel ||
+      snap.rowSignature !== prev.rowSignature ||
+      snap.firstPermit !== prev.firstPermit ||
+      snap.currentPage !== prev.currentPage
+    ) {
+      console.log(
+        `[Montgomery][grdProjects] grid refreshed dashboard page=${snap.currentPage} label="${snap.pagerLabel}" rows=${snap.rowCount} firstPermit=${snap.firstPermit || "n/a"} sig=${snap.rowSignature.slice(0, 72)}`,
+      );
+      return true;
+    }
+  }
+
+  console.warn(
+    "[Montgomery][grdProjects] timeout waiting for AJAX grid refresh after pager click",
+  );
+  return false;
+}
+
+/**
+ * One DOM snapshot of the My Projects grid (current page only).
+ * When `#grdProjects` exists, only rows inside it are used (avoids extra DOM noise).
+ * @param {import('playwright').Page} page
+ */
+async function collectMontgomeryDashboardProjectsFromDom(page) {
   return page.evaluate(() => {
     function norm(s) {
       return String(s || "")
@@ -467,11 +649,15 @@ async function collectMontgomeryDashboardProjects(page) {
       });
     }
 
-    const rowSelectors =
-      "table tbody tr, table tr, .ui-iggrid-table tbody tr, [role='row']";
+    const gridRoot = document.querySelector("#grdProjects");
+    const rowSelectors = gridRoot
+      ? "table tbody tr, .ui-iggrid-table tbody tr, [role='row']"
+      : "table tbody tr, table tr, .ui-iggrid-table tbody tr, [role='row']";
+    const root = gridRoot || document.body;
 
-    document.querySelectorAll(rowSelectors).forEach((tr) => {
+    root.querySelectorAll(rowSelectors).forEach((tr) => {
       if (tr.closest("thead")) return;
+      if (gridRoot && !gridRoot.contains(tr)) return;
       const anchors = tr.querySelectorAll(
         'a[href^="javascript:"], a[href*="Frame.aspx"]',
       );
@@ -491,7 +677,9 @@ async function collectMontgomeryDashboardProjects(page) {
       }
     });
 
-    document.querySelectorAll('a[href*="launchRemote"]').forEach((a) => {
+    const linkRoot = gridRoot || document;
+    linkRoot.querySelectorAll('a[href*="launchRemote"]').forEach((a) => {
+      if (gridRoot && !gridRoot.contains(a)) return;
       const href = a.getAttribute("href") || "";
       const pid = parsePidFromHref(href);
       if (!pid) return;
@@ -515,6 +703,192 @@ async function collectMontgomeryDashboardProjects(page) {
 
     return out;
   });
+}
+
+/**
+ * Legacy discovery when `#grdProjects` is absent — uses shared PGC pager heuristics.
+ * @param {import('playwright').Page} page
+ */
+async function collectMontgomeryDashboardProjectsLegacyPager(page) {
+  const pgc = require("../../pgc-eplan-scraper");
+  const pagerGuess = await pgc.detectPaginationMode(page);
+  let paginationMode = pagerGuess.mode;
+  if (paginationMode === "view_all") paginationMode = "next_button";
+
+  /** @type {Map<string, object>} */
+  const uniqueByKey = new Map();
+  let lastSignature = "";
+  let advancedPastFirstPage = false;
+
+  for (let i = 0; i < MAX_MONTGOMERY_DISCOVERY_PAGES; i++) {
+    const pageNum = i + 1;
+    let slice = await collectMontgomeryDashboardProjectsFromDom(page);
+    if (slice.length === 0 && i === 0) {
+      await page.waitForTimeout(800).catch(() => {});
+      slice = await collectMontgomeryDashboardProjectsFromDom(page);
+    }
+    for (const p of slice) {
+      const key =
+        String(p.projectId || p.id || "").trim() ||
+        String(p.projectNum || "").trim();
+      if (!key) continue;
+      if (!uniqueByKey.has(key)) uniqueByKey.set(key, p);
+    }
+    console.log(
+      `[Montgomery][discovery-paging] legacy page ${pageNum}/${MAX_MONTGOMERY_DISCOVERY_PAGES} slice=${slice.length} cumulative_unique=${uniqueByKey.size} mode=${paginationMode}`,
+    );
+
+    const idsOnPage = slice
+      .map((p) => String(p.projectId || "").trim())
+      .filter(Boolean);
+    const sig = [...idsOnPage].sort().join(",");
+    if (i > 0 && idsOnPage.length > 0 && sig === lastSignature) {
+      console.log(
+        "[Montgomery][discovery-paging] legacy same grid signature — stop",
+      );
+      break;
+    }
+    lastSignature = sig;
+
+    const canPaginate =
+      paginationMode === "next_button" ||
+      paginationMode === "numbered_pages" ||
+      paginationMode === "unknown";
+    if (!canPaginate || paginationMode === "single_page") {
+      console.log(
+        `[Montgomery][discovery-paging] legacy no more pages (mode=${paginationMode})`,
+      );
+      break;
+    }
+
+    const preferNum = paginationMode === "numbered_pages";
+    const advanced = await pgc.goToNextPage(page, preferNum);
+    if (!advanced) {
+      console.log(
+        "[Montgomery][discovery-paging] legacy pager did not advance — stop",
+      );
+      break;
+    }
+    advancedPastFirstPage = true;
+    if (paginationMode === "unknown" && advanced) paginationMode = "next_button";
+    await pgc.waitForProjectGrid(page);
+  }
+
+  return { projects: Array.from(uniqueByKey.values()), advancedPastFirstPage };
+}
+
+/**
+ * Scrape project rows from the main document (not child frames).
+ * Uses Infragistics `grdProjects` pager (`grdProjects_pager`, `grdProjects_pager_label`) + AJAX refresh wait.
+ * @param {import('playwright').Page} page
+ */
+async function collectMontgomeryDashboardProjects(page) {
+  const pgc = require("../../pgc-eplan-scraper");
+  await pgc.waitForProjectGrid(page);
+
+  const bootSnap = await readMontgomeryGrdProjectsPagingSnapshot(page);
+  const targetPermitLog =
+    process.env.MONTGOMERY_DEBUG_TARGET_PERMIT?.trim() || "";
+
+  if (!bootSnap.hasGrid) {
+    console.log(
+      "[Montgomery][discovery] no #grdProjects — using legacy pager path",
+    );
+    const legacy = await collectMontgomeryDashboardProjectsLegacyPager(page);
+    if (legacy.advancedPastFirstPage) {
+      console.log(
+        "[Montgomery][discovery-paging] reload dashboard so follow-up row clicks run on page 1",
+      );
+      await page
+        .reload({ waitUntil: "domcontentloaded", timeout: 45000 })
+        .catch(() => {});
+      await pgc.waitForProjectGrid(page);
+    }
+    return legacy.projects;
+  }
+
+  if (targetPermitLog) {
+    console.log(
+      `[Montgomery][grdProjects] debug targetPermit=${targetPermitLog}`,
+    );
+  }
+
+  /** @type {Map<string, object>} */
+  const uniqueByKey = new Map();
+  let lastRowSignature = "";
+  let advancedPastFirstPage = false;
+
+  for (let i = 0; i < MAX_MONTGOMERY_DISCOVERY_PAGES; i++) {
+    const snap = await readMontgomeryGrdProjectsPagingSnapshot(page);
+    const dashPage = snap.currentPage;
+    let slice = await collectMontgomeryDashboardProjectsFromDom(page);
+    if (slice.length === 0 && i === 0) {
+      await page.waitForTimeout(800).catch(() => {});
+      slice = await collectMontgomeryDashboardProjectsFromDom(page);
+    }
+
+    for (const p of slice) {
+      const key =
+        String(p.projectId || p.id || "").trim() ||
+        String(p.projectNum || "").trim();
+      if (!key) continue;
+      if (!uniqueByKey.has(key)) uniqueByKey.set(key, p);
+    }
+
+    const targetHit =
+      targetPermitLog &&
+      slice.some(
+        (p) =>
+          String(p.projectNum || "")
+            .trim()
+            .toUpperCase() === targetPermitLog.toUpperCase(),
+      );
+    if (targetHit) {
+      console.log(
+        `[Montgomery][grdProjects] target permit visible on dashboard page ${dashPage}: ${targetPermitLog}`,
+      );
+    }
+
+    console.log(
+      `[Montgomery][grdProjects] dashboardPage=${dashPage} slice=${slice.length} cumulative_unique=${uniqueByKey.size} label="${snap.pagerLabel}" firstPermit=${snap.firstPermit || "n/a"} sig=${snap.rowSignature.slice(0, 80)}`,
+    );
+
+    if (i > 0 && snap.rowSignature && snap.rowSignature === lastRowSignature) {
+      console.log(
+        "[Montgomery][grdProjects] row signature unchanged after advance — stop",
+      );
+      break;
+    }
+    lastRowSignature = snap.rowSignature;
+
+    const hasMore = !!(snap.range && snap.range.end < snap.range.total);
+    if (!hasMore) {
+      console.log(
+        `[Montgomery][grdProjects] no more pages (end=${snap.range?.end ?? "?"} total=${snap.range?.total ?? "?"})`,
+      );
+      break;
+    }
+
+    const advanced = await advanceMontgomeryGrdProjectsPage(page, snap);
+    if (!advanced) {
+      console.log("[Montgomery][grdProjects] advance failed — stop");
+      break;
+    }
+    advancedPastFirstPage = true;
+    await pgc.waitForProjectGrid(page);
+  }
+
+  if (advancedPastFirstPage) {
+    console.log(
+      "[Montgomery][discovery-paging] reload dashboard so follow-up row clicks run on page 1",
+    );
+    await page
+      .reload({ waitUntil: "domcontentloaded", timeout: 45000 })
+      .catch(() => {});
+    await pgc.waitForProjectGrid(page);
+  }
+
+  return Array.from(uniqueByKey.values());
 }
 
 /**

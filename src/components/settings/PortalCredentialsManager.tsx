@@ -69,6 +69,10 @@ const JURISDICTION_PORTALS = [
   { jurisdiction: "Harford County MD", url: "https://epermitcenter.harfordcountymd.gov/" },
   { jurisdiction: "Baltimore City MD - ProjectDox", url: "https://eplans.baltimorecity.gov/projectdox/" },
   { jurisdiction: "Baltimore City MD - Accela", url: "https://aca-prod.accela.com/BALTIMORE" },
+  {
+    jurisdiction: "Fairfax County VA - Accela",
+    url: "https://plus.fairfaxcounty.gov/CitizenAccess",
+  },
   { jurisdiction: "Baltimore Housing", url: "https://cels.baltimorehousing.org/" },
   { jurisdiction: "Anne Arundel County MD", url: "https://aca-prod.accela.com/AACO/Welcome.aspx" },
   { jurisdiction: "WSSC Water", url: "https://wssc-md-us.avolvecloud.com/Portal/Login/Index/WSSC-Prod" },

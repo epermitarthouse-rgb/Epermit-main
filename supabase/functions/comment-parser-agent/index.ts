@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import OpenAI from "https://esm.sh/openai@4.28.0";
+import {
+  inferPgcDisciplineFromReviewedBy,
+  parsePgcReviewComments,
+  type PgcReviewCommentsRow,
+} from "../_shared/pgcReviewCommentsStackedParse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,14 +54,65 @@ function normalizePgcFlattenedReviewCommentsText(raw: string): string {
 function isPgcExportReviewCommentsPdf(p: PortalPdf): boolean {
   const src = String(p.info?.source ?? "");
   return (
-    (src === "pgc-export" || src === "montgomery-export") &&
+    (src === "pgc-export" ||
+      src === "montgomery-export" ||
+      src === "howard-export") &&
     String(p.fileName ?? "").toLowerCase().includes("review comments") &&
     !String(p.fileName ?? "").toLowerCase().includes("review details") &&
     !String(p.fileName ?? "").toLowerCase().includes("routing slip")
   );
 }
 
+/** PGC ePlan + pgc-export Review Comments: use deterministic stacked parser (same as PortalDataViewer), not LLM. */
+function isPgcEplanDeterministicReviewCommentsExport(
+  portalData: PortalData,
+  pdf: PortalPdf,
+): boolean {
+  if (String(portalData.portalSubtype ?? "") !== "pgc-eplan") return false;
+  if (String(pdf.info?.source ?? "") !== "pgc-export") return false;
+  const name = String(pdf.fileName ?? "").toLowerCase();
+  return (
+    name.includes("review comments") &&
+    !name.includes("review details") &&
+    !name.includes("routing slip")
+  );
+}
+
+/**
+ * Match UI: stacked parse on raw text first (getReviewCommentsDisplayTextForPortal); retry on normalized if needed.
+ */
+function tryPgcStackedRowsRawThenNormalized(raw: string): PgcReviewCommentsRow[] | null {
+  const first = parsePgcReviewComments(raw);
+  if (first.ok && first.rows.length > 0) return first.rows;
+  const norm = normalizePgcFlattenedReviewCommentsText(raw);
+  if (norm.trim() === String(raw ?? "").trim()) return null;
+  const second = parsePgcReviewComments(norm);
+  if (second.ok && second.rows.length > 0) return second.rows;
+  return null;
+}
+
+function formatPgcDeterministicPersistedComment(row: PgcReviewCommentsRow): string {
+  return [
+    `REF #: ${row.ref}`,
+    `CYCLE: ${row.cycle}`,
+    `REVIEWED BY: ${row.reviewedBy}`,
+    `DATE/TIME: ${row.dateTime}`,
+    `TYPE: ${row.type}`,
+    `FILENAME: ${row.filename}`,
+    `PORTAL STATUS: ${row.status}`,
+    "",
+    "DISCUSSION:",
+    row.discussion,
+    "",
+    "--- SOURCE BLOCK ---",
+    row.originalTextBlock,
+  ]
+    .join("\n")
+    .trim();
+}
+
 interface PortalData {
+  portalSubtype?: string;
   tabs?: {
     reports?: { pdfs?: PortalPdf[] };
   };
@@ -225,7 +281,12 @@ function splitPgcFlattenedRowBlocks(normalized: string): string[] | null {
   );
   if (markers.length < 1) return null;
   if (markers.length < 2 && lines.length < 10) return null;
-  const out = lines.filter((l) => l.length >= 15 && !isNoiseBlock(l));
+  const out = lines.filter((l) => {
+    const t = l.trim();
+    if (isNoiseBlock(l)) return false;
+    if (t.length >= 15) return true;
+    return /^REF\s*#\s*\d+/i.test(t) || /^REF\s*#\s*CYCLE\b/i.test(t);
+  });
   if (out.length < 2) return null;
   return out;
 }
@@ -271,16 +332,36 @@ function looksLikeRealComment(block: string): boolean {
   return REAL_COMMENT_SIGNALS.some((signal) => lower.includes(signal.toLowerCase()));
 }
 
-/** PGC flattened PDF row: file + status, REF line, or long discussion with reviewer vocabulary. */
+/**
+ * PGC Review Comments grid row without tabs: 2+ spaces between columns (PDF text extract).
+ * Kept separate from isTabularCommentRow so Washington / strict tab paths stay unchanged.
+ */
+function isPgcSpaceAlignedGridRow(t: string): boolean {
+  if (t.includes("\t")) return false;
+  if (t.length < 28) return false;
+  const parts = t
+    .split(/\s{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return parts.length >= 4;
+}
+
+/** PGC flattened PDF row: REF/status/pdf signals first — do not reject short REF-only lines before pattern checks. */
 function isPgcFlattenedCommentRow(b: string): boolean {
   const t = b.trim();
-  if (t.length < 20) return false;
+  if (t.length < 2) return false;
+  if (/^REF\s*#\s*CYCLE\b/i.test(t)) return true;
+  if (/^REF\s*#\s*\d+/i.test(t)) return true;
   if (/\.pdf\b/i.test(t)) return true;
   if (/\b(unresolved|resolved|info\s*only|infoonly)\b/i.test(t)) return true;
-  if (/^REF\s*#\s*\d+/i.test(t)) return true;
-  if (/^REF\s*#\s*CYCLE\b/i.test(t)) return true;
   if (t.length >= 40 && looksLikeRealComment(t)) return true;
+  if (isPgcSpaceAlignedGridRow(t)) return true;
   return false;
+}
+
+/** Short line that is still a PGC grid fragment (must pass isNoiseBlock + isPgcFlattenedCommentRow after). */
+function isPgcShortRefOrCycleLine(t: string): boolean {
+  return /^REF\s*#\s*\d+/i.test(t) || /^REF\s*#\s*CYCLE\b/i.test(t);
 }
 
 /** Filter out report titles, metadata, table headers, and other noise before LLM. Only keep blocks that look like real comments. */
@@ -289,7 +370,12 @@ function filterNoiseBlocks(
   opts?: { allowPgcFlattenedRows?: boolean },
 ): string[] {
   return blocks
-    .filter((b) => b.trim().length >= 15)
+    .filter((b) => {
+      const t = b.trim();
+      if (t.length < 1) return false;
+      if (opts?.allowPgcFlattenedRows === true && isPgcShortRefOrCycleLine(t)) return true;
+      return t.length >= 15;
+    })
     .filter((b) => !isNoiseBlock(b))
     .filter((b) => {
       const pgcRow = opts?.allowPgcFlattenedRows === true && isPgcFlattenedCommentRow(b);
@@ -297,10 +383,14 @@ function filterNoiseBlocks(
     });
 }
 
+/** One LLM call per chunk so responses stay within max_tokens (large PGC reports need many blocks). */
+const CLASSIFY_BATCH_SIZE = 12;
+
 /** Classify comment text using same schema as parse-permit-comments (LLM). */
 async function classifyCommentBlocks(
   openai: OpenAI,
-  blocks: string[]
+  blocks: string[],
+  baseIndex = 0,
 ): Promise<ParsedCommentItem[]> {
   if (blocks.length === 0) return [];
 
@@ -326,7 +416,7 @@ Your task:
 3. If a block is not a real comment, omit it from the array.
 Return ONLY valid JSON. No markdown. Example: {"comments":[{"original_text":"Provide 1-hour fire rating","discipline":"Fire","code_reference":"IBC 708.4"}]}`;
 
-  const userContent = blocks.map((b, i) => `[${i + 1}]\n${b}`).join("\n\n");
+  const userContent = blocks.map((b, i) => `[${baseIndex + i + 1}]\n${b}`).join("\n\n");
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -357,9 +447,66 @@ Return ONLY valid JSON. No markdown. Example: {"comments":[{"original_text":"Pro
   }));
 }
 
+async function classifyCommentBlocksBatched(
+  openai: OpenAI,
+  blocks: string[],
+): Promise<ParsedCommentItem[]> {
+  const merged: ParsedCommentItem[] = [];
+  for (let off = 0; off < blocks.length; off += CLASSIFY_BATCH_SIZE) {
+    const chunk = blocks.slice(off, off + CLASSIFY_BATCH_SIZE);
+    const part = await classifyCommentBlocks(openai, chunk, off);
+    merged.push(...part);
+  }
+  return merged;
+}
+
 /** Normalize for duplicate check: trim and collapse whitespace. */
 function normalizeText(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+function previewSnippet(s: string, max = 200): string {
+  const one = s.replace(/\s+/g, " ").trim();
+  if (one.length <= max) return one;
+  return one.slice(0, max) + "…";
+}
+
+/** Evidence capture output for debugging modal vs parsed_comments mismatch (PGC stacked vs server pipeline). */
+function computeDropStageHint(args: {
+  split: number;
+  afterNoiseFilter: number;
+  llmInputBlockCount: number;
+  classified: number;
+  inserted: number;
+  skippedDuplicate: number;
+  skippedPostLlmNoise: number;
+}): string {
+  const {
+    split,
+    afterNoiseFilter,
+    llmInputBlockCount,
+    classified,
+    inserted,
+    skippedDuplicate,
+    skippedPostLlmNoise,
+  } = args;
+  if (split === 0) return "split: no blocks";
+  if (split === 1 && afterNoiseFilter >= 1 && classified <= 1 && inserted <= 1) {
+    return "split: single block only (likely fallback path, before filter)";
+  }
+  if (afterNoiseFilter < split) {
+    return "filter_stage: noise filter removed blocks (split → after_noise_filter)";
+  }
+  if (classified < llmInputBlockCount) {
+    return "classification_stage: LLM returned fewer items than blocks sent to model (after cap)";
+  }
+  if (inserted < classified) {
+    const parts: string[] = [];
+    if (skippedDuplicate > 0) parts.push(`duplicates_skipped=${skippedDuplicate}`);
+    if (skippedPostLlmNoise > 0) parts.push(`post_llm_noise_skipped=${skippedPostLlmNoise}`);
+    return `persistence_stage: ${parts.join("; ") || "insert failures or empty text"}`;
+  }
+  return "no_count_drop_vs_prior_stages (all stage counts aligned)";
 }
 
 serve(async (req) => {
@@ -424,6 +571,7 @@ serve(async (req) => {
     const maxPdfs = typeof body.max_pdfs === "number" && body.max_pdfs > 0 ? Math.min(body.max_pdfs, 10) : 2;
     const maxComments = typeof body.max_comments === "number" && body.max_comments > 0 ? body.max_comments : undefined;
     const cursorBody = body.cursor as { pdfIndex?: number } | undefined;
+    const capturePipelineEvidence = body.capture_pipeline_evidence === true;
 
     const { data: project, error: projectError } = await supabase
       .from("projects")
@@ -445,7 +593,28 @@ serve(async (req) => {
       );
     }
 
-    const portalData = (project.portal_data as PortalData | null) ?? {};
+    const fullRefresh = body.full_refresh === true;
+
+    let portalData = (project.portal_data as PortalData | null) ?? {};
+
+    if (fullRefresh) {
+      const { error: delErr } = await supabase
+        .from("parsed_comments")
+        .delete()
+        .eq("project_id", projectId);
+      if (delErr) console.warn("[comment-parser] full_refresh delete parsed_comments:", delErr.message);
+      const clearedPortal: PortalData = {
+        ...portalData,
+        meta: { ...portalData.meta, comment_parse_cursor: null },
+      };
+      const { error: metaErr } = await supabase
+        .from("projects")
+        .update({ portal_data: clearedPortal })
+        .eq("id", projectId);
+      if (metaErr) console.warn("[comment-parser] full_refresh clear cursor:", metaErr.message);
+      portalData = clearedPortal;
+    }
+
     const pdfs = portalData.tabs?.reports?.pdfs ?? [];
     const pdfsWithTextRaw = pdfs.filter((p): p is PortalPdf & { text: string } => !!p.text && p.text.trim().length > 0);
     // Only the single "Plan Review - Review Comments" report (exclude Review Details, Routing Slip)
@@ -521,35 +690,147 @@ serve(async (req) => {
 
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    const existingRows = await supabase
-      .from("parsed_comments")
-      .select("id, original_text")
-      .eq("project_id", projectId);
-
-    const existingData = existingRows.data ?? [];
-    const existingCount = existingData.length;
-    console.log("[DEBUG] comment-parser: existing rows for project:", existingCount);
-
     const existingNormalized = new Map<string, string>();
-    for (const row of existingData) {
-      const r = row as { id: string; original_text?: string };
-      if (r.original_text) existingNormalized.set(normalizeText(r.original_text), r.id);
+
+    if (!fullRefresh) {
+      const existingRows = await supabase
+        .from("parsed_comments")
+        .select("id, original_text")
+        .eq("project_id", projectId);
+
+      const existingData = existingRows.data ?? [];
+      console.log("[DEBUG] comment-parser: existing rows for project:", existingData.length);
+      for (const row of existingData) {
+        const r = row as { id: string; original_text?: string };
+        if (r.original_text) existingNormalized.set(normalizeText(r.original_text), r.id);
+      }
+    } else {
+      console.log("[DEBUG] comment-parser: full_refresh — existing duplicate map cleared");
     }
 
     let parsedCount = 0;
-    let skippedCount = 0;
+    let skippedPostLlmNoise = 0;
+    let skippedDuplicate = 0;
+    let skippedEmpty = 0;
     let insertErrorCount = 0;
     let processedPdfCount = 0;
     let nextPdfIndex = safeStart;
     let everHadSplitBlocks = false;
     let everHadFilteredBlocks = false;
+    let pipelineEvidence: Record<string, unknown> | null = null;
+
+    const totalSkips = () =>
+      skippedPostLlmNoise + skippedDuplicate + skippedEmpty;
 
     for (let i = 0; i < maxPdfs && safeStart + i < totalPdfs; i++) {
       const pdfIndex = safeStart + i;
       const pdf = pdfsToProcess[pdfIndex];
       const pageNumber = pdfIndex + 1;
-      const usePgc = isPgcExportReviewCommentsPdf(pdf);
       const rawPdfText = pdf.text ?? "";
+
+      const deterministicPgc = isPgcEplanDeterministicReviewCommentsExport(portalData, pdf);
+      if (deterministicPgc) {
+        const stackedRows = tryPgcStackedRowsRawThenNormalized(rawPdfText);
+        if (stackedRows && stackedRows.length > 0) {
+          everHadSplitBlocks = true;
+          everHadFilteredBlocks = true;
+          console.log(
+            "[DEBUG] comment-parser: PGC ePlan deterministic stacked rows:",
+            stackedRows.length,
+          );
+
+          let commentCountThisPdf = 0;
+          let roundSkippedDuplicate = 0;
+          let roundSkippedEmpty = 0;
+          let roundInsertFailures = 0;
+
+          for (const row of stackedRows) {
+            if (maxComments != null && parsedCount + totalSkips() + insertErrorCount >= maxComments) {
+              break;
+            }
+            const orig = formatPgcDeterministicPersistedComment(row);
+            if (!orig.trim()) {
+              roundSkippedEmpty++;
+              skippedEmpty++;
+              continue;
+            }
+
+            const key = normalizeText(orig);
+            if (existingNormalized.has(key)) {
+              roundSkippedDuplicate++;
+              skippedDuplicate++;
+              continue;
+            }
+
+            const { data: inserted, error: insertError } = await supabase.from("parsed_comments").insert({
+              project_id: projectId,
+              original_text: orig,
+              discipline: inferPgcDisciplineFromReviewedBy(row.reviewedBy ?? "") || null,
+              code_reference: null,
+              page_number: pageNumber,
+              status: "Pending",
+            }).select("id").single();
+
+            if (insertError) {
+              console.error("Insert parsed_comment error:", insertError.message, insertError);
+              insertErrorCount++;
+              roundInsertFailures++;
+              continue;
+            }
+
+            existingNormalized.set(key, inserted?.id ?? "");
+            parsedCount++;
+            commentCountThisPdf++;
+          }
+
+          if (capturePipelineEvidence && pipelineEvidence === null) {
+            pipelineEvidence = {
+              path: "pgc_eplan_deterministic_stacked",
+              A_source_report: {
+                fileName: pdf.fileName ?? "",
+                text_length_raw: rawPdfText.length,
+                stacked_row_count: stackedRows.length,
+              },
+              B_persistence: {
+                inserted: commentCountThisPdf,
+                skipped_duplicate: roundSkippedDuplicate,
+                skipped_empty: roundSkippedEmpty,
+                insert_failures: roundInsertFailures,
+              },
+              F_drop_analysis: "pgc_eplan_deterministic (no LLM split/filter/classify)",
+            };
+            console.log(
+              "[pipeline-evidence]",
+              JSON.stringify(pipelineEvidence, null, 0).slice(0, 12000),
+            );
+          }
+
+          nextPdfIndex = pdfIndex + 1;
+          processedPdfCount++;
+          console.log(
+            "[DEBUG] comment-parser: PDF",
+            pdfIndex + 1,
+            "deterministic inserted:",
+            commentCountThisPdf,
+            "running totals parsed:",
+            parsedCount,
+          );
+
+          const nextCursorDet = { pdfIndex: nextPdfIndex };
+          const mergedPortalDataDet = {
+            ...portalData,
+            meta: { ...portalData.meta, comment_parse_cursor: nextCursorDet },
+          };
+          const { error: updateErrDet } = await supabase
+            .from("projects")
+            .update({ portal_data: mergedPortalDataDet })
+            .eq("id", projectId);
+          if (updateErrDet) console.warn("Failed to save cursor:", updateErrDet.message);
+          continue;
+        }
+      }
+
+      const usePgc = isPgcExportReviewCommentsPdf(pdf);
       const textForParse = usePgc
         ? normalizePgcFlattenedReviewCommentsText(rawPdfText)
         : rawPdfText;
@@ -559,8 +840,11 @@ serve(async (req) => {
         allowPgcFlattenedRows: usePgc,
       });
       if (blocks.length > 0) everHadFilteredBlocks = true;
+      const filteredCountBeforeCap = blocks.length;
       const MAX_BLOCKS_PER_PDF = 100;
+      let blocksCapped = false;
       if (blocks.length > MAX_BLOCKS_PER_PDF) {
+        blocksCapped = true;
         console.log(
           "[DEBUG] comment-parser: capping blocks",
           blocks.length,
@@ -574,10 +858,38 @@ serve(async (req) => {
       if (blocks.length === 0) {
         nextPdfIndex = pdfIndex + 1;
         processedPdfCount++;
+        if (capturePipelineEvidence && pipelineEvidence === null) {
+          pipelineEvidence = {
+            A_source_report: {
+              fileName: pdf.fileName ?? "",
+              text_length_raw: rawPdfText.length,
+              text_length_for_parse: textForParse.length,
+              use_pgc_normalization: usePgc,
+            },
+            B_split: {
+              count: splitBlocks.length,
+              first_5_block_previews: splitBlocks.slice(0, 5).map((b) => previewSnippet(b)),
+            },
+            C_filtered: {
+              count_after_noise_filter: 0,
+              count_after_cap: 0,
+              blocks_capped: blocksCapped,
+            },
+            D_classified: { count: 0, item_previews: [] as { preview: string; length: number }[] },
+            E_persistence: {
+              inserted: 0,
+              skipped_duplicate: 0,
+              skipped_post_llm_noise: 0,
+              skipped_empty: 0,
+              insert_failures: 0,
+            },
+            F_drop_analysis: "filter_stage: all blocks removed (or empty before classify)",
+          };
+        }
         continue;
       }
 
-      const classified = await classifyCommentBlocks(openai, blocks);
+      const classified = await classifyCommentBlocksBatched(openai, blocks);
 
       const SKIP_PHRASES = [
         "Created in ProjectDox version",
@@ -589,23 +901,34 @@ serve(async (req) => {
       const DATE_ONLY_PATTERN = /^\d{1,2}\/\d{1,2}\/\d{2,4}\s+\d{1,2}:\d{2}/;
 
       let commentCountThisPdf = 0;
+      let roundSkippedPostLlmNoise = 0;
+      let roundSkippedDuplicate = 0;
+      let roundSkippedEmpty = 0;
+      let roundInsertFailures = 0;
+
       for (const c of classified) {
-        if (maxComments != null && parsedCount + skippedCount + insertErrorCount >= maxComments) break;
+        if (maxComments != null && parsedCount + totalSkips() + insertErrorCount >= maxComments) break;
         const orig = c.original_text.trim();
-        if (!orig) continue;
+        if (!orig) {
+          roundSkippedEmpty++;
+          skippedEmpty++;
+          continue;
+        }
 
         const origTrimmed = orig.trim();
         if (
           SKIP_PHRASES.some((phrase) => origTrimmed.includes(phrase)) ||
           (origTrimmed.length < 30 && DATE_ONLY_PATTERN.test(origTrimmed))
         ) {
-          skippedCount++;
+          roundSkippedPostLlmNoise++;
+          skippedPostLlmNoise++;
           continue;
         }
 
         const key = normalizeText(orig);
         if (existingNormalized.has(key)) {
-          skippedCount++;
+          roundSkippedDuplicate++;
+          skippedDuplicate++;
           continue;
         }
 
@@ -621,6 +944,7 @@ serve(async (req) => {
         if (insertError) {
           console.error("Insert parsed_comment error:", insertError.message, insertError);
           insertErrorCount++;
+          roundInsertFailures++;
           continue;
         }
 
@@ -629,9 +953,57 @@ serve(async (req) => {
         commentCountThisPdf++;
       }
 
+      if (capturePipelineEvidence && pipelineEvidence === null) {
+        const itemPreviews = classified.map((c) => ({
+          preview: previewSnippet(c.original_text, 200),
+          length: String(c.original_text ?? "").length,
+        }));
+        pipelineEvidence = {
+          A_source_report: {
+            fileName: pdf.fileName ?? "",
+            text_length_raw: rawPdfText.length,
+            text_length_for_parse: textForParse.length,
+            use_pgc_normalization: usePgc,
+          },
+          B_split: {
+            count: splitBlocks.length,
+            first_5_block_previews: splitBlocks.slice(0, 5).map((b) => previewSnippet(b)),
+          },
+          C_filtered: {
+            count_after_noise_filter: filteredCountBeforeCap,
+            count_after_cap: blocks.length,
+            blocks_capped: blocksCapped,
+          },
+          D_classified: {
+            count: classified.length,
+            item_previews: itemPreviews,
+          },
+          E_persistence: {
+            inserted: commentCountThisPdf,
+            skipped_duplicate: roundSkippedDuplicate,
+            skipped_post_llm_noise: roundSkippedPostLlmNoise,
+            skipped_empty: roundSkippedEmpty,
+            insert_failures: roundInsertFailures,
+          },
+          F_drop_analysis: computeDropStageHint({
+            split: splitBlocks.length,
+            afterNoiseFilter: filteredCountBeforeCap,
+            llmInputBlockCount: blocks.length,
+            classified: classified.length,
+            inserted: commentCountThisPdf,
+            skippedDuplicate: roundSkippedDuplicate,
+            skippedPostLlmNoise: roundSkippedPostLlmNoise,
+          }),
+        };
+        console.log(
+          "[pipeline-evidence]",
+          JSON.stringify(pipelineEvidence, null, 0).slice(0, 12000),
+        );
+      }
+
       nextPdfIndex = pdfIndex + 1;
       processedPdfCount++;
-      console.log("[DEBUG] comment-parser: PDF", pdfIndex + 1, "inserted:", commentCountThisPdf, "running totals parsed:", parsedCount, "skipped:", skippedCount);
+      console.log("[DEBUG] comment-parser: PDF", pdfIndex + 1, "inserted:", commentCountThisPdf, "running totals parsed:", parsedCount, "skipped (all):", totalSkips());
 
       const nextCursor = { pdfIndex: nextPdfIndex };
       const mergedPortalData = {
@@ -655,7 +1027,20 @@ serve(async (req) => {
     }
 
     const nextCursor = { pdfIndex: nextPdfIndex };
-    console.log("[DEBUG] comment-parser: chunk done parsed:", parsedCount, "skipped:", skippedCount, "insert_error:", insertErrorCount, "next_cursor:", nextCursor, "done:", done);
+    const skippedTotal =
+      skippedPostLlmNoise + skippedDuplicate + skippedEmpty;
+    console.log(
+      "[DEBUG] comment-parser: chunk done parsed:",
+      parsedCount,
+      "skipped:",
+      skippedTotal,
+      "insert_error:",
+      insertErrorCount,
+      "next_cursor:",
+      nextCursor,
+      "done:",
+      done,
+    );
 
     let doneReason: string | undefined;
     let doneMessage: string | undefined;
@@ -678,12 +1063,20 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         parsed_count: parsedCount,
-        skipped_count: skippedCount,
+        skipped_count: skippedTotal,
+        skipped_breakdown: {
+          post_llm_noise: skippedPostLlmNoise,
+          duplicate: skippedDuplicate,
+          empty_original_text: skippedEmpty,
+        },
         insert_error_count: insertErrorCount,
         next_cursor: nextCursor,
         done,
         total_pdfs: totalPdfs,
         ...(doneReason ? { reason: doneReason, message: doneMessage } : {}),
+        ...(capturePipelineEvidence && pipelineEvidence
+          ? { pipeline_evidence: pipelineEvidence }
+          : {}),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

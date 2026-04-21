@@ -10,7 +10,7 @@ Long-term technical memory for this repository. **No secrets or env values** —
 
 - **Frontend:** Vite 5 + React 18 + TypeScript, `src/main.tsx` → `src/App.tsx`, React Router, TanStack Query, shadcn/ui, Supabase JS client.
 - **Backend:** **Supabase only** for app API (Postgres, Auth, RLS, Storage, Edge Functions). There is no separate Node “app server” besides the scraper.
-- **Scraper:** Node **Express** + Playwright in `scraper-service/server.js` (default port **3001**, `process.env.PORT`). The Vite dev server (**5000**) proxies `/api` and `/view-file` to 3001 (`vite.config.ts`).
+- **Scraper:** Node **Express** + Playwright in `scraper-service/server.js` (default port **3001**, `process.env.PORT`). The Vite dev server (**5000**) proxies `/api` and `/view-file` to 3001 (`vite.config.ts`). **Parallel dev:** `npm run dev:parallel` uses Vite **5001** → proxy **3002** (`parallel-dev-server.js` loads the same `server.js` Express `app` and mounts `/__future`; set `VITE_API_BASE_URL` to `http://localhost:5001` or `http://127.0.0.1:3002`).
 
 **Supabase project ref** (from `supabase/config.toml`): `eeqxyjrcldivtpikcpvk`.
 
@@ -73,10 +73,10 @@ Default dashboard if `portalUrl` omitted on login: **`https://washington-dc-us.a
 ### 4.3 Montgomery County, MD — ProjectDox subtype
 
 - **Detection:** `montgomeryProjectDox.isMontgomeryProjectDoxHost(dashboardUrl)` before generic ProjectDox project collection.
-- **Login:** Montgomery-specific dashboard discovery and project collection (`montgomery-dashboard-discovery`, `montgomery-portal-login` as used in `server.js`). Session sets **`portalSubtype: "montgomery-projectdox"`** and may store **`montgomeryWebUiBases`** from `resolveMontgomeryWebUiBases`.
+- **Login:** Montgomery-specific dashboard discovery and project collection (`scrapers/montgomery/dashboard-discovery.js`, `scrapers/montgomery/portal-login.js` via `register-execution-routes.js`). Session sets **`portalSubtype: "montgomery-projectdox"`** and may store **`montgomeryWebUiBases`** from `resolveMontgomeryWebUiBases`.
 - **Scrape:** `scrapeMontgomeryAll` calls **`montgomeryProjectDox.runMontgomeryProductionPipeline`** (module header states it **clones the PGC pipeline shell** and reuses PGC SSRS helpers). Optional lightweight files harvest via `extractMontgomeryFilesTabLightweight`. Results mapped with **`mapMontgomeryPipelineToPortalData`**.
 - **Credential rule:** Montgomery path can return **`montgomery_saved_portal_credentials_missing`** if username/password empty when required.
-- **Report specs:** `montgomery-projectdox-scraper.js` defines **`MONTGOMERY_REPORT_SPECS`** (SSRS paths under `/MontgomeryCountyProd/ProjectDox/...`). Names must match grid labels.
+- **Report specs:** `scrapers/montgomery/projectdox-scraper.js` defines **`MONTGOMERY_REPORT_SPECS`** (SSRS paths under `/MontgomeryCountyProd/ProjectDox/...`). Names must match grid labels.
 
 **Recreation notes:** Keep host marker and WebUI base resolution in sync with Avolve URLs; changing report names/paths without checking the live grid will break Task 8-style exports.
 

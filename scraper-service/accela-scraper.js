@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { isScraperDebugArtifactsEnabled } = require("./artifacts/debug-artifacts");
 
 function getAccelaDebugDir() {
   const dir = path.join(__dirname, "debug");
@@ -9,6 +10,8 @@ function getAccelaDebugDir() {
 }
 
 function saveCheckpointScreenshot(page, label) {
+  if (!isScraperDebugArtifactsEnabled())
+    return Promise.resolve();
   if (!page || typeof page.screenshot !== "function") return Promise.resolve();
   const dir = getAccelaDebugDir();
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -94,6 +97,132 @@ const NAV_SCOPE_SELECTORS = [
 
 function isBaltimorePortal(page) {
   return !!(page && page._isBaltimore);
+}
+
+function isFairfaxPortal(page) {
+  return !!(page && page._isFairfax);
+}
+
+function isFairfaxGarbageRow(row) {
+  if (!row || typeof row !== "object") return false;
+  const key = String(row.key || "").trim();
+  const value = String(row.value || "").trim();
+  if (!key || !value) return false;
+
+  if (value === `${key}:`) return true;
+
+  if (value.endsWith(":") && value.length < 40 && key.startsWith(value))
+    return true;
+
+  return false;
+}
+
+async function extractFairfaxRelatedContacts(page) {
+  try {
+    const extractionFrame = getExtractionContext(page);
+
+    const contactResult = await extractionFrame.evaluate(() => {
+      const results = [];
+      const table = document.querySelector(
+        "#ctl00_PlaceHolderMain_PermitDetailList1_RelatContactList",
+      );
+      if (!table)
+        return {
+          contacts: results,
+          error: "RelatContactList table not found",
+        };
+
+      const roleHeaders = Array.from(table.querySelectorAll("h2"));
+
+      for (const h2 of roleHeaders) {
+        const headerText = (h2.textContent || "").trim();
+        const roleName = headerText.replace(/\s+information\s*$/i, "").trim();
+        if (!roleName) continue;
+
+        const nextH2 = roleHeaders[roleHeaders.indexOf(h2) + 1] || null;
+
+        const walker = document.createTreeWalker(
+          table,
+          NodeFilter.SHOW_ELEMENT,
+          null,
+        );
+        let seenThis = false;
+        let collectedText = "";
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (node === h2) {
+            seenThis = true;
+            continue;
+          }
+          if (!seenThis) continue;
+          if (nextH2 && node === nextH2) break;
+          if (node.children.length === 0) {
+            const txt = (node.textContent || "").replace(/\s+/g, " ").trim();
+            if (txt) collectedText += " " + txt;
+          }
+        }
+        collectedText = collectedText.replace(/\s+/g, " ").trim();
+        if (!collectedText) continue;
+
+        const contact = { role: roleName };
+
+        const partyMatch = collectedText.match(
+          /(Organization|Individual)\s+(.+?)\s+(?:United States|Primary Phone:)/,
+        );
+        if (partyMatch) {
+          contact.partyType = partyMatch[1];
+          contact.name = partyMatch[2].trim();
+        }
+
+        const phoneMatch = collectedText.match(
+          /Primary Phone:\s*(\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{4})/,
+        );
+        if (phoneMatch) contact.phone = phoneMatch[1].trim();
+
+        const emailMatch = collectedText.match(
+          /Email:\s*([^\s]+@[^\s]+?)(?:\s+(?:Mailing|License|Physical|$)|$)/,
+        );
+        if (emailMatch) contact.email = emailMatch[1].trim();
+
+        const licenseMatch = collectedText.match(
+          /License Number:\s*([^\s]+?)(?:\s+Company:|$)/,
+        );
+        if (licenseMatch) contact.license = licenseMatch[1].trim();
+
+        const companyMatch = collectedText.match(
+          /Company:\s*(.+?)(?:\s+(?:License|Physical|Mailing)|$)/,
+        );
+        if (companyMatch) contact.company = companyMatch[1].trim();
+
+        if (contact.phone || contact.email) {
+          results.push(contact);
+        }
+      }
+
+      return { contacts: results, error: null };
+    });
+
+    if (contactResult.error) {
+      console.log(
+        `  [Fairfax] Related Contacts re-extract: ${contactResult.error}`,
+      );
+      return [];
+    }
+    console.log(
+      `  [Fairfax] Related Contacts re-extract: ${contactResult.contacts.length} structured contacts parsed`,
+    );
+    return contactResult.contacts;
+  } catch (err) {
+    console.log(`  [Fairfax] Related Contacts re-extract error: ${err.message}`);
+    return [];
+  }
+}
+
+function isMinimalTabsPortal(page) {
+  return (
+    (page._isBaltimore && BALTIMORE_MINIMAL_PORTAL_TABS) ||
+    (page._isFairfax && FAIRFAX_MINIMAL_PORTAL_TABS)
+  );
 }
 
 /** Child frames only (main frame excluded) for navigateToRecordInfoSection / navigateToPaymentsSection. */
@@ -712,6 +841,20 @@ async function dumpPageDiagnostics(page, label) {
 }
 
 async function findAuthLandmark(page) {
+  if (isFairfaxPortal(page)) {
+    const u = (page.url() || "").toLowerCase();
+    if (u.includes("dashboard.aspx") || u.includes("myrecordscap.aspx")) {
+      return true;
+    }
+    if (await findFieldInFrames(page, ['a:has-text("My Records")'])) {
+      return true;
+    }
+    const frames = getAccelaChildFrames(page);
+    const myRecordsHit = await findLinkInAnyContext(page, frames, "My Records");
+    if (myRecordsHit) {
+      return true;
+    }
+  }
   const selectors = [
     'a:has-text("Logout")',
     'a:has-text("Log Out")',
@@ -816,7 +959,14 @@ async function accelaLogin(page, username, password, portalUrl) {
     `  Login context: ${loginFrame ? "LoginFrame (primary)" : "main page (no LoginFrame found)"}`,
   );
 
+  const isFairfaxLoginPortal =
+    typeof portalUrl === "string" &&
+    portalUrl.toUpperCase().includes("FAIRFAX");
+
   const userSelectors = [
+    ...(isFairfaxLoginPortal
+      ? ["input#username", 'input[name="username"]']
+      : []),
     "#ctl00_PlaceHolderMain_LoginBox_txtUserId",
     'input[name*="txtUserId"]',
     'input[name*="UserName"]',
@@ -859,6 +1009,9 @@ async function accelaLogin(page, username, password, portalUrl) {
   console.log("  Filled username");
 
   const passSelectors = [
+    ...(isFairfaxLoginPortal
+      ? ["input#passwordRequired", 'input[name="password"]']
+      : []),
     "#ctl00_PlaceHolderMain_LoginBox_txtPassword",
     'input[name*="txtPassword"]',
     'input[name*="Password"]',
@@ -982,96 +1135,261 @@ async function accelaLogin(page, username, password, portalUrl) {
       console.log(`  ❌ LoginFrame error: "${errorText}"`);
       await dumpLoginFrameDiagnostics(loginFrame, "LOGIN_ERROR");
       await dumpPageDiagnostics(page, "LOGIN_ERROR");
-      await page
-        .screenshot({ path: "login_failed.png", fullPage: true })
-        .catch(() => {});
+      if (isScraperDebugArtifactsEnabled()) {
+        await page
+          .screenshot({ path: "login_failed.png", fullPage: true })
+          .catch(() => {});
+      }
       throw new Error(`Accela login failed — portal error: ${errorText}`);
     }
   }
 
   await dumpLoginFrameDiagnostics(loginFrame, "LOGIN_TIMEOUT");
   await dumpPageDiagnostics(page, "LOGIN_TIMEOUT");
-  await page
-    .screenshot({ path: "login_failed.png", fullPage: true })
-    .catch(() => {});
+  if (isScraperDebugArtifactsEnabled()) {
+    await page
+      .screenshot({ path: "login_failed.png", fullPage: true })
+      .catch(() => {});
+  }
   throw new Error(
     "Accela login failed — timed out waiting for authenticated state (login form persisted in LoginFrame)",
   );
 }
 
-async function searchPermit(page, portalUrl, permitNumber) {
-  console.log(`  Searching for permit: ${permitNumber}`);
+/** Max pages when walking Accela Citizen Access permit / record list pager ("Next >"). */
+const MAX_ACCELA_PERMIT_LIST_PAGES = 150;
 
-  const isAuth = await findAuthLandmark(page);
-  if (!isAuth) {
-    await dumpPageDiagnostics(page, "SEARCH_AUTH_CHECK");
-    throw new Error(
-      "AUTHENTICATION_LOST: No authenticated landmarks found before permit search.",
-    );
-  }
-  console.log("  ✅ Authentication verified");
-
-  const permitsTab = await findFieldInFrames(page, [
-    "#Tab_Building",
-    'a:has-text("Permits and Inspections")',
-    'a:has-text("Permits & Inspections")',
-    'a[title*="Permits"]',
-    '#header_main_menu a:has-text("Permits")',
-  ]);
-
-  if (permitsTab) {
-    console.log("  Clicking Permits tab...");
-    await permitsTab.click();
-    await waitForAccelaLoad(page);
-    await page.waitForTimeout(3000);
-    await saveCheckpointScreenshot(page, "after_permits_page");
-  } else {
-    const isPublicPage = await page.$(
-      'a:has-text("Sign In"), a:has-text("Create an Account")',
-    );
-    if (isPublicPage) {
-      throw new Error("Session dropped — redirected to public page.");
-    }
-    console.log(
-      "  ⚠️ Permits tab not found, attempting to proceed on current page...",
-    );
-  }
-
-  console.log("  ⏳ Waiting for records grid...");
-  const gridAppeared = await page
-    .waitForSelector(
-      'table[id*="PermitList"] tr, table[id*="Record"] tr, .aca_grid_container tr td a, [id*="gview_List"] tr',
-      { visible: true, timeout: 15000 },
-    )
-    .catch(() => null);
-
-  if (!gridAppeared) {
-    let gridInFrame = false;
-    for (const frame of page.frames()) {
-      if (frame === page.mainFrame()) continue;
-      const frameGrid = await frame
-        .$("table tr td a, .aca_grid_container")
-        .catch(() => null);
-      if (frameGrid) {
-        console.log(
-          `  ✅ Grid found in frame: ${frame.name() || frame.url().substring(0, 60)}`,
-        );
-        gridInFrame = true;
-        break;
+/**
+ * @param {import('playwright').Page | import('playwright').Frame} frameOrPage
+ */
+async function accelaPermitListDocSignature(frameOrPage) {
+  return frameOrPage
+    .evaluate(() => {
+      function norm(s) {
+        return String(s || "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
       }
-    }
-    if (!gridInFrame) {
-      await dumpPageDiagnostics(page, "NO_GRID");
-      const anchorCount = await page.evaluate(
-        () => document.querySelectorAll("a").length,
-      );
-      console.log(`  [DIAG:NO_GRID] Total anchors on page: ${anchorCount}`);
-    }
-  } else {
-    await saveCheckpointScreenshot(page, "after_records_page");
-  }
+      const sels = [
+        'table[id*="PermitList"] td a',
+        'table[id*="Record"] td a',
+        ".aca_grid_container td a",
+        '[id*="gview_List"] td a',
+      ];
+      const keys = [];
+      const seen = new Set();
+      for (const sel of sels) {
+        for (const a of document.querySelectorAll(sel)) {
+          if (a.offsetWidth <= 0) continue;
+          const t = norm(a.textContent);
+          if (
+            !t ||
+            /^next\s*>?$/i.test(t) ||
+            /^<\s*prev/i.test(t) ||
+            /additional results/i.test(t)
+          ) {
+            continue;
+          }
+          const k = t.slice(0, 120);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          keys.push(k);
+          if (keys.length >= 18) return keys.join("|");
+        }
+      }
+      return keys.join("|");
+    })
+    .catch(() => "");
+}
 
-  console.log("  Scanning for permit link...");
+/**
+ * Snapshot of visible permit-like row links across main document and all frames (stall detection).
+ * @param {import('playwright').Page} page
+ */
+async function accelaPermitListCombinedSignature(page) {
+  const parts = [await accelaPermitListDocSignature(page)];
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame()) continue;
+    parts.push(await accelaPermitListDocSignature(frame));
+  }
+  return parts.join("||");
+}
+
+/**
+ * Clicks the first visible Accela list "Next >" pager link (main or iframe). Returns true if the
+ * grid signature changed afterward.
+ * @param {import('playwright').Page} page
+ */
+async function tryClickAccelaPermitGridNext(page) {
+  const sigBefore = await accelaPermitListCombinedSignature(page);
+  const contexts = [
+    ...page.frames().filter((f) => f !== page.mainFrame()),
+    page,
+  ];
+  for (const ctx of contexts) {
+    const clicked = await ctx
+      .evaluate(() => {
+        function norm(t) {
+          return String(t || "")
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        const anchors = [...document.querySelectorAll("a")];
+        const nextA = anchors.find((a) => {
+          const t = norm(a.textContent);
+          if (!/^Next\s*>$/i.test(t) && t !== "Next >") return false;
+          const st = window.getComputedStyle(a);
+          if (st.visibility === "hidden" || st.display === "none") return false;
+          if (a.getAttribute("aria-disabled") === "true") return false;
+          const cls = String(a.className || "").toLowerCase();
+          if (cls.includes("disabled")) return false;
+          return a.offsetWidth > 0 && a.offsetHeight > 0;
+        });
+        if (!nextA) return false;
+        nextA.click();
+        return true;
+      })
+      .catch(() => false);
+    if (!clicked) continue;
+
+    await waitForAccelaLoad(page);
+    const extraMs = page._isBaltimore ? 800 : 400;
+    await page.waitForTimeout(extraMs);
+
+    const sigAfter = await accelaPermitListCombinedSignature(page);
+    if (sigAfter === sigBefore) {
+      console.log(
+        "  [Accela search] Next > did not change list signature — treating as stalled",
+      );
+      return false;
+    }
+    console.log("  [Accela search] advanced permit list (Next >)");
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @returns {Promise<{ foundLink: import('playwright').ElementHandle | import('playwright').Locator | null, foundFrame: import('playwright').Page | import('playwright').Frame | null, foundInfo: Record<string, unknown> }>}
+ */
+async function findPermitLinkInAccelaList(page, permitNumber) {
+  if (page._isFairfax) {
+    const escapeRegex = (s) =>
+      String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try {
+      const exactMainLocator = page
+        .locator("a")
+        .filter({
+          hasText: new RegExp(`^\\s*${escapeRegex(permitNumber)}\\s*$`),
+        });
+      const exactMainCount = await exactMainLocator.count();
+      if (exactMainCount > 0) {
+        const first = exactMainLocator.first();
+        const isVisible = await first.isVisible().catch(() => false);
+        if (isVisible) {
+          const href = (await first.getAttribute("href").catch(() => "")) || "";
+          const textRaw = (await first.innerText().catch(() => permitNumber))
+            .replace(/\s+/g, " ")
+            .trim();
+          console.log(
+            `  [Fairfax] exact permit match found on main page: "${permitNumber}"`,
+          );
+          return {
+            foundLink: first,
+            foundFrame: page,
+            foundInfo: {
+              method: "fairfax-exact-main",
+              text: textRaw || permitNumber,
+              href,
+              frameName: "main",
+              frameUrl: page.url(),
+            },
+          };
+        }
+      }
+
+      const mainExactHandle = await page.evaluateHandle((target) => {
+        const anchors = Array.from(document.querySelectorAll("a"));
+        return (
+          anchors.find((a) => {
+            const txt = (a.textContent || "").trim();
+            return (
+              txt === target && a.offsetWidth > 0 && a.offsetHeight > 0
+            );
+          }) || null
+        );
+      }, permitNumber);
+      const mainExactElement = mainExactHandle.asElement();
+      if (mainExactElement) {
+        const href =
+          (await mainExactElement.getAttribute("href").catch(() => "")) || "";
+        const text = (await mainExactElement.innerText().catch(() => ""))
+          .replace(/\s+/g, " ")
+          .trim();
+        console.log(
+          `  [Fairfax] exact permit match found via main-page anchor scan: "${permitNumber}"`,
+        );
+        return {
+          foundLink: mainExactElement,
+          foundFrame: page,
+          foundInfo: {
+            method: "fairfax-exact-scan",
+            text: text || permitNumber,
+            href,
+            frameName: "main",
+            frameUrl: page.url(),
+          },
+        };
+      }
+      await mainExactHandle.dispose().catch(() => {});
+
+      for (const frame of page.frames()) {
+        if (frame === page.mainFrame()) continue;
+        try {
+          const frameExact = await frame.evaluate((target) => {
+            const anchors = Array.from(document.querySelectorAll("a"));
+            const match = anchors.find((a) => {
+              const txt = (a.textContent || "").trim();
+              return txt === target && a.offsetWidth > 0;
+            });
+            if (!match) return null;
+            return {
+              text: match.textContent.trim(),
+              href: match.href || "",
+            };
+          }, permitNumber);
+          if (frameExact) {
+            console.log(
+              `  [Fairfax] exact permit match found in frame: "${permitNumber}"`,
+            );
+            return {
+              foundLink: null,
+              foundFrame: frame,
+              foundInfo: {
+                method: "frame-evaluate",
+                text: frameExact.text,
+                href: frameExact.href,
+                frameName: frame.name() || "(unnamed)",
+                frameUrl: frame.url().substring(0, 100),
+              },
+            };
+          }
+        } catch {
+          // Cross-origin or detached frame — ignore and continue
+        }
+      }
+
+      console.log(
+        `  [Fairfax] no exact permit match for "${permitNumber}", falling through to substring logic`,
+      );
+    } catch (err) {
+      console.log(
+        `  [Fairfax] exact-match step warning (falling through): ${err.message}`,
+      );
+    }
+  }
 
   let foundLink = null;
   let foundFrame = null;
@@ -1153,6 +1471,267 @@ async function searchPermit(page, portalUrl, permitNumber) {
     }
   }
 
+  return { foundLink, foundFrame, foundInfo };
+}
+
+/**
+ * Baltimore post-login: Dashboard.aspx → My Records click → MyRecordsCap.aspx.
+ * (Fairfax uses direct navigation; see fairfaxNavigateDashboardToMyRecordsCap.)
+ */
+function shouldUseAccelaDashboardMyRecordsNav(page) {
+  if (!page) return false;
+  if (!isBaltimorePortal(page) && !isFairfaxPortal(page)) return false;
+  const u = page.url() || "";
+  if (!/\/Dashboard\.aspx/i.test(u)) return false;
+  if (/\/MyRecordsCap\.aspx/i.test(u)) return false;
+  return true;
+}
+
+const FAIRFAX_MYRECORDS_TAB_QUERY =
+  "TabName=Home&TabList=Home%7C0%7CBuilding%7C1%7CEnforcement%7C2%7CEnvHealth%7C3%7CFire%7C4%7CPlanning%7C5%7CSite%7C6%7CZoning%7C7%7CCurrentTabIndex%7C0";
+
+function buildFairfaxMyRecordsCapUrl(page) {
+  const raw = page.url() || "";
+  try {
+    const u = new URL(raw);
+    const lower = u.pathname.toLowerCase();
+    const marker = "/citizenaccess";
+    const i = lower.indexOf(marker);
+    const prefix =
+      i >= 0 ? u.pathname.slice(0, i + marker.length) : "/CitizenAccess";
+    return `${u.origin}${prefix}/Cap/MyRecordsCap.aspx?${FAIRFAX_MYRECORDS_TAB_QUERY}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fairfax: authenticated Dashboard → direct goto MyRecordsCap (click nav is unreliable).
+ * Optional click fallback via accelaClickMyRecordsNavFromDashboard.
+ * @returns {Promise<boolean>} true if final URL is MyRecordsCap.aspx
+ */
+async function fairfaxNavigateDashboardToMyRecordsCap(page) {
+  if (/\/MyRecordsCap\.aspx/i.test(page.url() || "")) return true;
+  if (!/\/Dashboard\.aspx/i.test(page.url() || "")) return false;
+
+  const target = buildFairfaxMyRecordsCapUrl(page);
+  if (!target) {
+    console.log("[Fairfax] My Records direct navigation failed");
+    return false;
+  }
+  console.log("[Fairfax] on Dashboard, navigating directly to My Records URL");
+  let directLanded = false;
+  try {
+    await page.goto(target, { waitUntil: "networkidle", timeout: 45000 });
+    await page.waitForURL(/MyRecordsCap\.aspx/i, { timeout: 20000 }).catch(() => {});
+    await waitForAccelaLoad(page);
+    await page.waitForTimeout(1500);
+    directLanded = /\/MyRecordsCap\.aspx/i.test(page.url() || "");
+  } catch (e) {
+    console.log(`[Fairfax] My Records direct goto error (${e.message})`);
+  }
+  if (directLanded) {
+    console.log("[Fairfax] My Records direct navigation succeeded");
+    return true;
+  }
+  console.log(
+    "[Fairfax] direct navigate did not land on MyRecordsCap, trying click fallback",
+  );
+  await accelaClickMyRecordsNavFromDashboard(page);
+  const ok = /\/MyRecordsCap\.aspx/i.test(page.url() || "");
+  if (ok) {
+    console.log("[Fairfax] My Records direct navigation succeeded");
+  } else {
+    console.log("[Fairfax] My Records direct navigation failed");
+  }
+  return ok;
+}
+
+/**
+ * Clicks "My Records" from Dashboard using findFieldInFrames('a:has-text("My Records")') first
+ * (same as findAuthLandmark selector ladder), then findLinkInAnyContext exact match, then
+ * click({ force: true }) like navigateToRecordInfoSection step 1 — not plain .click().
+ * @returns {Promise<boolean>} true if URL ends on MyRecordsCap.aspx (or was already there)
+ */
+async function accelaClickMyRecordsNavFromDashboard(page) {
+  const u = page.url() || "";
+  if (/\/MyRecordsCap\.aspx/i.test(u)) return true;
+  if (!/\/Dashboard\.aspx/i.test(u)) return false;
+
+  const frames = getAccelaChildFrames(page);
+  let handle = await findFieldInFrames(page, ['a:has-text("My Records")']);
+  if (!handle) {
+    const hit = await findLinkInAnyContext(page, frames, "My Records");
+    if (hit) handle = hit.element;
+  }
+  if (!handle) {
+    console.log(
+      "     [Accela nav] My Records not found on Dashboard (tried :has-text + findLinkInAnyContext)",
+    );
+    return false;
+  }
+  try {
+    await handle.click({ force: true });
+  } catch (e) {
+    console.log(`     [Accela nav] My Records click failed: ${e.message}`);
+    return false;
+  }
+  await page.waitForURL(/MyRecordsCap\.aspx/i, { timeout: 20000 }).catch(() => {});
+  await waitForAccelaLoad(page);
+  await page.waitForTimeout(1500);
+  return /\/MyRecordsCap\.aspx/i.test(page.url() || "");
+}
+
+async function searchPermit(page, portalUrl, permitNumber) {
+  console.log(`  Searching for permit: ${permitNumber}`);
+
+  let isAuth = await findAuthLandmark(page);
+  if (!isAuth && shouldUseAccelaDashboardMyRecordsNav(page)) {
+    if (isFairfaxPortal(page)) {
+      try {
+        await fairfaxNavigateDashboardToMyRecordsCap(page);
+        isAuth = await findAuthLandmark(page);
+        if (isAuth) {
+          console.log(
+            "[Accela] Fairfax My Records navigation succeeded (auth landmarks now visible)",
+          );
+        } else {
+          console.log(
+            "[Accela] Fairfax My Records navigation failed, continuing to normal auth failure path",
+          );
+        }
+      } catch (err) {
+        console.log(
+          `[Accela] Fairfax My Records navigation failed, continuing to normal auth failure path (${err.message})`,
+        );
+      }
+    } else {
+      console.log(
+        "[Accela] dashboard detected before auth failure, attempting My Records navigation (Baltimore-style :has-text + force click)",
+      );
+      try {
+        await accelaClickMyRecordsNavFromDashboard(page);
+        isAuth = await findAuthLandmark(page);
+        if (isAuth) {
+          console.log("[Accela] My Records navigation succeeded (auth landmarks now visible)");
+        } else {
+          console.log(
+            "[Accela] My Records navigation failed, continuing to normal auth failure path",
+          );
+        }
+      } catch (err) {
+        console.log(
+          `[Accela] My Records navigation failed, continuing to normal auth failure path (${err.message})`,
+        );
+      }
+    }
+  }
+  if (!isAuth) {
+    await dumpPageDiagnostics(page, "SEARCH_AUTH_CHECK");
+    throw new Error(
+      "AUTHENTICATION_LOST: No authenticated landmarks found before permit search.",
+    );
+  }
+  console.log("  ✅ Authentication verified");
+
+  if (isFairfaxPortal(page) && shouldUseAccelaDashboardMyRecordsNav(page)) {
+    try {
+      await fairfaxNavigateDashboardToMyRecordsCap(page);
+      console.log(`  [Fairfax] after My Records navigation, URL: ${page.url()}`);
+    } catch (err) {
+      console.log(`  [Fairfax] My Records navigation warning: ${err.message}`);
+    }
+  } else if (shouldUseAccelaDashboardMyRecordsNav(page)) {
+    try {
+      console.log(
+        '  [Accela] on Dashboard, navigating to My Records (Baltimore-style) for permit list',
+      );
+      await accelaClickMyRecordsNavFromDashboard(page);
+      console.log(`  [Accela] after My Records navigation, URL: ${page.url()}`);
+    } catch (err) {
+      console.log(`  [Accela] My Records navigation warning: ${err.message}`);
+    }
+  }
+
+  const permitsTab = await findFieldInFrames(page, [
+    "#Tab_Building",
+    'a:has-text("Permits and Inspections")',
+    'a:has-text("Permits & Inspections")',
+    'a[title*="Permits"]',
+    '#header_main_menu a:has-text("Permits")',
+  ]);
+
+  if (permitsTab) {
+    console.log("  Clicking Permits tab...");
+    await permitsTab.click();
+    await waitForAccelaLoad(page);
+    await page.waitForTimeout(3000);
+    await saveCheckpointScreenshot(page, "after_permits_page");
+  } else {
+    const isPublicPage = await page.$(
+      'a:has-text("Sign In"), a:has-text("Create an Account")',
+    );
+    if (isPublicPage) {
+      throw new Error("Session dropped — redirected to public page.");
+    }
+    console.log(
+      "  ⚠️ Permits tab not found, attempting to proceed on current page...",
+    );
+  }
+
+  console.log("  ⏳ Waiting for records grid...");
+  const gridAppeared = await page
+    .waitForSelector(
+      'table[id*="PermitList"] tr, table[id*="Record"] tr, .aca_grid_container tr td a, [id*="gview_List"] tr',
+      { visible: true, timeout: 15000 },
+    )
+    .catch(() => null);
+
+  if (!gridAppeared) {
+    let gridInFrame = false;
+    for (const frame of page.frames()) {
+      if (frame === page.mainFrame()) continue;
+      const frameGrid = await frame
+        .$("table tr td a, .aca_grid_container")
+        .catch(() => null);
+      if (frameGrid) {
+        console.log(
+          `  ✅ Grid found in frame: ${frame.name() || frame.url().substring(0, 60)}`,
+        );
+        gridInFrame = true;
+        break;
+      }
+    }
+    if (!gridInFrame) {
+      await dumpPageDiagnostics(page, "NO_GRID");
+      const anchorCount = await page.evaluate(
+        () => document.querySelectorAll("a").length,
+      );
+      console.log(`  [DIAG:NO_GRID] Total anchors on page: ${anchorCount}`);
+    }
+  } else {
+    await saveCheckpointScreenshot(page, "after_records_page");
+  }
+
+  console.log("  Scanning for permit link...");
+
+  let foundLink = null;
+  let foundFrame = null;
+  let foundInfo = {};
+
+  const listLogTag = page._isBaltimore ? " baltimore" : "";
+  for (let listPage = 1; listPage <= MAX_ACCELA_PERMIT_LIST_PAGES; listPage++) {
+    console.log(`  [Accela search]${listLogTag} list page ${listPage}`);
+    const hit = await findPermitLinkInAccelaList(page, permitNumber);
+    foundLink = hit.foundLink;
+    foundFrame = hit.foundFrame;
+    foundInfo = hit.foundInfo;
+    if (foundLink || foundInfo.method) break;
+    if (listPage >= MAX_ACCELA_PERMIT_LIST_PAGES) break;
+    const advanced = await tryClickAccelaPermitGridNext(page);
+    if (!advanced) break;
+  }
+
   if (!foundLink && !foundInfo.method) {
     const visibleTexts = await page.evaluate(() => {
       return Array.from(document.querySelectorAll("a"))
@@ -1167,9 +1746,11 @@ async function searchPermit(page, portalUrl, permitNumber) {
       JSON.stringify(visibleTexts.filter((t) => t.length > 0)),
     );
     await dumpPageDiagnostics(page, "PERMIT_NOT_FOUND");
-    await page
-      .screenshot({ path: "grid_not_found.png", fullPage: true })
-      .catch(() => {});
+    if (isScraperDebugArtifactsEnabled()) {
+      await page
+        .screenshot({ path: "grid_not_found.png", fullPage: true })
+        .catch(() => {});
+    }
     throw new Error(`Permit ${permitNumber} not found in the records list.`);
   }
 
@@ -1185,15 +1766,17 @@ async function searchPermit(page, portalUrl, permitNumber) {
       foundLink.click(),
     ]);
   } else if (foundFrame && foundInfo.method === "frame-evaluate") {
+    const pickText = (foundInfo.text || "").replace(/\s+/g, " ").trim();
     await foundFrame
-      .evaluate((target) => {
+      .evaluate((linkText) => {
         const anchors = Array.from(document.querySelectorAll("a"));
+        const want = String(linkText || "").replace(/\s+/g, " ").trim();
         const match = anchors.find((a) => {
           const text = (a.textContent || "").replace(/\s+/g, " ").trim();
-          return text.includes(target) && a.offsetWidth > 0;
+          return text === want && a.offsetWidth > 0;
         });
         if (match) match.click();
-      }, permitNumber)
+      }, pickText)
       .catch(() => {});
     await page
       .waitForLoadState("networkidle", { timeout: 30000 })
@@ -1316,9 +1899,11 @@ async function waitForRecordDetailStrong(page, recordFrame, permitNumber) {
   console.log(
     "  ⚠️ No strong record detail signals found after 20s, proceeding with best-effort extraction",
   );
-  await page
-    .screenshot({ path: "record_not_loaded.png", fullPage: true })
-    .catch(() => {});
+  if (isScraperDebugArtifactsEnabled()) {
+    await page
+      .screenshot({ path: "record_not_loaded.png", fullPage: true })
+      .catch(() => {});
+  }
   return contexts[0];
 }
 
@@ -1402,6 +1987,35 @@ async function extractRecordDetails(page) {
   console.log("  📋 Extracting record details...");
   const ctx = getExtractionContext(page);
 
+  let fairfaxInlineHandled = false;
+  if (isFairfaxPortal(page)) {
+    try {
+      const containerVisible = await ctx
+        .evaluate(() => {
+          const el = document.querySelector("#tab-record_detail");
+          return (
+            !!el &&
+            (el.classList.contains("show") || (el.offsetHeight || 0) > 0)
+          );
+        })
+        .catch(() => false);
+      if (containerVisible) {
+        fairfaxInlineHandled = true;
+        console.log(
+          "  [Fairfax] Record Details inline (#tab-record_detail visible) — skipping nav click",
+        );
+      } else {
+        console.log(
+          "  [Fairfax] #tab-record_detail not visible — using standard Record Details click flow",
+        );
+      }
+    } catch (err) {
+      console.log(
+        `  [Fairfax] #tab-record_detail check failed (falling through): ${err.message}`,
+      );
+    }
+  }
+
   if (isBaltimorePortal(page)) {
     const frames = getAccelaChildFrames(page);
     const contentFrame = ctx;
@@ -1416,7 +2030,7 @@ async function extractRecordDetails(page) {
       return { fields: {}, tables: [], screenshot: null };
     }
     await saveCheckpointScreenshot(page, "after_record_details").catch(() => {});
-  } else {
+  } else if (!fairfaxInlineHandled) {
     const { found } = await clickAccelaNavPanel(
       ctx,
       page,
@@ -1567,6 +2181,91 @@ async function extractRecordDetails(page) {
           rows: Object.entries(details.fields).map(([key, value]) => ({ key, value })),
         },
       ];
+    }
+  } else if (isFairfaxPortal(page) && fairfaxInlineHandled) {
+    const recordDetails = await extractBaltimoreRecordDetails(ctx);
+    console.log("[Fairfax] Record Details extracted inline:", recordDetails);
+    if (Object.keys(recordDetails).length > 0) {
+      Object.assign(details.fields, recordDetails);
+      details.tables = [
+        {
+          title: "Record Details",
+          headers: ["Field", "Value"],
+          rows: Object.entries(details.fields).map(([key, value]) => ({ key, value })),
+        },
+      ];
+    }
+    console.log(
+      `  [Fairfax] Record Details extracted inline: ${Object.keys(details.fields).length} fields`,
+    );
+
+    try {
+      const beforeKv = Object.keys(details.fields).length;
+      for (const k of Object.keys(details.fields)) {
+        if (isFairfaxGarbageRow({ key: k, value: details.fields[k] })) {
+          delete details.fields[k];
+        }
+      }
+      const droppedKv = beforeKv - Object.keys(details.fields).length;
+      if (droppedKv > 0) {
+        console.log(
+          `  [Fairfax] Record Details: filtered ${droppedKv} garbage rows from fields / keyValues source`,
+        );
+      }
+
+      details.tables = [
+        {
+          title: "Record Details",
+          headers: ["Field", "Value"],
+          rows: Object.entries(details.fields).map(([key, value]) => ({
+            key,
+            value,
+          })),
+        },
+      ];
+
+      const structuredContacts = await extractFairfaxRelatedContacts(page);
+      if (structuredContacts.length > 0) {
+        const contactRows = [];
+        for (const c of structuredContacts) {
+          if (c.name)
+            contactRows.push({ key: `${c.role} - Name`, value: c.name });
+          if (c.phone)
+            contactRows.push({
+              key: `${c.role} - Primary Phone`,
+              value: c.phone,
+            });
+          if (c.email)
+            contactRows.push({ key: `${c.role} - Email`, value: c.email });
+          if (c.license)
+            contactRows.push({
+              key: `${c.role} - License Number`,
+              value: c.license,
+            });
+          if (c.company && c.company !== c.name)
+            contactRows.push({ key: `${c.role} - Company`, value: c.company });
+        }
+        for (const r of contactRows) {
+          details.fields[r.key] = r.value;
+        }
+        details.tables = [
+          {
+            title: "Record Details",
+            headers: ["Field", "Value"],
+            rows: Object.entries(details.fields).map(([key, value]) => ({
+              key,
+              value,
+            })),
+          },
+        ];
+        console.log(
+          `  [Fairfax] Related Contacts: injected ${contactRows.length} structured rows across ${structuredContacts.length} roles`,
+        );
+      }
+    } catch (err) {
+      console.log(
+        `  [Fairfax] Record Details post-process: ${err.message}`,
+      );
     }
   }
 
@@ -2748,10 +3447,87 @@ function normalizePermitNumberKey(value) {
 }
 
 /**
+ * True when normalized key ends with a short numeric Accela revision/amendment segment
+ * (e.g. ...-01, ...-02). Requires at least four hyphen segments so we do not strip
+ * main record tails like ...-00386.
+ */
+function accelaNormalizedHasTrailingRevisionSuffix(normalizedKey) {
+  const parts = normalizedKey.split("-");
+  if (parts.length < 4) return false;
+  return /^\d{1,3}$/.test(parts[parts.length - 1]);
+}
+
+/**
+ * Strip one or more trailing revision segments (-01, -02, ...) from a normalized key.
+ * Only strips when the last segment is 1–3 digits and there are at least 4 segments.
+ */
+function accelaPermitBaseKeyFromNormalized(normalizedKey) {
+  if (!normalizedKey) return "";
+  let parts = normalizedKey.split("-");
+  while (parts.length >= 4) {
+    const last = parts[parts.length - 1];
+    if (/^\d{1,3}$/.test(last)) parts = parts.slice(0, -1);
+    else break;
+  }
+  return parts.join("-");
+}
+
+/**
+ * Baltimore / Fairfax: allow list + verify match when the user asked for a base permit
+ * (no trailing -01 style suffix) and the portal shows a revision-linked record.
+ * If the user includes an explicit revision suffix, only an exact normalized match passes.
+ */
+function accelaPermitsEquivalentForTenant(requestedRaw, visibleRaw, tenantFamilyAware) {
+  const reqK = normalizePermitNumberKey(requestedRaw);
+  const visK = normalizePermitNumberKey(visibleRaw);
+  if (!reqK || !visK) return { ok: false, kind: null };
+  if (reqK === visK) return { ok: true, kind: "exact" };
+  if (!tenantFamilyAware) return { ok: false, kind: null };
+
+  if (accelaNormalizedHasTrailingRevisionSuffix(reqK)) {
+    return { ok: false, kind: null };
+  }
+
+  const baseV = accelaPermitBaseKeyFromNormalized(visK);
+  if (baseV === reqK) return { ok: true, kind: "base" };
+
+  if (visK.startsWith(reqK + "-")) {
+    const suf = visK.slice(reqK.length + 1);
+    if (/^\d{1,3}$/.test(suf)) return { ok: true, kind: "base" };
+  }
+  return { ok: false, kind: null };
+}
+
+/** Lower score = better list match. -1 = no match. */
+function scoreAccelaListLinkText(rawLinkText, permitNumber, familyAware) {
+  const t = normalizePermitNumberKey(
+    String(rawLinkText || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+  const p = normalizePermitNumberKey(permitNumber);
+  if (!p) return -1;
+  if (t === p) return 0;
+  if (familyAware) {
+    const equiv = accelaPermitsEquivalentForTenant(permitNumber, rawLinkText, true);
+    if (equiv.ok && equiv.kind === "base") return 1;
+    if (accelaNormalizedHasTrailingRevisionSuffix(p)) {
+      return -1;
+    }
+    if (t.includes(p)) return 2;
+    return -1;
+  }
+  if (t.includes(p)) return 2;
+  return -1;
+}
+
+/**
  * TEMP (Baltimore): Only `tabs.info` (Record Details) + `tabs.attachments` in portalData;
  * other tab keys are omitted and their extractors are skipped. Set `false` to restore full portal payload.
  */
 const BALTIMORE_MINIMAL_PORTAL_TABS = true;
+const FAIRFAX_MINIMAL_PORTAL_TABS = true;
 
 /**
  * Parse __doPostBack('target','arg') for the "Next >" pager link in the attachment iframe.
@@ -3320,7 +4096,7 @@ async function extractAttachments(
   const ctx = getExtractionContext(page);
   let baltimoreAttachmentFrame = null;
 
-  if (isBaltimorePortal(page)) {
+  if (isMinimalTabsPortal(page)) {
     try {
       const frames = getAccelaChildFrames(page);
       const navOk = await navigateToRecordInfoSection(
@@ -3334,6 +4110,47 @@ async function extractAttachments(
         return { attachments: [], screenshot: null };
       }
       await saveCheckpointScreenshot(page, "after_attachments").catch(() => {});
+
+      if (isFairfaxPortal(page)) {
+        // Fairfax requires clicking "View Record Attachments" on the main page
+        // to populate the AttachmentsList iframe. Baltimore does not need this.
+        try {
+          const hit = await findLinkInAnyContext(
+            page,
+            frames,
+            "View Record Attachments",
+          );
+          let viewControl = hit?.element || null;
+          if (!viewControl) {
+            const searchContexts = [page, ...frames];
+            for (const ctx of searchContexts) {
+              const buttons = await ctx.$$("button").catch(() => []);
+              for (const b of buttons) {
+                const t = ((await b.textContent()) || "")
+                  .replace(/\s+/g, " ")
+                  .trim();
+                if (
+                  t === "View Record Attachments" &&
+                  (await b.isVisible().catch(() => false))
+                ) {
+                  viewControl = b;
+                  break;
+                }
+              }
+              if (viewControl) break;
+            }
+          }
+          if (viewControl) {
+            await viewControl.click();
+            await waitForAccelaLoad(page);
+            await page.waitForTimeout(1500);
+          }
+        } catch (err) {
+          console.log(
+            `  [scrape] Fairfax View Record Attachments click warning: ${err.message}`,
+          );
+        }
+      }
 
       // Wait for attachment iframe to load real content (async after navigation)
       baltimoreAttachmentFrame = null;
@@ -4225,6 +5042,8 @@ async function scrapeAccelaRecord(
   hashPortalData,
   uploadToSupabaseStorage,
   sanitizeStorageKey,
+  baltimoreTabs,
+  fairfaxTabs,
 ) {
   const { portalUrl } = session;
   const page =
@@ -4235,8 +5054,42 @@ async function scrapeAccelaRecord(
     );
   }
   page._isBaltimore = (typeof portalUrl === "string" && portalUrl.toUpperCase().includes("BALTIMORE"));
+  page._isFairfax = (typeof portalUrl === "string" && portalUrl.toUpperCase().includes("FAIRFAX"));
+  const baltimoreTabSet =
+    page._isBaltimore &&
+    Array.isArray(baltimoreTabs) &&
+    baltimoreTabs.length > 0
+      ? new Set(baltimoreTabs.map((k) => String(k).trim()))
+      : null;
+  const fairfaxTabSet =
+    page._isFairfax &&
+    Array.isArray(fairfaxTabs) &&
+    fairfaxTabs.length > 0
+      ? new Set(fairfaxTabs.map((k) => String(k).trim()))
+      : null;
+  const wantsBaltimoreInfo =
+    !page._isBaltimore || !baltimoreTabSet || baltimoreTabSet.has("info");
+  const wantsBaltimoreAttachments =
+    !page._isBaltimore || !baltimoreTabSet || baltimoreTabSet.has("attachments");
+  const wantsFairfaxInfo =
+    !page._isFairfax || !fairfaxTabSet || fairfaxTabSet.has("info");
+  const wantsFairfaxAttachments =
+    !page._isFairfax || !fairfaxTabSet || fairfaxTabSet.has("attachments");
   if (page._isBaltimore) {
-    console.log("  [Baltimore] portal detected — using extended submenu wait and multi-context link search");
+    console.log(
+      "  [Baltimore] portal detected — using extended submenu wait and multi-context link search",
+      baltimoreTabSet
+        ? `(tabs: ${[...baltimoreTabSet].join(", ")})`
+        : "(tabs: default all)",
+    );
+  }
+  if (page._isFairfax) {
+    console.log(
+      "  [Fairfax] portal detected — using extended submenu wait and multi-context link search",
+      fairfaxTabSet
+        ? `(tabs: ${[...fairfaxTabSet].join(", ")})`
+        : "(tabs: default all)",
+    );
   }
   const currentUrl = page.url();
   console.log(`  [GUARD] Starting scrape on existing page. URL: ${currentUrl}`);
@@ -4266,18 +5119,26 @@ async function scrapeAccelaRecord(
     const header = await extractRecordHeader(page);
     const visiblePermit = (header.record_number || "").trim();
     console.log(`[Scrape] visible permit loaded: ${visiblePermit || "(empty)"}`);
-    if (page._isBaltimore) {
+    if (page._isBaltimore || page._isFairfax) {
+      const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
       if (!visiblePermit) {
         throw new Error(
-          "PERMIT_VERIFY_FAILED: Baltimore record header did not expose permit number — aborting scrape (no DB write)",
+          `PERMIT_VERIFY_FAILED: ${tenantLabel} record header did not expose permit number — aborting scrape (no DB write)`,
         );
       }
-      if (
-        normalizePermitNumberKey(visiblePermit) !==
-        normalizePermitNumberKey(permitNumber)
-      ) {
+      const tenantMatch = accelaPermitsEquivalentForTenant(
+        permitNumber,
+        visiblePermit,
+        true,
+      );
+      if (!tenantMatch.ok) {
         throw new Error(
           `PERMIT_MISMATCH visible=${visiblePermit} requested=${permitNumber} — aborting scrape (no DB write)`,
+        );
+      }
+      if (tenantMatch.kind === "base") {
+        console.log(
+          `[Accela permit verify] accepted base permit match visible=${visiblePermit} requested=${permitNumber}`,
         );
       }
     } else if (
@@ -4299,16 +5160,27 @@ async function scrapeAccelaRecord(
       : null;
 
     let details = { fields: {}, tables: [], screenshot: null };
-    try {
-    session.message = `${permitNumber} → Record Details`;
-      details = await extractRecordDetails(page);
-    } catch (err) {
-      console.log(`  [scrape] Record Details section error: ${err.message}`);
+    const wantsRecordDetailsTab =
+      (!page._isBaltimore && !page._isFairfax) ||
+      (page._isBaltimore && wantsBaltimoreInfo) ||
+      (page._isFairfax && wantsFairfaxInfo);
+    if (wantsRecordDetailsTab) {
+      try {
+        session.message = `${permitNumber} → Record Details`;
+        details = await extractRecordDetails(page);
+      } catch (err) {
+        console.log(`  [scrape] Record Details section error: ${err.message}`);
+      }
+    } else {
+      const tabSkipLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
+      console.log(
+        `  [scrape] (skip) Record Details — ${tabSkipLabel} tab selection (info off)`,
+      );
     }
     checkTimeout();
 
     let processingStatus = { departments: [], screenshot: null };
-    if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
+    if (!isMinimalTabsPortal(page)) {
       try {
     session.message = `${permitNumber} → Processing Status`;
         processingStatus = await extractProcessingStatus(page);
@@ -4329,7 +5201,7 @@ async function scrapeAccelaRecord(
       planReviewSummary: null,
       downloadLinks: [],
     };
-    if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
+    if (!isMinimalTabsPortal(page)) {
       try {
     session.message = `${permitNumber} → Plan Review`;
         planReview = await extractPlanReview(page);
@@ -4342,7 +5214,7 @@ async function scrapeAccelaRecord(
     checkTimeout();
 
     let relatedRecords = { records: [], screenshot: null };
-    if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
+    if (!isMinimalTabsPortal(page)) {
       try {
     session.message = `${permitNumber} → Related Records`;
         relatedRecords = await extractRelatedRecords(page);
@@ -4357,18 +5229,29 @@ async function scrapeAccelaRecord(
     checkTimeout();
 
     let attachments = { attachments: [], screenshot: null };
-    try {
-    session.message = `${permitNumber} → Attachments`;
-      attachments = await extractAttachments(
-      page,
-      session,
-      supabaseProjectId,
-      supabase,
-      uploadToSupabaseStorage,
-      sanitizeStorageKey,
-    );
-    } catch (err) {
-      console.log(`  [scrape] Attachments section error: ${err.message}`);
+    const wantsAttachmentsTab =
+      (!page._isBaltimore && !page._isFairfax) ||
+      (page._isBaltimore && wantsBaltimoreAttachments) ||
+      (page._isFairfax && wantsFairfaxAttachments);
+    if (wantsAttachmentsTab) {
+      try {
+        session.message = `${permitNumber} → Attachments`;
+        attachments = await extractAttachments(
+          page,
+          session,
+          supabaseProjectId,
+          supabase,
+          uploadToSupabaseStorage,
+          sanitizeStorageKey,
+        );
+      } catch (err) {
+        console.log(`  [scrape] Attachments section error: ${err.message}`);
+      }
+    } else {
+      const tabSkipLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
+      console.log(
+        `  [scrape] (skip) Attachments — ${tabSkipLabel} tab selection (attachments off)`,
+      );
     }
     checkTimeout();
 
@@ -4378,7 +5261,7 @@ async function scrapeAccelaRecord(
       completed: [],
       screenshot: null,
     };
-    if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
+    if (!isMinimalTabsPortal(page)) {
       try {
     session.message = `${permitNumber} → Inspections`;
         inspections = await extractInspections(page);
@@ -4393,7 +5276,7 @@ async function scrapeAccelaRecord(
     checkTimeout();
 
     let payments = { payments: [], screenshot: null };
-    if (!page._isBaltimore || !BALTIMORE_MINIMAL_PORTAL_TABS) {
+    if (!isMinimalTabsPortal(page)) {
       try {
     session.message = `${permitNumber} → Payments`;
         payments = await extractPayments(page);
@@ -4405,9 +5288,11 @@ async function scrapeAccelaRecord(
     }
 
     const isBaltimore = page._isBaltimore === true;
+    const isFairfaxTenant = page._isFairfax === true;
+    const isBaltimoreOrFairfaxPayload = isBaltimore || isFairfaxTenant;
     const portalData = {
       portalType: "accela",
-      ...(isBaltimore ? { schemaVersion: 2 } : {}),
+      ...(isBaltimoreOrFairfaxPayload ? { schemaVersion: 2 } : {}),
       name: header.record_number || permitNumber,
       projectNum: permitNumber,
       description: header.record_type || "",
@@ -4420,7 +5305,7 @@ async function scrapeAccelaRecord(
       tabs: {
         info: {
           tables: (() => {
-            if (!isBaltimore) return details.tables;
+            if (!isBaltimoreOrFairfaxPayload) return details.tables;
             const keepAlways = new Set([
               "Record Number",
               "Record Type",
@@ -4477,7 +5362,7 @@ async function scrapeAccelaRecord(
               value,
             })),
             ];
-            if (!isBaltimore) return rows;
+            if (!isBaltimoreOrFairfaxPayload) return rows;
 
             const keepAlways = new Set([
               "Record Number",
@@ -4544,7 +5429,8 @@ async function scrapeAccelaRecord(
                   },
                 ]
               : []),
-            ...(planReview.text && (!isBaltimore || planReview.comments.length > 0)
+            ...(planReview.text &&
+            (!isBaltimoreOrFairfaxPayload || planReview.comments.length > 0)
               ? [
                   {
                     fileName: "Plan Review - Review Comments",
@@ -4570,7 +5456,7 @@ async function scrapeAccelaRecord(
           ],
           keyValues: [],
           tables: [],
-          ...(isBaltimore && planReview.planReviewSummary
+          ...(isBaltimoreOrFairfaxPayload && planReview.planReviewSummary
             ? { planReviewSummary: planReview.planReviewSummary }
             : {}),
         },
@@ -4668,11 +5554,21 @@ async function scrapeAccelaRecord(
       },
     };
 
-    if (isBaltimore && BALTIMORE_MINIMAL_PORTAL_TABS) {
-      portalData.tabs = {
-        info: portalData.tabs.info,
-        attachments: portalData.tabs.attachments,
-      };
+    if (isMinimalTabsPortal(page)) {
+      const minimalTabs = {};
+      if (
+        (page._isBaltimore && wantsBaltimoreInfo) ||
+        (page._isFairfax && wantsFairfaxInfo)
+      ) {
+        minimalTabs.info = portalData.tabs.info;
+      }
+      if (
+        (page._isBaltimore && wantsBaltimoreAttachments) ||
+        (page._isFairfax && wantsFairfaxAttachments)
+      ) {
+        minimalTabs.attachments = portalData.tabs.attachments;
+      }
+      portalData.tabs = minimalTabs;
     }
     console.log(
       "[PortalData] sections returned:",
@@ -4693,14 +5589,16 @@ async function scrapeAccelaRecord(
       const newHash = hashPortalData(portalData);
 
       let existingRow = null;
-      const selectFields = page._isBaltimore
-        ? "id, portal_data_hash, portal_data, permit_number, user_id"
-        : "id, portal_data_hash";
+      const selectFields =
+        page._isBaltimore || page._isFairfax
+          ? "id, portal_data_hash, portal_data, permit_number, user_id"
+          : "id, portal_data_hash";
 
-      if (page._isBaltimore) {
+      if (page._isBaltimore || page._isFairfax) {
+        const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
         if (!supabaseProjectId) {
           throw new Error(
-            "Baltimore scrape requires projectId — refusing DB write",
+            `${tenantLabel} scrape requires projectId — refusing DB write`,
           );
         }
         const { data: bRows, error: bErr } = await supabase
@@ -4710,16 +5608,18 @@ async function scrapeAccelaRecord(
           .limit(1);
         if (bErr || !bRows?.length) {
           throw new Error(
-            `Baltimore scrape: projects row not found id=${supabaseProjectId}`,
+            `${tenantLabel} scrape: projects row not found id=${supabaseProjectId}`,
           );
         }
         existingRow = bRows[0];
-        if (
-          normalizePermitNumberKey(existingRow.permit_number) !==
-          normalizePermitNumberKey(permitNumber)
-        ) {
+        const dbPermOk = accelaPermitsEquivalentForTenant(
+          permitNumber,
+          existingRow.permit_number,
+          true,
+        ).ok;
+        if (!dbPermOk) {
           throw new Error(
-            `Baltimore DB permit mismatch projects.id=${supabaseProjectId} dbPermit=${existingRow.permit_number} requested=${permitNumber}`,
+            `${tenantLabel} DB permit mismatch projects.id=${supabaseProjectId} dbPermit=${existingRow.permit_number} requested=${permitNumber}`,
           );
         }
       } else {
@@ -4741,7 +5641,7 @@ async function scrapeAccelaRecord(
       }
 
       const isLegacyBaltimore =
-        page._isBaltimore &&
+        (page._isBaltimore || page._isFairfax) &&
         existingRow?.portal_data &&
         (existingRow.portal_data.schemaVersion == null || existingRow.portal_data.schemaVersion < 2);
       const forceOverwrite = isLegacyBaltimore;
@@ -4750,7 +5650,7 @@ async function scrapeAccelaRecord(
         existingRow &&
         existingRow.portal_data_hash === newHash &&
         !forceOverwrite &&
-        !page._isBaltimore
+        !(page._isBaltimore || page._isFairfax)
       ) {
         console.log(
           `  ⏭️ Data unchanged (hash match), skipping update for row ${existingRow.id}`,
@@ -4761,13 +5661,15 @@ async function scrapeAccelaRecord(
           .eq("id", existingRow.id);
       } else if (existingRow) {
         if (forceOverwrite) {
+          const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
           console.log(
-            `  📌 Baltimore: forcing overwrite for row ${existingRow.id} (legacy schema)`,
+            `  📌 ${tenantLabel}: forcing overwrite for row ${existingRow.id} (legacy schema)`,
           );
         }
-        if (page._isBaltimore) {
+        if (page._isBaltimore || page._isFairfax) {
+          const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
           console.log(
-            `  📌 Baltimore: full portal_data replace (attachments rows = this scrape only, no merge) projects.id=${existingRow.id}`,
+            `  📌 ${tenantLabel}: full portal_data replace (attachments rows = this scrape only, no merge) projects.id=${existingRow.id}`,
           );
         }
         const updatePayload = {
@@ -4793,9 +5695,10 @@ async function scrapeAccelaRecord(
           );
         }
       } else {
-        if (page._isBaltimore) {
+        if (page._isBaltimore || page._isFairfax) {
+          const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
           throw new Error(
-            "Baltimore scrape: missing projects row (should have been loaded by id)",
+            `${tenantLabel} scrape: missing projects row (should have been loaded by id)`,
           );
         }
         const { data: created, error: createError } = await supabase
