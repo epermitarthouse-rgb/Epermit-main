@@ -54,7 +54,6 @@ import {
   FileText,
   AlertCircle,
   ListChecks,
-  ExternalLink,
   FolderOpen,
   MessageSquare,
   ArrowLeft,
@@ -759,7 +758,7 @@ function WashingtonStatusTabPanel({
                       className="h-auto py-1 px-1 text-[#6B9AC4]"
                     >
                       <a href={pdfUrl} target="_blank" rel="noreferrer">
-                        Open PDF
+                        Download PDF
                       </a>
                     </Button>
                   ) : null}
@@ -771,7 +770,7 @@ function WashingtonStatusTabPanel({
                       className="h-auto py-1 px-1 text-[#6B9AC4]"
                     >
                       <a href={excelUrl} target="_blank" rel="noreferrer">
-                        Open Excel
+                        Download Excel
                       </a>
                     </Button>
                   ) : null}
@@ -1443,13 +1442,20 @@ export default function PortalDataViewer() {
     portalData.portalSubtype === "montgomery-projectdox";
   const isHowardProjectDox =
     portalData.portalSubtype === "howard-projectdox";
-  const isMdAvolveProjectDox =
-    isMontgomeryProjectDox || isHowardProjectDox;
   /** Default DC Avolve / generic ProjectDox (not PGC, not Montgomery/Howard). */
   const isWashingtonDcProjectDox =
     portalData.portalType === "projectdox" &&
     !isPgcEplan &&
-    !isMdAvolveProjectDox;
+    !isMontgomeryProjectDox &&
+    !isHowardProjectDox;
+  // Tenants rendered via Montgomery-style report URL resolver
+  // (getMontgomeryReportEntryActionUrls). Washington shares Montgomery's
+  // reportEntries[] shape including Supabase-backed pdfUrl/excelUrl, so it
+  // belongs in this group despite the "Md" in the name.
+  const isMdAvolveProjectDox =
+    isMontgomeryProjectDox ||
+    isHowardProjectDox ||
+    isWashingtonDcProjectDox;
   const foldersForRender = (() => {
     const folders = filesTab?.folders ?? [];
     if (!isPgcEplan) return folders;
@@ -3150,7 +3156,7 @@ export default function PortalDataViewer() {
                                             target="_blank"
                                             rel="noreferrer"
                                           >
-                                            Open PDF
+                                            Download PDF
                                           </a>
                                         </Button>
                                       ) : null}
@@ -3161,7 +3167,7 @@ export default function PortalDataViewer() {
                                             target="_blank"
                                             rel="noreferrer"
                                           >
-                                            Open Excel
+                                            Download Excel
                                           </a>
                                         </Button>
                                       ) : null}
@@ -3855,7 +3861,7 @@ export default function PortalDataViewer() {
                                                               rel="noreferrer"
                                                             >
                                                               <FileText className="h-4 w-4 mr-2" />
-                                                              Open PDF
+                                                              Download PDF
                                                             </a>
                                                           </Button>
                                                         ) : null}
@@ -3870,7 +3876,7 @@ export default function PortalDataViewer() {
                                                               target="_blank"
                                                               rel="noreferrer"
                                                             >
-                                                              Open Excel
+                                                              Download Excel
                                                             </a>
                                                           </Button>
                                                         ) : null}
@@ -4496,61 +4502,12 @@ export default function PortalDataViewer() {
                     No extracted text for this report in saved data.
                   </p>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  {isHttpUrlCandidate(reportReaderOpen.pdf.url) ? (
-                    <Button asChild size="sm" variant="default">
-                      <a
-                        href={String(reportReaderOpen.pdf.url).trim()}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={
-                          isPgcEplan
-                            ? "Open SSRS ReportViewer in ePlan (original layout)"
-                            : "Open report viewer"
-                        }
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        {isPgcEplan
-                          ? "Open SSRS viewer"
-                          : "Open report in portal"}
-                      </a>
-                    </Button>
-                  ) : null}
-                  {isHttpUrlCandidate(reportReaderOpen.pdf.pdfUrl) ? (
-                    <Button asChild size="sm" variant="secondary">
-                      <a
-                        href={String(reportReaderOpen.pdf.pdfUrl).trim()}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={
-                          isPgcEplan
-                            ? "Binary PDF exported from SSRS and stored for this project (not generated from extracted text)"
-                            : "Open stored PDF"
-                        }
-                      >
-                        {isPgcEplan ? "Open stored PDF" : "Open PDF"}
-                      </a>
-                    </Button>
-                  ) : null}
-                  {isHttpUrlCandidate(reportReaderOpen.pdf.excelUrl) ? (
-                    <Button asChild size="sm" variant="outline">
-                      <a
-                        href={String(reportReaderOpen.pdf.excelUrl).trim()}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Excel export from SSRS"
-                      >
-                        Open Excel
-                      </a>
-                    </Button>
-                  ) : null}
-                </div>
                 {reportReaderOpen.pdf.screenshot ? (
                   <div className="rounded-md border border-border/60 bg-muted/10 p-3">
                     <p className="text-xs text-amber-200/90 mb-2">
                       Low-resolution preview only (compressed for database
                       storage). It is not full quality — use extracted text or
-                      portal links above when available.
+                      the actions on the report card when available.
                     </p>
                     <img
                       src={`data:image/png;base64,${reportReaderOpen.pdf.screenshot}`}
