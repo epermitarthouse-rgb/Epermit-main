@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 import {
-  inferPgcDisciplineFromReviewedBy,
+  extractRefSpanRows,
   parsePgcReviewComments,
   type PgcReviewCommentsRow,
 } from "../_shared/pgcReviewCommentsStackedParse.ts";
@@ -19,6 +19,8 @@ interface ParsedCommentItem {
   code_reference: string | null;
 }
 
+type ParsedCommentIngestSource = "raw_ref" | "fallback_llm";
+
 interface PortalPdf {
   fileName?: string;
   text?: string;
@@ -32,7 +34,7 @@ function normalizePgcFlattenedReviewCommentsText(raw: string): string {
   let s = String(raw || "").replace(/\r\n/g, "\n");
   s = s.replace(
     /\.pdf\s*(UnResolved|Resolved|Info\s*Only|InfoOnly)\b/gi,
-    ".pdf $1",
+    ".pdf\n$1",
   );
   s = s.replace(/\.pdf(?=[A-Za-z])/g, ".pdf\n");
   s = s.replace(/REF\s*#\s*CYCLE(?=REVIEWED)/gi, "REF # CYCLE\n");
@@ -63,13 +65,8 @@ function isPgcExportReviewCommentsPdf(p: PortalPdf): boolean {
   );
 }
 
-/** PGC ePlan + pgc-export Review Comments: use deterministic stacked parser (same as PortalDataViewer), not LLM. */
-function isPgcEplanDeterministicReviewCommentsExport(
-  portalData: PortalData,
-  pdf: PortalPdf,
-): boolean {
-  if (String(portalData.portalSubtype ?? "") !== "pgc-eplan") return false;
-  if (String(pdf.info?.source ?? "") !== "pgc-export") return false;
+/** Deterministic stacked parser should be attempted on every Review Comments export. */
+function shouldAttemptDeterministicStackedParse(pdf: PortalPdf): boolean {
   const name = String(pdf.fileName ?? "").toLowerCase();
   return (
     name.includes("review comments") &&
@@ -91,24 +88,137 @@ function tryPgcStackedRowsRawThenNormalized(raw: string): PgcReviewCommentsRow[]
   return null;
 }
 
-function formatPgcDeterministicPersistedComment(row: PgcReviewCommentsRow): string {
+function formatPgcDeterministicPersistedComment(
+  row: PgcReviewCommentsRow,
+  sourceReport: string,
+): string {
   return [
-    `REF #: ${row.ref}`,
-    `CYCLE: ${row.cycle}`,
-    `REVIEWED BY: ${row.reviewedBy}`,
-    `DATE/TIME: ${row.dateTime}`,
-    `TYPE: ${row.type}`,
-    `FILENAME: ${row.filename}`,
-    `PORTAL STATUS: ${row.status}`,
-    "",
-    "DISCUSSION:",
+    `ref: ${row.ref}`,
+    `cycle: ${row.cycle}`,
+    `reviewed_by: ${row.reviewedBy}`,
+    `type: ${row.type}`,
+    `filename: ${row.filename}`,
+    `full_discussion_text:`,
     row.discussion,
+    `status: ${row.status}`,
+    `source_report: ${sourceReport}`,
+    `date_time: ${row.dateTime}`,
     "",
-    "--- SOURCE BLOCK ---",
+    "--- original_source_block ---",
     row.originalTextBlock,
   ]
     .join("\n")
     .trim();
+}
+
+function hasLikelySourceRefRows(raw: string): boolean {
+  const t = String(raw ?? "");
+  if (!t.trim()) return false;
+  if (/\bREF\s*#?\s*\d+\b/i.test(t)) return true;
+  const lines = t.split(/\r?\n/).map((l) => l.trim());
+  const bareRefLines = lines.filter((l) => /^\d{1,3}$/.test(l)).length;
+  return bareRefLines >= 2;
+}
+
+function toUniqueOrdered(values: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of values) {
+    const v = String(raw ?? "").trim();
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out;
+}
+
+function extractOrderedRefsFromText(raw: string): string[] {
+  const refs: string[] = [];
+  const text = String(raw ?? "").replace(/\r\n/g, "\n");
+  const re = /\bREF\s*#?\s*(\d{1,4})\b/gi;
+  let m: RegExpExecArray | null = re.exec(text);
+  while (m) {
+    refs.push(String(m[1] ?? "").trim());
+    m = re.exec(text);
+  }
+  return toUniqueOrdered(refs);
+}
+
+/**
+ * Stacked `splitIndexOnlyLine` can produce one-line chunks; `originalTextBlock` is then only a digit. Detect that so
+ * we can prefer `extractRefSpanRows` when it has real line-anchored `REF` blocks.
+ */
+function pgcRowsAreHollowIndexOnlyBlocks(rows: PgcReviewCommentsRow[] | null): boolean {
+  if (!rows || rows.length < 2) return false;
+  return rows.every((r) => {
+    const t = String(r.originalTextBlock ?? "").trim();
+    return t.length > 0 && /^\d{1,4}$/.test(t);
+  });
+}
+
+/**
+ * Prefer full portal REF coverage: when stacked/header parse under-counts vs `REF #` lines in text,
+ * use `extractRefSpanRows`. Otherwise keep the richer `tryPgc` result when it covers all markers.
+ * If `try` is hollow (digit-only blocks) and `span` is not, prefer `span` when counts are adequate.
+ */
+function pickDeterministicPgcRows(
+  rawText: string,
+  tryPgcRows: PgcReviewCommentsRow[] | null,
+): PgcReviewCommentsRow[] | null {
+  const span = extractRefSpanRows(rawText);
+  const nExtracted = extractOrderedRefsFromText(rawText).length;
+  const nSpan = span?.length ?? 0;
+  const nTry = tryPgcRows?.length ?? 0;
+  if (nSpan === 0 && nTry === 0) return null;
+
+  const tryHollow = pgcRowsAreHollowIndexOnlyBlocks(tryPgcRows);
+  const spanHollow = pgcRowsAreHollowIndexOnlyBlocks(span);
+  const preferSpanOverHollowTry =
+    tryHollow &&
+    !spanHollow &&
+    nSpan > 0 &&
+    (nExtracted > 0 ? nSpan >= nExtracted : nSpan >= nTry);
+
+  if (preferSpanOverHollowTry) return span!;
+
+  if (nSpan === 0) return tryPgcRows ?? null;
+  if (nTry === 0) return span;
+  if (nExtracted > 0) {
+    const tryOk = nTry >= nExtracted;
+    const spanOk = nSpan >= nExtracted;
+    if (spanOk && !tryOk) return span;
+    if (tryOk && !spanOk) return tryPgcRows;
+    if (spanOk && tryOk) {
+      if (tryHollow && !spanHollow) return span!;
+      return nTry >= nSpan ? tryPgcRows! : span!;
+    }
+    return nSpan > nTry ? span! : tryPgcRows!;
+  }
+  if (tryHollow && !spanHollow && nSpan > 0) return span!;
+  return nSpan > nTry ? span! : tryPgcRows!;
+}
+
+function diffRefs(fromRefs: string[], toRefs: string[]): string[] {
+  const keep = new Set(toRefs);
+  return fromRefs.filter((r) => !keep.has(r));
+}
+
+async function fetchStoredCountsBySource(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+): Promise<{ raw_ref: number; fallback_llm: number; total: number }> {
+  const { data, error } = await supabase
+    .from("parsed_comments")
+    .select("id, ingest_source")
+    .eq("project_id", projectId);
+  if (error) {
+    console.warn("[comment-parser] failed to read stored counts by source:", error.message);
+    return { raw_ref: 0, fallback_llm: 0, total: 0 };
+  }
+  const rows = (data ?? []) as Array<{ ingest_source?: string | null }>;
+  const raw_ref = rows.filter((r) => r.ingest_source === "raw_ref").length;
+  const fallback_llm = rows.filter((r) => r.ingest_source === "fallback_llm").length;
+  return { raw_ref, fallback_llm, total: rows.length };
 }
 
 interface PortalData {
@@ -276,8 +386,8 @@ function splitPgcFlattenedRowBlocks(normalized: string): string[] | null {
     (l) =>
       /\.pdf\b/i.test(l) ||
       /\b(UnResolved|Resolved|Info\s*Only|InfoOnly)\b/i.test(l) ||
-      /^REF\s*#\s*\d+/i.test(l) ||
-      /^REF\s*#\s*CYCLE\b/i.test(l),
+      /^REF\s*#?\s*\d+/i.test(l) ||
+      /^REF\s*#?\s*CYCLE\b/i.test(l),
   );
   if (markers.length < 1) return null;
   if (markers.length < 2 && lines.length < 10) return null;
@@ -285,7 +395,7 @@ function splitPgcFlattenedRowBlocks(normalized: string): string[] | null {
     const t = l.trim();
     if (isNoiseBlock(l)) return false;
     if (t.length >= 15) return true;
-    return /^REF\s*#\s*\d+/i.test(t) || /^REF\s*#\s*CYCLE\b/i.test(t);
+    return /^REF\s*#?\s*\d+/i.test(t) || /^REF\s*#?\s*CYCLE\b/i.test(t);
   });
   if (out.length < 2) return null;
   return out;
@@ -350,8 +460,8 @@ function isPgcSpaceAlignedGridRow(t: string): boolean {
 function isPgcFlattenedCommentRow(b: string): boolean {
   const t = b.trim();
   if (t.length < 2) return false;
-  if (/^REF\s*#\s*CYCLE\b/i.test(t)) return true;
-  if (/^REF\s*#\s*\d+/i.test(t)) return true;
+  if (/^REF\s*#?\s*CYCLE\b/i.test(t)) return true;
+  if (/^REF\s*#?\s*\d+/i.test(t)) return true;
   if (/\.pdf\b/i.test(t)) return true;
   if (/\b(unresolved|resolved|info\s*only|infoonly)\b/i.test(t)) return true;
   if (t.length >= 40 && looksLikeRealComment(t)) return true;
@@ -361,13 +471,25 @@ function isPgcFlattenedCommentRow(b: string): boolean {
 
 /** Short line that is still a PGC grid fragment (must pass isNoiseBlock + isPgcFlattenedCommentRow after). */
 function isPgcShortRefOrCycleLine(t: string): boolean {
-  return /^REF\s*#\s*\d+/i.test(t) || /^REF\s*#\s*CYCLE\b/i.test(t);
+  return /^REF\s*#?\s*\d+/i.test(t) || /^REF\s*#?\s*CYCLE\b/i.test(t);
 }
 
 /** Filter out report titles, metadata, table headers, and other noise before LLM. Only keep blocks that look like real comments. */
+/** Keep blocks that carry a portal review row: REF #, .pdf, or status — not only "code-like" phrasing. */
+function blockHasPortalRefRowSignals(b: string): boolean {
+  const t = b.slice(0, 1_200);
+  if (/(?:^|\n)\s*REF\s*#?\s*\d+\b/i.test(t)) return true;
+  if (/(?:^|\n)\s*REF\s*#?\s*CYCLE\b/i.test(t)) return true;
+  if (isTabularCommentRow(b)) return true;
+  if (b.trim().length >= 20 && /\.pdf|UnResolved|Resolved|Info\s*Only|InfoOnly\b/i.test(b)) {
+    return true;
+  }
+  return false;
+}
+
 function filterNoiseBlocks(
   blocks: string[],
-  opts?: { allowPgcFlattenedRows?: boolean },
+  opts?: { allowPgcFlattenedRows?: boolean; allowPortalRefBlocks?: boolean },
 ): string[] {
   return blocks
     .filter((b) => {
@@ -379,7 +501,8 @@ function filterNoiseBlocks(
     .filter((b) => !isNoiseBlock(b))
     .filter((b) => {
       const pgcRow = opts?.allowPgcFlattenedRows === true && isPgcFlattenedCommentRow(b);
-      return looksLikeRealComment(b) || isTabularCommentRow(b) || pgcRow;
+      const portalRow = opts?.allowPortalRefBlocks === true && blockHasPortalRefRowSignals(b);
+      return looksLikeRealComment(b) || isTabularCommentRow(b) || pgcRow || portalRow;
     });
 }
 
@@ -391,10 +514,21 @@ async function classifyCommentBlocks(
   openai: OpenAI,
   blocks: string[],
   baseIndex = 0,
+  opts?: { portalPreservationMode?: boolean },
 ): Promise<ParsedCommentItem[]> {
   if (blocks.length === 0) return [];
 
-  const systemPrompt = `You are parsing official plan review comments from a building permit review process. ONLY extract actual reviewer comments — these are instructions, requirements, or feedback from government reviewers to the applicant.
+  const systemPrompt = opts?.portalPreservationMode
+    ? `You are normalizing the permit portal "Plan Review - Review Comments" report. Output one record per input block, in order, for Comment Review (full portal row preservation).
+
+For EACH input block, output one object with:
+- "original_text": full text for that block (trim only outer whitespace; keep status, filenames, and informational lines if they appear in the block).
+- "discipline" (Architecture, MEP, Structural, Zoning, Fire, or General)
+- "code_reference" string or null
+
+Do not merge blocks. Do not drop blocks for being informational or lacking a code citation. The "comments" array length must equal the number of input blocks.
+Return JSON: {"comments":[...]}.`
+    : `You are parsing official plan review comments from a building permit review process. ONLY extract actual reviewer comments — these are instructions, requirements, or feedback from government reviewers to the applicant.
 
 DO NOT include:
 - Report titles or headers
@@ -440,21 +574,40 @@ Return ONLY valid JSON. No markdown. Example: {"comments":[{"original_text":"Pro
   }
 
   const comments = Array.isArray(data.comments) ? data.comments : [];
-  return comments.map((c: Record<string, unknown>) => ({
+  const mapped = comments.map((c: Record<string, unknown>) => ({
     original_text: typeof c.original_text === "string" ? c.original_text : String(c.original_text ?? ""),
     discipline: typeof c.discipline === "string" ? c.discipline : "General",
     code_reference: typeof c.code_reference === "string" ? c.code_reference : null,
   }));
+  if (opts?.portalPreservationMode) {
+    const merged: ParsedCommentItem[] = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i] ?? "";
+      const c = mapped[i];
+      merged.push(
+        c
+          ? {
+            original_text: (c.original_text ?? "").trim() || b.trim() || b,
+            discipline: c.discipline || "General",
+            code_reference: c.code_reference ?? null,
+          }
+          : { original_text: b.trim() || b, discipline: "General", code_reference: null },
+      );
+    }
+    return merged;
+  }
+  return mapped;
 }
 
 async function classifyCommentBlocksBatched(
   openai: OpenAI,
   blocks: string[],
+  opts?: { portalPreservationMode?: boolean },
 ): Promise<ParsedCommentItem[]> {
   const merged: ParsedCommentItem[] = [];
   for (let off = 0; off < blocks.length; off += CLASSIFY_BATCH_SIZE) {
     const chunk = blocks.slice(off, off + CLASSIFY_BATCH_SIZE);
-    const part = await classifyCommentBlocks(openai, chunk, off);
+    const part = await classifyCommentBlocks(openai, chunk, off, opts);
     merged.push(...part);
   }
   return merged;
@@ -463,6 +616,32 @@ async function classifyCommentBlocksBatched(
 /** Normalize for duplicate check: trim and collapse whitespace. */
 function normalizeText(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+const PARSED_COMMENTS_ALLOWED_STATUSES = new Set([
+  "Pending Review",
+  "Pending",
+  "Approved",
+  "Rejected",
+  "Draft",
+  "Ready for Review",
+]);
+
+/** Map portal / PGC workflow lines to `parsed_comments.status` (DB `parsed_comments_status_check`). */
+function normalizePortalStatus(raw: string): string {
+  const trimmed = String(raw ?? "").trim();
+  if (PARSED_COMMENTS_ALLOWED_STATUSES.has(trimmed)) return trimmed;
+  const t = trimmed.toLowerCase().replace(/\s+/g, " ");
+  if (!t) return "Pending";
+  if (t === "resolved") return "Approved";
+  if (t === "unresolved" || t === "un resolved") return "Pending Review";
+  if (t === "info only" || t === "infoonly") return "Pending";
+  if (t === "pending review") return "Pending Review";
+  if (t === "rejected") return "Rejected";
+  if (t === "approved") return "Approved";
+  if (t === "draft") return "Draft";
+  if (t === "ready for review") return "Ready for Review";
+  return "Pending";
 }
 
 function previewSnippet(s: string, max = 200): string {
@@ -602,7 +781,19 @@ serve(async (req) => {
         .from("parsed_comments")
         .delete()
         .eq("project_id", projectId);
-      if (delErr) console.warn("[comment-parser] full_refresh delete parsed_comments:", delErr.message);
+      if (delErr) {
+        console.error("[comment-parser] full_refresh delete parsed_comments failed:", delErr.message);
+        return new Response(
+          JSON.stringify({
+            code: 500,
+            message: `Failed to clear existing parsed_comments before full refresh: ${delErr.message}`,
+            parsed_count: 0,
+            inserted_raw_ref_count: 0,
+            inserted_fallback_count: 0,
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       const clearedPortal: PortalData = {
         ...portalData,
         meta: { ...portalData.meta, comment_parse_cursor: null },
@@ -622,7 +813,7 @@ serve(async (req) => {
       const name = (p.fileName ?? "").toLowerCase();
       return name.includes("review comments") && !name.includes("review details") && !name.includes("routing slip");
     });
-    const pdfsToProcess = pdfsWithText.slice(0, 1);
+    const pdfsToProcess = pdfsWithText;
 
     if (pdfsToProcess.length === 0) {
       console.log("[DEBUG] comment-parser: no PDFs with 'Review Comments' in fileName, skipping");
@@ -718,6 +909,17 @@ serve(async (req) => {
     let everHadSplitBlocks = false;
     let everHadFilteredBlocks = false;
     let pipelineEvidence: Record<string, unknown> | null = null;
+    const extractedRefs: string[] = [];
+    const parsedRefs: string[] = [];
+    const normalizedRefs: string[] = [];
+    const storedRefs: string[] = [];
+    let deterministicParsedRowCount = 0;
+    let fallbackParsedRowCount = 0;
+    let insertedRawRefCount = 0;
+    let insertedFallbackCount = 0;
+    let extractedSourceRefCount = 0;
+    let parsedSourceRefCount = 0;
+    let normalizedRawCommentCount = 0;
 
     const totalSkips = () =>
       skippedPostLlmNoise + skippedDuplicate + skippedEmpty;
@@ -727,10 +929,20 @@ serve(async (req) => {
       const pdf = pdfsToProcess[pdfIndex];
       const pageNumber = pdfIndex + 1;
       const rawPdfText = pdf.text ?? "";
+      const extractedRefsThisPdf = extractOrderedRefsFromText(rawPdfText);
+      if (extractedRefsThisPdf.length > 0) {
+        extractedRefs.push(...extractedRefsThisPdf);
+        extractedSourceRefCount += extractedRefsThisPdf.length;
+      }
+      const likelySourceRefRows =
+        extractedRefsThisPdf.length > 0 || hasLikelySourceRefRows(rawPdfText);
 
-      const deterministicPgc = isPgcEplanDeterministicReviewCommentsExport(portalData, pdf);
+      const deterministicPgc = shouldAttemptDeterministicStackedParse(pdf);
       if (deterministicPgc) {
-        const stackedRows = tryPgcStackedRowsRawThenNormalized(rawPdfText);
+        const stackedRows = pickDeterministicPgcRows(
+          rawPdfText,
+          tryPgcStackedRowsRawThenNormalized(rawPdfText),
+        );
         if (stackedRows && stackedRows.length > 0) {
           everHadSplitBlocks = true;
           everHadFilteredBlocks = true;
@@ -738,6 +950,9 @@ serve(async (req) => {
             "[DEBUG] comment-parser: PGC ePlan deterministic stacked rows:",
             stackedRows.length,
           );
+          parsedSourceRefCount += stackedRows.length;
+          deterministicParsedRowCount += stackedRows.length;
+          parsedRefs.push(...stackedRows.map((r) => String(r.ref ?? "").trim()).filter(Boolean));
 
           let commentCountThisPdf = 0;
           let roundSkippedDuplicate = 0;
@@ -748,7 +963,12 @@ serve(async (req) => {
             if (maxComments != null && parsedCount + totalSkips() + insertErrorCount >= maxComments) {
               break;
             }
-            const orig = formatPgcDeterministicPersistedComment(row);
+            const orig = formatPgcDeterministicPersistedComment(
+              row,
+              String(pdf.fileName ?? "Plan Review - Review Comments"),
+            );
+            normalizedRawCommentCount++;
+            if (row.ref) normalizedRefs.push(String(row.ref).trim());
             if (!orig.trim()) {
               roundSkippedEmpty++;
               skippedEmpty++;
@@ -765,10 +985,12 @@ serve(async (req) => {
             const { data: inserted, error: insertError } = await supabase.from("parsed_comments").insert({
               project_id: projectId,
               original_text: orig,
-              discipline: inferPgcDisciplineFromReviewedBy(row.reviewedBy ?? "") || null,
+              /** Taxonomy only; `discipline-classifier-agent` sets from LLM. Not reviewer/org (inferPgc*). */
+              discipline: null,
               code_reference: null,
               page_number: pageNumber,
-              status: "Pending",
+              status: normalizePortalStatus(row.status),
+              ingest_source: "raw_ref" as ParsedCommentIngestSource,
             }).select("id").single();
 
             if (insertError) {
@@ -781,6 +1003,8 @@ serve(async (req) => {
             existingNormalized.set(key, inserted?.id ?? "");
             parsedCount++;
             commentCountThisPdf++;
+            insertedRawRefCount++;
+            if (row.ref) storedRefs.push(String(row.ref).trim());
           }
 
           if (capturePipelineEvidence && pipelineEvidence === null) {
@@ -828,6 +1052,15 @@ serve(async (req) => {
           if (updateErrDet) console.warn("Failed to save cursor:", updateErrDet.message);
           continue;
         }
+        if (likelySourceRefRows) {
+          console.warn(
+            "[WARN] comment-parser: detected REF rows but deterministic row parser returned 0; skipping LLM fallback to prevent row split/drop",
+            { fileName: pdf.fileName ?? "", pdfIndex },
+          );
+          nextPdfIndex = pdfIndex + 1;
+          processedPdfCount++;
+          continue;
+        }
       }
 
       const usePgc = isPgcExportReviewCommentsPdf(pdf);
@@ -838,6 +1071,7 @@ serve(async (req) => {
       if (splitBlocks.length > 0) everHadSplitBlocks = true;
       let blocks = filterNoiseBlocks(splitBlocks, {
         allowPgcFlattenedRows: usePgc,
+        allowPortalRefBlocks: deterministicPgc,
       });
       if (blocks.length > 0) everHadFilteredBlocks = true;
       const filteredCountBeforeCap = blocks.length;
@@ -889,7 +1123,10 @@ serve(async (req) => {
         continue;
       }
 
-      const classified = await classifyCommentBlocksBatched(openai, blocks);
+      const classified = await classifyCommentBlocksBatched(openai, blocks, {
+        portalPreservationMode: deterministicPgc,
+      });
+      fallbackParsedRowCount += classified.length;
 
       const SKIP_PHRASES = [
         "Created in ProjectDox version",
@@ -939,6 +1176,7 @@ serve(async (req) => {
           code_reference: c.code_reference ?? null,
           page_number: pageNumber,
           status: "Pending",
+          ingest_source: "fallback_llm" as ParsedCommentIngestSource,
         }).select("id").single();
 
         if (insertError) {
@@ -951,6 +1189,7 @@ serve(async (req) => {
         existingNormalized.set(key, inserted?.id ?? "");
         parsedCount++;
         commentCountThisPdf++;
+        insertedFallbackCount++;
       }
 
       if (capturePipelineEvidence && pipelineEvidence === null) {
@@ -1060,9 +1299,87 @@ serve(async (req) => {
       }
     }
 
+    const uniqueParsedRefs = Array.from(new Set(parsedRefs.filter(Boolean)));
+    const uniqueExtractedRefs = toUniqueOrdered(extractedRefs.filter(Boolean));
+    const uniqueNormalizedRefs = toUniqueOrdered(normalizedRefs.filter(Boolean));
+    const uniqueStoredRefs = Array.from(new Set(storedRefs.filter(Boolean)));
+    const disappearedAfterParse = diffRefs(uniqueExtractedRefs, uniqueParsedRefs);
+    const disappearedAfterNormalize = diffRefs(uniqueParsedRefs, uniqueNormalizedRefs);
+    const disappearedAfterStore = diffRefs(uniqueNormalizedRefs, uniqueStoredRefs);
+    const missingRefs = diffRefs(uniqueExtractedRefs, uniqueStoredRefs);
+    const reconciliationWarnings: string[] = [];
+    if (extractedSourceRefCount !== parsedSourceRefCount) {
+      reconciliationWarnings.push(
+        `count_mismatch: extracted_ref_count=${extractedSourceRefCount}, parsed_ref_count=${parsedSourceRefCount}`,
+      );
+    }
+    if (parsedSourceRefCount !== normalizedRawCommentCount) {
+      reconciliationWarnings.push(
+        `count_mismatch: parsed_ref_count=${parsedSourceRefCount}, normalized_count=${normalizedRawCommentCount}`,
+      );
+    }
+    if (normalizedRawCommentCount !== insertedRawRefCount) {
+      reconciliationWarnings.push(
+        `count_mismatch: normalized_count=${normalizedRawCommentCount}, inserted_raw_ref_count=${insertedRawRefCount}`,
+      );
+    }
+    if (missingRefs.length > 0) {
+      reconciliationWarnings.push(`missing_refs: ${missingRefs.join(", ")}`);
+    }
+    const storedCounts = await fetchStoredCountsBySource(supabase, projectId);
+    const reconciliation = {
+      extracted_ref_count: extractedSourceRefCount,
+      parsed_source_ref_count: parsedSourceRefCount,
+      normalized_count: normalizedRawCommentCount,
+      deterministic_parsed_row_count: deterministicParsedRowCount,
+      fallback_parsed_row_count: fallbackParsedRowCount,
+      inserted_raw_ref_count: insertedRawRefCount,
+      inserted_fallback_count: insertedFallbackCount,
+      stored_raw_ref_count: storedCounts.raw_ref,
+      stored_fallback_count: storedCounts.fallback_llm,
+      total_stored_count: storedCounts.total,
+      extracted_refs: uniqueExtractedRefs,
+      parsed_refs: uniqueParsedRefs,
+      normalized_refs: uniqueNormalizedRefs,
+      stored_refs: uniqueStoredRefs,
+      disappeared_after_parse: disappearedAfterParse,
+      disappeared_after_normalize: disappearedAfterNormalize,
+      disappeared_after_store: disappearedAfterStore,
+      missing_refs: missingRefs,
+      warning:
+        reconciliationWarnings.length > 0
+          ? reconciliationWarnings.join(" | ")
+          : null,
+    };
+    if (reconciliation.warning) {
+      console.warn("[WARN] comment-parser reconciliation", reconciliation);
+    }
+    console.log("[DEBUG] comment-parser ref stages", {
+      extracted_refs: uniqueExtractedRefs,
+      parsed_refs: uniqueParsedRefs,
+      normalized_refs: uniqueNormalizedRefs,
+      extracted_ref_count: extractedSourceRefCount,
+      parsed_ref_count: parsedSourceRefCount,
+      normalized_count: normalizedRawCommentCount,
+      deterministic_parsed_row_count: deterministicParsedRowCount,
+      fallback_parsed_row_count: fallbackParsedRowCount,
+      inserted_raw_ref_count: insertedRawRefCount,
+      inserted_fallback_count: insertedFallbackCount,
+      stored_raw_ref_count: storedCounts.raw_ref,
+      stored_fallback_count: storedCounts.fallback_llm,
+      stored_total_count: storedCounts.total,
+      disappeared_after_parse: disappearedAfterParse,
+      disappeared_after_normalize: disappearedAfterNormalize,
+      disappeared_after_store: disappearedAfterStore,
+    });
+
     return new Response(
       JSON.stringify({
         parsed_count: parsedCount,
+        deterministic_parsed_row_count: deterministicParsedRowCount,
+        fallback_parsed_row_count: fallbackParsedRowCount,
+        inserted_raw_ref_count: insertedRawRefCount,
+        inserted_fallback_count: insertedFallbackCount,
         skipped_count: skippedTotal,
         skipped_breakdown: {
           post_llm_noise: skippedPostLlmNoise,
@@ -1073,6 +1390,7 @@ serve(async (req) => {
         next_cursor: nextCursor,
         done,
         total_pdfs: totalPdfs,
+        reconciliation,
         ...(doneReason ? { reason: doneReason, message: doneMessage } : {}),
         ...(capturePipelineEvidence && pipelineEvidence
           ? { pipeline_evidence: pipelineEvidence }

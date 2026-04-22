@@ -102,6 +102,14 @@ serve(async (req) => {
       skipped_count?: number;
       skipped_breakdown?: Record<string, number>;
       insert_error_count?: number;
+      reconciliation?: {
+        parsed_source_ref_count?: number;
+        stored_raw_comment_count?: number;
+        parsed_refs?: string[];
+        stored_refs?: string[];
+        missing_refs?: string[];
+        warning?: string | null;
+      };
       pipeline_evidence?: Record<string, unknown>;
       error?: string;
       code?: number;
@@ -154,6 +162,16 @@ serve(async (req) => {
             | Record<string, number>
             | undefined,
           insert_error_count: (commentParserJson.insert_error_count as number) ?? 0,
+          reconciliation: commentParserJson.reconciliation as
+            | {
+              parsed_source_ref_count?: number;
+              stored_raw_comment_count?: number;
+              parsed_refs?: string[];
+              stored_refs?: string[];
+              missing_refs?: string[];
+              warning?: string | null;
+            }
+            | undefined,
           pipeline_evidence: commentParserJson.pipeline_evidence as
             | Record<string, unknown>
             | undefined,

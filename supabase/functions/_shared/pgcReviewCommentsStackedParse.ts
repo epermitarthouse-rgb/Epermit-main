@@ -28,6 +28,9 @@ const STATUS_LINE_RE =
 const TYPE_LINE_RE =
   /^(Comment|Changemark|Library\s+Comment|Checklist\s+Item|Question)(?:\s|$)/i;
 
+const REVIEW_HEADER_RE =
+  /REF\s*#?.*CYCLE.*REVIEWED\s*BY.*TYPE.*FILENAME.*DISCUSSION.*STATUS/i;
+
 /** Leading ref+cycle glued before English ordinal (3rd, 2nd, …). */
 const FLAT_NUMERIC_HEADER_RE =
   /^(\d+)(\d+(?:st|nd|rd|th))\b\s*(.*)$/i;
@@ -75,11 +78,11 @@ function splitSingleDigitGluedRefThenLetter(line: string): { ref: string; cycle:
 }
 
 /**
- * `REF # 12` / `REF # 7` rows where CYCLE is blank in the export — cycle is optional (empty string).
+ * `REF # 12`, `REF 12`, `REF # 7` rows where CYCLE may be blank in the export.
  */
-function splitRefSharpFirstLine(line: string): { ref: string; cycle: string; restOfFirstLine: string } | null {
+function splitRefFirstLine(line: string): { ref: string; cycle: string; restOfFirstLine: string } | null {
   const t = line.trim();
-  const m = t.match(/^REF\s*#\s*(\d+)\s*(.*)$/i);
+  const m = t.match(/^REF\s*#?\s*(\d+)\s*(.*)$/i);
   if (!m) return null;
   const ref = m[1]!;
   let rest = (m[2] ?? "").trim();
@@ -115,9 +118,9 @@ export function preprocessPgcReviewCommentsExtractText(raw: string): string {
   s = s.replace(/DISCUSSION(?=STATUS)/gi, "DISCUSSION\n");
   s = s.replace(/STATUS(?=REF)/gi, "STATUS\n");
   s = s.replace(/REF#\s*/gi, "REF # ");
-  s = s.replace(/([^\n])(?=(?:REF\s*#\s*\d+|REF\s*#\s*CYCLE))/gi, "$1\n");
+  s = s.replace(/([^\n])(?=(?:REF\s*#?\s*\d+|REF\s*#?\s*CYCLE))/gi, "$1\n");
   s = s.replace(
-    /\b(UnResolved|Resolved|Info\s*Only|InfoOnly)\b\s*(?=(?:REF\s*#))/gi,
+    /\b(UnResolved|Resolved|Info\s*Only|InfoOnly)\b\s*(?=(?:REF\s*#?))/gi,
     "$1\n\n",
   );
   return s.replace(/\n{3,}/g, "\n\n").trim();
@@ -146,10 +149,10 @@ function findFirstCommentLineIndex(lines: string[]): number {
     const t = lines[i]!.trim();
     if (!t || isBoilerplateLine(t)) continue;
     if (splitLeadingRefCycleOrdinalFirstLine(t)) return i;
-    if (splitRefSharpFirstLine(t)) return i;
+    if (splitRefFirstLine(t)) return i;
     if (splitIndexOnlyLine(t)) return i;
     if (splitSingleDigitGluedRefThenLetter(t)) return i;
-    if (/^REF\s*#\s*\d+/i.test(t)) return i;
+    if (/^REF\s*#?\s*\d+/i.test(t)) return i;
     if (/^REVIEW\s+COMMENTS\s*$/i.test(t)) {
       return i + 1 < lines.length ? i + 1 : i;
     }
@@ -161,6 +164,14 @@ function findTimestampIndex(lines: string[], from: number): number {
   for (let i = from; i < lines.length; i++) {
     const t = lines[i]!.trim();
     if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(t)) return i;
+  }
+  return -1;
+}
+
+/** First line index in `bodyLines` after `afterIdx` with non-empty trim (for optional cycle vs new ref row). */
+function firstNonEmptyIndexAfterBody(bodyLines: string[], afterIdx: number): number {
+  for (let j = afterIdx + 1; j < bodyLines.length; j++) {
+    if (bodyLines[j]!.trim()) return j;
   }
   return -1;
 }
@@ -214,7 +225,7 @@ function parseBlock(trimmedLines: string[], originalBlock: string): PgcReviewCom
   let headRest = "";
 
   const flat = splitLeadingRefCycleOrdinalFirstLine(first);
-  const refSharp = !flat ? splitRefSharpFirstLine(first) : null;
+  const refSharp = !flat ? splitRefFirstLine(first) : null;
   const indexOnly = !flat && !refSharp ? splitIndexOnlyLine(first) : null;
   const singleGlued = !flat && !refSharp && !indexOnly ? splitSingleDigitGluedRefThenLetter(first) : null;
   if (flat) {
@@ -229,6 +240,101 @@ function parseBlock(trimmedLines: string[], originalBlock: string): PgcReviewCom
     ref = indexOnly.ref;
     cycle = indexOnly.cycle;
     headRest = indexOnly.restOfFirstLine;
+    /** Stacked SSRS: optional cycle is the next line when it is a digit-only cell (1, 1, 6, 8, …), not a new ref row. */
+    let contentStart = 1;
+    if (trimmedLines.length > 1) {
+      const second = trimmedLines[1]!.trim();
+      const cyc = !splitRefFirstLine(second) && !splitLeadingRefCycleOrdinalFirstLine(second)
+        ? splitIndexOnlyLine(second)
+        : null;
+      if (cyc) {
+        cycle = cyc.ref;
+        contentStart = 2;
+      }
+    }
+    const tsIdx = findTimestampIndex(trimmedLines, contentStart);
+    let reviewedEnd: number;
+    let dateTime = "";
+
+    if (tsIdx !== -1) {
+      reviewedEnd = tsIdx;
+      dateTime = trimmedLines[tsIdx]!.trim();
+    } else {
+      const pdfIdx = findFirstPdfLineIndex(trimmedLines, contentStart);
+      if (pdfIdx !== -1) {
+        reviewedEnd = pdfIdx;
+      } else {
+        reviewedEnd = Math.min(contentStart + 2, trimmedLines.length);
+      }
+    }
+
+    let idx: number;
+    if (tsIdx !== -1) {
+      idx = tsIdx + 1;
+      if (idx < trimmedLines.length) {
+        const maybeTime = trimmedLines[idx]!.trim();
+        const dateHasClock = /\d{1,2}:\d{2}/.test(dateTime);
+        if (
+          !dateHasClock &&
+          (/^\d{1,2}:\d{2}/.test(maybeTime) || /\b(AM|PM)\b/i.test(maybeTime))
+        ) {
+          dateTime += " " + maybeTime;
+          idx++;
+        }
+      }
+    } else {
+      idx = reviewedEnd;
+    }
+
+    let filename = "";
+    if (idx < trimmedLines.length && /\.pdf\b/i.test(trimmedLines[idx]!)) {
+      filename = trimmedLines[idx]!.trim();
+      idx++;
+    }
+
+    let type = "";
+    if (idx < trimmedLines.length) {
+      const cand = trimmedLines[idx]!.trim();
+      if (TYPE_LINE_RE.test(cand) || /^Comment$/i.test(cand)) {
+        type = cand;
+        idx++;
+      }
+    }
+
+    const tail = trimmedLines.slice(idx);
+    const stIdx = findStatusIndexFromEnd(tail);
+    const reviewedByEnd = tsIdx !== -1 ? tsIdx : reviewedEnd;
+    const reviewedByParts = [
+      headRest,
+      ...trimmedLines.slice(contentStart, reviewedByEnd).map((l) => l.trim()),
+    ];
+    const reviewedBy = reviewedByParts.filter((p) => p.length > 0).join("\n").trim();
+    if (stIdx === -1) {
+      return {
+        ref,
+        cycle,
+        reviewedBy,
+        dateTime,
+        type,
+        filename,
+        discussion: tail.join("\n").trim(),
+        status: "",
+        originalTextBlock: originalBlock.trim(),
+      };
+    }
+    const discussion = tail.slice(0, stIdx).join("\n").trim();
+    const status = tail[stIdx]!.trim();
+    return {
+      ref,
+      cycle,
+      reviewedBy,
+      dateTime,
+      type,
+      filename,
+      discussion,
+      status,
+      originalTextBlock: originalBlock.trim(),
+    };
   } else if (singleGlued) {
     ref = singleGlued.ref;
     cycle = singleGlued.cycle;
@@ -329,6 +435,130 @@ function parseBlock(trimmedLines: string[], originalBlock: string): PgcReviewCom
   };
 }
 
+function splitSsrsRowCells(line: string): string[] {
+  const t = line.replace(/\u00a0/g, " ").trim();
+  if (!t) return [];
+  if (t.includes("\t")) {
+    return t.split("\t").map((c) => c.trim()).filter(Boolean);
+  }
+  return t.split(/\s{2,}/).map((c) => c.trim()).filter(Boolean);
+}
+
+function looksLikeRefRowStartLine(line: string): boolean {
+  const t = line.trim();
+  /**
+   * SSRS/PDF text often has single spaces between grid columns, so `splitSsrsRowCells` yields a
+   * single long cell. Still treat a line that *begins* with `REF # n` as a new row; otherwise
+   * REF 1–5 stay merged with REF 6 and the deterministic header path can yield too few rows.
+   */
+  if (/^\s*REF\s*#?\s*\d+\b/i.test(t)) return true;
+  const cells = splitSsrsRowCells(line);
+  if (cells.length < 2) return false;
+  const first = cells[0] ?? "";
+  if (/^REF\s*#?\s*\d+$/i.test(first)) return true;
+  if (!/^\d{1,4}$/.test(first)) return false;
+  const second = cells[1] ?? "";
+  if (/^\d{1,2}$/.test(second)) return true;
+  if (/^[A-Za-z]/.test(second)) return true;
+  return false;
+}
+
+function parseHeaderAlignedRefRows(lines: string[]): PgcReviewCommentsRow[] | null {
+  const headerIdx = lines.findIndex((ln) => REVIEW_HEADER_RE.test(ln.replace(/\s+/g, " ")));
+  if (headerIdx === -1) return null;
+
+  const body = lines.slice(headerIdx + 1);
+  const chunks: string[][] = [];
+  let current: string[] = [];
+
+  for (const rawLine of body) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.includes("Created in ProjectDox")) break;
+    if (isBoilerplateLine(line)) continue;
+    if (looksLikeRefRowStartLine(line)) {
+      if (current.length > 0) chunks.push(current);
+      current = [line];
+      continue;
+    }
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+  if (chunks.length === 0) return null;
+
+  const rows: PgcReviewCommentsRow[] = [];
+  for (const chunk of chunks) {
+    const firstLine = chunk[0] ?? "";
+    const cells = splitSsrsRowCells(firstLine);
+    if (cells.length === 0) continue;
+
+    let ref = "";
+    let cycle = "";
+    let start = 0;
+
+    const firstCell = cells[0] ?? "";
+    const refSharp = firstCell.match(/^REF\s*#?\s*(\d+)$/i);
+    if (refSharp) {
+      ref = refSharp[1] ?? "";
+      start = 1;
+    } else if (/^\d{1,4}$/.test(firstCell)) {
+      ref = firstCell;
+      start = 1;
+    } else {
+      continue;
+    }
+    if (start < cells.length && /^\d{1,2}$/.test(cells[start] ?? "")) {
+      cycle = cells[start] ?? "";
+      start += 1;
+    }
+
+    const statusIdx = (() => {
+      for (let i = cells.length - 1; i >= start; i--) {
+        if (STATUS_LINE_RE.test(cells[i] ?? "")) return i;
+      }
+      return -1;
+    })();
+    const filenameIdx = cells.findIndex((c, i) => i >= start && /\.pdf\b/i.test(c));
+    const typeIdx = cells.findIndex((c, i) => i >= start && TYPE_LINE_RE.test(c));
+
+    const reviewedEnd = Math.min(
+      ...[typeIdx, filenameIdx, statusIdx].filter((i) => i >= 0),
+      cells.length,
+    );
+    const reviewedBy = (cells.slice(start, reviewedEnd).join(" ") || "").trim();
+    const type =
+      typeIdx >= 0 && (filenameIdx === -1 || typeIdx <= filenameIdx) ? (cells[typeIdx] ?? "").trim() : "";
+    const filename = filenameIdx >= 0 ? (cells[filenameIdx] ?? "").trim() : "";
+
+    const discussionStart =
+      filenameIdx >= 0
+        ? filenameIdx + 1
+        : typeIdx >= 0
+          ? typeIdx + 1
+          : reviewedEnd;
+    const discussionEnd = statusIdx >= 0 ? statusIdx : cells.length;
+    const firstLineDiscussion = cells.slice(discussionStart, discussionEnd).join(" ").trim();
+    const continuation = chunk.slice(1).join("\n").trim();
+    const discussion = [firstLineDiscussion, continuation].filter(Boolean).join("\n").trim();
+    const status = statusIdx >= 0 ? (cells[statusIdx] ?? "").trim() : "";
+
+    rows.push({
+      ref,
+      cycle,
+      reviewedBy,
+      dateTime: "",
+      type,
+      filename,
+      discussion,
+      status,
+      originalTextBlock: chunk.join("\n").trim(),
+    });
+  }
+  return rows.length > 0 ? rows : null;
+}
+
 /** Last tokens that usually end a discipline/role phrase, not a surname (avoid stripping "Party Mechanical"). */
 const PGC_DISCIPLINE_ROLE_TAIL_WORDS = new Set(
   [
@@ -395,6 +625,45 @@ export function inferPgcDisciplineFromReviewedBy(reviewedBy: string): string {
   return cut || s;
 }
 
+/** TEMP: set PGC_STACKED_PARSE_DEBUG=1 to log deterministic stacked parse boundaries. Remove when fixed. */
+function pgcStackedParseDebugEnabled(): boolean {
+  try {
+    const d = (globalThis as { Deno?: { env: { get: (k: string) => string | undefined } } }).Deno;
+    if (d?.env.get("PGC_STACKED_PARSE_DEBUG") === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  if (typeof process !== "undefined" && process.env?.PGC_STACKED_PARSE_DEBUG === "1") {
+    return true;
+  }
+  return false;
+}
+
+function pgcPreprocessedExcerptAroundRefN(preprocessed: string, n: 1 | 2): string {
+  const re = new RegExp(`\\bREF\\s*#?\\s*${n}\\b`, "i");
+  const m = re.exec(preprocessed);
+  if (m?.index != null) {
+    const i = m.index;
+    return preprocessed.slice(
+      Math.max(0, i - 150),
+      Math.min(preprocessed.length, i + 450),
+    );
+  }
+  const lines = preprocessed.split("\n");
+  for (let li = 0; li < lines.length; li++) {
+    const t = lines[li]!.trim();
+    if (t === String(n) || new RegExp(`^REF\\s*#?\\s*${n}$`, "i").test(t)) {
+      const from = Math.max(0, li - 1);
+      const to = Math.min(lines.length, li + 10);
+      return lines
+        .slice(from, to)
+        .map((l, j) => `[L${from + j}] ${l}`)
+        .join("\n");
+    }
+  }
+  return `(no line/REF anchor for ref ${n} in preprocessed text)`;
+}
+
 export function parsePgcReviewComments(
   text: string,
 ): { ok: true; rows: PgcReviewCommentsRow[] } | { ok: false } {
@@ -402,24 +671,125 @@ export function parsePgcReviewComments(
   const preprocessed = preprocessPgcReviewCommentsExtractText(raw);
   const lines = preprocessed.split("\n").map((l) => l.trimEnd());
 
+  const headerAlignedRows = parseHeaderAlignedRefRows(lines);
+  if (headerAlignedRows && headerAlignedRows.length > 0) {
+    if (pgcStackedParseDebugEnabled()) {
+      console.log(
+        "[pgc-stacked-parse-debug] path=parseHeaderAlignedRefRows (stacked start/chunk log skipped; early return)",
+      );
+    }
+    return { ok: true, rows: headerAlignedRows };
+  }
+
   const dataStart = findFirstCommentLineIndex(lines);
   const sliceStart = Math.max(0, dataStart);
   const bodyLines = lines.slice(sliceStart);
 
+  /** If the extract contains explicit `REF` markers, do not use bare `1`/`2` index lines as row starts (avoids one-line chunks). */
+  const hasRefWordMarkers = /\bREF\s*#?\s*\d+/i.test(preprocessed);
+
   const starts: number[] = [];
+  /**
+   * Stacked SSRS: a row can be `REF` line then optional `CYCLE` line (both digit-only). The second digit line
+   * must not become a new row start — that split created hollow one-line "rows" and doubled row counts.
+   * Rule: the first non-blank line after an index-only ref line may be a digit-only **cycle**; do not add `starts` for it.
+   */
+  let optionalCycleAfterIndexOnlyAt: number | null = null;
   for (let i = 0; i < bodyLines.length; i++) {
     const ln = bodyLines[i]!.trim();
     if (!ln) continue;
     if (ln.includes("Created in ProjectDox")) break;
     if (isBoilerplateLine(ln)) continue;
+
+    if (optionalCycleAfterIndexOnlyAt != null) {
+      const nextNonEmpty = firstNonEmptyIndexAfterBody(bodyLines, optionalCycleAfterIndexOnlyAt);
+      if (nextNonEmpty !== -1 && i === nextNonEmpty) {
+        const isOptionalStackedCycleLine =
+          !hasRefWordMarkers &&
+          splitIndexOnlyLine(ln) != null &&
+          !splitRefFirstLine(ln) &&
+          !splitLeadingRefCycleOrdinalFirstLine(ln) &&
+          !splitSingleDigitGluedRefThenLetter(ln) &&
+          !splitRefCycleLegacyStacked(ln);
+        optionalCycleAfterIndexOnlyAt = null;
+        if (isOptionalStackedCycleLine) {
+          continue;
+        }
+      }
+    }
+
     if (
       splitLeadingRefCycleOrdinalFirstLine(ln) ||
-      splitRefSharpFirstLine(ln) ||
-      splitIndexOnlyLine(ln) ||
+      splitRefFirstLine(ln) ||
+      (!hasRefWordMarkers && splitIndexOnlyLine(ln)) ||
       splitSingleDigitGluedRefThenLetter(ln) ||
       splitRefCycleLegacyStacked(ln)
     ) {
       starts.push(i);
+      const indexOnlyIsStart =
+        !hasRefWordMarkers &&
+        splitIndexOnlyLine(ln) != null &&
+        !splitRefFirstLine(ln) &&
+        !splitLeadingRefCycleOrdinalFirstLine(ln) &&
+        !splitSingleDigitGluedRefThenLetter(ln) &&
+        !splitRefCycleLegacyStacked(ln);
+      optionalCycleAfterIndexOnlyAt = indexOnlyIsStart ? i : null;
+    }
+  }
+
+  if (pgcStackedParseDebugEnabled()) {
+    const ex1 = pgcPreprocessedExcerptAroundRefN(preprocessed, 1);
+    const ex2 = pgcPreprocessedExcerptAroundRefN(preprocessed, 2);
+    console.log("[pgc-stacked-parse-debug] (1) preprocessed excerpt [around REF#1 match or digit line 1]:\n", ex1);
+    console.log("[pgc-stacked-parse-debug] (1b) preprocessed excerpt [around REF#2 or digit line 2]:\n", ex2);
+    const maxIdx = Math.min(30, bodyLines.length);
+    const indexed = Array.from({ length: maxIdx }, (_, i) => ({
+      i,
+      line: bodyLines[i] ?? "",
+    }));
+    console.log(
+      "[pgc-stacked-parse-debug] (2) bodyLines[0..29] (body index 0 = first row window); dataStart=sliceStart=",
+      sliceStart,
+      "firstLineGlobalIndexInPreprocessed=",
+      sliceStart,
+    );
+    console.log("[pgc-stacked-parse-debug] (2) body lines:", JSON.stringify(indexed, null, 2));
+    console.log("[pgc-stacked-parse-debug] (3) hasRefWordMarkers=", hasRefWordMarkers);
+    console.log("[pgc-stacked-parse-debug] (4) starts[] (indices into bodyLines)=", JSON.stringify(starts));
+    for (const si of starts) {
+      const ln = (bodyLines[si] ?? "").trim();
+      const reasons: string[] = [];
+      if (splitLeadingRefCycleOrdinalFirstLine(ln)) reasons.push("flatRefCycleOrdinal");
+      if (splitRefFirstLine(ln)) reasons.push("refFirstLine");
+      if (!hasRefWordMarkers && splitIndexOnlyLine(ln)) reasons.push("indexOnly(digitLine)");
+      if (splitSingleDigitGluedRefThenLetter(ln)) reasons.push("singleDigitGlued");
+      if (splitRefCycleLegacyStacked(ln)) reasons.push("refCycleLegacy");
+      console.log(
+        "[pgc-stacked-parse-debug] (4b) start at bodyLines[" + si + "]:",
+        JSON.stringify(ln),
+        "matchers:",
+        reasons.join(" | ") || "(none?)",
+      );
+    }
+    for (let b = 0; b < starts.length; b++) {
+      const from = starts[b]!;
+      const to = b + 1 < starts.length ? starts[b + 1]! : bodyLines.length;
+      let chunk = bodyLines.slice(from, to);
+      const cr = chunk.findIndex((l) => l.includes("Created in ProjectDox"));
+      if (cr !== -1) chunk = chunk.slice(0, cr);
+      const nextLine = to < bodyLines.length ? (bodyLines[to] ?? "") : "";
+      console.log(
+        "[pgc-stacked-parse-debug] (5) block",
+        b,
+        "from=",
+        from,
+        "to=",
+        to,
+        "nextLineAtTo=",
+        JSON.stringify(nextLine.slice(0, 200)),
+        "chunk.join:",
+        JSON.stringify(chunk.join("\n").slice(0, 2000)),
+      );
     }
   }
 
@@ -440,6 +810,58 @@ export function parsePgcReviewComments(
 
   if (rows.length === 0) return { ok: false };
   return { ok: true, rows };
+}
+
+/**
+ * Deterministic one-row-per-REF for Review Comments when stacked/header parsing under-counts.
+ * Splits on each line that begins with `REF # n` and builds a minimal PgcReviewCommentsRow per span.
+ * Does not use the LLM; use when `parsePgcReviewComments` returns fewer rows than the portal's REFs.
+ */
+export function extractRefSpanRows(text: string): PgcReviewCommentsRow[] | null {
+  const raw = String(text || "").replace(/\r\n/g, "\n");
+  const s = preprocessPgcReviewCommentsExtractText(raw);
+  const lines = s.split("\n");
+  const rowStarts: { ref: string; lineIndex: number }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i]!.trim();
+    const m = ln.match(/^\s*REF\s*#?\s*(\d+)\b/i);
+    if (m) {
+      const ref = String(m[1] ?? "").trim();
+      if (ref) rowStarts.push({ ref, lineIndex: i });
+    }
+  }
+  if (rowStarts.length === 0) return null;
+  const rows: PgcReviewCommentsRow[] = [];
+  for (let r = 0; r < rowStarts.length; r++) {
+    const from = rowStarts[r]!.lineIndex;
+    const to = r + 1 < rowStarts.length ? rowStarts[r + 1]!.lineIndex : lines.length;
+    const blockLines = lines.slice(from, to);
+    let block = blockLines.join("\n").trim();
+    if (block.includes("Created in ProjectDox")) {
+      const c = block.indexOf("Created in ProjectDox");
+      if (c !== -1) block = block.slice(0, c).trim();
+    }
+    const first = blockLines[0] ?? "";
+    const firstM = first.trim().match(/^\s*REF\s*#?\s*\d+\b(.*)$/i);
+    const firstRest = (firstM?.[1] ?? "").trim();
+    const rest = blockLines.slice(1).join("\n");
+    const discussion = [firstRest, rest].filter((x) => x.length > 0).join("\n").trim();
+    const tlines = blockLines.map((l) => l.trim()).filter((l) => l.length > 0);
+    const st = findStatusIndexFromEnd(tlines);
+    const status = st >= 0 ? tlines[st]!.trim() : "";
+    rows.push({
+      ref: rowStarts[r]!.ref,
+      cycle: "",
+      reviewedBy: "",
+      dateTime: "",
+      type: "",
+      filename: "",
+      discussion,
+      status,
+      originalTextBlock: block,
+    });
+  }
+  return rows.length > 0 ? rows : null;
 }
 
 /** @deprecated Use parsePgcReviewComments; kept for imports that still use the old name. */

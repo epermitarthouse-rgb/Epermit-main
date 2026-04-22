@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,8 @@ import { useProjects } from "@/hooks/useProjects";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { ReviewTimer, type ReviewTimerHandle } from "@/components/shadow/ReviewTimer";
 import { supabase } from "@/lib/supabase";
+import { isTaxonomyDiscipline } from "@/lib/commentDisciplineTaxonomy";
+import { formatRawRefMetaLine, parsePgcRawRefDisplayText } from "@/lib/parsePgcRawRefDisplayText";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
 import { toast } from "sonner";
 import { FileImage, Loader2, CheckCircle2, Upload, ArrowLeft, RefreshCw } from "lucide-react";
@@ -51,6 +53,41 @@ interface ParsedCommentRow {
   code_reference: string | null;
   status: string;
   page_number: number | null;
+  ingest_source: "raw_ref" | "fallback_llm" | null;
+}
+
+/** Comment column: raw_ref = parsed discussion + compact ref/cycle; other = verbatim text. */
+function portalCommentTableCellContent(row: ParsedCommentRow) {
+  if (row.ingest_source !== "raw_ref") {
+    return row.original_text;
+  }
+  const f = parsePgcRawRefDisplayText(row.original_text);
+  const meta = formatRawRefMetaLine(f);
+  return (
+    <div className="space-y-1">
+      {meta ? <div className="text-xs text-muted-foreground/90 font-medium">{meta}</div> : null}
+      <div className="whitespace-pre-wrap text-foreground/90">{f.discussion}</div>
+    </div>
+  );
+}
+
+/** Status: raw_ref = portal line from `original_text` blob (`status:`), not DB-normalized `row.status`. */
+function portalStatusDisplayText(row: ParsedCommentRow): string {
+  if (row.ingest_source !== "raw_ref") return row.status;
+  const f = parsePgcRawRefDisplayText(row.original_text);
+  const portal = f.statusInBlob?.trim();
+  return portal || row.status;
+}
+
+/**
+ * Discipline: raw_ref shows only LLM/taxonomy values from `discipline-classifier-agent` (see `TAXONOMY_DISCIPLINES`).
+ * Reviewer/org strings are never taxonomy — hidden unless they match the classifier set (should not happen).
+ */
+function portalDisciplineDisplayText(row: ParsedCommentRow): string {
+  if (row.ingest_source !== "raw_ref") return row.discipline ?? "—";
+  const d = row.discipline?.trim();
+  if (d && isTaxonomyDiscipline(d)) return d;
+  return "—";
 }
 
 export default function CommentReview() {
@@ -68,6 +105,25 @@ export default function CommentReview() {
     reason?: string;
     message?: string;
     parsed_count?: number;
+    reconciliation?: {
+      extracted_ref_count?: number;
+      parsed_source_ref_count?: number;
+      normalized_count?: number;
+      deterministic_parsed_row_count?: number;
+      fallback_parsed_row_count?: number;
+      inserted_raw_ref_count?: number;
+      inserted_fallback_count?: number;
+      stored_raw_ref_count?: number;
+      stored_fallback_count?: number;
+      total_stored_count?: number;
+      rendered_comment_count?: number;
+      extracted_refs?: string[];
+      parsed_refs?: string[];
+      normalized_refs?: string[];
+      rendered_refs?: string[];
+      missing_refs?: string[];
+      warning?: string | null;
+    };
   } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -81,7 +137,7 @@ export default function CommentReview() {
     if (!projectId) return [];
     const { data, error } = await supabase
       .from("parsed_comments")
-      .select("id, project_id, original_text, discipline, code_reference, status, page_number")
+      .select("id, project_id, original_text, discipline, code_reference, status, page_number, ingest_source")
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
     if (error) {
@@ -91,11 +147,42 @@ export default function CommentReview() {
     return (data as ParsedCommentRow[]) || [];
   }, [projectId]);
 
+  const extractRefFromOriginalText = useCallback((text: string): string | null => {
+    const m = String(text ?? "").match(/(?:^|\n)\s*ref:\s*([0-9]{1,4})\b/i);
+    return m?.[1] ?? null;
+  }, []);
+
   const { data: portalComments = [], isLoading: commentsLoading, refetch: refetchComments } = useQuery({
     queryKey: ["parsed_comments", projectId],
     queryFn: fetchComments,
     enabled: !!projectId,
   });
+
+  const rawRefComments = useMemo(
+    () => portalComments.filter((row) => row.ingest_source === "raw_ref"),
+    [portalComments],
+  );
+  const fallbackComments = useMemo(
+    () => portalComments.filter((row) => row.ingest_source === "fallback_llm"),
+    [portalComments],
+  );
+  const renderSource: "raw_ref" | "fallback_llm" | "none" = rawRefComments.length > 0
+    ? "raw_ref"
+    : fallbackComments.length > 0
+      ? "fallback_llm"
+      : "none";
+  const renderedPortalComments = renderSource === "raw_ref" ? rawRefComments : fallbackComments;
+
+  useEffect(() => {
+    if (!projectId) return;
+    console.log("[CommentReview] render-source resolution", {
+      project_id: projectId,
+      fetched_raw_ref_count: rawRefComments.length,
+      fetched_fallback_count: fallbackComments.length,
+      final_render_source: renderSource,
+      final_rendered_count: renderedPortalComments.length,
+    });
+  }, [projectId, rawRefComments.length, fallbackComments.length, renderSource, renderedPortalComments.length]);
 
   const loadFromPortal = useCallback(async () => {
     if (!projectId || !user?.id) return;
@@ -139,6 +226,195 @@ export default function CommentReview() {
           break;
         }
         if (cp?.done === true && !cp?.error) {
+          const refreshed = await refetchComments();
+          const refreshedRows = Array.isArray(refreshed.data)
+            ? refreshed.data
+            : [];
+          const refreshedRawRefRows = refreshedRows.filter(
+            (row) => row.ingest_source === "raw_ref",
+          );
+          const refreshedFallbackRows = refreshedRows.filter(
+            (row) => row.ingest_source === "fallback_llm",
+          );
+          const refreshedRenderSource: "raw_ref" | "fallback_llm" | "none" =
+            refreshedRawRefRows.length > 0
+              ? "raw_ref"
+              : refreshedFallbackRows.length > 0
+                ? "fallback_llm"
+                : "none";
+          const refreshedRenderedRows =
+            refreshedRenderSource === "raw_ref"
+              ? refreshedRawRefRows
+              : refreshedFallbackRows;
+          const renderedCommentCount = refreshedRenderedRows.length;
+          const fetchedRawCount = refreshedRawRefRows.length;
+          const fetchedFallbackCount = refreshedFallbackRows.length;
+          const renderedRefs = refreshedRenderedRows.length > 0
+            ? Array.from(
+                new Set(
+                  refreshedRenderedRows
+                    .map((row) => extractRefFromOriginalText(row.original_text))
+                    .filter((r): r is string => !!r),
+                ),
+              )
+            : [];
+          console.log("[CommentReview] fetch/render pipeline", {
+            frontend_fetched_raw_count: fetchedRawCount,
+            frontend_fetched_fallback_count: fetchedFallbackCount,
+            final_render_source: refreshedRenderSource,
+            final_rendered_count: renderedCommentCount,
+          });
+          const extractedRefCount = Number(
+            cp?.reconciliation?.extracted_ref_count ?? 0,
+          );
+          const parsedSourceRefCount = Number(
+            cp?.reconciliation?.parsed_source_ref_count ?? 0,
+          );
+          const normalizedCount = Number(
+            cp?.reconciliation?.normalized_count ?? 0,
+          );
+          const deterministicParsedRowCount = Number(
+            cp?.reconciliation?.deterministic_parsed_row_count ?? 0,
+          );
+          const fallbackParsedRowCount = Number(
+            cp?.reconciliation?.fallback_parsed_row_count ?? 0,
+          );
+          const insertedRawRefCount = Number(
+            cp?.reconciliation?.inserted_raw_ref_count ?? 0,
+          );
+          const insertedFallbackCount = Number(
+            cp?.reconciliation?.inserted_fallback_count ?? 0,
+          );
+          const storedRawRefCount = Number(
+            cp?.reconciliation?.stored_raw_ref_count ?? 0,
+          );
+          const storedFallbackCount = Number(
+            cp?.reconciliation?.stored_fallback_count ?? 0,
+          );
+          const totalStoredCount = Number(
+            cp?.reconciliation?.total_stored_count ?? 0,
+          );
+          const extractedRefs = Array.isArray(cp?.reconciliation?.extracted_refs)
+            ? cp.reconciliation.extracted_refs
+            : [];
+          const parsedRefs = Array.isArray(cp?.reconciliation?.parsed_refs)
+            ? cp.reconciliation.parsed_refs
+            : [];
+          const normalizedRefs = Array.isArray(cp?.reconciliation?.normalized_refs)
+            ? cp.reconciliation.normalized_refs
+            : [];
+          const missingRefs = Array.isArray(cp?.reconciliation?.missing_refs)
+            ? cp.reconciliation.missing_refs
+            : [];
+          const disappearedAfterParse = Array.isArray(cp?.reconciliation?.disappeared_after_parse)
+            ? cp.reconciliation.disappeared_after_parse
+            : [];
+          const disappearedAfterNormalize = Array.isArray(cp?.reconciliation?.disappeared_after_normalize)
+            ? cp.reconciliation.disappeared_after_normalize
+            : [];
+          const disappearedAfterStore = Array.isArray(cp?.reconciliation?.disappeared_after_store)
+            ? cp.reconciliation.disappeared_after_store
+            : [];
+          const reconciliationWarningParts: string[] = [];
+          if (
+            Number.isFinite(extractedRefCount) &&
+            Number.isFinite(parsedSourceRefCount) &&
+            extractedRefCount !== parsedSourceRefCount
+          ) {
+            reconciliationWarningParts.push(
+              `extracted_ref_count (${extractedRefCount}) != parsed_ref_count (${parsedSourceRefCount})`,
+            );
+          }
+          if (
+            Number.isFinite(parsedSourceRefCount) &&
+            Number.isFinite(normalizedCount) &&
+            parsedSourceRefCount !== normalizedCount
+          ) {
+            reconciliationWarningParts.push(
+              `parsed_ref_count (${parsedSourceRefCount}) != normalized_count (${normalizedCount})`,
+            );
+          }
+          if (
+            Number.isFinite(normalizedCount) &&
+            Number.isFinite(insertedRawRefCount) &&
+            normalizedCount !== insertedRawRefCount
+          ) {
+            reconciliationWarningParts.push(
+              `normalized_count (${normalizedCount}) != inserted_raw_ref_count (${insertedRawRefCount})`,
+            );
+          }
+          if (
+            Number.isFinite(totalStoredCount) &&
+            totalStoredCount !== renderedCommentCount
+          ) {
+            reconciliationWarningParts.push(
+              `total_stored_count (${totalStoredCount}) != rendered_comment_count (${renderedCommentCount})`,
+            );
+          }
+          if (missingRefs.length > 0) {
+            reconciliationWarningParts.push(
+              `missing refs: ${missingRefs.join(", ")}`,
+            );
+          }
+          if (disappearedAfterParse.length > 0) {
+            reconciliationWarningParts.push(
+              `disappeared_after_parse: ${disappearedAfterParse.join(", ")}`,
+            );
+          }
+          if (disappearedAfterNormalize.length > 0) {
+            reconciliationWarningParts.push(
+              `disappeared_after_normalize: ${disappearedAfterNormalize.join(", ")}`,
+            );
+          }
+          if (disappearedAfterStore.length > 0) {
+            reconciliationWarningParts.push(
+              `disappeared_after_store: ${disappearedAfterStore.join(", ")}`,
+            );
+          }
+          if (reconciliationWarningParts.length > 0) {
+            console.warn("[CommentReview] reconciliation mismatch", {
+              extracted_ref_count: extractedRefCount,
+              parsed_source_ref_count: parsedSourceRefCount,
+              normalized_count: normalizedCount,
+              deterministic_parsed_row_count: deterministicParsedRowCount,
+              fallback_parsed_row_count: fallbackParsedRowCount,
+              inserted_raw_ref_count: insertedRawRefCount,
+              inserted_fallback_count: insertedFallbackCount,
+              stored_raw_ref_count: storedRawRefCount,
+              stored_fallback_count: storedFallbackCount,
+              total_stored_count: totalStoredCount,
+              rendered_comment_count: renderedCommentCount,
+              extracted_refs: extractedRefs,
+              parsed_refs: parsedRefs,
+              normalized_refs: normalizedRefs,
+              rendered_refs: renderedRefs,
+              disappeared_after_parse: disappearedAfterParse,
+              disappeared_after_normalize: disappearedAfterNormalize,
+              disappeared_after_store: disappearedAfterStore,
+              missing_refs: missingRefs,
+              warning: reconciliationWarningParts.join(" | "),
+            });
+          }
+          console.log("[CommentReview] ref stages", {
+            extracted_refs: extractedRefs,
+            parsed_refs: parsedRefs,
+            normalized_refs: normalizedRefs,
+            rendered_refs: renderedRefs,
+            extracted_ref_count: extractedRefCount,
+            parsed_ref_count: parsedSourceRefCount,
+            normalized_count: normalizedCount,
+            deterministic_parsed_row_count: deterministicParsedRowCount,
+            fallback_parsed_row_count: fallbackParsedRowCount,
+            inserted_raw_ref_count: insertedRawRefCount,
+            inserted_fallback_count: insertedFallbackCount,
+            stored_raw_ref_count: storedRawRefCount,
+            stored_fallback_count: storedFallbackCount,
+            total_stored_count: totalStoredCount,
+            rendered_count: renderedCommentCount,
+            disappeared_after_parse: disappearedAfterParse,
+            disappeared_after_normalize: disappearedAfterNormalize,
+            disappeared_after_store: disappearedAfterStore,
+          });
           if (cp.pipeline_evidence != null) {
             console.info("[CommentReview pipeline_evidence]", cp.pipeline_evidence);
           }
@@ -151,12 +427,60 @@ export default function CommentReview() {
               reason: cp.reason,
               message: cp.message,
               parsed_count: pc,
+              reconciliation: {
+                extracted_ref_count: extractedRefCount,
+                parsed_source_ref_count: parsedSourceRefCount,
+                normalized_count: normalizedCount,
+                deterministic_parsed_row_count: deterministicParsedRowCount,
+                fallback_parsed_row_count: fallbackParsedRowCount,
+                inserted_raw_ref_count: insertedRawRefCount,
+                inserted_fallback_count: insertedFallbackCount,
+                stored_raw_ref_count: storedRawRefCount,
+                stored_fallback_count: storedFallbackCount,
+                total_stored_count: totalStoredCount,
+                rendered_comment_count: renderedCommentCount,
+                extracted_refs: extractedRefs,
+                parsed_refs: parsedRefs,
+                normalized_refs: normalizedRefs,
+                rendered_refs: renderedRefs,
+                missing_refs: missingRefs,
+                warning:
+                  reconciliationWarningParts.length > 0
+                    ? reconciliationWarningParts.join(" | ")
+                    : (cp?.reconciliation?.warning ?? null),
+              },
             });
             toast.info(
               typeof cp.message === "string" && cp.message.length > 0
                 ? cp.message
                 : "Parser finished but no comments were saved.",
             );
+          }
+          if (pc > 0 && reconciliationWarningParts.length > 0) {
+            setParserDetail({
+              reason: cp.reason,
+              message: reconciliationWarningParts.join(" | "),
+              parsed_count: pc,
+              reconciliation: {
+                extracted_ref_count: extractedRefCount,
+                parsed_source_ref_count: parsedSourceRefCount,
+                normalized_count: normalizedCount,
+                deterministic_parsed_row_count: deterministicParsedRowCount,
+                fallback_parsed_row_count: fallbackParsedRowCount,
+                inserted_raw_ref_count: insertedRawRefCount,
+                inserted_fallback_count: insertedFallbackCount,
+                stored_raw_ref_count: storedRawRefCount,
+                stored_fallback_count: storedFallbackCount,
+                total_stored_count: totalStoredCount,
+                rendered_comment_count: renderedCommentCount,
+                extracted_refs: extractedRefs,
+                parsed_refs: parsedRefs,
+                normalized_refs: normalizedRefs,
+                rendered_refs: renderedRefs,
+                missing_refs: missingRefs,
+                warning: reconciliationWarningParts.join(" | "),
+              },
+            });
           }
           break;
         }
@@ -189,7 +513,7 @@ export default function CommentReview() {
     } finally {
       setLoadingFromPortal(false);
     }
-  }, [projectId, user?.id, queryClient]);
+  }, [extractRefFromOriginalText, projectId, user?.id, queryClient, refetchComments]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -304,6 +628,7 @@ export default function CommentReview() {
         code_reference: r.code_reference || null,
         status: "Approved",
         page_number: pageNumber,
+        ingest_source: "fallback_llm" as const,
       }));
       const { error } = await supabase.from("parsed_comments").insert(toInsert);
       if (error) throw error;
@@ -351,7 +676,7 @@ export default function CommentReview() {
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : portalComments.length === 0 && !noCommentsInPortal ? (
+        ) : renderedPortalComments.length === 0 && !noCommentsInPortal ? (
           <Card>
             <CardHeader>
               <CardTitle>No comments loaded</CardTitle>
@@ -378,7 +703,7 @@ export default function CommentReview() {
               </Button>
             </CardContent>
           </Card>
-        ) : noCommentsInPortal && portalComments.length === 0 ? (
+        ) : noCommentsInPortal && renderedPortalComments.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground space-y-2">
               <p>
@@ -398,8 +723,17 @@ export default function CommentReview() {
                 <div>
                   <CardTitle>Portal comments</CardTitle>
                   <CardDescription>
-                    {portalComments.length} comment{portalComments.length !== 1 ? "s" : ""} from the portal.
+                    {renderedPortalComments.length} comment{renderedPortalComments.length !== 1 ? "s" : ""} from the portal.
                   </CardDescription>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Render source: <span className="font-medium">{renderSource}</span>
+                    {renderSource === "fallback_llm" ? " (fallback mode active)" : ""}
+                  </p>
+                  {parserDetail?.reconciliation?.warning && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-200/90 rounded-md border border-amber-900/30 bg-amber-950/20 px-2 py-1 whitespace-pre-wrap">
+                      {parserDetail.reconciliation.warning}
+                    </p>
+                  )}
                 </div>
                 <Button
                   variant="outline"
@@ -430,14 +764,14 @@ export default function CommentReview() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {portalComments.map((row) => (
+                    {renderedPortalComments.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell className="text-sm text-muted-foreground align-top max-w-[400px]">
-                          {row.original_text}
+                          {portalCommentTableCellContent(row)}
                         </TableCell>
-                        <TableCell>{row.discipline ?? "—"}</TableCell>
+                        <TableCell>{portalDisciplineDisplayText(row)}</TableCell>
                         <TableCell>{row.code_reference ?? "—"}</TableCell>
-                        <TableCell>{row.status}</TableCell>
+                        <TableCell>{portalStatusDisplayText(row)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

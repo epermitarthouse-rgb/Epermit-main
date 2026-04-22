@@ -121,15 +121,26 @@ serve(async (req) => {
 
     const projectFilter = projectId ? [projectId] : projectIds;
 
+    /**
+     * (unclassified discipline) AND (not Approved OR raw_ref) so `raw_ref` rows with
+     * classifier-normalized `status=Approved` (portal Resolved) still get a taxonomy when discipline is null.
+     */
     const query = adminClient
       .from("parsed_comments")
-      .select("id, original_text, project_id, discipline")
+      .select("id, original_text, project_id, discipline, ingest_source")
       .in("project_id", projectFilter)
       .or("discipline.is.null,discipline.eq.General,discipline.eq.Unclassified")
-      .eq("status", "Pending")
+      .or("status.neq.Approved,ingest_source.eq.raw_ref")
       .limit(batchLimit);
 
-    console.log("[DEBUG] discipline-classifier query (adminClient): filter=(discipline IS NULL OR discipline='General' OR discipline='Unclassified'), status=Pending, project_id in", projectFilter.length, "projects, limit=", batchLimit, "shadow_mode=", isShadowMode);
+    console.log(
+      "[DEBUG] discipline-classifier query (adminClient): (discipline unclassified) AND (status!=Approved OR raw_ref), project_id in",
+      projectFilter.length,
+      "projects, limit=",
+      batchLimit,
+      "shadow_mode=",
+      isShadowMode,
+    );
 
     const { data: rows, error: fetchError } = await query;
 

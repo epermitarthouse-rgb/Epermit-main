@@ -2,6 +2,7 @@
  * Re-export shared PGC Review Comments deterministic parser (see supabase/functions/_shared).
  */
 export {
+  extractRefSpanRows,
   inferPgcDisciplineFromReviewedBy,
   parsePgcReviewComments,
   parsePgcReviewCommentsStacked,
