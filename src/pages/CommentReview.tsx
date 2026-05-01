@@ -32,7 +32,7 @@ import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { ReviewTimer, type ReviewTimerHandle } from "@/components/shadow/ReviewTimer";
 import { supabase } from "@/lib/supabase";
 import { isTaxonomyDiscipline } from "@/lib/commentDisciplineTaxonomy";
-import { formatRawRefMetaLine, parsePgcRawRefDisplayText } from "@/lib/parsePgcRawRefDisplayText";
+import { parsePgcRawRefDisplayText } from "@/lib/parsePgcRawRefDisplayText";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
 import { toast } from "sonner";
 import { FileImage, Loader2, CheckCircle2, Upload, ArrowLeft, RefreshCw } from "lucide-react";
@@ -56,19 +56,14 @@ interface ParsedCommentRow {
   ingest_source: "raw_ref" | "fallback_llm" | null;
 }
 
-/** Comment column: raw_ref = parsed discussion + compact ref/cycle; other = verbatim text. */
+/** Non–raw_ref: single Comment cell = verbatim `original_text`. */
 function portalCommentTableCellContent(row: ParsedCommentRow) {
-  if (row.ingest_source !== "raw_ref") {
-    return row.original_text;
-  }
-  const f = parsePgcRawRefDisplayText(row.original_text);
-  const meta = formatRawRefMetaLine(f);
-  return (
-    <div className="space-y-1">
-      {meta ? <div className="text-xs text-muted-foreground/90 font-medium">{meta}</div> : null}
-      <div className="whitespace-pre-wrap text-foreground/90">{f.discussion}</div>
-    </div>
-  );
+  return row.original_text;
+}
+
+function portalRawRefCellDash(s: string | undefined | null): string {
+  const t = s?.trim();
+  return t ? t : "—";
 }
 
 /** Status: raw_ref = portal line from `original_text` blob (`status:`), not DB-normalized `row.status`. */
@@ -753,28 +748,79 @@ export default function CommentReview() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-md overflow-auto max-h-[480px]">
+              <div className="border rounded-md overflow-auto max-h-[520px]">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Comment</TableHead>
-                      <TableHead className="w-[140px]">Discipline</TableHead>
-                      <TableHead className="w-[120px]">Code ref.</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {renderedPortalComments.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="text-sm text-muted-foreground align-top max-w-[400px]">
-                          {portalCommentTableCellContent(row)}
-                        </TableCell>
-                        <TableCell>{portalDisciplineDisplayText(row)}</TableCell>
-                        <TableCell>{row.code_reference ?? "—"}</TableCell>
-                        <TableCell>{portalStatusDisplayText(row)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
+                  {renderSource === "raw_ref" ? (
+                    <>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[48px] min-w-[44px] whitespace-nowrap">REF #</TableHead>
+                          <TableHead className="w-[56px] min-w-[48px] whitespace-nowrap">CYCLE</TableHead>
+                          <TableHead className="min-w-[140px] max-w-[200px]">REVIEWED BY</TableHead>
+                          <TableHead className="min-w-[88px] w-[100px] whitespace-nowrap">TYPE</TableHead>
+                          <TableHead className="min-w-[120px] max-w-[160px]">FILENAME</TableHead>
+                          <TableHead className="min-w-[240px] max-w-[480px]">DISCUSSION</TableHead>
+                          <TableHead className="w-[100px] min-w-[88px] whitespace-nowrap">STATUS</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {renderedPortalComments.map((row) => {
+                          const f = parsePgcRawRefDisplayText(row.original_text);
+                          return (
+                            <TableRow key={row.id}>
+                              <TableCell className="text-sm align-top font-mono tabular-nums">
+                                {portalRawRefCellDash(f.ref)}
+                              </TableCell>
+                              <TableCell className="text-sm align-top font-mono tabular-nums">
+                                {portalRawRefCellDash(f.cycle)}
+                              </TableCell>
+                              <TableCell className="text-sm align-top whitespace-pre-wrap break-words">
+                                {portalRawRefCellDash(f.reviewedBy)}
+                              </TableCell>
+                              <TableCell className="text-sm align-top whitespace-pre-wrap">
+                                {portalRawRefCellDash(f.type)}
+                              </TableCell>
+                              <TableCell
+                                className="text-sm align-top whitespace-pre-wrap break-all"
+                                title={f.filename ?? undefined}
+                              >
+                                {portalRawRefCellDash(f.filename)}
+                              </TableCell>
+                              <TableCell className="text-sm align-top text-foreground/90 whitespace-pre-wrap break-words max-w-[480px]">
+                                {f.discussion}
+                              </TableCell>
+                              <TableCell className="text-sm whitespace-nowrap align-top">
+                                {portalStatusDisplayText(row)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </>
+                  ) : (
+                    <>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Comment</TableHead>
+                          <TableHead className="w-[140px]">Discipline</TableHead>
+                          <TableHead className="w-[120px]">Code ref.</TableHead>
+                          <TableHead className="w-[100px]">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {renderedPortalComments.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="text-sm text-muted-foreground align-top max-w-[400px]">
+                              {portalCommentTableCellContent(row)}
+                            </TableCell>
+                            <TableCell>{portalDisciplineDisplayText(row)}</TableCell>
+                            <TableCell>{row.code_reference ?? "—"}</TableCell>
+                            <TableCell>{portalStatusDisplayText(row)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </>
+                  )}
                 </Table>
               </div>
             </CardContent>

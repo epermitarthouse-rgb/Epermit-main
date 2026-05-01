@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, RefreshCw, Wand2 } from "lucide-react";
+import { ArrowLeft, Database, Loader2, RefreshCw } from "lucide-react";
 
 interface ParsedCommentRow {
   id: string;
@@ -60,25 +60,75 @@ export default function ClassifiedComments() {
     return { keys, map };
   }, [comments]);
 
-  const runClassifier = useCallback(async () => {
+  /** Re-runs the discipline model on every parsed row for the project (not the incremental “unclassified only” path). */
+  const refreshClassifications = useCallback(async () => {
     if (!projectId) return;
     setRunningClassifier(true);
     try {
+      const { count: totalInDb, error: countErr } = await supabase
+        .from("parsed_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId);
+
+      if (countErr) throw countErr;
+      const loaded = totalInDb ?? 0;
+      toast.info(
+        loaded > 0
+          ? `Loaded ${loaded} parsed comment(s) for this project. Sending all to the discipline classifier…`
+          : "No parsed comments in the database for this project yet.",
+      );
+      if (loaded === 0) {
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("discipline-classifier-agent", {
-        body: { project_id: projectId },
+        body: { project_id: projectId, reclassify_all: true },
       });
       if (error) throw error;
-      const count = (data as { classified_count?: number })?.classified_count ?? 0;
+
+      const payload = data as {
+        code?: number;
+        message?: string;
+        classified_count?: number;
+        rows_sent?: number;
+        parsed_comments_total?: number;
+      };
+      if (payload?.code != null && payload.code >= 400) {
+        throw new Error(payload.message ?? `Classifier returned ${payload.code}`);
+      }
+
+      const rowsSent = payload?.rows_sent ?? 0;
+      const updated = payload?.classified_count ?? 0;
+      const total = payload?.parsed_comments_total ?? loaded;
+
       await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
-      toast.success(`Classified ${count} comment(s)`);
-      refetch();
+      await refetch();
+
+      toast.success(
+        `Discipline classifier: updated ${updated} row(s) (processed ${rowsSent} of ${total} parsed comment(s) in project).`,
+      );
     } catch (e) {
-      console.error(e);
-      toast.error("Classifier failed");
+      console.error("[ClassifiedComments] discipline-classifier-agent", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Classifier failed: ${msg}`);
     } finally {
       setRunningClassifier(false);
     }
   }, [projectId, queryClient, refetch]);
+
+  const reloadListOnly = useCallback(async () => {
+    if (!projectId) return;
+    const { count, error } = await supabase
+      .from("parsed_comments")
+      .select("*", { count: "exact", head: true })
+      .eq("project_id", projectId);
+    if (error) {
+      toast.error(`Could not load comment count: ${error.message}`);
+      return;
+    }
+    await refetch();
+    toast.info(`Reloaded list: ${count ?? 0} parsed comment(s) for this project.`);
+  }, [projectId, refetch]);
 
   if (authLoading) {
     return (
@@ -104,14 +154,27 @@ export default function ClassifiedComments() {
             </div>
           </div>
           {projectId && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void reloadListOnly()}
+                disabled={runningClassifier || isLoading}
+              >
+                <Database className="h-4 w-4 mr-2" />
+                Reload list
               </Button>
-              <Button size="sm" onClick={runClassifier} disabled={runningClassifier}>
-                {runningClassifier ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
-                Run classifier
+              <Button
+                size="sm"
+                onClick={() => void refreshClassifications()}
+                disabled={runningClassifier}
+              >
+                {runningClassifier ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Refresh classifications
               </Button>
             </div>
           )}

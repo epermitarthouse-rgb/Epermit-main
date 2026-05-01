@@ -2,8 +2,14 @@
 const { chromium } = require("playwright");
 const { execSync } = require("child_process");
 const ExcelJS = require("exceljs");
+const {
+  extractReviewCommentsStructuredRowsFromExcelBuffer,
+  extractReviewCommentsStructuredRowsFromExcelFile,
+} = require("../lib/reviewCommentsExcelStructuredRows.js");
+const AdmZip = require("adm-zip");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const { isScraperDebugArtifactsEnabled } = require("../artifacts/debug-artifacts");
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
@@ -3155,6 +3161,43 @@ async function mapMontgomeryPipelineToPortalData(projectRow, pipelineResult) {
     console.log(
       `[Montgomery][debug][reports] pdfTextExtract i=${i} name=${JSON.stringify(r.reportName)} textLen=${textLen} parseError=${parseError || "(none)"} pdfEntry.error=${pdfEntry.error || "(none)"} hadLocalPdf=${!!(r.pdfPath && fs.existsSync(r.pdfPath))} hadLocalExcel=${!!(r.excelPath && fs.existsSync(r.excelPath))}`,
     );
+
+    /**
+     * Montgomery: Plan Review – Review Comments — parse SSRS Excel to fixed-column rows whenever Excel is present.
+     * Does **not** change `pdfEntry.text` (PDF extract remains as-is).
+     */
+    if (isPgcReviewCommentsReportName(r.reportName)) {
+      /** @type {Array<{ ref: string; cycle: string; reviewed_by: string; type: string; filename: string; discussion: string; status: string }>} */
+      let structuredRowsResult = [];
+      const localExcelExists = !!(r.excelPath && fs.existsSync(r.excelPath));
+      const excelUrl = String(r.excelPublicUrl || r.excelHttpUrl || "").trim();
+      try {
+        if (localExcelExists && r.excelPath) {
+          structuredRowsResult = await extractReviewCommentsStructuredRowsFromExcelFile(r.excelPath);
+        }
+        if ((!structuredRowsResult || structuredRowsResult.length === 0) && /^https:\/\//i.test(excelUrl)) {
+          const xBuf = await fetchUrlToBuffer(excelUrl);
+          structuredRowsResult = await extractReviewCommentsStructuredRowsFromExcelBuffer(xBuf);
+        }
+      } catch (e) {
+        console.warn(
+          `[Montgomery][reports][excel-structured] parse failed report=${JSON.stringify(r.reportName ?? "")}`,
+          (e && e.message) || e,
+        );
+      }
+      const prev = structuredRowsResult?.slice(0, 3) ?? [];
+      console.log(
+        `[Montgomery][reports][excel-structured] report=${JSON.stringify(
+          r.reportName ?? "",
+        )} localExcel=${localExcelExists} excelUrl=${excelUrl ? "yes" : "no"} rowCount=${structuredRowsResult?.length ?? 0} preview=` +
+          JSON.stringify(prev),
+      );
+      if (Array.isArray(structuredRowsResult) && structuredRowsResult.length > 0) {
+        pdfEntry.structuredRows = structuredRowsResult;
+        pdfEntry.structuredRowsSource = "excel";
+      }
+    }
+
     reportsPdfs.push(pdfEntry);
   }
 
@@ -4380,10 +4423,36 @@ async function scrapeAll(
             `      ✓ ${filesResult.folders.length} folders, ${totalFiles} files, ${totalComments} comments`,
           );
         } else if (tab.key === "reports") {
-          const pdfs = await extractPDFsFromPage(page, context);
+          const pdfs = await extractPDFsFromPage(page, context, {
+            supabaseProjectId,
+            project,
+          });
           tabData.pdfs = pdfs;
+          tabData.reportEntries = pdfs.map((p) => {
+            const viewerUrl = p.url || null;
+            const reportUrl = p.url || null;
+            return {
+              fileSlug: sanitizeStorageKey(p.fileName || "report"),
+              reportName: p.fileName || "Report",
+              reportType: "",
+              reportDescription: "",
+              reportUrl,
+              viewerUrl,
+              viewerReady: !!viewerUrl,
+              pdfUrl: p.pdfPublicUrl || null,
+              excelUrl: p.excelPublicUrl || null,
+              excelDownloaded: !!p.excelPublicUrl,
+              pdfDownloaded: !!p.pdfPublicUrl,
+              exportUnavailable: !p.pdfPublicUrl && !p.excelPublicUrl,
+              flags: {
+                viewerUrlResolved: !!(
+                  viewerUrl && /^https?:\/\//i.test(String(viewerUrl))
+                ),
+              },
+            };
+          });
           console.log(
-            `      ✓ ${tabData.keyValues.length} fields, ${tabData.tables.length} tables, ${pdfs.length} PDFs`,
+            `      ✓ ${tabData.keyValues.length} fields, ${tabData.tables.length} tables, ${pdfs.length} PDFs, ${tabData.reportEntries.length} reportEntries`,
           );
         } else {
           console.log(
@@ -6586,8 +6655,568 @@ async function extractFilesTab(
   return result;
 }
 
-async function extractPDFsFromPage(page, context) {
+/**
+ * SSRS ReportViewer GET export hints (rs:Format=) for generic ProjectDox / Washington.
+ * @param {string} viewerPageUrl
+ * @returns {{ pdfUrl?: string, excelUrl?: string }}
+ */
+function ssrsExportUrlsFromViewerPageUrl(viewerPageUrl) {
+  const u = String(viewerPageUrl || "").trim();
+  if (!u) return {};
+  const hasReportViewerPath = /\/ReportViewer\.aspx(?:[?#]|$)/i.test(u);
+  // Require an actual report identity so we do not emit export links for
+  // portal/index/session URLs that merely mention viewer text.
+  // Support both styles:
+  //  1) key-based: ?ReportPath=... or ?WFlowInstanceID=...
+  //  2) path-style SSRS identity: ?%2fFolder%2fReport or ?/Folder/Report
+  let hasReportIdentity = false;
+  try {
+    const parsed = new URL(u);
+    const keys = [...parsed.searchParams.keys()];
+    hasReportIdentity = keys.some((k) =>
+      /^(ReportPath|WFlowInstanceID)$/i.test(String(k || "").trim())
+    );
+    if (!hasReportIdentity) {
+      hasReportIdentity = keys.some((k) =>
+        String(k || "").trim().startsWith("/")
+      );
+    }
+    if (!hasReportIdentity) {
+      const rawSearch = String(parsed.search || "");
+      hasReportIdentity = /(?:^|[?&])(?:%2[fF]|\/)[^&]+/.test(rawSearch);
+    }
+  } catch (_) {
+    hasReportIdentity = /(?:^|[?&])(ReportPath|WFlowInstanceID)=/i.test(u) ||
+      /(?:^|[?&])(?:%2[fF]|\/)[^&]+/.test(u);
+  }
+  if (!hasReportViewerPath || !hasReportIdentity) return {};
+
+  // Remove any pre-existing rs:Format so each format URL is deterministic.
+  const base = u
+    .replace(/([?&])rs(?::|%3A)Format=[^&]*/gi, "$1")
+    .replace(/([?&])rs(?::|%3A)Command=[^&]*/gi, "$1")
+    .replace(/[?&]$/, "");
+
+  const buildNativeSsrsExportUrl = (viewerUrl, format) => {
+    try {
+      const parsed = new URL(viewerUrl);
+      const cleaned = `${parsed.origin}${parsed.pathname}${parsed.search}`.replace(
+        /([?&])$/,
+        "",
+      );
+      const join = cleaned.includes("?") ? "&" : "?";
+      return `${cleaned}${join}rs:Format=${encodeURIComponent(format)}`;
+    } catch (_) {
+      const join = viewerUrl.includes("?") ? "&" : "?";
+      return `${viewerUrl}${join}rs:Format=${encodeURIComponent(
+        format,
+      )}`;
+    }
+  };
+  const out = {
+    pdfUrl: buildNativeSsrsExportUrl(base, "PDF"),
+    excelUrl: buildNativeSsrsExportUrl(base, "EXCELOPENXML"),
+  };
+  console.log(
+    `[SSRS][export-url] viewer=${u} pdf=${out.pdfUrl} excel=${out.excelUrl}`,
+  );
+  return out;
+}
+
+async function extractPDFsFromPage(page, context, uploadOpts = {}) {
   const pdfData = [];
+  const hasUploadContext = Boolean(
+    uploadOpts?.supabaseProjectId && uploadOpts?.project,
+  );
+  const projectIdent = hasUploadContext
+    ? String(
+        uploadOpts.project?.projectNum ||
+          uploadOpts.project?.projectID ||
+          uploadOpts.project?.projectId ||
+          uploadOpts.project?.id ||
+          "unknown",
+      ).replace(/[^a-zA-Z0-9._-]/g, "_")
+    : null;
+  const storagePrefix = hasUploadContext
+    ? `drawings/${uploadOpts.supabaseProjectId}/washington/${projectIdent}`
+    : null;
+
+  const hasPdfMagic = (localPath) => {
+    try {
+      const buf = fs.readFileSync(localPath);
+      return buf.slice(0, 5).toString("utf8") === "%PDF-";
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const hasXlsxMagic = (localPath) => {
+    try {
+      const buf = fs.readFileSync(localPath);
+      return (
+        buf.length >= 4 &&
+        buf[0] === 0x50 &&
+        buf[1] === 0x4b &&
+        buf[2] === 0x03 &&
+        buf[3] === 0x04
+      );
+    } catch (_) {
+      return false;
+    }
+  };
+
+  /** Washington Excel-only: binary diagnostics (no string/utf8 conversion of file body). */
+  const logWashingtonExcelArtifactDiagnostics = (phase, filePath) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) {
+        console.log(
+          `         [Washington][reports][excel-diag] ${phase}: missing path=${filePath}`,
+        );
+        return;
+      }
+      const buf = fs.readFileSync(filePath);
+      const size = buf.length;
+      const n = Math.min(16, buf.length);
+      const head = buf.subarray(0, n);
+      const hex16 = Buffer.from(head).toString("hex");
+      const ascii16 = [...head]
+        .map((b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : "."))
+        .join("");
+      const pkZip =
+        buf.length >= 4 &&
+        buf[0] === 0x50 &&
+        buf[1] === 0x4b &&
+        buf[2] === 0x03 &&
+        buf[3] === 0x04;
+      console.log(
+        `         [Washington][reports][excel-diag] ${phase}: path=${filePath} size=${size} hex16=${hex16} ascii16=${ascii16} pkZip=${pkZip} (EXCELOPENXML / xlsx zip)`,
+      );
+    } catch (e) {
+      console.warn(
+        `         [Washington][reports][excel-diag] ${phase}: read error ${e?.message || e}`,
+      );
+    }
+  };
+
+  /**
+   * Washington Excel: verify OOXML package parts (ZIP) — transport can be OK while package is incomplete.
+   * @returns {{ ok: boolean, entries: string[], missing: string[], error: string | null }}
+   */
+  const validateWashingtonXlsxOoxmlPackage = (filePath, reportLabel) => {
+    const result = {
+      ok: false,
+      entries: /** @type {string[]} */ ([]),
+      missing: /** @type {string[]} */ ([]),
+      error: /** @type {string | null} */ (null),
+    };
+    try {
+      const zip = new AdmZip(filePath);
+      const rawEntries = zip
+        .getEntries()
+        .filter((e) => !e.isDirectory)
+        .map((e) => String(e.entryName || "").replace(/\\/g, "/"));
+      result.entries = [...new Set(rawEntries)].sort((a, b) =>
+        a.localeCompare(b, "en"),
+      );
+      const lower = new Set(result.entries.map((n) => n.toLowerCase()));
+      const hasPath = (p) => lower.has(p.toLowerCase());
+      const hasWorksheet = [...lower].some((n) =>
+        /^xl\/worksheets\/[^/]+\.xml$/i.test(n),
+      );
+      const checks = [
+        { need: "[Content_Types].xml", pass: hasPath("[Content_Types].xml") },
+        { need: "_rels/.rels", pass: hasPath("_rels/.rels") },
+        { need: "xl/workbook.xml", pass: hasPath("xl/workbook.xml") },
+        {
+          need: "xl/_rels/workbook.xml.rels",
+          pass: hasPath("xl/_rels/workbook.xml.rels"),
+        },
+        { need: "xl/worksheets/*.xml", pass: hasWorksheet },
+      ];
+      for (const c of checks) {
+        if (!c.pass) result.missing.push(c.need);
+      }
+      result.ok = result.missing.length === 0;
+    } catch (e) {
+      result.error = (e && e.message) || String(e);
+    }
+    const sample = result.entries.slice(0, 60);
+    const more =
+      result.entries.length > 60
+        ? ` (+${result.entries.length - 60} more entries not logged)`
+        : "";
+    console.log(
+      `         [Washington][reports][xlsx-package] report=${JSON.stringify(
+        reportLabel,
+      )} structurallyValid=${result.ok} entryCount=${result.entries.length} missing=${JSON.stringify(
+        result.missing,
+      )}${result.error ? ` zipReadError=${JSON.stringify(result.error)}` : ""}`,
+    );
+    console.log(
+      `         [Washington][reports][xlsx-package] zipEntriesSample=${JSON.stringify(
+        sample,
+      )}${more}`,
+    );
+    if (!result.ok && result.missing.length) {
+      console.warn(
+        `         [Washington][reports][xlsx-package] PACKAGE_DEFECT report=${JSON.stringify(
+          reportLabel,
+        )} missingParts=${JSON.stringify(result.missing)}`,
+      );
+    }
+    return result;
+  };
+
+  const clickSsrsExportMenuTrigger = async (popup) =>
+    popup.evaluate(() => {
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return (
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      const textOf = (el) =>
+        String(el?.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      const candidates = Array.from(
+        document.querySelectorAll("a, button, input, span, div"),
+      );
+      const trigger = candidates.find((el) => {
+        if (!isVisible(el)) return false;
+        const t = textOf(el);
+        if (t === "export") return true;
+        const id = String(el.getAttribute("id") || "").toLowerCase();
+        const title = String(el.getAttribute("title") || "").toLowerCase();
+        return id.includes("export") || title.includes("export");
+      });
+      if (!trigger) return false;
+      if (trigger.tagName === "INPUT") {
+        trigger.focus?.();
+        trigger.click?.();
+      } else {
+        trigger.dispatchEvent(
+          new MouseEvent("click", {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }
+      return true;
+    });
+
+  const hasSsrsFormatAnchor = async (popup, formatLabel) =>
+    popup.evaluate((label) => {
+      const wanted = String(label || "").trim().toLowerCase();
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return (
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      return Array.from(document.querySelectorAll("a")).some((a) => {
+        if (!isVisible(a)) return false;
+        const txt = String(a.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        return txt === wanted;
+      });
+    }, formatLabel);
+
+  const clickSsrsFormatAnchor = async (popup, formatLabel) =>
+    popup.evaluate((label) => {
+      const wanted = String(label || "").trim().toLowerCase();
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return (
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      const anchor = Array.from(document.querySelectorAll("a")).find((a) => {
+        if (!isVisible(a)) return false;
+        const txt = String(a.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        return txt === wanted;
+      });
+      if (!anchor) return false;
+      anchor.dispatchEvent(
+        new MouseEvent("click", {
+          view: window,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      return true;
+    }, formatLabel);
+
+  const downloadExportFromPopup = async (popup, localPath, reportName, format) => {
+    await popup.bringToFront().catch(() => {});
+
+    let anchorVisible = await hasSsrsFormatAnchor(popup, format);
+    if (!anchorVisible) {
+      const opened = await clickSsrsExportMenuTrigger(popup).catch(() => false);
+      if (opened) await popup.waitForTimeout(400).catch(() => {});
+      anchorVisible = await hasSsrsFormatAnchor(popup, format);
+    }
+    if (!anchorVisible) {
+      throw new Error(`SSRS export anchor not found for format "${format}"`);
+    }
+
+    const downloadPromise = popup.waitForEvent("download", { timeout: 60000 });
+    const clicked = await clickSsrsFormatAnchor(popup, format);
+    if (!clicked) {
+      throw new Error(`Failed to click SSRS export anchor for "${format}"`);
+    }
+    const download = await downloadPromise;
+    await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+    await download.saveAs(localPath);
+    if (format === "Excel") {
+      logWashingtonExcelArtifactDiagnostics("after_saveAs", localPath);
+    }
+    console.log(
+      `         [Washington][reports] popup export captured format=${format} report="${reportName}"`,
+    );
+    return true;
+  };
+
+  /** Washington Excel fallback: same as browser DevTools — ReportViewer1.exportReport('EXCELOPENXML'). */
+  const downloadExcelViaReportViewerExportApi = async (
+    popup,
+    localPath,
+    reportName,
+  ) => {
+    await popup.bringToFront().catch(() => {});
+    const downloadPromise = popup.waitForEvent("download", {
+      timeout: 90000,
+    });
+    await popup.evaluate(() => {
+      const fn = /** @type {any} */ (window).$find;
+      if (typeof fn !== "function") throw new Error("$find not available");
+      const rv = fn("ReportViewer1");
+      if (!rv || typeof rv.exportReport !== "function") {
+        throw new Error("ReportViewer1.exportReport not available");
+      }
+      rv.exportReport("EXCELOPENXML");
+    });
+    const download = await downloadPromise;
+    await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+    await download.saveAs(localPath);
+    logWashingtonExcelArtifactDiagnostics(
+      "after_saveAs_exportReportApi",
+      localPath,
+    );
+    console.log(
+      `         [Washington][reports] EXCELOPENXML via exportReport(ReportViewer1) report="${reportName}"`,
+    );
+  };
+
+  const enrichReportWithPublicExports = async (popup, reportEntry, viewerUrl) => {
+    if (!hasUploadContext || !popup || !reportEntry) return;
+    const ssrsUrls = ssrsExportUrlsFromViewerPageUrl(viewerUrl);
+    const slug = sanitizeStorageKey(reportEntry.fileName || "report");
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    if (ssrsUrls.pdfUrl) {
+      let pdfPath = null;
+      try {
+        pdfPath = path.join(os.tmpdir(), `wa_report_${nonce}_${slug}.pdf`);
+        await downloadExportFromPopup(
+          popup,
+          pdfPath,
+          reportEntry.fileName,
+          "PDF",
+        );
+        const pdfValid = hasPdfMagic(pdfPath);
+        reportEntry.pdfValid = pdfValid;
+        reportEntry.pdfPath = pdfPath;
+        if (!pdfValid) {
+          console.warn(
+            `         [Washington][reports] PDF magic-bytes mismatch for "${reportEntry.fileName}" - skipping upload`,
+          );
+        } else {
+          const publicUrl = await uploadToSupabaseStorage(
+            pdfPath,
+            `${storagePrefix}/reports/${slug}.pdf`,
+          );
+          if (publicUrl) {
+            reportEntry.pdfPublicUrl = publicUrl;
+            console.log(
+              `         [Washington][reports] uploaded PDF -> ${publicUrl}`,
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `         [Washington][reports] PDF download/upload error for "${reportEntry.fileName}": ${err?.message || err}`,
+        );
+      } finally {
+        if (pdfPath && fs.existsSync(pdfPath)) {
+          try {
+            fs.unlinkSync(pdfPath);
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (ssrsUrls.excelUrl) {
+      await popup
+        .goto(viewerUrl, { waitUntil: "networkidle", timeout: 30000 })
+        .catch(() => {});
+      await popup.waitForTimeout(1500).catch(() => {});
+      let excelPath = null;
+      try {
+        excelPath = path.join(os.tmpdir(), `wa_report_${nonce}_${slug}.xlsx`);
+        await downloadExportFromPopup(
+          popup,
+          excelPath,
+          reportEntry.fileName,
+          "Excel",
+        );
+        let pkg = validateWashingtonXlsxOoxmlPackage(
+          excelPath,
+          reportEntry.fileName,
+        );
+        reportEntry.excelOoxmlPackageOk = pkg.ok;
+        reportEntry.excelOoxmlMissing = pkg.missing;
+        reportEntry.excelExportMethod = "anchor";
+
+        if (!pkg.ok || pkg.error) {
+          console.warn(
+            `         [Washington][reports] Excel OOXML package incomplete after anchor export; retrying via ReportViewer1.exportReport(EXCELOPENXML) for "${reportEntry.fileName}"`,
+          );
+          if (fs.existsSync(excelPath)) {
+            try {
+              fs.unlinkSync(excelPath);
+            } catch (_) {}
+          }
+          await popup
+            .goto(viewerUrl, { waitUntil: "networkidle", timeout: 30000 })
+            .catch(() => {});
+          await popup.waitForTimeout(2000).catch(() => {});
+          await downloadExcelViaReportViewerExportApi(
+            popup,
+            excelPath,
+            reportEntry.fileName,
+          );
+          pkg = validateWashingtonXlsxOoxmlPackage(
+            excelPath,
+            `${reportEntry.fileName} (after exportReport API)`,
+          );
+          reportEntry.excelOoxmlPackageOk = pkg.ok;
+          reportEntry.excelOoxmlMissing = pkg.missing;
+          reportEntry.excelExportMethod = "exportReportApi";
+        }
+
+        const magicOk = hasXlsxMagic(excelPath);
+        const excelValid =
+          magicOk && pkg.ok && !pkg.error;
+        reportEntry.excelValid = excelValid;
+        reportEntry.excelPath = excelPath;
+
+        if (!magicOk) {
+          logWashingtonExcelArtifactDiagnostics(
+            "before_upload_skipped_invalid_magic",
+            excelPath,
+          );
+          console.warn(
+            `         [Washington][reports] Excel magic-bytes mismatch for "${reportEntry.fileName}" - skipping upload`,
+          );
+        } else if (!pkg.ok || pkg.error) {
+          logWashingtonExcelArtifactDiagnostics(
+            "before_upload_skipped_invalid_ooxml",
+            excelPath,
+          );
+          console.warn(
+            `         [Washington][reports] Excel OOXML package still invalid for "${reportEntry.fileName}" missing=${JSON.stringify(pkg.missing)} err=${pkg.error || "none"} - skipping upload`,
+          );
+        } else {
+          logWashingtonExcelArtifactDiagnostics("before_upload", excelPath);
+          const publicUrl = await uploadToSupabaseStorage(
+            excelPath,
+            `${storagePrefix}/reports/${slug}.xlsx`,
+          );
+          if (publicUrl) {
+            reportEntry.excelPublicUrl = publicUrl;
+            console.log(
+              `         [Washington][reports] uploaded Excel -> ${publicUrl}`,
+            );
+            try {
+              const localBuf = fs.readFileSync(excelPath);
+              const localSha = crypto
+                .createHash("sha256")
+                .update(localBuf)
+                .digest("hex");
+              const localHead32 = localBuf.subarray(0, 32).toString("hex");
+              const res = await fetch(publicUrl, { redirect: "follow" });
+              const remoteAb = await res.arrayBuffer();
+              const remoteBuf = Buffer.from(remoteAb);
+              const remoteSha = crypto
+                .createHash("sha256")
+                .update(remoteBuf)
+                .digest("hex");
+              const remoteHead32 = remoteBuf.subarray(0, 32).toString("hex");
+              const bytesMatch =
+                localBuf.length === remoteBuf.length && localSha === remoteSha;
+              console.log(
+                `         [Washington][reports][excel-roundtrip] report=${JSON.stringify(
+                  reportEntry.fileName,
+                )} httpStatus=${res.status} contentType=${JSON.stringify(
+                  res.headers.get("content-type") || "",
+                )} localSize=${localBuf.length} remoteSize=${remoteBuf.length} sha256Match=${bytesMatch}`,
+              );
+              console.log(
+                `         [Washington][reports][excel-roundtrip] sha256 local=${localSha} remote=${remoteSha}`,
+              );
+              console.log(
+                `         [Washington][reports][excel-roundtrip] first32hex local=${localHead32} remote=${remoteHead32}`,
+              );
+              if (!bytesMatch) {
+                console.warn(
+                  `         [Washington][reports][excel-roundtrip] BYTES_DIFFER_AFTER_UPLOAD report=${JSON.stringify(
+                    reportEntry.fileName,
+                  )}`,
+                );
+              }
+            } catch (rtErr) {
+              console.warn(
+                `         [Washington][reports][excel-roundtrip] verify failed: ${rtErr?.message || rtErr}`,
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `         [Washington][reports] Excel download/upload error for "${reportEntry.fileName}": ${err?.message || err}`,
+        );
+      } finally {
+        if (excelPath && fs.existsSync(excelPath)) {
+          try {
+            fs.unlinkSync(excelPath);
+          } catch (_) {}
+        }
+      }
+    }
+  };
 
   const reportPageUrl = page.url();
   if (reportPageUrl.includes("SessionEnded") || reportPageUrl.includes("b2clogin") || reportPageUrl.includes("Login")) {
@@ -6783,24 +7412,31 @@ async function extractPDFsFromPage(page, context) {
           console.log(
             `         [DEBUG] html first 200 chars: ${(content?.html || "").substring(0, 200)}`,
           );
-          pdfData.push({
+          const reportEntry = {
             fileName: reportName,
             text: cleaned,
             screenshot: screenshotBase64,
             pages: 1,
             url: finalUrl,
             info: { source: content.source },
-          });
+            ...ssrsExportUrlsFromViewerPageUrl(finalUrl),
+          };
+          pdfData.push(reportEntry);
+          await enrichReportWithPublicExports(popup, reportEntry, finalUrl);
         } else {
           console.log(
             `         ⚠️ No meaningful content (${content?.text?.length || 0} chars, source: ${content?.source})`,
           );
-          pdfData.push({
+          const reportEntry = {
             fileName: reportName,
             text: "",
             pages: 0,
             error: "No content extracted",
-          });
+            url: finalUrl,
+            ...ssrsExportUrlsFromViewerPageUrl(finalUrl),
+          };
+          pdfData.push(reportEntry);
+          await enrichReportWithPublicExports(popup, reportEntry, finalUrl);
         }
 
         await popup.close().catch(() => {});
@@ -6832,12 +7468,14 @@ async function extractPDFsFromPage(page, context) {
           console.log(
             `         ✓ Found inline content: ${inlineContent.length} chars`,
           );
+          const inlineViewerUrl = page.url();
           pdfData.push({
             fileName: reportName,
             text: inlineContent,
             pages: 1,
-            url: page.url(),
+            url: inlineViewerUrl,
             info: { source: "inline" },
+            ...ssrsExportUrlsFromViewerPageUrl(inlineViewerUrl),
           });
         } else {
           pdfData.push({

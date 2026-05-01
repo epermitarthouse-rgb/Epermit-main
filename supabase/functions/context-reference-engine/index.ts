@@ -7,7 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Comments per OpenAI call — balances context window vs number of round-trips. */
 const BATCH_SIZE = 20;
+/** Hard cap on batches per invocation (avoids edge timeouts and infinite loops). */
+const MAX_ROUNDS = 200;
 
 const SYSTEM_PROMPT = `You are a building code expert. For each permit review comment, extract:
 1. code_reference: The specific code section referenced or most relevant 
@@ -19,6 +22,14 @@ const SYSTEM_PROMPT = `You are a building code expert. For each permit review co
 Return ONLY a JSON array with objects matching the input order:
 [{ "code_reference": "...", "suggested_response": "..." }, ...]`;
 
+type ParsedRow = {
+  id: string;
+  original_text: string;
+  discipline: string | null;
+  code_reference: string | null;
+  response_text: string | null;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -27,7 +38,7 @@ serve(async (req) => {
     if (!OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ code: 500, message: "OpenAI API key not configured", enriched_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -36,7 +47,7 @@ serve(async (req) => {
     if (!supabaseUrl || !anonKey) {
       return new Response(
         JSON.stringify({ code: 500, message: "SUPABASE_URL or SUPABASE_ANON_KEY not configured", enriched_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -44,14 +55,14 @@ serve(async (req) => {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ code: 401, message: "Missing or invalid Authorization header", enriched_count: 0 }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const token = authHeader.replace(/^\s*Bearer\s+/i, "").trim();
     if (!token) {
       return new Response(
         JSON.stringify({ code: 401, message: "Invalid JWT", enriched_count: 0 }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -63,7 +74,7 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({ code: 401, message: "Invalid JWT", enriched_count: 0 }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -72,7 +83,7 @@ serve(async (req) => {
     if (!projectId) {
       return new Response(
         JSON.stringify({ code: 400, message: "projectId is required", enriched_count: 0 }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -84,93 +95,135 @@ serve(async (req) => {
     if (!project || project.user_id !== user.id) {
       return new Response(
         JSON.stringify({ code: 404, message: "Project not found or access denied", enriched_count: 0 }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-
-    const { data: rows, error: fetchError } = await supabase
-      .from("parsed_comments")
-      .select("id, original_text, discipline, code_reference, response_text")
-      .eq("project_id", projectId)
-      .or("code_reference.is.null,code_reference.eq.")
-      .limit(BATCH_SIZE);
-
-    if (fetchError) {
-      console.error("context-reference-engine: fetch error", fetchError);
-      return new Response(
-        JSON.stringify({ code: 500, message: fetchError.message, enriched_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const comments = (rows ?? []) as { id: string; original_text: string; discipline: string | null; code_reference: string | null; response_text: string | null }[];
-    if (comments.length === 0) {
-      return new Response(
-        JSON.stringify({ enriched_count: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const userMessage = JSON.stringify(
-      comments.map((c) => ({ id: c.id, original_text: c.original_text, discipline: c.discipline ?? "" }))
-    );
 
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: 4096,
-    });
+    let totalEnriched = 0;
+    let rounds = 0;
+    let lastError: string | undefined;
+    let haltedReason: string | undefined;
 
-    const content = response.choices?.[0]?.message?.content;
-    if (!content || typeof content !== "string") {
-      return new Response(
-        JSON.stringify({ enriched_count: 0, error: "No response from model" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    let parsed: { code_reference?: string; suggested_response?: string }[];
-    try {
-      const trimmed = content.trim().replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
-      parsed = JSON.parse(trimmed) as { code_reference?: string; suggested_response?: string }[];
-      if (!Array.isArray(parsed)) parsed = [];
-    } catch (e) {
-      console.error("context-reference-engine: bad JSON from LLM", e);
-      return new Response(
-        JSON.stringify({ enriched_count: 0, error: "Invalid JSON from model" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    let enrichedCount = 0;
-    for (let i = 0; i < comments.length && i < parsed.length; i++) {
-      const row = comments[i];
-      const out = parsed[i];
-      const codeRef = typeof out?.code_reference === "string" ? out.code_reference.trim() : null;
-      const suggested = typeof out?.suggested_response === "string" ? out.suggested_response.trim() : null;
-      const setResponse = suggested && (!row.response_text || !row.response_text.trim());
-
-      const updates: { code_reference: string | null; response_text?: string | null } = {
-        code_reference: codeRef || null,
-      };
-      if (setResponse) updates.response_text = suggested;
-
-      const { error: updateError } = await supabase
+    while (true) {
+      const { data: rows, error: fetchError } = await supabase
         .from("parsed_comments")
-        .update(updates)
-        .eq("id", row.id);
+        .select("id, original_text, discipline, code_reference, response_text")
+        .eq("project_id", projectId)
+        .or("code_reference.is.null,code_reference.eq.")
+        .order("id", { ascending: true })
+        .limit(BATCH_SIZE);
 
-      if (!updateError) enrichedCount++;
+      if (fetchError) {
+        console.error("context-reference-engine: fetch error", fetchError);
+        return new Response(
+          JSON.stringify({ code: 500, message: fetchError.message, enriched_count: totalEnriched, rounds }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const comments = (rows ?? []) as ParsedRow[];
+      if (comments.length === 0) {
+        break;
+      }
+
+      if (rounds >= MAX_ROUNDS) {
+        const { count } = await supabase
+          .from("parsed_comments")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .or("code_reference.is.null,code_reference.eq.");
+        const remaining = count ?? 0;
+        haltedReason =
+          `Reached max rounds (${MAX_ROUNDS}); ${remaining} comments may still need enrichment — run the chain again`;
+        break;
+      }
+
+      rounds++;
+      const userMessage = JSON.stringify(
+        comments.map((c) => ({ id: c.id, original_text: c.original_text, discipline: c.discipline ?? "" })),
+      );
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: 4096,
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      if (!content || typeof content !== "string") {
+        lastError = "No response from model";
+        haltedReason = lastError;
+        break;
+      }
+
+      let parsed: { code_reference?: string; suggested_response?: string }[];
+      try {
+        const trimmed = content.trim().replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+        parsed = JSON.parse(trimmed) as { code_reference?: string; suggested_response?: string }[];
+        if (!Array.isArray(parsed)) parsed = [];
+      } catch (e) {
+        console.error("context-reference-engine: bad JSON from LLM", e);
+        lastError = "Invalid JSON from model";
+        haltedReason = lastError;
+        break;
+      }
+
+      let roundEnriched = 0;
+      let roundMeaningful = 0;
+
+      for (let i = 0; i < comments.length && i < parsed.length; i++) {
+        const row = comments[i];
+        const out = parsed[i];
+        const codeRef = typeof out?.code_reference === "string" ? out.code_reference.trim() : null;
+        const suggested = typeof out?.suggested_response === "string" ? out.suggested_response.trim() : null;
+        const setResponse = Boolean(suggested && (!row.response_text || !row.response_text.trim()));
+
+        const updates: { code_reference: string | null; response_text?: string | null } = {
+          code_reference: codeRef || null,
+        };
+        if (setResponse) updates.response_text = suggested;
+
+        const { error: updateError } = await supabase
+          .from("parsed_comments")
+          .update(updates)
+          .eq("id", row.id);
+
+        if (!updateError) {
+          roundEnriched++;
+          if ((codeRef && codeRef.length > 0) || setResponse) {
+            roundMeaningful++;
+          }
+        }
+      }
+
+      totalEnriched += roundEnriched;
+
+      if (roundEnriched === 0) {
+        haltedReason = "No database updates succeeded for this batch";
+        break;
+      }
+
+      if (roundMeaningful === 0 && comments.length > 0) {
+        haltedReason =
+          "Model returned no usable code_reference or suggested_response; stopping to avoid repeating the same batch";
+        break;
+      }
     }
 
-    return new Response(
-      JSON.stringify({ enriched_count: enrichedCount }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    const payload: Record<string, unknown> = {
+      enriched_count: totalEnriched,
+      rounds,
+    };
+    if (haltedReason) payload.warning = haltedReason;
+    if (lastError && !haltedReason) payload.error = lastError;
+
+    return new Response(JSON.stringify(payload), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("context-reference-engine:", error);
     return new Response(
@@ -178,7 +231,7 @@ serve(async (req) => {
         enriched_count: 0,
         error: error instanceof Error ? error.message : "Unknown error",
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

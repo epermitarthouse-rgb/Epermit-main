@@ -3960,48 +3960,67 @@ export default function PortalDataViewer() {
                                               )}
                                             </div>
                                           ) : pdf?.text ? (
-                                            <div className="space-y-3">
-                                              <div className="max-h-96 overflow-y-auto rounded border border-[#1A3055] bg-[#0D1E38] p-4">
-                                                {!isMdAvolveProjectDox &&
-                                                pdf.fileName?.includes(
-                                                  "Review Comments",
-                                                )
-                                                  ? renderReviewComments(
-                                                      getReviewCommentsDisplayTextForPortal(
-                                                        pdf,
-                                                      ),
-                                                      isPgcEplan
-                                                        ? "pgc"
-                                                        : isWashingtonDcProjectDox
-                                                          ? "washington"
-                                                          : "generic",
-                                                      { fileName: pdf.fileName },
-                                                    )
-                                                  : renderReportContent(
-                                                      pdf.text,
-                                                    )}
+                                            isMontgomeryProjectDox ? (
+                                              /** Montgomery: no formatted report preview from extracted text; mirrors Washington screenshot + raw pattern. */
+                                              <details
+                                                className="mt-0 w-full min-w-0 rounded border border-[#1A3055] bg-[#091428] p-2 text-xs"
+                                                data-testid="montgomery-report-extracted-text"
+                                              >
+                                                <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
+                                                  Show extracted text
+                                                </summary>
+                                                <pre
+                                                  className="mt-2 max-h-[min(50vh,480px)] w-full min-w-0 overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF] sm:max-h-[min(55vh,520px)]"
+                                                >
+                                                  {pdf.text.length > 120_000
+                                                    ? `${pdf.text.slice(0, 120_000)}\n\n[truncated]`
+                                                    : pdf.text}
+                                                </pre>
+                                              </details>
+                                            ) : (
+                                              <div className="space-y-3">
+                                                <div className="max-h-96 overflow-y-auto rounded border border-[#1A3055] bg-[#0D1E38] p-4">
+                                                  {!isMdAvolveProjectDox &&
+                                                  pdf.fileName?.includes(
+                                                    "Review Comments",
+                                                  )
+                                                    ? renderReviewComments(
+                                                        getReviewCommentsDisplayTextForPortal(
+                                                          pdf,
+                                                        ),
+                                                        isPgcEplan
+                                                          ? "pgc"
+                                                          : isWashingtonDcProjectDox
+                                                            ? "washington"
+                                                            : "generic",
+                                                        { fileName: pdf.fileName },
+                                                      )
+                                                    : renderReportContent(
+                                                        pdf.text,
+                                                      )}
+                                                </div>
+                                                {isPgcEplan &&
+                                                  pdf.fileName?.includes(
+                                                    "Review Comments",
+                                                  ) &&
+                                                  String(pdf.text ?? "").trim() ? (
+                                                  <details className="rounded border border-[#1A3055] bg-[#091428] p-2 text-xs">
+                                                    <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
+                                                      Raw extracted text (stored —
+                                                      copyable)
+                                                    </summary>
+                                                    <pre
+                                                      className="mt-2 max-h-[min(50vh,480px)] overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF]"
+                                                      data-testid="pgc-review-comments-raw-text"
+                                                    >
+                                                      {pdf.text.length > 120_000
+                                                        ? `${pdf.text.slice(0, 120_000)}\n\n[truncated]`
+                                                        : pdf.text}
+                                                    </pre>
+                                                  </details>
+                                                ) : null}
                                               </div>
-                                              {isPgcEplan &&
-                                                pdf.fileName?.includes(
-                                                  "Review Comments",
-                                                ) &&
-                                                String(pdf.text ?? "").trim() ? (
-                                                <details className="rounded border border-[#1A3055] bg-[#091428] p-2 text-xs">
-                                                  <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
-                                                    Raw extracted text (stored —
-                                                    copyable)
-                                                  </summary>
-                                                  <pre
-                                                    className="mt-2 max-h-[min(50vh,480px)] overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF]"
-                                                    data-testid="pgc-review-comments-raw-text"
-                                                  >
-                                                    {pdf.text.length > 120_000
-                                                      ? `${pdf.text.slice(0, 120_000)}\n\n[truncated]`
-                                                      : pdf.text}
-                                                  </pre>
-                                                </details>
-                                              ) : null}
-                                            </div>
+                                            )
                                           ) : (
                                             <p className="text-sm text-muted-foreground">
                                               {isMdAvolveProjectDox &&

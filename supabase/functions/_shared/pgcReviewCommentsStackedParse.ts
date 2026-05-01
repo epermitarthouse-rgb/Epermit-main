@@ -28,8 +28,11 @@ const STATUS_LINE_RE =
 const TYPE_LINE_RE =
   /^(Comment|Changemark|Library\s+Comment|Checklist\s+Item|Question)(?:\s|$)/i;
 
-const REVIEW_HEADER_RE =
+/** Exported for Montgomery `montgomery-export` text adapter (must match header-aligned parse). */
+export const PGC_REVIEW_COMMENTS_HEADER_LINE_RE =
   /REF\s*#?.*CYCLE.*REVIEWED\s*BY.*TYPE.*FILENAME.*DISCUSSION.*STATUS/i;
+
+const REVIEW_HEADER_RE = PGC_REVIEW_COMMENTS_HEADER_LINE_RE;
 
 /** Leading ref+cycle glued before English ordinal (3rd, 2nd, …). */
 const FLAT_NUMERIC_HEADER_RE =

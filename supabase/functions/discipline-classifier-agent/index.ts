@@ -88,9 +88,13 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const projectId = body.project_id as string | undefined;
+    /** When true (Classified Comments / manual refresh), classify every row for `project_id`. */
+    const reclassifyAll = body.reclassify_all === true;
+
+    const maxFetch = reclassifyAll ? 500 : 200;
     const batchLimit = typeof body.batch_limit === "number" && body.batch_limit > 0
-      ? Math.min(body.batch_limit, 200)
-      : BATCH_SIZE;
+      ? Math.min(body.batch_limit, maxFetch)
+      : (reclassifyAll ? 500 : BATCH_SIZE);
 
     let isShadowMode = false;
 
@@ -121,25 +125,63 @@ serve(async (req) => {
 
     const projectFilter = projectId ? [projectId] : projectIds;
 
+    if (reclassifyAll && !projectId) {
+      return new Response(
+        JSON.stringify({
+          code: 400,
+          message: "reclassify_all requires project_id",
+          classified_count: 0,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let parsedCommentsTotalForProject: number | null = null;
+    if (projectId) {
+      const { count: projectCommentCount } = await adminClient
+        .from("parsed_comments")
+        .select("*", { count: "exact", head: true })
+        .eq("project_id", projectId);
+      parsedCommentsTotalForProject = projectCommentCount ?? null;
+      console.log(
+        "[discipline-classifier] parsed_comments DB count for project",
+        projectId,
+        ":",
+        parsedCommentsTotalForProject ?? "unknown",
+      );
+    }
+
     /**
-     * (unclassified discipline) AND (not Approved OR raw_ref) so `raw_ref` rows with
-     * classifier-normalized `status=Approved` (portal Resolved) still get a taxonomy when discipline is null.
+     * Incremental: (discipline unclassified AND (not Approved OR raw_ref)) via one `or` group so filters AND correctly.
+     * Refresh/reclassify_all: load all rows up to batchLimit (scoped to project_id).
      */
-    const query = adminClient
+    let query = adminClient
       .from("parsed_comments")
-      .select("id, original_text, project_id, discipline, ingest_source")
-      .in("project_id", projectFilter)
-      .or("discipline.is.null,discipline.eq.General,discipline.eq.Unclassified")
-      .or("status.neq.Approved,ingest_source.eq.raw_ref")
-      .limit(batchLimit);
+      .select("id, original_text, project_id, discipline, ingest_source, status")
+      .in("project_id", projectFilter);
+
+    if (!reclassifyAll) {
+      query = query.or(
+        "and(discipline.is.null,ingest_source.eq.raw_ref)," +
+          "and(discipline.is.null,status.neq.Approved)," +
+          "and(discipline.eq.General,ingest_source.eq.raw_ref)," +
+          "and(discipline.eq.General,status.neq.Approved)," +
+          "and(discipline.eq.Unclassified,ingest_source.eq.raw_ref)," +
+          "and(discipline.eq.Unclassified,status.neq.Approved)",
+      );
+    }
+
+    query = query.order("created_at", { ascending: true }).limit(batchLimit);
 
     console.log(
-      "[DEBUG] discipline-classifier query (adminClient): (discipline unclassified) AND (status!=Approved OR raw_ref), project_id in",
-      projectFilter.length,
-      "projects, limit=",
-      batchLimit,
-      "shadow_mode=",
-      isShadowMode,
+      "[discipline-classifier] query mode=" +
+        (reclassifyAll ? "reclassify_all (all rows)" : "incremental (unclassified + status/ref gate)") +
+        " project_scope=" +
+        projectFilter.length +
+        " projects, limit=" +
+        batchLimit +
+        " shadow_mode=" +
+        isShadowMode,
     );
 
     const { data: rows, error: fetchError } = await query;
@@ -156,28 +198,39 @@ serve(async (req) => {
     console.log("[DEBUG] discipline-classifier: filtered query returned rows:", comments.length);
 
     if (comments.length === 0) {
-      const { data: allRows, error: allErr } = await adminClient
-        .from("parsed_comments")
-        .select("id, discipline, status")
-        .in("project_id", projectFilter)
-        .limit(50);
-      const allComments = allRows ?? [];
-      console.log("[DEBUG] discipline-classifier: UNFILTERED query returned:", allComments.length, "rows");
-      if (allComments.length > 0) {
-        const disciplineBreakdown: Record<string, number> = {};
-        const statusBreakdown: Record<string, number> = {};
-        for (const r of allComments as { discipline: string | null; status: string | null }[]) {
-          const d = r.discipline ?? "null";
-          const s = r.status ?? "null";
-          disciplineBreakdown[d] = (disciplineBreakdown[d] || 0) + 1;
-          statusBreakdown[s] = (statusBreakdown[s] || 0) + 1;
+      const dbgTotal = parsedCommentsTotalForProject ?? 0;
+      console.log(
+        "[discipline-classifier] no rows matched filters; parsed_comments total in project (if single project):",
+        dbgTotal,
+      );
+      if (projectId && dbgTotal > 0) {
+        const { data: sampleRows } = await adminClient
+          .from("parsed_comments")
+          .select("id, discipline, status, ingest_source")
+          .eq("project_id", projectId)
+          .limit(200);
+        if (sampleRows && sampleRows.length > 0) {
+          const disciplineBreakdown: Record<string, number> = {};
+          const statusBreakdown: Record<string, number> = {};
+          for (const r of sampleRows as { discipline: string | null; status: string | null; ingest_source?: string | null }[]) {
+            const d = r.discipline ?? "null";
+            const s = r.status ?? "null";
+            disciplineBreakdown[d] = (disciplineBreakdown[d] || 0) + 1;
+            statusBreakdown[s] = (statusBreakdown[s] || 0) + 1;
+          }
+          console.log("[discipline-classifier] sample discipline breakdown:", JSON.stringify(disciplineBreakdown));
+          console.log("[discipline-classifier] sample status breakdown:", JSON.stringify(statusBreakdown));
         }
-        console.log("[DEBUG] discipline breakdown:", JSON.stringify(disciplineBreakdown));
-        console.log("[DEBUG] status breakdown:", JSON.stringify(statusBreakdown));
       }
       return new Response(
-        JSON.stringify({ classified_count: 0, debug_total_comments: allComments.length }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          classified_count: 0,
+          rows_sent: 0,
+          parsed_comments_total: dbgTotal,
+          reclassify_all: reclassifyAll,
+          debug_total_comments: dbgTotal,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -226,131 +279,161 @@ Return a JSON object with a single key "classifications": an array of objects wi
 
 One object per comment in the same order as provided.`;
 
-    const userContent = comments.map((c, i) => `[${i}] ${c.original_text}`).join("\n\n");
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      max_tokens: 2048,
-      response_format: { type: "json_object" },
-    });
-
-    const content = response.choices?.[0]?.message?.content;
-    if (!content) {
-      return new Response(
-        JSON.stringify({ code: 500, message: "No response from model", classified_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    let data: { classifications?: { index: number; discipline: string; confidence_score?: number }[] };
-    try {
-      data = JSON.parse(content);
-    } catch {
-      return new Response(
-        JSON.stringify({ code: 500, message: "Invalid JSON from model", classified_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const classifications = Array.isArray(data.classifications) ? data.classifications : [];
+    const OPENAI_CHUNK = 45;
     let classifiedCount = 0;
     let shadowLoggedCount = 0;
+    let classificationLabelsTotal = 0;
     let otherCount = 0;
 
-    for (const c of classifications) {
-      const i = c.index;
-      if (i < 0 || i >= comments.length) continue;
+    for (let chunkStart = 0; chunkStart < comments.length; chunkStart += OPENAI_CHUNK) {
+      const chunk = comments.slice(chunkStart, chunkStart + OPENAI_CHUNK);
+      const userContent = chunk.map((c, i) => `[${i}] ${c.original_text}`).join("\n\n");
 
-      const row = comments[i];
-      const discipline = isDiscipline(c.discipline) ? c.discipline : "Other";
-      const confidenceScore = typeof c.confidence_score === "number"
-        ? Math.max(0, Math.min(1, c.confidence_score))
-        : 0.5;
+      console.log(
+        `[discipline-classifier] OpenAI chunk offset ${chunkStart}, size ${chunk.length}, total batch ${comments.length}`,
+      );
 
-      if (discipline === "Other") otherCount++;
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
+      });
 
-      // STEP 1: ALWAYS update parsed_comments with the classified discipline
-      const { error: updateError } = await adminClient
-        .from("parsed_comments")
-        .update({ discipline })
-        .eq("id", row.id);
-
-      // STEP 2: Increment count on success
-      if (!updateError) {
-        classifiedCount++;
-      } else {
-        console.warn("parsed_comments update failed for comment", row.id, updateError.message);
+      const content = response.choices?.[0]?.message?.content;
+      if (!content) {
+        return new Response(
+          JSON.stringify({
+            code: 500,
+            message: "No response from model",
+            classified_count: classifiedCount,
+            rows_sent: chunkStart,
+            parsed_comments_total: parsedCommentsTotalForProject,
+            reclassify_all: reclassifyAll,
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
 
-      // STEP 3: If shadow mode, ADDITIONALLY log to shadow_predictions
-      if (isShadowMode) {
-        const matchStatus = "match";
+      let data: { classifications?: { index: number; discipline: string; confidence_score?: number }[] };
+      try {
+        data = JSON.parse(content);
+      } catch {
+        return new Response(
+          JSON.stringify({
+            code: 500,
+            message: "Invalid JSON from model",
+            classified_count: classifiedCount,
+            rows_sent: chunkStart,
+            parsed_comments_total: parsedCommentsTotalForProject,
+            reclassify_all: reclassifyAll,
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const classifications = Array.isArray(data.classifications) ? data.classifications : [];
+      classificationLabelsTotal += classifications.length;
+
+      for (const c of classifications) {
+        const i = c.index;
+        if (i < 0 || i >= chunk.length) continue;
+
+        const row = chunk[i]!;
+        const discipline = isDiscipline(c.discipline) ? c.discipline : "Other";
+        const confidenceScore = typeof c.confidence_score === "number"
+          ? Math.max(0, Math.min(1, c.confidence_score))
+          : 0.5;
+
+        if (discipline === "Other") otherCount++;
+
+        // STEP 1: ALWAYS update parsed_comments with the classified discipline
+        const { error: updateError } = await adminClient
+          .from("parsed_comments")
+          .update({ discipline })
+          .eq("id", row.id);
+
+        // STEP 2: Increment count on success
+        if (!updateError) {
+          classifiedCount++;
+        } else {
+          console.warn("parsed_comments update failed for comment", row.id, updateError.message);
+        }
+
+        // STEP 3: If shadow mode, ADDITIONALLY log to shadow_predictions
+        if (isShadowMode) {
+          const matchStatus = "match";
+          try {
+            const { error: shadowErr } = await adminClient
+              .from("shadow_predictions")
+              .insert({
+                project_id: row.project_id,
+                comment_id: row.id,
+                agent_name: "Discipline Classifier",
+                prediction_data: {
+                  ai_discipline: discipline,
+                  assigned_discipline: discipline,
+                },
+                confidence_score: confidenceScore,
+                match_status: matchStatus,
+              });
+            if (shadowErr) {
+              console.warn("shadow_predictions insert failed for comment", row.id, shadowErr.message);
+            } else {
+              shadowLoggedCount++;
+            }
+          } catch (err) {
+            console.warn("shadow_predictions insert exception for comment", row.id, err);
+          }
+        }
+
+        // STEP 4: Audit trail — record whether this was live or shadow
         try {
-          const { error: shadowErr } = await adminClient
-            .from("shadow_predictions")
-            .insert({
-              project_id: row.project_id,
-              comment_id: row.id,
-              agent_name: "Discipline Classifier",
-              prediction_data: {
-                ai_discipline: discipline,
-                assigned_discipline: discipline,
-              },
-              confidence_score: confidenceScore,
-              match_status: matchStatus,
-            });
-          if (shadowErr) {
-            console.warn("shadow_predictions insert failed for comment", row.id, shadowErr.message);
-          } else {
-            shadowLoggedCount++;
+          const routingDecision = isShadowMode ? "shadow_logged" : "live_update";
+          const auditPayload: Record<string, unknown> = {
+            project_id: row.project_id,
+            actor_id: "Discipline Classifier",
+            action_type: "classification",
+            routing_decision: routingDecision,
+            input_hash: row.id,
+          };
+          if (isShadowMode) {
+            auditPayload.routing_decision = "shadow_match";
+          }
+          const { error: auditErr } = await adminClient
+            .from("audit_trail")
+            .insert(auditPayload);
+          if (auditErr) {
+            console.warn("audit_trail insert failed for comment", row.id, auditErr.message);
           }
         } catch (err) {
-          console.warn("shadow_predictions insert exception for comment", row.id, err);
+          console.warn("audit_trail insert exception for comment", row.id, err);
         }
-      }
-
-      // STEP 4: Audit trail — record whether this was live or shadow
-      try {
-        const routingDecision = isShadowMode ? "shadow_logged" : "live_update";
-        const auditPayload: Record<string, unknown> = {
-          project_id: row.project_id,
-          actor_id: "Discipline Classifier",
-          action_type: "classification",
-          routing_decision: routingDecision,
-          input_hash: row.id,
-        };
-        if (isShadowMode) {
-          auditPayload.routing_decision = "shadow_match";
-        }
-        const { error: auditErr } = await adminClient
-          .from("audit_trail")
-          .insert(auditPayload);
-        if (auditErr) {
-          console.warn("audit_trail insert failed for comment", row.id, auditErr.message);
-        }
-      } catch (err) {
-        console.warn("audit_trail insert exception for comment", row.id, err);
       }
     }
 
-    if (classifications.length > 0 && otherCount / classifications.length > 0.5) {
+    if (classificationLabelsTotal > 0 && otherCount / classificationLabelsTotal > 0.5) {
       console.log("[WARN] Over 50% classified as Other — prompt may need tuning");
     }
 
     const mode = isShadowMode ? "shadow" : "live";
-    console.log(`discipline-classifier [${mode}]: classified=${classifiedCount}, shadow_logged=${shadowLoggedCount}`);
+    console.log(
+      `discipline-classifier [${mode}]: rows_sent=${comments.length}, DB_total=${parsedCommentsTotalForProject}, classified_updates=${classifiedCount}, shadow_logged=${shadowLoggedCount}, reclassify_all=${reclassifyAll}`,
+    );
 
     return new Response(
       JSON.stringify({
         classified_count: classifiedCount,
+        rows_sent: comments.length,
+        parsed_comments_total: parsedCommentsTotalForProject ?? comments.length,
+        reclassify_all: reclassifyAll,
         shadow_logged_count: shadowLoggedCount,
         mode,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Error in discipline-classifier-agent:", error);

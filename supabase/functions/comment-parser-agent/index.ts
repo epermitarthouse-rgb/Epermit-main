@@ -2,10 +2,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 import {
+  extractMontgomeryGridRefOrder,
+  parseMontgomeryGridRowsDeterministic,
+  preprocessMontgomeryReviewCommentsExtractText,
+} from "../_shared/montgomeryReviewCommentsExtract.ts";
+import {
   extractRefSpanRows,
   parsePgcReviewComments,
   type PgcReviewCommentsRow,
 } from "../_shared/pgcReviewCommentsStackedParse.ts";
+import {
+  mapMontgomeryStructuredRowsToPgcDeterministic,
+  type MontgomeryPortalStructuredExcelRow,
+} from "../_shared/mapMontgomeryStructuredRowsToDeterministic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +36,9 @@ interface PortalPdf {
   pages?: number;
   error?: string;
   info?: { source?: string };
+  /** Montgomery Phase A: Excel grid rows from scraper (`excel` source). */
+  structuredRows?: MontgomeryPortalStructuredExcelRow[];
+  structuredRowsSource?: string;
 }
 
 /** Keep aligned with src/lib/pgcReviewCommentsText.ts */
@@ -88,21 +100,26 @@ function tryPgcStackedRowsRawThenNormalized(raw: string): PgcReviewCommentsRow[]
   return null;
 }
 
+/** Keep ref/cycle/type/etc. on one header line so `parsePgcRawRefDisplayText` line match is stable. */
+function pgcPersistSingleLineCell(v: unknown): string {
+  return String(v ?? "").replace(/\r\n|\r|\n/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function formatPgcDeterministicPersistedComment(
   row: PgcReviewCommentsRow,
   sourceReport: string,
 ): string {
   return [
-    `ref: ${row.ref}`,
-    `cycle: ${row.cycle}`,
-    `reviewed_by: ${row.reviewedBy}`,
-    `type: ${row.type}`,
-    `filename: ${row.filename}`,
+    `ref: ${pgcPersistSingleLineCell(row.ref)}`,
+    `cycle: ${pgcPersistSingleLineCell(row.cycle)}`,
+    `reviewed_by: ${pgcPersistSingleLineCell(row.reviewedBy)}`,
+    `type: ${pgcPersistSingleLineCell(row.type)}`,
+    `filename: ${pgcPersistSingleLineCell(row.filename)}`,
     `full_discussion_text:`,
     row.discussion,
-    `status: ${row.status}`,
-    `source_report: ${sourceReport}`,
-    `date_time: ${row.dateTime}`,
+    `status: ${pgcPersistSingleLineCell(row.status)}`,
+    `source_report: ${pgcPersistSingleLineCell(sourceReport)}`,
+    `date_time: ${pgcPersistSingleLineCell(row.dateTime)}`,
     "",
     "--- original_source_block ---",
     row.originalTextBlock,
@@ -164,9 +181,13 @@ function pgcRowsAreHollowIndexOnlyBlocks(rows: PgcReviewCommentsRow[] | null): b
 function pickDeterministicPgcRows(
   rawText: string,
   tryPgcRows: PgcReviewCommentsRow[] | null,
+  options?: { extractedRefCountOverride?: number },
 ): PgcReviewCommentsRow[] | null {
   const span = extractRefSpanRows(rawText);
-  const nExtracted = extractOrderedRefsFromText(rawText).length;
+  const nExtracted =
+    typeof options?.extractedRefCountOverride === "number"
+      ? options.extractedRefCountOverride
+      : extractOrderedRefsFromText(rawText).length;
   const nSpan = span?.length ?? 0;
   const nTry = tryPgcRows?.length ?? 0;
   if (nSpan === 0 && nTry === 0) return null;
@@ -939,13 +960,108 @@ serve(async (req) => {
 
       const deterministicPgc = shouldAttemptDeterministicStackedParse(pdf);
       if (deterministicPgc) {
-        const stackedRows = pickDeterministicPgcRows(
-          rawPdfText,
-          tryPgcStackedRowsRawThenNormalized(rawPdfText),
-        );
+        const isMontgomeryExport = String(pdf.info?.source ?? "") === "montgomery-export";
+
+        const hasStructuredArray =
+          isMontgomeryExport &&
+          Array.isArray(pdf.structuredRows) &&
+          pdf.structuredRows.length > 0;
+        const mappedFromStructured = hasStructuredArray
+          ? mapMontgomeryStructuredRowsToPgcDeterministic(pdf.structuredRows!)
+          : [];
+        const useStructuredRowsPath = mappedFromStructured.length > 0;
+
+        if (hasStructuredArray) {
+          const sr = pdf.structuredRows!;
+          console.log(
+            "[comment-parser] montgomery structured rows " +
+              JSON.stringify({
+                path: "montgomery_structured_rows",
+                structured_rows_count: sr.length,
+                mapped_row_count: mappedFromStructured.length,
+                first_3_refs: sr.slice(0, 3).map((r) => String(r?.ref ?? "").trim()),
+                first_row_preview: sr[0] ?? null,
+                structured_rows_source: pdf.structuredRowsSource ?? null,
+              }),
+          );
+        }
+
+        let stackedRows: PgcReviewCommentsRow[] | null = null;
+        let usedMontgomeryStructuredRows = false;
+        let usedMontgomeryDeterministicGrid = false;
+
+        if (useStructuredRowsPath) {
+          stackedRows = mappedFromStructured;
+          usedMontgomeryStructuredRows = true;
+        } else {
+          const textForDeterministic = isMontgomeryExport
+            ? preprocessMontgomeryReviewCommentsExtractText(rawPdfText)
+            : rawPdfText;
+          const montgomeryGridRefOrder = isMontgomeryExport
+            ? extractMontgomeryGridRefOrder(textForDeterministic)
+            : [];
+
+          const tryPgcDeterministicRows = tryPgcStackedRowsRawThenNormalized(textForDeterministic);
+          const montgomeryDeterministicRows = isMontgomeryExport
+            ? parseMontgomeryGridRowsDeterministic(textForDeterministic)
+            : null;
+
+          if (isMontgomeryExport) {
+            console.log(
+              "[comment-parser] montgomery grid diagnostics " +
+                JSON.stringify({
+                  grid_ref_order_count: montgomeryGridRefOrder.length,
+                  adapted_preview_2000: textForDeterministic.slice(0, 2000),
+                  try_pgc_deterministic_row_count: tryPgcDeterministicRows?.length ?? 0,
+                  montgomery_deterministic_row_count: montgomeryDeterministicRows?.length ?? 0,
+                  refs_try_pgc_first_20:
+                    tryPgcDeterministicRows?.slice(0, 20).map((r) =>
+                      String(r.ref ?? "").trim()
+                    ) ?? [],
+                  refs_montgomery_first_20:
+                    montgomeryDeterministicRows?.slice(0, 20).map((r) =>
+                      String(r.ref ?? "").trim()
+                    ) ?? [],
+                }),
+            );
+          }
+
+          stackedRows =
+            isMontgomeryExport &&
+              montgomeryDeterministicRows &&
+              montgomeryDeterministicRows.length > 0
+              ? montgomeryDeterministicRows
+              : pickDeterministicPgcRows(
+                  textForDeterministic,
+                  tryPgcDeterministicRows,
+                  isMontgomeryExport &&
+                    montgomeryGridRefOrder.length > 0 &&
+                    !(montgomeryDeterministicRows?.length)
+                    ? { extractedRefCountOverride: montgomeryGridRefOrder.length }
+                    : undefined,
+                );
+
+          usedMontgomeryDeterministicGrid = Boolean(
+            isMontgomeryExport &&
+              stackedRows &&
+              stackedRows === montgomeryDeterministicRows &&
+              stackedRows.length > 0,
+          );
+        }
         if (stackedRows && stackedRows.length > 0) {
           everHadSplitBlocks = true;
           everHadFilteredBlocks = true;
+          if (usedMontgomeryDeterministicGrid) {
+            console.log(
+              "[comment-parser] montgomery deterministic refs before insert " +
+                JSON.stringify(stackedRows.map((r) => String(r.ref ?? "").trim())),
+            );
+          } else if (usedMontgomeryStructuredRows) {
+            console.log(
+              "[comment-parser] montgomery structured rows refs before insert " +
+                JSON.stringify(stackedRows.map((r) => String(r.ref ?? "").trim())),
+            );
+          }
           console.log(
             "[DEBUG] comment-parser: PGC ePlan deterministic stacked rows:",
             stackedRows.length,
@@ -1009,11 +1125,18 @@ serve(async (req) => {
 
           if (capturePipelineEvidence && pipelineEvidence === null) {
             pipelineEvidence = {
-              path: "pgc_eplan_deterministic_stacked",
+              path: usedMontgomeryStructuredRows
+                ? "montgomery_structured_rows"
+                : usedMontgomeryDeterministicGrid
+                  ? "montgomery_deterministic_grid"
+                  : "pgc_eplan_deterministic_stacked",
               A_source_report: {
                 fileName: pdf.fileName ?? "",
                 text_length_raw: rawPdfText.length,
                 stacked_row_count: stackedRows.length,
+                montgomery_structured_rows: usedMontgomeryStructuredRows,
+                structured_rows_count: hasStructuredArray ? (pdf.structuredRows?.length ?? 0) : 0,
+                montgomery_deterministic: usedMontgomeryDeterministicGrid,
               },
               B_persistence: {
                 inserted: commentCountThisPdf,
@@ -1021,7 +1144,11 @@ serve(async (req) => {
                 skipped_empty: roundSkippedEmpty,
                 insert_failures: roundInsertFailures,
               },
-              F_drop_analysis: "pgc_eplan_deterministic (no LLM split/filter/classify)",
+              F_drop_analysis: usedMontgomeryStructuredRows
+                ? "montgomery_structured_rows (portal_data Excel structuredRows)"
+                : usedMontgomeryDeterministicGrid
+                  ? "montgomery_deterministic_grid (Montgomery-export grid parser)"
+                  : "pgc_eplan_deterministic (no LLM split/filter/classify)",
             };
             console.log(
               "[pipeline-evidence]",
