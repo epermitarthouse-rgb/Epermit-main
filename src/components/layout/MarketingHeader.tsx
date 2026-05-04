@@ -23,12 +23,15 @@ export function MarketingHeader() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 lg:px-8">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
-            <span className="text-lg font-bold text-primary-foreground">I</span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm shadow-primary/20">
+            <span className="font-tight text-lg font-bold text-primary-foreground">P</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight text-foreground">
-              Insight<span className="text-primary">|</span>DesignCheck
+          <div className="flex flex-col leading-tight">
+            <span className="font-display text-lg font-semibold tracking-tight text-foreground">
+              PermitPilot
+            </span>
+            <span className="text-[11px] font-tight text-muted-foreground">
+              A Commun-ET product
             </span>
           </div>
         </Link>

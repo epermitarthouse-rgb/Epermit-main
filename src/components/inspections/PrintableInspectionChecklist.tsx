@@ -533,7 +533,7 @@ export function PrintableInspectionChecklist({
       case 'signed': return 'bg-green-600';
       case 'completed': return 'bg-blue-600';
       case 'in_progress': return 'bg-yellow-600';
-      default: return 'bg-[#6B9AC4]';
+      default: return 'bg-primary';
     }
   };
 
@@ -1386,10 +1386,10 @@ export function PrintableInspectionChecklist({
                 <span className="w-4 h-4 border-2 border-red-600 bg-red-100 rounded" /> Fail
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-4 h-4 border-2 border-[#6B9AC4] bg-[#6B9AC4]/10 rounded" /> N/A
+                <span className="w-4 h-4 border-2 border-primary bg-primary/10 rounded" /> N/A
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-4 h-4 border-2 border-[#1A3055] rounded" /> Pending
+                <span className="w-4 h-4 border-2 border-navy rounded" /> Pending
               </span>
             </div>
             <div className="text-muted-foreground">
@@ -1693,7 +1693,7 @@ export function PrintableInspectionChecklist({
                         onChange={e => setAttachPDF(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#1A3055] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                      <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success"></div>
                     </label>
                   </div>
                   

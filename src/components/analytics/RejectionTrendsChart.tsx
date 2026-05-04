@@ -1,33 +1,37 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { RejectionTrend } from '@/types/analytics';
+import { cn } from '@/lib/utils';
+import { DATA_INTELLIGENCE_PANEL } from '@/components/layout/editorialPageChrome';
 
 interface RejectionTrendsChartProps {
   trends: RejectionTrend[];
 }
 
 const COLORS = [
-  'hsl(0, 84%, 60%)',      // Red
-  'hsl(38, 92%, 50%)',     // Orange/Amber
-  'hsl(221, 83%, 53%)',    // Blue
-  'hsl(262, 83%, 58%)',    // Purple
-  'hsl(142, 71%, 45%)',    // Green
-  'hsl(174, 84%, 32%)',    // Teal
-  'hsl(339, 80%, 50%)',    // Pink
-  'hsl(25, 95%, 53%)',     // Orange
+  'hsl(0, 72%, 55%)',
+  'hsl(var(--accent-gold))',
+  'hsl(var(--accent-teal))',
+  'hsl(262, 50%, 65%)',
+  'hsl(142, 55%, 45%)',
+  'hsl(174, 60%, 38%)',
+  'hsl(339, 70%, 55%)',
+  'hsl(32, 72%, 52%)',
 ];
+
+const panel = cn(DATA_INTELLIGENCE_PANEL);
 
 export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
   if (trends.length === 0) {
     return (
-      <Card>
+      <Card className={panel}>
         <CardHeader>
-          <CardTitle>Rejection Reason Trends</CardTitle>
-          <CardDescription>Common reasons for permit corrections</CardDescription>
+          <CardTitle className="text-ink-primary-dark">Rejection Reason Trends</CardTitle>
+          <CardDescription className="text-ink-secondary-dark">Common reasons for permit corrections</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[300px] flex items-center justify-center">
-            <p className="text-muted-foreground text-center">
+          <div className="flex h-[300px] items-center justify-center">
+            <p className="text-center text-ink-tertiary-dark">
               No rejection data available yet.<br />
               Rejection reasons will appear here when projects receive corrections.
             </p>
@@ -44,10 +48,12 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
   }));
 
   return (
-    <Card>
+    <Card className={panel}>
       <CardHeader>
-        <CardTitle>Rejection Reason Trends</CardTitle>
-        <CardDescription>Most common reasons for permit corrections and resubmissions</CardDescription>
+        <CardTitle className="text-ink-primary-dark">Rejection Reason Trends</CardTitle>
+        <CardDescription className="text-ink-secondary-dark">
+          Most common reasons for permit corrections and resubmissions
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
@@ -70,9 +76,10 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
               </Pie>
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(var(--background))', 
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'hsl(219 42% 16%)', 
+                  border: '1px solid hsl(var(--border-obsidian-strong) / 0.55)',
                   borderRadius: '8px',
+                  color: 'hsl(var(--ink-primary-dark))',
                 }}
                 formatter={(value: number, name: string) => [`${value} occurrences`, name]}
               />
@@ -80,7 +87,7 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
                 layout="vertical" 
                 align="right" 
                 verticalAlign="middle"
-                formatter={(value) => <span className="text-sm">{value}</span>}
+                formatter={(value) => <span className="text-sm text-ink-secondary-dark">{value}</span>}
               />
             </PieChart>
           </ResponsiveContainer>

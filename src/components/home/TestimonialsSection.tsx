@@ -4,7 +4,7 @@ import { staggerContainer, staggerItem } from "@/components/animations/variants"
 
 const testimonials = [
   {
-    quote: "Insight|DesignCheck cut our permit review time in half. We used to spend days checking code compliance manually—now AI catches issues before we even submit.",
+    quote: "PermitPilot cut our permit review time in half. We used to spend days checking code compliance manually—now AI catches issues before we even submit.",
     name: "Sarah Chen",
     role: "Principal Architect",
     company: "Chen & Associates",
@@ -44,7 +44,7 @@ const testimonials = [
     rating: 5,
   },
   {
-    quote: "We integrated Insight|DesignCheck into our workflow last year. It's become as essential as our CAD software. Couldn't imagine going back.",
+    quote: "We integrated PermitPilot into our workflow last year. It's become as essential as our CAD software. Couldn't imagine going back.",
     name: "Robert Kim",
     role: "Owner",
     company: "Kim Builders LLC",

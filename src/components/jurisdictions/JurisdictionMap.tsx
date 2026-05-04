@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, MapPin, Building2, TrendingUp, X, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { US_STATES } from '@/types/jurisdiction';
+import { EDITORIAL_FORM_CARD } from '@/components/layout/editorialPageChrome';
+import { cn } from '@/lib/utils';
 
 interface JurisdictionMapData {
   id: string;
@@ -220,18 +222,18 @@ export function JurisdictionMap({ mapboxToken }: JurisdictionMapProps) {
   }, [jurisdictions, mapReady]);
 
   const getVolumeColor = (units: number | null) => {
-    if (!units) return 'bg-muted text-muted-foreground';
-    if (units >= 10000) return 'bg-emerald-500/10 text-emerald-400';
-    if (units >= 5000) return 'bg-blue-500/10 text-blue-400';
-    if (units >= 1000) return 'bg-amber-500/10 text-amber-400';
-    return 'bg-[#6B9AC4]/10 text-[#6B9AC4]';
+    if (!units) return 'border-cream-sunken bg-cream-raised/80 text-ink-secondary-light';
+    if (units >= 10000) return 'bg-teal/12 text-teal border-teal/35';
+    if (units >= 5000) return 'bg-teal/10 text-teal-soft border-teal/28';
+    if (units >= 1000) return 'bg-gold-soft/85 text-gold-deep border-gold/35';
+    return 'bg-gold/10 text-gold-deep border-gold/28';
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-4">
         <Select value={selectedState} onValueChange={setSelectedState}>
-          <SelectTrigger className="w-full sm:w-64" data-testid="select-map-state">
+          <SelectTrigger className="w-full sm:w-64 border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream" data-testid="select-map-state">
             <SelectValue placeholder="Filter by state (East Coast default)" />
           </SelectTrigger>
           <SelectContent>
@@ -247,35 +249,35 @@ export function JurisdictionMap({ mapboxToken }: JurisdictionMapProps) {
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-emerald-500" />
-            <span className="text-muted-foreground">High Volume</span>
+            <span className="text-ink-secondary-light">High Volume</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span className="text-muted-foreground">Standard</span>
+            <span className="text-ink-secondary-light">Standard</span>
           </div>
         </div>
 
         {loading && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex items-center gap-2 text-ink-secondary-light">
+            <Loader2 className="h-4 w-4 animate-spin text-teal" />
             <span>Loading jurisdictions...</span>
           </div>
         )}
       </div>
 
-      <div className="relative h-[500px] rounded-lg overflow-hidden border shadow-sm">
+      <div className="relative h-[500px] rounded-xl overflow-hidden border border-cream-sunken shadow-cream bg-cream-raised">
         <div ref={mapContainer} className="absolute inset-0" />
         
         {selectedJurisdiction && (
-          <Card className="absolute top-4 left-4 w-80 shadow-lg z-10">
+          <Card className={cn(EDITORIAL_FORM_CARD, "absolute top-4 left-4 w-80 z-10")}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
+                  <CardTitle className="text-base flex items-center gap-2 text-ink-primary-light">
+                    <Building2 className="h-4 w-4 text-teal shrink-0" />
                     {selectedJurisdiction.name}
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-ink-secondary-light">
                     {selectedJurisdiction.city && `${selectedJurisdiction.city}, `}
                     {selectedJurisdiction.state}
                   </CardDescription>
@@ -294,54 +296,54 @@ export function JurisdictionMap({ mapboxToken }: JurisdictionMapProps) {
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {selectedJurisdiction.is_high_volume && (
-                  <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                  <Badge className="border border-teal/30 bg-teal/12 text-teal">
                     <TrendingUp className="h-3 w-3 mr-1" />
                     High Volume
                   </Badge>
                 )}
-                <Badge className={getVolumeColor(selectedJurisdiction.total_permits_2024 ?? selectedJurisdiction.residential_units_2024)}>
+                <Badge variant="outline" className={getVolumeColor(selectedJurisdiction.total_permits_2024 ?? selectedJurisdiction.residential_units_2024)}>
                   {(selectedJurisdiction.total_permits_2024 ?? selectedJurisdiction.residential_units_2024)?.toLocaleString() ?? 'N/A'} total permits
                 </Badge>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Residential:</span>
-                  <p className="font-medium">{selectedJurisdiction.residential_units_2024?.toLocaleString() || 'N/A'}</p>
+                  <span className="text-ink-secondary-light">Residential:</span>
+                  <p className="font-medium text-ink-primary-light">{selectedJurisdiction.residential_units_2024?.toLocaleString() || 'N/A'}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Commercial:</span>
-                  <p className="font-medium">{selectedJurisdiction.commercial_permits_2024?.toLocaleString() || 'N/A'}</p>
+                  <span className="text-ink-secondary-light">Commercial:</span>
+                  <p className="font-medium text-ink-primary-light">{selectedJurisdiction.commercial_permits_2024?.toLocaleString() || 'N/A'}</p>
                 </div>
                 {selectedJurisdiction.base_permit_fee != null && (
                   <div>
-                    <span className="text-muted-foreground">Base Fee:</span>
-                    <p className="font-medium">${selectedJurisdiction.base_permit_fee.toLocaleString()}</p>
+                    <span className="text-ink-secondary-light">Base Fee:</span>
+                    <p className="font-medium text-ink-primary-light">${selectedJurisdiction.base_permit_fee.toLocaleString()}</p>
                   </div>
                 )}
                 {(selectedJurisdiction.avg_review_days_actual || selectedJurisdiction.plan_review_sla_days) != null && (
                   <div>
-                    <span className="text-muted-foreground">Avg Review:</span>
-                    <p className="font-medium">
+                    <span className="text-ink-secondary-light">Avg Review:</span>
+                    <p className="font-medium text-ink-primary-light">
                       {selectedJurisdiction.avg_review_days_actual || selectedJurisdiction.plan_review_sla_days} days
                       {selectedJurisdiction.avg_review_days_actual && selectedJurisdiction.plan_review_sla_days && selectedJurisdiction.avg_review_days_actual !== selectedJurisdiction.plan_review_sla_days && (
-                        <span className="text-xs text-muted-foreground ml-1">(SLA: {selectedJurisdiction.plan_review_sla_days}d)</span>
+                        <span className="text-xs text-ink-tertiary-light ml-1">(SLA: {selectedJurisdiction.plan_review_sla_days}d)</span>
                       )}
                     </p>
                   </div>
                 )}
                 {selectedJurisdiction.avg_issuance_days_actual != null && (
                   <div>
-                    <span className="text-muted-foreground">Avg Issuance:</span>
-                    <p className="font-medium">{selectedJurisdiction.avg_issuance_days_actual} days</p>
+                    <span className="text-ink-secondary-light">Avg Issuance:</span>
+                    <p className="font-medium text-ink-primary-light">{selectedJurisdiction.avg_issuance_days_actual} days</p>
                   </div>
                 )}
               </div>
 
               <div className="flex gap-2">
-                <Button 
-                  size="sm" 
-                  variant="outline"
+                <Button
+                  size="sm"
+                  variant="outlineGold"
                   className="flex-1"
                   onClick={() => window.open(`/jurisdictions/compare?add=${selectedJurisdiction.id}`, '_blank')}
                   data-testid="button-add-comparison"
@@ -350,8 +352,9 @@ export function JurisdictionMap({ mapboxToken }: JurisdictionMapProps) {
                   Compare
                 </Button>
                 {selectedJurisdiction.permit_portal_url && (
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
+                    variant="gold"
                     className="flex-1"
                     onClick={() => window.open(selectedJurisdiction.permit_portal_url!, '_blank', 'noopener,noreferrer')}
                     data-testid="button-view-portal"
@@ -365,23 +368,25 @@ export function JurisdictionMap({ mapboxToken }: JurisdictionMapProps) {
           </Card>
         )}
 
-        <div className="absolute bottom-4 right-4 bg-background/95 backdrop-blur rounded-lg px-4 py-2 shadow-lg border">
-          <div className="flex items-center gap-4 text-sm">
+        <div className="absolute bottom-4 right-4 rounded-xl border border-cream-sunken bg-cream-raised/95 backdrop-blur-sm px-4 py-2 shadow-cream">
+          <div className="flex items-center gap-4 text-sm text-ink-primary-light">
             <div>
-              <span className="text-muted-foreground">Showing:</span>
+              <span className="text-ink-secondary-light">Showing:</span>
               <span className="font-medium ml-1">{jurisdictions.length} jurisdictions</span>
             </div>
             {selectedState === 'all' && (
-              <Badge variant="outline">East Coast</Badge>
+              <Badge variant="outline" className="border-gold/30 bg-gold/10 text-gold-deep">
+                East Coast
+              </Badge>
             )}
           </div>
         </div>
       </div>
 
-      <Card>
+      <Card className={cn(EDITORIAL_FORM_CARD)}>
         <CardHeader>
-          <CardTitle className="text-lg">Top Permit Volume Jurisdictions</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg text-ink-primary-light">Top Permit Volume Jurisdictions</CardTitle>
+          <CardDescription className="text-ink-secondary-light">
             {selectedState && selectedState !== 'all'
               ? `Highest permit activity in ${US_STATES.find(s => s.code === selectedState)?.name}`
               : 'Highest permit activity across East Coast states'}
@@ -393,15 +398,18 @@ export function JurisdictionMap({ mapboxToken }: JurisdictionMapProps) {
               <button
                 key={jurisdiction.id}
                 onClick={() => setSelectedJurisdiction(jurisdiction)}
-                className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors text-left"
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-xl border transition-colors text-left",
+                  "border-cream-sunken bg-cream hover:bg-gold-soft/40 hover:border-gold/25",
+                )}
                 data-testid={`button-jurisdiction-${jurisdiction.id}`}
               >
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gold/18 text-gold-deep font-semibold text-sm border border-gold/25">
                   {index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{jurisdiction.name}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="font-medium truncate text-ink-primary-light">{jurisdiction.name}</p>
+                  <p className="text-xs text-ink-secondary-light">
                     {(jurisdiction.total_permits_2024 ?? jurisdiction.residential_units_2024)?.toLocaleString() ?? '—'} permits • {jurisdiction.state}
                   </p>
                 </div>

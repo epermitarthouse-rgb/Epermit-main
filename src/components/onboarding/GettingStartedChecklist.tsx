@@ -54,9 +54,9 @@ export function GettingStartedChecklist({
           variant="outline"
           size="sm"
           onClick={showChecklist}
-          className="gap-2"
+          className="gap-2 rounded-lg border-gold/45 bg-cream text-gold-deep transition-colors hover:bg-gold hover:text-cream"
         >
-          <Sparkles className="h-4 w-4 text-accent" />
+          <Sparkles className="h-4 w-4 text-teal" />
           Show Getting Started ({completedCount}/{totalCount})
         </Button>
       </motion.div>
@@ -73,26 +73,30 @@ export function GettingStartedChecklist({
       animate={{ opacity: 1, y: 0 }}
       className={className}
     >
-      <Card className={cn(
-        "border-accent/30 bg-gradient-to-br from-accent/5 to-transparent",
-        isComplete && "border-emerald-500/30 from-emerald-500/5"
-      )}>
+      <Card
+        className={cn(
+          "rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream transition-[box-shadow,border-color] dark:bg-cream-raised dark:text-ink-primary-light",
+          isComplete
+            ? "border-emerald-500/35 shadow-[0_8px_28px_-8px_hsl(142_71%_45%/0.1)] hover:border-emerald-500/45"
+            : "border-teal/18 shadow-[0_10px_32px_-8px_hsl(var(--accent-teal)/0.08)] hover:border-gold/25",
+        )}
+      >
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2">
               {isComplete ? (
                 <PartyPopper className="h-5 w-5 text-emerald-500" />
               ) : (
-                <Sparkles className="h-5 w-5 text-accent" />
+                <Sparkles className="h-5 w-5 text-teal" />
               )}
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg !font-normal font-serif tracking-tight !text-ink-primary-light">
                 {isComplete ? "You're all set!" : "Getting Started"}
               </CardTitle>
               <Badge 
                 variant="secondary" 
                 className={cn(
-                  "ml-2",
-                  isComplete && "bg-emerald-500/10 text-emerald-600"
+                  "ml-2 border border-cream-sunken bg-cream-sunken/50 text-ink-secondary-light",
+                  isComplete && "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
                 )}
               >
                 {completedCount}/{totalCount}
@@ -103,7 +107,7 @@ export function GettingStartedChecklist({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-7 w-7 text-ink-tertiary-light hover:bg-cream-sunken/50 hover:text-ink-primary-light dark:hover:bg-cream-sunken/40"
                   onClick={() => setExpanded(!expanded)}
                 >
                   {expanded ? (
@@ -116,7 +120,7 @@ export function GettingStartedChecklist({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-7 w-7 text-ink-tertiary-light hover:bg-cream-sunken/50 hover:text-ink-primary-light dark:hover:bg-cream-sunken/40"
                 onClick={dismissChecklist}
               >
                 <X className="h-4 w-4" />
@@ -126,11 +130,11 @@ export function GettingStartedChecklist({
           
           {/* Progress bar */}
           <div className="mt-3">
-            <Progress 
-              value={progress} 
+            <Progress
+              value={progress}
               className={cn(
-                "h-2",
-                isComplete && "[&>div]:bg-emerald-500"
+                "h-2 rounded-full border border-cream-sunken/60 bg-cream-sunken/45",
+                isComplete ? "[&>div]:!bg-emerald-500" : "[&>div]:!bg-gold",
               )}
             />
           </div>
@@ -147,7 +151,7 @@ export function GettingStartedChecklist({
               <CardContent className="pt-0">
                 {isComplete ? (
                   <div className="text-center py-4">
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="mb-4 text-sm text-ink-secondary-light">
                       Great job! You've completed all the getting started steps.
                     </p>
                     <div className="flex items-center justify-center gap-2">
@@ -155,7 +159,7 @@ export function GettingStartedChecklist({
                         variant="outline"
                         size="sm"
                         onClick={resetProgress}
-                        className="gap-2"
+                        className="gap-2 rounded-lg border-gold/45 text-gold-deep transition-colors hover:border-gold hover:bg-gold hover:text-cream"
                       >
                         <RotateCcw className="h-3 w-3" />
                         Reset Progress
@@ -203,10 +207,10 @@ function ChecklistItemRow({ item, index, onComplete }: ChecklistItemRowProps) {
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
       className={cn(
-        "flex items-start gap-3 p-3 rounded-lg transition-colors",
-        item.completed 
-          ? "bg-muted/50" 
-          : "bg-background hover:bg-muted/30"
+        "flex items-start gap-3 rounded-lg border border-cream-sunken/55 p-3 transition-colors",
+        item.completed
+          ? "border-teal/20 bg-teal-soft/45"
+          : "border-transparent bg-cream hover:border-cream-sunken hover:bg-cream-sunken/35",
       )}
     >
       <button
@@ -217,18 +221,18 @@ function ChecklistItemRow({ item, index, onComplete }: ChecklistItemRowProps) {
         {item.completed ? (
           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
         ) : (
-          <Circle className="h-5 w-5 text-muted-foreground hover:text-accent transition-colors" />
+          <Circle className="h-5 w-5 text-teal/70 transition-colors hover:text-teal" />
         )}
       </button>
       
       <div className="flex-1 min-w-0">
         <p className={cn(
-          "text-sm font-medium",
-          item.completed && "line-through text-muted-foreground"
+          "text-sm font-medium text-ink-primary-light",
+          item.completed && "text-ink-tertiary-light line-through"
         )}>
           {item.title}
         </p>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="mt-0.5 text-xs text-ink-secondary-light">
           {item.description}
         </p>
       </div>
@@ -238,7 +242,7 @@ function ChecklistItemRow({ item, index, onComplete }: ChecklistItemRowProps) {
           asChild
           variant="ghost"
           size="sm"
-          className="flex-shrink-0 gap-1 text-accent hover:text-accent"
+          className="flex-shrink-0 gap-1 text-gold-deep hover:bg-cream-sunken/40 hover:text-gold"
           onClick={() => onComplete(item.id)}
         >
           <Link to={item.route}>

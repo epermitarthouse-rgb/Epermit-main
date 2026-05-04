@@ -223,7 +223,7 @@ export function NotificationBell() {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative p-2 rounded-md text-ink-secondary-light hover:text-ink-primary-light hover:bg-cream-raised dark:text-ink-secondary-dark dark:hover:bg-obsidian-raised dark:hover:text-ink-primary-dark">
           <Bell className="h-5 w-5" />
           {totalAlerts > 0 && (
             <Badge

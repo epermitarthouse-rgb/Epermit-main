@@ -84,7 +84,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
         <div className="bg-primary/5 px-6 py-4 border-b">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-foreground">Welcome to Insight|DesignCheck</h2>
+              <h2 className="text-xl font-semibold text-foreground">Welcome to PermitPilot</h2>
               <p className="text-sm text-muted-foreground">Let's get you set up in just 3 steps</p>
             </div>
             <span className="text-sm font-medium text-primary">Step {currentStep} of {STEPS.length}</span>

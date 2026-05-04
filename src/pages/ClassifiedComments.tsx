@@ -7,7 +7,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { ArrowLeft, Database, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Database, Layers, Loader2, RefreshCw } from "lucide-react";
+import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { DATA_INTELLIGENCE_PANEL, EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 
 interface ParsedCommentRow {
   id: string;
@@ -132,31 +134,41 @@ export default function ClassifiedComments() {
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-[80vh] flex items-center justify-center bg-cream">
+        <Loader2 className="h-8 w-8 animate-spin text-teal" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] p-4 md:p-6">
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">Classified Comments</h1>
-              <p className="text-muted-foreground text-sm">
-                Comments grouped by discipline for the selected project.
-              </p>
-            </div>
-          </div>
-          {projectId && (
-            <div className="flex flex-wrap gap-2">
+    <div className="min-h-[80vh] bg-cream pb-12">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 pt-6 md:pt-8">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 text-ink-secondary-light hover:text-ink-primary-light"
+          onClick={() => navigate("/dashboard")}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Dashboard
+        </Button>
+      </div>
+      <EditorialPageHeader
+        eyebrow="DISCIPLINE VIEW"
+        title={
+          <>
+            Classified{" "}
+            <em className="text-gold italic">Comments</em>
+          </>
+        }
+        description="Comments grouped by discipline for the selected project."
+        icon={Layers}
+        iconClassName="text-teal"
+        actions={
+          projectId ? (
+            <div className="flex flex-wrap gap-2 justify-end">
               <Button
-                variant="outline"
+                variant="outlineGold"
                 size="sm"
                 onClick={() => void reloadListOnly()}
                 disabled={runningClassifier || isLoading}
@@ -165,34 +177,37 @@ export default function ClassifiedComments() {
                 Reload list
               </Button>
               <Button
+                variant="gold"
                 size="sm"
                 onClick={() => void refreshClassifications()}
                 disabled={runningClassifier}
               >
                 {runningClassifier ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 animate-spin mr-2 text-cream" />
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
                 Refresh classifications
               </Button>
             </div>
-          )}
-        </div>
+          ) : null
+        }
+      />
 
+      <div className="max-w-4xl mx-auto px-4 md:px-6 pt-8 space-y-4">
         {!projectId ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
+          <Card className={EDITORIAL_FORM_CARD}>
+            <CardContent className="py-10 text-center text-ink-secondary-light space-y-2">
               Select a project in the sidebar to view classified comments.
             </CardContent>
           </Card>
         ) : isLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <Loader2 className="h-8 w-8 animate-spin text-teal" />
           </div>
         ) : comments.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
+          <Card className={EDITORIAL_FORM_CARD}>
+            <CardContent className="py-8 text-center text-ink-secondary-light">
               No parsed comments for this project. Load comments from the portal on the Comment Review page first.
             </CardContent>
           </Card>
@@ -201,23 +216,26 @@ export default function ClassifiedComments() {
             {grouped.keys.map((discipline) => {
               const items = grouped.map.get(discipline)!;
               return (
-                <Card key={discipline}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">
+                <Card key={discipline} className={DATA_INTELLIGENCE_PANEL}>
+                  <CardHeader className="pb-2 border-b border-[hsl(var(--border-obsidian-strong)/0.35)]">
+                    <CardTitle className="text-lg text-ink-primary-dark">
                       {discipline}
-                      <span className="text-muted-foreground font-normal ml-2">({items.length})</span>
+                      <span className="text-ink-secondary-dark font-normal ml-2">({items.length})</span>
                     </CardTitle>
+                    <CardDescription className="text-ink-secondary-dark">
+                      Parsed comment text retained verbatim from the classifier.
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-4">
                     <ul className="space-y-2">
                       {items.map((c) => (
                         <li
                           key={c.id}
-                          className="text-sm text-muted-foreground border-l-2 border-muted pl-3 py-1"
+                          className="text-sm text-ink-secondary-dark border-l-2 border-teal/40 pl-3 py-1.5 bg-obsidian-sunken/25 rounded-r-md"
                         >
-                          {c.original_text}
+                          <span className="text-ink-primary-dark">{c.original_text}</span>
                           {c.code_reference && (
-                            <span className="text-muted-foreground/80 ml-2">({c.code_reference})</span>
+                            <span className="text-ink-tertiary-dark ml-2 font-mono text-xs">({c.code_reference})</span>
                           )}
                         </li>
                       ))}

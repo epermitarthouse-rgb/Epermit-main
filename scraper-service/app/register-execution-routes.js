@@ -7530,33 +7530,6 @@ async function downloadMontgomeryProjectDoxFile(
   );
 }
 
-const _AGENT_DEBUG_LOG_BCEAB9 = path.join(
-  __dirname,
-  "..",
-  "..",
-  ".cursor",
-  "debug-bceab9.log",
-);
-function _agentDebugIngestBceab9(payload) {
-  const body = {
-    sessionId: "bceab9",
-    timestamp: Date.now(),
-    ...payload,
-  };
-  try {
-    fs.appendFileSync(_AGENT_DEBUG_LOG_BCEAB9, `${JSON.stringify(body)}\n`);
-  } catch (_) {}
-  try {
-    fetch("http://127.0.0.1:7282/ingest/2b8a8960-cce1-46dc-85f3-a5c11fbb1c06", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "bceab9",
-      },
-      body: JSON.stringify(body),
-    }).catch(() => {});
-  } catch (_) {}
-}
 
 let _downloadProjectDoxFileCallSeq = 0;
 
@@ -8488,51 +8461,11 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     } catch (_) {
       ctxPageCount = -1;
     }
-    // #region agent log
-    _agentDebugIngestBceab9({
-      runId: "washington-file-action",
-      hypothesisId: "H1_H2_H4",
-      location: "register-execution-routes.js:downloadProjectDoxFile:afterViewFileEvaluate",
-      message: "viewFile DOM action + main page state",
-      data: {
-        fileId: String(fileId),
-        pdoxCallId,
-        fileName: String(fileName).slice(0, 160),
-        adapter,
-        viewFileDom,
-        mainUrlAfterViewFile,
-        ctxPageCount,
-      },
-    });
-    // #endregion
 
     logMontgomeryPageLife("after viewFile");
 
-    // #region agent log
-    _agentDebugIngestBceab9({
-      runId: "washington-file-action",
-      hypothesisId: "H3_H5",
-      location: "register-execution-routes.js:downloadProjectDoxFile:beforeRealResponsePromise",
-      message: "about to await realResponsePromise (20s max)",
-      data: { fileId: String(fileId), pdoxCallId },
-    });
-    // #endregion
 
     const gotRealResponse = await realResponsePromise;
-    // #region agent log
-    _agentDebugIngestBceab9({
-      runId: "washington-file-action",
-      hypothesisId: "H3_H5",
-      location: "register-execution-routes.js:downloadProjectDoxFile:afterRealResponsePromise",
-      message: "realResponsePromise result + capturedResponses count",
-      data: {
-        fileId: String(fileId),
-        pdoxCallId,
-        gotRealResponse,
-        capturedResponsesLen: capturedResponses.length,
-      },
-    });
-    // #endregion
     if (!gotRealResponse) {
       console.log(`      ⚠️ No real file response received within 20s for fileId ${fileId}, falling back to captured responses`);
     }
@@ -8582,46 +8515,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     }
     popup = await popupPromise;
 
-    // #region agent log
-    (() => {
-      let popupUrl = "";
-      try {
-        popupUrl = popup ? popup.url().slice(0, 320) : "";
-      } catch (_) {
-        popupUrl = "(url_err)";
-      }
-      _agentDebugIngestBceab9({
-        runId: "washington-file-action",
-        hypothesisId: "H4",
-        location: "register-execution-routes.js:downloadProjectDoxFile:afterPopupPromise",
-        message: "viewer popup presence",
-        data: {
-          fileId: String(fileId),
-          pdoxCallId,
-          hasPopup: !!popup,
-          popupUrl,
-          popupSameAsPage: !!(popup && popup === page),
-        },
-      });
-    })();
-    // #endregion
 
-    // #region agent log
-    _agentDebugIngestBceab9({
-      runId: "washington-file-action",
-      hypothesisId: "H4_SAME_TAB_GATE",
-      location: "downloadProjectDoxFile:sameTabGate",
-      message: "after popup wait; gate for same-tab fallback",
-      data: {
-        fileId: String(fileId),
-        pdoxCallId,
-        hasPopup: !!popup,
-        isMontgomeryAdapter,
-        originTruthy: !!origin,
-        willEnterSameTab: !popup && !isMontgomeryAdapter && !!origin,
-      },
-    });
-    // #endregion
 
     if (popup) {
       popup.on("response", contextResponseHandler);
@@ -8982,15 +8876,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       console.log(
         `      ⚙️ Same-tab viewer (no popup): trying direct RetrieveFile + main-page scan for fileId ${fileId}`,
       );
-      // #region agent log
-      _agentDebugIngestBceab9({
-        runId: "washington-file-action",
-        hypothesisId: "H4_SAME_TAB_FALLBACK",
-        location: "downloadProjectDoxFile:sameTabViewerFallback:entry",
-        message: "entering same-tab ProjectDox retrieval",
-        data: { fileId: String(fileId), pdoxCallId, origin },
-      });
-      // #endregion
       try {
         const originNorm = String(origin).replace(/\/$/, "");
         const webApiOrigin = originNorm.replace(/projectdoxwebui/gi, "projectdoxwebapi");
@@ -9021,22 +8906,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                   const status = response.status();
                   const ct = response.headers()["content-type"] || "";
                   if (!response.ok()) {
-                    // #region agent log
-                    _agentDebugIngestBceab9({
-                      runId: "washington-file-action",
-                      hypothesisId: "H4_SAME_TAB_FALLBACK",
-                      location: "downloadProjectDoxFile:sameTabViewerFallback:washingtonWebApi",
-                      message: "washington_webapi_direct_http_not_ok",
-                      data: {
-                        fileId: String(fileId),
-                        pdoxCallId,
-                        waVariant: wi,
-                        status,
-                        contentType: ct.slice(0, 120),
-                        retrieveUrl: retrieveUrl.slice(0, 220),
-                      },
-                    });
-                    // #endregion
                     continue;
                   }
                   const buffer = await response.body();
@@ -9052,27 +8921,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                     }
                   }
                   if (rejectReason) {
-                    // #region agent log
-                    _agentDebugIngestBceab9({
-                      runId: "washington-file-action",
-                      hypothesisId: "H4_SAME_TAB_FALLBACK",
-                      location: "downloadProjectDoxFile:sameTabViewerFallback:washingtonWebApi",
-                      message: "washington_webapi_ok_body_rejected",
-                      data: {
-                        fileId: String(fileId),
-                        pdoxCallId,
-                        waVariant: wi,
-                        rejectReason,
-                        status,
-                        contentType: ct.slice(0, 120),
-                        bytes: buffer.length,
-                        headHex: buffer.length
-                          ? buffer.subarray(0, Math.min(12, buffer.length)).toString("hex")
-                          : "",
-                        retrieveUrl: retrieveUrl.slice(0, 220),
-                      },
-                    });
-                    // #endregion
                     continue;
                   }
                   const cumulative = (session?._scrapeCumulativeBytes || 0) + buffer.length;
@@ -9083,69 +8931,16 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                   console.log(
                     `      ✅ Downloaded via same-tab Web API RetrieveFile: ${fileName} (${sizeMB} MB, md5: ${contentHash})`,
                   );
-                  // #region agent log
-                  _agentDebugIngestBceab9({
-                    runId: "washington-file-action",
-                    hypothesisId: "H4_SAME_TAB_FALLBACK",
-                    location: "downloadProjectDoxFile:sameTabViewerFallback:washingtonWebApi",
-                    message: "washington_webapi_direct_success",
-                    data: {
-                      fileId: String(fileId),
-                      pdoxCallId,
-                      waVariant: wi,
-                      bytes: buffer.length,
-                      status,
-                      contentType: ct.slice(0, 120),
-                      retrieveUrl: retrieveUrl.slice(0, 220),
-                    },
-                  });
-                  // #endregion
                   return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
                     downloadUrl: retrieveUrl.replace(/([?&])_nocache=[^&]*/g, "$1").replace(/[?&]$/, ""),
                     fileSizeKB: Math.max(1, Math.round(buffer.length / 1024)),
                   });
                 } catch (oneErr) {
-                  // #region agent log
-                  _agentDebugIngestBceab9({
-                    runId: "washington-file-action",
-                    hypothesisId: "H4_SAME_TAB_FALLBACK",
-                    location: "downloadProjectDoxFile:sameTabViewerFallback:washingtonWebApi",
-                    message: "washington_webapi_variant_error",
-                    data: {
-                      fileId: String(fileId),
-                      pdoxCallId,
-                      waVariant: wi,
-                      err: String(oneErr?.message || oneErr),
-                    },
-                  });
-                  // #endregion
                 }
               }
             } else {
-              // #region agent log
-              _agentDebugIngestBceab9({
-                runId: "washington-file-action",
-                hypothesisId: "H4_SAME_TAB_FALLBACK",
-                location: "downloadProjectDoxFile:sameTabViewerFallback:washingtonWebApi",
-                message: "washington_webapi_no_session_cookie",
-                data: { fileId: String(fileId), pdoxCallId },
-              });
-              // #endregion
             }
           } catch (wErr) {
-            // #region agent log
-            _agentDebugIngestBceab9({
-              runId: "washington-file-action",
-              hypothesisId: "H4_SAME_TAB_FALLBACK",
-              location: "downloadProjectDoxFile:sameTabViewerFallback:washingtonWebApi",
-              message: "washington_webapi_direct_error",
-              data: {
-                fileId: String(fileId),
-                pdoxCallId,
-                err: String(wErr?.message || wErr),
-              },
-            });
-            // #endregion
           }
         }
 
@@ -9178,19 +8973,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
             console.log(
               `      ✅ Downloaded via same-tab RetrieveFile: ${fileName} (${sizeMB} MB, md5: ${contentHash})`,
             );
-            // #region agent log
-            _agentDebugIngestBceab9({
-              runId: "washington-file-action",
-              hypothesisId: "H4_SAME_TAB_FALLBACK",
-              location: "downloadProjectDoxFile:sameTabViewerFallback:directRetrieve",
-              message: "direct_retrieve_success",
-              data: {
-                fileId: String(fileId),
-                bytes: buffer.length,
-                candidate: String(fetched.finalUrl || candidate).slice(0, 220),
-              },
-            });
-            // #endregion
             return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
               downloadUrl: String(fetched.finalUrl || candidate).replace(
                 /([?&])_nocache=[^&]*/g,
@@ -9272,19 +9054,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
             console.log(
               `      ✅ Downloaded via same-tab candidate fetch: ${fileName} (${sizeMB} MB, md5: ${contentHash})`,
             );
-            // #region agent log
-            _agentDebugIngestBceab9({
-              runId: "washington-file-action",
-              hypothesisId: "H4_SAME_TAB_FALLBACK",
-              location: "downloadProjectDoxFile:sameTabViewerFallback:candidateFetch",
-              message: "candidate_fetch_success",
-              data: {
-                fileId: String(fileId),
-                bytes: buffer.length,
-                candidate: String(fetched.finalUrl || candidate).slice(0, 220),
-              },
-            });
-            // #endregion
             return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
               downloadUrl: String(fetched.finalUrl || candidate).replace(
                 /([?&])_nocache=[^&]*/g,
@@ -9369,15 +9138,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                     console.log(
                       `      ✅ Downloaded via same-tab file source URL: ${fileName} (${sizeMB} MB, md5: ${contentHash})`,
                     );
-                    // #region agent log
-                    _agentDebugIngestBceab9({
-                      runId: "washington-file-action",
-                      hypothesisId: "H4_SAME_TAB_FALLBACK",
-                      location: "downloadProjectDoxFile:sameTabViewerFallback:fileSourceUrl",
-                      message: "file_source_url_success",
-                      data: { fileId: String(fileId), bytes: buffer.length },
-                    });
-                    // #endregion
                     return await tryUploadAndClean(downloadPath, sizeMB, contentHash, {
                       downloadUrl: sameTabFileSourceUrl.replace(
                         /([?&])_nocache=[^&]*/g,
@@ -9394,30 +9154,8 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           }
         }
 
-        // #region agent log
-        _agentDebugIngestBceab9({
-          runId: "washington-file-action",
-          hypothesisId: "H4_SAME_TAB_FALLBACK",
-          location: "downloadProjectDoxFile:sameTabViewerFallback:exhausted",
-          message: "same_tab_fallback_exhausted",
-          data: {
-            fileId: String(fileId),
-            sameTabViewerCandidatesLen: sameTabViewerCandidates.length,
-            hadFileSourceUrl: !!sameTabFileSourceUrl,
-          },
-        });
-        // #endregion
       } catch (sameTabErr) {
         console.log(`      ⚠️ Same-tab viewer extraction failed: ${sameTabErr.message}`);
-        // #region agent log
-        _agentDebugIngestBceab9({
-          runId: "washington-file-action",
-          hypothesisId: "H4_SAME_TAB_FALLBACK",
-          location: "downloadProjectDoxFile:sameTabViewerFallback:error",
-          message: "same_tab_fallback_error",
-          data: { fileId: String(fileId), err: String(sameTabErr.message || sameTabErr) },
-        });
-        // #endregion
       }
     }
 

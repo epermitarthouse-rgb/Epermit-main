@@ -99,7 +99,7 @@ export function DateRangeFilter({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Select value={presetRange} onValueChange={handlePresetChange}>
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-[180px] rounded-xl border-cream-sunken bg-cream shadow-sm dark:bg-cream-raised">
           <SelectValue placeholder="Select range" />
         </SelectTrigger>
         <SelectContent>
@@ -116,10 +116,10 @@ export function DateRangeFilter({
           <Popover open={isFromOpen} onOpenChange={setIsFromOpen}>
             <PopoverTrigger asChild>
               <Button
-                variant="outline"
+                variant="outlineGold"
                 className={cn(
                   'w-[140px] justify-start text-left font-normal',
-                  !dateRange.from && 'text-muted-foreground'
+                  !dateRange.from && 'text-ink-tertiary-light'
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -138,15 +138,15 @@ export function DateRangeFilter({
             </PopoverContent>
           </Popover>
 
-          <span className="text-muted-foreground">to</span>
+          <span className="text-ink-secondary-light">to</span>
 
           <Popover open={isToOpen} onOpenChange={setIsToOpen}>
             <PopoverTrigger asChild>
               <Button
-                variant="outline"
+                variant="outlineGold"
                 className={cn(
                   'w-[140px] justify-start text-left font-normal',
-                  !dateRange.to && 'text-muted-foreground'
+                  !dateRange.to && 'text-ink-tertiary-light'
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -168,7 +168,7 @@ export function DateRangeFilter({
       )}
 
       {presetRange !== 'custom' && presetRange !== 'allTime' && (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm text-ink-secondary-light">
           {dateRange.from && dateRange.to && (
             <>
               {format(dateRange.from, 'MMM d, yyyy')} - {format(dateRange.to, 'MMM d, yyyy')}

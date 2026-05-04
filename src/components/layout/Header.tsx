@@ -38,7 +38,7 @@ export function Header() {
   return (
     <motion.header
       className={cn(
-        "sticky top-0 z-50 w-full border-b transition-all duration-300",
+        "sticky top-0 z-50 w-full border-b border-border/40 transition-all duration-300",
         scrolled
           ? "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm"
           : "bg-background/80 backdrop-blur"
@@ -54,17 +54,17 @@ export function Header() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <Link to="/" className="flex items-center space-x-2 group">
-            <div className="flex items-center">
-              <span className="text-base sm:text-xl font-bold text-primary">Insight</span>
-              <span className="text-base sm:text-xl font-light text-muted-foreground">|</span>
-              <motion.span
-                className="text-base sm:text-xl font-bold text-accent"
-                whileHover={{ scale: 1.05 }}
-              >
-                DesignCheck
-              </motion.span>
-              <span className="text-xs font-medium text-accent ml-0.5">™</span>
+          <Link to="/" className="flex items-center gap-2 group">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-sm shadow-primary/20 sm:h-9 sm:w-9 sm:text-base">
+              P
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="font-display text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                PermitPilot
+              </span>
+              <span className="hidden text-[10px] font-tight uppercase tracking-wide text-muted-foreground sm:block">
+                A Commun-ET product
+              </span>
             </div>
           </Link>
         </motion.div>

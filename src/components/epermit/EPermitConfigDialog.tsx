@@ -97,7 +97,7 @@ export function EPermitConfigDialog({
     };
     onSave(newConfig);
     onOpenChange(false);
-    toast.success('E-permit configuration saved');
+    toast.success('Portal configuration saved');
   };
 
   const updateCredential = (key: keyof EPermitCredentials, value: string) => {
@@ -111,7 +111,7 @@ export function EPermitConfigDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            E-Permit System Configuration
+            Permit portal integration
           </DialogTitle>
           <DialogDescription>
             Configure your connection to Accela or CityView for direct permit submission.

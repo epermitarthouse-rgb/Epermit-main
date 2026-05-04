@@ -38,13 +38,15 @@ const AnimCounter = ({ target, suffix = "", duration = 2000 }: AnimCounterProps)
 };
 
 const GoldLine = ({ w = "100%", delay = 0 }: { w?: string; delay?: number }) => (
-  <div style={{
-    height: 1,
-    background: `linear-gradient(90deg, transparent, #FF6B2B, transparent)`,
-    width: w,
-    opacity: 0.4,
-    animationDelay: `${delay}s`,
-  }} />
+  <div
+    style={{
+      height: 1,
+      background: `linear-gradient(90deg, transparent, hsl(var(--primary)), transparent)`,
+      width: w,
+      opacity: 0.4,
+      animationDelay: `${delay}s`,
+    }}
+  />
 );
 
 export default function CommunETLanding() {
@@ -82,23 +84,23 @@ export default function CommunETLanding() {
   }, []);
 
   const modules = [
-    { id: "01", name: "DesignCheck™", tag: "FLAGSHIP", desc: "AI-powered permit comment reconciliation. Reduces 8+ hours of manual review to under 60 minutes. Analyzes agency comments, matches to code sections, generates resolution instructions.", icon: "◈", color: COLORS.gold },
-    { id: "02", name: "SubmitIQ™", tag: "WAVE 1", desc: "Pre-submission quality assurance engine. Validates drawing packages against jurisdiction-specific requirements before first submittal, eliminating predictable rejections.", icon: "⬡", color: COLORS.teal },
-    { id: "03", name: "UtilitySync™", tag: "WAVE 1", desc: "Utility coordination command center. Maps existing infrastructure, tracks locate requests, manages conflict resolution, and maintains agency communication threads.", icon: "⬢", color: "#818CF8" },
-    { id: "04", name: "CommentTrace™", tag: "WAVE 2", desc: "Historical comment intelligence. Mines proprietary comment database to predict agency objections before submission and surfaces resolution precedents.", icon: "◉", color: "#FF6B2B" },
-    { id: "05", name: "AgencyPulse™", tag: "WAVE 2", desc: "Real-time agency relationship monitoring. Tracks reviewer preferences, turnaround velocity, and jurisdictional pattern shifts across all active projects.", icon: "◎", color: "#38BDF8" },
-    { id: "06", name: "ConstructionOS™", tag: "WAVE 3", desc: "Unified construction management platform. Integrates all 12 Insight modules into a single command interface with project health scoring and cascading delay forecasts.", icon: "⬛", color: "#FB7185" },
+    { id: "01", name: "PermitPilot™", tag: "FLAGSHIP", desc: "AI-powered permit comment reconciliation. Reduces 8+ hours of manual review to under 60 minutes. Analyzes agency comments, matches to code sections, generates resolution instructions.", icon: "◈", color: "hsl(28 81% 55%)" },
+    { id: "02", name: "SubmitIQ™", tag: "WAVE 1", desc: "Pre-submission quality assurance engine. Validates drawing packages against jurisdiction-specific requirements before first submittal, eliminating predictable rejections.", icon: "⬡", color: "hsl(173 58% 45%)" },
+    { id: "03", name: "UtilitySync™", tag: "WAVE 1", desc: "Utility coordination command center. Maps existing infrastructure, tracks locate requests, manages conflict resolution, and maintains agency communication threads.", icon: "⬢", color: "hsl(199 89% 58%)" },
+    { id: "04", name: "CommentTrace™", tag: "WAVE 2", desc: "Historical comment intelligence. Mines proprietary comment database to predict agency objections before submission and surfaces resolution precedents.", icon: "◉", color: "hsl(28 81% 55%)" },
+    { id: "05", name: "AgencyPulse™", tag: "WAVE 2", desc: "Real-time agency relationship monitoring. Tracks reviewer preferences, turnaround velocity, and jurisdictional pattern shifts across all active projects.", icon: "◎", color: "hsl(199 89% 48%)" },
+    { id: "06", name: "ConstructionOS™", tag: "WAVE 3", desc: "Unified construction management platform. Integrates Commun-ET’s full product roadmap into a single command interface with project health scoring and cascading delay forecasts.", icon: "⬛", color: "hsl(330 81% 70%)" },
   ];
 
   const infographicSteps = [
-    { n: "01", label: "Plans Submitted", sub: "Architect delivers drawings", icon: "◈", color: "#6B9AC4" },
-    { n: "02", label: "Agency Review", sub: "30–90 day review cycle", icon: "◉", color: "#6B9AC4" },
+    { n: "01", label: "Plans Submitted", sub: "Architect delivers drawings", icon: "◈", color: "hsl(199 89% 58%)" },
+    { n: "02", label: "Agency Review", sub: "30–90 day review cycle", icon: "◉", color: "hsl(199 89% 58%)" },
     { n: "03", label: "Comments Issued", sub: "8–40 correction items", icon: "◎", color: COLORS.red },
     { n: "04", label: "Manual Reconciliation", sub: "8+ hrs per comment set", icon: "⬡", color: COLORS.red },
     { n: "05", label: "Resubmittal", sub: "Often repeat 3–4 cycles", icon: "⬢", color: COLORS.red },
   ];
 
-  const insightSteps = [
+  const permitPilotFlowSteps = [
     { n: "01", label: "Comment Ingestion", sub: "AI parses agency PDF/portal", icon: "◈", color: COLORS.gold },
     { n: "02", label: "Code Mapping", sub: "Context & Reference Engine", icon: "⬡", color: COLORS.gold },
     { n: "03", label: "Resolution Generation", sub: "Proprietary history + LLM", icon: "◉", color: COLORS.gold },
@@ -110,7 +112,7 @@ export default function CommunETLanding() {
     { name: "Burnham Nationwide", age: "30 yrs", tech: "Manual", ai: false, portal: "Basic", intel: false },
     { name: "Permit Place", age: "20 yrs", tech: "Manual+", ai: false, portal: "Status only", intel: false },
     { name: "McCormick Permits", age: "Est'd", tech: "Manual", ai: false, portal: "None", intel: false },
-    { name: "Commun-ET + Insight™", age: "AI-Native", tech: "AI-Powered", ai: true, portal: "Full Platform", intel: true },
+    { name: "Commun-ET + PermitPilot™", age: "AI-Native", tech: "AI-Powered", ai: true, portal: "Full Platform", intel: true },
   ];
 
   const style = {
@@ -134,7 +136,7 @@ export default function CommunETLanding() {
         .module-card { transition: all 0.4s cubic-bezier(0.16,1,0.3,1); cursor: pointer; }
         .module-card:hover { transform: translateY(-4px); }
         .gold-hover { transition: color 0.3s ease; }
-        .gold-hover:hover { color: #FF6B2B; }
+        .gold-hover:hover { color: hsl(var(--primary)); }
         .grid-bg {
           background-image: 
             linear-gradient(${isDark ? "rgba(56,189,248,0.04)" : "rgba(15,23,42,0.04)"} 1px, transparent 1px),
@@ -142,7 +144,7 @@ export default function CommunETLanding() {
           background-size: 60px 60px;
         }
         .shimmer {
-          background: linear-gradient(90deg, transparent 0%, rgba(255,107,43,0.12) 50%, transparent 100%);
+          background: linear-gradient(90deg, transparent 0%, hsl(var(--primary) / 0.12) 50%, transparent 100%);
           background-size: 200% 100%;
           animation: shimmer 3s infinite;
         }
@@ -152,14 +154,14 @@ export default function CommunETLanding() {
         @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(100vh); } }
         .scan-line {
           position: absolute; left: 0; right: 0; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,107,43,${isDark ? "0.4" : "0.15"}), transparent);
+          background: linear-gradient(90deg, transparent, hsl(var(--primary) / ${isDark ? "0.4" : "0.15"}), transparent);
           animation: scan 8s linear infinite;
         }
         .stat-number {
           font-family: 'Cormorant Garamond', Georgia, serif;
           font-weight: 300;
           font-size: clamp(3rem, 6vw, 5rem);
-          color: #FF6B2B;
+          color: hsl(var(--primary));
           letter-spacing: -0.02em;
           line-height: 1;
         }
@@ -167,7 +169,7 @@ export default function CommunETLanding() {
           font-family: 'DM Mono', 'Courier New', monospace;
           font-size: 0.65rem;
           letter-spacing: 0.25em;
-          color: #FF6B2B;
+          color: hsl(var(--primary));
           text-transform: uppercase;
         }
         .display-headline {
@@ -246,12 +248,12 @@ export default function CommunETLanding() {
             }}>⬡</div>
             <div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1rem", letterSpacing: "0.1em", color: COLORS.white }}>COMMUN-ET</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>INTELLIGENCE PLATFORM</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>PERMITPILOT™ PLATFORM</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 32, fontFamily: "'Barlow', sans-serif", fontSize: "0.8rem", letterSpacing: "0.08em", color: COLORS.fog }}>
-            {["Services", "Insight™", "Results", "Contact"].map(n => (
-              <span key={n} className="gold-hover" style={{ cursor: "pointer" }} data-testid={`link-nav-${n.toLowerCase().replace("™", "")}`}>{n}</span>
+            {["Services", "Platform", "Results", "Contact"].map((n) => (
+              <span key={n} className="gold-hover" style={{ cursor: "pointer" }} data-testid={`link-nav-${n.toLowerCase().replace(/\s+/g, "-")}`}>{n}</span>
             ))}
           </div>
           <div
@@ -319,7 +321,7 @@ export default function CommunETLanding() {
                 letterSpacing: "0.15em",
                 cursor: "pointer",
                 fontWeight: 500,
-              }}>EXPLORE INSIGHT™ PLATFORM</button>
+              }}>EXPLORE PERMITPILOT™ PLATFORM</button>
             <button
               data-testid="button-view-case-results"
               onClick={() => competitiveMatrixRef.current?.scrollIntoView({ behavior: "smooth" })}
@@ -350,8 +352,8 @@ export default function CommunETLanding() {
           {[
             { val: 90, suffix: "%", label: "Reduction in Review Time" },
             { val: 50, suffix: "+", label: "Jurisdictions Covered" },
-            { val: 12, suffix: " Modules", label: "Insight™ Platform Roadmap" },
-            { val: 8, suffix: " Agents", label: "AI Agents in DesignCheck" },
+            { val: 12, suffix: " Modules", label: "Commun-ET Platform Roadmap" },
+            { val: 8, suffix: " Agents", label: "AI Agents in PermitPilot" },
           ].map((s, i) => (
             <div key={i} style={{
               padding: "28px 24px",
@@ -416,19 +418,19 @@ export default function CommunETLanding() {
               fontSize: "0.7rem",
               letterSpacing: "0.2em",
               color: COLORS.gold,
-            }}>INSIGHT™ DESIGNCHECK</div>
+            }}>PERMITPILOT™</div>
             <div style={{ flex: 1, height: 1, background: COLORS.border }} />
           </div>
 
-          {/* Insight Flow */}
+          {/* Optimized permit flow */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", letterSpacing: "0.2em", color: COLORS.gold }}>◈ INSIGHT™ PROCESS</span>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", letterSpacing: "0.2em", color: COLORS.gold }}>◈ PERMITPILOT™ PROCESS</span>
               <div style={{ flex: 1, height: 1, background: `${COLORS.gold}33` }} />
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", color: COLORS.teal }}>UNDER 60 MINUTES</span>
             </div>
             <div style={{ display: "flex", alignItems: "stretch", overflowX: "auto", gap: 0, paddingBottom: 8 }}>
-              {insightSteps.map((s, i) => (
+              {permitPilotFlowSteps.map((s, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", flex: "1 1 0", minWidth: 140 }}>
                   <div style={{
                     flex: 1,
@@ -444,7 +446,7 @@ export default function CommunETLanding() {
                     <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: "0.8rem", color: COLORS.white, fontWeight: 500, marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: "0.7rem", color: COLORS.fog }}>{s.sub}</div>
                   </div>
-                  {i < insightSteps.length - 1 && <div className="arrow-connector" style={{ color: COLORS.goldDim }}>→</div>}
+                  {i < permitPilotFlowSteps.length - 1 && <div className="arrow-connector" style={{ color: COLORS.goldDim }}>→</div>}
                 </div>
               ))}
             </div>
@@ -465,7 +467,7 @@ export default function CommunETLanding() {
             {[
               { val: "8 hrs → 45 min", label: "Comment Resolution Time" },
               { val: "90%", label: "Efficiency Gain Per Project" },
-              { val: "$1M+", label: "DesignCheck ARR Projection" },
+              { val: "$1M+", label: "PermitPilot ARR Projection" },
             ].map((item, i) => (
               <div key={i} style={{ textAlign: "center", flex: "1 1 150px" }}>
                 <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.8rem", color: COLORS.gold, fontWeight: 300 }}>{item.val}</div>
@@ -537,13 +539,13 @@ export default function CommunETLanding() {
         </p>
       </section>
 
-      {/* INSIGHT PLATFORM */}
+      {/* PERMITPILOT PLATFORM */}
       <section style={{ padding: "120px clamp(24px, 5vw, 80px)", background: COLORS.panel }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 40, marginBottom: 80 }}>
           <div style={{ flex: "1 1 400px" }}>
             <div className="section-eyebrow" style={{ marginBottom: 16 }}>Product Architecture</div>
             <h2 className="display-headline" style={{ fontSize: "clamp(2rem, 4vw, 3rem)", color: COLORS.white }}>
-              Insight™ Platform<br /><span style={{ color: COLORS.gold }}>12 Modules. One Mission.</span>
+              PermitPilot™ Platform<br /><span style={{ color: COLORS.gold }}>12 Modules. One Mission.</span>
             </h2>
           </div>
           <div style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -553,7 +555,7 @@ export default function CommunETLanding() {
                 fontFamily: "'DM Mono', monospace", fontSize: "0.6rem",
                 letterSpacing: "0.1em", color: COLORS.fog,
               }}>
-                <div style={{ width: 24, height: 1, background: [COLORS.gold, COLORS.teal, "#818CF8"][i] }} />
+                <div style={{ width: 24, height: 1, background: [COLORS.gold, COLORS.teal, "hsl(199 89% 58%)"][i] }} />
                 {w}
               </div>
             ))}
@@ -569,14 +571,24 @@ export default function CommunETLanding() {
               onClick={() => setActiveModule(i)}
               style={{
                 padding: "36px 32px",
-                background: activeModule === i ? `${m.color}12` : COLORS.panel,
+                background:
+                  activeModule === i ? `color-mix(in srgb, ${m.color} 12%, transparent)` : COLORS.panel,
                 borderLeft: activeModule === i ? `2px solid ${m.color}` : "2px solid transparent",
                 cursor: "pointer",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                 <div style={{ fontSize: "1.6rem", color: m.color }}>{m.icon}</div>
-                <span className="tag" style={{ background: `${m.color}18`, color: m.color, border: `1px solid ${m.color}44` }}>{m.tag}</span>
+                <span
+                  className="tag"
+                  style={{
+                    background: `color-mix(in srgb, ${m.color} 18%, transparent)`,
+                    color: m.color,
+                    border: `1px solid color-mix(in srgb, ${m.color} 40%, transparent)`,
+                  }}
+                >
+                  {m.tag}
+                </span>
               </div>
               <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.6rem", letterSpacing: "0.15em", color: COLORS.fog, marginBottom: 8 }}>{m.id}</div>
               <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.3rem", color: COLORS.white, marginBottom: 12, fontWeight: 400 }}>{m.name}</h3>
@@ -601,10 +613,10 @@ export default function CommunETLanding() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
           {[
             { icon: "◈", title: "Proactive Intelligence", sub: "Client Portal Experience", desc: "Clients see what's happening before they ask. Real-time permit status, predicted timelines, and risk flags — presented through a portal as refined as a private banking dashboard.", benchmark: "Benchmark: JPMorgan Private" },
-            { icon: "⬡", title: "Concierge Communication", sub: "Dedicated Success Architecture", desc: "Every engagement includes a named Insight Advisor. White-glove onboarding. SLA commitments published in writing. No tickets. No hold queues. Direct lines only.", benchmark: "Benchmark: Four Seasons Hotels" },
+            { icon: "⬡", title: "Concierge Communication", sub: "Dedicated Success Architecture", desc: "Every engagement includes a named success partner. White-glove onboarding. SLA commitments published in writing. No tickets. No hold queues. Direct lines only.", benchmark: "Benchmark: Four Seasons Hotels" },
             { icon: "◉", title: "Radical Transparency", sub: "Full Project Visibility", desc: "Show the work. Every comment, every response, every revision — documented, timestamped, and searchable. Clients don't wonder what we're doing. They watch it happen.", benchmark: "Benchmark: Stripe Dashboard" },
             { icon: "⬢", title: "Outcome Guarantees", sub: "Performance SLAs", desc: "Comment responses within 24 hours. Pre-submission QA completed in 48 hours. First-pass approval rate tracked and published quarterly. We tie our value to measurable results.", benchmark: "Benchmark: Amazon Prime SLA" },
-            { icon: "◎", title: "Expertise On Demand", sub: "Strategic Advisory Layer", desc: "Insight transforms expeditors from processors into strategic advisors. Clients access AI-powered analysis plus human judgment on jurisdiction strategy, phasing, and risk mitigation.", benchmark: "Benchmark: McKinsey Engagement Model" },
+            { icon: "◎", title: "Expertise On Demand", sub: "Strategic Advisory Layer", desc: "Commun-ET transforms expeditors from processors into strategic advisors. Clients access AI-powered analysis plus human judgment on jurisdiction strategy, phasing, and risk mitigation.", benchmark: "Benchmark: McKinsey Engagement Model" },
             { icon: "✦", title: "Continuous Learning", sub: "Platform That Gets Smarter", desc: "Every project enriches the proprietary comment database. Every interaction trains the AI. The longer you're a client, the more intelligent the system becomes for your project types.", benchmark: "Benchmark: Netflix Recommendation Engine" },
           ].map((p, i) => (
             <div key={i} style={{
@@ -652,7 +664,7 @@ export default function CommunETLanding() {
           The Permits Will Still Be Complex.<br /><span style={{ color: COLORS.gold }}>Your Experience Won't Be.</span>
         </h2>
         <p className="body-text" style={{ maxWidth: 500, margin: "0 auto 48px", fontSize: "1rem" }}>
-          Join the firms already running projects through Insight™. Early access pricing available through Q2 2026.
+          Join the firms already standardizing permitting on PermitPilot™. Early access pricing available through Q2 2026.
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
           <button
@@ -668,7 +680,7 @@ export default function CommunETLanding() {
               letterSpacing: "0.15em",
               cursor: "pointer",
               fontWeight: 500,
-            }}>REQUEST INSIGHT™ DEMO</button>
+            }}>REQUEST PERMITPILOT™ DEMO</button>
           <button
             data-testid="button-download-brief"
             onClick={() => navigate("/auth")}
@@ -689,7 +701,7 @@ export default function CommunETLanding() {
             <div style={{ width: 28, height: 28, border: `1px solid ${COLORS.goldDim}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", color: COLORS.gold }}>⬡</div>
             <div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "0.85rem", letterSpacing: "0.1em", color: COLORS.white }}>COMMUN-ET, LLC</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.5rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>INSIGHT™ INTELLIGENCE PLATFORM</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.5rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>PERMITPILOT™ BY COMMUN-ET</div>
             </div>
           </div>
           <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.1em", color: COLORS.fog }}>

@@ -114,7 +114,7 @@ const APIDocumentation = () => {
 
   const CodeBlock = ({ code, id }: { code: string; id: string }) => (
     <div className="relative">
-      <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg text-sm overflow-x-auto">
+      <pre className="rounded-lg border border-obsidian-raised bg-obsidian p-4 text-sm text-ink-primary-dark overflow-x-auto font-mono">
         <code>{code}</code>
       </pre>
       <Button

@@ -308,7 +308,7 @@ export function AnalyticsExport({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" disabled={exporting}>
+        <Button variant="gold" disabled={exporting} className="shadow-cream">
           {exporting ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (

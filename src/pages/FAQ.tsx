@@ -31,8 +31,8 @@ const categories = [
 const faqData: FAQItem[] = [
   // Getting Started
   {
-    question: "What is Insight|DesignCheck?",
-    answer: "Insight|DesignCheck is a permit intelligence platform that helps architects, engineers, and contractors navigate the building permit process. We provide jurisdiction-specific requirements, AI-powered compliance checking, and tools to streamline your permit submissions.",
+    question: "What is PermitPilot?",
+    answer: "PermitPilot is a permit intelligence platform that helps architects, engineers, and contractors navigate the building permit process. We provide jurisdiction-specific requirements, AI-powered compliance checking, and tools to streamline your permit submissions.",
     category: "getting-started",
   },
   {
@@ -197,7 +197,7 @@ export default function FAQ() {
             Frequently Asked Questions
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Find answers to common questions about Insight|DesignCheck. Can't find what you're looking for? Contact our support team.
+            Find answers to common questions about PermitPilot. Can't find what you're looking for? Contact our support team.
           </p>
         </div>
 

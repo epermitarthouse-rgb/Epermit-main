@@ -103,7 +103,7 @@ function renderStatusInlineLink(
         href={h}
         target={s.target || "_blank"}
         rel="noopener noreferrer"
-        className="text-[#0000EE] underline hover:text-[#551A8B]"
+        className="text-gold underline decoration-gold/40 hover:text-gold-deep hover:decoration-gold-deep"
       >
         {s.text}
       </a>
@@ -113,7 +113,7 @@ function renderStatusInlineLink(
     return (
       <span
         key={key}
-        className="text-[#0000EE] underline decoration-dotted cursor-help"
+        className="text-gold underline decoration-dotted decoration-gold/50 cursor-help"
         title={s.onclick}
       >
         {s.text}
@@ -129,7 +129,7 @@ function renderSegments(
   emphasized?: boolean,
 ) {
   if (!segments?.length) return null;
-  const emphasisClass = emphasized ? "text-[#c00000] font-medium" : "";
+  const emphasisClass = emphasized ? "text-destructive font-medium" : "";
   return (
     <span className={emphasisClass}>
       {segments.map((s, i) => {
@@ -154,16 +154,16 @@ function LegacyKeyValues({
   keyValues: { key: string; value: string }[];
 }) {
   return (
-    <div className="border border-[#ccc] bg-white">
+    <div className="rounded-xl border border-cream-sunken bg-cream shadow-cream overflow-hidden">
       {keyValues.map((kv, i) => (
         <div
           key={`${kv.key}-${i}`}
-          className={`grid grid-cols-[minmax(140px,1fr)_2fr] gap-2 border-b border-[#e0e0e0] px-3 py-2 text-left last:border-b-0 ${
-            i % 2 === 0 ? "bg-white" : "bg-[#f5f5f5]"
+          className={`grid grid-cols-[minmax(140px,1fr)_2fr] gap-2 border-t border-cream-sunken px-3 py-2 text-left first:border-t-0 ${
+            i % 2 === 0 ? "bg-cream" : "bg-cream-raised/40"
           }`}
         >
-          <div className="font-medium text-[#333]">{kv.key}</div>
-          <div className="text-[#222]">{kv.value || "—"}</div>
+          <div className="font-medium text-ink-primary-light">{kv.key}</div>
+          <div className="text-ink-primary-light">{kv.value || "—"}</div>
         </div>
       ))}
     </div>
@@ -184,16 +184,16 @@ function LegacyTables({
       {tables.map((tbl, ti) => (
         <div key={ti}>
           {tbl.title ? (
-            <p className="mb-2 font-semibold text-[#333]">{tbl.title}</p>
+            <p className="mb-2 font-semibold text-ink-primary-light">{tbl.title}</p>
           ) : null}
-          <div className="overflow-x-auto border border-[#ccc] bg-white">
+          <div className="overflow-x-auto rounded-xl border border-cream-sunken bg-cream">
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-[#ccc] bg-[#eee] hover:bg-[#eee]">
+                <TableRow className="border-b border-cream-sunken bg-cream hover:bg-cream">
                   {tbl.headers?.map((h, hi) => (
                     <TableHead
                       key={hi}
-                      className="text-[#333] font-semibold border-r border-[#ddd] last:border-r-0"
+                      className="text-[10px] font-mono uppercase tracking-[0.12em] text-ink-tertiary-light font-normal border-r border-cream-sunken last:border-r-0"
                     >
                       {h}
                     </TableHead>
@@ -205,13 +205,15 @@ function LegacyTables({
                   <TableRow
                     key={ri}
                     className={
-                      ri % 2 === 1 ? "bg-[#f9f9f9]" : "bg-white border-[#ddd]"
+                      ri % 2 === 1
+                        ? "bg-cream-raised/35 border-t border-cream-sunken hover:bg-cream-raised/55"
+                        : "bg-cream border-t border-cream-sunken hover:bg-cream-raised/50"
                     }
                   >
                     {tbl.headers?.map((h) => (
                       <TableCell
                         key={h}
-                        className="border-r border-[#eee] last:border-r-0 text-[#222]"
+                        className="border-r border-cream-sunken last:border-r-0 text-ink-primary-light"
                       >
                         {row[h] ?? ""}
                       </TableCell>
@@ -235,17 +237,17 @@ function SectionBlock({
   index: number;
 }) {
   if (section.type === "divider") {
-    return <hr className="my-4 border-[#ccc]" />;
+    return <hr className="my-4 border-cream-sunken" />;
   }
   if (section.type === "text_block") {
     return (
       <div className="mb-3" data-section-index={index}>
         {section.title ? (
-          <h3 className="mb-1 text-base font-semibold text-[#333]">
+          <h3 className="mb-1 text-base font-semibold text-ink-primary-light">
             {section.title}
           </h3>
         ) : null}
-        <div className="whitespace-pre-wrap text-[#222]">
+        <div className="whitespace-pre-wrap text-ink-primary-light">
           {renderSegments(section.segments, `tb-${index}`, false)}
         </div>
       </div>
@@ -255,7 +257,7 @@ function SectionBlock({
     return (
       <div className="mb-4" data-section-index={index}>
         {section.title ? (
-          <p className="mb-1 font-semibold text-[#333]">{section.title}</p>
+          <p className="mb-1 font-semibold text-ink-primary-light">{section.title}</p>
         ) : null}
         <ul className="list-none space-y-1 pl-0">
           {section.links.map((L, li) => (
@@ -279,20 +281,20 @@ function SectionBlock({
     return (
       <div className="mb-4" data-section-index={index}>
         {section.title ? (
-          <p className="mb-2 font-semibold text-[#333]">{section.title}</p>
+          <p className="mb-2 font-semibold text-ink-primary-light">{section.title}</p>
         ) : null}
-        <div className="border border-[#ccc] bg-white">
+        <div className="border border-cream-sunken rounded-xl bg-cream shadow-cream overflow-hidden">
           {section.items.map((it, ii) => (
             <div
               key={ii}
-              className={`grid grid-cols-[minmax(160px,1fr)_2fr] gap-2 border-b border-[#e8e8e8] px-3 py-2 last:border-b-0 ${
-                ii % 2 === 0 ? "bg-white" : "bg-[#fafafa]"
+              className={`grid grid-cols-[minmax(160px,1fr)_2fr] gap-2 border-t border-cream-sunken px-3 py-2 first:border-t-0 ${
+                ii % 2 === 0 ? "bg-cream" : "bg-cream-raised/40"
               }`}
             >
-              <div className="font-medium text-[#333]">{it.key}</div>
+              <div className="font-medium text-ink-primary-light">{it.key}</div>
               <div
                 className={
-                  it.emphasized ? "text-[#c00000] font-medium" : "text-[#222]"
+                  it.emphasized ? "text-destructive font-medium" : "text-ink-primary-light"
                 }
               >
                 {it.segments?.length
@@ -313,14 +315,14 @@ function SectionBlock({
     return (
       <div className="mb-4" data-section-index={index}>
         {section.title ? (
-          <p className="mb-2 font-semibold text-[#333]">{section.title}</p>
+          <p className="mb-2 font-semibold text-ink-primary-light">{section.title}</p>
         ) : null}
-        <ul className="list-disc space-y-1 pl-6 text-[#222]">
+        <ul className="list-disc space-y-1 pl-6 text-ink-primary-light">
           {section.items.map((it, ii) => (
             <li
               key={ii}
               className={
-                it.emphasized ? "text-[#c00000] font-medium marker:text-[#c00000]" : ""
+                it.emphasized ? "text-destructive font-medium marker:text-destructive" : ""
               }
             >
               {it.segments?.length
@@ -341,16 +343,16 @@ function SectionBlock({
     return (
       <div className="mb-4" data-section-index={index}>
         {section.title ? (
-          <p className="mb-2 font-semibold text-[#333]">{section.title}</p>
+          <p className="mb-2 font-semibold text-ink-primary-light">{section.title}</p>
         ) : null}
-        <div className="overflow-x-auto border border-[#ccc] bg-white">
+        <div className="overflow-x-auto rounded-xl border border-cream-sunken bg-cream shadow-cream">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-[#ccc] bg-[#eee] hover:bg-[#eee]">
+              <TableRow className="border-b border-cream-sunken bg-cream hover:bg-cream">
                 {section.headers?.map((h, hi) => (
                   <TableHead
                     key={hi}
-                    className="text-[#333] font-semibold border-r border-[#ddd] last:border-r-0"
+                    className="text-[10px] font-mono uppercase tracking-[0.12em] text-ink-tertiary-light font-normal border-r border-cream-sunken last:border-r-0"
                   >
                     {h}
                   </TableHead>
@@ -362,7 +364,9 @@ function SectionBlock({
                 <TableRow
                   key={ri}
                   className={
-                    ri % 2 === 1 ? "bg-[#f9f9f9]" : "bg-white border-[#ddd]"
+                    ri % 2 === 1
+                      ? "bg-cream-raised/35 border-t border-cream-sunken hover:bg-cream-raised/55"
+                      : "bg-cream border-t border-cream-sunken hover:bg-cream-raised/50"
                   }
                 >
                   {section.headers?.map((h, hi) => {
@@ -370,10 +374,10 @@ function SectionBlock({
                     return (
                       <TableCell
                         key={h}
-                        className={`border-r border-[#eee] last:border-r-0 align-top ${
+                        className={`border-r border-cream-sunken last:border-r-0 align-top ${
                           cell?.emphasized
-                            ? "text-[#c00000] font-medium"
-                            : "text-[#222]"
+                            ? "text-destructive font-medium"
+                            : "text-ink-primary-light"
                         }`}
                       >
                         {cell?.segments?.length
@@ -404,7 +408,7 @@ export function PgcStatusTab({ status }: { status: PgcStatusTabData }) {
     (status.keyValues?.length ?? 0) > 0 || (status.tables?.length ?? 0) > 0;
 
   return (
-    <div className="pgc-status-portal max-w-2xl mx-auto w-full rounded-sm border border-[#d0d0d0] bg-[#f5f5f5] px-6 py-8 text-[13px] leading-relaxed text-[#222] shadow-sm">
+    <div className="pgc-status-portal max-w-2xl mx-auto w-full rounded-xl border border-cream-sunken bg-cream-raised px-6 py-8 text-[13px] leading-relaxed text-ink-primary-light shadow-cream">
       {hasSections ? (
         <div className="space-y-1">
           {sections!.map((sec, i) => (
@@ -423,11 +427,11 @@ export function PgcStatusTab({ status }: { status: PgcStatusTabData }) {
         </div>
       ) : null}
       {!hasSections && !hasLegacy ? (
-        <p className="text-center text-[#666]">No status data available.</p>
+        <p className="text-center text-ink-tertiary-light">No status data available.</p>
       ) : null}
       {!hasSections && status.links && status.links.length > 0 ? (
-        <div className="mt-6 border-t border-[#ddd] pt-4">
-          <p className="mb-2 font-semibold text-[#333]">Links</p>
+        <div className="mt-6 border-t border-cream-sunken pt-4">
+          <p className="mb-2 font-semibold text-ink-primary-light">Links</p>
           <ul className="list-none space-y-1">
             {status.links.map((L, i) => (
               <li key={i}>

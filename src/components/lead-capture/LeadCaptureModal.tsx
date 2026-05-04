@@ -65,7 +65,7 @@ export function LeadCaptureModal() {
         <DialogHeader>
           <DialogTitle className="text-2xl">Unlock Full Interactive Demos</DialogTitle>
           <DialogDescription className="text-base">
-            Get instant access to all interactive demos and see how Insight|DesignCheck™ can accelerate your permits.
+            Get instant access to all interactive demos and see how PermitPilot can accelerate your permits.
           </DialogDescription>
         </DialogHeader>
 

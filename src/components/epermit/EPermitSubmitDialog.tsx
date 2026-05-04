@@ -96,7 +96,7 @@ export function EPermitSubmitDialog({
 
   const handleSubmit = async () => {
     if (!config) {
-      toast.error('Please configure e-permit settings first');
+      toast.error('Please configure portal submission settings first');
       return;
     }
 
@@ -172,7 +172,7 @@ export function EPermitSubmitDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-5 w-5" />
-              Submit to E-Permit System
+              Submit to permit portal
             </DialogTitle>
             <DialogDescription>
               Submit your permit application directly to Accela or CityView.
@@ -207,7 +207,7 @@ export function EPermitSubmitDialog({
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Not Configured</AlertTitle>
                   <AlertDescription className="flex items-center justify-between">
-                    <span>Configure your e-permit system connection to submit.</span>
+                    <span>Configure your agency portal connection to submit.</span>
                     <Button 
                       variant="outline" 
                       size="sm"

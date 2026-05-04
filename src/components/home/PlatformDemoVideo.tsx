@@ -54,7 +54,7 @@ const videoSegments: VideoSegment[] = [
     src: demoDashboard,
     title: 'Multi-Municipality Permit Tracking',
     description: 'Track permits across 10 DMV jurisdictions with municipality badges, workflow-aligned navigation, and real-time agent status.',
-    narration: 'Welcome to Insight DesignCheck. Your centralized dashboard tracks permits across 10 DMV jurisdictions. See municipality badges, agent pipeline status, and deadline alerts — all organized by your workflow.',
+    narration: 'Welcome to PermitPilot. Your centralized dashboard tracks permits across 10 DMV jurisdictions. See municipality badges, agent pipeline status, and deadline alerts — all organized by your workflow.',
   },
   {
     src: demoPortalIntake,

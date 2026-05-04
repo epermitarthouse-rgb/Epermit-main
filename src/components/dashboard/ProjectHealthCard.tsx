@@ -106,9 +106,9 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
   if (!projectId) return null;
   if (isLoading) {
     return (
-      <Card>
+      <Card className="overflow-hidden rounded-2xl border border-cream-sunken/90 bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:text-ink-primary-light">
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <Loader2 className="h-6 w-6 animate-spin text-ink-tertiary-light" />
         </CardContent>
       </Card>
     );
@@ -195,9 +195,11 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
       : null;
 
   return (
-    <Card className="relative overflow-hidden border border-white/10 bg-white/5 backdrop-blur-sm rounded-xl">
+    <Card className="relative overflow-hidden rounded-2xl border border-cream-sunken/95 bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:border-cream-sunken dark:text-ink-primary-light">
       <CardHeader className="pb-2 flex flex-row items-start justify-between gap-4">
-        <CardTitle className="text-base">Project Health</CardTitle>
+        <CardTitle className="text-base font-serif font-normal tracking-tight text-ink-primary-light">
+          Project Health
+        </CardTitle>
         <div className="shrink-0 relative w-14 h-14">
           <svg className="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
             <circle
@@ -205,7 +207,7 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
               cy="18"
               r="14"
               fill="none"
-              className="stroke-muted/30"
+              className="stroke-cream-sunken"
               strokeWidth="3"
             />
             <circle
@@ -225,48 +227,56 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
               strokeDashoffset={strokeOffset}
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground">
+          <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-ink-primary-light">
             {healthPercent}%
           </span>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div className="rounded-lg border border-l-4 border-l-zinc-400 bg-muted/30 p-2 transition-shadow hover:shadow-md">
-            <FileText className="h-4 w-4 text-muted-foreground mb-1" />
-            <p className="text-xl font-bold leading-tight">{total_comments}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+          <div className="rounded-lg border border-cream-sunken bg-cream-sunken/35 border-l-4 border-l-zinc-400/90 p-2 transition-shadow hover:shadow-sm">
+            <FileText className="h-4 w-4 text-ink-tertiary-light mb-1" />
+            <p className="text-xl font-bold leading-tight text-ink-primary-light">{total_comments}</p>
+            <p className="text-xs text-ink-secondary-light">Total</p>
           </div>
-          <div className="rounded-lg border border-l-4 border-l-amber-500 bg-amber-500/5 p-2 transition-shadow hover:shadow-md">
-            <Clock className="h-4 w-4 text-amber-500 mb-1" />
-            <p className="text-xl font-bold leading-tight">{pending_comments}</p>
-            <p className="text-xs text-muted-foreground">Pending</p>
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] border-l-4 border-l-amber-500 p-2 transition-shadow hover:shadow-sm">
+            <Clock className="h-4 w-4 text-amber-600 mb-1" />
+            <p className="text-xl font-bold leading-tight text-ink-primary-light">{pending_comments}</p>
+            <p className="text-xs text-ink-secondary-light">Pending</p>
           </div>
-          <div className="rounded-lg border border-l-4 border-l-blue-500 bg-blue-500/5 p-2 transition-shadow hover:shadow-md">
-            <CheckCircle className="h-4 w-4 text-blue-500 mb-1" />
-            <p className="text-xl font-bold leading-tight">{ready_comments}</p>
-            <p className="text-xs text-muted-foreground">Ready</p>
+          <div className="rounded-lg border border-blue-500/15 bg-blue-500/[0.05] border-l-4 border-l-blue-500 p-2 transition-shadow hover:shadow-sm">
+            <CheckCircle className="h-4 w-4 text-teal mb-1" />
+            <p className="text-xl font-bold leading-tight text-ink-primary-light">{ready_comments}</p>
+            <p className="text-xs text-ink-secondary-light">Ready</p>
           </div>
-          <div className="rounded-lg border border-l-4 border-l-emerald-500 bg-emerald-500/5 p-2 transition-shadow hover:shadow-md">
-            <Shield className="h-4 w-4 text-emerald-500 mb-1" />
-            <p className="text-xl font-bold leading-tight">{approved_comments}</p>
-            <p className="text-xs text-muted-foreground">Approved</p>
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] border-l-4 border-l-emerald-500 p-2 transition-shadow hover:shadow-sm">
+            <Shield className="h-4 w-4 text-emerald-600 mb-1" />
+            <p className="text-xl font-bold leading-tight text-ink-primary-light">{approved_comments}</p>
+            <p className="text-xs text-ink-secondary-light">Approved</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-sm">
-          <Clock className={cn("h-4 w-4 shrink-0", lastCheckVariant === "green" && "text-emerald-500", lastCheckVariant === "amber" && "text-amber-500", lastCheckVariant === "red" && "text-red-500", lastCheckVariant === "muted" && "text-muted-foreground")} />
+          <Clock className={cn("h-4 w-4 shrink-0", lastCheckVariant === "green" && "text-emerald-500", lastCheckVariant === "amber" && "text-amber-500", lastCheckVariant === "red" && "text-red-500", lastCheckVariant === "muted" && "text-ink-tertiary-light")} />
           {lastCheckVariant === "green" && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />}
-          <span className={cn(lastCheckVariant === "green" && "text-emerald-600 dark:text-emerald-400", lastCheckVariant === "amber" && "text-amber-600 dark:text-amber-400", lastCheckVariant === "red" && "text-red-600 dark:text-red-400", lastCheckVariant === "muted" && "text-muted-foreground")}>
+          <span className={cn(lastCheckVariant === "green" && "text-emerald-600", lastCheckVariant === "amber" && "text-amber-600", lastCheckVariant === "red" && "text-red-600", lastCheckVariant === "muted" && "text-ink-tertiary-light")}>
             Last portal check: {lastCheckText}
             {lastCheckVariant === "red" && lastCheckedAt != null && " ⚠"}
           </span>
         </div>
 
         <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-secondary-light">
             {deadline == null ? (
-              <>Deadline: {deadlineText} · <button type="button" onClick={() => navigate("/projects")} className="text-emerald-500 hover:underline">Set deadline</button></>
+              <>Deadline: {deadlineText} ·{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/projects")}
+                  className="font-medium text-emerald-700 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-teal dark:hover:text-teal-soft"
+                >
+                  Set deadline
+                </button>
+              </>
             ) : (
               <span className={cn(deadlineNear && "text-amber-600 dark:text-amber-400 font-medium", (daysUntilDeadline ?? 0) < 0 && "text-red-600 dark:text-red-400")}>
                 Deadline: {deadlineText}
@@ -274,7 +284,7 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
             )}
           </p>
           {deadlineProgress != null && deadline != null && (
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-1.5 rounded-full bg-cream-sunken/80 overflow-hidden border border-cream-sunken/50">
               <div
                 className={cn("h-full rounded-full transition-all duration-500", deadlineNear ? "bg-amber-500" : (daysUntilDeadline ?? 0) < 0 ? "bg-red-500" : "bg-emerald-500/60")}
                 style={{ width: `${Math.min(deadlineProgress, 100)}%` }}
@@ -289,7 +299,7 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
               <AlertTriangle className="h-4 w-4 shrink-0" />
               Action required
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Resolve pending comments to stay on track.</p>
+            <p className="text-xs text-ink-secondary-light mt-1">Resolve pending comments to stay on track.</p>
             <Button
               size="sm"
               className="mt-2 hover:shadow-[0_0_12px_rgba(239,68,68,0.3)] transition-shadow"

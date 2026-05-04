@@ -25,7 +25,7 @@ const faqs = [
     answer: "We currently cover over 3,000 jurisdictions across the United States, including major metropolitan areas and their surrounding municipalities. Our database is continuously updated to reflect the latest code amendments and local requirements. Contact us if you need coverage for a specific jurisdiction.",
   },
   {
-    question: "Can I integrate Insight|DesignCheck with my existing workflow?",
+    question: "Can I integrate PermitPilot with my existing workflow?",
     answer: "Yes! We offer integrations with popular project management tools like Procore, PlanGrid, and Autodesk Construction Cloud. We also provide a REST API for custom integrations, and our team can help set up workflows tailored to your specific needs.",
   },
   {

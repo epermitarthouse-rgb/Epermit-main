@@ -54,7 +54,7 @@ export function MarketingHeroSection() {
 
               {/* Subheadline */}
               <p className="text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-8">
-                Join over a million professionals who choose InsightDesignCheck for fast, 
+                Join over a million professionals who choose PermitPilot for fast, 
                 accurate permit submissions and real-time compliance tracking.
               </p>
             </motion.div>

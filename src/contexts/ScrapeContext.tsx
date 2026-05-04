@@ -491,24 +491,24 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
           aria-label="Scraping progress"
           data-testid="scrape-progress-bar"
         >
-          <div className="relative rounded-xl border border-emerald-500/30 bg-zinc-900/95 shadow-2xl shadow-emerald-900/20 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-600/5 pointer-events-none" />
+          <div className="relative rounded-xl border border-teal/30 bg-obsidian shadow-2xl shadow-emerald-900/20 overflow-hidden text-ink-primary-dark">
+            <div className="absolute inset-0 bg-gradient-to-br from-teal/10 via-transparent to-emerald-600/5 pointer-events-none" />
             <div className="relative">
               {scrapeOverlay.phase === "scraping" ? (
                 scrapeMinimized ? (
                   <button
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-obsidian-raised transition-colors"
                     onClick={() => setScrapeMinimized(false)}
                     data-testid="button-expand-scrape"
                   >
                     <div
-                      className="h-4 w-4 shrink-0 rounded-full border-2 border-emerald-500 border-t-transparent"
+                      className="h-4 w-4 shrink-0 rounded-full border-2 border-teal border-t-transparent"
                       style={{ animation: "scrape-spin 0.8s linear infinite" }}
                     />
-                    <span className="text-xs text-zinc-300 truncate flex-1">
+                    <span className="text-xs text-ink-secondary-dark truncate flex-1">
                       {scrapeOverlay.stepText}
                     </span>
-                    <span className="text-xs font-mono text-emerald-400 tabular-nums shrink-0">
+                    <span className="text-xs font-mono text-teal tabular-nums shrink-0">
                       {formatElapsed(scrapeElapsed)}
                     </span>
                   </button>
@@ -517,19 +517,19 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div
-                          className="h-4 w-4 shrink-0 rounded-full border-2 border-emerald-500 border-t-transparent"
+                          className="h-4 w-4 shrink-0 rounded-full border-2 border-teal border-t-transparent"
                           style={{ animation: "scrape-spin 0.8s linear infinite" }}
                         />
-                        <h3 className="text-sm font-semibold text-white">
+                        <h3 className="text-sm font-semibold text-ink-primary-dark">
                           Scraping portal
                         </h3>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-mono text-emerald-400 tabular-nums">
+                        <span className="text-xs font-mono text-teal tabular-nums">
                           {formatElapsed(scrapeElapsed)}
                         </span>
                         <button
-                          className="ml-1 p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                          className="ml-1 p-1 rounded hover:bg-obsidian-raised text-ink-tertiary-dark hover:text-ink-primary-dark transition-colors"
                           onClick={handleHideToBackground}
                           title="Hide to background"
                           data-testid="button-hide-scrape-background"
@@ -538,18 +538,18 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-ink-tertiary-dark">
                       Permit:{" "}
-                      <span className="font-medium text-emerald-400">
+                      <span className="font-medium text-teal">
                         {scrapeOverlay.projectNum}
                       </span>
                     </p>
-                    <p className="text-xs text-zinc-300">
+                    <p className="text-xs text-ink-secondary-dark">
                       {scrapeOverlay.stepText}
                     </p>
-                    <div className="h-1.5 rounded-full bg-zinc-700 overflow-hidden">
+                    <div className="h-1.5 rounded-full bg-obsidian-raised overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500 ease-out"
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal transition-all duration-500 ease-out"
                         style={{
                           width: `${scrapeOverlay.total > 0 ? Math.round((scrapeOverlay.progress / scrapeOverlay.total) * 100) : 0}%`,
                         }}
@@ -562,16 +562,16 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
                         return (
                           <li key={tab.key} className="flex items-center gap-2 text-xs">
                             {done ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-teal" />
                             ) : current ? (
                               <span
-                                className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                                className="h-2 w-2 shrink-0 rounded-full bg-teal"
                                 style={{ animation: "scrape-pulse-dot 1s ease-in-out infinite" }}
                               />
                             ) : (
-                              <Circle className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
+                              <Circle className="h-3.5 w-3.5 shrink-0 text-ink-tertiary-dark" />
                             )}
-                            <span className={done ? "text-zinc-400" : current ? "text-emerald-400 font-medium" : "text-zinc-600"}>
+                            <span className={done ? "text-ink-tertiary-dark" : current ? "text-teal font-medium" : "text-ink-tertiary-dark"}>
                               {tab.label}
                             </span>
                           </li>
@@ -582,7 +582,7 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="flex-1 h-7 text-xs border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                        className="flex-1 h-7 text-xs border-obsidian-raised text-ink-secondary-dark hover:bg-obsidian-raised hover:text-ink-primary-dark"
                         onClick={handleHideToBackground}
                         data-testid="button-hide-to-background"
                       >
@@ -605,21 +605,21 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
               ) : (
                 <div className="p-4 space-y-2">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    <h3 className="text-sm font-semibold text-white">
+                    <CheckCircle2 className="h-5 w-5 text-teal" />
+                    <h3 className="text-sm font-semibold text-ink-primary-dark">
                       Scraping complete!
                     </h3>
                   </div>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-ink-tertiary-dark">
                     {scrapeOverlay.stepText}
                   </p>
-                  <p className="text-xs text-emerald-400">
+                  <p className="text-xs text-teal">
                     Launching agent chain...
                   </p>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full h-7 text-xs border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                    className="w-full h-7 text-xs border-teal/40 text-teal hover:bg-teal/10"
                     onClick={handleDismissOverlay}
                     data-testid="button-dismiss-scraping"
                   >

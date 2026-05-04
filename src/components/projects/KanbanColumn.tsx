@@ -35,7 +35,7 @@ export function KanbanColumn({
     <div
       className={cn(
         "flex flex-col min-h-[300px] sm:min-h-[500px] min-w-[260px] sm:min-w-0 rounded-lg border-2 transition-colors",
-        isDragOver ? "border-accent bg-accent/5" : "border-transparent bg-muted/30"
+        isDragOver ? "border-primary/40 bg-primary/[0.04]" : "border-transparent bg-muted/30"
       )}
       onDragOver={(e) => {
         e.preventDefault();
@@ -52,7 +52,7 @@ export function KanbanColumn({
         config.bgColor
       )}>
         <div className="flex items-center gap-2">
-          <div className={cn("w-2 h-2 rounded-full", config.bgColor.replace('bg-', 'bg-').replace('100', '500'))} />
+          <div className={cn("w-2 h-2 rounded-full shrink-0", config.dotColor)} />
           <span className={cn("font-medium text-sm", config.color)}>
             {config.label}
           </span>

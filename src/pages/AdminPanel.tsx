@@ -536,6 +536,7 @@ export default function AdminPanel() {
   return (
     <>
       <AdminPageShell
+        variant="editorial"
         title="Admin Panel"
         description="Notifications, drip campaigns, activity log, and email branding."
         breadcrumbs={[{ label: 'Overview' }]}
@@ -543,21 +544,21 @@ export default function AdminPanel() {
       >
         <div className="space-y-6">
 
-          <Tabs defaultValue="notifications" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="notifications" className="flex items-center gap-2">
+            <Tabs defaultValue="notifications" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/40 p-1 text-ink-secondary-light">
+              <TabsTrigger value="notifications" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
                 <Bell className="h-4 w-4" />
                 Notifications
               </TabsTrigger>
-              <TabsTrigger value="drip" className="flex items-center gap-2">
+              <TabsTrigger value="drip" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
                 <MailCheck className="h-4 w-4" />
                 Drip Campaigns
               </TabsTrigger>
-              <TabsTrigger value="activity" className="flex items-center gap-2">
+              <TabsTrigger value="activity" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
                 <History className="h-4 w-4" />
                 Activity Log
               </TabsTrigger>
-              <TabsTrigger value="branding" className="flex items-center gap-2">
+              <TabsTrigger value="branding" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
                 <Palette className="h-4 w-4" />
                 Email Branding
               </TabsTrigger>
@@ -940,7 +941,7 @@ export default function AdminPanel() {
                         {/* Live Preview */}
                         <div className="space-y-2">
                           <Label>Live Preview</Label>
-                          <div className="border rounded-lg overflow-hidden bg-[#0D1E38] text-sm">
+                          <div className="border rounded-lg overflow-hidden bg-navy text-sm text-navy-foreground">
                             <div style={{ backgroundColor: editedBranding.primary_color }} className="px-4 py-3 text-center">
                               {editedBranding.logo_url && (
                                 <img 
@@ -953,8 +954,8 @@ export default function AdminPanel() {
                               <h3 className="text-white font-bold text-sm">{editedBranding.header_text}</h3>
                             </div>
                             <div className="p-4 space-y-2">
-                              <p className="text-xs text-[#6B9AC4]">Jurisdiction Code Update</p>
-                              <p className="font-bold text-[#F0F6FF]">Sample Notification Title</p>
+                              <p className="text-xs text-primary/85">Jurisdiction Code Update</p>
+                              <p className="font-bold text-navy-foreground">Sample Notification Title</p>
                               <span 
                                 className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
                                 style={{ 
@@ -964,18 +965,17 @@ export default function AdminPanel() {
                               >
                                 Sample Jurisdiction, ST
                               </span>
-                              <div 
-                                className="p-2 text-xs"
-                                style={{ 
-                                  backgroundColor: '#091428',
-                                  borderLeft: `3px solid ${editedBranding.primary_color}` 
+                              <div
+                                className="p-2 text-xs bg-navy/70 text-muted-foreground border-l-[3px]"
+                                style={{
+                                  borderLeftColor: editedBranding.primary_color,
                                 }}
                               >
                                 Sample notification message content...
                               </div>
                             </div>
-                            <div className="bg-[#091428] px-4 py-2 text-center">
-                              <p className="text-xs text-[#6B9AC4]">{editedBranding.footer_text}</p>
+                            <div className="bg-navy/80 px-4 py-2 text-center border-t border-border/30">
+                              <p className="text-xs text-primary/80">{editedBranding.footer_text}</p>
                               <p className="mt-1">
                                 <span 
                                   className="text-xs cursor-pointer"
@@ -1136,7 +1136,7 @@ export default function AdminPanel() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="border rounded-lg overflow-hidden bg-[#0D1E38]">
+          <div className="border rounded-lg overflow-hidden bg-navy text-navy-foreground">
             {/* Email Header */}
             <div style={{ backgroundColor: currentBranding.primary_color }} className="px-6 py-4 text-center">
               {currentBranding.logo_url && (
@@ -1151,12 +1151,12 @@ export default function AdminPanel() {
             </div>
             
             {/* Email Body */}
-            <div className="p-6 space-y-4">
-              <div className="text-sm text-muted-foreground">
+            <div className="p-6 space-y-4 text-navy-foreground">
+              <div className="text-sm text-navy-foreground/75">
                 Jurisdiction Code Update Notification
               </div>
               
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-2xl font-bold">
                 {notificationTitle || 'Notification Title'}
               </h1>
               
@@ -1170,21 +1170,20 @@ export default function AdminPanel() {
                 {jurisdictions.find(j => j.jurisdiction_id === selectedJurisdiction)?.jurisdiction_name || 'Selected Jurisdiction'}, {jurisdictions.find(j => j.jurisdiction_id === selectedJurisdiction)?.jurisdiction_state || 'State'}
               </span>
               
-              <div 
-                className="p-4"
-                style={{ 
-                  backgroundColor: '#091428',
-                  borderLeft: `4px solid ${currentBranding.primary_color}` 
+              <div
+                className="p-4 bg-navy/70 border-l-4 text-navy-foreground"
+                style={{
+                  borderLeftColor: currentBranding.primary_color,
                 }}
               >
-                <p className="text-foreground whitespace-pre-wrap">
+                <p className="whitespace-pre-wrap opacity-95">
                   {notificationMessage || 'Notification message will appear here...'}
                 </p>
               </div>
               
               <hr className="my-4" />
               
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-navy-foreground/75">
                 You are receiving this email because you subscribed to updates for this jurisdiction on {currentBranding.header_text}.
               </p>
             </div>

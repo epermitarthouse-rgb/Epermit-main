@@ -12,6 +12,8 @@ import { BaltimoreDetailSection } from "@/components/baltimore/BaltimoreDetailSe
 import { BaltimoreInfoGrid } from "@/components/baltimore/BaltimoreInfoGrid";
 import { BaltimorePanelTable } from "@/components/baltimore/BaltimorePanelTable";
 import { getBaltimoreRecordDetail } from "@/data/baltimorePortalMock";
+import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
+import { cn } from "@/lib/utils";
 
 export default function BaltimoreRecordDetailPage() {
   const { recordId } = useParams<{ recordId: string }>();
@@ -33,8 +35,8 @@ export default function BaltimoreRecordDetailPage() {
   if (!recordId) {
     return (
       <BaltimoreLayout activeModule="permits" permitsSubActive="search">
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+        <Card className={EDITORIAL_FORM_CARD}>
+          <CardContent className="py-12 text-center text-sm text-ink-secondary-light">
             Missing record ID.
           </CardContent>
         </Card>
@@ -45,8 +47,8 @@ export default function BaltimoreRecordDetailPage() {
   if (!record) {
     return (
       <BaltimoreLayout activeModule="permits" permitsSubActive="search">
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+        <Card className={EDITORIAL_FORM_CARD}>
+          <CardContent className="py-12 text-center text-sm text-ink-secondary-light">
             Record not found.
           </CardContent>
         </Card>
@@ -59,7 +61,7 @@ export default function BaltimoreRecordDetailPage() {
       <div className="space-y-6">
         <BaltimoreRecordHeader record={record} />
 
-        <Card>
+        <Card className={cn(EDITORIAL_FORM_CARD, "overflow-hidden")}>
           <BaltimoreRecordTabBar
             activePanel={activePanel}
             onPanelChange={setActivePanel}
@@ -133,7 +135,7 @@ export default function BaltimoreRecordDetailPage() {
                       <h4 className="mb-1 text-xs font-semibold text-muted-foreground">
                         Description
                       </h4>
-                      <p className="text-sm text-[#333]">
+                      <p className="text-sm text-muted-foreground">
                         {record.description}
                       </p>
                     </div>
@@ -194,7 +196,7 @@ export default function BaltimoreRecordDetailPage() {
                       render: (r) => (
                         <Link
                           to={`/baltimore/records/${encodeURIComponent(r.recordId as string)}`}
-                          className="text-primary hover:underline"
+                          className="text-gold-deep hover:underline underline-offset-2 font-medium"
                         >
                           {r.recordNumber as string}
                         </Link>
@@ -236,7 +238,7 @@ export default function BaltimoreRecordDetailPage() {
                       key: "action",
                       header: "Action",
                       render: (r) => (
-                        <span className="cursor-pointer text-primary">
+                        <span className="cursor-pointer text-gold-deep hover:underline underline-offset-2 font-medium">
                           {(r.actionLabel as string) || "View"}
                         </span>
                       ),

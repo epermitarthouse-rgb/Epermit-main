@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { EyebrowDark, SectionTitle } from "@/components/ui/Typography";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -192,9 +186,6 @@ export function AgentWorkflowStatus() {
     pdfIndex: number;
     totalPdfs: number;
   } | null>(null);
-  const [firstJurisdiction, setFirstJurisdiction] = useState<string | null>(
-    null,
-  );
   const [latestProjectId, setLatestProjectId] = useState<string | null>(null);
   const [latestPermitNumber, setLatestPermitNumber] = useState<string | null>(
     null,
@@ -537,13 +528,6 @@ export function AgentWorkflowStatus() {
 
   const loadDashboardData = useCallback(async () => {
     if (!user) return;
-    const { data: cred } = await supabase
-      .from("portal_credentials")
-      .select("jurisdiction")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
-    if (cred?.jurisdiction) setFirstJurisdiction(cred.jurisdiction);
 
     const { data: project } = await supabase
       .from("projects")
@@ -1165,7 +1149,7 @@ export function AgentWorkflowStatus() {
         );
       }
 
-      const loginUrl = cred.login_url?.trim();
+      const loginUrl = String(cred.login_url ?? "").trim();
       if (!loginUrl) {
         throw new Error(
           `Missing Portal URL for ${cred.jurisdiction || "this jurisdiction"}. Please update Settings.`,
@@ -1310,7 +1294,7 @@ export function AgentWorkflowStatus() {
               ? `Status: ${portalStatusText}`
               : "Idle",
       action: (
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-col gap-2 mt-2 items-start">
           {portalStatus === "checking" ? (
             <Button
               size="sm"
@@ -1571,7 +1555,7 @@ export function AgentWorkflowStatus() {
                     </>
                   ) : isMinimalTabsCred ? (
                     <>
-                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      <DropdownMenuLabel className="text-xs font-normal text-popover-foreground">
                         Tabs
                       </DropdownMenuLabel>
                       {(isBaltimoreCred
@@ -1607,7 +1591,7 @@ export function AgentWorkflowStatus() {
                         </DropdownMenuCheckboxItem>
                       ))}
                       <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      <DropdownMenuLabel className="text-xs font-normal text-popover-foreground">
                         Presets (single run)
                       </DropdownMenuLabel>
                       <DropdownMenuItem
@@ -1697,7 +1681,7 @@ export function AgentWorkflowStatus() {
                     </>
                   ) : isWashingtonProjectDoxCred ? (
                     <>
-                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      <DropdownMenuLabel className="text-xs font-normal text-popover-foreground">
                         Tabs
                       </DropdownMenuLabel>
                       {WASHINGTON_SCRAPE_TAB_DEFS.map(({ key, label }) => (
@@ -1719,7 +1703,7 @@ export function AgentWorkflowStatus() {
                       {washingtonScrapeTabs.files ? (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                          <DropdownMenuLabel className="text-xs font-normal text-popover-foreground">
                             Files — folders
                           </DropdownMenuLabel>
                           <DropdownMenuCheckboxItem
@@ -1759,7 +1743,7 @@ export function AgentWorkflowStatus() {
                         </>
                       ) : null}
                       <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      <DropdownMenuLabel className="text-xs font-normal text-popover-foreground">
                         Presets (single run)
                       </DropdownMenuLabel>
                       <DropdownMenuItem
@@ -1845,9 +1829,9 @@ export function AgentWorkflowStatus() {
             size="sm"
             variant="outline"
             asChild
-            className="group/btn transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
+            className="group/btn w-fit shrink-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
           >
-            <Link to="/portal-data" className="flex items-center">
+            <Link to="/portal-data" className="inline-flex items-center">
               <ExternalLink className="h-4 w-4 mr-2 transition-transform duration-300 group-hover/btn:scale-110" />
               View Portal Data
             </Link>
@@ -1923,162 +1907,246 @@ export function AgentWorkflowStatus() {
     },
   ];
 
+  const statusRingClass = (status: StepStatus) => {
+    if (status === "checking") {
+      return "border-teal bg-teal/15 text-teal shadow-[0_0_14px_hsl(var(--accent-teal)_/_0.35)]";
+    }
+    if (status === "done") {
+      return "border-teal bg-teal/20 text-teal";
+    }
+    if (status === "failed") {
+      return "border-destructive bg-destructive/15 text-destructive animate-status-shake";
+    }
+    if (status === "waiting") {
+      return "border-gold/50 bg-gold/10 text-gold animate-pulse-glow";
+    }
+    if (status === "pending") {
+      return "border-obsidian-raised bg-obsidian-sunken text-ink-tertiary-dark";
+    }
+    return "border-ink-tertiary-dark/40 bg-obsidian-raised text-ink-secondary-dark animate-pulse-glow";
+  };
+
+  const statusPillClass = (status: StepStatus) => {
+    if (status === "checking") {
+      return "border-teal/35 bg-teal/10 text-teal border";
+    }
+    if (status === "done") {
+      return "border-teal/35 bg-teal/10 text-teal border";
+    }
+    if (status === "failed") {
+      return "border-destructive/35 bg-destructive/10 text-destructive border";
+    }
+    if (status === "waiting") {
+      return "border-gold/40 bg-gold/10 text-gold border animate-pulse-glow";
+    }
+    if (status === "pending") {
+      return "border-obsidian-raised text-ink-secondary-dark bg-obsidian-sunken border";
+    }
+    return "border-gold/30 bg-gold/10 text-gold border";
+  };
+
+  /** Pipeline aside: coerce to string — DB/JSON may return numeric permit (#). */
+  const pipelinePermitTrim = String(
+    projectBySelectedId?.permit_number ?? "",
+  ).trim();
+  const pipelineJurisdictionTrim = String(
+    projectBySelectedId?.jurisdiction ?? "",
+  ).trim();
+
   return (
-    <Card className="relative overflow-hidden border-0 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl shadow-xl">
-      <div className="absolute inset-0 rounded-xl border border-transparent bg-gradient-to-br from-emerald-500/20 via-transparent to-transparent bg-[length:200%_200%] animate-shimmer pointer-events-none" />
-      <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-emerald-500/20 pointer-events-none" />
-      <CardHeader className="relative">
-        <CardTitle className="flex items-center gap-2 text-lg flex-wrap">
-          <span className="flex items-center gap-2">
-            <Workflow
-              className="h-5 w-5 text-emerald-400 animate-pulse-glow"
-              style={{ boxShadow: "0 0 12px rgba(16, 185, 129, 0.3)" }}
-            />
-            DesignCheck Intake Pipeline
-          </span>
-          <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
-            AI-Powered
-          </span>
-          {chainRunning && (
-            <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400 animate-pulse" data-testid="badge-chain-running">
-              Chain Active
-            </span>
-          )}
-          {chainPhase === "complete" && (
-            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400" data-testid="badge-chain-complete">
-              Chain Complete
-            </span>
-          )}
-          {isShadowMode && chainPhase !== "idle" && (
-            <span className="inline-flex items-center rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-xs font-medium text-purple-400" data-testid="badge-shadow-mode">
-              Shadow Mode
-            </span>
-          )}
-        </CardTitle>
-        <CardDescription>
-          {chainRunning
-            ? `Agent chain in progress — ${chainPhase} step active. All agents fire sequentially.`
-            : "Agentic workflow status (Steps 1-5). Run a manual portal check to trigger the full chain."}
-        </CardDescription>
-        {chainError && (
-          <p className="text-xs text-red-400 mt-1" data-testid="text-chain-error">
-            Last error: {chainError}
-          </p>
-        )}
-      </CardHeader>
-      <CardContent className="relative space-y-0">
-        {steps.map((step, i) => (
-          <div
-            key={i}
-            className="flex gap-4 group transition-transform duration-200 hover:scale-[1.02]"
-            style={{
-              animation: "fade-in-up 0.4s ease-out forwards",
-              animationDelay: `${i * 100}ms`,
-              opacity: 0,
-            }}
-          >
-            <div className="flex flex-col items-center shrink-0">
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 group-hover:shadow-lg ${
-                  step.status === "checking"
-                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)] [animation:spin_0.8s_linear_infinite]"
-                    : step.status === "done"
-                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-500"
-                      : step.status === "failed"
-                        ? "border-red-500 bg-red-500/10 text-red-500 animate-status-shake"
-                        : "border-muted-foreground/40 bg-muted/50 text-muted-foreground animate-pulse-glow"
-                }`}
-                style={
-                  step.status === "checking"
-                    ? { animation: "scrape-spin 0.8s linear infinite" }
-                    : undefined
-                }
-              >
-                {step.status === "checking" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : step.status === "done" ? (
-                  <CheckCircle2
-                    className="h-4 w-4"
-                    style={{ animation: "scrape-scale-check 0.3s ease-out" }}
-                  />
-                ) : step.status === "failed" ? (
-                  <XCircle className="h-4 w-4" />
-                ) : (
-                  <Circle className="h-4 w-4" />
+    <div className="relative w-full text-ink-primary-dark">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_min(100%,17.5rem)] lg:gap-8 xl:gap-10 lg:items-start">
+        <div className="min-w-0 lg:max-w-3xl">
+          <div className="mb-8">
+            <EyebrowDark className="mb-2">Intake pipeline</EyebrowDark>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 max-w-3xl">
+                <SectionTitle className="flex flex-wrap items-center gap-3 text-ink-primary-dark !text-2xl sm:!text-3xl">
+                  <Workflow className="h-7 w-7 text-teal shrink-0" aria-hidden />
+                  <span>PermitPilot Intake Pipeline</span>
+                </SectionTitle>
+                <p className="text-sm text-ink-secondary-dark mt-2">
+                  {chainRunning
+                    ? `Agent chain in progress — ${chainPhase} step active. All agents fire sequentially.`
+                    : "Agentic workflow status (Steps 1-5). Run a manual portal check to trigger the full chain."}
+                </p>
+                {chainError && (
+                  <p className="text-xs text-destructive mt-2" data-testid="text-chain-error">
+                    Last error: {chainError}
+                  </p>
                 )}
               </div>
-              {i < steps.length - 1 && (
-                <div className="w-0.5 flex-1 min-h-[24px] my-1 bg-border overflow-hidden">
-                  <div
-                    className="w-full bg-emerald-500/60 transition-all duration-500 ease-out min-h-0"
-                    style={{ height: step.status === "done" ? "100%" : "0%" }}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="pb-4 min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-medium">{step.title}</p>
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
-                    step.status === "checking"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : step.status === "done"
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : step.status === "failed"
-                          ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                          : step.status === "waiting"
-                            ? "bg-muted/50 text-muted-foreground border border-border animate-pulse-glow"
-                            : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                  }`}
-                >
-                  {step.status === "checking" && (
-                    <span className="inline-flex gap-0.5 mr-1">
-                      <span className="animate-pulse">.</span>
-                      <span
-                        className="animate-pulse"
-                        style={{ animationDelay: "0.2s" }}
-                      >
-                        .
-                      </span>
-                      <span
-                        className="animate-pulse"
-                        style={{ animationDelay: "0.4s" }}
-                      >
-                        .
-                      </span>
-                    </span>
-                  )}
-                  {step.status === "done" && (
-                    <CheckCircle2 className="h-3 w-3 mr-1 shrink-0" />
-                  )}
-                  {step.status === "failed" && (
-                    <XCircle className="h-3 w-3 mr-1 shrink-0" />
-                  )}
-                  {step.status === "waiting" && "Waiting for Doc"}
-                  {step.status === "pending" && "Pending"}
-                  {step.status === "checking" && "Running"}
-                  {step.status === "done" && "Complete"}
-                  {step.status === "failed" && "Error"}
-                  {![
-                    "checking",
-                    "done",
-                    "failed",
-                    "waiting",
-                    "pending",
-                  ].includes(step.status) && "Idle"}
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <span className="inline-flex items-center rounded-full border border-teal/40 bg-teal/10 px-2.5 py-0.5 text-xs font-medium text-teal">
+                  AI-Powered
                 </span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {step.description}
-              </p>
-              <div className="mt-2 [&_button]:transition-all [&_button]:duration-200 [&_button:hover]:-translate-y-0.5 [&_button:hover]:shadow-md [&_button:active]:scale-[0.98]">
-                {"action" in step && step.action}
+                {chainRunning && (
+                  <span
+                    className="inline-flex items-center rounded-full border border-gold/35 bg-gold/10 px-2.5 py-0.5 text-xs font-medium text-gold animate-pulse"
+                    data-testid="badge-chain-running"
+                  >
+                    Chain Active
+                  </span>
+                )}
+                {chainPhase === "complete" && (
+                  <span
+                    className="inline-flex items-center rounded-full border border-teal/40 bg-teal/10 px-2.5 py-0.5 text-xs font-medium text-teal"
+                    data-testid="badge-chain-complete"
+                  >
+                    Chain Complete
+                  </span>
+                )}
+                {isShadowMode && chainPhase !== "idle" && (
+                  <span
+                    className="inline-flex items-center rounded-full border border-teal/30 bg-teal/5 px-2.5 py-0.5 text-xs font-medium text-teal"
+                    data-testid="badge-shadow-mode"
+                  >
+                    Shadow Mode
+                  </span>
+                )}
               </div>
             </div>
           </div>
-        ))}
-      </CardContent>
-    </Card>
+
+          <div className="relative">
+            {steps.map((step, i) => (
+              <div
+                key={i}
+                className="flex gap-4 sm:gap-6 group transition-transform duration-200 hover:scale-[1.01]"
+                style={{
+                  animation: "fade-in-up 0.4s ease-out forwards",
+                  animationDelay: `${i * 100}ms`,
+                  opacity: 0,
+                }}
+              >
+                <div className="flex flex-col items-center shrink-0">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 group-hover:shadow-lg ${statusRingClass(
+                      step.status,
+                    )}`}
+                    style={
+                      step.status === "checking"
+                        ? { animation: "scrape-spin 0.8s linear infinite" }
+                        : undefined
+                    }
+                  >
+                    {step.status === "checking" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : step.status === "done" ? (
+                      <CheckCircle2
+                        className="h-4 w-4"
+                        style={{ animation: "scrape-scale-check 0.3s ease-out" }}
+                      />
+                    ) : step.status === "failed" ? (
+                      <XCircle className="h-4 w-4" />
+                    ) : (
+                      <Circle className="h-4 w-4" />
+                    )}
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div className="w-px flex-1 min-h-[24px] my-1 bg-gradient-to-b from-teal/60 to-teal/15 overflow-hidden rounded-full">
+                      <div
+                        className="w-full mx-auto bg-teal/70 transition-all duration-500 ease-out min-h-0 rounded-full"
+                        style={{
+                          width: "100%",
+                          height: step.status === "done" ? "100%" : "0%",
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="pb-8 min-w-0 flex-1 last:pb-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-ink-primary-dark">{step.title}</p>
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${statusPillClass(
+                        step.status,
+                      )}`}
+                    >
+                      {step.status === "checking" && (
+                        <span className="inline-flex gap-0.5 mr-1">
+                          <span className="animate-pulse">.</span>
+                          <span
+                            className="animate-pulse"
+                            style={{ animationDelay: "0.2s" }}
+                          >
+                            .
+                          </span>
+                          <span
+                            className="animate-pulse"
+                            style={{ animationDelay: "0.4s" }}
+                          >
+                            .
+                          </span>
+                        </span>
+                      )}
+                      {step.status === "done" && (
+                        <CheckCircle2 className="h-3 w-3 mr-1 shrink-0" />
+                      )}
+                      {step.status === "failed" && (
+                        <XCircle className="h-3 w-3 mr-1 shrink-0" />
+                      )}
+                      {step.status === "waiting" && "Waiting for Doc"}
+                      {step.status === "pending" && "Pending"}
+                      {step.status === "checking" && "Running"}
+                      {step.status === "done" && "Complete"}
+                      {step.status === "failed" && "Error"}
+                      {![
+                        "checking",
+                        "done",
+                        "failed",
+                        "waiting",
+                        "pending",
+                      ].includes(step.status) && "Idle"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-ink-secondary-dark mt-0.5">
+                    {step.description}
+                  </p>
+                  <div className="mt-2 [&_button]:transition-all [&_button]:duration-200 [&_button:hover]:-translate-y-0.5 [&_button:hover]:shadow-md [&_button:active]:scale-[0.98] [&_a.inline-flex]:transition-all">
+                    {"action" in step && step.action}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside
+          className="mt-10 min-w-0 rounded-xl border border-[hsl(var(--border-obsidian-strong)/0.38)] bg-gradient-to-br from-obsidian-raised/92 via-[hsl(219_52%_13%)] to-obsidian-sunken p-4 text-sm shadow-[0_10px_44px_-14px_rgba(0,0,0,0.52)] ring-1 ring-white/[0.05] backdrop-blur-[1px] lg:mt-0"
+          aria-label="Pipeline context"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-dark mb-3">
+            Pipeline context
+          </p>
+          {selectedProjectId ? (
+            projectBySelectedId ? (
+              <dl className="space-y-3 text-ink-primary-dark">
+                <div>
+                  <dt className="text-xs text-ink-secondary-dark">Permit</dt>
+                  <dd className="font-mono text-sm mt-0.5 tabular-nums">
+                    {pipelinePermitTrim || "—"}
+                  </dd>
+                </div>
+                {pipelineJurisdictionTrim ? (
+                  <div>
+                    <dt className="text-xs text-ink-secondary-dark">Jurisdiction</dt>
+                    <dd className="mt-0.5">{pipelineJurisdictionTrim}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : (
+              <p className="text-xs text-ink-secondary-dark leading-relaxed">
+                Project is selected; permit and jurisdiction will appear here when loaded from your workspace.
+              </p>
+            )
+          ) : (
+            <p className="text-xs text-ink-secondary-dark leading-relaxed">
+              Select a project from the workspace to scope portal checks and the agent chain.
+            </p>
+          )}
+        </aside>
+      </div>
+    </div>
   );
 }

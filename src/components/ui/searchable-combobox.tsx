@@ -69,10 +69,10 @@ export function SearchableCombobox({
           aria-expanded={open}
           className={cn("w-full justify-between font-normal", className)}
         >
-          <span className="truncate">
+          <span className={cn("truncate", !selectedOption && "text-muted-foreground")}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-popover" align="start">

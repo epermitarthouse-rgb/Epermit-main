@@ -78,7 +78,7 @@ export function ProjectDetailDialog({
         project={project}
       />
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-border bg-card shadow-lg">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div>
@@ -110,7 +110,7 @@ export function ProjectDetailDialog({
             </TabsTrigger>
             <TabsTrigger value="epermit" className="flex items-center gap-1 text-xs sm:text-sm">
               <Send className="h-4 w-4" />
-              <span className="hidden sm:inline">E-Permit</span>
+              <span className="hidden sm:inline">Portal Submission</span>
             </TabsTrigger>
             <TabsTrigger value="annotations" className="flex items-center gap-1 text-xs sm:text-sm">
               <PenTool className="h-4 w-4" />
@@ -287,7 +287,7 @@ export function ProjectDetailDialog({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold">E-Permit Submissions</h3>
+                  <h3 className="text-sm font-semibold">Portal Submissions</h3>
                   <p className="text-xs text-muted-foreground">
                     Track permit applications submitted to Accela or CityView
                   </p>
@@ -346,7 +346,7 @@ export function ProjectDetailDialog({
           </Button>
           <Button variant="outline" onClick={() => setEpermitDialogOpen(true)}>
             <Send className="mr-2 h-4 w-4" />
-            Submit to E-Permit
+            Submit to Portal
           </Button>
           <Button onClick={() => {
             onOpenChange(false);

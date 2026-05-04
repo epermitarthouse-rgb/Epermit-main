@@ -37,6 +37,9 @@ import {
 import { PortalCredentialsManager } from "@/components/settings/PortalCredentialsManager";
 import { ArchitectProfileManager } from "@/components/settings/ArchitectProfileManager";
 import { ExportBrandingManager } from "@/components/settings/ExportBrandingManager";
+import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
+import { cn } from "@/lib/utils";
 
 // Validation schemas
 const profileSchema = z.object({
@@ -352,30 +355,23 @@ export default function Settings() {
   if (authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal" />
       </div>
     );
   }
 
   return (
-    <>
-      <section className="py-4 sm:py-6 md:py-8 lg:py-12">
-        <div className="w-full max-w-4xl ml-0 mr-auto pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 lg:pl-6 lg:pr-8">
-          {/* Header */}
-          <motion.div
-            className="mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <User className="h-8 w-8 text-accent" />
-              Settings
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your account settings and preferences
-            </p>
-          </motion.div>
+    <div className="min-h-screen bg-cream text-ink-primary-light">
+      <EditorialPageHeader
+        eyebrow="ACCOUNT"
+        title="Settings"
+        description="Manage your profile, security, notifications, portals, branding, and data cleanup."
+        icon={User}
+        iconClassName="text-teal"
+      />
 
+      <section className="py-4 sm:py-8">
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6">
           {/* Tabs */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -383,32 +379,55 @@ export default function Settings() {
             transition={{ delay: 0.1 }}
           >
             <Tabs defaultValue="profile" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 lg:grid-cols-7">
-                <TabsTrigger value="profile" className="flex items-center gap-2">
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/45 p-1 text-ink-secondary-light sm:grid-cols-4 lg:grid-cols-7">
+                <TabsTrigger
+                  value="profile"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
                   <User className="h-4 w-4" />
                   <span className="hidden sm:inline">Profile</span>
                 </TabsTrigger>
-                <TabsTrigger value="security" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="security"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
                   <Lock className="h-4 w-4" />
                   <span className="hidden sm:inline">Security</span>
                 </TabsTrigger>
-                <TabsTrigger value="notifications" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="notifications"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
                   <Bell className="h-4 w-4" />
                   <span className="hidden sm:inline">Notifications</span>
                 </TabsTrigger>
-                <TabsTrigger value="portals" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="portals"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
                   <KeyRound className="h-4 w-4" />
                   <span className="hidden sm:inline">Portal Credentials</span>
                 </TabsTrigger>
-                <TabsTrigger value="architect" className="flex items-center gap-2" data-testid="tab-architect-profile">
+                <TabsTrigger
+                  value="architect"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                  data-testid="tab-architect-profile"
+                >
                   <Stamp className="h-4 w-4" />
                   <span className="hidden sm:inline">Architect</span>
                 </TabsTrigger>
-                <TabsTrigger value="branding" className="flex items-center gap-2" data-testid="tab-export-branding">
+                <TabsTrigger
+                  value="branding"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                  data-testid="tab-export-branding"
+                >
                   <FileSignature className="h-4 w-4" />
                   <span className="hidden sm:inline">Export Branding</span>
                 </TabsTrigger>
-                <TabsTrigger value="cleanup" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="cleanup"
+                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
                   <Database className="h-4 w-4" />
                   <span className="hidden sm:inline">Clean Up Data</span>
                 </TabsTrigger>
@@ -416,10 +435,10 @@ export default function Settings() {
 
               {/* Profile Tab */}
               <TabsContent value="profile">
-                <Card>
+                <Card className={cn(EDITORIAL_FORM_CARD)}>
                   <CardHeader>
                     <CardTitle>Profile Information</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-ink-secondary-light">
                       Update your personal information and company details
                     </CardDescription>
                   </CardHeader>
@@ -533,9 +552,9 @@ export default function Settings() {
                         <Separator />
 
                         <Button
+                          variant="gold"
                           onClick={handleProfileSave}
                           disabled={profileSaving}
-                          className="bg-accent hover:bg-accent/90"
                         >
                           {profileSaving ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -552,10 +571,10 @@ export default function Settings() {
 
               {/* Security Tab */}
               <TabsContent value="security">
-                <Card>
+                <Card className={cn(EDITORIAL_FORM_CARD)}>
                   <CardHeader>
                     <CardTitle>Change Password</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-ink-secondary-light">
                       Update your password to keep your account secure
                     </CardDescription>
                   </CardHeader>
@@ -658,10 +677,7 @@ export default function Settings() {
 
                     <Separator />
 
-                    <Button
-                      onClick={handlePasswordChange}
-                      disabled={passwordSaving}
-                    >
+                    <Button variant="gold" onClick={handlePasswordChange} disabled={passwordSaving}>
                       {passwordSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -675,10 +691,10 @@ export default function Settings() {
 
               {/* Notifications Tab */}
               <TabsContent value="notifications">
-                <Card>
+                <Card className={cn(EDITORIAL_FORM_CARD)}>
                   <CardHeader>
                     <CardTitle>Notification Preferences</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-ink-secondary-light">
                       Choose how you want to be notified about updates
                     </CardDescription>
                   </CardHeader>
@@ -773,11 +789,7 @@ export default function Settings() {
 
                     <Separator />
 
-                    <Button
-                      onClick={handleNotificationsSave}
-                      disabled={notificationsSaving}
-                      className="bg-accent hover:bg-accent/90"
-                    >
+                    <Button variant="gold" onClick={handleNotificationsSave} disabled={notificationsSaving}>
                       {notificationsSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -806,13 +818,13 @@ export default function Settings() {
 
               {/* Clean Up Data Tab */}
               <TabsContent value="cleanup">
-                <Card>
+                <Card className={cn(EDITORIAL_FORM_CARD)}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Trash2 className="h-5 w-5 text-muted-foreground" />
+                      <Trash2 className="h-5 w-5 text-ink-tertiary-light" />
                       Clean Up Data
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-ink-secondary-light">
                       Remove duplicate projects or empty test projects for your account
                     </CardDescription>
                   </CardHeader>
@@ -822,11 +834,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         For each permit number with multiple projects, keeps the most recently checked and deletes the rest (including their comments).
                       </p>
-                      <Button
-                        variant="outline"
-                        onClick={handleRemoveDuplicateProjects}
-                        disabled={removingDuplicates}
-                      >
+                      <Button variant="outlineGold" onClick={handleRemoveDuplicateProjects} disabled={removingDuplicates}>
                         {removingDuplicates ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
@@ -841,11 +849,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         Deletes all projects that have no portal data and no permit number (empty test entries).
                       </p>
-                      <Button
-                        variant="outline"
-                        onClick={handleClearTestData}
-                        disabled={clearingTestData}
-                      >
+                      <Button variant="outlineGold" onClick={handleClearTestData} disabled={clearingTestData}>
                         {clearingTestData ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
@@ -861,6 +865,6 @@ export default function Settings() {
           </motion.div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

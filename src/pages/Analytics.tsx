@@ -10,6 +10,7 @@ import { JurisdictionTrendsChart } from '@/components/analytics/JurisdictionTren
 import { ProjectTypeBreakdownCard } from '@/components/analytics/ProjectTypeBreakdownCard';
 import { DateRangeFilter, DateRange, PresetRange, getPresetDateRange } from '@/components/analytics/DateRangeFilter';
 import { AnalyticsExport } from '@/components/analytics/AnalyticsExport';
+import { EditorialPageHeader } from '@/components/layout/EditorialPageHeader';
 import { Loader2, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
@@ -34,8 +35,8 @@ export default function Analytics() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-[50vh] items-center justify-center bg-cream">
+        <Loader2 className="h-8 w-8 animate-spin text-teal" />
       </div>
     );
   }
@@ -45,29 +46,24 @@ export default function Analytics() {
   }
 
   return (
-    <>
-      <div className="w-full max-w-7xl ml-0 mr-auto pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 py-4 sm:py-6 md:py-8">
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <BarChart3 className="h-8 w-8 text-primary" />
-              <div>
-                <h1 className="text-3xl font-bold">Analytics & Reporting</h1>
-                <p className="text-muted-foreground">
-                  Permit cycle times, costs, and performance metrics
-                </p>
-              </div>
-            </div>
-            
-            <AnalyticsExport
-              summary={summary}
-              jurisdictionMetrics={jurisdictionMetrics}
-              projectTypeMetrics={projectTypeMetrics}
-              rejectionTrends={rejectionTrends}
-              dateRange={dateRange}
-            />
-          </div>
-          
+    <div className="min-h-screen bg-cream text-ink-primary-light">
+      <EditorialPageHeader
+        eyebrow="ANALYTICS & REPORTING"
+        title="Analytics & Reporting"
+        description="Permit cycle times, costs, and performance metrics for your workspace."
+        icon={BarChart3}
+        iconClassName="text-teal"
+        actions={<AnalyticsExport
+          summary={summary}
+          jurisdictionMetrics={jurisdictionMetrics}
+          projectTypeMetrics={projectTypeMetrics}
+          rejectionTrends={rejectionTrends}
+          dateRange={dateRange}
+        />}
+      />
+
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 md:py-8">
+        <div className="mb-8 rounded-2xl border border-cream-sunken bg-cream-raised/80 px-4 py-4 shadow-inner sm:px-5">
           <DateRangeFilter
             dateRange={dateRange}
             onDateRangeChange={setDateRange}
@@ -77,31 +73,41 @@ export default function Analytics() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-teal" />
           </div>
         ) : error ? (
-          <div className="text-center py-8">
+          <div className="py-8 text-center">
             <p className="text-destructive">{error}</p>
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Summary Cards */}
             <AnalyticsSummaryCards summary={summary} />
 
-            {/* Tabs for different analytics views */}
             <Tabs defaultValue="trends" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-none lg:inline-flex">
-                <TabsTrigger value="trends">Permit Trends</TabsTrigger>
-                <TabsTrigger value="performance">Performance</TabsTrigger>
-                <TabsTrigger value="costs">Costs & Rejections</TabsTrigger>
+              <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/40 p-1 text-ink-secondary-light sm:grid-cols-3 lg:inline-flex lg:w-auto">
+                <TabsTrigger
+                  value="trends"
+                  className="data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
+                  Permit Trends
+                </TabsTrigger>
+                <TabsTrigger
+                  value="performance"
+                  className="data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
+                  Performance
+                </TabsTrigger>
+                <TabsTrigger
+                  value="costs"
+                  className="data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
+                >
+                  Costs & Rejections
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="trends" className="space-y-6">
-                {/* Jurisdiction Trends */}
                 <JurisdictionTrendsChart trends={jurisdictionTrends} />
-
-                {/* Project Type Charts */}
                 <div className="grid gap-6 lg:grid-cols-2">
                   <ProjectTypePieChart metrics={projectTypeMetrics} />
                   <ProjectTypeBreakdownCard metrics={projectTypeMetrics} />
@@ -109,7 +115,6 @@ export default function Analytics() {
               </TabsContent>
 
               <TabsContent value="performance" className="space-y-6">
-                {/* Cycle Time & Jurisdiction Performance */}
                 <div className="grid gap-6 lg:grid-cols-2">
                   <CycleTimeChart monthlyMetrics={monthlyMetrics} />
                   <JurisdictionTable metrics={jurisdictionMetrics} />
@@ -117,7 +122,6 @@ export default function Analytics() {
               </TabsContent>
 
               <TabsContent value="costs" className="space-y-6">
-                {/* Costs & Rejections */}
                 <div className="grid gap-6 lg:grid-cols-2">
                   <CostTrackingCard projects={projectAnalytics} />
                   <RejectionTrendsChart trends={rejectionTrends} />
@@ -127,6 +131,6 @@ export default function Analytics() {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }

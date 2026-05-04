@@ -67,36 +67,42 @@ export const PROJECT_STATUS_CONFIG: Record<ProjectStatus, {
   color: string;
   bgColor: string;
   borderColor: string;
+  dotColor: string;
 }> = {
   draft: {
     label: 'Draft',
-    color: 'text-slate-700',
-    bgColor: 'bg-slate-100',
-    borderColor: 'border-slate-300',
+    color: 'text-ink-tertiary-light',
+    bgColor: 'bg-cream-raised',
+    borderColor: 'border-cream-sunken',
+    dotColor: 'bg-ink-tertiary-light',
   },
   submitted: {
     label: 'Submitted',
     color: 'text-blue-700',
     bgColor: 'bg-blue-100',
     borderColor: 'border-blue-300',
+    dotColor: 'bg-blue-500',
   },
   in_review: {
     label: 'In Review',
     color: 'text-amber-700',
     bgColor: 'bg-amber-100',
     borderColor: 'border-amber-300',
+    dotColor: 'bg-amber-500',
   },
   corrections: {
     label: 'Corrections',
     color: 'text-red-700',
     bgColor: 'bg-red-100',
     borderColor: 'border-red-300',
+    dotColor: 'bg-red-500',
   },
   approved: {
     label: 'Approved',
     color: 'text-emerald-700',
     bgColor: 'bg-emerald-100',
     borderColor: 'border-emerald-300',
+    dotColor: 'bg-emerald-500',
   },
 };
 

@@ -60,7 +60,7 @@ export const INSPECTION_STATUS_CONFIG: Record<InspectionStatus, {
   passed: { label: 'Passed', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
   failed: { label: 'Failed', color: 'text-red-700', bgColor: 'bg-red-100' },
   conditional: { label: 'Conditional', color: 'text-orange-700', bgColor: 'bg-orange-100' },
-  cancelled: { label: 'Cancelled', color: 'text-slate-700', bgColor: 'bg-slate-100' },
+  cancelled: { label: 'Cancelled', color: 'text-ink-secondary-light', bgColor: 'bg-cream-sunken' },
 };
 
 export const INSPECTION_TYPE_LABELS: Record<InspectionType, string> = {
@@ -99,7 +99,7 @@ export const PUNCH_LIST_PRIORITY_CONFIG: Record<PunchListPriority, {
   color: string;
   bgColor: string;
 }> = {
-  low: { label: 'Low', color: 'text-slate-700', bgColor: 'bg-slate-100' },
+  low: { label: 'Low', color: 'text-ink-secondary-light', bgColor: 'bg-cream-sunken' },
   medium: { label: 'Medium', color: 'text-blue-700', bgColor: 'bg-blue-100' },
   high: { label: 'High', color: 'text-orange-700', bgColor: 'bg-orange-100' },
   critical: { label: 'Critical', color: 'text-red-700', bgColor: 'bg-red-100' },

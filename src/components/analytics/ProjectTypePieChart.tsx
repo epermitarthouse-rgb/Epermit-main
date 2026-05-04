@@ -1,12 +1,21 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { ProjectTypeMetrics } from '@/types/analytics';
+import { cn } from '@/lib/utils';
+import { DATA_INTELLIGENCE_PANEL } from '@/components/layout/editorialPageChrome';
 
 interface ProjectTypePieChartProps {
   metrics: ProjectTypeMetrics[];
 }
 
-const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const COLORS = [
+  'hsl(var(--accent-teal))',
+  'hsl(var(--accent-gold))',
+  'hsl(35 72% 55%)',
+  'hsl(0 72% 58%)',
+  'hsl(262 55% 62%)',
+  'hsl(330 65% 55%)',
+];
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
   new_construction: 'New Construction',
@@ -17,16 +26,20 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+const panel = cn(DATA_INTELLIGENCE_PANEL);
+
 export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
   if (metrics.length === 0) {
     return (
-      <Card>
+      <Card className={panel}>
         <CardHeader>
-          <CardTitle>Permits by Type</CardTitle>
-          <CardDescription>Distribution of permit applications by project type</CardDescription>
+          <CardTitle className="text-ink-primary-dark">Permits by Type</CardTitle>
+          <CardDescription className="text-ink-secondary-dark">
+            Distribution of permit applications by project type
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">No project data available</p>
+        <CardContent className="flex h-64 items-center justify-center">
+          <p className="text-ink-tertiary-dark">No project data available</p>
         </CardContent>
       </Card>
     );
@@ -40,10 +53,12 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
   }));
 
   return (
-    <Card>
+    <Card className={panel}>
       <CardHeader>
-        <CardTitle>Permits by Type</CardTitle>
-        <CardDescription>Distribution of permit applications by project type</CardDescription>
+        <CardTitle className="text-ink-primary-dark">Permits by Type</CardTitle>
+        <CardDescription className="text-ink-secondary-dark">
+          Distribution of permit applications by project type
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -54,7 +69,6 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
               cy="50%"
               labelLine={false}
               outerRadius={100}
-              fill="#8884d8"
               dataKey="value"
               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
             >
@@ -63,23 +77,19 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number, name: string, props: any) => [
-                `${value} permits`,
-                props.payload.name,
-              ]}
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
-                  const data = payload[0].payload;
+                  const data = payload[0].payload as typeof chartData[0];
                   return (
-                    <div className="bg-background border rounded-lg p-3 shadow-lg">
+                    <div className="rounded-lg border border-[hsl(var(--border-obsidian-strong)/0.5)] bg-obsidian-raised p-3 text-sm text-ink-primary-dark shadow-lg">
                       <p className="font-medium">{data.name}</p>
-                      <p className="text-sm text-muted-foreground">{data.value} permits</p>
+                      <p className="text-ink-tertiary-dark">{data.value} permits</p>
                       {data.avgCycleTime && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-ink-tertiary-dark">
                           Avg cycle: {data.avgCycleTime.toFixed(1)} days
                         </p>
                       )}
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-ink-tertiary-dark">
                         Approval rate: {data.approvalRate.toFixed(0)}%
                       </p>
                     </div>
@@ -88,7 +98,7 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
                 return null;
               }}
             />
-            <Legend />
+            <Legend wrapperStyle={{ color: 'hsl(var(--ink-secondary-dark))' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>

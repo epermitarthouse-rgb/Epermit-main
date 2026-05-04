@@ -128,7 +128,7 @@ export function RecentChecklistsWidget() {
       case 'in_progress':
         return <Badge className="bg-amber-500 text-white text-xs">In Progress</Badge>;
       default:
-        return <Badge variant="secondary" className="text-xs">Draft</Badge>;
+        return <Badge variant="secondary" className="text-xs text-ink-secondary-light">Draft</Badge>;
     }
   };
 
@@ -137,11 +137,11 @@ export function RecentChecklistsWidget() {
       case 'signed':
         return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
       case 'completed':
-        return <FileText className="h-4 w-4 text-blue-500" />;
+        return <FileText className="h-4 w-4 text-teal" />;
       case 'in_progress':
         return <Clock className="h-4 w-4 text-amber-500" />;
       default:
-        return <PenLine className="h-4 w-4 text-muted-foreground" />;
+        return <PenLine className="h-4 w-4 text-ink-tertiary-light" />;
     }
   };
 
@@ -169,7 +169,7 @@ export function RecentChecklistsWidget() {
         key={checklist.id}
         onClick={() => navigate('/checklist-history')}
         className={cn(
-          "flex items-center justify-between p-3 rounded-lg border transition-colors hover:bg-muted/50 cursor-pointer",
+          "flex cursor-pointer items-center justify-between rounded-lg border border-cream-sunken/70 bg-cream-sunken/25 p-3 transition-colors hover:bg-cream-sunken/50",
           checklist.status === 'signed' && "border-emerald-500/30 bg-emerald-500/5"
         )}
       >
@@ -179,29 +179,29 @@ export function RecentChecklistsWidget() {
             checklist.status === 'signed' ? "bg-emerald-500/20" :
             checklist.status === 'completed' ? "bg-blue-500/20" :
             checklist.status === 'in_progress' ? "bg-amber-500/20" :
-            "bg-muted"
+            "bg-cream-sunken/60"
           )}>
             {getStatusIcon(checklist.status)}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-medium text-sm truncate">{checklist.name}</p>
-            <p className="text-xs text-muted-foreground truncate">
+            <p className="truncate text-sm font-medium text-ink-primary-light">{checklist.name}</p>
+            <p className="text-xs text-ink-secondary-light truncate">
               {formatInspectionType(checklist.form_data.inspectionType)} • {projectName}
             </p>
             <div className="flex items-center gap-2 mt-1">
               <Progress value={progress} className="h-1.5 flex-1 max-w-24" />
-              <span className="text-xs text-muted-foreground">{progress}%</span>
+              <span className="text-xs text-ink-secondary-light">{progress}%</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
           <div className="text-right hidden sm:block">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-secondary-light">
               {format(parseISO(checklist.updated_at), 'MMM d')}
             </p>
             {getStatusBadge(checklist.status)}
           </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <ChevronRight className="h-4 w-4 text-ink-tertiary-light" />
         </div>
       </div>
     );
@@ -218,67 +218,74 @@ export function RecentChecklistsWidget() {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:text-ink-primary-light">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5" />
+          <CardTitle className="flex items-center gap-2 font-serif font-normal tracking-tight text-ink-primary-light">
+            <ClipboardList className="h-5 w-5 text-teal" />
             Recent Checklists
           </CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <Loader2 className="h-6 w-6 animate-spin text-ink-tertiary-light" />
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
+    <Card className="rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream hover:border-gold/22 dark:bg-cream-raised dark:text-ink-primary-light">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-indigo-500" />
-            <CardTitle>Recent Checklists</CardTitle>
+            <ClipboardList className="h-5 w-5 shrink-0 text-teal" />
+            <CardTitle className="font-serif font-normal tracking-tight text-ink-primary-light">
+              Recent Checklists
+            </CardTitle>
           </div>
-          <Button variant="ghost" size="sm" asChild>
+          <Button variant="ghost" size="sm" asChild className="text-ink-secondary-light hover:bg-cream-sunken/50 hover:text-ink-primary-light">
             <Link to="/checklist-history">View All</Link>
           </Button>
         </div>
-        <CardDescription>
+        <CardDescription className="text-ink-secondary-light">
           Your recently saved inspection checklists
         </CardDescription>
       </CardHeader>
       <CardContent>
         {/* Quick Stats */}
         {checklists.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-            <div className="text-center p-2 rounded-lg bg-muted/50">
-              <p className="text-lg font-bold">{stats.total}</p>
-              <p className="text-xs text-muted-foreground">Total</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            <div className="rounded-lg border border-cream-sunken/60 bg-cream-sunken/50 p-2 text-center">
+              <p className="text-lg font-bold text-ink-primary-light">{stats.total}</p>
+              <p className="text-xs text-ink-secondary-light">Total</p>
             </div>
-            <div className="text-center p-2 rounded-lg bg-emerald-500/10">
+            <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.08] p-2 text-center">
               <p className="text-lg font-bold text-emerald-600">{stats.signed}</p>
-              <p className="text-xs text-muted-foreground">Signed</p>
+              <p className="text-xs text-ink-secondary-light">Signed</p>
             </div>
-            <div className="text-center p-2 rounded-lg bg-blue-500/10">
-              <p className="text-lg font-bold text-blue-600">{stats.completed}</p>
-              <p className="text-xs text-muted-foreground">Done</p>
+            <div className="rounded-lg border border-blue-500/25 bg-blue-500/[0.08] p-2 text-center">
+              <p className="text-lg font-bold text-teal">{stats.completed}</p>
+              <p className="text-xs text-ink-secondary-light">Done</p>
             </div>
-            <div className="text-center p-2 rounded-lg bg-amber-500/10">
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.08] p-2 text-center">
               <p className="text-lg font-bold text-amber-600">{stats.inProgress + stats.draft}</p>
-              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="text-xs text-ink-secondary-light">Active</p>
             </div>
           </div>
         )}
 
         {checklists.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <ClipboardList className="h-12 w-12 text-muted-foreground/50 mb-3" />
-            <p className="font-medium">No saved checklists yet</p>
-            <p className="text-sm text-muted-foreground mb-4">
+            <ClipboardList className="mb-3 h-12 w-12 text-ink-tertiary-light/75" />
+            <p className="font-medium text-ink-primary-light">No saved checklists yet</p>
+            <p className="mb-4 text-sm text-ink-secondary-light">
               Create and save inspection checklists from your projects
             </p>
-            <Button variant="outline" size="sm" asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="rounded-lg border-cream-sunken bg-cream text-ink-primary-light hover:bg-cream-sunken/50 hover:text-ink-primary-light"
+            >
               <Link to="/projects">Go to Projects</Link>
             </Button>
           </div>

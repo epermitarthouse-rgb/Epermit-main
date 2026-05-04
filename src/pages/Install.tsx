@@ -101,10 +101,10 @@ export default function Install() {
               <Smartphone className="h-4 w-4" />
               Mobile App Available
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+            <h1 className="font-display text-4xl font-semibold tracking-tight md:text-5xl mb-4">
               Install{" "}
-              <span className="bg-gradient-to-r from-primary to-sky-400 bg-clip-text text-transparent">
-                DesignCheck
+              <span className="italic text-primary">
+                PermitPilot
               </span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -121,19 +121,19 @@ export default function Install() {
               </CardTitle>
               <CardDescription>
                 {isInstalled 
-                  ? "You're all set! Open DesignCheck from your home screen."
-                  : "Add DesignCheck to your home screen for the best experience"
+                  ? "You're all set! Open PermitPilot from your home screen."
+                  : "Add PermitPilot to your home screen for the best experience"
                 }
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
               {isInstalled ? (
                 <div className="flex flex-col items-center gap-4 py-6">
-                  <div className="p-4 rounded-full bg-green-500/10">
-                    <CheckCircle2 className="h-12 w-12 text-green-500" />
+                  <div className="p-4 rounded-full bg-success/10">
+                    <CheckCircle2 className="h-12 w-12 text-success" />
                   </div>
                   <p className="text-center text-muted-foreground">
-                    DesignCheck is installed and ready to use. Look for it on your home screen!
+                    PermitPilot is installed and ready to use. Look for it on your home screen!
                   </p>
                   <Button asChild>
                     <a href="/dashboard">
@@ -169,7 +169,7 @@ export default function Install() {
                 <div className="flex flex-col items-center gap-4 py-6">
                   <Button size="lg" onClick={handleInstallClick} className="gap-2">
                     <Download className="h-5 w-5" />
-                    Install DesignCheck
+                    Install PermitPilot
                   </Button>
                   <p className="text-sm text-muted-foreground">
                     Free • No app store required • Instant install

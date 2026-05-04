@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,7 +8,6 @@ import {
   BookOpen,
   Search,
   ChevronRight,
-  Keyboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -170,17 +168,20 @@ export function FloatingHelpWidget({ isOpen: controlledOpen, onOpenChange }: Flo
         )}
       </AnimatePresence>
 
-      {/* Floating Button */}
+      {/* Floating Button — gold token, softer lift; open/close unchanged */}
       <motion.button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-colors",
+          "inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors",
+          "shadow-md shadow-gold/20 dark:shadow-gold/15",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isOpen
-            ? "bg-muted text-muted-foreground"
-            : "bg-primary text-primary-foreground hover:bg-primary/90"
+            ? "border border-cream-sunken bg-cream-sunken text-ink-secondary-light shadow-sm dark:border-obsidian-raised dark:bg-obsidian-raised dark:text-ink-secondary-dark"
+            : "bg-gold text-cream hover:bg-gold-deep",
         )}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
         aria-label={isOpen ? "Close help" : "Open help"}
       >
         <AnimatePresence mode="wait">

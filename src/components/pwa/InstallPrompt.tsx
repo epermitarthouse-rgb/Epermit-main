@@ -79,7 +79,7 @@ export function InstallPrompt() {
                 <Smartphone className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <CardTitle className="text-lg">Install DesignCheck</CardTitle>
+                <CardTitle className="font-display text-lg">Install PermitPilot</CardTitle>
                 <CardDescription className="text-sm">
                   Get the full app experience
                 </CardDescription>

@@ -40,9 +40,9 @@ export function EmailPreviewDialog({
   const { settings, loading } = useEmailBranding();
 
   const primaryColor = settings?.primary_color || '#0f4c5c';
-  const headerText = settings?.header_text || 'Insight|DesignCheck';
+  const headerText = settings?.header_text || 'PermitPilot';
   const logoUrl = settings?.logo_url;
-  const footerText = settings?.footer_text || '© 2025 Insight|DesignCheck. All rights reserved.';
+  const footerText = settings?.footer_text || '© 2025 Commun-ET, LLC. All rights reserved.';
 
   const emailHtml = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">

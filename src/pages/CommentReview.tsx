@@ -36,6 +36,8 @@ import { parsePgcRawRefDisplayText } from "@/lib/parsePgcRawRefDisplayText";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
 import { toast } from "sonner";
 import { FileImage, Loader2, CheckCircle2, Upload, ArrowLeft, RefreshCw } from "lucide-react";
+import { Section } from "@/components/ui/Section";
+import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 
 const DISCIPLINES = ["Architecture", "MEP", "Structural", "Zoning", "Fire"] as const;
 
@@ -640,39 +642,54 @@ export default function CommentReview() {
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-[80vh] flex items-center justify-center bg-cream">
+        <Loader2 className="h-8 w-8 animate-spin text-teal" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Comment Review</h1>
-            <p className="text-muted-foreground text-sm">
-              Comments from the portal report &quot;Plan Review - Review Comments&quot; for the selected project.
-            </p>
+    <div className="min-h-[80vh] bg-cream">
+      <Section variant="cream" className="pt-10 pb-8 border-b border-cream-sunken">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
+          <div className="flex items-start gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/dashboard")}
+              className="text-ink-secondary-light hover:text-ink-primary-light shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <Eyebrow>COMMENT REVIEW</Eyebrow>
+              <h1 className="mt-3 font-serif text-4xl sm:text-5xl text-ink-primary-light leading-tight">
+                Comment <em className="text-gold italic">Review</em>
+              </h1>
+              <p className="mt-3 text-ink-secondary-light max-w-2xl text-sm sm:text-base leading-relaxed">
+                Review parsed jurisdiction comments, classifier outputs, statuses, disciplines, and applicant/reviewer discussion history.
+              </p>
+              <p className="text-sm text-ink-tertiary-light mt-2 max-w-2xl">
+                Comments from the portal report &quot;Plan Review - Review Comments&quot; for the selected project.
+              </p>
+            </div>
           </div>
         </div>
+      </Section>
 
+      <div className="max-w-7xl mx-auto px-4 md:px-6 space-y-4 py-6">
         {!projectId ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
+          <Card className="border-dashed border-cream-sunken bg-cream-raised/80 shadow-cream">
+            <CardContent className="py-10 text-center text-ink-secondary-light space-y-2">
               Select a project in the sidebar to view and load comments from the portal.
             </CardContent>
           </Card>
         ) : commentsLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <Loader2 className="h-8 w-8 animate-spin text-teal" />
           </div>
         ) : renderedPortalComments.length === 0 && !noCommentsInPortal ? (
-          <Card>
+          <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream">
             <CardHeader>
               <CardTitle>No comments loaded</CardTitle>
               <CardDescription className="space-y-2">
@@ -680,7 +697,7 @@ export default function CommentReview() {
                   Load comments from the portal report &quot;Plan Review - Review Comments&quot; for this project.
                 </span>
                 {(parserDetail?.message || parserDetail?.reason) && (
-                  <p className="text-sm text-amber-700 dark:text-amber-200/90 rounded-md border border-amber-900/30 bg-amber-950/20 px-3 py-2 whitespace-pre-wrap">
+                  <p className="text-sm text-warning-foreground rounded-md border border-warning/35 bg-warning/10 px-3 py-2 whitespace-pre-wrap">
                     {parserDetail.message ||
                       (parserDetail.reason ? `Reason: ${parserDetail.reason}` : "")}
                   </p>
@@ -688,7 +705,7 @@ export default function CommentReview() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={loadFromPortal} disabled={loadingFromPortal}>
+              <Button variant="gold" onClick={loadFromPortal} disabled={loadingFromPortal}>
                 {loadingFromPortal ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
@@ -699,33 +716,35 @@ export default function CommentReview() {
             </CardContent>
           </Card>
         ) : noCommentsInPortal && renderedPortalComments.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground space-y-2">
+          <Card className="border-dashed border-cream-sunken bg-cream-raised/60 shadow-cream">
+            <CardContent className="py-8 text-center text-ink-secondary-light space-y-2">
               <p>
                 No comments found in the portal for this project. The &quot;Plan Review - Review Comments&quot; report may be empty or not yet available.
               </p>
               {parserDetail?.message && (
-                <p className="text-sm text-amber-700 dark:text-amber-200/90 whitespace-pre-wrap">
+                <p className="text-sm text-warning-foreground whitespace-pre-wrap rounded-md border border-warning/25 bg-warning/8 px-3 py-2">
                   {parserDetail.message}
                 </p>
               )}
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Portal comments</CardTitle>
-                  <CardDescription>
+          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream p-4 sm:p-5">
+            <div className="overflow-hidden rounded-lg border border-obsidian-raised bg-obsidian shadow-inner">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-obsidian-raised bg-obsidian-raised px-4 py-3 sm:px-5">
+                <div className="min-w-0">
+                  <SectionTitle className="!text-xl sm:!text-2xl text-ink-primary-dark">
+                    Portal comments
+                  </SectionTitle>
+                  <p className="text-sm text-ink-secondary-dark mt-1">
                     {renderedPortalComments.length} comment{renderedPortalComments.length !== 1 ? "s" : ""} from the portal.
-                  </CardDescription>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Render source: <span className="font-medium">{renderSource}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-ink-tertiary-dark">
+                    Render source: <span className="font-mono text-teal">{renderSource}</span>
                     {renderSource === "fallback_llm" ? " (fallback mode active)" : ""}
                   </p>
                   {parserDetail?.reconciliation?.warning && (
-                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-200/90 rounded-md border border-amber-900/30 bg-amber-950/20 px-2 py-1 whitespace-pre-wrap">
+                    <p className="mt-2 text-xs text-warning-foreground rounded-md border border-warning/35 bg-warning/10 px-2 py-1.5 whitespace-pre-wrap">
                       {parserDetail.reconciliation.warning}
                     </p>
                   )}
@@ -737,6 +756,7 @@ export default function CommentReview() {
                   onClick={() => {
                     void loadFromPortal();
                   }}
+                  className="shrink-0 border-teal/40 bg-teal/10 text-teal hover:bg-teal/15"
                 >
                   {loadingFromPortal ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -746,50 +766,54 @@ export default function CommentReview() {
                   Reload from portal
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-md overflow-auto max-h-[520px]">
-                <Table>
+              <div className="max-h-[min(520px,70vh)] overflow-auto">
+                <Table
+                  wrapperClassName="rounded-none border-0 shadow-none bg-transparent dark:border-0"
+                  className="min-w-[1000px] w-full"
+                >
                   {renderSource === "raw_ref" ? (
                     <>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[48px] min-w-[44px] whitespace-nowrap">REF #</TableHead>
-                          <TableHead className="w-[56px] min-w-[48px] whitespace-nowrap">CYCLE</TableHead>
-                          <TableHead className="min-w-[140px] max-w-[200px]">REVIEWED BY</TableHead>
-                          <TableHead className="min-w-[88px] w-[100px] whitespace-nowrap">TYPE</TableHead>
-                          <TableHead className="min-w-[120px] max-w-[160px]">FILENAME</TableHead>
-                          <TableHead className="min-w-[240px] max-w-[480px]">DISCUSSION</TableHead>
-                          <TableHead className="w-[100px] min-w-[88px] whitespace-nowrap">STATUS</TableHead>
+                        <TableRow className="border-obsidian-raised bg-obsidian-raised hover:bg-obsidian-raised border-0">
+                          <TableHead className="table-head-sticky w-[48px] min-w-[44px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">REF #</TableHead>
+                          <TableHead className="table-head-sticky w-[56px] min-w-[48px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">CYCLE</TableHead>
+                          <TableHead className="table-head-sticky min-w-[140px] max-w-[200px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">REVIEWED BY</TableHead>
+                          <TableHead className="table-head-sticky min-w-[88px] w-[100px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">TYPE</TableHead>
+                          <TableHead className="table-head-sticky min-w-[120px] max-w-[160px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">FILENAME</TableHead>
+                          <TableHead className="table-head-sticky min-w-[240px] max-w-[480px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">DISCUSSION</TableHead>
+                          <TableHead className="table-head-sticky w-[100px] min-w-[88px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">STATUS</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {renderedPortalComments.map((row) => {
                           const f = parsePgcRawRefDisplayText(row.original_text);
                           return (
-                            <TableRow key={row.id}>
-                              <TableCell className="text-sm align-top font-mono tabular-nums">
+                            <TableRow
+                              key={row.id}
+                              className="border-t border-obsidian-raised bg-obsidian-sunken/40 text-ink-primary-dark hover:bg-obsidian-raised/35 transition-colors"
+                            >
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top font-mono-data tabular-nums text-ink-secondary-dark">
                                 {portalRawRefCellDash(f.ref)}
                               </TableCell>
-                              <TableCell className="text-sm align-top font-mono tabular-nums">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top font-mono-data tabular-nums text-ink-secondary-dark">
                                 {portalRawRefCellDash(f.cycle)}
                               </TableCell>
-                              <TableCell className="text-sm align-top whitespace-pre-wrap break-words">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap break-words text-ink-primary-dark">
                                 {portalRawRefCellDash(f.reviewedBy)}
                               </TableCell>
-                              <TableCell className="text-sm align-top whitespace-pre-wrap">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap text-ink-primary-dark">
                                 {portalRawRefCellDash(f.type)}
                               </TableCell>
                               <TableCell
-                                className="text-sm align-top whitespace-pre-wrap break-all"
+                                className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap break-all text-ink-primary-dark"
                                 title={f.filename ?? undefined}
                               >
                                 {portalRawRefCellDash(f.filename)}
                               </TableCell>
-                              <TableCell className="text-sm align-top text-foreground/90 whitespace-pre-wrap break-words max-w-[480px]">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top text-ink-primary-dark whitespace-pre-wrap break-words max-w-[480px]">
                                 {f.discussion}
                               </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap align-top">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm whitespace-nowrap align-top text-ink-primary-dark">
                                 {portalStatusDisplayText(row)}
                               </TableCell>
                             </TableRow>
@@ -800,22 +824,25 @@ export default function CommentReview() {
                   ) : (
                     <>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Comment</TableHead>
-                          <TableHead className="w-[140px]">Discipline</TableHead>
-                          <TableHead className="w-[120px]">Code ref.</TableHead>
-                          <TableHead className="w-[100px]">Status</TableHead>
+                        <TableRow className="border-obsidian-raised bg-obsidian-raised hover:bg-obsidian-raised border-0">
+                          <TableHead className="table-head-sticky min-w-[220px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Comment</TableHead>
+                          <TableHead className="table-head-sticky w-[140px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Discipline</TableHead>
+                          <TableHead className="table-head-sticky w-[120px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Code ref.</TableHead>
+                          <TableHead className="table-head-sticky w-[100px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {renderedPortalComments.map((row) => (
-                          <TableRow key={row.id}>
-                            <TableCell className="text-sm text-muted-foreground align-top max-w-[400px]">
+                          <TableRow
+                            key={row.id}
+                            className="border-t border-obsidian-raised bg-obsidian-sunken/40 text-ink-primary-dark hover:bg-obsidian-raised/35 transition-colors"
+                          >
+                            <TableCell className="px-4 py-2.5 sm:px-5 text-sm text-ink-primary-dark align-top max-w-[400px]">
                               {portalCommentTableCellContent(row)}
                             </TableCell>
-                            <TableCell>{portalDisciplineDisplayText(row)}</TableCell>
-                            <TableCell>{row.code_reference ?? "—"}</TableCell>
-                            <TableCell>{portalStatusDisplayText(row)}</TableCell>
+                            <TableCell className="px-4 py-2.5 sm:px-5 text-ink-secondary-dark">{portalDisciplineDisplayText(row)}</TableCell>
+                            <TableCell className="px-4 py-2.5 sm:px-5 font-mono-data text-xs align-top text-ink-secondary-dark">{row.code_reference ?? "—"}</TableCell>
+                            <TableCell className="px-4 py-2.5 sm:px-5 text-ink-primary-dark">{portalStatusDisplayText(row)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -823,13 +850,13 @@ export default function CommentReview() {
                   )}
                 </Table>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
 
         {projectId && (
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="upload">
+          <Accordion type="single" collapsible className="w-full rounded-xl border border-cream-sunken bg-cream-raised shadow-cream">
+            <AccordionItem value="upload" className="border-border px-1">
               <AccordionTrigger>Optional: Upload a document to parse</AccordionTrigger>
               <AccordionContent>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
@@ -841,7 +868,7 @@ export default function CommentReview() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center min-h-[200px] bg-muted/30">
+                      <div className="border-2 border-dashed border-gold/30 rounded-xl p-6 flex flex-col items-center justify-center min-h-[200px] bg-cream-sunken/40">
                         {imagePreview ? (
                           <img
                             src={imagePreview}
@@ -849,7 +876,7 @@ export default function CommentReview() {
                             className="max-h-[240px] w-auto object-contain rounded border"
                           />
                         ) : (
-                          <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+                          <Upload className="h-10 w-10 text-teal mb-2" />
                         )}
                         <Input
                           type="file"
@@ -858,7 +885,7 @@ export default function CommentReview() {
                           className="mt-2 max-w-xs"
                         />
                       </div>
-                      <Button onClick={runParse} disabled={parsing || !imageFile} className="w-full" size="sm">
+                      <Button variant="gold" onClick={runParse} disabled={parsing || !imageFile} className="w-full" size="sm">
                         {parsing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                         {parsing ? "Parsing…" : "Parse comments with AI"}
                       </Button>
@@ -874,10 +901,10 @@ export default function CommentReview() {
                         <div className="flex items-center gap-2">
                           <ReviewTimer ref={timerRef} projectId={projectId} commentCount={uploadRows.length} />
                           <Button
+                            variant="gold"
                             size="sm"
                             onClick={approveAll}
                             disabled={saving || uploadRows.length === 0}
-                            className="bg-accent hover:bg-accent/90"
                           >
                             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                             Approve All
@@ -889,13 +916,13 @@ export default function CommentReview() {
                       {uploadRows.length === 0 ? (
                         <p className="text-muted-foreground text-sm py-4">Upload a document and click Parse.</p>
                       ) : (
-                        <div className="border rounded-md overflow-auto max-h-[280px]">
+                        <div className="border border-border rounded-lg overflow-auto max-h-[280px]">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Comment</TableHead>
-                                <TableHead className="w-[120px]">Discipline</TableHead>
-                                <TableHead className="w-[100px]">Code ref.</TableHead>
+                                <TableHead className="table-head-sticky">Comment</TableHead>
+                                <TableHead className="table-head-sticky w-[120px]">Discipline</TableHead>
+                                <TableHead className="table-head-sticky w-[100px]">Code ref.</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>

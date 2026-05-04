@@ -4,6 +4,7 @@ import { AdminPageShell } from '@/components/admin/AdminPageShell';
 export default function FeatureFlagsAdmin() {
   return (
     <AdminPageShell
+      variant="editorial"
       title="Feature Flags"
       description="Toggle features per browser (stored in localStorage). Server-side flags not implemented yet."
       breadcrumbs={[{ label: 'Feature Flags' }]}

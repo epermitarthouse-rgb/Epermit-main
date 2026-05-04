@@ -20,6 +20,8 @@ import {
   ArrowRight, Zap, Shield, AlertTriangle, Save, LogIn, Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 // Types
@@ -404,21 +406,24 @@ const ROICalculator = () => {
   };
 
   return (
-    <div className="w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="bg-primary text-primary-foreground py-8 sm:py-12">
-        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">ROI Calculator</h1>
-          <p className="text-primary-foreground/80 max-w-2xl mx-auto">
-            Calculate your potential savings with AI-powered permit acceleration
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen w-full overflow-x-hidden bg-cream text-ink-primary-light">
+      <EditorialPageHeader
+        eyebrow="ROI"
+        title={
+          <>
+            <span className="italic text-gold">ROI</span> Calculator
+          </>
+        }
+        description="Calculate your potential savings with AI-powered permit acceleration."
+        icon={TrendingUp}
+        iconClassName="text-teal"
+        align="center"
+      />
 
-      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8">
+      <div className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8">
         {/* Progress */}
         <div className="mb-8 max-w-2xl mx-auto">
-          <div className="flex justify-between text-sm text-muted-foreground mb-2">
+          <div className="mb-2 flex justify-between text-sm text-ink-secondary-light">
             <span>Step {step} of {totalSteps}</span>
             <span>{Math.round(progress)}% complete</span>
           </div>
@@ -429,7 +434,7 @@ const ROICalculator = () => {
                 key={label}
                 className={cn(
                   "text-xs shrink-0",
-                  step > i + 1 ? "text-accent" : step === i + 1 ? "text-foreground font-medium" : "text-muted-foreground"
+                  step > i + 1 ? "text-gold-deep" : step === i + 1 ? "font-medium text-ink-primary-light" : "text-ink-tertiary-light"
                 )}
               >
                 {label}
@@ -440,10 +445,10 @@ const ROICalculator = () => {
 
         {/* Step 1: Company Profile */}
         {step === 1 && (
-          <Card className="animate-fade-in max-w-2xl mx-auto">
+          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <Building2 className="h-6 w-6 text-accent shrink-0" />
+                <Building2 className="h-6 w-6 text-teal shrink-0" />
                 Company Profile
               </CardTitle>
               <CardDescription>Tell us about your organization</CardDescription>
@@ -455,9 +460,9 @@ const ROICalculator = () => {
                   {orgTypes.map(type => (
                     <Button
                       key={type}
-                      variant={companyProfile.orgType === type ? "default" : "outline"}
+                      variant={companyProfile.orgType === type ? "gold" : "outlineGold"}
                       size="sm"
-                      className={cn("justify-start text-left min-w-0", companyProfile.orgType === type && "bg-accent hover:bg-accent/90")}
+                      className="min-w-0 justify-start text-left"
                       onClick={() => setCompanyProfile(prev => ({ ...prev, orgType: type }))}
                     >
                       <span className="truncate">{type}</span>
@@ -472,9 +477,9 @@ const ROICalculator = () => {
                   {companySizes.map(size => (
                     <Button
                       key={size}
-                      variant={companyProfile.companySize === size ? "default" : "outline"}
+                      variant={companyProfile.companySize === size ? "gold" : "outlineGold"}
                       size="sm"
-                      className={cn("justify-start text-left min-w-0", companyProfile.companySize === size && "bg-accent hover:bg-accent/90")}
+                      className="min-w-0 justify-start text-left"
                       onClick={() => setCompanyProfile(prev => ({ ...prev, companySize: size }))}
                     >
                       <span className="truncate">{size}</span>
@@ -536,7 +541,7 @@ const ROICalculator = () => {
                           className={cn(
                             "flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors text-sm min-w-0",
                             companyProfile.primaryJurisdictions.includes(jurisdiction)
-                              ? "border-accent bg-accent/10"
+                              ? "border-teal/35 bg-teal/10"
                               : "hover:bg-secondary/50"
                           )}
                         >
@@ -559,10 +564,10 @@ const ROICalculator = () => {
 
         {/* Step 2: Current Tools */}
         {step === 2 && (
-          <Card className="animate-fade-in max-w-2xl mx-auto">
+          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <FileText className="h-6 w-6 text-accent" />
+                <FileText className="h-6 w-6 text-teal" />
                 Current Tools
               </CardTitle>
               <CardDescription>What tools do you currently use for permit management?</CardDescription>
@@ -577,7 +582,7 @@ const ROICalculator = () => {
                       className={cn(
                         "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all",
                         currentTools.tools.includes(tool.id)
-                          ? "border-accent bg-accent/10 shadow-md"
+                          ? "border-teal/35 bg-teal/12 shadow-md"
                           : "hover:bg-secondary/50"
                       )}
                     >
@@ -623,7 +628,7 @@ const ROICalculator = () => {
 
               <div className="p-4 bg-secondary/30 rounded-lg">
                 <p className="text-sm text-muted-foreground">Estimated current monthly tool spend:</p>
-                <p className="text-2xl font-bold text-accent">
+                <p className="text-2xl font-bold text-gold-deep">
                   ${(currentTools.tools.reduce((sum, toolId) => {
                     const tool = toolOptions.find(t => t.id === toolId);
                     return sum + (tool?.monthlyPrice || 0);
@@ -636,10 +641,10 @@ const ROICalculator = () => {
 
         {/* Step 3: Pain Points */}
         {step === 3 && (
-          <Card className="animate-fade-in max-w-2xl mx-auto">
+          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <AlertTriangle className="h-6 w-6 text-accent" />
+                <AlertTriangle className="h-6 w-6 text-teal" />
                 Pain Points Assessment
               </CardTitle>
               <CardDescription>Rate each challenge from 1 (minor) to 10 (severe)</CardDescription>
@@ -677,7 +682,7 @@ const ROICalculator = () => {
 
               <div className="p-4 bg-secondary/30 rounded-lg">
                 <p className="text-sm text-muted-foreground">Average pain score:</p>
-                <p className="text-2xl font-bold text-accent">
+                <p className="text-2xl font-bold text-gold-deep">
                   {(Object.values(painPoints).reduce((a, b) => a + b, 0) / 8).toFixed(1)}/10
                 </p>
               </div>
@@ -687,10 +692,10 @@ const ROICalculator = () => {
 
         {/* Step 4: Results Preview (Teaser) */}
         {step === 4 && (
-          <Card className="animate-fade-in max-w-2xl mx-auto">
+          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <TrendingUp className="h-6 w-6 text-accent" />
+                <TrendingUp className="h-6 w-6 text-teal" />
                 Your Potential Savings
               </CardTitle>
               <CardDescription>Based on your inputs, here's a preview of your potential ROI</CardDescription>
@@ -698,15 +703,15 @@ const ROICalculator = () => {
             <CardContent className="space-y-6">
               {/* Animated counter preview */}
               <div className="grid md:grid-cols-2 gap-6">
-                <div className="p-6 rounded-xl bg-accent/10 border border-accent/20 text-center">
-                  <Clock className="h-8 w-8 text-accent mx-auto mb-3" />
-                  <p className="text-4xl font-bold text-accent mb-2">{Math.round(results.totalHoursSaved)}</p>
-                  <p className="text-muted-foreground">Hours Saved Per Year</p>
+                <div className="rounded-xl border border-teal/25 bg-teal/10 p-6 text-center">
+                  <Clock className="mx-auto mb-3 h-8 w-8 text-teal" />
+                  <p className="mb-2 text-4xl font-bold text-gold-deep">{Math.round(results.totalHoursSaved)}</p>
+                  <p className="text-ink-secondary-light">Hours Saved Per Year</p>
                 </div>
-                <div className="p-6 rounded-xl bg-accent/10 border border-accent/20 text-center">
-                  <DollarSign className="h-8 w-8 text-accent mx-auto mb-3" />
-                  <p className="text-4xl font-bold text-accent mb-2">${Math.round(results.totalAnnualSavings / 1000)}K+</p>
-                  <p className="text-muted-foreground">Estimated Annual Savings</p>
+                <div className="rounded-xl border border-teal/25 bg-teal/10 p-6 text-center">
+                  <DollarSign className="mx-auto mb-3 h-8 w-8 text-teal" />
+                  <p className="mb-2 text-4xl font-bold text-gold-deep">${Math.round(results.totalAnnualSavings / 1000)}K+</p>
+                  <p className="text-ink-secondary-light">Estimated Annual Savings</p>
                 </div>
               </div>
 
@@ -732,7 +737,7 @@ const ROICalculator = () => {
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60">
                   <div className="text-center">
-                    <Shield className="h-8 w-8 text-accent mx-auto mb-2" />
+                    <Shield className="h-8 w-8 text-teal mx-auto mb-2" />
                     <p className="font-medium mb-1">Unlock Full Results</p>
                     <p className="text-sm text-muted-foreground">Enter your details to see the complete breakdown</p>
                   </div>
@@ -744,10 +749,10 @@ const ROICalculator = () => {
 
         {/* Step 5: Lead Capture */}
         {step === 5 && (
-          <Card className="animate-fade-in max-w-2xl mx-auto">
+          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
-                <Users className="h-6 w-6 text-accent" />
+                <Users className="h-6 w-6 text-teal" />
                 Get Your Full Results
               </CardTitle>
               <CardDescription>Enter your details to unlock your personalized ROI report</CardDescription>
@@ -816,9 +821,9 @@ const ROICalculator = () => {
                   {roleOptions.map(role => (
                     <Button
                       key={role}
-                      variant={leadInfo.role === role ? "default" : "outline"}
+                      variant={leadInfo.role === role ? "gold" : "outlineGold"}
                       size="sm"
-                      className={cn(leadInfo.role === role && "bg-accent hover:bg-accent/90")}
+                      className=""
                       onClick={() => setLeadInfo(prev => ({ ...prev, role }))}
                     >
                       {role}
@@ -828,15 +833,11 @@ const ROICalculator = () => {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button variant="outline" onClick={handlePrev} className="flex-1">
+                <Button variant="outlineGold" onClick={handlePrev} className="flex-1">
                   <ChevronLeft className="mr-2 h-4 w-4" />
                   Back
                 </Button>
-                <Button
-                  onClick={handleLeadSubmit}
-                  className="flex-1 bg-accent hover:bg-accent/90"
-                  disabled={!leadInfo.email || !leadInfo.firstName || !leadInfo.lastName || !leadInfo.company}
-                >
+                <Button variant="gold" onClick={handleLeadSubmit} className="flex-1" disabled={!leadInfo.email || !leadInfo.firstName || !leadInfo.lastName || !leadInfo.company}>
                   View Full Results
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -849,33 +850,33 @@ const ROICalculator = () => {
         {step === 6 && (
           <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
             {/* Summary Header */}
-            <Card className="bg-primary text-primary-foreground">
+            <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
               <CardContent className="p-8">
-                <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold mb-2">Your ROI Report</h2>
-                  <p className="text-primary-foreground/80">Personalized for {leadInfo.company}</p>
+                <div className="mb-8 text-center">
+                  <h2 className="mb-2 font-serif text-3xl font-normal text-ink-primary-dark">Your ROI Report</h2>
+                  <p className="text-ink-secondary-dark">Personalized for {leadInfo.company}</p>
                 </div>
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="text-center p-4 bg-primary-foreground/10 rounded-xl">
-                    <p className="text-4xl font-bold text-accent">${Math.round(results.totalAnnualSavings).toLocaleString()}</p>
-                    <p className="text-primary-foreground/80">Annual Savings</p>
+                <div className="grid gap-6 md:grid-cols-3">
+                  <div className="rounded-xl border border-teal/20 bg-obsidian-sunken/80 p-4 text-center">
+                    <p className="text-4xl font-bold text-gold">${Math.round(results.totalAnnualSavings).toLocaleString()}</p>
+                    <p className="text-ink-secondary-dark">Annual Savings</p>
                   </div>
-                  <div className="text-center p-4 bg-primary-foreground/10 rounded-xl">
-                    <p className="text-4xl font-bold text-accent">{Math.round(results.roi)}%</p>
-                    <p className="text-primary-foreground/80">Return on Investment</p>
+                  <div className="rounded-xl border border-teal/20 bg-obsidian-sunken/80 p-4 text-center">
+                    <p className="text-4xl font-bold text-teal">{Math.round(results.roi)}%</p>
+                    <p className="text-ink-secondary-dark">Return on Investment</p>
                   </div>
-                  <div className="text-center p-4 bg-primary-foreground/10 rounded-xl">
-                    <p className="text-4xl font-bold text-accent">{results.paybackMonths.toFixed(1)} mo</p>
-                    <p className="text-primary-foreground/80">Payback Period</p>
+                  <div className="rounded-xl border border-teal/20 bg-obsidian-sunken/80 p-4 text-center">
+                    <p className="text-4xl font-bold text-gold">{results.paybackMonths.toFixed(1)} mo</p>
+                    <p className="text-ink-secondary-dark">Payback Period</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Savings Breakdown */}
-            <Card>
+            <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
               <CardHeader>
-                <CardTitle>Savings Breakdown</CardTitle>
+                <CardTitle className="text-ink-primary-dark">Savings Breakdown</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
@@ -899,58 +900,58 @@ const ROICalculator = () => {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4 mt-6">
-                  <div className="p-4 bg-secondary/30 rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Clock className="h-5 w-5 text-accent" />
-                      <span className="font-medium">Time Efficiency</span>
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border border-teal/15 bg-obsidian-sunken/60 p-4">
+                    <div className="mb-2 flex items-center gap-3">
+                      <Clock className="h-5 w-5 text-teal" />
+                      <span className="font-medium text-ink-primary-dark">Time Efficiency</span>
                     </div>
-                    <p className="text-2xl font-bold">{results.timeSavingsPercent.toFixed(0)}% faster</p>
-                    <p className="text-sm text-muted-foreground">{Math.round(results.totalHoursSaved)} hours saved annually</p>
+                    <p className="text-2xl font-bold text-ink-primary-dark">{results.timeSavingsPercent.toFixed(0)}% faster</p>
+                    <p className="text-sm text-ink-secondary-dark">{Math.round(results.totalHoursSaved)} hours saved annually</p>
                   </div>
-                  <div className="p-4 bg-secondary/30 rounded-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Shield className="h-5 w-5 text-accent" />
-                      <span className="font-medium">Rejection Rate</span>
+                  <div className="rounded-lg border border-teal/15 bg-obsidian-sunken/60 p-4">
+                    <div className="mb-2 flex items-center gap-3">
+                      <Shield className="h-5 w-5 text-teal" />
+                      <span className="font-medium text-ink-primary-dark">Rejection Rate</span>
                     </div>
-                    <p className="text-2xl font-bold">{results.rejectionReductionPercent.toFixed(0)}% reduction</p>
-                    <p className="text-sm text-muted-foreground">{results.rejectionsSaved.toFixed(1)} fewer rejections/year</p>
+                    <p className="text-2xl font-bold text-ink-primary-dark">{results.rejectionReductionPercent.toFixed(0)}% reduction</p>
+                    <p className="text-sm text-ink-secondary-dark">{results.rejectionsSaved.toFixed(1)} fewer rejections/year</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Recommended Plan */}
-            <Card className="border-accent border-2">
+            <Card className={cn(EDITORIAL_FORM_CARD, "border-gold/35")}>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-3">
-                    <Zap className="h-6 w-6 text-accent" />
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-3 text-ink-primary-light">
+                    <Zap className="h-6 w-6 text-gold" />
                     Recommended Plan
                   </CardTitle>
-                  <Badge className="bg-accent text-accent-foreground">Best Value</Badge>
+                  <Badge className="border border-gold/35 bg-gold/15 text-gold-deep">Best Value</Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between mb-4">
+                <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-2xl font-bold">
+                    <p className="text-2xl font-bold text-ink-primary-light">
                       {companyProfile.companySize.includes("1-10") ? "Starter" :
                        companyProfile.companySize.includes("11-50") ? "Professional" : "Business"}
                     </p>
-                    <p className="text-muted-foreground">Based on your company profile</p>
+                    <p className="text-ink-secondary-light">Based on your company profile</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-3xl font-bold text-accent">${results.recommendedTier}</p>
-                    <p className="text-muted-foreground">/user/month</p>
+                    <p className="text-3xl font-bold text-teal">${results.recommendedTier}</p>
+                    <p className="text-ink-secondary-light">/user/month</p>
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <Button className="flex-1 bg-accent hover:bg-accent/90">
+                <div className="flex flex-wrap gap-3">
+                  <Button variant="gold" className="flex-1 min-w-[140px]">
                     Start Free Trial
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                  <Button variant="outline">
+                  <Button variant="outlineGold" className="flex-1 min-w-[140px]">
                     Schedule Demo
                   </Button>
                 </div>
@@ -958,16 +959,16 @@ const ROICalculator = () => {
             </Card>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-3 justify-center">
-              <Button variant="outline">
+            <div className="flex flex-wrap justify-center gap-3">
+              <Button variant="outlineGold">
                 <Download className="mr-2 h-4 w-4" />
                 Download PDF Report
               </Button>
-              <Button variant="outline" onClick={handleSaveClick}>
+              <Button variant="outlineGold" onClick={handleSaveClick}>
                 <Save className="mr-2 h-4 w-4" />
                 {user ? "Save to Dashboard" : "Sign In to Save"}
               </Button>
-              <Button variant="outline">
+              <Button variant="outlineGold">
                 <Share2 className="mr-2 h-4 w-4" />
                 Share Results
               </Button>
@@ -995,10 +996,10 @@ const ROICalculator = () => {
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+              <Button variant="outlineGold" onClick={() => setSaveDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveCalculation} disabled={isSaving || !saveName.trim()}>
+              <Button variant="gold" onClick={handleSaveCalculation} disabled={isSaving || !saveName.trim()}>
                 {isSaving ? "Saving..." : "Save Calculation"}
               </Button>
             </DialogFooter>
@@ -1009,12 +1010,12 @@ const ROICalculator = () => {
         {step < 5 && (
           <div className="flex flex-col sm:flex-row gap-3 mt-8 max-w-2xl mx-auto">
             {step > 1 && (
-              <Button variant="outline" onClick={handlePrev} className="flex-1">
+              <Button variant="outlineGold" onClick={handlePrev} className="flex-1">
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Previous
               </Button>
             )}
-            <Button onClick={handleNext} className="flex-1 bg-accent hover:bg-accent/90">
+            <Button variant="gold" onClick={handleNext} className="flex-1">
               Next Step
               <ChevronRight className="ml-2 h-4 w-4" />
             </Button>

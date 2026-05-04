@@ -58,14 +58,14 @@ export const ACTIVITY_TYPE_CONFIG: Record<ActivityType, {
   document_uploaded: {
     label: 'Document Uploaded',
     icon: 'FileUp',
-    color: 'text-teal-600',
-    bgColor: 'bg-teal-100',
+    color: 'text-teal',
+    bgColor: 'bg-teal-soft',
   },
   document_version_uploaded: {
     label: 'New Version',
     icon: 'FilePlus2',
-    color: 'text-teal-600',
-    bgColor: 'bg-teal-100',
+    color: 'text-teal',
+    bgColor: 'bg-teal-soft',
   },
   document_deleted: {
     label: 'Document Deleted',
@@ -124,8 +124,8 @@ export const ACTIVITY_TYPE_CONFIG: Record<ActivityType, {
   inspection_cancelled: {
     label: 'Inspection Cancelled',
     icon: 'CalendarX',
-    color: 'text-slate-600',
-    bgColor: 'bg-slate-100',
+    color: 'text-ink-secondary-light',
+    bgColor: 'bg-cream-sunken',
   },
   punch_item_created: {
     label: 'Punch Item Created',
@@ -154,7 +154,7 @@ export const ACTIVITY_TYPE_CONFIG: Record<ActivityType, {
   comment_added: {
     label: 'Comment Added',
     icon: 'MessageSquare',
-    color: 'text-slate-600',
-    bgColor: 'bg-slate-100',
+    color: 'text-ink-secondary-light',
+    bgColor: 'bg-cream-sunken',
   },
 };

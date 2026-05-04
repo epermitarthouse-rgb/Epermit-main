@@ -126,22 +126,22 @@ interface AccelaPortalData {
 function getStatusBadgeStyle(status: string): { className: string } {
   const s = status.toLowerCase();
   if (s.includes("expired"))
-    return { className: "bg-amber-500/20 text-amber-400 border-amber-500/30" };
+    return { className: "bg-warning/20 text-warning border-warning/30" };
   if (s.includes("approved") || s.includes("issued") || s.includes("active"))
     return {
-      className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+      className: "bg-success/20 text-success border-success/30",
     };
   if (s.includes("closed"))
-    return { className: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" };
+    return { className: "bg-muted text-muted-foreground border-border" };
   if (
     s.includes("pending") ||
     s.includes("review") ||
     s.includes("in progress")
   )
-    return { className: "bg-blue-500/20 text-blue-400 border-blue-500/30" };
+    return { className: "bg-warning/15 text-warning border-warning/30" };
   if (s.includes("denied") || s.includes("rejected"))
-    return { className: "bg-red-500/20 text-red-400 border-red-500/30" };
-  return { className: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30" };
+    return { className: "bg-destructive/15 text-destructive border-destructive/40" };
+  return { className: "bg-muted text-muted-foreground border-border" };
 }
 
 interface AccelaProjectViewProps {
@@ -210,7 +210,7 @@ export default function AccelaProjectView({
 
   return (
     <div className="space-y-4" data-testid="accela-project-view">
-      <Card className="border-[#1A3055] bg-[#091428]">
+      <Card className="border-border bg-card">
         <CardContent className="pt-5 pb-4 px-5">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div className="min-w-0">
@@ -218,7 +218,7 @@ export default function AccelaProjectView({
                 Accela Record
               </p>
               <h2
-                className="text-lg font-semibold text-[#F0F6FF] truncate"
+                className="text-lg font-semibold text-foreground truncate"
                 data-testid="text-record-number"
               >
                 {recordNumber}
@@ -252,8 +252,8 @@ export default function AccelaProjectView({
                   variant="outline"
                   className={`text-sm px-3 py-1 ${
                     recordStatus.toLowerCase().includes("expired")
-                      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                      : "bg-[#0D1E38] text-muted-foreground border-[#1A3055]"
+                      ? "bg-warning/20 text-warning border-warning/30"
+                      : "bg-muted/40 text-muted-foreground border-border"
                   }`}
                   data-testid="badge-expiration-date"
                 >
@@ -267,9 +267,9 @@ export default function AccelaProjectView({
 
       <div className="flex flex-col lg:flex-row gap-4">
         {departments.length > 0 && (
-          <Card className="border-[#1A3055] bg-[#091428] lg:w-80 flex-shrink-0">
+          <Card className="border-border bg-card lg:w-80 flex-shrink-0">
             <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-sm font-medium text-[#F0F6FF] flex items-center gap-2">
+              <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                 <ClipboardList className="h-4 w-4 text-muted-foreground" />
                 Processing Status
                 <span className="ml-auto text-xs text-muted-foreground font-normal">
@@ -293,7 +293,7 @@ export default function AccelaProjectView({
                     >
                       <div className="flex flex-col items-center flex-shrink-0 w-6">
                         <div
-                          className={`rounded-full p-0.5 ${isComplete ? "text-emerald-400" : "text-zinc-500"}`}
+                          className={`rounded-full p-0.5 ${isComplete ? "text-success" : "text-muted-foreground"}`}
                         >
                           {isComplete ? (
                             <CheckCircle2 className="h-4 w-4" />
@@ -304,14 +304,14 @@ export default function AccelaProjectView({
                         {!isLast && (
                           <div
                             className={`w-px flex-1 min-h-[16px] ${
-                              isComplete ? "bg-emerald-500/30" : "bg-zinc-700"
+                              isComplete ? "bg-success/30" : "bg-border"
                             }`}
                           />
                         )}
                       </div>
                       <div className="pb-3 min-w-0 flex-1">
                         <p
-                          className={`text-xs leading-tight ${isComplete ? "text-[#F0F6FF]" : "text-zinc-500"}`}
+                          className={`text-xs leading-tight ${isComplete ? "text-foreground" : "text-muted-foreground"}`}
                         >
                           {dept.name}
                         </p>
@@ -331,7 +331,7 @@ export default function AccelaProjectView({
 
         <div className="flex-1 min-w-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-[#0D1E38] border border-[#1A3055] mb-3">
+            <TabsList className="bg-muted/40 border border-border mb-3">
               <TabsTrigger
                 value="info"
                 className="gap-1.5 text-xs"
@@ -398,7 +398,7 @@ export default function AccelaProjectView({
               </TabsTrigger>
             </TabsList>
             <TabsContent value="info">
-              <Card className="border-[#1A3055] bg-[#091428]">
+              <Card className="border-border bg-card">
                 <CardContent className="p-4">
                   {infoKeyValues.length > 0 ? (
                     <div
@@ -408,13 +408,13 @@ export default function AccelaProjectView({
                       {infoKeyValues.map((kv, i) => (
                         <div
                           key={i}
-                          className="rounded-md border border-[#1A3055] bg-[#0D1E38] px-3 py-2"
+                          className="rounded-md border border-border bg-muted/40 px-3 py-2"
                           data-testid={`info-field-${i}`}
                         >
                           <div className="text-xs text-muted-foreground mb-1">
                             {kv.key}
                           </div>
-                          <div className="text-sm text-[#F0F6FF] break-words">
+                          <div className="text-sm text-foreground break-words">
                             {kv.value || "—"}
                           </div>
                         </div>
@@ -430,12 +430,12 @@ export default function AccelaProjectView({
               </Card>
             </TabsContent>
             <TabsContent value="files">
-              <Card className="border-[#1A3055] bg-[#091428]">
+              <Card className="border-border bg-card">
                 <CardContent className="p-0">
                   {attachmentRows.length > 0 ? (
                     <Table>
                       <TableHeader>
-                        <TableRow className="border-[#1A3055] hover:bg-transparent">
+                        <TableRow className="border-border hover:bg-transparent">
                           <TableHead className="text-xs text-muted-foreground">
                             Name
                           </TableHead>
@@ -457,7 +457,7 @@ export default function AccelaProjectView({
                         {attachmentRows.map((att, idx) => (
                           <TableRow
                             key={idx}
-                            className="border-[#1A3055]"
+                            className="border-border"
                             data-testid={`file-row-${idx}`}
                           >
                             <TableCell className="max-w-[300px]">
@@ -466,14 +466,14 @@ export default function AccelaProjectView({
                                   href={att.viewUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 text-sm"
+                                  className="text-primary hover:text-primary/90 hover:underline flex items-center gap-1 text-sm"
                                   data-testid={`link-file-${idx}`}
                                 >
                                   <span className="truncate">{att.name}</span>
                                   <ExternalLink className="h-3 w-3 flex-shrink-0" />
                                 </a>
                               ) : (
-                                <span className="text-sm text-[#F0F6FF] truncate block">
+                                <span className="text-sm text-foreground truncate block">
                                   {att.name}
                                 </span>
                               )}
@@ -491,7 +491,7 @@ export default function AccelaProjectView({
                               {att.downloadStatus === "failed" ? (
                                 <Badge
                                   variant="outline"
-                                  className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]"
+                                  className="bg-destructive/15 text-destructive border-destructive/40 text-[10px]"
                                   data-testid={`badge-file-failed-${idx}`}
                                 >
                                   <XCircle className="h-3 w-3 mr-1" />
@@ -500,12 +500,12 @@ export default function AccelaProjectView({
                               ) : att.viewUrl ? (
                                 <Badge
                                   variant="outline"
-                                  className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]"
+                                  className="bg-success/15 text-success border-success/35 text-[10px]"
                                 >
                                   Saved
                                 </Badge>
                               ) : (
-                                <span className="text-xs text-zinc-600">—</span>
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
                           </TableRow>
@@ -523,21 +523,21 @@ export default function AccelaProjectView({
             </TabsContent>
 
             <TabsContent value="inspections">
-              <Card className="border-[#1A3055] bg-[#091428]">
+              <Card className="border-border bg-card">
                 <CardContent className="p-0">
                   {inspectionTables.length > 0 &&
                   inspectionTables.some((t) => t.rows.length > 0) ? (
-                    <div className="divide-y divide-[#1A3055]">
+                    <div className="divide-y divide-border">
                       {inspectionTables.map((table, tIdx) => (
                         <div key={tIdx}>
-                          <div className="px-4 py-2 bg-[#0D1E38]">
+                          <div className="px-4 py-2 bg-muted/40">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               {table.title}
                             </p>
                           </div>
                           <Table>
                             <TableHeader>
-                              <TableRow className="border-[#1A3055] hover:bg-transparent">
+                              <TableRow className="border-border hover:bg-transparent">
                                 <TableHead className="text-xs text-muted-foreground">
                                   Type
                                 </TableHead>
@@ -561,10 +561,10 @@ export default function AccelaProjectView({
                                 return (
                                   <TableRow
                                     key={rIdx}
-                                    className="border-[#1A3055]"
+                                    className="border-border"
                                     data-testid={`inspection-row-${tIdx}-${rIdx}`}
                                   >
-                                    <TableCell className="text-sm text-[#F0F6FF]">
+                                    <TableCell className="text-sm text-foreground">
                                       {r.type || row["Type"] || "—"}
                                     </TableCell>
                                     <TableCell>
@@ -603,12 +603,12 @@ export default function AccelaProjectView({
             </TabsContent>
 
             <TabsContent value="links">
-              <Card className="border-[#1A3055] bg-[#091428]">
+              <Card className="border-border bg-card">
                 <CardContent className="p-0">
                   {relatedRecordRows.length > 0 ? (
                     <Table>
                       <TableHeader>
-                        <TableRow className="border-[#1A3055] hover:bg-transparent">
+                        <TableRow className="border-border hover:bg-transparent">
                           <TableHead className="text-xs text-muted-foreground">
                             Record Number
                           </TableHead>
@@ -630,10 +630,10 @@ export default function AccelaProjectView({
                         {relatedRecordRows.map((rec, idx) => (
                           <TableRow
                             key={idx}
-                            className="border-[#1A3055]"
+                            className="border-border"
                             data-testid={`related-record-${idx}`}
                           >
-                            <TableCell className="text-sm text-blue-400 font-mono">
+                            <TableCell className="text-sm text-primary font-mono">
                               {rec.record_number || "—"}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
@@ -648,7 +648,7 @@ export default function AccelaProjectView({
                                   {rec.status}
                                 </Badge>
                               ) : (
-                                <span className="text-xs text-zinc-600">—</span>
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
@@ -672,7 +672,7 @@ export default function AccelaProjectView({
             </TabsContent>
 
             <TabsContent value="planReview">
-              <Card className="border-[#1A3055] bg-[#091428]">
+              <Card className="border-border bg-card">
                 <CardContent className="p-4">
                   {planReviewPdf?.text ? (
                     <div
@@ -706,7 +706,7 @@ export default function AccelaProjectView({
                                     {value}
                                   </Badge>
                                 ) : (
-                                  <span className="text-sm text-[#F0F6FF]">
+                                  <span className="text-sm text-foreground">
                                     {value}
                                   </span>
                                 )}
@@ -715,7 +715,7 @@ export default function AccelaProjectView({
                           }
 
                           return (
-                            <p key={i} className="text-sm text-[#F0F6FF]">
+                            <p key={i} className="text-sm text-foreground">
                               {line}
                             </p>
                           );
@@ -732,16 +732,16 @@ export default function AccelaProjectView({
             </TabsContent>
 
             <TabsContent value="payments">
-              <Card className="border-[#1A3055] bg-[#091428]">
+              <Card className="border-border bg-card">
                 <CardContent className="p-0">
                   {paymentTables.length > 0 &&
                   paymentTables.some((t) => t.rows.length > 0) ? (
-                    <div className="divide-y divide-[#1A3055]">
+                    <div className="divide-y divide-border">
                       {paymentTables.map((table, tIdx) => (
                         <div key={tIdx}>
                           <Table>
                             <TableHeader>
-                              <TableRow className="border-[#1A3055] hover:bg-transparent">
+                              <TableRow className="border-border hover:bg-transparent">
                                 {table.headers.map((h, hIdx) => (
                                   <TableHead
                                     key={hIdx}
@@ -756,7 +756,7 @@ export default function AccelaProjectView({
                               {table.rows.map((row, rIdx) => (
                                 <TableRow
                                   key={rIdx}
-                                  className="border-[#1A3055]"
+                                  className="border-border"
                                   data-testid={`payment-row-${rIdx}`}
                                 >
                                   {table.headers.map((h, hIdx) => {
@@ -770,7 +770,7 @@ export default function AccelaProjectView({
                                     return (
                                       <TableCell
                                         key={hIdx}
-                                        className="text-sm text-[#F0F6FF]"
+                                        className="text-sm text-foreground"
                                       >
                                         {val}
                                       </TableCell>
@@ -811,8 +811,8 @@ function EmptyState({
       className="flex flex-col items-center justify-center py-12 text-center"
       data-testid="empty-state"
     >
-      <div className="rounded-full bg-[#0D1E38] p-4 mb-3">
-        <Icon className="h-8 w-8 text-zinc-600" />
+      <div className="rounded-full bg-muted/40 p-4 mb-3">
+        <Icon className="h-8 w-8 text-muted-foreground" />
       </div>
       <p className="text-sm text-muted-foreground">{message}</p>
     </div>

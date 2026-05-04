@@ -18,7 +18,7 @@ export function EmailBrandingDialog({ open, onOpenChange }: EmailBrandingDialogP
   
   const [logoUrl, setLogoUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#0f4c5c');
-  const [headerText, setHeaderText] = useState('Insight|DesignCheck');
+  const [headerText, setHeaderText] = useState('PermitPilot');
   const [footerText, setFooterText] = useState('');
   const [unsubscribeText, setUnsubscribeText] = useState('');
 

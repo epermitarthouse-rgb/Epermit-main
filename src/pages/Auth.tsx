@@ -10,7 +10,24 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Loader2, User, Building2, Briefcase, Phone, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Loader2,
+  User,
+  Building2,
+  Briefcase,
+  Phone,
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  Lock,
+} from "lucide-react";
+
+const AUTH_INPUT_CLASSES =
+  "bg-cream shadow-inner border-cream-sunken text-ink-primary-light placeholder:text-ink-tertiary-light focus-visible:border-gold/45 focus-visible:ring-2 focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream dark:bg-cream dark:border-cream-sunken dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light dark:focus-visible:ring-offset-cream";
+
+const AUTH_LABEL_CLASSES =
+  "font-mono-data text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-primary-light";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address"),
@@ -128,52 +145,87 @@ export default function Auth() {
   };
 
   return (
-    <div className="flex min-h-screen w-full">
-      {/* Left Panel: Form */}
-      <div className="flex w-full flex-col justify-center px-4 py-12 sm:px-6 lg:w-1/2 lg:px-20 xl:px-24 bg-background">
-        <motion.div
-          className="mx-auto w-full max-w-sm lg:w-96"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          key={activeView}
-        >
-          <motion.div variants={itemVariants}>
-            {/* Back Button */}
-            <Link 
-              to="/" 
-              className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="text-sm">Back to home</span>
-            </Link>
+    <div className="flex min-h-screen w-full flex-col overflow-x-hidden lg:flex-row">
+      {/* Editorial hero — navy / obsidian + grid */}
+      <div className="relative flex w-full min-h-[34vh] shrink-0 flex-col justify-between bg-gradient-to-br from-navy-deep via-navy-deep to-obsidian-sunken px-6 pb-8 pt-7 text-ink-primary-dark lg:order-none lg:h-auto lg:min-h-screen lg:w-1/2 lg:px-11 lg:pb-14 lg:pt-11">
+        <div
+          className="pointer-events-none absolute inset-0 z-0 opacity-[0.42] bg-grid-navy-lines"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-40 bg-gradient-to-t from-black/35 to-transparent"
+          aria-hidden
+        />
 
-            {/* Logo */}
-            <div className="mb-8">
-              <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                  <span className="text-lg font-bold text-primary-foreground">I</span>
-                </div>
-                <span className="text-lg font-bold tracking-tight">
-                  Insight<span className="text-accent">|</span>DesignCheck
-                </span>
+        <header className="relative z-[1]">
+          <p className="font-display text-2xl font-semibold tracking-tight text-ink-primary-dark lg:text-[1.7rem]">
+            PermitPilot
+          </p>
+          <p className="mt-0.5 text-[11px] font-tight tracking-wide text-ink-secondary-dark">by Commun-ET</p>
+        </header>
+
+        <div className="relative z-[1] mt-8 flex max-w-xl flex-col justify-center lg:mt-0 lg:flex-1">
+          <div className="font-display tracking-tight text-ink-primary-dark">
+            <span className="block text-xl font-normal leading-snug text-ink-secondary-dark lg:text-2xl">
+              Welcome to
+            </span>
+            <span className="mt-3 block text-[2.125rem] font-medium leading-none lg:mt-4 lg:text-[2.875rem]">
+              PermitPilot by
+            </span>
+            <span className="mt-3 block text-[2.125rem] font-medium leading-none lg:mt-3 lg:text-[2.875rem]">
+              Commun-ET.
+            </span>
+          </div>
+          <p className="mt-6 max-w-md text-[0.938rem] font-tight leading-relaxed text-ink-secondary-dark lg:mt-8 lg:text-base">
+            The Intelligence Layer for Permits and Utilities.
+            <span className="mt-2 block max-w-sm text-[0.875rem] text-ink-secondary-dark lg:text-[0.938rem]">
+              Currently exclusive to Commun-ET clients.
+            </span>
+          </p>
+        </div>
+
+        <p className="relative z-[1] mt-8 font-mono-data text-[9px] uppercase tracking-[0.2em] text-ink-tertiary-dark lg:mt-auto lg:pb-2">
+          PERMITTING · UTILITY COORDINATION · RESULTS
+        </p>
+      </div>
+
+      {/* Cream auth panel */}
+      <div className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-cream via-cream to-cream-raised/95 lg:h-auto lg:min-h-screen lg:w-1/2">
+        <div className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 lg:px-14 xl:px-24">
+          <motion.div
+            className="mx-auto w-full max-w-[412px]"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            key={activeView}
+          >
+            <motion.div variants={itemVariants}>
+              <Link
+                to="/"
+                className="mb-9 inline-flex items-center gap-2 text-sm font-tight text-ink-secondary-light transition-colors hover:text-ink-primary-light"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                Back to home
               </Link>
-            </div>
+            </motion.div>
 
-            {/* Header */}
-            <div className="mb-10">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                {activeView === "login" ? "Welcome back!" : "Create your account"}
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {activeView === "login"
-                  ? "Sign in by entering the information below"
-                  : "Get started with your free account today"}
-              </p>
-            </div>
+            <motion.div variants={itemVariants} className="mb-8 flex flex-col items-start gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/15 bg-gradient-to-br from-obsidian-raised to-obsidian shadow-sm">
+                <Lock className="h-5 w-5 text-ink-primary-dark" strokeWidth={1.75} />
+              </div>
+              <div>
+                <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-primary-light">
+                  {activeView === "login" ? "Sign in" : "Create your account"}
+                </h1>
+                <p className="mt-2 font-tight text-sm text-ink-secondary-light">
+                  {activeView === "login"
+                    ? "Access your PermitPilot workspace"
+                    : "Get started with your free account today"}
+                </p>
+              </div>
+            </motion.div>
 
             {activeView === "login" ? (
-              /* Login Form */
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-6">
                   <motion.div variants={itemVariants}>
@@ -182,13 +234,14 @@ export default function Auth() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email Address</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Email Address</FormLabel>
                           <FormControl>
                             <Input
                               type="email"
-                              placeholder="you@example.com"
+                              placeholder="name@company.com"
                               {...field}
                               disabled={isLoading}
+                              className={AUTH_INPUT_CLASSES}
                             />
                           </FormControl>
                           <FormMessage />
@@ -203,7 +256,15 @@ export default function Auth() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <div className="flex items-center justify-between gap-4">
+                            <FormLabel className={AUTH_LABEL_CLASSES}>Password</FormLabel>
+                            <a
+                              href="#"
+                              className="text-xs font-semibold uppercase tracking-[0.12em] text-gold underline-offset-4 transition-colors hover:text-gold-deep"
+                            >
+                              Forgot password?
+                            </a>
+                          </div>
                           <FormControl>
                             <div className="relative">
                               <Input
@@ -211,12 +272,12 @@ export default function Auth() {
                                 placeholder="••••••••"
                                 {...field}
                                 disabled={isLoading}
-                                className="pr-10"
+                                className={cn(AUTH_INPUT_CLASSES, "pr-11")}
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowLoginPassword(!showLoginPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-tertiary-light transition-colors hover:text-ink-primary-light"
                                 tabIndex={-1}
                               >
                                 {showLoginPassword ? (
@@ -233,12 +294,12 @@ export default function Auth() {
                     />
                   </motion.div>
 
-                  <motion.div variants={itemVariants} className="flex items-center justify-between">
+                  <motion.div variants={itemVariants}>
                     <FormField
                       control={loginForm.control}
                       name="rememberMe"
                       render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                           <FormControl>
                             <Checkbox
                               checked={field.value}
@@ -247,31 +308,29 @@ export default function Auth() {
                             />
                           </FormControl>
                           <div className="leading-none">
-                            <FormLabel className="text-sm font-normal cursor-pointer">
+                            <FormLabel className="cursor-pointer font-tight text-sm font-normal normal-case tracking-normal text-ink-secondary-light">
                               Remember Me
                             </FormLabel>
                           </div>
                         </FormItem>
                       )}
                     />
-                    <a
-                      href="#"
-                      className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-                    >
-                      Forgotten Password
-                    </a>
                   </motion.div>
 
                   <motion.div variants={itemVariants}>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
+                    <Button
+                      type="submit"
+                      variant="gold"
+                      className="h-11 w-full rounded-xl font-tight text-xs font-semibold uppercase tracking-[0.18em]"
+                      disabled={isLoading}
+                    >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Continue
+                      SIGN IN
                     </Button>
                   </motion.div>
                 </form>
               </Form>
             ) : (
-              /* Signup Form */
               <Form {...signupForm}>
                 <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
                   <motion.div variants={itemVariants}>
@@ -280,11 +339,16 @@ export default function Auth() {
                       name="fullName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Full Name *</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Full Name *</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input {...field} placeholder="John Smith" className="pl-10" disabled={isLoading} />
+                              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary-light" />
+                              <Input
+                                {...field}
+                                placeholder="John Smith"
+                                disabled={isLoading}
+                                className={cn(AUTH_INPUT_CLASSES, "pl-10")}
+                              />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -299,13 +363,14 @@ export default function Auth() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email Address *</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Email Address *</FormLabel>
                           <FormControl>
                             <Input
                               type="email"
                               placeholder="you@example.com"
                               {...field}
                               disabled={isLoading}
+                              className={AUTH_INPUT_CLASSES}
                             />
                           </FormControl>
                           <FormMessage />
@@ -314,17 +379,22 @@ export default function Auth() {
                     />
                   </motion.div>
 
-                  <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormField
                       control={signupForm.control}
                       name="companyName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Company</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Company</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Building2 className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input {...field} placeholder="Acme Inc" className="pl-10" disabled={isLoading} />
+                              <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary-light" />
+                              <Input
+                                {...field}
+                                placeholder="Acme Inc"
+                                disabled={isLoading}
+                                className={cn(AUTH_INPUT_CLASSES, "pl-10")}
+                              />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -336,11 +406,16 @@ export default function Auth() {
                       name="jobTitle"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Job Title</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Job Title</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Briefcase className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input {...field} placeholder="Architect" className="pl-10" disabled={isLoading} />
+                              <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary-light" />
+                              <Input
+                                {...field}
+                                placeholder="Architect"
+                                disabled={isLoading}
+                                className={cn(AUTH_INPUT_CLASSES, "pl-10")}
+                              />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -355,11 +430,17 @@ export default function Auth() {
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Phone</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Phone</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input {...field} type="tel" placeholder="(555) 123-4567" className="pl-10" disabled={isLoading} />
+                              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-tertiary-light" />
+                              <Input
+                                {...field}
+                                type="tel"
+                                placeholder="(555) 123-4567"
+                                disabled={isLoading}
+                                className={cn(AUTH_INPUT_CLASSES, "pl-10")}
+                              />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -374,7 +455,7 @@ export default function Auth() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password *</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Password *</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <Input
@@ -382,12 +463,12 @@ export default function Auth() {
                                 placeholder="••••••••"
                                 {...field}
                                 disabled={isLoading}
-                                className="pr-10"
+                                className={cn(AUTH_INPUT_CLASSES, "pr-11")}
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowSignupPassword(!showSignupPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-tertiary-light transition-colors hover:text-ink-primary-light"
                                 tabIndex={-1}
                               >
                                 {showSignupPassword ? (
@@ -410,7 +491,7 @@ export default function Auth() {
                       name="confirmPassword"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Confirm Password *</FormLabel>
+                          <FormLabel className={AUTH_LABEL_CLASSES}>Confirm Password *</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <Input
@@ -418,12 +499,12 @@ export default function Auth() {
                                 placeholder="••••••••"
                                 {...field}
                                 disabled={isLoading}
-                                className="pr-10"
+                                className={cn(AUTH_INPUT_CLASSES, "pr-11")}
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-tertiary-light transition-colors hover:text-ink-primary-light"
                                 tabIndex={-1}
                               >
                                 {showConfirmPassword ? (
@@ -441,27 +522,40 @@ export default function Auth() {
                   </motion.div>
 
                   <motion.div variants={itemVariants}>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
+                    <Button
+                      type="submit"
+                      variant="gold"
+                      className="h-11 w-full rounded-xl font-tight text-xs font-semibold uppercase tracking-[0.18em]"
+                      disabled={isLoading}
+                    >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Create Account
+                      CREATE ACCOUNT
                     </Button>
                   </motion.div>
                 </form>
               </Form>
             )}
 
-            <motion.p variants={itemVariants} className="mt-8 text-center text-sm text-muted-foreground">
+            <motion.p variants={itemVariants} className="mt-9 text-center text-sm text-ink-secondary-light">
               {activeView === "login" ? (
                 <>
-                  Don't have an account?{" "}
+                  Need access?{" "}
                   <button
                     type="button"
                     onClick={() => setActiveView("signup")}
-                    className="font-semibold text-primary hover:text-primary/80 transition-colors"
+                    className="font-semibold text-gold transition-colors hover:text-gold-deep"
                   >
-                    Create one here
-                  </button>
-                  .
+                    Create an account
+                  </button>{" "}
+                  <span className="text-ink-tertiary-light" aria-hidden>
+                    ·
+                  </span>{" "}
+                  <a
+                    href="mailto:hello@commun-et.com"
+                    className="font-semibold text-gold transition-colors hover:text-gold-deep"
+                  >
+                    Become a client
+                  </a>
                 </>
               ) : (
                 <>
@@ -469,7 +563,7 @@ export default function Auth() {
                   <button
                     type="button"
                     onClick={() => setActiveView("login")}
-                    className="font-semibold text-primary hover:text-primary/80 transition-colors"
+                    className="font-semibold text-gold transition-colors hover:text-gold-deep"
                   >
                     Sign in here
                   </button>
@@ -478,46 +572,20 @@ export default function Auth() {
               )}
             </motion.p>
 
-            <motion.p variants={itemVariants} className="mt-4 text-center text-xs text-muted-foreground">
+            <motion.p
+              variants={itemVariants}
+              className="mt-6 text-center text-xs leading-relaxed text-ink-secondary-light"
+            >
               By signing up, you agree to our Terms of Service and Privacy Policy.
             </motion.p>
           </motion.div>
-        </motion.div>
-      </div>
-
-      {/* Right Panel: Image */}
-      <div className="relative hidden w-0 lg:block lg:w-1/2">
-        <div className="absolute inset-0 bg-primary/20" />
-        <img
-          className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
-          alt="Modern architecture building"
-        />
-        {/* Overlay content */}
-        <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/40 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-12 text-primary-foreground">
-          <div className="max-w-lg">
-            <h3 className="text-2xl font-bold mb-4">Streamline Your Permit Process</h3>
-            <p className="text-primary-foreground/80 mb-6">
-              Join thousands of architects, engineers, and permit expeditors who've 
-              accelerated their approval process with Insight|DesignCheck.
-            </p>
-            <div className="flex gap-8">
-              <div>
-                <div className="text-2xl font-bold">80%</div>
-                <div className="text-sm text-primary-foreground/60">Higher approval rate</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">40%</div>
-                <div className="text-sm text-primary-foreground/60">Faster turnaround</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">200+</div>
-                <div className="text-sm text-primary-foreground/60">Jurisdictions</div>
-              </div>
-            </div>
-          </div>
         </div>
+
+        <footer className="shrink-0 px-6 pb-8 pt-2 text-center">
+          <p className="text-[11px] leading-relaxed text-ink-tertiary-light">
+            © 2026 Commun-ET, LLC. PermitPilot is a registered product of Commun-ET, LLC.
+          </p>
+        </footer>
       </div>
     </div>
   );

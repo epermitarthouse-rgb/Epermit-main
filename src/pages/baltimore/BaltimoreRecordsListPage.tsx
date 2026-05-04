@@ -3,6 +3,7 @@ import { BaltimoreLayout } from "@/components/baltimore/BaltimoreLayout";
 import { BaltimoreRecordsTable } from "@/components/baltimore/BaltimoreRecordsTable";
 import { getBaltimoreRecordsList } from "@/data/baltimorePortalMock";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import {
   Pagination,
   PaginationContent,
@@ -34,7 +35,7 @@ export default function BaltimoreRecordsListPage() {
         <BaltimoreRecordsTable records={records} />
 
         {totalPages > 1 && (
-          <Card>
+          <Card className={EDITORIAL_FORM_CARD}>
             <CardContent className="flex justify-center py-4">
               <Pagination>
                 <PaginationContent>

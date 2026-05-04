@@ -2,6 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ProjectTypeMetrics } from '@/types/analytics';
+import { cn } from '@/lib/utils';
+import { DATA_INTELLIGENCE_PANEL } from '@/components/layout/editorialPageChrome';
 
 interface ProjectTypeBreakdownCardProps {
   metrics: ProjectTypeMetrics[];
@@ -25,16 +27,18 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+const panel = cn(DATA_INTELLIGENCE_PANEL);
+
 export function ProjectTypeBreakdownCard({ metrics }: ProjectTypeBreakdownCardProps) {
   if (metrics.length === 0) {
     return (
-      <Card>
+      <Card className={panel}>
         <CardHeader>
-          <CardTitle>Project Type Breakdown</CardTitle>
-          <CardDescription>Detailed metrics by project type</CardDescription>
+          <CardTitle className="text-ink-primary-dark">Project Type Breakdown</CardTitle>
+          <CardDescription className="text-ink-secondary-dark">Detailed metrics by project type</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">No project type data available</p>
+        <CardContent className="flex h-64 items-center justify-center">
+          <p className="text-ink-tertiary-dark">No project type data available</p>
         </CardContent>
       </Card>
     );
@@ -43,29 +47,38 @@ export function ProjectTypeBreakdownCard({ metrics }: ProjectTypeBreakdownCardPr
   const maxCount = Math.max(...metrics.map(m => m.count));
 
   return (
-    <Card>
+    <Card className={panel}>
       <CardHeader>
-        <CardTitle>Project Type Breakdown</CardTitle>
-        <CardDescription>Detailed metrics by project type</CardDescription>
+        <CardTitle className="text-ink-primary-dark">Project Type Breakdown</CardTitle>
+        <CardDescription className="text-ink-secondary-dark">Detailed metrics by project type</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {metrics.map((metric) => (
           <div key={metric.projectType} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-ink-primary-dark">
                 {PROJECT_TYPE_LABELS[metric.projectType] || metric.projectType}
               </span>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{metric.count} permits</Badge>
-                <Badge 
-                  variant={metric.approvalRate >= 80 ? 'default' : metric.approvalRate >= 50 ? 'secondary' : 'destructive'}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge variant="outline" className="border-teal/30 text-ink-secondary-dark">
+                  {metric.count} permits
+                </Badge>
+                <Badge
+                  variant={metric.approvalRate >= 50 ? 'outline' : 'destructive'}
+                  className={
+                    metric.approvalRate >= 80
+                      ? 'border-teal/35 bg-teal/15 text-teal'
+                      : metric.approvalRate >= 50
+                        ? 'border-gold/35 bg-gold/10 text-gold'
+                        : ''
+                  }
                 >
                   {metric.approvalRate.toFixed(0)}% approved
                 </Badge>
               </div>
             </div>
             <Progress value={(metric.count / maxCount) * 100} className="h-2" />
-            <div className="flex justify-between text-sm text-muted-foreground">
+            <div className="flex justify-between text-sm text-ink-tertiary-dark">
               <span>
                 Avg cycle: {metric.avgCycleTime ? `${metric.avgCycleTime.toFixed(1)} days` : 'N/A'}
               </span>

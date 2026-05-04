@@ -59,6 +59,8 @@ import {
   ArrowLeft,
   Loader2,
 } from "lucide-react";
+import { Section } from "@/components/ui/Section";
+import { Eyebrow, EyebrowDark } from "@/components/ui/Typography";
 import AccelaProjectView from "@/components/portal/AccelaProjectView";
 import {
   PgcStatusTab,
@@ -72,6 +74,25 @@ import {
   isProjectDoxUrl,
   resolvePortalView,
 } from "@/lib/portalView";
+import { cn } from "@/lib/utils";
+
+/** Commun-ET tab pills — presentation only; tab `value` and visibility unchanged. */
+const PORTAL_TAB_TRIGGER =
+  "h-auto rounded-full border border-cream-sunken bg-cream-raised px-4 py-2 text-sm font-medium text-ink-secondary-light shadow-none transition-all hover:bg-cream-sunken hover:text-ink-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream data-[state=active]:border-gold data-[state=active]:bg-gold data-[state=active]:px-4 data-[state=active]:py-2 data-[state=active]:text-sm data-[state=active]:font-semibold data-[state=active]:text-cream data-[state=active]:shadow-cream data-[state=active]:hover:bg-gold data-[state=active]:hover:text-cream";
+
+/** PortalDataViewer primary actions — h-9 / px-3.5 / icon 16px (see [&_svg] on base). */
+const PORTAL_ACTION_BUTTON_BASE =
+  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-3.5 text-sm font-medium transition-all duration-200 ease-out-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/35 disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
+
+const PORTAL_ACTION_BUTTON_PRIMARY = `${PORTAL_ACTION_BUTTON_BASE} bg-gold text-cream shadow-cream hover:bg-gold-deep`;
+
+const PORTAL_ACTION_BUTTON_OUTLINE = `${PORTAL_ACTION_BUTTON_BASE} border border-gold/45 bg-transparent text-gold hover:bg-gold hover:text-cream`;
+
+const PORTAL_ACTION_BUTTON_SECONDARY_FILL = `${PORTAL_ACTION_BUTTON_BASE} border border-cream-sunken bg-cream-sunken/90 text-ink-primary-light hover:bg-cream-sunken`;
+
+const PORTAL_ACTION_BUTTON_LIGHT_OUTLINE = `${PORTAL_ACTION_BUTTON_BASE} border border-cream-sunken bg-cream-raised text-ink-secondary-light hover:bg-cream-sunken hover:text-ink-primary-light`;
+
+const PORTAL_ACTION_BUTTON_AI = `${PORTAL_ACTION_BUTTON_BASE} border border-teal/30 bg-teal/10 text-teal hover:bg-teal/18`;
 
 class TabErrorBoundary extends React.Component<
   { tabName: string; children: React.ReactNode },
@@ -139,6 +160,23 @@ function statusTableDisplayHeaders(tbl: TableData): string[] {
     }
   }
   return order;
+}
+
+/** Display-only: fixes duplicated scraped status strings (e.g. "Decision IssuedDecision Issued"). */
+function normalizeRepeatedStatusLabel(value?: string | null) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (trimmed === "Decision IssuedDecision Issued") {
+    return "Decision Issued";
+  }
+  const half = Math.floor(trimmed.length / 2);
+  if (
+    trimmed.length % 2 === 0 &&
+    trimmed.slice(0, half) === trimmed.slice(half)
+  ) {
+    return trimmed.slice(0, half).trim();
+  }
+  return trimmed;
 }
 
 interface FileComment {
@@ -558,14 +596,14 @@ function WashingtonStatusFieldLine({
   const v = (value || "").trim() || "—";
   return (
     <div className="flex gap-3 py-1.5 items-start">
-      <div className="min-w-[11rem] max-w-[45%] shrink-0 text-right text-[12px] font-semibold text-foreground/95 leading-snug">
+      <div className="min-w-[11rem] max-w-[45%] shrink-0 text-right text-[12px] font-semibold text-ink-secondary-light leading-snug">
         {label && label !== "—" ? `${label}:` : ""}
       </div>
       <div
         className={
           denseValue
-            ? "flex-1 text-xs leading-snug text-foreground/85 max-h-24 overflow-y-auto break-words"
-            : "flex-1 text-[13px] leading-snug text-foreground/95 break-words"
+            ? "flex-1 text-xs leading-snug text-ink-primary-light max-h-24 overflow-y-auto break-words"
+            : "flex-1 text-[13px] leading-snug text-ink-primary-light break-words"
         }
       >
         {v}
@@ -574,7 +612,7 @@ function WashingtonStatusFieldLine({
   );
 }
 
-/** Portal-like: routing slip = link; View Report = outline button. */
+/** Portal-like: compact gold-outline actions (same URL deduped vs linkActions in Washington panel). */
 function WashingtonStatusActionControl({
   href,
   label,
@@ -582,23 +620,8 @@ function WashingtonStatusActionControl({
   href: string;
   label: string;
 }) {
-  const isViewReport = /view\s*report/i.test(label);
-  if (isViewReport) {
-    return (
-      <Button asChild size="sm" variant="outline" className="h-auto py-1.5 px-3">
-        <a href={href} target="_blank" rel="noreferrer">
-          {label}
-        </a>
-      </Button>
-    );
-  }
   return (
-    <Button
-      asChild
-      size="sm"
-      variant="link"
-      className="h-auto py-1 px-1 text-[#6B9AC4]"
-    >
+    <Button asChild variant="ghost" className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}>
       <a href={href} target="_blank" rel="noreferrer">
         {label}
       </a>
@@ -625,9 +648,23 @@ function WashingtonStatusTabPanel({
   const { urlActions } = partitioned;
   const rawLinks = Array.isArray(tab.links) ? tab.links : [];
   const linkActions = montgomeryStatusLinksActionable(rawLinks);
+  const viewerUrlsFromLinkActions = new Set<string>();
+  for (const L of linkActions) {
+    const { viewerUrl, showOpenViewer } =
+      getMontgomeryStatusLinkActionUrls(L);
+    if (showOpenViewer && viewerUrl) {
+      viewerUrlsFromLinkActions.add(viewerUrl.trim());
+    }
+  }
+  /** Drop key/value URL rows that duplicate the structured link "Open viewer" URL (same tab, same target). */
+  const urlActionsDeduped = urlActions.filter((kv) => {
+    const href = String(kv.value ?? "").trim();
+    if (!isHttpUrlCandidate(href)) return true;
+    return !viewerUrlsFromLinkActions.has(href);
+  });
   const hasBottomActions =
     linkActions.length > 0 ||
-    urlActions.length > 0 ||
+    urlActionsDeduped.length > 0 ||
     rawLinks.some((L) => {
       const h = String(L.href ?? "").trim();
       return h && h !== "#" && isHttpUrlCandidate(h);
@@ -639,7 +676,7 @@ function WashingtonStatusTabPanel({
   );
 
   return (
-    <div className="max-w-lg mx-auto space-y-3">
+    <div className="max-w-lg mx-auto space-y-3 rounded-xl border border-cream-sunken bg-cream-raised px-5 py-6 shadow-cream">
       <div className="space-y-1">
         {fields.map((kv, i) => (
           <WashingtonStatusFieldLine
@@ -654,9 +691,9 @@ function WashingtonStatusTabPanel({
           const asLines = washingtonStatusTableAsLines(tbl);
           if (asLines) {
             return (
-              <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-border/40">
+              <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-cream-sunken/80">
                 {tbl.title ? (
-                  <p className="text-[11px] text-muted-foreground/70 mb-1.5">
+                  <p className="text-[11px] text-ink-tertiary-light mb-1.5">
                     {tbl.title}
                   </p>
                 ) : null}
@@ -679,9 +716,9 @@ function WashingtonStatusTabPanel({
           const displayHeaders = statusTableDisplayHeaders(tbl);
           if (!displayHeaders.length && !(tbl.rows?.length ?? 0)) return null;
           return (
-            <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-border/40">
+            <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-cream-sunken/80">
               {tbl.title ? (
-                <p className="text-[11px] text-muted-foreground/70 mb-1.5">
+                <p className="text-[11px] text-ink-tertiary-light mb-1.5">
                   {tbl.title}
                 </p>
               ) : null}
@@ -689,7 +726,7 @@ function WashingtonStatusTabPanel({
                 {(tbl.rows ?? []).map((row, ri) => (
                   <p
                     key={ri}
-                    className="text-[12px] leading-snug text-foreground/90"
+                    className="text-[12px] leading-snug text-ink-primary-light"
                   >
                     {displayHeaders
                       .map((h) => String(row[h] ?? "").trim())
@@ -704,80 +741,90 @@ function WashingtonStatusTabPanel({
       </div>
 
       {hasBottomActions ? (
-        <div className="mt-8 pt-4 border-t border-border/50">
-          <p className="text-sm font-semibold text-foreground mb-3">
+        <div className="mt-8 pt-4 border-t border-cream-sunken">
+          <p className="text-sm font-semibold text-ink-primary-light mb-3">
             For more details:
           </p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            {linkActions.map((L, mi) => {
-              const {
-                viewerUrl,
-                pdfUrl,
-                excelUrl,
-                showOpenViewer,
-              } = getMontgomeryStatusLinkActionUrls(L);
-              const label =
-                (L.reportName && String(L.reportName).trim()) ||
-                (L.text && String(L.text).trim()) ||
-                `Action ${mi + 1}`;
-              const simpleDc =
-                !!showOpenViewer &&
-                !!viewerUrl &&
-                !pdfUrl &&
-                !excelUrl;
-              return (
-                <span
-                  key={`wst-lk-${mi}`}
-                  className="inline-flex flex-wrap gap-2 items-center"
-                >
-                  {showOpenViewer && viewerUrl ? (
-                    simpleDc ? (
-                      <WashingtonStatusActionControl
-                        href={viewerUrl}
-                        label={label}
-                      />
-                    ) : (
+            {(() => {
+              const seenViewerUrl = new Set<string>();
+              return linkActions.map((L, mi) => {
+                const {
+                  viewerUrl,
+                  pdfUrl,
+                  excelUrl,
+                  showOpenViewer,
+                } = getMontgomeryStatusLinkActionUrls(L);
+                const label =
+                  (L.reportName && String(L.reportName).trim()) ||
+                  (L.text && String(L.text).trim()) ||
+                  `Action ${mi + 1}`;
+                const simpleDc =
+                  !!showOpenViewer &&
+                  !!viewerUrl &&
+                  !pdfUrl &&
+                  !excelUrl;
+                let renderOpen = !!(showOpenViewer && viewerUrl);
+                if (renderOpen && viewerUrl) {
+                  const v = viewerUrl.trim();
+                  if (seenViewerUrl.has(v)) renderOpen = false;
+                  else seenViewerUrl.add(v);
+                }
+                return (
+                  <span
+                    key={`wst-lk-${mi}`}
+                    className="inline-flex flex-wrap gap-2 items-center"
+                  >
+                    {renderOpen && viewerUrl ? (
+                      simpleDc ? (
+                        <WashingtonStatusActionControl
+                          href={viewerUrl}
+                          label={label}
+                        />
+                      ) : (
+                        <Button
+                          asChild
+                          variant="ghost"
+                          className={cn(PORTAL_ACTION_BUTTON_PRIMARY)}
+                        >
+                          <a
+                            href={viewerUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <FileText />
+                            {label}
+                          </a>
+                        </Button>
+                      )
+                    ) : null}
+                    {pdfUrl ? (
                       <Button
                         asChild
-                        size="sm"
-                        variant="link"
-                        className="h-auto py-1 px-1 text-[#6B9AC4]"
+                        variant="ghost"
+                        className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}
                       >
-                        <a href={viewerUrl} target="_blank" rel="noreferrer">
-                          <FileText className="h-3.5 w-3.5 mr-1.5 inline" />
-                          {label}
+                        <a href={pdfUrl} target="_blank" rel="noreferrer">
+                          Download PDF
                         </a>
                       </Button>
-                    )
-                  ) : null}
-                  {pdfUrl ? (
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="link"
-                      className="h-auto py-1 px-1 text-[#6B9AC4]"
-                    >
-                      <a href={pdfUrl} target="_blank" rel="noreferrer">
-                        Download PDF
-                      </a>
-                    </Button>
-                  ) : null}
-                  {excelUrl ? (
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="link"
-                      className="h-auto py-1 px-1 text-[#6B9AC4]"
-                    >
-                      <a href={excelUrl} target="_blank" rel="noreferrer">
-                        Download Excel
-                      </a>
-                    </Button>
-                  ) : null}
-                </span>
-              );
-            })}
-            {urlActions.map((kv, ui) => {
+                    ) : null}
+                    {excelUrl ? (
+                      <Button
+                        asChild
+                        variant="ghost"
+                        className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}
+                      >
+                        <a href={excelUrl} target="_blank" rel="noreferrer">
+                          Download Excel
+                        </a>
+                      </Button>
+                    ) : null}
+                  </span>
+                );
+              });
+            })()}
+            {urlActionsDeduped.map((kv, ui) => {
               const href = String(kv.value ?? "").trim();
               const label = kv.key || "Open link";
               return (
@@ -808,6 +855,40 @@ function WashingtonStatusTabPanel({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Reports tab (obsidian): extracted text disclosure — collapsed by default; presentation only. */
+function ReportsExtractedTextDetails({
+  text,
+  summaryLabel = "Show extracted text",
+  testId,
+}: {
+  text: string;
+  summaryLabel?: string;
+  testId?: string;
+}) {
+  const len = text.length;
+  const display =
+    len > 120_000 ? `${text.slice(0, 120_000)}\n\n[truncated]` : text;
+  return (
+    <div className="mt-4 w-full min-w-0">
+      <p className="text-xs text-ink-tertiary-dark">Extracted text available</p>
+      <details
+        className="mt-2 rounded-lg border border-obsidian-raised bg-obsidian-sunken"
+        data-testid={testId}
+      >
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 px-4 py-3 text-sm font-medium text-gold [&::-webkit-details-marker]:hidden">
+          <span>{summaryLabel}</span>
+          <span className="text-xs font-mono font-normal text-ink-tertiary-dark">
+            {len.toLocaleString()} chars
+          </span>
+        </summary>
+        <pre className="max-h-[min(55vh,480px)] overflow-auto border-t border-obsidian-raised p-4 font-mono text-[11px] leading-relaxed text-ink-secondary-dark whitespace-pre-wrap break-words">
+          {display}
+        </pre>
+      </details>
     </div>
   );
 }
@@ -1341,7 +1422,7 @@ export default function PortalDataViewer() {
           : "No portal data available.";
     return (
       <section className="py-6 px-4 sm:px-6 max-w-5xl">
-        <div className="p-8 text-center text-gray-400">
+        <div className="p-8 text-center text-muted-foreground">
           {noTabsLabel} Run a scrape first.
         </div>
       </section>
@@ -1372,7 +1453,7 @@ export default function PortalDataViewer() {
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-[#F0F6FF]">
+            <h1 className="text-xl font-semibold text-foreground">
               Portal Data
             </h1>
             {loading && (
@@ -1386,14 +1467,13 @@ export default function PortalDataViewer() {
           </div>
           <Button
             variant="outline"
-            size="sm"
             onClick={handleManualRefresh}
             disabled={refreshing}
-            className="gap-1.5"
+            className={cn(PORTAL_ACTION_BUTTON_OUTLINE, "gap-2")}
             data-testid="button-refresh"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              className={cn(refreshing && "animate-spin")}
             />
             Refresh
           </Button>
@@ -2202,11 +2282,11 @@ export default function PortalDataViewer() {
           >
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="bg-[#091428] border-b-2 border-[#1A3055]">
+                <tr className="bg-muted/40 border-b-2 border-border">
                   {table.headers.map((h, hi) => (
                     <th
                       key={hi}
-                      className="text-left p-2 px-3 text-xs font-bold text-[#C44D14] font-mono border-r border-[#1A3055] whitespace-nowrap"
+                      className="text-left p-2 px-3 text-xs font-bold text-primary font-mono border-r border-border whitespace-nowrap"
                     >
                       {h}
                     </th>
@@ -2217,12 +2297,12 @@ export default function PortalDataViewer() {
                 {table.rows.map((row, ri) => (
                   <tr
                     key={ri}
-                    className={`border-b border-[#1A3055] ${ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"} hover:bg-[#FF6B2B08]`}
+                    className={`border-b border-border ${ri % 2 === 0 ? "bg-muted/25" : "bg-muted/40"} hover:bg-primary/10`}
                   >
                     {row.map((cell, ci) => (
                       <td
                         key={ci}
-                        className="p-2 px-3 align-top border-r border-[#1A3055] whitespace-nowrap text-[#F0F6FF] max-w-[200px] overflow-hidden text-ellipsis"
+                        className="p-2 px-3 align-top border-r border-border whitespace-nowrap text-foreground max-w-[200px] overflow-hidden text-ellipsis"
                       >
                         {cell}
                       </td>
@@ -2249,7 +2329,7 @@ export default function PortalDataViewer() {
         elements.push(
           <p
             key={keyInc++}
-            className="text-xs text-[#6B9AC4] mt-6 pt-2 border-t border-[#1A3055] italic"
+            className="text-xs text-muted-foreground mt-6 pt-2 border-t border-border italic"
           >
             {trimmed}
           </p>,
@@ -2270,7 +2350,7 @@ export default function PortalDataViewer() {
         elements.push(
           <h3
             key={keyInc++}
-            className="text-xl font-light text-[#6B9AC4] pb-2 mb-4 border-b-2 border-blue-600"
+            className="text-xl font-light text-foreground pb-2 mb-4 border-b-2 border-primary"
           >
             {trimmed}
           </h3>,
@@ -2290,7 +2370,7 @@ export default function PortalDataViewer() {
         elements.push(
           <div
             key={keyInc++}
-            className="text-center text-sm font-bold tracking-wider text-[#6B9AC4] bg-[#091428] py-2 my-4 border-y border-[#1A3055]"
+            className="text-center text-sm font-bold tracking-wider text-foreground bg-muted/40 py-2 my-4 border-y border-border"
           >
             {trimmed}
           </div>,
@@ -2311,10 +2391,10 @@ export default function PortalDataViewer() {
         if (key.length > 1 && key.length < 45) {
           elements.push(
             <div key={keyInc++} className="flex gap-2 py-0.5">
-              <span className="text-sm text-[#6B9AC4] whitespace-nowrap min-w-[160px]">
+              <span className="text-sm text-muted-foreground whitespace-nowrap min-w-[160px]">
                 {key}:
               </span>
-              <span className="text-sm font-semibold text-[#F0F6FF]">
+              <span className="text-sm font-semibold text-foreground">
                 {val}
               </span>
             </div>,
@@ -2325,7 +2405,7 @@ export default function PortalDataViewer() {
       }
 
       elements.push(
-        <p key={keyInc++} className="text-sm text-[#F0F6FF] py-0.5">
+        <p key={keyInc++} className="text-sm text-foreground py-0.5">
           {trimmed}
         </p>,
       );
@@ -2366,14 +2446,14 @@ export default function PortalDataViewer() {
     ) : null;
 
     const tableNode = (
-      <div className="overflow-x-auto rounded border border-[#1A3055] my-2">
+      <div className="overflow-x-auto rounded border border-border my-2">
         <table className="text-xs w-full border-collapse min-w-[640px]">
           <thead>
-            <tr className="bg-[#091428] border-b-2 border-[#1A3055]">
+            <tr className="bg-muted/40 border-b-2 border-border">
               {headerCells.map((h, hi) => (
                 <th
                   key={hi}
-                  className="text-left p-2 px-3 font-semibold text-[#C44D14] border-r border-[#1A3055] align-top whitespace-pre-wrap max-w-[min(200px,28vw)]"
+                  className="text-left p-2 px-3 font-semibold text-primary border-r border-border align-top whitespace-pre-wrap max-w-[min(200px,28vw)]"
                 >
                   {h}
                 </th>
@@ -2386,12 +2466,12 @@ export default function PortalDataViewer() {
               return (
                 <tr
                   key={`${li}-${ri}`}
-                  className={ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"}
+                  className={ri % 2 === 0 ? "bg-muted/25" : "bg-muted/40"}
                 >
                   {pad(splitSsrsDataRow(line)).map((cell, ci) => (
                     <td
                       key={ci}
-                      className="border border-[#1A3055] px-2 py-1.5 align-top text-[#F0F6FF] whitespace-pre-wrap max-w-[min(320px,45vw)] break-words"
+                      className="border border-border px-2 py-1.5 align-top text-foreground whitespace-pre-wrap max-w-[min(320px,45vw)] break-words"
                     >
                       {cell}
                     </td>
@@ -2507,13 +2587,13 @@ export default function PortalDataViewer() {
     const cap = 400;
     const slice = dataRows.length > cap ? dataRows.slice(0, cap) : dataRows;
     return (
-      <div className="overflow-x-auto rounded border border-[#1A3055] my-2">
+      <div className="overflow-x-auto rounded border border-border my-2">
         <table className="text-xs w-full border-collapse min-w-[480px]">
           <tbody>
             {slice.map((row, ri) => (
               <tr
                 key={ri}
-                className={ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"}
+                className={ri % 2 === 0 ? "bg-muted/25" : "bg-muted/40"}
               >
                 {Array.from({ length: maxCols }, (_, ci) => {
                   const cells = splitRow(row);
@@ -2521,7 +2601,7 @@ export default function PortalDataViewer() {
                   return (
                     <td
                       key={ci}
-                      className="border border-[#1A3055] px-2 py-1.5 align-top text-[#F0F6FF] whitespace-pre-wrap max-w-[min(280px,40vw)] break-words"
+                      className="border border-border px-2 py-1.5 align-top text-foreground whitespace-pre-wrap max-w-[min(280px,40vw)] break-words"
                     >
                       {cell}
                     </td>
@@ -2544,14 +2624,14 @@ export default function PortalDataViewer() {
 
   function renderPgcStackedReviewCommentsTable(rows: PgcReviewCommentsRow[]) {
     const thClass =
-      "text-left p-2 px-3 font-semibold text-[#C44D14] border-r border-[#1A3055] align-top whitespace-pre-wrap max-w-[min(200px,28vw)]";
+      "text-left p-2 px-3 font-semibold text-primary border-r border-border align-top whitespace-pre-wrap max-w-[min(200px,28vw)]";
     const tdBase =
-      "border border-[#1A3055] px-2 py-1.5 align-top text-[#F0F6FF] whitespace-pre-wrap";
+      "border border-border px-2 py-1.5 align-top text-foreground whitespace-pre-wrap";
     return (
-      <div className="overflow-x-auto rounded border border-[#1A3055] my-2">
+      <div className="overflow-x-auto rounded border border-border my-2">
         <table className="text-xs w-full border-collapse min-w-[920px]">
           <thead>
-            <tr className="bg-[#091428] border-b-2 border-[#1A3055]">
+            <tr className="bg-muted/40 border-b-2 border-border">
               <th className={thClass}>Ref #</th>
               <th className={thClass}>Cycle</th>
               <th className={thClass}>Reviewed by</th>
@@ -2568,7 +2648,7 @@ export default function PortalDataViewer() {
             {rows.map((row, ri) => (
               <tr
                 key={ri}
-                className={ri % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"}
+                className={ri % 2 === 0 ? "bg-muted/25" : "bg-muted/40"}
               >
                 <td className={`${tdBase} whitespace-nowrap`}>{row.ref}</td>
                 <td className={`${tdBase} whitespace-nowrap`}>{row.cycle}</td>
@@ -2611,11 +2691,11 @@ export default function PortalDataViewer() {
       }
       return (
         <div className="space-y-2">
-          <p className="text-xs text-[#6B9AC4]">
+          <p className="text-xs text-muted-foreground">
             Could not parse this PGC Review Comments layout into rows. Showing
             raw extracted text.
           </p>
-          <pre className="text-xs bg-[#091428] text-[#F0F6FF] p-3 rounded border border-[#1A3055] overflow-auto max-h-[min(60vh,520px)] whitespace-pre-wrap break-words">
+          <pre className="text-xs bg-card text-foreground p-3 rounded border border-border overflow-auto max-h-[min(60vh,520px)] whitespace-pre-wrap break-words">
             {text.length > 120_000
               ? `${text.slice(0, 120_000)}\n\n[truncated]`
               : text}
@@ -2650,7 +2730,7 @@ export default function PortalDataViewer() {
     elements.push(
       <div
         key={keyInc++}
-        className="text-center text-sm font-bold tracking-wider text-[#6B9AC4] bg-[#091428] py-2 my-4 border-y border-[#1A3055]"
+        className="text-center text-sm font-bold tracking-wider text-foreground bg-muted/40 py-2 my-4 border-y border-border"
       >
         REVIEW COMMENTS
       </div>,
@@ -2668,7 +2748,7 @@ export default function PortalDataViewer() {
               ? "No structured comment blocks found (expected Washington-style STATUS section). Showing tabular or formatted preview when available."
               : "No structured comment blocks detected. Showing tabular or formatted preview when available.";
         elements.push(
-          <p key={keyInc++} className="text-sm text-[#6B9AC4] italic py-2">
+          <p key={keyInc++} className="text-sm text-muted-foreground italic py-2">
             {emptyParseMessage}
           </p>,
         );
@@ -2677,10 +2757,10 @@ export default function PortalDataViewer() {
         elements.push(<div key={keyInc++}>{tabular}</div>);
         elements.push(
           <details key={keyInc++} className="mt-2 text-xs">
-            <summary className="cursor-pointer text-[#6B9AC4] hover:text-[#F0F6FF]">
+            <summary className="cursor-pointer select-none text-muted-foreground hover:text-primary">
               Show raw extracted text
             </summary>
-            <pre className="mt-2 p-3 bg-[#091428] rounded border border-[#1A3055] overflow-auto max-h-64 whitespace-pre-wrap text-[#F0F6FF]">
+            <pre className="mt-2 p-3 bg-muted/40 rounded border border-border overflow-auto max-h-64 whitespace-pre-wrap text-foreground">
               {text.length > 120_000 ? `${text.slice(0, 120_000)}\n\n[truncated]` : text}
             </pre>
           </details>,
@@ -2697,40 +2777,40 @@ export default function PortalDataViewer() {
     comments.forEach((comment) => {
       elements.push(
         <div key={keyInc++} className="border rounded-lg mb-3 overflow-hidden">
-          <div className="flex items-center justify-between bg-[#091428] px-4 py-2 border-b border-[#1A3055] flex-wrap gap-2">
+          <div className="flex items-center justify-between bg-muted/40 px-4 py-2 border-b border-border flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+              <span className="bg-primary text-primary-foreground text-xs font-bold px-2.5 py-1 rounded-full">
                 #{comment.ref}
               </span>
               {comment.cycle && (
-                <span className="text-xs text-[#6B9AC4] bg-[#1A3055] px-2 py-0.5 rounded">
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                   Cycle {comment.cycle}
                 </span>
               )}
               {comment.department && (
-                <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded">
+                <span className="bg-muted text-foreground text-xs font-semibold px-2 py-0.5 rounded">
                   {comment.department}
                 </span>
               )}
               {comment.reviewer && (
-                <span className="text-sm text-[#F0F6FF] font-medium">
+                <span className="text-sm text-foreground font-medium">
                   {comment.reviewer}
                 </span>
               )}
               {comment.date && (
-                <span className="text-xs text-[#6B9AC4]">{comment.date}</span>
+                <span className="text-xs text-muted-foreground">{comment.date}</span>
               )}
             </div>
             {comment.status && (
               <span
                 className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${
                   comment.status === "Resolved"
-                    ? "bg-green-100 text-green-700"
+                    ? "bg-success/15 text-success"
                     : comment.status === "Unresolved"
-                      ? "bg-red-100 text-red-700"
+                      ? "bg-destructive/15 text-destructive"
                       : comment.status === "Info Only"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-[#6B9AC4]/10 text-[#6B9AC4]"
+                        ? "bg-warning/15 text-warning"
+                        : "bg-primary/10 text-primary"
                 }`}
               >
                 {comment.status}
@@ -2746,17 +2826,17 @@ export default function PortalDataViewer() {
                 return (
                   <div
                     key={idx}
-                    className="text-sm font-semibold text-[#6B9AC4] mt-3 pt-2 border-t border-dashed border-[#1A3055]"
+                    className="text-sm font-semibold text-primary mt-3 pt-2 border-t border-dashed border-border"
                   >
                     {line}
                   </div>
                 );
               }
               if (line === "---") {
-                return <hr key={idx} className="my-2 border-[#1A3055]" />;
+                return <hr key={idx} className="my-2 border-border" />;
               }
               return (
-                <p key={idx} className="text-sm text-[#F0F6FF] leading-relaxed">
+                <p key={idx} className="text-sm text-foreground leading-relaxed">
                   {line}
                 </p>
               );
@@ -2771,7 +2851,7 @@ export default function PortalDataViewer() {
       elements.push(
         <p
           key={keyInc++}
-          className="text-xs text-[#6B9AC4] mt-4 pt-2 border-t border-[#1A3055] italic"
+          className="text-xs text-muted-foreground mt-4 pt-2 border-t border-border italic"
         >
           {footerMatch[0]}
         </p>,
@@ -2781,121 +2861,135 @@ export default function PortalDataViewer() {
     return <>{elements}</>;
   }
 
+  const displayPortalStatus = normalizeRepeatedStatusLabel(
+    portalData.dashboardStatus ?? portalStatus,
+  );
+
   return (
-    <section className="py-6 px-4 sm:px-6 max-w-5xl">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/dashboard")}
-          data-testid="button-back-to-dashboard"
-          className="mb-3 -ml-1"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Dashboard
-        </Button>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{portalData.projectNum}</h1>
-              {loading && (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              )}
+    <>
+      <Section variant="cream" className="pt-12 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/dashboard")}
+            data-testid="button-back-to-dashboard"
+            className={cn(
+              PORTAL_ACTION_BUTTON_LIGHT_OUTLINE,
+              "mb-3 -ml-1 border-transparent bg-transparent shadow-none hover:bg-cream-sunken",
+            )}
+          >
+            <ArrowLeft />
+            Back to Dashboard
+          </Button>
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+            <div className="min-w-0">
+              <Eyebrow>PORTAL DATA</Eyebrow>
+              <h1 className="mt-3 font-serif text-4xl sm:text-5xl text-ink-primary-light leading-tight">
+                Portal Data <em className="text-gold italic">Viewer</em>
+              </h1>
+              <p className="mt-3 text-ink-secondary-light max-w-2xl text-sm sm:text-base leading-relaxed">
+                Review extracted permit information, reports, attachments, screenshots, and jurisdiction-specific portal data.
+              </p>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mt-8">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-xl font-serif text-ink-primary-light font-normal">
+                      {portalData.projectNum}
+                    </h2>
+                    {loading && (
+                      <Loader2 className="h-4 w-4 animate-spin text-ink-tertiary-light" />
+                    )}
+                  </div>
+                  {portalData.description && (
+                    <p className="text-ink-secondary-light mt-1 max-w-2xl text-sm">
+                      {portalData.description}
+                    </p>
+                  )}
+                  {portalData.location && (
+                    <p className="text-sm text-ink-tertiary-light mt-0.5">
+                      {portalData.location}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    {displayPortalStatus && (
+                      <span className="inline-flex items-center rounded-full border border-gold/25 bg-gold-soft/70 px-3 py-1 text-xs font-semibold text-ink-primary-light">
+                        {displayPortalStatus}
+                      </span>
+                    )}
+                    {lastCheckedStr && (
+                      <span className="text-sm text-ink-tertiary-light">
+                        {lastCheckedStr}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-            {portalData.description && (
-              <p className="text-muted-foreground mt-1 max-w-2xl">
-                {portalData.description}
-              </p>
-            )}
-            {portalData.location && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {portalData.location}
-              </p>
-            )}
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              {(portalData.dashboardStatus ?? portalStatus) && (
-                <Badge className="bg-[#091428] text-foreground border-0">
-                  {portalData.dashboardStatus ?? portalStatus}
-                </Badge>
-              )}
-              {lastCheckedStr && (
-                <span className="text-sm text-muted-foreground">
-                  {lastCheckedStr}
+            <div className="flex items-center gap-2 shrink-0">
+              {scrape.isScraping && (
+                <span
+                  className="text-xs text-teal flex items-center gap-1"
+                  data-testid="text-auto-refresh-active"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Auto-refreshing
                 </span>
               )}
+              <Button
+                variant="outline"
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+                data-testid="button-refresh-portal-data"
+                className={
+                  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gold/60 bg-transparent px-3.5 text-sm font-semibold text-gold-deep shadow-none transition-colors hover:bg-gold hover:text-cream hover:border-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 disabled:cursor-not-allowed disabled:border-cream-sunken disabled:bg-cream-raised disabled:text-ink-tertiary-light disabled:opacity-70 [&_svg]:h-4 [&_svg]:w-4"
+                }
+              >
+                {refreshing ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <RefreshCw />
+                )}
+                {refreshing ? "Refreshing..." : "Refresh Data"}
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {scrape.isScraping && (
-              <span
-                className="text-xs text-muted-foreground flex items-center gap-1"
-                data-testid="text-auto-refresh-active"
-              >
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Auto-refreshing
-              </span>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleManualRefresh}
-              disabled={refreshing}
-              data-testid="button-refresh-portal-data"
-            >
-              {refreshing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              {refreshing ? "Refreshing..." : "Refresh Data"}
-            </Button>
-          </div>
         </div>
-      </div>
+      </Section>
 
+      <div className="mt-10 bg-cream border-b border-cream-raised">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
       <Tabs defaultValue="info" className="w-full">
-        <TabsList className="h-9 rounded-none border-b border-transparent bg-transparent p-0 gap-0">
-          <TabsTrigger
-            value="info"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
-          >
+        <TabsList className="h-auto w-full flex flex-wrap gap-2 bg-transparent p-0 py-4 justify-start border-0 rounded-none text-ink-secondary-light">
+          <TabsTrigger value="info" className={PORTAL_TAB_TRIGGER}>
             Info
           </TabsTrigger>
           {hasStatusTab && (
-            <TabsTrigger
-              value="status"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
-            >
+            <TabsTrigger value="status" className={PORTAL_TAB_TRIGGER}>
               Status
             </TabsTrigger>
           )}
           {hasTasksTab && (
-            <TabsTrigger
-              value="tasks"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
-            >
+            <TabsTrigger value="tasks" className={PORTAL_TAB_TRIGGER}>
               Tasks
             </TabsTrigger>
           )}
           {hasReviewTab && (
             <TabsTrigger
               value="review"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+              className={PORTAL_TAB_TRIGGER}
               data-testid="tab-review"
             >
               Review
             </TabsTrigger>
           )}
-          <TabsTrigger
-            value="reports"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
-          >
+          <TabsTrigger value="reports" className={PORTAL_TAB_TRIGGER}>
             Reports
           </TabsTrigger>
           {filesTab && (
             <TabsTrigger
               value="files"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+              className={PORTAL_TAB_TRIGGER}
               data-testid="tab-files"
             >
               Files
@@ -2903,8 +2997,8 @@ export default function PortalDataViewer() {
           )}
         </TabsList>
 
-        <TabsContent value="info" className="mt-4">
-          <Card>
+        <TabsContent value="info" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
+          <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
             <CardContent className="p-0">
               <TabErrorBoundary tabName="Info">
                 <>
@@ -2914,31 +3008,39 @@ export default function PortalDataViewer() {
                     {infoTab?.error}
                   </div>
                 ) : hasInfoData || hasInfoFallbackForPgc ? (
-                  <div>
+                  <div className="p-4 space-y-6">
                     {!isPgcEplan && displayProjectInfo.length > 0 && (
-                      <div className="p-4 pb-0">
-                        <p className="text-sm font-bold mb-2">Project Info</p>
-                        <div className="border border-border rounded-md overflow-hidden">
-                          <div className="grid grid-cols-3 border-b border-border bg-muted/30">
-                            <div className="col-span-1 px-3 py-2 text-sm font-semibold">
-                              Field
-                            </div>
-                            <div className="col-span-2 px-3 py-2 text-sm font-semibold">
-                              Value
-                            </div>
+                      <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+                        <div className="border-b border-cream-sunken px-6 py-5">
+                          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-gold">
+                            PROJECT INFO
                           </div>
+                          <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-ink-primary-light leading-tight">
+                            Project <em className="text-gold italic">Details</em>
+                          </h2>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <div className="min-w-0">
+                            <div className="grid grid-cols-3 border-b border-cream-sunken bg-cream">
+                              <div className="col-span-1 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                                Field
+                              </div>
+                              <div className="col-span-2 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                                Value
+                              </div>
+                            </div>
                           {displayProjectInfo.map((kv, i) => (
                             <div
                               key={`${kv.key}-${i}`}
-                              className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
-                                i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                              className={`grid grid-cols-3 border-t border-cream-sunken last:border-b-0 hover:bg-cream-raised/50 transition-colors ${
+                                i % 2 === 0 ? "bg-cream" : "bg-cream-raised/40"
                               }`}
                             >
-                              <div className="col-span-1 w-1/3 min-w-[140px] px-3 py-2 text-sm font-semibold bg-[#091428] border-r border-[#1A3055]">
+                              <div className="col-span-1 w-1/3 min-w-[140px] px-4 py-3 text-sm font-medium text-ink-primary-light bg-cream-raised/60 border-r border-cream-sunken">
                                 {kv.key}
                               </div>
                               <div
-                                className={`col-span-2 px-3 py-2 text-sm ${
+                                className={`col-span-2 px-4 py-3 text-sm text-ink-primary-light ${
                                   kv.key === "Description"
                                     ? "whitespace-normal break-words"
                                     : ""
@@ -2948,42 +3050,52 @@ export default function PortalDataViewer() {
                                   ? kv.value
                                   : kv.value.trim() !== ""
                                     ? kv.value
-                                    : "-"}
+                                    : <span className="text-ink-tertiary-light/60">—</span>}
                               </div>
                             </div>
                           ))}
+                          </div>
                         </div>
                       </div>
                     )}
                     {!isPgcEplan &&
                       displayProjectInfo.length === 0 &&
                       hasInfoFallbackForPgc && (
-                        <div className="p-4 pb-0">
-                          <p className="text-sm font-bold mb-2">Project Summary</p>
-                          <div className="border border-border rounded-md overflow-hidden">
-                            <div className="grid grid-cols-3 border-b border-border bg-muted/30">
-                              <div className="col-span-1 px-3 py-2 text-sm font-semibold">
-                                Field
-                              </div>
-                              <div className="col-span-2 px-3 py-2 text-sm font-semibold">
-                                Value
-                              </div>
+                        <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+                          <div className="border-b border-cream-sunken px-6 py-5">
+                            <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-gold">
+                              PROJECT SUMMARY
                             </div>
+                            <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-ink-primary-light leading-tight">
+                              Portal <em className="text-gold italic">Summary</em>
+                            </h2>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <div className="min-w-0">
+                              <div className="grid grid-cols-3 border-b border-cream-sunken bg-cream">
+                                <div className="col-span-1 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                                  Field
+                                </div>
+                                <div className="col-span-2 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                                  Value
+                                </div>
+                              </div>
                             {pgcInfoFallbackRows.map((kv, i) => (
                               <div
                                 key={`${kv.key}-${i}`}
-                                className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
-                                  i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                                className={`grid grid-cols-3 border-t border-cream-sunken last:border-b-0 hover:bg-cream-raised/50 transition-colors ${
+                                  i % 2 === 0 ? "bg-cream" : "bg-cream-raised/40"
                                 }`}
                               >
-                                <div className="col-span-1 px-3 py-2 text-sm font-semibold bg-[#091428] border-r border-[#1A3055]">
+                                <div className="col-span-1 px-4 py-3 text-sm font-medium text-ink-primary-light bg-cream-raised/60 border-r border-cream-sunken">
                                   {kv.key}
                                 </div>
-                                <div className="col-span-2 px-3 py-2 text-sm">
-                                  {kv.value.trim() !== "" ? kv.value : "-"}
+                                <div className="col-span-2 px-4 py-3 text-sm text-ink-primary-light">
+                                  {kv.value.trim() !== "" ? kv.value : <span className="text-ink-tertiary-light/60">—</span>}
                                 </div>
                               </div>
                             ))}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -2991,18 +3103,18 @@ export default function PortalDataViewer() {
                       infoTab?.keyValues &&
                       infoTab?.keyValues?.length > 0 &&
                       displayProjectInfo.length === 0 && (
-                        <div className="border-0">
+                        <div className="rounded-xl border border-cream-sunken overflow-hidden bg-cream">
                           {infoTab?.keyValues?.map((kv, i) => (
                             <div
                               key={i}
-                              className={`flex border-b border-border last:border-b-0 ${
-                                i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                              className={`flex border-t border-cream-raised first:border-t-0 last:border-b-0 hover:bg-cream-raised/50 transition-colors ${
+                                i % 2 === 0 ? "bg-cream" : "bg-cream-raised/30"
                               }`}
                             >
-                              <div className="w-1/3 min-w-[140px] px-3 py-2 text-sm font-semibold text-muted-foreground bg-muted/40 shrink-0">
+                              <div className="w-1/3 min-w-[140px] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light bg-cream-raised/60 shrink-0 border-r border-cream-sunken">
                                 {kv.key}
                               </div>
-                              <div className="flex-1 px-3 py-2 text-sm">
+                              <div className="flex-1 px-4 py-3 text-sm text-ink-primary-light">
                                 {kv.value}
                               </div>
                             </div>
@@ -3012,7 +3124,7 @@ export default function PortalDataViewer() {
                     {filteredInfoTables.map((tbl, ti) => (
                       <div
                         key={ti}
-                        className={`overflow-x-auto ${
+                        className={`overflow-x-auto rounded-xl border border-cream-sunken bg-cream min-w-0 ${
                           ti === 0 &&
                           !infoTab?.keyValues?.length &&
                           displayProjectInfo.length === 0
@@ -3020,13 +3132,13 @@ export default function PortalDataViewer() {
                             : "mt-4"
                         }`}
                       >
-                        <Table>
+                        <Table className="min-w-[800px] w-full">
                           <TableHeader>
-                            <TableRow className="bg-[#091428] hover:bg-[#091428]">
+                            <TableRow className="bg-cream-raised hover:bg-cream-raised border-b border-cream-sunken">
                               {tbl.headers?.map((h, hi) => (
                                 <TableHead
                                   key={hi}
-                                  className="text-foreground font-medium whitespace-nowrap"
+                                  className="table-head-sticky text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light font-normal whitespace-nowrap"
                                 >
                                   {h}
                                 </TableHead>
@@ -3038,13 +3150,14 @@ export default function PortalDataViewer() {
                               <TableRow
                                 key={ri}
                                 className={
-                                  ri % 2 === 1 ? "bg-[#091428]" : "bg-[#0D1E38]"
+                                  "border-t border-cream-raised hover:bg-cream-raised/60 transition-colors " +
+                                  (ri % 2 === 1 ? "bg-cream-raised/35" : "bg-cream")
                                 }
                               >
                                 {tbl.headers?.map((h) => (
                                   <TableCell
                                     key={h}
-                                    className="whitespace-nowrap"
+                                    className="whitespace-nowrap text-ink-primary-light"
                                   >
                                     {row[h] ?? ""}
                                   </TableCell>
@@ -3057,16 +3170,16 @@ export default function PortalDataViewer() {
                     ))}
                   </div>
                 ) : (
-                  <p className="p-4 text-muted-foreground">
+                  <p className="p-4 text-ink-tertiary-light">
                     No info data available.
                   </p>
                 )}
                 {isPgcEplan && infoTab?.info_debug != null && (
-                  <details className="p-4 border-t border-border text-xs">
-                    <summary className="cursor-pointer text-muted-foreground select-none">
+                  <details className="p-4 border-t border-cream-sunken text-xs">
+                    <summary className="cursor-pointer text-ink-tertiary-light select-none hover:text-ink-primary-light">
                       Info extraction debug
                     </summary>
-                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/30 p-2 font-mono">
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-obsidian-raised bg-obsidian-sunken/90 p-3 font-mono text-ink-secondary-dark">
                       {JSON.stringify(infoTab.info_debug, null, 2)}
                     </pre>
                   </details>
@@ -3078,20 +3191,12 @@ export default function PortalDataViewer() {
         </TabsContent>
 
         {hasStatusTab && (
-          <TabsContent value="status" className="mt-4">
-            <Card
-              className={
-                isPgcEplan || isWashingtonDcProjectDox
-                  ? "border-border/50 bg-transparent shadow-none"
-                  : undefined
-              }
-            >
+          <TabsContent value="status" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
+            <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
               <CardContent
-                className={
-                  isPgcEplan || isWashingtonDcProjectDox
-                    ? "p-4 pt-2"
-                    : "p-0"
-                }
+                className={cn(
+                  isPgcEplan || isWashingtonDcProjectDox ? "p-4 pt-4" : "p-0",
+                )}
               >
                 <TabErrorBoundary tabName="Status">
                   {statusTabData?.error ? (
@@ -3112,86 +3217,118 @@ export default function PortalDataViewer() {
                     <div className="p-4 space-y-4">
                       {isMdAvolveProjectDox &&
                         montgomeryStatusActionLinks.length > 0 && (
-                          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
-                            <p className="text-sm font-medium text-foreground">
+                          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream p-5 space-y-2">
+                            <p className="text-sm font-medium text-ink-primary-light">
                               Report actions
                             </p>
                             <div className="flex flex-col gap-3">
-                              {montgomeryStatusActionLinks.map((L, mi) => {
-                                const {
-                                  viewerUrl,
-                                  pdfUrl,
-                                  excelUrl,
-                                  showOpenViewer,
-                                } = getMontgomeryStatusLinkActionUrls(L);
-                                const label =
-                                  (L.reportName && String(L.reportName).trim()) ||
-                                  (L.text && String(L.text).trim()) ||
-                                  `Link ${mi + 1}`;
-                                return (
-                                  <div
-                                    key={`mdc-st-${mi}`}
-                                    className="flex flex-wrap items-center gap-2"
-                                  >
-                                    <span className="text-xs text-muted-foreground min-w-[8rem] max-w-[20rem] truncate">
-                                      {label}
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                      {showOpenViewer && viewerUrl ? (
-                                        <Button asChild size="sm" variant="default">
-                                          <a
-                                            href={viewerUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                          >
-                                            <FileText className="h-4 w-4 mr-2" />
-                                            Open viewer
-                                          </a>
-                                        </Button>
-                                      ) : null}
-                                      {pdfUrl ? (
-                                        <Button asChild size="sm" variant="secondary">
-                                          <a
-                                            href={pdfUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                          >
-                                            Download PDF
-                                          </a>
-                                        </Button>
-                                      ) : null}
-                                      {excelUrl ? (
-                                        <Button asChild size="sm" variant="outline">
-                                          <a
-                                            href={excelUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                          >
-                                            Download Excel
-                                          </a>
-                                        </Button>
-                                      ) : null}
-                                    </div>
-                                  </div>
+                              {(() => {
+                                const seenViewerUrl = new Set<string>();
+                                return montgomeryStatusActionLinks.map(
+                                  (L, mi) => {
+                                    const {
+                                      viewerUrl,
+                                      pdfUrl,
+                                      excelUrl,
+                                      showOpenViewer,
+                                    } = getMontgomeryStatusLinkActionUrls(L);
+                                    const label =
+                                      (L.reportName &&
+                                        String(L.reportName).trim()) ||
+                                      (L.text && String(L.text).trim()) ||
+                                      `Link ${mi + 1}`;
+                                    let renderOpen = !!(
+                                      showOpenViewer && viewerUrl
+                                    );
+                                    if (renderOpen && viewerUrl) {
+                                      const v = viewerUrl.trim();
+                                      if (seenViewerUrl.has(v)) renderOpen = false;
+                                      else seenViewerUrl.add(v);
+                                    }
+                                    return (
+                                      <div
+                                        key={`mdc-st-${mi}`}
+                                        className="flex flex-wrap items-center gap-2"
+                                      >
+                                        <span className="text-xs text-muted-foreground min-w-[8rem] max-w-[20rem] truncate">
+                                          {label}
+                                        </span>
+                                        <div className="flex flex-wrap gap-2">
+                                          {renderOpen && viewerUrl ? (
+                                            <Button
+                                              asChild
+                                              variant="ghost"
+                                              className={cn(
+                                                PORTAL_ACTION_BUTTON_PRIMARY,
+                                              )}
+                                            >
+                                              <a
+                                                href={viewerUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                              >
+                                                <FileText />
+                                                Open viewer
+                                              </a>
+                                            </Button>
+                                          ) : null}
+                                          {pdfUrl ? (
+                                            <Button
+                                              asChild
+                                              variant="ghost"
+                                              className={cn(
+                                                PORTAL_ACTION_BUTTON_OUTLINE,
+                                              )}
+                                            >
+                                              <a
+                                                href={pdfUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                              >
+                                                Download PDF
+                                              </a>
+                                            </Button>
+                                          ) : null}
+                                          {excelUrl ? (
+                                            <Button
+                                              asChild
+                                              variant="ghost"
+                                              className={cn(
+                                                PORTAL_ACTION_BUTTON_OUTLINE,
+                                              )}
+                                            >
+                                              <a
+                                                href={excelUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                              >
+                                                Download Excel
+                                              </a>
+                                            </Button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    );
+                                  },
                                 );
-                              })}
+                              })()}
                             </div>
                           </div>
                         )}
                       {statusTabData?.keyValues &&
                         statusTabData.keyValues.length > 0 && (
-                          <div className="border border-border rounded-md overflow-hidden">
+                          <div className="rounded-xl border border-cream-sunken bg-cream shadow-cream overflow-hidden">
                             {statusTabData.keyValues.map((kv, i) => (
                               <div
                                 key={`${kv.key}-${i}`}
-                                className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
-                                  i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                                className={`grid grid-cols-3 border-t border-cream-sunken first:border-t-0 ${
+                                  i % 2 === 0 ? "bg-cream" : "bg-cream-raised/35"
                                 }`}
                               >
-                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-[#1A3055]">
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-cream-sunken bg-cream-raised/50 text-ink-primary-light">
                                   {kv.key}
                                 </div>
-                                <div className="col-span-2 px-3 py-2 text-sm">
+                                <div className="col-span-2 px-3 py-2 text-sm text-ink-primary-light">
                                   {kv.value || "—"}
                                 </div>
                               </div>
@@ -3201,12 +3338,17 @@ export default function PortalDataViewer() {
                       {(statusTabData?.tables ?? []).map((tbl, ti) => {
                         const displayHeaders = statusTableDisplayHeaders(tbl);
                         return (
-                          <div key={ti} className="overflow-x-auto">
+                          <div key={ti} className="overflow-x-auto rounded-xl border border-cream-sunken bg-cream shadow-cream">
                             <Table>
                               <TableHeader>
-                                <TableRow className="bg-[#091428]">
+                                <TableRow className="border-b border-cream-sunken bg-cream hover:bg-cream">
                                   {displayHeaders.map((h, hi) => (
-                                    <TableHead key={hi}>{h}</TableHead>
+                                    <TableHead
+                                      key={hi}
+                                      className="text-[10px] font-mono uppercase tracking-[0.12em] text-ink-tertiary-light font-normal"
+                                    >
+                                      {h}
+                                    </TableHead>
                                   ))}
                                 </TableRow>
                               </TableHeader>
@@ -3216,12 +3358,15 @@ export default function PortalDataViewer() {
                                     key={ri}
                                     className={
                                       ri % 2 === 1
-                                        ? "bg-[#091428]"
-                                        : "bg-[#0D1E38]"
+                                        ? "bg-cream-raised/35 border-t border-cream-sunken hover:bg-cream-raised/55"
+                                        : "bg-cream border-t border-cream-sunken hover:bg-cream-raised/45"
                                     }
                                   >
                                     {displayHeaders.map((h, ci) => (
-                                      <TableCell key={`${ri}-${ci}`}>
+                                      <TableCell
+                                        key={`${ri}-${ci}`}
+                                        className="text-ink-primary-light"
+                                      >
                                         {row[h] ?? ""}
                                       </TableCell>
                                     ))}
@@ -3241,8 +3386,8 @@ export default function PortalDataViewer() {
         )}
 
         {hasTasksTab && (
-          <TabsContent value="tasks" className="mt-4">
-            <Card>
+          <TabsContent value="tasks" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
+            <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
               <CardContent className="p-0">
                 <TabErrorBoundary tabName="Tasks">
                   {tasksTabData?.error ? (
@@ -3254,18 +3399,18 @@ export default function PortalDataViewer() {
                     <div className="p-4 space-y-4">
                       {tasksTabData?.keyValues &&
                         tasksTabData.keyValues.length > 0 && (
-                          <div className="border border-border rounded-md overflow-hidden">
+                          <div className="rounded-xl border border-cream-sunken bg-cream shadow-cream overflow-hidden">
                             {tasksTabData.keyValues.map((kv, i) => (
                               <div
                                 key={`${kv.key}-${i}`}
-                                className={`grid grid-cols-3 border-b border-border last:border-b-0 ${
-                                  i % 2 === 0 ? "bg-[#0D1E38]" : "bg-[#091428]"
+                                className={`grid grid-cols-3 border-t border-cream-sunken first:border-t-0 ${
+                                  i % 2 === 0 ? "bg-cream" : "bg-cream-raised/35"
                                 }`}
                               >
-                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-[#1A3055]">
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-cream-sunken bg-cream-raised/50 text-ink-primary-light">
                                   {kv.key}
                                 </div>
-                                <div className="col-span-2 px-3 py-2 text-sm whitespace-pre-wrap">
+                                <div className="col-span-2 px-3 py-2 text-sm whitespace-pre-wrap text-ink-primary-light">
                                   {kv.value || "—"}
                                 </div>
                               </div>
@@ -3273,15 +3418,20 @@ export default function PortalDataViewer() {
                           </div>
                         )}
                       {pgcTaskTablesForRender.map((tbl, ti) => (
-                        <div key={ti} className="overflow-x-auto">
+                        <div key={ti} className="overflow-x-auto rounded-xl border border-cream-sunken bg-cream shadow-cream">
                           {isPgcEplan && tbl.title && (
-                            <p className="text-sm font-semibold mb-2">{tbl.title}</p>
+                            <p className="text-sm font-semibold mb-2 px-4 pt-4 text-ink-primary-light">{tbl.title}</p>
                           )}
-                          <Table>
+                          <Table wrapperClassName="!rounded-xl !border-cream-sunken !border !bg-cream !shadow-none dark:!border-cream-sunken">
                             <TableHeader>
-                              <TableRow className="bg-[#091428]">
+                              <TableRow className="!border-cream-sunken border-b bg-cream hover:!bg-cream">
                                 {tbl.headers?.map((h, hi) => (
-                                  <TableHead key={hi}>{h}</TableHead>
+                                  <TableHead
+                                    key={hi}
+                                    className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]"
+                                  >
+                                    {h}
+                                  </TableHead>
                                 ))}
                               </TableRow>
                             </TableHeader>
@@ -3291,12 +3441,17 @@ export default function PortalDataViewer() {
                                   key={ri}
                                   className={
                                     ri % 2 === 1
-                                      ? "bg-[#091428]"
-                                      : "bg-[#0D1E38]"
+                                      ? "border-t border-cream-sunken bg-cream-raised/50 hover:!bg-cream-raised/80"
+                                      : "border-t border-cream-sunken bg-cream hover:!bg-cream-raised/65"
                                   }
                                 >
                                   {tbl.headers?.map((h) => (
-                                    <TableCell key={h}>{row[h] ?? ""}</TableCell>
+                                    <TableCell
+                                      key={h}
+                                      className="!text-ink-primary-light font-tight text-sm"
+                                    >
+                                      {row[h] ?? ""}
+                                    </TableCell>
                                   ))}
                                 </TableRow>
                               ))}
@@ -3313,7 +3468,7 @@ export default function PortalDataViewer() {
         )}
 
         {hasReviewTab && (
-          <TabsContent value="review" className="mt-4">
+          <TabsContent value="review" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
             <Card>
               <CardContent className="p-4">
                 <TabErrorBoundary tabName="Review">
@@ -3336,13 +3491,17 @@ export default function PortalDataViewer() {
                             <Button
                               key={wf.workflowName}
                               type="button"
-                              size="sm"
-                              variant={active ? "default" : "outline"}
-                              className="max-w-[min(100%,20rem)] truncate"
+                              variant="ghost"
                               title={wf.workflowName}
                               onClick={() =>
                                 setSelectedReviewWorkflow(wf.workflowName)
                               }
+                              className={cn(
+                                active
+                                  ? PORTAL_ACTION_BUTTON_PRIMARY
+                                  : PORTAL_ACTION_BUTTON_LIGHT_OUTLINE,
+                                "max-w-[min(100%,20rem)] truncate",
+                              )}
                             >
                               {wf.workflowName}
                             </Button>
@@ -3352,7 +3511,7 @@ export default function PortalDataViewer() {
                       {activePgcReviewWorkflow &&
                         (activePgcReviewWorkflow.groupedItems?.length ?? 0) >
                           0 && (
-                          <div className="rounded-lg border border-border/50 bg-[#091428]/60 px-3 py-2.5">
+                          <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5">
                             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                               Active workflow
                             </p>
@@ -3387,7 +3546,7 @@ export default function PortalDataViewer() {
                             return (
                               <div
                                   key={`${activePgcReviewWorkflow.workflowName}-${i}`}
-                                className="rounded-lg border border-border/60 bg-[#0D1E38] p-3 shadow-sm space-y-3"
+                                className="rounded-lg border border-border/60 bg-card p-3 shadow-sm space-y-3"
                               >
                                 <div className="flex flex-wrap items-start justify-between gap-2 gap-y-2">
                                   <div className="flex flex-wrap gap-x-5 gap-y-2 min-w-0 flex-1">
@@ -3469,7 +3628,7 @@ export default function PortalDataViewer() {
                                   </div>
                                 </div>
                                 {vm.responseText ? (
-                                  <div className="border-t border-border/40 pt-2 bg-[#091428]/40 -mx-3 px-3 pb-0.5 rounded-b-md">
+                                  <div className="border-t border-border/40 pt-2 bg-muted/30 -mx-3 px-3 pb-0.5 rounded-b-md">
                                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
                                       Response
                                     </div>
@@ -3484,7 +3643,7 @@ export default function PortalDataViewer() {
                                       href={link}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="text-[#6B9AC4] hover:underline inline-flex items-center gap-1"
+                                      className="text-primary hover:underline inline-flex items-center gap-1"
                                     >
                                       <FileText className="h-3.5 w-3.5 shrink-0" />
                                       Open file / markup
@@ -3502,17 +3661,17 @@ export default function PortalDataViewer() {
                       No review corrections in the latest cycle for this project.
                     </p>
                   ) : !isPgcEplan || reviewWorkflowBuckets.length === 0 ? (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto max-h-[min(70vh,720px)] overflow-y-auto rounded-md border border-border/60">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-[#091428]">
-                            <TableHead>Ref</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Department</TableHead>
-                            <TableHead>File</TableHead>
-                            {!isPgcEplan && <TableHead>Markup</TableHead>}
-                            <TableHead>Comment</TableHead>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="table-head-sticky">Ref</TableHead>
+                            <TableHead className="table-head-sticky">Type</TableHead>
+                            <TableHead className="table-head-sticky">Status</TableHead>
+                            <TableHead className="table-head-sticky">Department</TableHead>
+                            <TableHead className="table-head-sticky">File</TableHead>
+                            {!isPgcEplan && <TableHead className="table-head-sticky">Markup</TableHead>}
+                            <TableHead className="table-head-sticky">Comment</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -3536,10 +3695,10 @@ export default function PortalDataViewer() {
                               <TableRow
                                 key={c.correctionID || i}
                                 className={
-                                  i % 2 === 1 ? "bg-[#091428]" : "bg-[#0D1E38]"
+                                  i % 2 === 1 ? "bg-muted/40" : "bg-muted/25"
                                 }
                               >
-                                <TableCell className="whitespace-nowrap">
+                                <TableCell className="whitespace-nowrap font-mono-data tabular-nums text-xs">
                                   {c.referenceNumber || c.correctionID || "—"}
                                 </TableCell>
                                 <TableCell>{typeLabel}</TableCell>
@@ -3557,7 +3716,7 @@ export default function PortalDataViewer() {
                                         href={markupHref}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="text-[#6B9AC4] hover:underline text-sm"
+                                        className="text-primary hover:underline text-sm"
                                       >
                                         PDF
                                       </a>
@@ -3585,12 +3744,24 @@ export default function PortalDataViewer() {
           </TabsContent>
         )}
 
-        <TabsContent value="reports" className="mt-4">
-          <p className="text-sm text-muted-foreground mb-3">
+        <TabsContent
+          value="reports"
+          className="mt-8 pt-0 pb-0 bg-obsidian text-ink-primary-dark focus-visible:outline-none"
+        >
+          <Section variant="obsidian" className="py-10 sm:py-14 px-4 sm:px-6 md:px-8">
+            <div className="max-w-7xl mx-auto">
+              <EyebrowDark className="mb-2">REPORTS</EyebrowDark>
+              <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-ink-primary-dark">
+                Extracted <em className="text-gold italic">Reports</em>
+              </h2>
+              <p className="mt-3 text-ink-secondary-dark max-w-2xl text-sm sm:text-base leading-relaxed">
+                Stored report artifacts, live viewer links, screenshots, and extracted text used by the AI pipeline.
+              </p>
+              <p className="text-sm text-ink-secondary-dark/90 mb-6 mt-4">
             Source data from the portal. For an actionable comment list and
-            responses, use <strong>Comment Review</strong>.
+            responses, use <strong className="text-ink-primary-dark font-semibold">Comment Review</strong>.
           </p>
-          <Card>
+          <Card className="border border-obsidian-raised bg-obsidian-raised/50 shadow-none">
             <CardContent className="p-0">
               <TabErrorBoundary tabName="Reports">
                 {reportsTab?.error ? (
@@ -3602,21 +3773,22 @@ export default function PortalDataViewer() {
                   reportEntries.length > 0 ? (
                   <>
                     {showWashingtonReportsTable ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-[#091428] hover:bg-[#091428]">
-                        {reportsTable.headers?.map((h, hi) => (
-                          <TableHead
-                            key={hi}
-                            className="text-foreground font-medium"
-                          >
-                            {h}
-                          </TableHead>
-                        ))}
-                        <TableHead className="text-foreground font-medium w-12 min-w-[3rem] text-right" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                  (() => {
+                    const rh = reportsTable.headers ?? [];
+                    const statusCol = rh.find((h) =>
+                      /^status$/i.test(String(h).trim()),
+                    );
+                    return (
+                    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-obsidian-raised bg-obsidian-raised/50">
+                    <div className="grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-obsidian-raised px-5 py-3">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark">
+                        Report Name
+                      </div>
+                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark">
+                        Status
+                      </div>
+                      <div className="justify-self-end" aria-hidden />
+                    </div>
                       {reportsRows.map((row, ri) => {
                         const reportName = String(
                           row["REPORT NAME"] ?? row["Report Name"] ?? "",
@@ -3632,6 +3804,16 @@ export default function PortalDataViewer() {
                             )
                           : null;
 
+                        const statusRaw = statusCol ? row[statusCol] ?? "" : "";
+                        const statusLabel = statusCol
+                          ? isMdAvolveProjectDox && rowEntry
+                            ? montgomeryReportStatusForRow(
+                                String(statusRaw),
+                                rowEntry,
+                              ).text
+                            : String(statusRaw).trim() || "—"
+                          : "—";
+
                         return (
                           <Collapsible
                             key={ri}
@@ -3640,65 +3822,42 @@ export default function PortalDataViewer() {
                               setExpandedReport(open ? reportName : null)
                             }
                           >
-                            <>
-                              <TableRow
-                                className={`cursor-pointer hover:bg-muted/50 ${ri % 2 === 1 ? "bg-muted/30" : ""}`}
-                                onClick={() =>
-                                  setExpandedReport(
-                                    isExpanded ? null : reportName,
-                                  )
-                                }
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                className={`grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-obsidian-raised px-5 py-4 text-left transition-colors ${ri % 2 === 1 ? "bg-obsidian-sunken/40 hover:bg-obsidian-sunken/60" : "bg-obsidian/80 hover:bg-obsidian-raised/45"}`}
                               >
-                                {reportsTable.headers?.map((h) => {
-                                  const raw = row[h] ?? "";
-                                  if (
-                                    isMdAvolveProjectDox &&
-                                    /^status$/i.test(String(h).trim())
-                                  ) {
-                                    const { text } = montgomeryReportStatusForRow(
-                                      String(raw),
-                                      rowEntry,
-                                    );
-                                    return (
-                                      <TableCell key={h}>{text}</TableCell>
-                                    );
-                                  }
-                                  return (
-                                    <TableCell key={h}>{raw}</TableCell>
-                                  );
-                                })}
-                                <TableCell className="w-12 min-w-[3rem] text-right align-middle">
-                                  <div className="flex justify-end">
-                                    <CollapsibleTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 shrink-0"
-                                      >
-                                        {isExpanded ? (
-                                          <ChevronDown className="h-4 w-4" />
-                                        ) : (
-                                          <ChevronRight className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                    </CollapsibleTrigger>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                              <CollapsibleContent asChild>
-                                <TableRow>
-                                  <TableCell
-                                    colSpan={
-                                      (reportsTable.headers?.length ?? 1) + 1
-                                    }
-                                    className="bg-muted/30 p-0"
-                                  >
-                                    <div className="p-4">
-                                      <Card className="bg-background border shadow-sm">
-                                        <CardHeader className="pb-2">
-                                          <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <CardTitle className="text-base flex items-center gap-2">
+                                <span className="truncate text-sm font-medium text-ink-primary-dark">
+                                  {reportName}
+                                </span>
+                                <span className="text-sm text-ink-secondary-dark">
+                                  {statusLabel}
+                                </span>
+                                <span className="flex justify-end text-ink-tertiary-dark">
+                                  {isExpanded ? (
+                                    <ChevronDown
+                                      className="h-4 w-4 shrink-0"
+                                      aria-hidden
+                                    />
+                                  ) : (
+                                    <ChevronRight
+                                      className="h-4 w-4 shrink-0"
+                                      aria-hidden
+                                    />
+                                  )}
+                                </span>
+                              </button>
+                            </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <div className="w-full border-b border-obsidian-raised bg-obsidian-sunken/50 p-4">
+                                      <Card className="rounded-xl border border-gold/25 bg-obsidian-raised/70 p-5 shadow-none">
+                                        <CardHeader className="space-y-0 p-0 pb-4">
+                                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="font-serif text-2xl text-ink-primary-dark">
                                               {reportName}
+                                            </h3>
                                               {hasError &&
                                                 (() => {
                                                   const soft =
@@ -3731,8 +3890,9 @@ export default function PortalDataViewer() {
                                                     </Badge>
                                                   );
                                                 })()}
-                                            </CardTitle>
-                                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                              </div>
+                                            </div>
+                                            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                                               {isPgcEplan
                                                 ? (() => {
                                                     const ent =
@@ -3759,8 +3919,10 @@ export default function PortalDataViewer() {
                                                         {viewerHref ? (
                                                           <Button
                                                             asChild
-                                                            size="sm"
-                                                            variant="outline"
+                                                            variant="ghost"
+                                                            className={cn(
+                                                              PORTAL_ACTION_BUTTON_PRIMARY,
+                                                            )}
                                                           >
                                                             <a
                                                               href={viewerHref}
@@ -3768,7 +3930,7 @@ export default function PortalDataViewer() {
                                                               rel="noreferrer"
                                                               title="Open SSRS ReportViewer in ePlan (original layout)"
                                                             >
-                                                              <FileText className="h-4 w-4 mr-2" />
+                                                              <FileText />
                                                               Open viewer
                                                             </a>
                                                           </Button>
@@ -3776,8 +3938,10 @@ export default function PortalDataViewer() {
                                                         {ent?.pdfUrl ? (
                                                           <Button
                                                             asChild
-                                                            size="sm"
-                                                            variant="default"
+                                                            variant="ghost"
+                                                            className={cn(
+                                                              PORTAL_ACTION_BUTTON_OUTLINE,
+                                                            )}
                                                           >
                                                             <a
                                                               href={ent.pdfUrl}
@@ -3785,7 +3949,7 @@ export default function PortalDataViewer() {
                                                               rel="noreferrer"
                                                               title="PDF exported from SSRS and stored for this project (binary file)"
                                                             >
-                                                              <FileText className="h-4 w-4 mr-2" />
+                                                              <FileText />
                                                               Download PDF
                                                             </a>
                                                           </Button>
@@ -3793,8 +3957,10 @@ export default function PortalDataViewer() {
                                                         {ent?.excelUrl ? (
                                                           <Button
                                                             asChild
-                                                            size="sm"
-                                                            variant="secondary"
+                                                            variant="ghost"
+                                                            className={cn(
+                                                              PORTAL_ACTION_BUTTON_OUTLINE,
+                                                            )}
                                                           >
                                                             <a
                                                               href={
@@ -3811,87 +3977,94 @@ export default function PortalDataViewer() {
                                                       </>
                                                     );
                                                   })()
-                                                : null}
-                                              {isMdAvolveProjectDox
-                                                ? (() => {
-                                                    const ent =
-                                                      findMontgomeryReportEntryForRow(
-                                                        reportEntryByReportName,
-                                                        reportEntries,
-                                                        reportName,
+                                                : isMdAvolveProjectDox
+                                                  ? (() => {
+                                                      const ent =
+                                                        findMontgomeryReportEntryForRow(
+                                                          reportEntryByReportName,
+                                                          reportEntries,
+                                                          reportName,
+                                                        );
+                                                      if (!ent) return null;
+                                                      const {
+                                                        viewerUrl: viewerHref,
+                                                        pdfUrl: pdfHref,
+                                                        excelUrl: xlHref,
+                                                        showOpenViewer,
+                                                      } =
+                                                        getMontgomeryReportEntryActionUrls(
+                                                          ent,
+                                                        );
+                                                      return (
+                                                        <>
+                                                          {showOpenViewer &&
+                                                          viewerHref ? (
+                                                            <Button
+                                                              asChild
+                                                              variant="ghost"
+                                                              className={cn(
+                                                                PORTAL_ACTION_BUTTON_PRIMARY,
+                                                              )}
+                                                            >
+                                                              <a
+                                                                href={viewerHref}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                              >
+                                                                <FileText />
+                                                                Open viewer
+                                                              </a>
+                                                            </Button>
+                                                          ) : null}
+                                                          {pdfHref ? (
+                                                            <Button
+                                                              asChild
+                                                              variant="ghost"
+                                                              className={cn(
+                                                                PORTAL_ACTION_BUTTON_OUTLINE,
+                                                              )}
+                                                            >
+                                                              <a
+                                                                href={pdfHref}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                              >
+                                                                <FileText />
+                                                                Download PDF
+                                                              </a>
+                                                            </Button>
+                                                          ) : null}
+                                                          {xlHref ? (
+                                                            <Button
+                                                              asChild
+                                                              variant="ghost"
+                                                              className={cn(
+                                                                PORTAL_ACTION_BUTTON_OUTLINE,
+                                                              )}
+                                                            >
+                                                              <a
+                                                                href={xlHref}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                              >
+                                                                Download Excel
+                                                              </a>
+                                                            </Button>
+                                                          ) : null}
+                                                        </>
                                                       );
-                                                    if (!ent) return null;
-                                                    const {
-                                                      viewerUrl: viewerHref,
-                                                      pdfUrl: pdfHref,
-                                                      excelUrl: xlHref,
-                                                      showOpenViewer,
-                                                    } =
-                                                      getMontgomeryReportEntryActionUrls(
-                                                        ent,
-                                                      );
-                                                    return (
-                                                      <>
-                                                        {showOpenViewer &&
-                                                        viewerHref ? (
-                                                          <Button
-                                                            asChild
-                                                            size="sm"
-                                                            variant="default"
-                                                          >
-                                                            <a
-                                                              href={viewerHref}
-                                                              target="_blank"
-                                                              rel="noreferrer"
-                                                            >
-                                                              <FileText className="h-4 w-4 mr-2" />
-                                                              Open viewer
-                                                            </a>
-                                                          </Button>
-                                                        ) : null}
-                                                        {pdfHref ? (
-                                                          <Button
-                                                            asChild
-                                                            size="sm"
-                                                            variant="secondary"
-                                                          >
-                                                            <a
-                                                              href={pdfHref}
-                                                              target="_blank"
-                                                              rel="noreferrer"
-                                                            >
-                                                              <FileText className="h-4 w-4 mr-2" />
-                                                              Download PDF
-                                                            </a>
-                                                          </Button>
-                                                        ) : null}
-                                                        {xlHref ? (
-                                                          <Button
-                                                            asChild
-                                                            size="sm"
-                                                            variant="outline"
-                                                          >
-                                                            <a
-                                                              href={xlHref}
-                                                              target="_blank"
-                                                              rel="noreferrer"
-                                                            >
-                                                              Download Excel
-                                                            </a>
-                                                          </Button>
-                                                        ) : null}
-                                                      </>
-                                                    );
-                                                  })()
-                                                : null}
+                                                    })()
+                                                  : null}
                                               {!isMdAvolveProjectDox &&
                                                 reportName &&
                                                 reportName.includes(
                                                   "Review Comments",
                                                 ) && (
                                                   <Button
-                                                    size="sm"
-                                                    className="bg-accent hover:bg-accent/90"
+                                                    variant="ghost"
+                                                    className={cn(
+                                                      PORTAL_ACTION_BUTTON_AI,
+                                                    )}
                                                     onClick={() =>
                                                       navigate(
                                                         "/comment-review",
@@ -3903,7 +4076,7 @@ export default function PortalDataViewer() {
                                                       )
                                                     }
                                                   >
-                                                    <ListChecks className="h-4 w-4 mr-2" />
+                                                    <ListChecks />
                                                     Open Comment Review
                                                   </Button>
                                                 )}
@@ -3923,7 +4096,7 @@ export default function PortalDataViewer() {
                                                 when available.
                                               </p>
                                               <div
-                                                className="overflow-auto rounded border cursor-pointer transition-all duration-200 hover:border-[#FF6B2B40] hover:shadow-[0_0_8px_#FF6B2B40] hover:brightness-105"
+                                                className="overflow-auto rounded-lg border border-obsidian-raised bg-obsidian-sunken cursor-pointer transition-all hover:ring-1 hover:ring-gold/40"
                                                 style={{ maxHeight: "420px" }}
                                                 onClick={() => {
                                                   setReportReaderOpen({
@@ -3949,37 +4122,20 @@ export default function PortalDataViewer() {
                                                 />
                                               </div>
                                               {pdf.text && (
-                                                <details className="mt-2">
-                                                  <summary className="text-xs text-[#6B9AC4] cursor-pointer hover:text-[#F0F6FF]">
-                                                    Show extracted text
-                                                  </summary>
-                                                  <pre className="mt-2 text-xs bg-[#091428] text-[#F0F6FF] p-3 rounded border border-[#1A3055] overflow-auto max-h-64 whitespace-pre-wrap">
-                                                    {pdf.text}
-                                                  </pre>
-                                                </details>
+                                                <ReportsExtractedTextDetails
+                                                  text={pdf.text}
+                                                />
                                               )}
                                             </div>
                                           ) : pdf?.text ? (
                                             isMontgomeryProjectDox ? (
-                                              /** Montgomery: no formatted report preview from extracted text; mirrors Washington screenshot + raw pattern. */
-                                              <details
-                                                className="mt-0 w-full min-w-0 rounded border border-[#1A3055] bg-[#091428] p-2 text-xs"
-                                                data-testid="montgomery-report-extracted-text"
-                                              >
-                                                <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
-                                                  Show extracted text
-                                                </summary>
-                                                <pre
-                                                  className="mt-2 max-h-[min(50vh,480px)] w-full min-w-0 overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF] sm:max-h-[min(55vh,520px)]"
-                                                >
-                                                  {pdf.text.length > 120_000
-                                                    ? `${pdf.text.slice(0, 120_000)}\n\n[truncated]`
-                                                    : pdf.text}
-                                                </pre>
-                                              </details>
+                                              <ReportsExtractedTextDetails
+                                                text={pdf.text}
+                                                testId="montgomery-report-extracted-text"
+                                              />
                                             ) : (
                                               <div className="space-y-3">
-                                                <div className="max-h-96 overflow-y-auto rounded border border-[#1A3055] bg-[#0D1E38] p-4">
+                                                <div className="max-h-96 overflow-y-auto rounded-md border border-border bg-card p-4">
                                                   {!isMdAvolveProjectDox &&
                                                   pdf.fileName?.includes(
                                                     "Review Comments",
@@ -4004,20 +4160,11 @@ export default function PortalDataViewer() {
                                                     "Review Comments",
                                                   ) &&
                                                   String(pdf.text ?? "").trim() ? (
-                                                  <details className="rounded border border-[#1A3055] bg-[#091428] p-2 text-xs">
-                                                    <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
-                                                      Raw extracted text (stored —
-                                                      copyable)
-                                                    </summary>
-                                                    <pre
-                                                      className="mt-2 max-h-[min(50vh,480px)] overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF]"
-                                                      data-testid="pgc-review-comments-raw-text"
-                                                    >
-                                                      {pdf.text.length > 120_000
-                                                        ? `${pdf.text.slice(0, 120_000)}\n\n[truncated]`
-                                                        : pdf.text}
-                                                    </pre>
-                                                  </details>
+                                                  <ReportsExtractedTextDetails
+                                                    text={pdf.text}
+                                                    summaryLabel="Raw extracted text (stored — copyable)"
+                                                    testId="pgc-review-comments-raw-text"
+                                                  />
                                                 ) : null}
                                               </div>
                                             )
@@ -4043,18 +4190,16 @@ export default function PortalDataViewer() {
                                           )}
                                         </CardContent>
                                       </Card>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
+                                </div>
                               </CollapsibleContent>
-                            </>
                           </Collapsible>
                         );
                       })}
-                    </TableBody>
-                  </Table>
+                    </div>
+                    );
+                  })()
                     ) : (
-                      <div className="p-4 space-y-4">
+                      <div className="w-full space-y-4 p-4">
                         {reportEntries.map((entry, idx) => {
                           if (isMdAvolveProjectDox) {
                             const {
@@ -4066,7 +4211,7 @@ export default function PortalDataViewer() {
                             return (
                               <Card
                                 key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                                className="bg-muted/20 border-border"
+                                className="w-full border border-obsidian-raised bg-obsidian-sunken/20 text-ink-primary-dark shadow-none"
                               >
                                 <CardHeader className="pb-2">
                                   <CardTitle className="text-base">
@@ -4080,13 +4225,17 @@ export default function PortalDataViewer() {
                                 </CardHeader>
                                 <CardContent className="flex flex-wrap gap-2 pt-0">
                                   {showViewerCard && viewerCardHref ? (
-                                    <Button asChild size="sm" variant="default">
+                                    <Button
+                                      asChild
+                                      variant="ghost"
+                                      className={cn(PORTAL_ACTION_BUTTON_PRIMARY)}
+                                    >
                                       <a
                                         href={viewerCardHref}
                                         target="_blank"
                                         rel="noreferrer"
                                       >
-                                        <FileText className="h-4 w-4 mr-2" />
+                                        <FileText />
                                         Open viewer
                                       </a>
                                     </Button>
@@ -4094,15 +4243,15 @@ export default function PortalDataViewer() {
                                   {pdfCardHref ? (
                                     <Button
                                       asChild
-                                      size="sm"
-                                      variant="secondary"
+                                      variant="ghost"
+                                      className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}
                                     >
                                       <a
                                         href={pdfCardHref}
                                         target="_blank"
                                         rel="noreferrer"
                                       >
-                                        <FileText className="h-4 w-4 mr-2" />
+                                        <FileText />
                                         Download PDF
                                       </a>
                                     </Button>
@@ -4110,8 +4259,8 @@ export default function PortalDataViewer() {
                                   {xlCardHref ? (
                                     <Button
                                       asChild
-                                      size="sm"
-                                      variant="outline"
+                                      variant="ghost"
+                                      className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}
                                     >
                                       <a
                                         href={xlCardHref}
@@ -4139,7 +4288,7 @@ export default function PortalDataViewer() {
                           return (
                             <Card
                               key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                              className="bg-muted/20 border-border"
+                              className="w-full border border-obsidian-raised bg-obsidian-sunken/20 text-ink-primary-dark shadow-none"
                             >
                               <CardHeader className="pb-2">
                                 <CardTitle className="text-base">
@@ -4150,7 +4299,11 @@ export default function PortalDataViewer() {
                                 {isPgcEplan &&
                                   (isHttpUrlCandidate(entry.viewerUrl) ||
                                     isHttpUrlCandidate(entry.reportUrl)) && (
-                                    <Button asChild size="sm" variant="outline">
+                                    <Button
+                                      asChild
+                                      variant="ghost"
+                                      className={cn(PORTAL_ACTION_BUTTON_PRIMARY)}
+                                    >
                                       <a
                                         href={
                                           isHttpUrlCandidate(entry.viewerUrl)
@@ -4161,20 +4314,24 @@ export default function PortalDataViewer() {
                                         rel="noreferrer"
                                         title="Open SSRS ReportViewer in ePlan (original layout)"
                                       >
-                                        <FileText className="h-4 w-4 mr-2" />
+                                        <FileText />
                                         Open viewer
                                       </a>
                                     </Button>
                                   )}
                                 {entry.pdfUrl ? (
-                                  <Button asChild size="sm" variant="default">
+                                  <Button
+                                    asChild
+                                    variant="ghost"
+                                    className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}
+                                  >
                                     <a
                                       href={entry.pdfUrl}
                                       target="_blank"
                                       rel="noreferrer"
                                       title="PDF exported from SSRS and stored for this project (binary file)"
                                     >
-                                      <FileText className="h-4 w-4 mr-2" />
+                                      <FileText />
                                       Download PDF
                                     </a>
                                   </Button>
@@ -4186,8 +4343,8 @@ export default function PortalDataViewer() {
                                 {entry.excelUrl ? (
                                   <Button
                                     asChild
-                                    size="sm"
-                                    variant="secondary"
+                                    variant="ghost"
+                                    className={cn(PORTAL_ACTION_BUTTON_OUTLINE)}
                                   >
                                     <a
                                       href={entry.excelUrl}
@@ -4218,15 +4375,17 @@ export default function PortalDataViewer() {
               </TabErrorBoundary>
             </CardContent>
           </Card>
+            </div>
+          </Section>
         </TabsContent>
 
         {filesTab && (
           <TabsContent
             value="files"
-            className="mt-4"
+            className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none"
             data-testid="tabcontent-files"
           >
-            <Card>
+            <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
               <CardContent className="p-0">
                 <TabErrorBoundary tabName="Files">
                   {filesTab?.error ? (
@@ -4239,7 +4398,7 @@ export default function PortalDataViewer() {
                       No files data available.
                     </p>
                   ) : (
-                    <div className="divide-y divide-border">
+                    <div className="divide-y divide-cream-sunken">
                       {foldersForRender.map((folder, fi) => {
                         const folderKey = `${folder.name}-${fi}`;
                         const isOpen = expandedFolders.has(folderKey);
@@ -4263,16 +4422,18 @@ export default function PortalDataViewer() {
                           >
                             <CollapsibleTrigger asChild>
                               <button
-                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+                                className="w-full flex items-center justify-between gap-3 bg-cream px-5 py-4 text-left transition-colors hover:bg-cream-raised"
                                 data-testid={`button-folder-${fi}`}
                               >
                                 {isOpen ? (
-                                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-ink-secondary-light" />
                                 ) : (
-                                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-secondary-light" />
                                 )}
-                                <FolderOpen className="h-4 w-4 shrink-0 text-[#FF6B2B]" />
-                                <span className="font-medium text-sm flex-1">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gold/35 bg-gold/12 text-gold shadow-sm">
+                                  <FolderOpen className="h-4 w-4 shrink-0" />
+                                </div>
+                                <span className="flex-1 text-left text-sm font-medium text-ink-primary-light">
                                   {isPgcEplan
                                     ? [
                                         folder.parentFolder || "",
@@ -4282,38 +4443,41 @@ export default function PortalDataViewer() {
                                         .join(" \u2192 ")
                                     : folder.folderName || folder.name}
                                 </span>
-                                <Badge variant="secondary" className="text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 border-cream-sunken bg-cream-raised px-2 py-0.5 text-xs font-mono font-semibold tabular-nums text-ink-primary-light"
+                                >
                                   {folder.fileCount ??
                                     folder.files?.length ??
                                     0}{" "}
                                   files
                                 </Badge>
                                 {totalComments > 0 && (
-                                  <Badge className="text-xs bg-[#FF6B2B] text-white">
-                                    <MessageSquare className="h-3 w-3 mr-1" />
+                                  <Badge className="shrink-0 border border-gold/30 bg-gold/12 text-xs font-semibold text-ink-primary-light">
+                                    <MessageSquare className="mr-1 h-3 w-3 text-gold" />
                                     {totalComments}
                                   </Badge>
                                 )}
                               </button>
                             </CollapsibleTrigger>
                             <CollapsibleContent>
-                              <div className="overflow-x-auto">
-                                <Table>
+                              <div className="overflow-x-auto bg-cream">
+                                <Table wrapperClassName="!rounded-none !border-0 !border-t !border-cream-sunken !bg-cream !shadow-none">
                                   <TableHeader>
-                                    <TableRow className="bg-[#091428] hover:bg-[#091428]">
-                                      <TableHead className="text-foreground font-medium">
+                                    <TableRow className="!border-cream-sunken border-b bg-cream-raised/60 hover:!bg-cream-raised/80">
+                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         File Name
                                       </TableHead>
-                                      <TableHead className="text-foreground font-medium">
+                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Status
                                       </TableHead>
-                                      <TableHead className="text-foreground font-medium">
+                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Reviewed By
                                       </TableHead>
-                                      <TableHead className="text-foreground font-medium">
+                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Uploaded
                                       </TableHead>
-                                      <TableHead className="text-foreground font-medium text-right">
+                                      <TableHead className="!text-right !text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Comments
                                       </TableHead>
                                     </TableRow>
@@ -4329,7 +4493,7 @@ export default function PortalDataViewer() {
                                       return (
                                         <React.Fragment key={fileKey}>
                                           <TableRow
-                                            className={`${fIdx % 2 === 1 ? "bg-[#091428]" : "bg-[#0D1E38]"} ${hasComments ? "cursor-pointer hover:bg-muted/40" : ""}`}
+                                            className={`${fIdx % 2 === 1 ? "bg-cream-raised/50" : "bg-cream"} border-t border-cream-sunken ${hasComments ? "cursor-pointer hover:!bg-cream-raised/85" : "hover:!bg-cream-raised/70"}`}
                                             onClick={() => {
                                               if (!hasComments) return;
                                               setExpandedFileComments(
@@ -4344,15 +4508,15 @@ export default function PortalDataViewer() {
                                             }}
                                             data-testid={`row-file-${fi}-${fIdx}`}
                                           >
-                                            <TableCell className="text-sm">
+                                            <TableCell className="!text-ink-primary-light text-sm">
                                               <div className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <FileText className="h-4 w-4 shrink-0 text-gold/90" />
                                                 {file.viewUrl ? (
                                                   <a
                                                     href={file.viewUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="truncate max-w-[300px] text-[#6B9AC4] hover:text-[#FF6B2B] hover:underline transition-colors"
+                                                    className="truncate max-w-[300px] text-gold hover:text-gold-deep hover:underline transition-colors"
                                                     onClick={(e) =>
                                                       e.stopPropagation()
                                                     }
@@ -4361,14 +4525,14 @@ export default function PortalDataViewer() {
                                                     {file.name}
                                                   </a>
                                                 ) : (
-                                                  <span className="truncate max-w-[300px]">
+                                                  <span className="truncate max-w-[300px] text-ink-primary-light">
                                                     {file.name}
                                                   </span>
                                                 )}
                                                 {file.downloadStatus ===
                                                   "failed" && (
                                                   <Badge
-                                                    className="bg-red-600 text-white text-[10px] px-1.5 py-0 shrink-0"
+                                                    className="bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0 shrink-0"
                                                     title={
                                                       file.downloadError ||
                                                       "Download failed"
@@ -4380,22 +4544,22 @@ export default function PortalDataViewer() {
                                                 )}
                                               </div>
                                             </TableCell>
-                                            <TableCell className="text-sm whitespace-nowrap">
+                                            <TableCell className="!text-ink-primary-light whitespace-nowrap text-sm">
                                               {file.status || "—"}
                                             </TableCell>
-                                            <TableCell className="text-sm whitespace-nowrap">
+                                            <TableCell className="!text-ink-primary-light whitespace-nowrap text-sm">
                                               {file.reviewedBy || "—"}
                                             </TableCell>
-                                            <TableCell className="text-sm whitespace-nowrap">
+                                            <TableCell className="!text-ink-primary-light whitespace-nowrap text-sm">
                                               {file.uploadedDate || "—"}
                                             </TableCell>
-                                            <TableCell className="text-sm text-right">
+                                            <TableCell className="text-right text-sm">
                                               {(file.commentCount || 0) > 0 ? (
-                                                <Badge className="bg-[#FF6B2B] text-white text-xs">
+                                                <Badge className="border border-gold/25 bg-gold/12 text-xs font-semibold text-ink-primary-light">
                                                   {file.commentCount}
                                                 </Badge>
                                               ) : (
-                                                <span className="text-muted-foreground">
+                                                <span className="text-ink-secondary-light">
                                                   0
                                                 </span>
                                               )}
@@ -4405,7 +4569,7 @@ export default function PortalDataViewer() {
                                             <TableRow>
                                               <TableCell
                                                 colSpan={5}
-                                                className="p-0 bg-[#091428]"
+                                                className="p-0 bg-muted/30"
                                               >
                                                 <div className="px-6 py-3 space-y-2">
                                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -4416,7 +4580,7 @@ export default function PortalDataViewer() {
                                                     (comment, ci) => (
                                                       <div
                                                         key={ci}
-                                                        className="border border-border rounded-md p-3 bg-[#0D1E38]"
+                                                        className="border border-border rounded-md p-3 bg-card"
                                                         data-testid={`comment-${fi}-${fIdx}-${ci}`}
                                                       >
                                                         <div className="flex items-center gap-3 mb-1 text-xs text-muted-foreground">
@@ -4476,6 +4640,8 @@ export default function PortalDataViewer() {
           </TabsContent>
         )}
       </Tabs>
+        </div>
+      </div>
 
       <Dialog
         open={!!reportReaderOpen}
@@ -4484,7 +4650,7 @@ export default function PortalDataViewer() {
         }}
       >
         <DialogContent
-          className="max-w-3xl max-h-[90vh] overflow-y-auto border-border bg-[#091428] text-foreground"
+          className="max-w-3xl max-h-[90vh] overflow-y-auto border-border bg-card text-card-foreground"
           data-testid="dialog-report-reader"
         >
           {reportReaderOpen ? (
@@ -4501,19 +4667,11 @@ export default function PortalDataViewer() {
                     reportReaderOpen.pdf.fileName?.includes(
                       "Review Comments",
                     ) ? (
-                      <details className="rounded border border-[#1A3055] bg-[#091428] p-2 text-xs">
-                        <summary className="cursor-pointer select-none text-[#6B9AC4] hover:text-[#F0F6FF]">
-                          Raw extracted text (stored — copyable)
-                        </summary>
-                        <pre
-                          className="mt-2 max-h-[min(50vh,480px)] overflow-auto whitespace-pre-wrap break-words rounded border border-[#1A3055] bg-[#0D1E38] p-3 font-mono text-[11px] leading-snug text-[#F0F6FF]"
-                          data-testid="dialog-pgc-review-comments-raw-text"
-                        >
-                          {(reportReaderOpen.pdf.text || "").length > 120_000
-                            ? `${(reportReaderOpen.pdf.text || "").slice(0, 120_000)}\n\n[truncated]`
-                            : reportReaderOpen.pdf.text}
-                        </pre>
-                      </details>
+                      <ReportsExtractedTextDetails
+                        text={reportReaderOpen.pdf.text || ""}
+                        summaryLabel="Raw extracted text (stored — copyable)"
+                        testId="dialog-pgc-review-comments-raw-text"
+                      />
                     ) : null}
                   </>
                 ) : (
@@ -4523,7 +4681,7 @@ export default function PortalDataViewer() {
                 )}
                 {reportReaderOpen.pdf.screenshot ? (
                   <div className="rounded-md border border-border/60 bg-muted/10 p-3">
-                    <p className="text-xs text-amber-200/90 mb-2">
+                    <p className="text-xs text-warning mb-2">
                       Low-resolution preview only (compressed for database
                       storage). It is not full quality — use extracted text or
                       the actions on the report card when available.
@@ -4540,6 +4698,6 @@ export default function PortalDataViewer() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }

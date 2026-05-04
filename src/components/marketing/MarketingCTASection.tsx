@@ -20,7 +20,7 @@ export function MarketingCTASection() {
           </h2>
           <p className="text-lg text-primary-foreground/80 mb-8">
             Join thousands of architects, engineers, and permit expeditors who've
-            streamlined their approval process with Insight|DesignCheck.
+            streamlined their approval process with PermitPilot.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button

@@ -23,7 +23,7 @@ import {
   FolderKanban,
   Database,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { staggerContainer, staggerItem } from "@/components/animations/variants";
 import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
 import { InspectionsPunchListWidget } from "@/components/dashboard/InspectionsPunchListWidget";
@@ -36,6 +36,41 @@ import { GettingStartedChecklist } from "@/components/onboarding/GettingStartedC
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
+import { Eyebrow } from "@/components/ui/Typography";
+import { cn } from "@/lib/utils";
+
+/** Light raised card — welcome, projects, deadlines, checklists, calculations.
+ * Force cream surface in dark mode so `text-ink-*-light` stays readable (Card defaults otherwise use `dark:bg-card`).
+ */
+const surfCreamRaised =
+  "rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream transition-[box-shadow,border-color] hover:border-gold/25 hover:shadow-[0_12px_36px_-10px_hsl(30_55%_48%/0.16)] dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light";
+
+const surfGoldSoft =
+  "rounded-2xl border border-gold/30 bg-gradient-to-br from-gold-soft/70 via-cream-raised to-cream-raised text-ink-primary-light shadow-cream transition-colors hover:border-gold/45 dark:border-gold/30 dark:bg-gradient-to-br dark:from-gold-soft/65 dark:via-cream-raised dark:to-cream-raised dark:text-ink-primary-light";
+
+/** Blue-gray intelligence surface (Permit Intelligence quick card) */
+const surfIntelBlueGray =
+  "rounded-2xl border border-[hsl(var(--border-obsidian-strong)/0.42)] bg-gradient-to-br from-obsidian-raised/95 via-obsidian to-obsidian-sunken text-ink-primary-dark shadow-lg shadow-black/20 transition-colors hover:border-teal/30 dark:border-[hsl(var(--border-obsidian-strong)/0.42)] dark:bg-gradient-to-br dark:from-obsidian-raised/95 dark:via-obsidian dark:to-obsidian-sunken dark:text-ink-primary-dark";
+
+/** Teal-soft light card (Interactive Demos) */
+const surfTealSoftLight =
+  "rounded-2xl border border-teal/22 bg-teal-soft/55 text-ink-primary-light shadow-cream transition-colors hover:border-teal/40 hover:shadow-md dark:border-teal/25 dark:bg-teal-soft/50 dark:text-ink-primary-light";
+
+/** Dark pipeline feature shell */
+const intakePipelineShell =
+  "relative overflow-hidden rounded-2xl border border-[hsl(var(--border-obsidian-strong)/0.45)] bg-gradient-to-br from-obsidian-raised via-obsidian to-obsidian-sunken p-6 text-ink-primary-dark shadow-xl shadow-black/30 dark:border-[hsl(var(--border-obsidian-strong)/0.45)] dark:bg-gradient-to-br dark:from-obsidian-raised dark:via-obsidian dark:to-obsidian-sunken dark:text-ink-primary-dark sm:p-8";
+
+/** Gold outline icon tile — light backgrounds */
+const tileGoldAccent =
+  "flex shrink-0 items-center justify-center rounded-lg border border-gold/28 bg-gold-soft/90 text-gold-deep shadow-sm transition-colors group-hover:border-gold/42 group-hover:bg-gold-soft";
+
+/** Teal accent tile — dark intel card */
+const tileTealOnDark =
+  "flex shrink-0 items-center justify-center rounded-lg border border-teal/35 bg-teal/15 text-teal shadow-inner transition-colors group-hover:bg-teal/22";
+
+/** Teal accent tile — teal-soft light card */
+const tileTealOnLight =
+  "flex shrink-0 items-center justify-center rounded-lg border border-teal/25 bg-teal/12 text-teal transition-colors group-hover:bg-teal/18";
 
 interface SavedCalculation {
   id: string;
@@ -131,6 +166,9 @@ export default function Dashboard() {
     return SUBSCRIPTION_TIERS[subscription.tier]?.name || subscription.tier;
   };
 
+  const profileFullNameSafe = String(profile?.full_name ?? "");
+  const welcomeFirstName = profileFullNameSafe.trim().split(/\s+/).filter(Boolean)[0];
+
   if (authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
@@ -143,61 +181,102 @@ export default function Dashboard() {
     <>
       {/* Onboarding Wizard */}
       <OnboardingWizard open={showOnboarding} onComplete={completeOnboarding} />
-      
-      <section className="py-4 sm:py-6 md:py-8 lg:py-12 pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6">
-        <div className="max-w-6xl mr-auto ml-0 w-full min-w-0">
-          {/* Header */}
-          <motion.div
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+
+      <div className="dashboard-editorial-canvas min-w-0">
+        <div className="dashboard-editorial-canvas__inner mx-auto w-full max-w-6xl min-w-0 px-4 pb-14 pt-7 sm:px-6 sm:pt-9 sm:pb-16">
+          <Card
+            className={cn(
+              surfCreamRaised,
+              "relative mb-8 overflow-hidden border-cream-sunken/95 before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_70%_58%_at_100%_-8%,hsl(var(--accent-gold-soft)/0.5),transparent_58%)] before:opacity-[0.85]",
+            )}
           >
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold text-lg sm:text-xl">
-                {profile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || "U"}
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-bold truncate">
-                  Welcome{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}!
-                </h1>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-muted-foreground text-xs sm:text-sm">
-                  {profile?.job_title && (
-                    <span className="flex items-center gap-1">
-                      <Briefcase className="h-3 w-3" />
-                      {profile.job_title}
-                    </span>
-                  )}
-                  {profile?.company_name && (
-                    <span className="flex items-center gap-1">
-                      <Building2 className="h-3 w-3" />
-                      {profile.company_name}
-                    </span>
+            <CardContent className="relative z-[1] p-6 sm:p-7">
+              <motion.div
+                className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-gold/45 bg-cream text-lg font-serif font-normal text-ink-primary-light shadow-inner sm:h-14 sm:w-14 sm:text-xl">
+                    {(profileFullNameSafe.trim()
+                      ? profileFullNameSafe.trim().charAt(0)
+                      : "") ||
+                      user?.email?.charAt(0)?.toUpperCase() ||
+                      "U"}
+                  </div>
+                  <div className="min-w-0">
+                    <Eyebrow className="mb-1 text-ink-secondary-light">Home</Eyebrow>
+                    <h1 className="font-serif text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl">
+                      {welcomeFirstName ? (
+                        <>
+                          Welcome, <span className="italic text-gold">{welcomeFirstName}</span>!
+                        </>
+                      ) : (
+                        "Welcome!"
+                      )}
+                    </h1>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-secondary-light sm:gap-x-3 sm:text-sm">
+                      {profile?.job_title && (
+                        <span className="flex items-center gap-1">
+                          <Briefcase className="h-3 w-3 shrink-0" />
+                          {profile.job_title}
+                        </span>
+                      )}
+                      {profile?.company_name && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3 shrink-0" />
+                          {profile.company_name}
+                        </span>
+                      )}
+                    </div>
+                    {selectedProjectId ? (
+                      <p className="mt-2 font-mono text-[11px] tabular-nums tracking-tight text-ink-secondary-light sm:text-xs">
+                        Active project{" "}
+                        <span className="text-ink-primary-light/95">
+                          {selectedProjectId.slice(0, 8)}…{selectedProjectId.slice(-4)}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2 sm:pt-1">
+                  {subscription.subscribed && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      className="w-fit shrink-0 rounded-lg border-gold/45 bg-cream-raised px-3.5 text-gold-deep shadow-sm transition-colors hover:border-gold hover:bg-gold hover:text-cream"
+                    >
+                      <Link to="/pricing">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Manage Billing
+                      </Link>
+                    </Button>
                   )}
                 </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {subscription.subscribed && (
-                <Button variant="outline" asChild>
-                  <Link to="/pricing">
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Manage Billing
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </motion.div>
+              </motion.div>
+            </CardContent>
+          </Card>
 
-          {/* Agent Workflow Status (Intake Pipeline) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="mb-8"
+            className="mb-10"
           >
-            <AgentWorkflowStatus />
+            <div className={intakePipelineShell}>
+              <div
+                className="pointer-events-none absolute inset-0 bg-grid-navy-lines opacity-[0.28]"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_78%_60%_at_68%_-12%,hsl(219_48%_20%/0.45),transparent_58%)]"
+                aria-hidden
+              />
+              <div className="relative">
+                <AgentWorkflowStatus />
+              </div>
+            </div>
           </motion.div>
-
           {/* Project Health (Step 6) - near/below Portal Monitor */}
           {selectedProjectId && (
             <motion.div
@@ -217,35 +296,52 @@ export default function Dashboard() {
             transition={{ delay: 0.1 }}
             className="mb-8"
           >
-            <Card className={subscription.subscribed ? "border-accent/50 bg-accent/5" : "border-dashed"}>
+            <Card
+              className={cn(
+                surfGoldSoft,
+                subscription.subscribed
+                  ? ""
+                  : "border-dashed border-cream-sunken bg-gradient-to-br from-cream-sunken/55 to-cream-raised hover:border-gold/30",
+              )}
+            >
               <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 sm:p-6">
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                    subscription.subscribed ? "bg-accent/20 text-accent" : "bg-muted text-muted-foreground"
-                  }`}>
+                  <div
+                    className={cn(
+                      "w-12 h-12 rounded-lg flex items-center justify-center border",
+                      subscription.subscribed
+                        ? "bg-gold-soft/80 border-gold/30 text-gold-deep"
+                        : "bg-cream-sunken/80 border-cream-sunken text-ink-tertiary-light",
+                    )}
+                  >
                     <Crown className="h-6 w-6" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">
+                      <h3 className="font-serif text-lg font-normal text-ink-primary-light tracking-tight">
                         {subscription.subscribed ? `${getTierDisplayName()} Plan` : "No Active Subscription"}
                       </h3>
                       {subscription.subscribed && (
-                        <Badge className="bg-accent text-accent-foreground">Active</Badge>
+                        <Badge className="border border-gold/35 bg-gold/12 text-gold-deep">Active</Badge>
                       )}
                       {subscriptionLoading && (
-                        <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <RefreshCw className="h-4 w-4 animate-spin text-ink-tertiary-light" />
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-ink-secondary-light">
                       {subscription.subscribed && subscription.subscriptionEnd
-                        ? `Renews on ${format(new Date(subscription.subscriptionEnd), "MMMM d, yyyy")}`
+                        ? (() => {
+                            const end = new Date(subscription.subscriptionEnd);
+                            return isValid(end)
+                              ? `Renews on ${format(end, "MMMM d, yyyy")}`
+                              : "Subscription active — renewal date unavailable";
+                          })()
                         : "Upgrade to access all features"}
                     </p>
                   </div>
                 </div>
                 {!subscription.subscribed && (
-                  <Button asChild className="bg-accent hover:bg-accent/90">
+                  <Button variant="gold" asChild>
                     <Link to="/pricing">View Plans</Link>
                   </Button>
                 )}
@@ -261,44 +357,64 @@ export default function Dashboard() {
             animate="visible"
           >
             <motion.div variants={staggerItem} className="h-full min-h-[120px]">
-              <Card className="h-full min-h-[120px] hover:border-accent/50 transition-colors cursor-pointer group border-accent/30 bg-accent/5" onClick={() => navigate("/projects")}>
-                <CardContent className="flex items-center gap-3 sm:gap-4 p-4 sm:p-6 h-full">
-                  <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center group-hover:bg-accent/30 transition-colors">
-                    <FolderKanban className="h-6 w-6 text-accent" />
+              <Card
+                className={cn(
+                  "group h-full min-h-[120px] cursor-pointer rounded-2xl border-cream-sunken bg-cream/95 text-ink-primary-light shadow-cream transition-colors hover:border-gold/35 hover:shadow-lg dark:border-cream-sunken dark:bg-cream dark:text-ink-primary-light",
+                )}
+                onClick={() => navigate("/projects")}
+              >
+                <CardContent className="flex h-full items-center gap-3 p-4 sm:gap-4 sm:p-6">
+                  <div className={cn("h-12 w-12", tileGoldAccent)}>
+                    <FolderKanban className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">Projects</h3>
-                    <p className="text-sm text-muted-foreground">Manage permits</p>
+                    <h3 className="font-serif text-xl font-normal tracking-tight text-ink-primary-light">
+                      Projects
+                    </h3>
+                    <p className="text-sm text-ink-secondary-light">Manage permits</p>
                   </div>
-                  <Plus className="ml-auto h-5 w-5 text-muted-foreground group-hover:text-accent transition-colors" />
+                  <Plus className="ml-auto h-5 w-5 text-ink-tertiary-light transition-colors group-hover:text-gold-deep" />
                 </CardContent>
               </Card>
             </motion.div>
             <motion.div variants={staggerItem} className="h-full min-h-[120px]">
-              <Card className="h-full min-h-[120px] hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => navigate("/permit-intelligence")}>
-                <CardContent className="flex items-center gap-3 sm:gap-4 p-4 sm:p-6 h-full">
-                  <div className="w-12 h-12 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                    <Database className="h-6 w-6 text-orange-500" />
+              <Card
+                className={cn(
+                  "group h-full min-h-[120px] cursor-pointer",
+                  surfIntelBlueGray,
+                )}
+                onClick={() => navigate("/permit-intelligence")}
+              >
+                <CardContent className="flex h-full items-center gap-3 p-4 sm:gap-4 sm:p-6">
+                  <div className={cn("h-12 w-12", tileTealOnDark)}>
+                    <Database className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">Permit Intelligence</h3>
-                    <p className="text-sm text-muted-foreground">Shovels data</p>
+                    <h3 className="font-serif text-xl font-normal tracking-tight text-ink-primary-dark">
+                      Permit Intelligence
+                    </h3>
+                    <p className="text-sm text-ink-secondary-dark">Shovels data</p>
                   </div>
-                  <Plus className="ml-auto h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <Plus className="ml-auto h-5 w-5 text-ink-tertiary-dark transition-colors group-hover:text-teal" />
                 </CardContent>
               </Card>
             </motion.div>
             <motion.div variants={staggerItem} className="h-full min-h-[120px]">
-              <Card className="h-full min-h-[120px] hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => navigate("/demos")}>
-                <CardContent className="flex items-center gap-3 sm:gap-4 p-4 sm:p-6 h-full">
-                  <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                    <LayoutDashboard className="h-6 w-6 text-emerald-500" />
+              <Card
+                className={cn("group h-full min-h-[120px] cursor-pointer", surfTealSoftLight)}
+                onClick={() => navigate("/demos")}
+              >
+                <CardContent className="flex h-full items-center gap-3 p-4 sm:gap-4 sm:p-6">
+                  <div className={cn("h-12 w-12", tileTealOnLight)}>
+                    <LayoutDashboard className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">Interactive Demos</h3>
-                    <p className="text-sm text-muted-foreground">Try our AI tools</p>
+                    <h3 className="font-serif text-xl font-normal tracking-tight text-ink-primary-light">
+                      Interactive Demos
+                    </h3>
+                    <p className="text-sm text-ink-secondary-light">Try our AI tools</p>
                   </div>
-                  <Plus className="ml-auto h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <Plus className="ml-auto h-5 w-5 text-ink-tertiary-light transition-colors group-hover:text-teal" />
                 </CardContent>
               </Card>
             </motion.div>
@@ -351,16 +467,24 @@ export default function Dashboard() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
+            className="rounded-2xl border border-cream-sunken/80 bg-gradient-to-br from-cream-sunken/40 via-cream-raised/95 to-cream-raised px-5 py-7 text-ink-primary-light shadow-inner dark:border-cream-sunken/80 dark:from-cream-sunken/45 dark:via-cream-raised dark:to-cream-raised dark:text-ink-primary-light sm:px-7 sm:py-9"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Saved Calculations</h2>
-              <Badge variant="secondary">{calculations.length} saved</Badge>
+            <div className="flex items-center justify-between mb-6 gap-3">
+              <h2 className="font-serif text-2xl font-normal text-ink-primary-light tracking-tight">
+                Saved Calculations
+              </h2>
+              <Badge
+                variant="secondary"
+                className="border border-cream-sunken bg-cream-sunken/60 text-ink-secondary-light"
+              >
+                {calculations.length} saved
+              </Badge>
             </div>
 
             {loading ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[1, 2, 3].map((i) => (
-                  <Card key={i}>
+                  <Card key={i} className={cn(surfCreamRaised)}>
                     <CardHeader>
                       <Skeleton className="h-5 w-3/4" />
                       <Skeleton className="h-4 w-1/2" />
@@ -372,18 +496,25 @@ export default function Dashboard() {
                 ))}
               </div>
             ) : calculations.length === 0 ? (
-              <Card className="border-dashed">
+              <Card className="border-dashed border-cream-sunken bg-cream/90 text-ink-primary-light shadow-inner dark:border-cream-sunken dark:bg-cream dark:text-ink-primary-light">
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <Calculator className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="font-semibold mb-2">No saved calculations yet</h3>
-                  <p className="text-muted-foreground text-sm mb-4">
+                  <Calculator className="mb-4 h-12 w-12 text-gold/70" />
+                  <h3 className="font-serif text-lg font-normal text-ink-primary-light mb-2">
+                    No saved calculations yet
+                  </h3>
+                  <p className="text-ink-secondary-light text-sm mb-4">
                     Run an ROI or Consolidation calculation to save your results here
                   </p>
                   <div className="flex gap-2">
-                    <Button asChild size="sm">
+                    <Button variant="gold" asChild size="sm">
                       <Link to="/roi-calculator">ROI Calculator</Link>
                     </Button>
-                    <Button asChild size="sm" variant="outline">
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg border-gold/45 bg-cream text-gold-deep transition-colors hover:border-gold hover:bg-gold hover:text-cream"
+                    >
                       <Link to="/consolidation-calculator">Consolidation Calculator</Link>
                     </Button>
                   </div>
@@ -399,39 +530,49 @@ export default function Dashboard() {
                     whileHover={{ y: -4 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <Card className="h-full hover:border-primary/30 transition-colors">
+                    <Card className={cn("h-full transition-colors", surfCreamRaised)}>
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
-                          <Badge variant={calc.calculation_type === "roi" ? "default" : "secondary"}>
+                          <Badge
+                            className={cn(
+                              "border shadow-sm",
+                              calc.calculation_type === "roi"
+                                ? "border-gold/35 bg-gold text-cream"
+                                : "border-teal/28 bg-teal-soft/85 text-teal",
+                            )}
+                          >
                             {calc.calculation_type === "roi" ? "ROI" : "Consolidation"}
                           </Badge>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            className="h-8 w-8 text-ink-tertiary-light hover:text-destructive"
                             onClick={() => handleDelete(calc.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                        <CardTitle className="text-lg mt-2">{calc.name}</CardTitle>
-                        <CardDescription className="flex items-center gap-1">
+                        <CardTitle className="mt-2 text-lg text-ink-primary-light">{calc.name}</CardTitle>
+                        <CardDescription className="flex items-center gap-1 text-ink-secondary-light">
                           <Clock className="h-3 w-3" />
-                          {format(new Date(calc.created_at), "MMM d, yyyy")}
+                          {(() => {
+                            const d = new Date(calc.created_at);
+                            return isValid(d) ? format(d, "MMM d, yyyy") : "—";
+                          })()}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         {calc.calculation_type === "roi" && calc.results_data && (
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Annual Savings</span>
-                              <span className="font-semibold text-emerald-600">
+                              <span className="text-ink-secondary-light">Annual Savings</span>
+                              <span className="font-semibold text-success">
                                 ${((calc.results_data as { annualSavings?: number }).annualSavings || 0).toLocaleString()}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Time Saved</span>
-                              <span className="font-semibold">
+                              <span className="text-ink-secondary-light">Time Saved</span>
+                              <span className="font-semibold text-ink-primary-light">
                                 {((calc.results_data as { hoursSaved?: number }).hoursSaved || 0)} hrs/yr
                               </span>
                             </div>
@@ -440,14 +581,14 @@ export default function Dashboard() {
                         {calc.calculation_type === "consolidation" && calc.results_data && (
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Current Cost</span>
-                              <span className="font-semibold">
+                              <span className="text-ink-secondary-light">Current Cost</span>
+                              <span className="font-semibold text-ink-primary-light">
                                 ${((calc.results_data as { currentCost?: number }).currentCost || 0).toLocaleString()}/yr
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">With Insight</span>
-                              <span className="font-semibold text-emerald-600">
+                              <span className="text-ink-secondary-light">With PermitPilot</span>
+                              <span className="font-semibold text-success">
                                 ${((calc.results_data as { insightCost?: number }).insightCost || 0).toLocaleString()}/yr
                               </span>
                             </div>
@@ -461,7 +602,7 @@ export default function Dashboard() {
             )}
           </motion.div>
         </div>
-      </section>
+      </div>
     </>
   );
 }

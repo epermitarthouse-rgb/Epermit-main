@@ -1,10 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { ProjectAnalytics } from '@/types/analytics';
+import { cn } from '@/lib/utils';
+import { DATA_INTELLIGENCE_PANEL } from '@/components/layout/editorialPageChrome';
 
 interface CostTrackingCardProps {
   projects: ProjectAnalytics[];
 }
+
+const panel = cn(DATA_INTELLIGENCE_PANEL);
 
 export function CostTrackingCard({ projects }: CostTrackingCardProps) {
   const formatCurrency = (amount: number) => {
@@ -16,7 +20,6 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
     }).format(amount);
   };
 
-  // Group by project type
   const byType = new Map<string, { permitFees: number; expeditorCosts: number; count: number }>();
   
   projects.forEach(p => {
@@ -41,14 +44,16 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
 
   if (data.length === 0 || data.every(d => d.permitFees === 0 && d.expeditorCosts === 0)) {
     return (
-      <Card>
+      <Card className={panel}>
         <CardHeader>
-          <CardTitle>Cost per Permit by Type</CardTitle>
-          <CardDescription>Permit fees and expeditor costs breakdown</CardDescription>
+          <CardTitle className="text-ink-primary-dark">Cost per Permit by Type</CardTitle>
+          <CardDescription className="text-ink-secondary-dark">
+            Permit fees and expeditor costs breakdown
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[300px] flex items-center justify-center">
-            <p className="text-muted-foreground text-center">
+          <div className="flex h-[300px] items-center justify-center">
+            <p className="text-center text-ink-tertiary-dark">
               No cost data available yet.<br />
               Add permit fees and expeditor costs to projects to see this chart.
             </p>
@@ -59,10 +64,12 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
   }
 
   return (
-    <Card>
+    <Card className={panel}>
       <CardHeader>
-        <CardTitle>Cost per Permit by Type</CardTitle>
-        <CardDescription>Permit fees and expeditor costs breakdown by project type</CardDescription>
+        <CardTitle className="text-ink-primary-dark">Cost per Permit by Type</CardTitle>
+        <CardDescription className="text-ink-secondary-dark">
+          Permit fees and expeditor costs breakdown by project type
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
@@ -72,40 +79,41 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
               layout="vertical"
               margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
             >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-teal/15" />
               <XAxis 
                 type="number"
-                className="text-xs fill-muted-foreground"
-                tick={{ fontSize: 12 }}
+                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
+                stroke="hsl(var(--ink-tertiary-dark))"
                 tickFormatter={(value) => formatCurrency(value)}
               />
               <YAxis 
                 type="category"
                 dataKey="type"
-                className="text-xs fill-muted-foreground"
-                tick={{ fontSize: 12 }}
+                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
+                stroke="hsl(var(--ink-tertiary-dark))"
                 width={90}
               />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(var(--background))', 
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'hsl(219 42% 16%)', 
+                  border: '1px solid hsl(var(--border-obsidian-strong) / 0.55)',
                   borderRadius: '8px',
+                  color: 'hsl(var(--ink-primary-dark))',
                 }}
                 formatter={(value: number) => formatCurrency(value)}
               />
-              <Legend />
+              <Legend wrapperStyle={{ color: 'hsl(var(--ink-secondary-dark))' }} />
               <Bar 
                 dataKey="permitFees" 
                 name="Permit Fees" 
-                fill="hsl(var(--primary))" 
+                fill="hsl(var(--accent-teal))" 
                 stackId="a"
                 radius={[0, 0, 0, 0]}
               />
               <Bar 
                 dataKey="expeditorCosts" 
                 name="Expeditor Costs" 
-                fill="hsl(262, 83%, 58%)" 
+                fill="hsl(var(--accent-gold))" 
                 stackId="a"
                 radius={[0, 4, 4, 0]}
               />

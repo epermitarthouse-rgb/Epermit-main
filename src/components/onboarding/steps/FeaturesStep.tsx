@@ -68,7 +68,7 @@ export function FeaturesStep({ onComplete, onBack }: FeaturesStepProps) {
         </div>
         <h3 className="text-lg font-semibold">You're All Set!</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Here's what you can do with Insight|DesignCheck
+          Here's what you can do with PermitPilot
         </p>
       </div>
 

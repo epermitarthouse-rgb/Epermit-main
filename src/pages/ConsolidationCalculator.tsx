@@ -14,8 +14,10 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { 
   DollarSign, Users, ArrowRight, Check, TrendingDown, Download,
-  Calculator, Layers, Zap, Save
+  Calculator, Layers, Save
 } from "lucide-react";
+import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
@@ -136,7 +138,7 @@ const ConsolidationCalculator = () => {
       recommendedTier = insightPricing.professional;
     }
 
-    // Insight costs (assuming 30% of team uses the tool actively)
+    // Alternate-tool costs (assuming 30% of team uses it actively)
     const activeUsers = Math.max(recommendedTier.minUsers, Math.ceil(teamSize * 0.5));
     const insightMonthlyCost = recommendedTier.pricePerUser * activeUsers;
     const insightAnnualCost = insightMonthlyCost * 12;
@@ -172,41 +174,46 @@ const ConsolidationCalculator = () => {
     {
       name: "Current Tools",
       cost: calculations.currentAnnualCost,
-      fill: "hsl(var(--muted-foreground))",
+      fill: "hsl(var(--accent-teal))",
     },
     {
-      name: "Insight|DesignCheck",
+      name: "PermitPilot",
       cost: calculations.insightAnnualCost,
       fill: "hsl(168, 76%, 32%)",
     },
   ];
 
   return (
-    <>
-      {/* Header */}
-      <div className="bg-primary text-primary-foreground py-12">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">Tool Consolidation Calculator</h1>
-          <p className="text-primary-foreground/80 max-w-2xl mx-auto">
-            See how much you can save by replacing multiple tools with one platform
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-cream text-ink-primary-light">
+      <EditorialPageHeader
+        eyebrow="TOOL STACK"
+        title={
+          <>
+            Consolidation <em className="text-gold italic">Calculator</em>
+          </>
+        }
+        description="See how much you can save by replacing multiple tools with one platform."
+        icon={Calculator}
+        iconClassName="text-teal"
+        align="center"
+      />
 
-      <div className="w-full max-w-6xl ml-0 mr-auto pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 py-6 sm:py-8">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="grid lg:grid-cols-5 gap-8">
           {/* Left Side - Inputs */}
           <div className="lg:col-span-3 space-y-6">
             {/* Step 1: Select Tools */}
-            <Card>
+            <Card className={cn(EDITORIAL_FORM_CARD)}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-3">
-                      <Layers className="h-6 w-6 text-accent" />
+                      <Layers className="h-6 w-6 text-teal" />
                       Step 1: Select Your Current Tools
                     </CardTitle>
-                    <CardDescription>Choose all the tools you're currently paying for</CardDescription>
+                    <CardDescription className="text-ink-secondary-light">
+                      Choose all the tools you&apos;re currently paying for
+                    </CardDescription>
                   </div>
                   <Badge variant="secondary">{selectedTools.length} selected</Badge>
                 </div>
@@ -219,8 +226,8 @@ const ConsolidationCalculator = () => {
                       className={cn(
                         "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all",
                         selectedTools.includes(tool.id)
-                          ? "border-accent bg-accent/10 shadow-md"
-                          : "hover:bg-secondary/50"
+                          ? "border-teal/40 bg-teal/10 shadow-md"
+                          : "hover:bg-cream-sunken/50 border-cream-sunken"
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -264,19 +271,21 @@ const ConsolidationCalculator = () => {
             </Card>
 
             {/* Step 2: Team Size */}
-            <Card>
+            <Card className={cn(EDITORIAL_FORM_CARD)}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
-                  <Users className="h-6 w-6 text-accent" />
+                  <Users className="h-6 w-6 text-teal" />
                   Step 2: Team Size
                 </CardTitle>
-                <CardDescription>How many people on your team use these tools?</CardDescription>
+                <CardDescription className="text-ink-secondary-light">
+                  How many people on your team use these tools?
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label>Team Members</Label>
-                    <span className="text-2xl font-bold text-accent">{teamSize}</span>
+                    <span className="text-2xl font-bold text-teal">{teamSize}</span>
                   </div>
                   <Slider
                     value={[teamSize]}
@@ -285,7 +294,7 @@ const ConsolidationCalculator = () => {
                     max={200}
                     step={1}
                   />
-                  <div className="flex justify-between text-xs text-muted-foreground">
+                  <div className="flex justify-between text-xs text-ink-tertiary-light">
                     <span>1</span>
                     <span>50</span>
                     <span>100</span>
@@ -298,7 +307,7 @@ const ConsolidationCalculator = () => {
 
             {/* Comparison Chart */}
             {selectedTools.length > 0 && (
-              <Card>
+              <Card className={cn(EDITORIAL_FORM_CARD)}>
                 <CardHeader>
                   <CardTitle>Annual Cost Comparison</CardTitle>
                 </CardHeader>
@@ -343,10 +352,10 @@ const ConsolidationCalculator = () => {
           {/* Right Side - Results */}
           <div className="lg:col-span-2 space-y-6">
             {/* Results Summary */}
-            <Card className={cn("sticky top-24 transition-all", selectedTools.length > 0 ? "border-accent border-2" : "")}>
+            <Card className={cn(EDITORIAL_FORM_CARD, "sticky top-24 transition-all", selectedTools.length > 0 ? "border-teal/35 shadow-lg" : "")}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
-                  <Calculator className="h-6 w-6 text-accent" />
+                  <Calculator className="h-6 w-6 text-teal" />
                   Your Savings
                 </CardTitle>
               </CardHeader>
@@ -359,18 +368,18 @@ const ConsolidationCalculator = () => {
                 ) : (
                   <>
                     {/* Annual Savings */}
-                    <div className="p-6 rounded-xl bg-accent/10 border border-accent/20 text-center">
-                      <TrendingDown className="h-8 w-8 text-accent mx-auto mb-2" />
-                      <p className="text-4xl font-bold text-accent">
+                    <div className="p-6 rounded-xl border border-teal/25 bg-teal/10 text-center">
+                      <TrendingDown className="mx-auto mb-2 h-8 w-8 text-teal" />
+                      <p className="text-4xl font-bold text-gold-deep">
                         {calculations.annualSavings > 0 ? (
                           `$${Math.round(calculations.annualSavings).toLocaleString()}`
                         ) : (
                           "—"
                         )}
                       </p>
-                      <p className="text-muted-foreground">Annual Savings</p>
+                      <p className="text-ink-secondary-light">Annual Savings</p>
                       {calculations.savingsPercent > 0 && (
-                        <Badge className="mt-2 bg-accent text-accent-foreground">
+                        <Badge className="mt-2 border border-teal/30 bg-teal/15 text-teal">
                           {calculations.savingsPercent.toFixed(0)}% less
                         </Badge>
                       )}
@@ -378,18 +387,18 @@ const ConsolidationCalculator = () => {
 
                     {/* Cost Comparison */}
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                        <span className="text-muted-foreground">Current Annual Cost</span>
+                      <div className="flex items-center justify-between rounded-lg bg-cream-sunken/45 p-3">
+                        <span className="text-ink-secondary-light">Current Annual Cost</span>
                         <span className="font-bold text-lg">${calculations.currentAnnualCost.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-accent/10 border border-accent/20">
-                        <span className="text-muted-foreground">With Insight|DesignCheck</span>
-                        <span className="font-bold text-lg text-accent">${calculations.insightAnnualCost.toLocaleString()}</span>
+                      <div className="flex items-center justify-between rounded-lg border border-teal/25 bg-teal/10 p-3">
+                        <span className="text-ink-secondary-light">With PermitPilot</span>
+                        <span className="text-lg font-bold text-teal">${calculations.insightAnnualCost.toLocaleString()}</span>
                       </div>
                     </div>
 
                     {/* Recommended Plan */}
-                    <div className="p-4 rounded-lg border">
+                    <div className="rounded-lg border border-cream-sunken p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium">Recommended Plan</span>
                         <Badge>{calculations.recommendedTier.name}</Badge>
@@ -416,7 +425,7 @@ const ConsolidationCalculator = () => {
                           "Inspection scheduling & tracking",
                         ].map((benefit, i) => (
                           <div key={i} className="flex items-center gap-2 text-sm">
-                            <Check className="h-4 w-4 text-accent" />
+                            <Check className="h-4 w-4 text-teal" />
                             <span>{benefit}</span>
                           </div>
                         ))}
@@ -425,17 +434,17 @@ const ConsolidationCalculator = () => {
 
                     {/* CTAs */}
                     <div className="space-y-3 pt-4">
-                      <Button className="w-full bg-accent hover:bg-accent/90" asChild>
+                      <Button variant="gold" className="w-full" asChild>
                         <Link to="/roi-calculator">
                           Calculate Full ROI
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Link>
                       </Button>
-                      <Button variant="outline" className="w-full" onClick={handleSaveClick}>
+                      <Button variant="outlineGold" className="w-full" onClick={handleSaveClick}>
                         <Save className="mr-2 h-4 w-4" />
                         {user ? "Save to Dashboard" : "Sign In to Save"}
                       </Button>
-                      <Button variant="outline" className="w-full">
+                      <Button variant="outlineGold" className="w-full">
                         <Download className="mr-2 h-4 w-4" />
                         Download Comparison
                       </Button>
@@ -447,16 +456,16 @@ const ConsolidationCalculator = () => {
 
             {/* Quick Stats */}
             {selectedTools.length > 0 && (
-              <Card>
+              <Card className={cn(EDITORIAL_FORM_CARD)}>
                 <CardContent className="p-4">
                   <div className="grid grid-cols-2 gap-4 text-center">
                     <div>
-                      <p className="text-2xl font-bold text-accent">{calculations.toolCount}</p>
-                      <p className="text-xs text-muted-foreground">Tools Replaced</p>
+                      <p className="text-2xl font-bold text-teal">{calculations.toolCount}</p>
+                      <p className="text-xs text-ink-tertiary-light">Tools Replaced</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-accent">1</p>
-                      <p className="text-xs text-muted-foreground">Platform Needed</p>
+                      <p className="text-2xl font-bold text-gold-deep">1</p>
+                      <p className="text-xs text-ink-tertiary-light">Platform Needed</p>
                     </div>
                   </div>
                 </CardContent>
@@ -485,17 +494,17 @@ const ConsolidationCalculator = () => {
               className="mt-2"
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+            <DialogFooter>
+            <Button variant="outlineGold" onClick={() => setSaveDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveCalculation} disabled={isSaving || !saveName.trim()}>
+            <Button variant="gold" onClick={handleSaveCalculation} disabled={isSaving || !saveName.trim()}>
               {isSaving ? "Saving..." : "Save Calculation"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 };
 

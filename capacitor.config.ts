@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'app.lovable.0664b92985614c0ebe90b14e3fcda8e1',
-  appName: 'Insight DesignCheck',
+  appName: 'PermitPilot',
   webDir: 'dist',
   server: {
     url: 'https://0664b929-8561-4c0e-be90-b14e3fcda8e1.lovableproject.com?forceHideBadge=true',

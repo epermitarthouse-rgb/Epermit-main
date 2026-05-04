@@ -294,7 +294,7 @@ export function InteractiveDrawingViewer() {
           </div>
 
           {/* Drawing Area */}
-          <div className="relative h-[calc(100%-60px)] bg-[#091428] overflow-auto">
+          <div className="relative h-[calc(100%-60px)] bg-navy overflow-auto">
             <div
               className="relative w-full h-full min-h-[500px] transition-transform duration-200"
               style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
@@ -426,7 +426,7 @@ export function InteractiveDrawingViewer() {
                     key={`resolved-${response.issueId}`}
                     className={cn(
                       "absolute w-6 h-6 -ml-3 -mt-3 rounded-full flex items-center justify-center",
-                      response.status === "rejected" ? "bg-[#6B9AC4]" : "bg-emerald-500"
+                      response.status === "rejected" ? "bg-primary" : "bg-emerald-500"
                     )}
                     style={{ left: `${issue.x}%`, top: `${issue.y}%` }}
                   >
@@ -545,7 +545,7 @@ export function InteractiveDrawingViewer() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="border-amber-500 text-amber-400 hover:bg-[#FFF7ED] dark:hover:bg-[#FF6B2B08]"
+                    className="border-warning text-warning-foreground hover:bg-warning/15 dark:hover:bg-warning/10"
                     onClick={() => {
                       setModifiedResponse(selectedIssue.suggestedFix);
                       setShowModifyDialog(true);
@@ -717,7 +717,7 @@ export function InteractiveDrawingViewer() {
                               "text-[10px]",
                               response.status === "accepted" && "bg-emerald-500/10 text-emerald-400",
                               response.status === "modified" && "bg-amber-500/10 text-amber-400",
-                              response.status === "rejected" && "bg-[#6B9AC4]/10 text-[#6B9AC4]"
+                              response.status === "rejected" && "bg-primary/12 text-primary"
                             )}
                           >
                             {response.status}

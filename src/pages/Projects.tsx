@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects, CreateProjectData, UpdateProjectData } from '@/hooks/useProjects';
@@ -24,6 +25,7 @@ import {
 import { staggerContainer, staggerItem } from '@/components/animations/variants';
 import { FeatureTooltip } from '@/components/onboarding/FeatureTooltip';
 import { useGettingStarted } from '@/hooks/useGettingStarted';
+import { EditorialPageHeader } from '@/components/layout/EditorialPageHeader';
 
 export default function Projects() {
   const { user, loading: authLoading } = useAuth();
@@ -144,32 +146,32 @@ export default function Projects() {
   if (authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal" />
       </div>
     );
   }
 
   return (
-    <>
-      <section className="py-4 sm:py-6 md:py-8 lg:py-12 pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 lg:pl-6 lg:pr-8">
-        <div className="w-full max-w-7xl ml-0 mr-auto">
-          {/* Header */}
+    <div className="min-h-screen bg-cream text-ink-primary-light">
+      <EditorialPageHeader
+        eyebrow="PORTFOLIO"
+        title={
+          <span className="inline-flex flex-wrap items-center gap-2 sm:gap-3">
+            <FolderKanban className="h-7 w-7 shrink-0 text-gold-deep sm:h-9 sm:w-9" />
+            <span>Projects</span>
+          </span>
+        }
+        description="Manage your permit projects and track their status."
+      />
+
+      <section className="py-4 pb-12 sm:py-6 md:py-8">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
           <motion.div
-            className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8"
-            initial={{ opacity: 0, y: 20 }}
+            className="mb-6 flex flex-wrap items-center justify-end gap-2"
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 sm:gap-3">
-                <FolderKanban className="h-6 w-6 sm:h-8 sm:w-8 text-accent" />
-                Projects
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your permit projects and track their status
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={fetchProjects} disabled={loading}>
+              <Button variant="outlineGold" size="icon" onClick={fetchProjects} disabled={loading} aria-label="Refresh projects">
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               <FeatureTooltip
@@ -178,12 +180,11 @@ export default function Projects() {
                 description="Click here to start tracking a new permit project. You can add project details, upload documents, and monitor status."
                 position="left"
               >
-                <Button onClick={() => { handleCreateProject(); completeItem('create_project'); }} className="bg-accent hover:bg-accent/90">
+                <Button variant="gold" onClick={() => { handleCreateProject(); completeItem('create_project'); }}>
                   <Plus className="mr-2 h-4 w-4" />
                   New Project
                 </Button>
               </FeatureTooltip>
-            </div>
           </motion.div>
 
           {/* Toolbar */}
@@ -264,7 +265,7 @@ export default function Projects() {
               animate="visible"
             >
               {/* List Header */}
-              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-medium text-muted-foreground border-b">
+              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border bg-muted/30 rounded-t-lg">
                 <div className="col-span-4">Project</div>
                 <div className="col-span-2">Status</div>
                 <div className="col-span-2">Jurisdiction</div>
@@ -273,9 +274,21 @@ export default function Projects() {
               </div>
 
               {filteredProjects.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  No projects found. Create your first project to get started.
-                </div>
+                <Card className="border-dashed border-border bg-muted/15">
+                  <CardContent className="py-14 text-center text-muted-foreground space-y-1">
+                    {searchQuery.trim() ? (
+                      <>
+                        <p className="font-medium text-foreground">No projects match your search</p>
+                        <p className="text-sm">Try another term or clear the search.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium text-foreground">No projects yet</p>
+                        <p className="text-sm">Create your first project to get started.</p>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
               ) : (
                 filteredProjects.map((project) => {
                   const statusConfig = PROJECT_STATUS_CONFIG[project.status];
@@ -283,13 +296,13 @@ export default function Projects() {
                     <motion.div
                       key={project.id}
                       variants={staggerItem}
-                      className="grid grid-cols-12 gap-4 px-4 py-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                      className="grid grid-cols-12 gap-4 px-4 py-3.5 rounded-lg border border-border bg-card hover:bg-muted/40 hover:border-primary/25 cursor-pointer transition-[background-color,border-color,box-shadow]"
                       onClick={() => handleViewProject(project)}
                     >
                       <div className="col-span-12 md:col-span-4">
                         <p className="font-medium truncate">{project.name}</p>
                         {project.permit_number && (
-                          <p className="text-xs text-muted-foreground">{project.permit_number}</p>
+                          <p className="text-xs text-muted-foreground font-mono-data tracking-tight">{project.permit_number}</p>
                         )}
                       </div>
                       <div className="col-span-6 md:col-span-2">
@@ -338,6 +351,6 @@ export default function Projects() {
         onConfirm={handleDeleteConfirm}
         loading={deleteLoading}
       />
-    </>
+    </div>
   );
 }

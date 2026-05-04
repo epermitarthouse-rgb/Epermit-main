@@ -50,7 +50,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 import { useNavigationHistory } from "@/hooks/useRecentlyUsed";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +79,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 
 const PERMIT_NUMBER_STORAGE_KEY_PREFIX = "epermit:permitNumber";
+
+const SIDEBAR_FIELD_CLASS =
+  "h-9 w-full px-3 py-2 bg-cream text-sm font-mono border border-cream-sunken rounded-md text-ink-primary-light placeholder:text-ink-tertiary-light/70 focus:border-gold focus:ring-1 focus:ring-gold/25 outline-none transition-all dark:bg-obsidian dark:border-obsidian-strong dark:text-ink-primary-dark";
 
 const mainNavigation = [
   {
@@ -454,10 +456,13 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (!selectedProjectData) return;
-    const projectPermit = selectedProjectData.permit_number;
-    if (projectPermit && projectPermit.trim() && !permitNumber.trim()) {
-      setPermitNumber(projectPermit.trim());
-      persistPermitNumber(projectPermit.trim());
+    // permit_number may be stored as numeric in JSON/API — normalize before trim
+    const projectPermit = String(
+      selectedProjectData.permit_number ?? "",
+    ).trim();
+    if (projectPermit && !permitNumber.trim()) {
+      setPermitNumber(projectPermit);
+      persistPermitNumber(projectPermit);
     }
   }, [selectedProjectData?.id, selectedProjectData?.permit_number]);
 
@@ -624,20 +629,22 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border/50">
+    <Sidebar collapsible="icon" className="border-r border-cream-raised bg-cream text-ink-primary-light dark:border-obsidian-raised dark:bg-obsidian dark:text-ink-primary-dark">
       {/* Header with Logo */}
-      <SidebarHeader className="border-b border-border/50">
+      <SidebarHeader className="border-b border-cream-raised p-6 dark:border-obsidian-raised">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link to="/" className="flex items-center gap-2">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <SidebarMenuButton size="lg" asChild className="hover:bg-cream-raised/60 dark:hover:bg-obsidian-raised/50">
+              <Link to="/" className="flex items-center gap-3">
+                <div className="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg bg-gold text-cream shadow-cream">
                   <Building2 className="size-4" />
                 </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Insight|DesignCheck</span>
-                  <span className="text-xs text-muted-foreground">
-                    Permit Intelligence
+                <div className="flex min-w-0 flex-col gap-0.5 leading-tight text-left">
+                  <span className="font-serif text-2xl tracking-tight text-ink-primary-light dark:text-ink-primary-dark">
+                    PermitPilot
+                  </span>
+                  <span className="text-[10px] font-mono uppercase leading-none tracking-[0.16em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
+                    A Commun-ET product
                   </span>
                 </div>
               </Link>
@@ -784,7 +791,6 @@ export function AppSidebar() {
         {/* Project block: permit-first. No auto-selection; only localStorage or explicit user choice. */}
         {user && selectedProject && (
           <SidebarGroup>
-            <SidebarGroupLabel>Project</SidebarGroupLabel>
             <SidebarGroupContent>
               {isCollapsed ? (
                 <Tooltip>
@@ -812,11 +818,15 @@ export function AppSidebar() {
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <div className="px-2 space-y-2">
+                <div className="mx-4 my-4 rounded-lg border border-cream-sunken bg-cream-raised p-4 shadow-cream dark:border-obsidian-strong dark:bg-obsidian-raised">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
+                    PROJECT
+                  </span>
+                  <div className="mt-3 space-y-3">
                   <div className="space-y-1">
                     <Label
                       htmlFor="sidebar-permit-number"
-                      className="text-xs text-muted-foreground"
+                      className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark"
                     >
                       Permit # <span className="text-destructive">*</span>
                     </Label>
@@ -826,11 +836,11 @@ export function AppSidebar() {
                       value={permitNumber}
                       onChange={(e) => setPermitNumber(e.target.value)}
                       onBlur={handlePermitBlur}
-                      className="h-9"
+                      className={SIDEBAR_FIELD_CLASS}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
+                    <Label className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">
                       Active Project
                     </Label>
                     <Select
@@ -839,7 +849,7 @@ export function AppSidebar() {
                       disabled={!permitNumber.trim() || savingLink}
                     >
                       <SelectTrigger
-                        className="h-9 w-full"
+                        className={SIDEBAR_FIELD_CLASS}
                         data-sidebar="select"
                       >
                         <SelectValue placeholder="Select a project" />
@@ -859,8 +869,8 @@ export function AppSidebar() {
                   </div>
                   {sidebarCredentials.length > 0 && (
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                        <KeyRound className="h-3 w-3" />
+                      <Label className="flex items-center gap-1 text-xs text-ink-secondary-light dark:text-ink-secondary-dark">
+                        <KeyRound className="h-3 w-3 text-gold" />
                         Portal Credential
                       </Label>
                       <Select
@@ -868,7 +878,7 @@ export function AppSidebar() {
                         onValueChange={handleCredentialChange}
                       >
                         <SelectTrigger
-                          className="h-9 w-full"
+                          className={SIDEBAR_FIELD_CLASS}
                           data-testid="select-sidebar-credential"
                         >
                           <SelectValue placeholder="Select credential" />
@@ -891,7 +901,7 @@ export function AppSidebar() {
                   )}
                   {!selectedProject.selectedProjectId &&
                     permitNumber.trim() && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-ink-tertiary-light dark:text-ink-tertiary-dark">
                         Select a project above or create one below.
                       </p>
                     )}
@@ -904,18 +914,18 @@ export function AppSidebar() {
                     />
                     <Label
                       htmlFor="sidebar-create-new-project"
-                      className="text-xs font-normal cursor-pointer"
+                      className="cursor-pointer text-xs font-normal text-ink-secondary-light dark:text-ink-secondary-dark"
                     >
                       Or create a new project for this permit
                     </Label>
                   </div>
                   {createNewProject && (
-                    <div className="space-y-2 rounded-md border p-2 bg-muted/30">
+                    <div className="space-y-2 rounded-md border border-cream-sunken bg-cream p-2 dark:border-obsidian-strong dark:bg-obsidian">
                       <Input
                         placeholder="Project name (default: permit #)"
                         value={newProjectName}
                         onChange={(e) => setNewProjectName(e.target.value)}
-                        className="h-9"
+                        className={SIDEBAR_FIELD_CLASS}
                       />
                       <Input
                         placeholder="Jurisdiction (optional)"
@@ -923,13 +933,13 @@ export function AppSidebar() {
                         onChange={(e) =>
                           setNewProjectJurisdiction(e.target.value)
                         }
-                        className="h-9"
+                        className={SIDEBAR_FIELD_CLASS}
                       />
                       <Input
                         placeholder="Address (optional)"
                         value={newProjectAddress}
                         onChange={(e) => setNewProjectAddress(e.target.value)}
-                        className="h-9"
+                        className={SIDEBAR_FIELD_CLASS}
                       />
                       <Button
                         size="sm"
@@ -941,6 +951,7 @@ export function AppSidebar() {
                       </Button>
                     </div>
                   )}
+                  </div>
                 </div>
               )}
             </SidebarGroupContent>
@@ -1082,7 +1093,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="border-t border-border/50">
+      <SidebarFooter className="mt-auto border-t border-cream-raised pt-4 dark:border-obsidian-raised">
         <SidebarMenu>
           {/* Auth Section */}
           {user ? (

@@ -60,7 +60,7 @@ export function ProjectCard({
         isDragging && "opacity-50"
       )}
     >
-      <Card className="hover:shadow-md transition-shadow">
+      <Card className="border-border/70 hover:border-primary/20 hover:shadow-md transition-shadow">
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">

@@ -43,13 +43,15 @@ import { ExportPackageDialog } from "@/components/response-matrix/ExportPackageD
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
+import { Section } from "@/components/ui/Section";
+import { Eyebrow } from "@/components/ui/Typography";
 import { PlanMarkupWorkspace } from "@/components/plans/PlanMarkupWorkspace";
 import { useApprovalGate } from "@/components/plans/ArchitectApprovalDialog";
 import type { PanelComment } from "@/components/plans/CommentPlanPanel";
 
 const RESPONSE_MATRIX_STYLES = `
   @keyframes response-fade-in { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes icon-shimmer { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px rgba(16,185,129,0.3)); } 50% { opacity: 0.9; filter: drop-shadow(0 0 10px rgba(16,185,129,0.5)); } }
+  @keyframes icon-shimmer { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px hsl(var(--accent-teal) / 0.35)); } 50% { opacity: 0.9; filter: drop-shadow(0 0 10px hsl(var(--accent-teal) / 0.45)); } }
   .auto-draft-icon { animation: icon-shimmer 2.5s ease-in-out infinite; }
   .response-text-fade-in { animation: response-fade-in 0.3s ease-out; }
 `;
@@ -88,31 +90,57 @@ function isReportMetadataRow(row: { original_text?: string | null }): boolean {
 
 function statusBorderClass(status: string | null): string {
   const s = (status ?? "").toLowerCase();
-  if (s === "pending" || s === "pending review" || s === "draft") return "border-l-amber-400";
-  if (s === "approved") return "border-l-emerald-500";
-  if (s === "rejected") return "border-l-red-500";
-  if (s.includes("ready")) return "border-l-blue-500";
-  return "border-l-[#1A3055]";
+  if (s === "pending" || s === "pending review" || s === "draft") return "border-l-warning";
+  if (s === "approved") return "border-l-success";
+  if (s === "rejected") return "border-l-destructive";
+  if (s.includes("ready")) return "border-l-[hsl(var(--chart-2))]";
+  return "border-l-border";
 }
 
 function statusBadgeClass(status: string): string {
   const s = status.toLowerCase();
-  if (s === "pending" || s === "pending review" || s === "draft") return "bg-amber-500/10 text-amber-700 border-amber-500/30";
-  if (s === "approved") return "bg-emerald-500/10 text-emerald-700 border-emerald-500/30";
-  if (s === "rejected") return "bg-red-500/10 text-red-700 border-red-500/30";
-  if (s.includes("ready")) return "bg-blue-500/10 text-blue-700 border-blue-500/30";
-  return "bg-[#6B9AC4]/10 text-[#6B9AC4] border-[#6B9AC4]/30";
+  if (s === "pending" || s === "pending review" || s === "draft") {
+    return "bg-warning/15 text-amber-950 border-warning/40";
+  }
+  if (s === "approved") {
+    return "bg-success/10 text-emerald-950 border-emerald-700/40";
+  }
+  if (s === "rejected") {
+    return "bg-destructive/15 text-red-950 border-red-700/35";
+  }
+  if (s.includes("ready")) {
+    return "border-sky-700/35 bg-sky-500/[0.13] text-sky-950";
+  }
+  return "bg-cream-sunken/80 text-ink-secondary-light border-cream-sunken";
+}
+
+/** Closed trigger pill: navy surface + cream ink (dropdown menu items keep light chips via statusBadgeClass). */
+function statusSelectTriggerAccentClass(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "pending" || s === "pending review" || s === "draft") {
+    return "border-warning/55 shadow-[inset_0_0_0_1px_hsl(var(--warning)_/_0.12)]";
+  }
+  if (s === "approved") {
+    return "border-teal/50 shadow-[inset_0_0_0_1px_hsl(var(--accent-teal)_/_0.18)]";
+  }
+  if (s === "rejected") {
+    return "border-red-400/55 shadow-[inset_0_0_0_1px_hsl(var(--destructive)_/_0.15)]";
+  }
+  if (s.includes("ready")) {
+    return "border-sky-400/50 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.12)]";
+  }
+  return "border-teal/40 shadow-[inset_0_0_0_1px_hsl(var(--accent-teal)_/_0.1)]";
 }
 
 const DISCIPLINE_COLORS: Record<string, string> = {
   zoning: "bg-violet-500/15 text-violet-700 border-violet-500/30",
   structural: "bg-blue-500/15 text-blue-700 border-blue-500/30",
-  architectural: "bg-teal-500/15 text-teal-700 border-teal-500/30",
-  mechanical: "bg-orange-500/15 text-orange-700 border-orange-500/30",
-  mep: "bg-orange-500/15 text-orange-700 border-orange-500/30",
+  architectural: "bg-teal/15 text-ink-primary-light border-teal/30",
+  mechanical: "bg-gold/12 text-gold-deep border-gold/32",
+  mep: "bg-gold/12 text-gold-deep border-gold/32",
   electrical: "bg-yellow-500/15 text-yellow-700 border-yellow-500/30",
   fire: "bg-red-500/15 text-red-700 border-red-500/30",
-  general: "bg-[#6B9AC4]/15 text-[#6B9AC4] border-[#6B9AC4]/30",
+  general: "bg-cream-sunken/90 text-ink-secondary-light border-cream-sunken",
 };
 
 function disciplineBadgeClass(discipline: string | null): string {
@@ -128,19 +156,19 @@ function CodeRefChip({ value }: { value: string | null | undefined }) {
     navigator.clipboard.writeText(text);
     toast.success("Code reference copied");
   };
-  if (!text) return <span className="text-muted-foreground">—</span>;
+  if (!text) return <span className="text-ink-tertiary-light">—</span>;
   return (
     <div className="group/code flex items-center gap-1 max-w-full">
-      <span className="text-xs font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 px-2 py-1 rounded border border-blue-200 dark:border-blue-800 truncate">
+      <span className="text-xs font-mono-data bg-gold-soft/90 text-ink-primary-light px-2 py-1 rounded border border-gold/35 truncate">
         {text}
       </span>
       <button
         type="button"
         onClick={copy}
-        className="opacity-0 group-hover/code:opacity-100 p-1 rounded hover:bg-muted transition-opacity shrink-0"
+        className="opacity-0 group-hover/code:opacity-100 p-1 rounded shrink-0 transition-opacity hover:bg-cream-sunken/70"
         aria-label="Copy code reference"
       >
-        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+        <Copy className="h-3.5 w-3.5 text-ink-tertiary-light" />
       </button>
     </div>
   );
@@ -164,7 +192,7 @@ function MarkupStatusBadge({ commentId, projectId }: { commentId: string; projec
     return () => { cancelled = true; };
   }, [commentId, projectId]);
 
-  if (status === "none") return <span className="text-muted-foreground text-xs">—</span>;
+  if (status === "none") return <span className="text-ink-tertiary-light text-xs">—</span>;
 
   const variant = status === "approved" ? "default" : status === "rejected" ? "destructive" : "secondary";
   return (
@@ -204,12 +232,14 @@ function ResponseCell({
         onChange={(e) => onUpdate(e.target.value)}
         placeholder={isDrafting ? "Drafting..." : "Official response..."}
         className={cn(
-          "min-h-[80px] resize-y transition-shadow duration-200 placeholder:text-muted-foreground/70",
-          "focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-1"
+          "min-h-[80px] resize-y border-cream-sunken bg-cream-raised text-ink-primary-light placeholder:text-ink-tertiary-light shadow-inner",
+          "dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light",
+          "transition-shadow duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/35 focus-visible:border-cream-sunken focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
         )}
         disabled={isDrafting}
       />
-      <p className="text-xs text-muted-foreground text-right tabular-nums">
+      <p className="text-xs text-ink-tertiary-light text-right tabular-nums">
         {text.length} characters
       </p>
     </div>
@@ -500,32 +530,40 @@ export default function ResponseMatrix() {
   if (authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-teal" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] w-full min-w-0 p-4 md:p-6 overflow-x-hidden">
+    <div className="min-h-[80vh] w-full min-w-0 overflow-x-hidden bg-cream">
       <style>{RESPONSE_MATRIX_STYLES}</style>
-      <div className="max-w-[1600px] mx-auto w-full min-w-0 space-y-4">
-        {/* Header: title block (no overlap with project or actions) */}
+      <Section variant="cream" className="pt-10 pb-8 border-b border-cream-sunken">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0">
         <header className="flex flex-col gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/dashboard")}
+              className="shrink-0 text-ink-secondary-light hover:text-ink-primary-light hover:bg-cream-sunken"
+            >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="min-w-0 border-l-4 border-emerald-500 pl-3">
-              <h1 className="text-2xl font-bold tracking-tight">Response Matrix</h1>
-              <p className="text-muted-foreground text-sm mt-0.5">
+            <div className="min-w-0 pl-2 border-l-2 border-gold/40">
+              <Eyebrow>RESPONSE MATRIX</Eyebrow>
+              <h1 className="mt-2 font-serif text-4xl sm:text-5xl text-ink-primary-light leading-tight">
+                Response <em className="text-gold italic">Matrix</em>
+              </h1>
+              <p className="text-ink-secondary-light text-sm mt-2 max-w-2xl leading-relaxed">
                 Manage and draft official responses to permit comments.
               </p>
-              <div className="h-0.5 w-16 mt-1 bg-gradient-to-r from-emerald-500 to-transparent rounded-full" />
+              <div className="h-0.5 w-16 mt-2 bg-gradient-to-r from-gold/70 to-transparent rounded-full" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 gap-y-2">
             {projectId && (
-              <span className="inline-flex items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-medium h-6 min-w-[24px] px-2 border border-emerald-500/30 shrink-0">
+              <span className="inline-flex items-center justify-center rounded-full border border-gold/35 bg-gold/12 text-gold-deep text-xs font-medium h-6 min-w-[24px] px-2 shrink-0">
                 {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
               </span>
             )}
@@ -533,7 +571,7 @@ export default function ResponseMatrix() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant="outlineGold"
                     size="sm"
                     disabled={!projectId}
                     data-testid="button-actions-dropdown"
@@ -596,11 +634,7 @@ export default function ResponseMatrix() {
               </DropdownMenu>
               <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
               <div className="ml-auto">
-                <Button
-                  onClick={saveChanges}
-                  disabled={saving || rows.length === 0}
-                  className="bg-accent hover:bg-accent/90 shrink-0 transition-transform hover:scale-[1.02] hover:shadow-md active:scale-[0.98]"
-                >
+                <Button variant="gold" onClick={saveChanges} disabled={saving || rows.length === 0} className="shrink-0">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                   Save Changes
                 </Button>
@@ -608,6 +642,10 @@ export default function ResponseMatrix() {
             </div>
           </div>
         </header>
+        </div>
+      </Section>
+
+      <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0 space-y-4 py-6">
 
         <Dialog open={validateOpen} onOpenChange={setValidateOpen}>
           <DialogContent>
@@ -790,19 +828,41 @@ export default function ResponseMatrix() {
               <Badge variant="secondary">Showing pending comments only</Badge>
             </p>
           )}
-          <div className="border rounded-lg overflow-auto shadow-sm">
-            <Table className="w-full min-w-[900px]">
-              <TableHeader>
-                <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
-                  <TableHead className="w-[120px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Status</TableHead>
-                  <TableHead className="w-[100px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Discipline</TableHead>
-                  <TableHead className="min-w-[220px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">City Comment</TableHead>
-                  <TableHead className="w-[140px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Code Ref.</TableHead>
-                  <TableHead className="min-w-[300px] w-full sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Response</TableHead>
-                  <TableHead className="w-[100px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Auto-Draft</TableHead>
-                  <TableHead className="w-[140px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Assigned To</TableHead>
-                  <TableHead className="w-[80px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Markup</TableHead>
-                  <TableHead className="w-[100px] sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-[0_1px_0_0_hsl(var(--border))]">Sheet Ref.</TableHead>
+          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+            <div className="overflow-x-auto bg-gradient-to-b from-cream via-cream-raised/95 to-cream-raised">
+            <Table
+              wrapperClassName="rounded-none border-0 shadow-none bg-transparent dark:border-0"
+              className="w-full min-w-[900px]"
+            >
+              <TableHeader className="dark:[&_tr]:!bg-transparent">
+                <TableRow className="border-b border-obsidian-raised/70 !bg-obsidian-raised hover:!bg-obsidian dark:!border-obsidian-raised/55 dark:!bg-obsidian-raised dark:hover:!bg-obsidian">
+                  <TableHead className="w-[120px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Status
+                  </TableHead>
+                  <TableHead className="w-[100px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Discipline
+                  </TableHead>
+                  <TableHead className="min-w-[220px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    City Comment
+                  </TableHead>
+                  <TableHead className="w-[140px] table-head-sticky px-4 py-3 font-mono-data sm:px-5 sm:py-3.5 text-left text-[10px] uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Code Ref.
+                  </TableHead>
+                  <TableHead className="min-w-[300px] w-full table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Response
+                  </TableHead>
+                  <TableHead className="w-[100px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Auto-Draft
+                  </TableHead>
+                  <TableHead className="min-w-[240px] w-[260px] table-head-sticky whitespace-normal px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark sm:px-5 sm:py-3.5">
+                    Assigned To
+                  </TableHead>
+                  <TableHead className="w-[80px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Markup
+                  </TableHead>
+                  <TableHead className="w-[100px] table-head-sticky px-4 py-3 font-mono-data sm:px-5 sm:py-3.5 text-left text-[10px] uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                    Sheet Ref.
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -810,23 +870,61 @@ export default function ResponseMatrix() {
                   <TableRow
                     key={row.id}
                     className={cn(
-                      "border-l-4 transition-all duration-150 hover:bg-muted/30 hover:translate-x-px",
-                      idx % 2 === 0 ? "bg-background" : "bg-muted/10",
-                      statusBorderClass(row.status)
+                      "!border-transparent border-t border-cream-sunken bg-cream hover:!bg-cream-sunken/50 dark:bg-cream dark:hover:!bg-cream-sunken/50 dark:!border-transparent",
+                      idx % 2 === 1 &&
+                        "!bg-cream-raised hover:!bg-cream-sunken/50 dark:!bg-cream-raised dark:hover:!bg-cream-sunken/50",
+                      "text-ink-primary-light transition-colors duration-150",
+                      statusBorderClass(row.status),
                     )}
                   >
-                    <TableCell className="align-middle w-[120px]">
+                    <TableCell className="align-middle w-[120px] text-ink-primary-light dark:!text-ink-primary-light">
                       <Select
                         value={row.status}
                         onValueChange={(v) => updateRow(row.id, "status", v)}
                       >
-                        <SelectTrigger className={cn("h-8 w-full max-w-full rounded-full border text-xs font-medium transition-colors duration-200", statusBadgeClass(row.status))}>
-                          <SelectValue />
+                        <SelectTrigger
+                          className={cn(
+                            "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold text-ink-primary-dark shadow-sm ring-offset-transparent",
+                            "bg-obsidian hover:bg-obsidian-raised",
+                            "dark:bg-obsidian dark:text-ink-primary-dark dark:hover:bg-obsidian-raised dark:ring-offset-obsidian",
+                            "!text-ink-primary-dark text-[11px] leading-tight hover:!text-ink-primary-dark md:text-xs",
+                            "focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+                            "dark:!text-ink-primary-dark dark:hover:!text-ink-primary-dark [&>span:first-child]:!text-ink-primary-dark",
+                            "[&>span:first-child[data-placeholder]]:!text-ink-tertiary-dark",
+                            "[&_svg]:!h-4 [&_svg]:!w-4 [&_svg]:!shrink-0 [&_svg]:!opacity-95 [&_svg]:!text-ink-secondary-dark dark:[&_svg]:!text-ink-secondary-dark",
+                            "[&>span:first-child]:truncate",
+                            statusSelectTriggerAccentClass(row.status),
+                          )}
+                        >
+                          {/* Explicit children ⇒ Radix does not portal ItemText badge nodes into trigger (fixes dark emerald on obsidian pill). */}
+                          <SelectValue>{row.status}</SelectValue>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent
+                          position="popper"
+                          sideOffset={4}
+                          className={cn(
+                            "z-[200] rounded-lg border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream",
+                            "dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light",
+                          )}
+                        >
                           {STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium border", statusBadgeClass(s))}>
+                            <SelectItem
+                              key={s}
+                              value={s}
+                              className={cn(
+                                "rounded-md py-2.5 pl-8 pr-2 text-sm font-tight text-ink-primary-light",
+                                "outline-none cursor-pointer transition-colors dark:text-ink-primary-light",
+                                "data-[highlighted]:bg-cream-sunken data-[highlighted]:text-ink-primary-light",
+                                "dark:data-[highlighted]:bg-cream-sunken dark:data-[highlighted]:text-ink-primary-light",
+                                "aria-selected:bg-gold-soft/70 aria-selected:border-l-[3px] aria-selected:border-l-gold aria-selected:text-ink-primary-light",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "inline-flex max-w-[min(18rem,var(--radix-select-trigger-width))] whitespace-normal rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                                  statusBadgeClass(s),
+                                )}
+                              >
                                 {s}
                               </span>
                             </SelectItem>
@@ -834,22 +932,28 @@ export default function ResponseMatrix() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="align-middle">
-                      <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium border", disciplineBadgeClass(row.discipline))}>
+                    <TableCell className="align-middle text-ink-primary-light dark:!text-ink-primary-light">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2.5 py-1 text-xs font-medium border max-w-[200px] truncate",
+                          disciplineBadgeClass(row.discipline),
+                          "contrast-more:bg-muted contrast-more:text-foreground contrast-more:border-border contrast-more:ring-0",
+                        )}
+                      >
                         {row.discipline}
                       </span>
                     </TableCell>
-                    <TableCell className="align-top text-sm text-muted-foreground max-w-[280px]">
+                    <TableCell className="max-w-[280px] align-top text-sm text-ink-secondary-light dark:!text-ink-secondary-light">
                       {row.original_text}
                     </TableCell>
-                    <TableCell className="align-top w-[140px] min-w-[140px]">
+                    <TableCell className="min-w-[140px] w-[140px] align-top text-ink-primary-light dark:!text-ink-primary-light">
                       {row.code_reference?.trim() ? (
                         <CodeRefChip value={row.code_reference} />
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <span className="text-ink-tertiary-light">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="align-top p-2 min-w-[300px]">
+                    <TableCell className="min-w-[300px] align-top p-2 text-ink-primary-light dark:!text-ink-primary-light">
                       <div className="space-y-1">
                         {modifiedCommentIds.has(row.id) && (
                           <Badge
@@ -868,9 +972,9 @@ export default function ResponseMatrix() {
                         />
                       </div>
                     </TableCell>
-                    <TableCell className="align-top w-[100px]">
+                    <TableCell className="w-[100px] align-top text-ink-primary-light dark:!text-ink-primary-light">
                       <Button
-                        variant="outline"
+                        variant="outlineGold"
                         size="sm"
                         onClick={() => runAutoDraft(row)}
                         disabled={draftingId === row.id}
@@ -886,29 +990,30 @@ export default function ResponseMatrix() {
                         <span className="ml-1 hidden sm:inline">Auto-Draft</span>
                       </Button>
                     </TableCell>
-                    <TableCell className="align-top p-2">
+                    <TableCell className="min-w-[240px] max-w-none w-[260px] align-top whitespace-normal p-2 text-ink-primary-light dark:!text-ink-primary-light">
                       <Input
                         value={row.assigned_to ?? ""}
                         onChange={(e) => updateRow(row.id, "assigned_to", e.target.value)}
                         placeholder="Name or email"
-                        className="h-8"
+                        className="h-9 min-h-9 w-full min-w-[12rem] max-w-none border-cream-sunken bg-cream-raised text-sm leading-normal text-ink-primary-light shadow-inner placeholder:text-ink-tertiary-light focus-visible:border-cream-sunken focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light md:text-sm"
                       />
                     </TableCell>
-                    <TableCell className="align-middle w-[80px]">
+                    <TableCell className="w-[80px] align-middle text-ink-primary-light dark:!text-ink-primary-light">
                       <MarkupStatusBadge commentId={row.id} projectId={row.project_id} />
                     </TableCell>
-                    <TableCell className="align-top p-2">
+                    <TableCell className="align-top p-2 text-ink-primary-light dark:!text-ink-primary-light">
                       <Input
                         value={row.sheet_reference ?? ""}
                         onChange={(e) => updateRow(row.id, "sheet_reference", e.target.value)}
                         placeholder="e.g. A1.02"
-                        className="h-8"
+                        className="h-8 border-cream-sunken bg-cream-raised text-ink-primary-light shadow-inner placeholder:text-ink-tertiary-light focus-visible:border-cream-sunken focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light"
                       />
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           </div>
           </>
         )}

@@ -132,7 +132,7 @@ interface FeatureCategory {
 }
 
 const competitors: Record<string, CompetitorData> = {
-  insight: { name: "Insight|DesignCheck", priceRange: "$99-999/user/mo", focus: "Permit Acceleration" },
+  insight: { name: "PermitPilot", priceRange: "$99-999/user/mo", focus: "Permit Acceleration" },
   bluebeam: { name: "Bluebeam Revu", priceRange: "$240/user/mo", focus: "PDF Markup" },
   procore: { name: "Procore", priceRange: "$375+/user/mo", focus: "Project Management" },
   plangrid: { name: "PlanGrid", priceRange: "$39/user/mo", focus: "Field Management" },
@@ -635,7 +635,7 @@ const Pricing = () => {
             <div className="text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">How We Compare</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                See how Insight|DesignCheck stacks up against the tools you're currently using
+                See how PermitPilot stacks up against the tools you're currently using
               </p>
             </div>
 
@@ -665,7 +665,7 @@ const Pricing = () => {
                 {/* Table Header */}
                 <div className="hidden lg:grid lg:grid-cols-7 gap-4 p-4 bg-secondary/50 rounded-t-lg font-medium text-sm">
                   <div className="col-span-1">Feature</div>
-                  <div className="text-center text-accent">Insight|DesignCheck</div>
+                  <div className="text-center text-accent">PermitPilot</div>
                   <div className="text-center">Bluebeam</div>
                   <div className="text-center">Procore</div>
                   <div className="text-center">PlanGrid</div>
@@ -716,7 +716,7 @@ const Pricing = () => {
                               {/* Mobile View */}
                               <div className="col-span-2 lg:hidden grid grid-cols-3 gap-2 text-center text-sm">
                                 <div className="flex flex-col items-center gap-1">
-                                  <span className="text-xs text-muted-foreground">Insight</span>
+                                  <span className="text-xs text-muted-foreground">PermitPilot</span>
                                   <FeatureIcon value={feature.insight} />
                                 </div>
                                 <div className="flex flex-col items-center gap-1">
