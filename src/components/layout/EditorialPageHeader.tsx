@@ -46,7 +46,7 @@ export function EditorialPageHeader({
           )}
         >
           <div className={cn("min-w-0", isCenter && "text-center")}>
-            <h1 className="font-serif text-3xl font-normal leading-tight tracking-tight text-ink-primary-light sm:text-4xl md:text-5xl">
+            <h1 className="font-display text-3xl font-normal leading-tight tracking-tight text-ink-primary-light sm:text-4xl md:text-5xl">
               {title}
             </h1>
             {description ? (

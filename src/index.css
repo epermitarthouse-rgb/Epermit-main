@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,8 +15,8 @@
     --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
     --font-tight: 'Inter Tight', 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
-    /* Technical / permit IDs / metadata (production migration) */
-    --font-mono-data: 'DM Mono', 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+    /* Technical / permit IDs / metadata — JetBrains Mono (Commun-ET / Lovable system) */
+    --font-mono-data: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
 
     /* Light canvas — Lovable-adjacent warm family (~24 hue); intentional: kept slightly softer than pure 24/100/98 */
     --background: 24 60% 98%;
@@ -299,8 +298,8 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: Inter, system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased leading-relaxed;
+    font-family: var(--font-sans);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
@@ -394,7 +393,7 @@
 
   .label-caps {
     font-family: var(--font-tight), ui-sans-serif, system-ui, sans-serif;
-    @apply text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+    @apply text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground;
   }
 
   .container-page {

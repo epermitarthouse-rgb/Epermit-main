@@ -552,7 +552,7 @@ export default function ResponseMatrix() {
             </Button>
             <div className="min-w-0 pl-2 border-l-2 border-gold/40">
               <Eyebrow>RESPONSE MATRIX</Eyebrow>
-              <h1 className="mt-2 font-serif text-4xl sm:text-5xl text-ink-primary-light leading-tight">
+              <h1 className="mt-2 font-display text-4xl sm:text-5xl text-ink-primary-light leading-tight">
                 Response <em className="text-gold italic">Matrix</em>
               </h1>
               <p className="text-ink-secondary-light text-sm mt-2 max-w-2xl leading-relaxed">

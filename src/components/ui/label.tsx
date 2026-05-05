@@ -10,7 +10,7 @@ const labelVariants = cva(
     variants: {
       variant: {
         default: "",
-        caps: "label-caps font-semibold leading-none text-inherit",
+        caps: "label-caps leading-none text-inherit",
       },
     },
     defaultVariants: {

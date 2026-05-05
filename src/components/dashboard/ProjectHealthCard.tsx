@@ -197,7 +197,7 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
   return (
     <Card className="relative overflow-hidden rounded-2xl border border-cream-sunken/95 bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:border-cream-sunken dark:text-ink-primary-light">
       <CardHeader className="pb-2 flex flex-row items-start justify-between gap-4">
-        <CardTitle className="text-base font-serif font-normal tracking-tight text-ink-primary-light">
+        <CardTitle className="text-base font-display font-normal tracking-tight text-ink-primary-light">
           Project Health
         </CardTitle>
         <div className="shrink-0 relative w-14 h-14">

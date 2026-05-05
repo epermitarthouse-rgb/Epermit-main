@@ -220,7 +220,7 @@ export function RecentChecklistsWidget() {
     return (
       <Card className="rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:text-ink-primary-light">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 font-serif font-normal tracking-tight text-ink-primary-light">
+          <CardTitle className="flex items-center gap-2 font-display font-normal tracking-tight text-ink-primary-light">
             <ClipboardList className="h-5 w-5 text-teal" />
             Recent Checklists
           </CardTitle>
@@ -238,7 +238,7 @@ export function RecentChecklistsWidget() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ClipboardList className="h-5 w-5 shrink-0 text-teal" />
-            <CardTitle className="font-serif font-normal tracking-tight text-ink-primary-light">
+            <CardTitle className="font-display font-normal tracking-tight text-ink-primary-light">
               Recent Checklists
             </CardTitle>
           </div>

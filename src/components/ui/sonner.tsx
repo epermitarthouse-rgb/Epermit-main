@@ -14,8 +14,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:rounded-xl group-[.toaster]:border group-[.toaster]:border-border/80 group-[.toaster]:bg-card group-[.toaster]:text-card-foreground group-[.toaster]:shadow-lg group-[.toaster]:backdrop-blur-md group-[.toaster]:animate-slide-in-right group-[.toaster]:overflow-hidden dark:group-[.toaster]:border-border/60 dark:group-[.toaster]:bg-card dark:group-[.toaster]:shadow-elegant",
-          description: "group-[.toast]:text-sm group-[.toast]:text-muted-foreground",
+            "group toast group-[.toaster]:rounded-xl group-[.toaster]:border group-[.toaster]:border-border/80 group-[.toaster]:bg-card group-[.toaster]:font-sans group-[.toaster]:text-card-foreground group-[.toaster]:shadow-lg group-[.toaster]:backdrop-blur-md group-[.toaster]:animate-slide-in-right group-[.toaster]:overflow-hidden dark:group-[.toaster]:border-border/60 dark:group-[.toaster]:bg-card dark:group-[.toaster]:shadow-elegant",
+          title: "group-[.toast]:font-tight group-[.toast]:text-sm group-[.toast]:font-semibold",
+          description:
+            "group-[.toast]:font-sans group-[.toast]:text-sm group-[.toast]:leading-relaxed group-[.toast]:text-muted-foreground",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground group-[.toast]:hover:bg-primary/90",
           cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",

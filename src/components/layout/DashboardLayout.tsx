@@ -109,7 +109,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
             >
               <Search className="h-4 w-4 shrink-0 text-gold" />
               <span className="text-ink-primary-light/80 dark:text-ink-primary-dark/85">Search...</span>
-              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-cream-raised bg-cream px-1.5 font-mono text-[10px] font-medium text-ink-secondary-light sm:flex dark:border-obsidian dark:bg-obsidian-raised dark:text-ink-secondary-dark">
+              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-cream-raised bg-cream px-1.5 font-mono text-[11px] font-medium tabular-nums text-ink-secondary-light sm:flex dark:border-obsidian dark:bg-obsidian-raised dark:text-ink-secondary-dark">
                 ⌘K
               </kbd>
             </Button>

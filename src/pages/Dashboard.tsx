@@ -197,7 +197,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
               >
                 <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-gold/45 bg-cream text-lg font-serif font-normal text-ink-primary-light shadow-inner sm:h-14 sm:w-14 sm:text-xl">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-gold/45 bg-cream text-lg font-display font-normal text-ink-primary-light shadow-inner sm:h-14 sm:w-14 sm:text-xl">
                     {(profileFullNameSafe.trim()
                       ? profileFullNameSafe.trim().charAt(0)
                       : "") ||
@@ -206,7 +206,7 @@ export default function Dashboard() {
                   </div>
                   <div className="min-w-0">
                     <Eyebrow className="mb-1 text-ink-secondary-light">Home</Eyebrow>
-                    <h1 className="font-serif text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl">
+                    <h1 className="font-display text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl">
                       {welcomeFirstName ? (
                         <>
                           Welcome, <span className="italic text-gold">{welcomeFirstName}</span>!
@@ -318,7 +318,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-serif text-lg font-normal text-ink-primary-light tracking-tight">
+                      <h3 className="font-display text-lg font-normal text-ink-primary-light tracking-tight">
                         {subscription.subscribed ? `${getTierDisplayName()} Plan` : "No Active Subscription"}
                       </h3>
                       {subscription.subscribed && (
@@ -368,7 +368,7 @@ export default function Dashboard() {
                     <FolderKanban className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-serif text-xl font-normal tracking-tight text-ink-primary-light">
+                    <h3 className="font-display text-xl font-normal tracking-tight text-ink-primary-light">
                       Projects
                     </h3>
                     <p className="text-sm text-ink-secondary-light">Manage permits</p>
@@ -390,7 +390,7 @@ export default function Dashboard() {
                     <Database className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-serif text-xl font-normal tracking-tight text-ink-primary-dark">
+                    <h3 className="font-display text-xl font-normal tracking-tight text-ink-primary-dark">
                       Permit Intelligence
                     </h3>
                     <p className="text-sm text-ink-secondary-dark">Shovels data</p>
@@ -409,7 +409,7 @@ export default function Dashboard() {
                     <LayoutDashboard className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-serif text-xl font-normal tracking-tight text-ink-primary-light">
+                    <h3 className="font-display text-xl font-normal tracking-tight text-ink-primary-light">
                       Interactive Demos
                     </h3>
                     <p className="text-sm text-ink-secondary-light">Try our AI tools</p>
@@ -470,7 +470,7 @@ export default function Dashboard() {
             className="rounded-2xl border border-cream-sunken/80 bg-gradient-to-br from-cream-sunken/40 via-cream-raised/95 to-cream-raised px-5 py-7 text-ink-primary-light shadow-inner dark:border-cream-sunken/80 dark:from-cream-sunken/45 dark:via-cream-raised dark:to-cream-raised dark:text-ink-primary-light sm:px-7 sm:py-9"
           >
             <div className="flex items-center justify-between mb-6 gap-3">
-              <h2 className="font-serif text-2xl font-normal text-ink-primary-light tracking-tight">
+              <h2 className="font-display text-2xl font-normal text-ink-primary-light tracking-tight">
                 Saved Calculations
               </h2>
               <Badge
@@ -499,7 +499,7 @@ export default function Dashboard() {
               <Card className="border-dashed border-cream-sunken bg-cream/90 text-ink-primary-light shadow-inner dark:border-cream-sunken dark:bg-cream dark:text-ink-primary-light">
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <Calculator className="mb-4 h-12 w-12 text-gold/70" />
-                  <h3 className="font-serif text-lg font-normal text-ink-primary-light mb-2">
+                  <h3 className="font-display text-lg font-normal text-ink-primary-light mb-2">
                     No saved calculations yet
                   </h3>
                   <p className="text-ink-secondary-light text-sm mb-4">

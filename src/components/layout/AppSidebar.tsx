@@ -640,10 +640,10 @@ export function AppSidebar() {
                   <Building2 className="size-4" />
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5 leading-tight text-left">
-                  <span className="font-serif text-2xl tracking-tight text-ink-primary-light dark:text-ink-primary-dark">
+                  <span className="font-display text-2xl tracking-tight text-ink-primary-light dark:text-ink-primary-dark">
                     PermitPilot
                   </span>
-                  <span className="text-[10px] font-mono uppercase leading-none tracking-[0.16em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
+                  <span className="text-[11px] font-tight font-bold uppercase leading-none tracking-[0.16em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
                     A Commun-ET product
                   </span>
                 </div>
@@ -819,7 +819,7 @@ export function AppSidebar() {
                 </Tooltip>
               ) : (
                 <div className="mx-4 my-4 rounded-lg border border-cream-sunken bg-cream-raised p-4 shadow-cream dark:border-obsidian-strong dark:bg-obsidian-raised">
-                  <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
+                  <span className="text-[11px] font-tight font-bold uppercase tracking-[0.15em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
                     PROJECT
                   </span>
                   <div className="mt-3 space-y-3">
@@ -846,7 +846,11 @@ export function AppSidebar() {
                     <Select
                       value={selectedProject.selectedProjectId ?? "__none__"}
                       onValueChange={handleSelectValueChange}
-                      disabled={!permitNumber.trim() || savingLink}
+                      disabled={
+                        savingLink ||
+                        loading ||
+                        (!permitNumber.trim() && projects.length === 0)
+                      }
                     >
                       <SelectTrigger
                         className={SIDEBAR_FIELD_CLASS}

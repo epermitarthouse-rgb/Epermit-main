@@ -27,7 +27,7 @@ const AUTH_INPUT_CLASSES =
   "bg-cream shadow-inner border-cream-sunken text-ink-primary-light placeholder:text-ink-tertiary-light focus-visible:border-gold/45 focus-visible:ring-2 focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream dark:bg-cream dark:border-cream-sunken dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light dark:focus-visible:ring-offset-cream";
 
 const AUTH_LABEL_CLASSES =
-  "font-mono-data text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-primary-light";
+  "font-tight text-[11px] font-bold uppercase tracking-[0.16em] text-ink-primary-light";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address"),
@@ -184,7 +184,7 @@ export default function Auth() {
           </p>
         </div>
 
-        <p className="relative z-[1] mt-8 font-mono-data text-[9px] uppercase tracking-[0.2em] text-ink-tertiary-dark lg:mt-auto lg:pb-2">
+        <p className="relative z-[1] mt-8 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-tertiary-dark lg:mt-auto lg:pb-2">
           PERMITTING · UTILITY COORDINATION · RESULTS
         </p>
       </div>
@@ -214,7 +214,7 @@ export default function Auth() {
                 <Lock className="h-5 w-5 text-ink-primary-dark" strokeWidth={1.75} />
               </div>
               <div>
-                <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-primary-light">
+                <h1 className="font-display text-3xl font-normal tracking-tight text-ink-primary-light">
                   {activeView === "login" ? "Sign in" : "Create your account"}
                 </h1>
                 <p className="mt-2 font-tight text-sm text-ink-secondary-light">

@@ -156,7 +156,7 @@ export function DeadlineAlertsWidget() {
     return (
       <Card className="rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:text-ink-primary-light">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 font-serif font-normal tracking-tight text-ink-primary-light">
+          <CardTitle className="flex items-center gap-2 font-display font-normal tracking-tight text-ink-primary-light">
             <Bell className="h-5 w-5 text-gold-deep" />
             Deadline Alerts
           </CardTitle>
@@ -176,7 +176,7 @@ export function DeadlineAlertsWidget() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 shrink-0 text-gold-deep" />
-            <CardTitle className="font-serif font-normal tracking-tight text-ink-primary-light">
+            <CardTitle className="font-display font-normal tracking-tight text-ink-primary-light">
               Deadline Alerts
             </CardTitle>
             {totalAlerts > 0 && (

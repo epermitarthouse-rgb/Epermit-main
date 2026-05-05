@@ -166,7 +166,7 @@ export default function CommunETLanding() {
           line-height: 1;
         }
         .section-eyebrow {
-          font-family: 'DM Mono', 'Courier New', monospace;
+          font-family: 'JetBrains Mono', 'Courier New', monospace;
           font-size: 0.65rem;
           letter-spacing: 0.25em;
           color: hsl(var(--primary));
@@ -185,7 +185,7 @@ export default function CommunETLanding() {
           color: ${COLORS.fog};
         }
         .tag {
-          font-family: 'DM Mono', monospace;
+          font-family: 'JetBrains Mono', monospace;
           font-size: 0.6rem;
           letter-spacing: 0.15em;
           padding: 3px 8px;
@@ -248,7 +248,7 @@ export default function CommunETLanding() {
             }}>⬡</div>
             <div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1rem", letterSpacing: "0.1em", color: COLORS.white }}>COMMUN-ET</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>PERMITPILOT™ PLATFORM</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>PERMITPILOT™ PLATFORM</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 32, fontFamily: "'Barlow', sans-serif", fontSize: "0.8rem", letterSpacing: "0.08em", color: COLORS.fog }}>
@@ -262,7 +262,7 @@ export default function CommunETLanding() {
             style={{
               padding: "8px 20px",
               border: `1px solid ${COLORS.gold}`,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "0.65rem",
               letterSpacing: "0.15em",
               color: COLORS.gold,
@@ -316,7 +316,7 @@ export default function CommunETLanding() {
                 background: COLORS.gold,
                 border: "none",
                 color: COLORS.obsidian,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'JetBrains Mono', monospace",
                 fontSize: "0.7rem",
                 letterSpacing: "0.15em",
                 cursor: "pointer",
@@ -330,7 +330,7 @@ export default function CommunETLanding() {
                 background: "transparent",
                 border: `1px solid ${COLORS.steel}`,
                 color: COLORS.fog,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'JetBrains Mono', monospace",
                 fontSize: "0.7rem",
                 letterSpacing: "0.15em",
                 cursor: "pointer",
@@ -381,9 +381,9 @@ export default function CommunETLanding() {
           {/* Traditional Flow */}
           <div style={{ marginBottom: 60 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", letterSpacing: "0.2em", color: COLORS.red }}>◉ LEGACY PROCESS</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.65rem", letterSpacing: "0.2em", color: COLORS.red }}>◉ LEGACY PROCESS</span>
               <div style={{ flex: 1, height: 1, background: `${COLORS.red}33` }} />
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", color: COLORS.fog }}>8+ HOURS PER PROJECT</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.65rem", color: COLORS.fog }}>8+ HOURS PER PROJECT</span>
             </div>
             <div style={{ display: "flex", alignItems: "stretch", overflowX: "auto", gap: 0, paddingBottom: 8 }}>
               {infographicSteps.map((s, i) => (
@@ -397,7 +397,7 @@ export default function CommunETLanding() {
                     position: "relative",
                   }}>
                     <div style={{ fontSize: "1.5rem", marginBottom: 8 }}>{s.icon}</div>
-                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.15em", color: i >= 2 ? COLORS.red : COLORS.fog, marginBottom: 6 }}>{s.n}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.15em", color: i >= 2 ? COLORS.red : COLORS.fog, marginBottom: 6 }}>{s.n}</div>
                     <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: "0.8rem", color: COLORS.offwhite, fontWeight: 500, marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: "0.7rem", color: COLORS.fog }}>{s.sub}</div>
                     {i >= 2 && <div style={{ position: "absolute", top: 6, right: 6, width: 6, height: 6, borderRadius: "50%", background: COLORS.red, animation: "pulse-gold 2s infinite" }} />}
@@ -414,7 +414,7 @@ export default function CommunETLanding() {
             <div style={{
               padding: "10px 32px",
               border: `1px solid ${COLORS.gold}`,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "0.7rem",
               letterSpacing: "0.2em",
               color: COLORS.gold,
@@ -425,9 +425,9 @@ export default function CommunETLanding() {
           {/* Optimized permit flow */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", letterSpacing: "0.2em", color: COLORS.gold }}>◈ PERMITPILOT™ PROCESS</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.65rem", letterSpacing: "0.2em", color: COLORS.gold }}>◈ PERMITPILOT™ PROCESS</span>
               <div style={{ flex: 1, height: 1, background: `${COLORS.gold}33` }} />
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.65rem", color: COLORS.teal }}>UNDER 60 MINUTES</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.65rem", color: COLORS.teal }}>UNDER 60 MINUTES</span>
             </div>
             <div style={{ display: "flex", alignItems: "stretch", overflowX: "auto", gap: 0, paddingBottom: 8 }}>
               {permitPilotFlowSteps.map((s, i) => (
@@ -442,7 +442,7 @@ export default function CommunETLanding() {
                     boxShadow: `0 0 20px ${COLORS.gold}08`,
                   }}>
                     <div style={{ fontSize: "1.2rem", color: s.color, marginBottom: 8 }}>{s.icon}</div>
-                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.15em", color: COLORS.goldDim, marginBottom: 6 }}>{s.n}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.15em", color: COLORS.goldDim, marginBottom: 6 }}>{s.n}</div>
                     <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: "0.8rem", color: COLORS.white, fontWeight: 500, marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: "0.7rem", color: COLORS.fog }}>{s.sub}</div>
                   </div>
@@ -501,7 +501,7 @@ export default function CommunETLanding() {
                   <th key={i} style={{
                     padding: "16px 20px",
                     textAlign: i === 0 ? "left" : "center",
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'JetBrains Mono', monospace",
                     fontSize: "0.6rem",
                     letterSpacing: "0.2em",
                     color: COLORS.goldDim,
@@ -521,7 +521,7 @@ export default function CommunETLanding() {
                   }}>
                     <td style={{ padding: "20px", fontFamily: "'Barlow', sans-serif", fontSize: "0.9rem", color: isUs ? COLORS.gold : COLORS.white, fontWeight: isUs ? 500 : 300 }}>
                       {c.name}
-                      {isUs && <span style={{ marginLeft: 10, background: COLORS.gold, color: COLORS.obsidian, fontSize: "0.55rem", padding: "2px 8px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em" }}>YOU ARE HERE</span>}
+                      {isUs && <span style={{ marginLeft: 10, background: COLORS.gold, color: COLORS.obsidian, fontSize: "0.55rem", padding: "2px 8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>YOU ARE HERE</span>}
                     </td>
                     <td style={{ padding: "20px", textAlign: "center", fontFamily: "'Barlow', sans-serif", fontSize: "0.8rem", color: isUs ? COLORS.teal : COLORS.fog }}>{c.tech}</td>
                     <td style={{ padding: "20px", textAlign: "center", fontSize: "1.1rem" }}>{c.ai ? <span style={{ color: COLORS.teal }}>✓</span> : <span style={{ color: `${COLORS.fog}44` }}>—</span>}</td>
@@ -552,7 +552,7 @@ export default function CommunETLanding() {
             {["Wave 1 · Prove the Intelligence", "Wave 2 · Scale the Platform", "Wave 3 · Own the Category"].map((w, i) => (
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: 10,
-                fontFamily: "'DM Mono', monospace", fontSize: "0.6rem",
+                fontFamily: "'JetBrains Mono', monospace", fontSize: "0.6rem",
                 letterSpacing: "0.1em", color: COLORS.fog,
               }}>
                 <div style={{ width: 24, height: 1, background: [COLORS.gold, COLORS.teal, "hsl(199 89% 58%)"][i] }} />
@@ -590,7 +590,7 @@ export default function CommunETLanding() {
                   {m.tag}
                 </span>
               </div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.6rem", letterSpacing: "0.15em", color: COLORS.fog, marginBottom: 8 }}>{m.id}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.6rem", letterSpacing: "0.15em", color: COLORS.fog, marginBottom: 8 }}>{m.id}</div>
               <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.3rem", color: COLORS.white, marginBottom: 12, fontWeight: 400 }}>{m.name}</h3>
               <p className="body-text" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>{m.desc}</p>
             </div>
@@ -630,12 +630,12 @@ export default function CommunETLanding() {
             onMouseLeave={e => (e.currentTarget.style.borderColor = COLORS.border)}
             >
               <div style={{ fontSize: "1.4rem", color: COLORS.gold, marginBottom: 16 }}>{p.icon}</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.15em", color: COLORS.goldDim, marginBottom: 8 }}>{p.sub}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.15em", color: COLORS.goldDim, marginBottom: 8 }}>{p.sub}</div>
               <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.2rem", color: COLORS.white, marginBottom: 12, fontWeight: 400 }}>{p.title}</h3>
               <p className="body-text" style={{ fontSize: "0.82rem", marginBottom: 20 }}>{p.desc}</p>
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
-                fontFamily: "'DM Mono', monospace", fontSize: "0.55rem",
+                fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem",
                 letterSpacing: "0.1em", color: `${COLORS.teal}88`,
               }}>
                 <div style={{ width: 16, height: 1, background: COLORS.tealDim }} />
@@ -675,7 +675,7 @@ export default function CommunETLanding() {
               background: COLORS.gold,
               border: "none",
               color: COLORS.obsidian,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "0.75rem",
               letterSpacing: "0.15em",
               cursor: "pointer",
@@ -689,7 +689,7 @@ export default function CommunETLanding() {
               background: "transparent",
               border: `1px solid ${COLORS.steel}`,
               color: COLORS.fog,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "0.75rem",
               letterSpacing: "0.15em",
               cursor: "pointer",
@@ -701,13 +701,13 @@ export default function CommunETLanding() {
             <div style={{ width: 28, height: 28, border: `1px solid ${COLORS.goldDim}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", color: COLORS.gold }}>⬡</div>
             <div>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "0.85rem", letterSpacing: "0.1em", color: COLORS.white }}>COMMUN-ET, LLC</div>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.5rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>PERMITPILOT™ BY COMMUN-ET</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.5rem", letterSpacing: "0.2em", color: COLORS.goldDim }}>PERMITPILOT™ BY COMMUN-ET</div>
             </div>
           </div>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.1em", color: COLORS.fog }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.1em", color: COLORS.fog }}>
             PERMIT EXPEDITING · UTILITY COORDINATION · CONSTRUCTION MANAGEMENT
           </div>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.1em", color: COLORS.fog }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.55rem", letterSpacing: "0.1em", color: COLORS.fog }}>
             © 2026 COMMUN-ET, LLC. ALL RIGHTS RESERVED.
           </div>
         </div>

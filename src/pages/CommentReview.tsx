@@ -663,7 +663,7 @@ export default function CommentReview() {
             </Button>
             <div>
               <Eyebrow>COMMENT REVIEW</Eyebrow>
-              <h1 className="mt-3 font-serif text-4xl sm:text-5xl text-ink-primary-light leading-tight">
+              <h1 className="mt-3 font-display text-4xl sm:text-5xl text-ink-primary-light leading-tight">
                 Comment <em className="text-gold italic">Review</em>
               </h1>
               <p className="mt-3 text-ink-secondary-light max-w-2xl text-sm sm:text-base leading-relaxed">

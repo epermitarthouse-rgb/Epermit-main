@@ -853,7 +853,7 @@ const ROICalculator = () => {
             <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
               <CardContent className="p-8">
                 <div className="mb-8 text-center">
-                  <h2 className="mb-2 font-serif text-3xl font-normal text-ink-primary-dark">Your ROI Report</h2>
+                  <h2 className="mb-2 font-display text-3xl font-normal text-ink-primary-dark">Your ROI Report</h2>
                   <p className="text-ink-secondary-dark">Personalized for {leadInfo.company}</p>
                 </div>
                 <div className="grid gap-6 md:grid-cols-3">

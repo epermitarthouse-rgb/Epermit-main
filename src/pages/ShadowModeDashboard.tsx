@@ -194,7 +194,7 @@ function StatCard({
   };
   const titleClass =
     tone === "obsidian" ? "text-xs font-medium text-ink-secondary-dark" : "text-sm font-medium text-muted-foreground";
-  const valueClass = tone === "obsidian" ? "text-2xl font-bold text-ink-primary-dark font-serif" : "text-2xl font-bold";
+  const valueClass = tone === "obsidian" ? "text-2xl font-bold text-ink-primary-dark font-display" : "text-2xl font-bold";
   const subtitleClass =
     tone === "obsidian" ? "text-xs text-ink-tertiary-dark mt-1" : "text-xs text-muted-foreground mt-1";
 

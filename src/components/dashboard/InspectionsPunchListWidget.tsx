@@ -149,7 +149,7 @@ export function InspectionsPunchListWidget() {
       <Card className="rounded-2xl border border-[hsl(219_22%_87%)] bg-gradient-to-b from-[hsl(219_20%_96%)] to-cream-raised/98 text-ink-primary-light shadow-inner dark:border-[hsl(219_22%_87%)] dark:bg-gradient-to-b dark:from-[hsl(219_20%_96%)] dark:to-cream-raised dark:text-ink-primary-light">
         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
           <ClipboardCheck className="mb-4 h-12 w-12 text-ink-tertiary-light/80" />
-          <h3 className="mb-2 font-serif font-normal text-lg text-ink-primary-light">No inspections or punch list items</h3>
+          <h3 className="mb-2 font-display font-normal text-lg text-ink-primary-light">No inspections or punch list items</h3>
           <p className="mb-4 text-sm text-ink-secondary-light">
             Schedule inspections and create punch list items from your projects
           </p>
@@ -166,7 +166,7 @@ export function InspectionsPunchListWidget() {
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle className="flex items-center gap-2 flex-wrap font-serif font-normal tracking-tight text-ink-primary-light">
+            <CardTitle className="flex items-center gap-2 flex-wrap font-display font-normal tracking-tight text-ink-primary-light">
               <ClipboardCheck className="h-5 w-5 shrink-0 text-gold-deep" />
               Inspections & Punch List
             </CardTitle>
