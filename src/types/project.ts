@@ -1,4 +1,5 @@
 export type ProjectStatus = 'draft' | 'submitted' | 'in_review' | 'corrections' | 'approved';
+
 export type ProjectType =
   | 'new_construction'
   | 'renovation'
@@ -49,6 +50,9 @@ export interface Project {
   description: string | null;
   estimated_value: number | null;
   square_footage: number | null;
+  permit_fee: number | null;
+  expeditor_cost: number | null;
+  total_cost: number | null;
   permit_number: string | null;
   submitted_at: string | null;
   approved_at: string | null;
@@ -58,6 +62,26 @@ export interface Project {
   last_checked_at: string | null;
   portal_data: unknown | null;
   credential_id: string | null;
+  /** Billing / QuickBooks (Phase 4B+) */
+  client_name: string | null;
+  client_email: string | null;
+  service_type: string | null;
+  contract_value: number | null;
+  reimbursement_amount: number | null;
+  reimbursement_description: string | null;
+  qb_customer_id: string | null;
+  qb_invoice_id_m1: string | null;
+  qb_invoice_id_m2: string | null;
+  qb_invoice_id_m3: string | null;
+  m1_triggered: boolean;
+  m2_triggered: boolean;
+  m3_triggered: boolean;
+  m1_triggered_at: string | null;
+  m2_triggered_at: string | null;
+  m3_triggered_at: string | null;
+  m1_trigger_source: string | null;
+  m2_trigger_source: string | null;
+  m3_trigger_source: string | null;
   created_at: string;
   updated_at: string;
 }

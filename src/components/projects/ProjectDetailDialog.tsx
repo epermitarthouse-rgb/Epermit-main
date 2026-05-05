@@ -28,7 +28,8 @@ import {
   Share2,
   MessageSquare,
   PenTool,
-  Send
+  Send,
+  Receipt,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Project, PROJECT_STATUS_CONFIG, PROJECT_TYPE_LABELS } from '@/types/project';
@@ -43,12 +44,28 @@ import { CommentThread } from '@/components/collaboration/CommentThread';
 import { DocumentAnnotationCanvas } from '@/components/collaboration/DocumentAnnotationCanvas';
 import { EPermitSubmitDialog } from '@/components/epermit/EPermitSubmitDialog';
 import { EPermitStatusTracker } from '@/components/epermit/EPermitStatusTracker';
+import { BillingInvoicePanel } from './BillingInvoicePanel';
+
+function displayLine(value: string | null | undefined): string {
+  const t = value?.trim();
+  return t ? t : '—';
+}
+
+function displayMoney(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return `$${Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
 interface ProjectDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: Project | null;
   onEdit: (project: Project) => void;
+  /** Refetch single project after billing actions (e.g. QB draft created). */
+  onProjectBillingRefresh?: () => Promise<void>;
 }
 
 export function ProjectDetailDialog({
@@ -56,6 +73,7 @@ export function ProjectDetailDialog({
   onOpenChange,
   project,
   onEdit,
+  onProjectBillingRefresh,
 }: ProjectDetailDialogProps) {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
@@ -78,63 +96,107 @@ export function ProjectDetailDialog({
         project={project}
       />
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-border bg-card shadow-lg">
-        <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <DialogTitle className="text-xl">{project.name}</DialogTitle>
-              <DialogDescription className="flex items-center gap-2 mt-1">
-                {project.permit_number && (
-                  <>
-                    <FileText className="h-4 w-4" />
-                    {project.permit_number}
-                  </>
-                )}
-              </DialogDescription>
+      <DialogContent
+        className={
+          'flex max-h-[85vh] w-[calc(100%-2rem)] max-w-5xl flex-col gap-0 overflow-hidden ' +
+          'border-border bg-card p-0 shadow-lg sm:rounded-lg'
+        }
+      >
+        <div className="shrink-0 border-b border-border px-6 pb-4 pt-6 pr-14">
+          <DialogHeader className="space-y-0 text-left">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="font-display text-xl font-normal leading-snug">{project.name}</DialogTitle>
+                <DialogDescription className="mt-1 flex flex-wrap items-center gap-2">
+                  {project.permit_number && (
+                    <>
+                      <FileText className="h-4 w-4 shrink-0" />
+                      <span>{project.permit_number}</span>
+                    </>
+                  )}
+                </DialogDescription>
+              </div>
+              <Badge className={`${statusConfig.bgColor} ${statusConfig.color} shrink-0 border-0`}>
+                {statusConfig.label}
+              </Badge>
             </div>
-            <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}>
-              {statusConfig.label}
-            </Badge>
+          </DialogHeader>
+        </div>
+
+        <Tabs
+          defaultValue="details"
+          className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+        >
+          <div className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-border bg-muted/25 px-3 py-2 sm:px-5">
+            <TabsList className="inline-flex h-auto min-h-10 w-max flex-nowrap items-center justify-start gap-1 rounded-lg border border-border bg-muted/50 p-1">
+              <TabsTrigger
+                value="details"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <Info className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Details</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="billing"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <Receipt className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Billing</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="documents"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <FolderOpen className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Docs</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="epermit"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <Send className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Portal Submission</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="annotations"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <PenTool className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Markup</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="comments"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Comments</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="inspections"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <ClipboardCheck className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Inspect</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="team"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Team</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="activity"
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap px-2.5 py-2 text-xs sm:gap-1.5 sm:px-3 sm:text-sm"
+              >
+                <History className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Activity</span>
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </DialogHeader>
 
-        <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-8">
-            <TabsTrigger value="details" className="flex items-center gap-1 text-xs sm:text-sm">
-              <Info className="h-4 w-4" />
-              <span className="hidden sm:inline">Details</span>
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-1 text-xs sm:text-sm">
-              <FolderOpen className="h-4 w-4" />
-              <span className="hidden sm:inline">Docs</span>
-            </TabsTrigger>
-            <TabsTrigger value="epermit" className="flex items-center gap-1 text-xs sm:text-sm">
-              <Send className="h-4 w-4" />
-              <span className="hidden sm:inline">Portal Submission</span>
-            </TabsTrigger>
-            <TabsTrigger value="annotations" className="flex items-center gap-1 text-xs sm:text-sm">
-              <PenTool className="h-4 w-4" />
-              <span className="hidden sm:inline">Markup</span>
-            </TabsTrigger>
-            <TabsTrigger value="comments" className="flex items-center gap-1 text-xs sm:text-sm">
-              <MessageSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">Comments</span>
-            </TabsTrigger>
-            <TabsTrigger value="inspections" className="flex items-center gap-1 text-xs sm:text-sm">
-              <ClipboardCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Inspect</span>
-            </TabsTrigger>
-            <TabsTrigger value="team" className="flex items-center gap-1 text-xs sm:text-sm">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Team</span>
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-1 text-xs sm:text-sm">
-              <History className="h-4 w-4" />
-              <span className="hidden sm:inline">Activity</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="details" className="space-y-6 mt-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+          <TabsContent value="details" className="mt-0 space-y-6 pb-1 outline-none focus-visible:ring-0">
             {/* Project Type & Badges */}
             <div className="flex flex-wrap gap-2">
               {project.project_type && (
@@ -147,7 +209,7 @@ export function ProjectDetailDialog({
             {/* Location Section */}
             {(project.address || project.city || project.jurisdiction) && (
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                   Location
                 </h3>
                 <div className="grid gap-2">
@@ -176,7 +238,7 @@ export function ProjectDetailDialog({
 
             {/* Project Details */}
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 Project Details
               </h3>
               <div className="grid sm:grid-cols-2 gap-4">
@@ -209,7 +271,7 @@ export function ProjectDetailDialog({
               <>
                 <Separator />
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                     Description
                   </h3>
                   <p className="text-sm whitespace-pre-wrap">{project.description}</p>
@@ -222,7 +284,7 @@ export function ProjectDetailDialog({
               <>
                 <Separator />
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                     Notes
                   </h3>
                   <p className="text-sm whitespace-pre-wrap">{project.notes}</p>
@@ -235,7 +297,7 @@ export function ProjectDetailDialog({
               <>
                 <Separator />
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                     Approval Timeline
                   </h3>
                   <SlaEstimateDisplay
@@ -252,7 +314,7 @@ export function ProjectDetailDialog({
 
             {/* Timeline */}
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 Timeline
               </h3>
               <div className="grid gap-2 text-sm">
@@ -279,15 +341,73 @@ export function ProjectDetailDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="documents" className="mt-4">
+          <TabsContent value="billing" className="mt-0 space-y-4 pb-1 outline-none focus-visible:ring-0">
+            <div className="space-y-2">
+              <h3 className="font-tight text-xs font-bold uppercase tracking-[0.16em] text-foreground">
+                Billing summary
+              </h3>
+              <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      Client name
+                    </p>
+                    <p className="text-foreground">{displayLine(project.client_name)}</p>
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      Client email
+                    </p>
+                    <p className="break-all text-foreground">{displayLine(project.client_email)}</p>
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      Service type
+                    </p>
+                    <p className="text-foreground">{displayLine(project.service_type)}</p>
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      Contract value
+                    </p>
+                    <p className="text-foreground">{displayMoney(project.contract_value)}</p>
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      Reimbursement
+                    </p>
+                    <p className="text-foreground">{displayMoney(project.reimbursement_amount)}</p>
+                  </div>
+                  <div className="min-w-0 space-y-0.5 sm:col-span-2 lg:col-span-3">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      Reimbursement description
+                    </p>
+                    <p className="whitespace-pre-wrap text-foreground">{displayLine(project.reimbursement_description)}</p>
+                  </div>
+                  <div className="min-w-0 space-y-0.5 sm:col-span-2 lg:col-span-3">
+                    <p className="text-[11px] font-tight font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      QuickBooks customer ID
+                    </p>
+                    <p className="break-all font-mono text-xs text-foreground">{displayLine(project.qb_customer_id)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <BillingInvoicePanel project={project} onBillingRefresh={onProjectBillingRefresh} />
+          </TabsContent>
+
+          <TabsContent value="documents" className="mt-0 pb-1 outline-none focus-visible:ring-0">
             <ProjectDocumentsSection projectId={project.id} />
           </TabsContent>
 
-          <TabsContent value="epermit" className="mt-4">
+          <TabsContent value="epermit" className="mt-0 space-y-4 pb-1 outline-none focus-visible:ring-0">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold">Portal Submissions</h3>
+                  <h3 className="font-tight text-sm font-semibold text-foreground">Portal Submissions</h3>
                   <p className="text-xs text-muted-foreground">
                     Track permit applications submitted to Accela or CityView
                   </p>
@@ -301,7 +421,7 @@ export function ProjectDetailDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="annotations" className="mt-4">
+          <TabsContent value="annotations" className="mt-0 space-y-4 pb-1 outline-none focus-visible:ring-0">
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Use the markup tools below to annotate project drawings. Your annotations are saved automatically and visible to team members.
@@ -314,25 +434,26 @@ export function ProjectDetailDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="comments" className="mt-4">
+          <TabsContent value="comments" className="mt-0 pb-1 outline-none focus-visible:ring-0">
             <CommentThread projectId={project.id} />
           </TabsContent>
 
-          <TabsContent value="inspections" className="mt-4">
+          <TabsContent value="inspections" className="mt-0 pb-1 outline-none focus-visible:ring-0">
             <ProjectInspectionsSection projectId={project.id} />
           </TabsContent>
 
-          <TabsContent value="team" className="mt-4">
+          <TabsContent value="team" className="mt-0 pb-1 outline-none focus-visible:ring-0">
             <ProjectTeamSection projectId={project.id} projectOwnerId={project.user_id} />
           </TabsContent>
 
-          <TabsContent value="activity" className="mt-4">
+          <TabsContent value="activity" className="mt-0 pb-1 outline-none focus-visible:ring-0">
             <ProjectActivitySection projectId={project.id} />
           </TabsContent>
+          </div>
         </Tabs>
 
         {/* Actions */}
-        <div className="flex flex-wrap justify-end gap-2 pt-4 border-t">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-card px-4 py-4 sm:px-6">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>

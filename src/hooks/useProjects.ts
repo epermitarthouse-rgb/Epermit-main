@@ -5,6 +5,147 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { logProjectActivity } from '@/lib/activityLogger';
 
+/** Columns added in Phase 4 QB/billing migrations — omit from fallback select if DB not migrated yet. */
+const PHASE_4_PLUS_OPTIONAL_PROJECT_COLUMNS = new Set([
+  'client_name',
+  'client_email',
+  'service_type',
+  'contract_value',
+  'reimbursement_amount',
+  'reimbursement_description',
+  'qb_customer_id',
+  'qb_invoice_id_m1',
+  'qb_invoice_id_m2',
+  'qb_invoice_id_m3',
+  'm1_triggered',
+  'm2_triggered',
+  'm3_triggered',
+  'm1_triggered_at',
+  'm2_triggered_at',
+  'm3_triggered_at',
+  'm1_trigger_source',
+  'm2_trigger_source',
+  'm3_trigger_source',
+]);
+
+const PROJECT_COLUMN_LIST = [
+  'id',
+  'name',
+  'permit_number',
+  'jurisdiction',
+  'status',
+  'user_id',
+  'portal_status',
+  'last_checked_at',
+  'created_at',
+  'updated_at',
+  'is_shadow_mode',
+  'address',
+  'project_url',
+  'city',
+  'state',
+  'zip_code',
+  'project_type',
+  'description',
+  'estimated_value',
+  'square_footage',
+  'deadline',
+  'notes',
+  'permit_fee',
+  'expeditor_cost',
+  'total_cost',
+  'credential_id',
+  'submitted_at',
+  'approved_at',
+  'rejection_count',
+  'rejection_reasons',
+  'client_name',
+  'client_email',
+  'service_type',
+  'contract_value',
+  'reimbursement_amount',
+  'reimbursement_description',
+  'qb_customer_id',
+  'qb_invoice_id_m1',
+  'qb_invoice_id_m2',
+  'qb_invoice_id_m3',
+  'm1_triggered',
+  'm2_triggered',
+  'm3_triggered',
+  'm1_triggered_at',
+  'm2_triggered_at',
+  'm3_triggered_at',
+  'm1_trigger_source',
+  'm2_trigger_source',
+  'm3_trigger_source',
+] as const;
+
+const PROJECT_SELECT_COLUMNS = PROJECT_COLUMN_LIST.join(',');
+
+const PROJECT_CORE_SELECT_COLUMNS = PROJECT_COLUMN_LIST.filter(
+  c => !PHASE_4_PLUS_OPTIONAL_PROJECT_COLUMNS.has(c),
+).join(',');
+
+const PROJECT_EXTENDED_DEFAULTS_FOR_PARTIAL_ROWS: Pick<
+  Project,
+  | 'client_name'
+  | 'client_email'
+  | 'service_type'
+  | 'contract_value'
+  | 'reimbursement_amount'
+  | 'reimbursement_description'
+  | 'qb_customer_id'
+  | 'qb_invoice_id_m1'
+  | 'qb_invoice_id_m2'
+  | 'qb_invoice_id_m3'
+  | 'm1_triggered_at'
+  | 'm2_triggered_at'
+  | 'm3_triggered_at'
+  | 'm1_trigger_source'
+  | 'm2_trigger_source'
+  | 'm3_trigger_source'
+> = {
+  client_name: null,
+  client_email: null,
+  service_type: null,
+  contract_value: null,
+  reimbursement_amount: null,
+  reimbursement_description: null,
+  qb_customer_id: null,
+  qb_invoice_id_m1: null,
+  qb_invoice_id_m2: null,
+  qb_invoice_id_m3: null,
+  m1_triggered_at: null,
+  m2_triggered_at: null,
+  m3_triggered_at: null,
+  m1_trigger_source: null,
+  m2_trigger_source: null,
+  m3_trigger_source: null,
+};
+
+function normalizeProjectRow(row: Record<string, unknown>): Project {
+  return {
+    ...PROJECT_EXTENDED_DEFAULTS_FOR_PARTIAL_ROWS,
+    ...(row as unknown as Project),
+    m1_triggered: Boolean(row.m1_triggered),
+    m2_triggered: Boolean(row.m2_triggered),
+    m3_triggered: Boolean(row.m3_triggered),
+  };
+}
+
+function isProjectsSchemaMismatchError(err: { message?: string; code?: string } | null): boolean {
+  if (!err) return false;
+  const msg = String(err.message || '').toLowerCase();
+  const code = String(err.code || '');
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    msg.includes('does not exist') ||
+    msg.includes('could not find') ||
+    msg.includes('schema cache')
+  );
+}
+
 export interface CreateProjectData {
   name: string;
   address?: string;
@@ -24,6 +165,13 @@ export interface CreateProjectData {
   total_cost?: number;
   permit_number?: string | null;
   credential_id?: string | null;
+  /** Optional billing fields (Phase 4C); null clears values on update. */
+  client_name?: string | null;
+  client_email?: string | null;
+  service_type?: string | null;
+  contract_value?: number | null;
+  reimbursement_amount?: number | null;
+  reimbursement_description?: string | null;
 }
 
 export interface UpdateProjectData extends Partial<CreateProjectData> {
@@ -52,14 +200,23 @@ export function useProjects() {
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
+      let { data, error: fetchError } = await supabase
         .from('projects')
-        .select('id, name, permit_number, jurisdiction, status, user_id, portal_status, last_checked_at, created_at, updated_at, is_shadow_mode, address, project_url, city, state, zip_code, project_type, description, estimated_value, square_footage, deadline, notes, permit_fee, expeditor_cost, total_cost, credential_id, submitted_at, approved_at, rejection_count, rejection_reasons')
+        .select(PROJECT_SELECT_COLUMNS)
         .order('updated_at', { ascending: false });
+
+      if (fetchError && isProjectsSchemaMismatchError(fetchError)) {
+        const retry = await supabase
+          .from('projects')
+          .select(PROJECT_CORE_SELECT_COLUMNS)
+          .order('updated_at', { ascending: false });
+        data = retry.data;
+        fetchError = retry.error;
+      }
 
       if (fetchError) throw fetchError;
 
-      setProjects((data as Project[]) || []);
+      setProjects(((data || []) as Record<string, unknown>[]).map(normalizeProjectRow));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch projects';
       setError(message);
@@ -92,7 +249,7 @@ export function useProjects() {
 
       if (error) throw error;
 
-      setProjects(prev => [newProject as Project, ...prev]);
+      setProjects(prev => [normalizeProjectRow(newProject as Record<string, unknown>), ...prev]);
       
       // Log activity
       await logProjectActivity(
@@ -105,7 +262,7 @@ export function useProjects() {
       );
       
       toast.success('Project created successfully');
-      return newProject as Project;
+      return normalizeProjectRow(newProject as Record<string, unknown>);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create project';
       toast.error(message);
@@ -140,8 +297,10 @@ export function useProjects() {
 
       if (error) throw error;
 
-      setProjects(prev => 
-        prev.map(p => p.id === id ? (updatedProject as Project) : p)
+      setProjects(prev =>
+        prev.map(p =>
+          p.id === id ? normalizeProjectRow(updatedProject as Record<string, unknown>) : p,
+        ),
       );
       
       // Log activity
@@ -169,7 +328,7 @@ export function useProjects() {
         toast.success('Project updated successfully');
       }
       
-      return updatedProject as Project;
+      return normalizeProjectRow(updatedProject as Record<string, unknown>);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update project';
       toast.error(message);
@@ -202,11 +361,46 @@ export function useProjects() {
     return projects.filter(p => p.status === status);
   }, [projects]);
 
+  const refreshProjectById = useCallback(
+    async (id: string): Promise<Project | null> => {
+      if (!user) return null;
+      try {
+        let { data, error: fetchError } = await supabase
+          .from('projects')
+          .select(PROJECT_SELECT_COLUMNS)
+          .eq('id', id)
+          .maybeSingle();
+
+        if (fetchError && isProjectsSchemaMismatchError(fetchError)) {
+          const retry = await supabase
+            .from('projects')
+            .select(PROJECT_CORE_SELECT_COLUMNS)
+            .eq('id', id)
+            .maybeSingle();
+          data = retry.data;
+          fetchError = retry.error;
+        }
+
+        if (fetchError) throw fetchError;
+        if (!data) return null;
+
+        const normalized = normalizeProjectRow(data as Record<string, unknown>);
+        setProjects(prev => prev.map(p => (p.id === id ? normalized : p)));
+        return normalized;
+      } catch (err) {
+        console.error('Error refreshing project:', err);
+        return null;
+      }
+    },
+    [user],
+  );
+
   return {
     projects,
     loading,
     error,
     fetchProjects,
+    refreshProjectById,
     createProject,
     updateProject,
     deleteProject,

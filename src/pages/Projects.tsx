@@ -34,7 +34,8 @@ export default function Projects() {
   const {
     projects, 
     loading, 
-    fetchProjects, 
+    fetchProjects,
+    refreshProjectById,
     createProject, 
     updateProject, 
     deleteProject,
@@ -302,7 +303,7 @@ export default function Projects() {
                       <div className="col-span-12 md:col-span-4">
                         <p className="font-medium truncate">{project.name}</p>
                         {project.permit_number && (
-                          <p className="text-xs text-muted-foreground font-mono-data tracking-tight">{project.permit_number}</p>
+                          <p className="text-xs text-muted-foreground font-mono tabular-nums tracking-tight">{project.permit_number}</p>
                         )}
                       </div>
                       <div className="col-span-6 md:col-span-2">
@@ -342,6 +343,11 @@ export default function Projects() {
         onOpenChange={setDetailDialogOpen}
         project={selectedProject}
         onEdit={handleEditProject}
+        onProjectBillingRefresh={async () => {
+          if (!selectedProject) return;
+          const updated = await refreshProjectById(selectedProject.id);
+          if (updated) setSelectedProject(updated);
+        }}
       />
 
       <DeleteProjectDialog

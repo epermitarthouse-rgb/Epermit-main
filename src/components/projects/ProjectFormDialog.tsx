@@ -67,6 +67,12 @@ const FIELD_INFO = {
   expeditor_cost: "Any fees paid to expediting services or consultants to help process the permit.",
   description: "A brief summary of the work to be performed (e.g., 'Kitchen remodel with new electrical and plumbing').",
   notes: "Internal notes or reminders about this project. Not shared with the jurisdiction.",
+  client_name: "Billing contact or organization name shown on invoices.",
+  client_email: "Email for the billed client (used for QuickBooks customer matching).",
+  service_type: "Short label for the service line (e.g. Permit management).",
+  contract_value: "Total contract amount for billing milestones (separate from estimated construction value).",
+  reimbursement_amount: "Expected reimbursable expenses passed through (e.g. agency fees).",
+  reimbursement_description: "Description for reimbursable line items on invoices.",
 };
 
 // Validation schema
@@ -96,6 +102,34 @@ const projectSchema = z.object({
   permit_number: z.string().trim().max(100, "Permit number must be less than 100 characters").optional(),
   permit_fee: z.string().optional().refine((val) => !val || !isNaN(parseFloat(val)), "Must be a valid number"),
   expeditor_cost: z.string().optional().refine((val) => !val || !isNaN(parseFloat(val)), "Must be a valid number"),
+  client_name: z.string().trim().max(200, "Max 200 characters").optional(),
+  client_email: z
+    .string()
+    .trim()
+    .max(320, "Email too long")
+    .optional()
+    .refine(
+      (val) => !val || z.string().email().safeParse(val).success,
+      "Must be a valid email",
+    ),
+  service_type: z.string().trim().max(200, "Max 200 characters").optional(),
+  contract_value: z
+    .string()
+    .optional()
+    .refine((val) => {
+      if (val == null || val.trim() === "") return true;
+      const n = parseFloat(val);
+      return !Number.isNaN(n) && n >= 0;
+    }, "Must be a number ≥ 0"),
+  reimbursement_amount: z
+    .string()
+    .optional()
+    .refine((val) => {
+      if (val == null || val.trim() === "") return true;
+      const n = parseFloat(val);
+      return !Number.isNaN(n) && n >= 0;
+    }, "Must be a number ≥ 0"),
+  reimbursement_description: z.string().trim().max(2000, "Max 2000 characters").optional(),
 });
 
 type FormErrors = Partial<Record<keyof z.infer<typeof projectSchema>, string>>;
@@ -162,6 +196,12 @@ export function ProjectFormDialog({
     permit_fee: '',
     expeditor_cost: '',
     credential_id: '',
+    client_name: '',
+    client_email: '',
+    service_type: '',
+    contract_value: '',
+    reimbursement_amount: '',
+    reimbursement_description: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -183,7 +223,7 @@ export function ProjectFormDialog({
       setFormData({
         name: project.name || '',
         address: project.address || '',
-        project_url: (project as any).project_url || '',
+        project_url: project.project_url || '',
         city: project.city || '',
         state: project.state || '',
         zip_code: project.zip_code || '',
@@ -195,9 +235,22 @@ export function ProjectFormDialog({
         deadline: project.deadline ? project.deadline.split('T')[0] : '',
         notes: project.notes || '',
         permit_number: project.permit_number || '',
-        permit_fee: (project as any).permit_fee?.toString() || '',
-        expeditor_cost: (project as any).expeditor_cost?.toString() || '',
+        permit_fee: project.permit_fee?.toString() || '',
+        expeditor_cost: project.expeditor_cost?.toString() || '',
         credential_id: project.credential_id || '',
+        client_name: project.client_name ?? '',
+        client_email: project.client_email ?? '',
+        service_type: project.service_type ?? '',
+        contract_value:
+          project.contract_value != null && !Number.isNaN(Number(project.contract_value))
+            ? String(project.contract_value)
+            : '',
+        reimbursement_amount:
+          project.reimbursement_amount != null &&
+          !Number.isNaN(Number(project.reimbursement_amount))
+            ? String(project.reimbursement_amount)
+            : '',
+        reimbursement_description: project.reimbursement_description ?? '',
       });
       setErrors({});
       setTouched(new Set());
@@ -220,6 +273,12 @@ export function ProjectFormDialog({
         permit_fee: '',
         expeditor_cost: '',
         credential_id: '',
+        client_name: '',
+        client_email: '',
+        service_type: '',
+        contract_value: '',
+        reimbursement_amount: '',
+        reimbursement_description: '',
       });
       setErrors({});
       setTouched(new Set());
@@ -313,6 +372,17 @@ export function ProjectFormDialog({
       permit_fee: permitFee,
       expeditor_cost: expeditorCost,
       total_cost: permitFee + expeditorCost,
+      client_name: formData.client_name.trim() || null,
+      client_email: formData.client_email.trim() || null,
+      service_type: formData.service_type.trim() || null,
+      contract_value: formData.contract_value.trim()
+        ? parseFloat(formData.contract_value)
+        : null,
+      reimbursement_amount: formData.reimbursement_amount.trim()
+        ? parseFloat(formData.reimbursement_amount)
+        : null,
+      reimbursement_description:
+        formData.reimbursement_description.trim() || null,
     };
 
     if (project && formData.permit_number) {
@@ -339,7 +409,7 @@ export function ProjectFormDialog({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground">Basic Information</h3>
+            <h3 className="font-tight text-sm font-semibold text-muted-foreground">Basic Information</h3>
             
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -462,7 +532,7 @@ export function ProjectFormDialog({
 
           {/* Location */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground">Location</h3>
+            <h3 className="font-tight text-sm font-semibold text-muted-foreground">Location</h3>
             
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -542,7 +612,7 @@ export function ProjectFormDialog({
 
           {/* Project Details */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground">Project Details</h3>
+            <h3 className="font-tight text-sm font-semibold text-muted-foreground">Project Details</h3>
             
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -678,6 +748,125 @@ export function ProjectFormDialog({
                 className={errors.notes ? 'border-destructive' : ''}
               />
               <FieldError error={errors.notes} />
+            </div>
+          </div>
+
+          {/* Billing (optional) */}
+          <div className="space-y-4 rounded-lg border border-border bg-muted/25 p-4">
+            <div>
+              <h3 className="font-tight text-sm font-semibold text-foreground">Billing</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional fields for invoicing and QuickBooks. Leave blank if not applicable.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label htmlFor="client_name" className="flex items-center">
+                  Client name
+                  <FieldInfo info={FIELD_INFO.client_name} />
+                </Label>
+                <Input
+                  id="client_name"
+                  value={formData.client_name}
+                  onChange={(e) => handleChange('client_name', e.target.value)}
+                  onBlur={() => handleBlur('client_name')}
+                  placeholder="Organization or billed party"
+                  className={`bg-background ${errors.client_name ? 'border-destructive' : ''}`}
+                />
+                <FieldError error={errors.client_name} />
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label htmlFor="client_email" className="flex items-center">
+                  Client email
+                  <FieldInfo info={FIELD_INFO.client_email} />
+                </Label>
+                <Input
+                  id="client_email"
+                  type="email"
+                  autoComplete="email"
+                  value={formData.client_email}
+                  onChange={(e) => handleChange('client_email', e.target.value)}
+                  onBlur={() => handleBlur('client_email')}
+                  placeholder="billing@example.com"
+                  className={`bg-background ${errors.client_email ? 'border-destructive' : ''}`}
+                />
+                <FieldError error={errors.client_email} />
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label htmlFor="service_type" className="flex items-center">
+                  Service type
+                  <FieldInfo info={FIELD_INFO.service_type} />
+                </Label>
+                <Input
+                  id="service_type"
+                  value={formData.service_type}
+                  onChange={(e) => handleChange('service_type', e.target.value)}
+                  onBlur={() => handleBlur('service_type')}
+                  placeholder="e.g. Permit management"
+                  className={`bg-background ${errors.service_type ? 'border-destructive' : ''}`}
+                />
+                <FieldError error={errors.service_type} />
+              </div>
+
+              <div>
+                <Label htmlFor="contract_value" className="flex items-center">
+                  Contract value ($)
+                  <FieldInfo info={FIELD_INFO.contract_value} />
+                </Label>
+                <Input
+                  id="contract_value"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formData.contract_value}
+                  onChange={(e) => handleChange('contract_value', e.target.value)}
+                  onBlur={() => handleBlur('contract_value')}
+                  placeholder="0.00"
+                  className={`bg-background ${errors.contract_value ? 'border-destructive' : ''}`}
+                />
+                <FieldError error={errors.contract_value} />
+              </div>
+
+              <div>
+                <Label htmlFor="reimbursement_amount" className="flex items-center">
+                  Reimbursement ($)
+                  <FieldInfo info={FIELD_INFO.reimbursement_amount} />
+                </Label>
+                <Input
+                  id="reimbursement_amount"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formData.reimbursement_amount}
+                  onChange={(e) => handleChange('reimbursement_amount', e.target.value)}
+                  onBlur={() => handleBlur('reimbursement_amount')}
+                  placeholder="0.00"
+                  className={`bg-background ${errors.reimbursement_amount ? 'border-destructive' : ''}`}
+                />
+                <FieldError error={errors.reimbursement_amount} />
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label htmlFor="reimbursement_description" className="flex items-center">
+                  Reimbursement description
+                  <FieldInfo info={FIELD_INFO.reimbursement_description} />
+                </Label>
+                <Textarea
+                  id="reimbursement_description"
+                  value={formData.reimbursement_description}
+                  onChange={(e) =>
+                    handleChange('reimbursement_description', e.target.value)
+                  }
+                  onBlur={() => handleBlur('reimbursement_description')}
+                  placeholder="e.g. City filing fees"
+                  rows={2}
+                  className={`bg-background ${errors.reimbursement_description ? 'border-destructive' : ''}`}
+                />
+                <FieldError error={errors.reimbursement_description} />
+              </div>
             </div>
           </div>
 

@@ -62,6 +62,18 @@ function getRedirectUrls() {
   };
 }
 
+/** Default Sales Item ID when service_type lookup fails (invoice trigger). */
+function getDefaultItemId() {
+  const v = process.env.QB_DEFAULT_ITEM_ID?.trim();
+  return v || null;
+}
+
+/** Default item DisplayName for lookup when QB_DEFAULT_ITEM_ID is unset. */
+function getDefaultItemName() {
+  const v = process.env.QB_DEFAULT_ITEM_NAME?.trim();
+  return v || null;
+}
+
 module.exports = {
   INTUIT_AUTHORIZATION_URL,
   INTUIT_TOKEN_URL,
@@ -71,4 +83,6 @@ module.exports = {
   assertOAuthEnv,
   getOAuthConfig,
   getRedirectUrls,
+  getDefaultItemId,
+  getDefaultItemName,
 };

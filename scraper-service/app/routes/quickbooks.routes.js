@@ -12,6 +12,10 @@ const {
   generateInvoicePayload,
 } = require("../services/quickbooks/qb-invoice-payload.js");
 const qbApi = require("../services/quickbooks/qb-api.service.js");
+const {
+  InvoiceTriggerError,
+  executeInvoiceTrigger,
+} = require("../services/quickbooks/qb-invoice-trigger.service.js");
 
 /** Offline payload preview only (no Intuit calls). */
 function isDevPayloadPreviewEnabled() {
@@ -144,6 +148,25 @@ function createQuickBooksRouter(opts) {
     }
 
     return res.redirect(302, okUrl);
+  });
+
+  router.post("/invoice/trigger", async (req, res) => {
+    try {
+      const result = await executeInvoiceTrigger(supabase, req.body || {});
+      return res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof InvoiceTriggerError) {
+        return res.status(err.httpStatus).json({
+          error: err.code,
+          message: err.message,
+        });
+      }
+      console.error("[invoice/trigger]", err.message || err);
+      return res.status(500).json({
+        error: "invoice_trigger_failed",
+        message: err.message || String(err),
+      });
+    }
   });
 
   router.get("/status", async (_req, res) => {
