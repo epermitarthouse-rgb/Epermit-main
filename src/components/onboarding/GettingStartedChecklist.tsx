@@ -89,7 +89,7 @@ export function GettingStartedChecklist({
               ) : (
                 <Sparkles className="h-5 w-5 text-teal" />
               )}
-              <CardTitle className="text-lg !font-normal font-serif tracking-tight !text-ink-primary-light">
+              <CardTitle className="text-lg !font-normal font-display tracking-tight !text-ink-primary-light">
                 {isComplete ? "You're all set!" : "Getting Started"}
               </CardTitle>
               <Badge 

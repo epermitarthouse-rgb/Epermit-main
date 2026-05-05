@@ -27,6 +27,10 @@ import { FeatureTooltip } from '@/components/onboarding/FeatureTooltip';
 import { useGettingStarted } from '@/hooks/useGettingStarted';
 import { EditorialPageHeader } from '@/components/layout/EditorialPageHeader';
 
+/** Toolbar segmented control: inactive = navy-deep on cream track; active = navy-deep pill + white text. */
+const PROJECTS_VIEW_TAB_CLASSES =
+  'gap-2 px-4 font-tight font-medium transition-colors rounded-md text-navy-deep/80 hover:bg-cream-raised/90 hover:text-navy-deep data-[state=active]:bg-navy-deep data-[state=active]:font-semibold data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:hover:bg-navy-deep data-[state=active]:hover:text-white [&_svg]:shrink-0 [&_svg]:text-current';
+
 export default function Projects() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -165,67 +169,81 @@ export default function Projects() {
         description="Manage your permit projects and track their status."
       />
 
-      <section className="py-4 pb-12 sm:py-6 md:py-8">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+      <section className="py-4 pb-10 sm:py-5 md:pb-12">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-8">
+          {/* Toolbar — single cohesive row */}
           <motion.div
-            className="mb-6 flex flex-wrap items-center justify-end gap-2"
-            initial={{ opacity: 0, y: 12 }}
+            className="mb-5 flex flex-col gap-4 rounded-2xl border border-cream-sunken bg-card p-4 shadow-sm ring-1 ring-navy-deep/10 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:p-4 md:p-5"
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
           >
-              <Button variant="outlineGold" size="icon" onClick={fetchProjects} disabled={loading} aria-label="Refresh projects">
+            <div className="relative min-w-0 flex-1 sm:max-w-md md:max-w-lg">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy/55" />
+              <Input
+                placeholder="Search projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="border-cream-sunken bg-cream-raised pl-9 font-sans text-navy-deep shadow-inner placeholder:text-navy/55 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/15"
+              />
+            </div>
+
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              <Badge
+                variant="outline"
+                className="border-white/20 bg-white/10 px-3 py-1 font-mono text-[11px] font-semibold tabular-nums tracking-tight text-white shadow-none"
+              >
+                {filteredProjects.length} {filteredProjects.length === 1 ? 'project' : 'projects'}
+              </Badge>
+
+              <Tabs value={view} onValueChange={(v) => setView(v as 'kanban' | 'list')} className="w-full sm:w-auto">
+                <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-lg border border-cream-sunken bg-cream-sunken p-1 sm:inline-grid sm:w-auto">
+                  <TabsTrigger value="kanban" className={PROJECTS_VIEW_TAB_CLASSES}>
+                    <LayoutGrid className="h-4 w-4" />
+                    Kanban
+                  </TabsTrigger>
+                  <TabsTrigger value="list" className={PROJECTS_VIEW_TAB_CLASSES}>
+                    <List className="h-4 w-4" />
+                    List
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <Button
+                variant="outlineGold"
+                size="icon"
+                className="shrink-0 border-cream-sunken bg-cream-raised text-gold-deep hover:bg-cream-raised hover:text-gold focus-visible:ring-2 focus-visible:ring-primary/20 disabled:border-cream-sunken disabled:text-navy/50 disabled:opacity-[0.88]"
+                onClick={fetchProjects}
+                disabled={loading}
+                aria-label="Refresh projects"
+              >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
+
               <FeatureTooltip
                 id="projects_new_button"
                 title="Create Your First Project"
                 description="Click here to start tracking a new permit project. You can add project details, upload documents, and monitor status."
                 position="left"
               >
-                <Button variant="gold" onClick={() => { handleCreateProject(); completeItem('create_project'); }}>
+                <Button
+                  variant="gold"
+                  className="min-w-[10rem] shrink-0 shadow-cream sm:min-w-0"
+                  onClick={() => {
+                    handleCreateProject();
+                    completeItem('create_project');
+                  }}
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   New Project
                 </Button>
               </FeatureTooltip>
-          </motion.div>
-
-          {/* Toolbar */}
-          <motion.div
-            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search projects..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="secondary">{filteredProjects.length} projects</Badge>
-              </div>
-              <Tabs value={view} onValueChange={(v) => setView(v as 'kanban' | 'list')}>
-                <TabsList>
-                  <TabsTrigger value="kanban">
-                    <LayoutGrid className="h-4 w-4 mr-2" />
-                    Kanban
-                  </TabsTrigger>
-                  <TabsTrigger value="list">
-                    <List className="h-4 w-4 mr-2" />
-                    List
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
             </div>
           </motion.div>
 
           {/* Content */}
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-5">
               {STATUS_ORDER.map((status) => (
                 <div key={status} className="space-y-4">
                   <Skeleton className="h-10 w-full rounded-lg" />
@@ -236,13 +254,17 @@ export default function Projects() {
             </div>
           ) : view === 'kanban' ? (
             <motion.div
-              className="flex overflow-x-auto gap-4 pb-2 -mx-3 sm:mx-0 sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible min-w-0"
+              className="-mx-1 flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain pb-3 pt-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 lg:grid-cols-5 sm:overflow-visible sm:rounded-2xl sm:border sm:border-cream-sunken sm:bg-gradient-to-b sm:from-card sm:to-cream-raised sm:p-4 sm:shadow-sm sm:ring-1 sm:ring-navy-deep/10"
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
             >
               {STATUS_ORDER.map((status) => (
-                <motion.div key={status} variants={staggerItem} className="flex-shrink-0 w-[280px] sm:w-auto sm:min-w-0">
+                <motion.div
+                  key={status}
+                  variants={staggerItem}
+                  className="w-[min(280px,calc(100vw-3rem))] shrink-0 sm:w-auto sm:min-w-0 sm:self-start"
+                >
                   <KanbanColumn
                     status={status}
                     projects={getFilteredProjectsByStatus(status)}
@@ -266,7 +288,7 @@ export default function Projects() {
               animate="visible"
             >
               {/* List Header */}
-              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 text-sm font-medium text-muted-foreground border-b border-border bg-muted/30 rounded-t-lg">
+              <div className="hidden md:grid grid-cols-12 gap-4 rounded-t-xl border-b border-cream-sunken bg-cream-raised px-4 py-3 font-tight text-[11px] font-semibold uppercase tracking-[0.12em] text-navy/72">
                 <div className="col-span-4">Project</div>
                 <div className="col-span-2">Status</div>
                 <div className="col-span-2">Jurisdiction</div>
@@ -275,17 +297,21 @@ export default function Projects() {
               </div>
 
               {filteredProjects.length === 0 ? (
-                <Card className="border-dashed border-border bg-muted/15">
-                  <CardContent className="py-14 text-center text-muted-foreground space-y-1">
+                <Card className="rounded-xl border-dashed border-navy-deep/20 bg-card shadow-sm md:rounded-b-xl md:rounded-t-none">
+                  <CardContent className="space-y-2 py-14 text-center">
                     {searchQuery.trim() ? (
                       <>
-                        <p className="font-medium text-foreground">No projects match your search</p>
-                        <p className="text-sm">Try another term or clear the search.</p>
+                        <p className="font-medium text-navy-deep">No projects match your search</p>
+                        <p className="text-sm leading-relaxed text-navy/70">
+                          Try another term or clear the search.
+                        </p>
                       </>
                     ) : (
                       <>
-                        <p className="font-medium text-foreground">No projects yet</p>
-                        <p className="text-sm">Create your first project to get started.</p>
+                        <p className="font-medium text-navy-deep">No projects yet</p>
+                        <p className="text-sm leading-relaxed text-navy/70">
+                          Create your first project to get started.
+                        </p>
                       </>
                     )}
                   </CardContent>
@@ -297,27 +323,29 @@ export default function Projects() {
                     <motion.div
                       key={project.id}
                       variants={staggerItem}
-                      className="grid grid-cols-12 gap-4 px-4 py-3.5 rounded-lg border border-border bg-card hover:bg-muted/40 hover:border-primary/25 cursor-pointer transition-[background-color,border-color,box-shadow]"
+                      className="grid cursor-pointer grid-cols-12 gap-4 rounded-xl border border-navy-line/35 bg-navy-deep px-4 py-3.5 text-white shadow-sm ring-1 ring-white/10 transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-navy hover:shadow-md"
                       onClick={() => handleViewProject(project)}
                     >
                       <div className="col-span-12 md:col-span-4">
-                        <p className="font-medium truncate">{project.name}</p>
-                        {project.permit_number && (
-                          <p className="text-xs text-muted-foreground font-mono tabular-nums tracking-tight">{project.permit_number}</p>
-                        )}
+                        <p className="truncate font-semibold text-white">{project.name}</p>
+                        {project.permit_number ? (
+                          <p className="mt-0.5 font-mono text-xs tabular-nums tracking-tight text-white/70">
+                            {project.permit_number}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="col-span-6 md:col-span-2">
-                        <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}>
+                        <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0 font-tight`}>
                           {statusConfig.label}
                         </Badge>
                       </div>
-                      <div className="col-span-6 md:col-span-2 text-sm text-muted-foreground truncate">
-                        {project.jurisdiction || '-'}
+                      <div className="col-span-6 md:col-span-2 truncate text-sm text-white/70">
+                        {project.jurisdiction || '—'}
                       </div>
-                      <div className="col-span-6 md:col-span-2 text-sm text-muted-foreground truncate">
-                        {[project.city, project.state].filter(Boolean).join(', ') || '-'}
+                      <div className="col-span-6 md:col-span-2 truncate text-sm text-white/70">
+                        {[project.city, project.state].filter(Boolean).join(', ') || '—'}
                       </div>
-                      <div className="col-span-6 md:col-span-2 text-sm text-muted-foreground">
+                      <div className="col-span-6 md:col-span-2 font-mono text-sm tabular-nums text-white/70">
                         {new Date(project.updated_at).toLocaleDateString()}
                       </div>
                     </motion.div>

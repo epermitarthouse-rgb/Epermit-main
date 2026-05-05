@@ -26,6 +26,10 @@ import { Project, PROJECT_STATUS_CONFIG, PROJECT_TYPE_LABELS, ProjectStatus, STA
 import { cn } from '@/lib/utils';
 import { SlaEstimateDisplay } from './SlaEstimateDisplay';
 
+/** Navy/obsidian card: primary = light headline ink; secondary = readable muted (not grey-washed). */
+const cardPrimary = 'text-ink-primary-dark';
+const cardSecondary = 'text-ink-secondary-dark';
+
 interface ProjectCardProps {
   project: Project;
   onEdit: (project: Project) => void;
@@ -47,34 +51,49 @@ export function ProjectCard({
   const currentStatusIndex = STATUS_ORDER.indexOf(project.status);
   const nextStatus = STATUS_ORDER[currentStatusIndex + 1];
   const prevStatus = currentStatusIndex > 0 ? STATUS_ORDER[currentStatusIndex - 1] : null;
+  const moneyValue =
+    project.estimated_value ?? project.total_cost ?? project.contract_value ?? null;
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      whileHover={{ y: -2 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.2 }}
       className={cn(
-        "cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-50"
+        'cursor-grab active:cursor-grabbing',
+        isDragging && 'opacity-50'
       )}
     >
-      <Card className="border-border/70 hover:border-primary/20 hover:shadow-md transition-shadow">
-        <CardHeader className="pb-2">
+      <Card
+        className={cn(
+          'border-navy-line/40 bg-gradient-to-b from-navy-elev to-navy-deep',
+          cardPrimary,
+          'shadow-[0_4px_20px_-6px_rgba(15,23,42,0.5)] transition-[box-shadow,border-color] duration-200',
+          'hover:border-primary/40 hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.58)] hover:!translate-y-0 active:!translate-y-0'
+        )}
+      >
+        <CardHeader className="space-y-0 px-3 pb-2 pt-3">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-sm truncate">{project.name}</h3>
-              {project.permit_number && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                  <FileText className="h-3 w-3" />
+            <div className="min-w-0 flex-1">
+              <h3 className={cn('truncate font-sans text-sm font-semibold leading-snug tracking-tight', cardPrimary)}>
+                {project.name}
+              </h3>
+              {project.permit_number ? (
+                <p className={cn('mt-1 flex items-center gap-1 font-mono text-[11px] tabular-nums tracking-tight', cardSecondary)}>
+                  <FileText className={cn('h-3 w-3 shrink-0', cardSecondary)} aria-hidden />
                   {project.permit_number}
                 </p>
-              )}
+              ) : null}
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-ink-primary-dark hover:bg-white/[0.12]"
+                >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -111,50 +130,50 @@ export function ProjectCard({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </CardHeader>
-        <CardContent className="pt-0 space-y-3">
-          {/* Project Type Badge */}
-          {project.project_type && (
-            <Badge variant="secondary" className="text-xs">
-              {PROJECT_TYPE_LABELS[project.project_type]}
-            </Badge>
-          )}
 
-          {/* Location */}
-          {(project.city || project.state) && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              <span className="truncate">
-                {[project.city, project.state].filter(Boolean).join(', ')}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge className={cn('border-0 font-tight text-[10px] font-semibold uppercase tracking-wide', statusConfig.bgColor, statusConfig.color)}>
+              {statusConfig.label}
+            </Badge>
+            {project.project_type ? (
+              <Badge variant="outline" className={cn('border-white/20 bg-white/10 font-tight text-[10px] font-medium normal-case tracking-normal', cardPrimary)}>
+                {PROJECT_TYPE_LABELS[project.project_type]}
+              </Badge>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 px-3 pb-3 pt-0">
+          {(project.city || project.state) ? (
+            <div className={cn('flex items-start gap-2 font-sans text-xs leading-snug', cardSecondary)}>
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-secondary-dark" aria-hidden />
+              <span className="min-w-0 truncate">{[project.city, project.state].filter(Boolean).join(', ')}</span>
+            </div>
+          ) : null}
+
+          {project.jurisdiction ? (
+            <div className={cn('flex items-start gap-2 font-sans text-xs leading-snug', cardSecondary)}>
+              <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-secondary-dark" aria-hidden />
+              <span className="min-w-0 truncate">{project.jurisdiction}</span>
+            </div>
+          ) : null}
+
+          {moneyValue != null ? (
+            <div className={cn('flex items-center gap-2 font-sans text-xs', cardSecondary)}>
+              <DollarSign className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+              <span className={cn('font-mono tabular-nums tracking-tight', cardPrimary)}>${moneyValue.toLocaleString()}</span>
+            </div>
+          ) : null}
+
+          {project.deadline ? (
+            <div className={cn('flex items-center gap-2 font-sans text-xs', cardSecondary)}>
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+              <span>
+                <span className={cardSecondary}>Due </span>
+                <span className={cn('font-mono tabular-nums', cardPrimary)}>{format(new Date(project.deadline), 'MMM d, yyyy')}</span>
               </span>
             </div>
-          )}
+          ) : null}
 
-          {/* Jurisdiction */}
-          {project.jurisdiction && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Building2 className="h-3 w-3" />
-              <span className="truncate">{project.jurisdiction}</span>
-            </div>
-          )}
-
-          {/* Value */}
-          {project.estimated_value && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <DollarSign className="h-3 w-3" />
-              <span>${project.estimated_value.toLocaleString()}</span>
-            </div>
-          )}
-
-          {/* Deadline */}
-          {project.deadline && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3 w-3" />
-              <span>Due {format(new Date(project.deadline), 'MMM d, yyyy')}</span>
-            </div>
-          )}
-
-          {/* SLA Estimate Badge */}
           {project.jurisdiction && project.status !== 'approved' && (
             <SlaEstimateDisplay
               jurisdictionName={project.jurisdiction}
@@ -165,10 +184,10 @@ export function ProjectCard({
             />
           )}
 
-          {/* Footer */}
-          <div className="flex items-center justify-between pt-2 border-t">
-            <span className="text-xs text-muted-foreground">
-              Updated {format(new Date(project.updated_at), 'MMM d')}
+          <div className="flex items-center justify-between border-t border-white/[0.14] pt-2">
+            <span className={cn('font-sans text-[11px]', cardSecondary)}>
+              Updated{' '}
+              <span className={cn('font-mono tabular-nums', cardPrimary)}>{format(new Date(project.updated_at), 'MMM d, yyyy')}</span>
             </span>
           </div>
         </CardContent>

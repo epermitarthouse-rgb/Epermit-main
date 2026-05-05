@@ -98,7 +98,7 @@ export function AdminPageShell({
               <h1
                 className={cn(
                   editorial
-                    ? "font-serif text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl"
+                    ? "font-display text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl"
                     : "text-2xl sm:text-3xl font-bold tracking-tight",
                 )}
               >

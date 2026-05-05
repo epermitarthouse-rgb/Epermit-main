@@ -1,4 +1,5 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { Inbox } from 'lucide-react';
 import { Project, ProjectStatus, PROJECT_STATUS_CONFIG } from '@/types/project';
 import { ProjectCard } from './ProjectCard';
 import { cn } from '@/lib/utils';
@@ -34,8 +35,10 @@ export function KanbanColumn({
   return (
     <div
       className={cn(
-        "flex flex-col min-h-[300px] sm:min-h-[500px] min-w-[260px] sm:min-w-0 rounded-lg border-2 transition-colors",
-        isDragOver ? "border-primary/40 bg-primary/[0.04]" : "border-transparent bg-muted/30"
+        'flex min-w-0 flex-col overflow-hidden rounded-xl border shadow-sm transition-[box-shadow,border-color,background-color] duration-200',
+        isDragOver
+          ? 'border-primary/45 bg-primary/[0.06] shadow-md ring-2 ring-primary/25'
+          : 'border-cream-sunken bg-gradient-to-b from-card from-[8%] via-cream/28 via-[55%] to-cream-raised ring-1 ring-navy-deep/10'
       )}
       onDragOver={(e) => {
         e.preventDefault();
@@ -46,24 +49,29 @@ export function KanbanColumn({
         onDrop(status);
       }}
     >
-      {/* Column Header */}
-      <div className={cn(
-        "px-3 py-2 rounded-t-lg flex items-center justify-between",
-        config.bgColor
-      )}>
-        <div className="flex items-center gap-2">
-          <div className={cn("w-2 h-2 rounded-full shrink-0", config.dotColor)} />
-          <span className={cn("font-medium text-sm", config.color)}>
+      {/* Column header strip */}
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] px-3 py-2.5 dark:border-white/[0.06]',
+          config.bgColor
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn('h-2 w-2 shrink-0 rounded-full shadow-sm', config.dotColor)} aria-hidden />
+          <span className={cn('truncate font-tight text-[11px] font-semibold uppercase tracking-[0.14em]', config.color)}>
             {config.label}
           </span>
         </div>
-        <Badge variant="secondary" className="text-xs">
+        <Badge
+          variant="outline"
+          className="shrink-0 border-navy-deep/22 bg-card px-2 py-0 font-mono text-[11px] font-semibold tabular-nums tracking-tight text-ink-primary-light shadow-none"
+        >
           {projects.length}
         </Badge>
       </div>
 
-      {/* Cards Container */}
-      <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+      {/* Cards + compact empty drop zone */}
+      <div className="flex flex-col gap-2.5 p-2">
         <AnimatePresence mode="popLayout">
           {projects.map((project) => (
             <div
@@ -86,11 +94,20 @@ export function KanbanColumn({
           ))}
         </AnimatePresence>
 
-        {projects.length === 0 && (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-            No projects
+        {projects.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-navy-deep/22 bg-cream-raised/95 px-3 py-6 text-center ring-1 ring-navy-deep/[0.05]"
+            role="status"
+          >
+            <Inbox className="h-8 w-8 text-navy/60" strokeWidth={1.25} aria-hidden />
+            <p className="font-tight text-[11px] font-semibold uppercase tracking-[0.14em] text-navy-deep">
+              No projects
+            </p>
+            <p className="max-w-[12rem] font-sans text-[11px] leading-relaxed text-navy/72">
+              Drop a card here or create one.
+            </p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -1625,6 +1625,9 @@ app.use(
   }),
 );
 
+const { createQuickBooksRouter } = require("./routes/quickbooks.routes.js");
+app.use("/api/quickbooks", createQuickBooksRouter({ supabase }));
+
 function isMontgomeryPortalSubtypePayload(data) {
   return (
     data &&
