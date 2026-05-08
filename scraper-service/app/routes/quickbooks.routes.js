@@ -132,15 +132,25 @@ function createQuickBooksRouter(opts) {
     try {
       await tokenStore.upsertConnection(supabase, {
         realmId,
-        accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        accessTokenExpiresAt: tokens.accessTokenExpiresAt,
         refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
         scopes: tokens.scopes,
         tokenType: tokens.tokenType,
         environment,
       });
-    } catch {
+      qbApi.primeAccessTokenCache(
+        realmId,
+        environment,
+        tokens.accessToken,
+        tokens.accessTokenExpiresAt,
+      );
+    } catch (e) {
+      if (e.code === "quickbooks_token_encryption_unconfigured") {
+        return res.redirect(
+          302,
+          appendQuery(failUrl, { qb_error: "token_encryption_unconfigured" }),
+        );
+      }
       return res.redirect(
         302,
         appendQuery(failUrl, { qb_error: "storage_failed" }),
@@ -183,11 +193,16 @@ function createQuickBooksRouter(opts) {
         });
       }
 
+      const expiryMeta = qbApi.getCachedAccessTokenExpiryMeta(
+        row.realm_id,
+        row.environment || environment,
+      );
+
       return res.json({
         connected: true,
         realmId: row.realm_id,
         environment: row.environment || environment,
-        accessTokenExpiresAt: row.access_token_expires_at,
+        accessTokenExpiresAt: expiryMeta?.accessTokenExpiresAt ?? null,
       });
     } catch (e) {
       return res.status(500).json({
@@ -237,6 +252,16 @@ function createQuickBooksRouter(opts) {
     if (err.code === "QB_TOKEN_REFRESH_FAILED") {
       return res.status(503).json({
         error: "quickbooks_token_refresh_failed",
+        message: err.message,
+      });
+    }
+    if (
+      err.code === "QB_TOKEN_DECRYPT_FAILED" ||
+      err.code === "quickbooks_token_encryption_unconfigured" ||
+      err.code === "QB_REFRESH_MISSING"
+    ) {
+      return res.status(503).json({
+        error: err.code,
         message: err.message,
       });
     }

@@ -1,15 +1,115 @@
 "use strict";
 
+const { encryptToken, decryptToken } = require("./qb-token-crypto.js");
+
 /**
- * Persist QuickBooks tokens via Supabase service-role client (backend only).
+ * Persist QuickBooks connection metadata + encrypted refresh token (service role only).
+ * Access tokens are never written to the database.
  */
 
-function mapUpsertRow(params) {
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} row
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function prepareConnectionRow(supabase, row) {
+  if (!row) return row;
+
+  const encPresent =
+    row.encrypted_refresh_token != null &&
+    String(row.encrypted_refresh_token).trim() !== "";
+  const plainRt =
+    row.refresh_token != null && String(row.refresh_token).trim() !== ""
+      ? String(row.refresh_token).trim()
+      : "";
+  const plainAt =
+    row.access_token != null && String(row.access_token).trim() !== "";
+
+  if (!encPresent && plainRt) {
+    const encryptedPayload = encryptToken(plainRt);
+    const { error } = await supabase
+      .from("quickbooks_connections")
+      .update({
+        encrypted_refresh_token: encryptedPayload,
+        refresh_token_encrypted_at: new Date().toISOString(),
+        encrypted_token_version: "v1",
+        refresh_token: null,
+        access_token: null,
+        access_token_expires_at: null,
+      })
+      .eq("realm_id", row.realm_id)
+      .eq("environment", row.environment);
+
+    if (error) {
+      throw Object.assign(new Error(error.message), { cause: error });
+    }
+
+    return {
+      ...row,
+      encrypted_refresh_token: encryptedPayload,
+      refresh_token_encrypted_at: new Date().toISOString(),
+      encrypted_token_version: "v1",
+      refresh_token: null,
+      access_token: null,
+      access_token_expires_at: null,
+    };
+  }
+
+  if (encPresent && (plainRt || plainAt)) {
+    const { error } = await supabase
+      .from("quickbooks_connections")
+      .update({
+        refresh_token: null,
+        access_token: null,
+        access_token_expires_at: null,
+      })
+      .eq("realm_id", row.realm_id)
+      .eq("environment", row.environment);
+
+    if (error) {
+      throw Object.assign(new Error(error.message), { cause: error });
+    }
+
+    return {
+      ...row,
+      refresh_token: null,
+      access_token: null,
+      access_token_expires_at: null,
+    };
+  }
+
+  return row;
+}
+
+/**
+ * Decrypt stored refresh token after prepareConnectionRow.
+ *
+ * @param {Record<string, unknown>} row
+ */
+function getDecryptedRefreshToken(row) {
+  const enc =
+    row.encrypted_refresh_token != null
+      ? String(row.encrypted_refresh_token).trim()
+      : "";
+  if (!enc) {
+    const err = new Error(
+      "QuickBooks connection has no encrypted refresh token.",
+    );
+    err.code = "QB_REFRESH_MISSING";
+    throw err;
+  }
+  return decryptToken(enc);
+}
+
+/**
+ * OAuth callback: store encrypted refresh + metadata; never persist access_token.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ */
+async function upsertConnection(supabase, params) {
   const {
     realmId,
-    accessToken,
     refreshToken,
-    accessTokenExpiresAt,
     refreshTokenExpiresAt,
     scopes,
     tokenType,
@@ -18,14 +118,17 @@ function mapUpsertRow(params) {
     companyName,
   } = params;
 
+  const encryptedPayload = encryptToken(refreshToken);
+
+  /** @type {Record<string, unknown>} */
   const row = {
     realm_id: realmId,
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    access_token_expires_at:
-      accessTokenExpiresAt instanceof Date
-        ? accessTokenExpiresAt.toISOString()
-        : accessTokenExpiresAt,
+    encrypted_refresh_token: encryptedPayload,
+    refresh_token_encrypted_at: new Date().toISOString(),
+    encrypted_token_version: "v1",
+    refresh_token: null,
+    access_token: null,
+    access_token_expires_at: null,
     refresh_token_expires_at:
       refreshTokenExpiresAt == null
         ? null
@@ -40,14 +143,6 @@ function mapUpsertRow(params) {
   if (userId !== undefined) row.user_id = userId;
   if (companyName !== undefined) row.company_name = companyName;
 
-  return row;
-}
-
-/**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- */
-async function upsertConnection(supabase, params) {
-  const row = mapUpsertRow(params);
   const { error } = await supabase.from("quickbooks_connections").upsert(row, {
     onConflict: "environment,realm_id",
   });
@@ -55,58 +150,30 @@ async function upsertConnection(supabase, params) {
 }
 
 /**
+ * After Intuit token refresh: persist rotated encrypted refresh + meta only.
+ *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  */
-async function getConnectionByRealm(supabase, { realmId, environment }) {
-  const { data, error } = await supabase
-    .from("quickbooks_connections")
-    .select("*")
-    .eq("realm_id", realmId)
-    .eq("environment", environment)
-    .maybeSingle();
-
-  if (error) throw Object.assign(new Error(error.message), { cause: error });
-  return data;
-}
-
-/**
- * Latest row by updated_at for an environment (includes secrets — HTTP handlers must strip).
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- */
-async function getLatestConnection(supabase, { environment }) {
-  const { data, error } = await supabase
-    .from("quickbooks_connections")
-    .select("*")
-    .eq("environment", environment)
-    .order("updated_at", { ascending: false })
-    .limit(1);
-
-  if (error) throw Object.assign(new Error(error.message), { cause: error });
-  return data?.[0] ?? null;
-}
-
-/**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- */
-async function updateTokens(supabase, params) {
+async function persistEncryptedRefreshOnly(supabase, params) {
   const {
     realmId,
     environment,
-    accessToken,
-    refreshToken,
-    accessTokenExpiresAt,
+    refreshTokenPlaintext,
     refreshTokenExpiresAt,
     scopes,
     tokenType,
   } = params;
 
+  const encryptedPayload = encryptToken(refreshTokenPlaintext);
+
+  /** @type {Record<string, unknown>} */
   const patch = {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    access_token_expires_at:
-      accessTokenExpiresAt instanceof Date
-        ? accessTokenExpiresAt.toISOString()
-        : accessTokenExpiresAt,
+    encrypted_refresh_token: encryptedPayload,
+    refresh_token_encrypted_at: new Date().toISOString(),
+    encrypted_token_version: "v1",
+    refresh_token: null,
+    access_token: null,
+    access_token_expires_at: null,
     refresh_token_expires_at:
       refreshTokenExpiresAt == null
         ? null
@@ -126,9 +193,42 @@ async function updateTokens(supabase, params) {
   if (error) throw Object.assign(new Error(error.message), { cause: error });
 }
 
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ */
+async function getConnectionByRealm(supabase, { realmId, environment }) {
+  const { data, error } = await supabase
+    .from("quickbooks_connections")
+    .select("*")
+    .eq("realm_id", realmId)
+    .eq("environment", environment)
+    .maybeSingle();
+
+  if (error) throw Object.assign(new Error(error.message), { cause: error });
+  return data;
+}
+
+/**
+ * Latest row by updated_at for an environment (never exposes tokens via HTTP — handlers strip).
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ */
+async function getLatestConnection(supabase, { environment }) {
+  const { data, error } = await supabase
+    .from("quickbooks_connections")
+    .select("*")
+    .eq("environment", environment)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw Object.assign(new Error(error.message), { cause: error });
+  return data?.[0] ?? null;
+}
+
 module.exports = {
   upsertConnection,
   getConnectionByRealm,
   getLatestConnection,
-  updateTokens,
+  prepareConnectionRow,
+  getDecryptedRefreshToken,
+  persistEncryptedRefreshOnly,
 };

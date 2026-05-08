@@ -14,8 +14,57 @@ const TOKEN_REFRESH_BUFFER_MS = 2 * 60 * 1000;
 /** @type {Map<string, { items: Array<{ id: string, name: string, type: string | null, active: boolean }>, cachedAt: number }>} */
 const itemsCache = new Map();
 
+/**
+ * Volatile access tokens only (lost on process restart; refreshed via encrypted refresh_token).
+ * @type {Map<string, { accessToken: string, accessTokenExpiresAt: Date }>}
+ */
+const accessTokenCache = new Map();
+
 function cacheKey(realmId, environment) {
   return `${environment}::${realmId}`;
+}
+
+/**
+ * After OAuth code exchange: prime cache so the next API call avoids an immediate refresh.
+ *
+ * @param {string} realmId
+ * @param {string | null | undefined} environment
+ * @param {string} accessToken
+ * @param {Date | string} accessTokenExpiresAt
+ */
+function primeAccessTokenCache(
+  realmId,
+  environment,
+  accessToken,
+  accessTokenExpiresAt,
+) {
+  const rid = String(realmId).trim();
+  const env = normalizeEnv(environment);
+  const exp =
+    accessTokenExpiresAt instanceof Date
+      ? accessTokenExpiresAt
+      : new Date(accessTokenExpiresAt);
+  accessTokenCache.set(cacheKey(rid, env), {
+    accessToken,
+    accessTokenExpiresAt: exp,
+  });
+}
+
+/**
+ * For GET /status — expiry metadata only, never token values.
+ *
+ * @param {string} realmId
+ * @param {string | null | undefined} environment
+ * @returns {{ accessTokenExpiresAt: string } | null}
+ */
+function getCachedAccessTokenExpiryMeta(realmId, environment) {
+  const rid = String(realmId).trim();
+  const env = normalizeEnv(environment);
+  const cached = accessTokenCache.get(cacheKey(rid, env));
+  if (!cached) return null;
+  return {
+    accessTokenExpiresAt: cached.accessTokenExpiresAt.toISOString(),
+  };
 }
 
 function normalizeEnv(environment) {
@@ -67,6 +116,42 @@ class QuickBooksApiError extends Error {
   }
 }
 
+/**
+ * QuickBooks Invoice.CustomerMemo must be `{ value: string }`, not a bare string.
+ * @param {unknown} customerMemo
+ * @returns {string | null} trimmed memo text, or null if empty / invalid
+ */
+function extractCustomerMemoText(customerMemo) {
+  if (customerMemo === undefined || customerMemo === null) return null;
+  if (
+    typeof customerMemo === "object" &&
+    customerMemo !== null &&
+    "value" in customerMemo
+  ) {
+    const v = /** @type {{ value?: unknown }} */ (customerMemo).value;
+    const t = v !== undefined && v !== null ? String(v).trim() : "";
+    return t || null;
+  }
+  const t = String(customerMemo).trim();
+  return t || null;
+}
+
+/**
+ * Dev-only: log invoice JSON body (no Authorization header / tokens).
+ * @param {Record<string, unknown>} invoice
+ */
+function logInvoiceCreatePayloadDev(invoice) {
+  if (process.env.NODE_ENV === "production") return;
+  try {
+    console.info(
+      "[QB dev] createDraftInvoice POST body:",
+      JSON.stringify(invoice),
+    );
+  } catch {
+    console.info("[QB dev] createDraftInvoice POST body: <stringify failed>");
+  }
+}
+
 function throwNormalizedHttpError(httpStatus, json, fallbackMessage) {
   const faultMsg = extractFaultMessage(json);
   const msg =
@@ -90,7 +175,7 @@ function throwNormalizedHttpError(httpStatus, json, fallbackMessage) {
 }
 
 /**
- * Load stored connection (optional realm), refresh tokens if near expiry.
+ * Load stored connection (optional realm); access token from volatile cache or Intuit refresh.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {{ realmId?: string | null, environment?: string | null }} opts
@@ -113,23 +198,49 @@ async function getValidConnection(supabase, opts = {}) {
     throw err;
   }
 
-  const expiresMs = new Date(row.access_token_expires_at).getTime();
-  if (Number.isNaN(expiresMs)) {
-    const err = new Error(
-      "QuickBooks connection has invalid access_token_expires_at.",
-    );
-    err.code = "QB_TOKEN_INVALID";
-    throw err;
-  }
+  row = await tokenStore.prepareConnectionRow(supabase, row);
 
-  const needsRefresh = Date.now() >= expiresMs - TOKEN_REFRESH_BUFFER_MS;
+  const rid = String(row.realm_id);
+  const envRow = normalizeEnv(row.environment ?? environment);
+  const key = cacheKey(rid, envRow);
 
-  if (needsRefresh) {
+  const cached = accessTokenCache.get(key);
+
+  /** @type {string} */
+  let accessToken;
+  /** @type {Date} */
+  let accessExpiresAt;
+
+  if (
+    cached &&
+    Date.now() <
+      cached.accessTokenExpiresAt.getTime() - TOKEN_REFRESH_BUFFER_MS
+  ) {
+    accessToken = cached.accessToken;
+    accessExpiresAt = cached.accessTokenExpiresAt;
+  } else {
+    let refreshPlain;
+    try {
+      refreshPlain = tokenStore.getDecryptedRefreshToken(row);
+    } catch (e) {
+      if (e.code === "quickbooks_token_encryption_unconfigured") {
+        throw e;
+      }
+      if (e.code === "quickbooks_token_decrypt_failed") {
+        const wrapped = new Error(
+          "QuickBooks refresh token could not be decrypted. Check QB_TOKEN_ENCRYPTION_KEY.",
+        );
+        wrapped.code = "QB_TOKEN_DECRYPT_FAILED";
+        throw wrapped;
+      }
+      throw e;
+    }
+
     let refreshed;
     try {
       getOAuthConfig();
       refreshed = await refreshAccessToken({
-        refreshToken: row.refresh_token,
+        refreshToken: refreshPlain,
       });
     } catch (e) {
       const wrapped = new Error(
@@ -144,25 +255,28 @@ async function getValidConnection(supabase, opts = {}) {
       throw wrapped;
     }
 
-    await tokenStore.updateTokens(supabase, {
-      realmId: row.realm_id,
+    await tokenStore.persistEncryptedRefreshOnly(supabase, {
+      realmId: rid,
       environment: row.environment,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      accessTokenExpiresAt: refreshed.accessTokenExpiresAt,
+      refreshTokenPlaintext: refreshed.refreshToken,
       refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt,
       scopes: refreshed.scopes,
       tokenType: refreshed.tokenType,
     });
 
+    accessExpiresAt =
+      refreshed.accessTokenExpiresAt instanceof Date
+        ? refreshed.accessTokenExpiresAt
+        : new Date(refreshed.accessTokenExpiresAt);
+    accessToken = refreshed.accessToken;
+
+    accessTokenCache.set(key, {
+      accessToken,
+      accessTokenExpiresAt: accessExpiresAt,
+    });
+
     row = {
       ...row,
-      access_token: refreshed.accessToken,
-      refresh_token: refreshed.refreshToken,
-      access_token_expires_at:
-        refreshed.accessTokenExpiresAt instanceof Date
-          ? refreshed.accessTokenExpiresAt.toISOString()
-          : refreshed.accessTokenExpiresAt,
       refresh_token_expires_at:
         refreshed.refreshTokenExpiresAt == null
           ? row.refresh_token_expires_at
@@ -174,7 +288,11 @@ async function getValidConnection(supabase, opts = {}) {
     };
   }
 
-  return row;
+  return {
+    ...row,
+    access_token: accessToken,
+    access_token_expires_at: accessExpiresAt.toISOString(),
+  };
 }
 
 /**
@@ -513,9 +631,12 @@ async function createDraftInvoice(supabase, opts) {
   if (privateNote != null && String(privateNote).trim()) {
     invoice.PrivateNote = String(privateNote).trim();
   }
-  if (customerMemo != null && String(customerMemo).trim()) {
-    invoice.CustomerMemo = String(customerMemo).trim();
+  const memoText = extractCustomerMemoText(customerMemo);
+  if (memoText) {
+    invoice.CustomerMemo = { value: memoText };
   }
+
+  logInvoiceCreatePayloadDev(invoice);
 
   const json = await quickBooksRequest(supabase, {
     method: "POST",
@@ -549,6 +670,8 @@ async function createDraftInvoice(supabase, opts) {
 module.exports = {
   QuickBooksApiError,
   getValidConnection,
+  primeAccessTokenCache,
+  getCachedAccessTokenExpiryMeta,
   quickBooksRequest,
   findCustomerByEmailOrName,
   createCustomer,

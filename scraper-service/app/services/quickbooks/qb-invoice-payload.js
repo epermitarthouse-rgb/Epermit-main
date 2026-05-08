@@ -171,7 +171,7 @@ function generateInvoicePayload(params) {
     baseMilestoneAmount + reimbursement + adminFeeAmount,
   );
 
-  const CustomerMemo =
+  const customerMemoText =
     `Permit ${permitRef} — ${projectName}`.slice(0, 400);
 
   const PrivateNote =
@@ -188,7 +188,7 @@ function generateInvoicePayload(params) {
     CustomerRef: { value: String(qbCustomerId).trim() },
     TxnDate,
     DueDate,
-    CustomerMemo,
+    CustomerMemo: { value: customerMemoText },
     PrivateNote,
     Line,
   };
