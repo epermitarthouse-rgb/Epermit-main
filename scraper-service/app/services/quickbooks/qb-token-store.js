@@ -144,9 +144,14 @@ async function upsertConnection(supabase, params) {
   if (companyName !== undefined) row.company_name = companyName;
 
   const { error } = await supabase.from("quickbooks_connections").upsert(row, {
-    onConflict: "environment,realm_id",
+    onConflict: "environment",
   });
-  if (error) throw Object.assign(new Error(error.message), { cause: error });
+  if (error) {
+    const err = new Error(error.message);
+    err.cause = error;
+    err.qbEncryptedRefreshTokenGenerated = true;
+    throw err;
+  }
 }
 
 /**

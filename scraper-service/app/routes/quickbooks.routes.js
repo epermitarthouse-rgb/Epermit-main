@@ -9,6 +9,9 @@ const {
 } = require("../services/quickbooks/qb-oauth.service.js");
 const tokenStore = require("../services/quickbooks/qb-token-store.js");
 const {
+  getEncryptionKeyDiagnostics,
+} = require("../services/quickbooks/qb-token-crypto.js");
+const {
   generateInvoicePayload,
 } = require("../services/quickbooks/qb-invoice-payload.js");
 const qbApi = require("../services/quickbooks/qb-api.service.js");
@@ -31,6 +34,46 @@ function isDevApiTestEnabled() {
     return process.env.QB_DEV_API_TEST === "1";
   }
   return true;
+}
+
+/**
+ * @param {object} p
+ * @param {string} p.environment
+ * @param {string} p.realmId
+ * @param {{ accessToken?: string, refreshToken?: string }} p.tokens
+ * @param {Error & { cause?: unknown, qbEncryptedRefreshTokenGenerated?: boolean }} p.err
+ */
+function logQuickBooksOAuthCallbackStorageFailure(p) {
+  const { environment, realmId, tokens, err } = p;
+  const keyDiag = getEncryptionKeyDiagnostics();
+  const cause =
+    err.cause && typeof err.cause === "object"
+      ? /** @type {{ message?: string, details?: string, hint?: string, code?: string }} */ (
+          err.cause
+        )
+      : null;
+  const stackLines =
+    typeof err.stack === "string" ? err.stack.split("\n") : [];
+  const stackFirstTwoLines = stackLines
+    .slice(0, 2)
+    .map((line) => line.trim())
+    .join("\n");
+
+  console.error("[QuickBooks][OAuthCallback] reached callback", {
+    environment,
+    realmId,
+    tokenResponseHasAccessToken: Boolean(tokens?.accessToken),
+    tokenResponseHasRefreshToken: Boolean(tokens?.refreshToken),
+    encryptedRefreshTokenGenerated: Boolean(err.qbEncryptedRefreshTokenGenerated),
+    qbTokenEncryptionKeyPresent: keyDiag.keyPresent,
+    qbTokenEncryptionKeyDecodedByteLength: keyDiag.decodedByteLength,
+    supabaseErrorMessage: cause?.message ?? null,
+    supabaseErrorDetails: cause?.details ?? null,
+    supabaseErrorHint: cause?.hint ?? null,
+    supabaseErrorCode: cause?.code ?? null,
+    caughtErrorMessage: err.message || String(err),
+    stackFirstTwoLines,
+  });
 }
 
 function appendQuery(url, params) {
@@ -145,12 +188,21 @@ function createQuickBooksRouter(opts) {
         tokens.accessTokenExpiresAt,
       );
     } catch (e) {
-      if (e.code === "quickbooks_token_encryption_unconfigured") {
+      if (
+        e.code === "quickbooks_token_encryption_unconfigured" ||
+        e.code === "QB_TOKEN_ENCRYPTION_KEY_INVALID"
+      ) {
         return res.redirect(
           302,
           appendQuery(failUrl, { qb_error: "token_encryption_unconfigured" }),
         );
       }
+      logQuickBooksOAuthCallbackStorageFailure({
+        environment,
+        realmId,
+        tokens,
+        err: e,
+      });
       return res.redirect(
         302,
         appendQuery(failUrl, { qb_error: "storage_failed" }),
@@ -258,6 +310,7 @@ function createQuickBooksRouter(opts) {
     if (
       err.code === "QB_TOKEN_DECRYPT_FAILED" ||
       err.code === "quickbooks_token_encryption_unconfigured" ||
+      err.code === "QB_TOKEN_ENCRYPTION_KEY_INVALID" ||
       err.code === "QB_REFRESH_MISSING"
     ) {
       return res.status(503).json({

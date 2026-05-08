@@ -7,6 +7,20 @@ const IV_LENGTH = 12;
 const VERSION = "v1";
 
 /**
+ * Safe diagnostics only (never logs or returns secret material).
+ * @returns {{ keyPresent: boolean, decodedByteLength: number | null }}
+ */
+function getEncryptionKeyDiagnostics() {
+  const raw = process.env.QB_TOKEN_ENCRYPTION_KEY;
+  const keyPresent = Boolean(raw && String(raw).trim());
+  if (!keyPresent) {
+    return { keyPresent: false, decodedByteLength: null };
+  }
+  const buf = Buffer.from(String(raw).trim(), "base64");
+  return { keyPresent: true, decodedByteLength: buf.length };
+}
+
+/**
  * @returns {Buffer}
  */
 function loadKeyBytes() {
@@ -21,9 +35,9 @@ function loadKeyBytes() {
   const buf = Buffer.from(String(raw).trim(), "base64");
   if (buf.length !== 32) {
     const err = new Error(
-      "QB_TOKEN_ENCRYPTION_KEY must be base64 encoding of exactly 32 bytes (AES-256).",
+      "Invalid QB_TOKEN_ENCRYPTION_KEY: expected 32 decoded bytes.",
     );
-    err.code = "quickbooks_token_encryption_unconfigured";
+    err.code = "QB_TOKEN_ENCRYPTION_KEY_INVALID";
     throw err;
   }
   return buf;
@@ -102,4 +116,5 @@ function decryptToken(encryptedPayload) {
 module.exports = {
   encryptToken,
   decryptToken,
+  getEncryptionKeyDiagnostics,
 };
