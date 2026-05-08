@@ -73,6 +73,7 @@ function normalizeTokenResponse(payload, scopesOrOpts = ACCOUNTING_SCOPE) {
     accessToken,
     refreshToken,
     accessTokenExpiresAt,
+    expiresInSeconds: expiresInSec,
     refreshTokenExpiresAt,
     tokenType: payload.token_type || "bearer",
     scopes:

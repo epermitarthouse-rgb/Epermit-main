@@ -260,6 +260,8 @@ async function getValidConnection(supabase, opts = {}) {
       environment: row.environment,
       refreshTokenPlaintext: refreshed.refreshToken,
       refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt,
+      accessTokenExpiresAt: refreshed.accessTokenExpiresAt,
+      expiresInSeconds: refreshed.expiresInSeconds,
       scopes: refreshed.scopes,
       tokenType: refreshed.tokenType,
     });

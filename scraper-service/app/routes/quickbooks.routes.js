@@ -177,6 +177,8 @@ function createQuickBooksRouter(opts) {
         realmId,
         refreshToken: tokens.refreshToken,
         refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+        accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+        expiresInSeconds: tokens.expiresInSeconds,
         scopes: tokens.scopes,
         tokenType: tokens.tokenType,
         environment,
