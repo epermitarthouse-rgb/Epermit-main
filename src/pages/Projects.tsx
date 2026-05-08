@@ -68,6 +68,26 @@ export default function Projects() {
     }
   }, [user, authLoading, navigate]);
 
+  /** Keep dialogs aligned with canonical rows after refetches (e.g. billing reset in Supabase). */
+  useEffect(() => {
+    const selectedId = selectedProject?.id;
+    if (!selectedId) return;
+
+    const canonical = projects.find((p) => p.id === selectedId);
+    if (!canonical) {
+      setSelectedProject(null);
+      setDetailDialogOpen(false);
+      setFormDialogOpen(false);
+      setDeleteDialogOpen(false);
+      return;
+    }
+
+    setSelectedProject((prev) => {
+      if (prev?.id !== selectedId) return prev;
+      return canonical;
+    });
+  }, [projects, selectedProject?.id]);
+
   // Filter projects by search
   const filteredProjects = projects.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -373,8 +393,7 @@ export default function Projects() {
         onEdit={handleEditProject}
         onProjectBillingRefresh={async () => {
           if (!selectedProject) return;
-          const updated = await refreshProjectById(selectedProject.id);
-          if (updated) setSelectedProject(updated);
+          await refreshProjectById(selectedProject.id);
         }}
       />
 
