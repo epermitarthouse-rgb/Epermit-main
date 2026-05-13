@@ -48,31 +48,30 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * UI label → seeded `utility_providers.slug` mapping:
- * PEPCO → pepco, BGE → bge, Washington Gas → washington-gas,
- * Dominion Energy → dominion, Florida Power & Light → fpl,
- * Consolidated Edison → con-edison, PSEG → pseg, Eversource Energy → eversource,
- * Duke Energy → duke-energy, Georgia Power → georgia-power.
- * Legacy row label "BGE (Exelon)" preserved (still maps to Baltimore Gas & Electric intent).
+ * UI label → seeded `utility_providers.slug` (see Sprint 2 spec). Stored in
+ * `portal_credentials.jurisdiction` when a utility is selected.
  */
-const UCI_UTILITY_PORTALS = [
-  { jurisdiction: "PEPCO", url: "" },
-  { jurisdiction: "BGE", url: "" },
-  /** Legacy label; keep so existing saved rows stay selectable and editable */
-  { jurisdiction: "BGE (Exelon)", url: "" },
-  { jurisdiction: "Washington Gas", url: "" },
-  { jurisdiction: "Dominion Energy", url: "" },
-  { jurisdiction: "Florida Power & Light", url: "" },
-  { jurisdiction: "Consolidated Edison", url: "" },
-  { jurisdiction: "PSEG", url: "" },
-  { jurisdiction: "Eversource Energy", url: "" },
-  { jurisdiction: "Duke Energy", url: "" },
-  { jurisdiction: "Georgia Power", url: "" },
-] as const;
+const UCI_UTILITY_OPTIONS: { label: string; url: string }[] = [
+  { label: "PEPCO", url: "" },
+  { label: "BGE", url: "" },
+  { label: "Washington Gas", url: "" },
+  { label: "Dominion Energy", url: "" },
+  { label: "Florida Power & Light", url: "" },
+  { label: "Consolidated Edison", url: "" },
+  { label: "PSEG", url: "" },
+  { label: "Eversource Energy", url: "" },
+  { label: "Duke Energy", url: "" },
+  { label: "Georgia Power", url: "" },
+];
 
-const UCI_UTILITY_JURISDICTION_LABELS = new Set(
-  UCI_UTILITY_PORTALS.map((p) => p.jurisdiction),
-);
+/** Legacy saved rows; keep selectable so edits are not orphaned */
+const UCI_LEGACY_UTILITY_OPTIONS: { label: string; url: string }[] = [
+  { label: "BGE (Exelon)", url: "" },
+];
+
+const ALL_UCI_UTILITY_OPTIONS = [...UCI_UTILITY_OPTIONS, ...UCI_LEGACY_UTILITY_OPTIONS];
+
+const UCI_UTILITY_LABEL_SET = new Set(ALL_UCI_UTILITY_OPTIONS.map((o) => o.label));
 
 const LEGACY_DC_LOGIN_URL = "https://washington-dc-us.avolvecloud.com/User/Index";
 
@@ -130,15 +129,23 @@ const JURISDICTION_PORTALS = [
   { jurisdiction: "Access DC", url: "" },
   { jurisdiction: "MDOT SHA", url: "https://mdotsha.my.site.com/" },
   { jurisdiction: "OAS Avolve (General)", url: "https://oas.avolvecloud.com/Portal/" },
-  ...UCI_UTILITY_PORTALS,
 ];
 
 const defaultForm = {
   jurisdiction: "",
+  utility: "",
   portal_username: "",
   portal_password: "",
   login_url: "",
 };
+
+function isSavedUtilityCredential(storedJurisdiction: string): boolean {
+  return UCI_UTILITY_LABEL_SET.has(storedJurisdiction.trim());
+}
+
+function utilityOptionTestId(label: string): string {
+  return `option-utility-${label.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
 
 export function PortalCredentialsManager() {
   const { user } = useAuth();
@@ -152,7 +159,10 @@ export function PortalCredentialsManager() {
   const [showPassword, setShowPassword] = useState(false);
   const [jurisdictionOpen, setJurisdictionOpen] = useState(false);
   const [jurisdictionSearch, setJurisdictionSearch] = useState("");
+  const [utilityOpen, setUtilityOpen] = useState(false);
+  const [utilitySearch, setUtilitySearch] = useState("");
   const commandInputRef = useRef<HTMLInputElement>(null);
+  const utilityCommandInputRef = useRef<HTMLInputElement>(null);
 
   const fetchCredentials = useCallback(async () => {
     if (!user) return;
@@ -175,18 +185,32 @@ export function PortalCredentialsManager() {
     setEditingId(null);
     setForm({ ...defaultForm });
     setJurisdictionSearch("");
+    setUtilitySearch("");
     setDialogOpen(true);
   };
 
   const openEdit = (row: PortalCredentialSafe) => {
     setEditingId(row.id);
-    setForm({
-      jurisdiction: row.jurisdiction,
-      portal_username: row.portal_username,
-      portal_password: "",
-      login_url: row.login_url ?? "",
-    });
+    const stored = row.jurisdiction.trim();
+    if (isSavedUtilityCredential(stored)) {
+      setForm({
+        jurisdiction: "",
+        utility: stored,
+        portal_username: row.portal_username,
+        portal_password: "",
+        login_url: row.login_url ?? "",
+      });
+    } else {
+      setForm({
+        jurisdiction: row.jurisdiction,
+        utility: "",
+        portal_username: row.portal_username,
+        portal_password: "",
+        login_url: row.login_url ?? "",
+      });
+    }
     setJurisdictionSearch("");
+    setUtilitySearch("");
     setDialogOpen(true);
   };
 
@@ -195,15 +219,28 @@ export function PortalCredentialsManager() {
     setForm((f) => ({
       ...f,
       jurisdiction: jurisdictionName,
+      utility: "",
       login_url: match ? match.url : "",
     }));
     setJurisdictionOpen(false);
   };
 
+  const handleUtilitySelect = (utilityLabel: string) => {
+    const match = ALL_UCI_UTILITY_OPTIONS.find((u) => u.label === utilityLabel);
+    setForm((f) => ({
+      ...f,
+      utility: utilityLabel,
+      jurisdiction: "",
+      login_url: match ? match.url : "",
+    }));
+    setUtilityOpen(false);
+  };
+
   const handleSave = async () => {
     if (!user) return;
-    if (!form.jurisdiction.trim() || !form.portal_username.trim()) {
-      toast.error("Jurisdiction and username are required");
+    const jurisdictionPayload = form.utility.trim() || form.jurisdiction.trim();
+    if (!jurisdictionPayload || !form.portal_username.trim()) {
+      toast.error("Select a jurisdiction or a utility provider, and enter a username");
       return;
     }
 
@@ -217,13 +254,13 @@ export function PortalCredentialsManager() {
       const trimmedUrl = form.login_url.trim();
       const loginUrl = trimmedUrl
         ? trimmedUrl
-        : UCI_UTILITY_JURISDICTION_LABELS.has(form.jurisdiction.trim())
+        : UCI_UTILITY_LABEL_SET.has(jurisdictionPayload)
           ? ""
           : LEGACY_DC_LOGIN_URL;
 
       if (editingId) {
         await updatePortalCredentialViaApi(editingId, {
-          jurisdiction: form.jurisdiction.trim(),
+          jurisdiction: jurisdictionPayload,
           portal_username: form.portal_username.trim(),
           login_url: loginUrl,
           ...(form.portal_password.trim()
@@ -233,7 +270,7 @@ export function PortalCredentialsManager() {
         toast.success("Credentials updated");
       } else {
         await createPortalCredentialViaApi({
-          jurisdiction: form.jurisdiction.trim(),
+          jurisdiction: jurisdictionPayload,
           portal_username: form.portal_username.trim(),
           portal_password: form.portal_password.trim(),
           login_url: loginUrl,
@@ -263,8 +300,14 @@ export function PortalCredentialsManager() {
   };
 
   const filteredJurisdictions = JURISDICTION_PORTALS.filter((j) =>
-    j.jurisdiction.toLowerCase().includes(jurisdictionSearch.toLowerCase())
+    j.jurisdiction.toLowerCase().includes(jurisdictionSearch.toLowerCase()),
   );
+
+  const filteredUtilities = ALL_UCI_UTILITY_OPTIONS.filter((u) =>
+    u.label.toLowerCase().includes(utilitySearch.toLowerCase()),
+  );
+
+  const hasPortalTarget = !!(form.utility.trim() || form.jurisdiction.trim());
 
   return (
     <>
@@ -293,7 +336,7 @@ export function PortalCredentialsManager() {
             </div>
           ) : credentials.length === 0 ? (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-credentials">
-              No credentials saved. Click &quot;Add New&quot; to add jurisdiction portal logins.
+              No credentials saved. Click &quot;Add New&quot; to add permit or utility portal logins.
             </p>
           ) : (
             <ul className="space-y-3" data-testid="list-credentials">
@@ -345,6 +388,7 @@ export function PortalCredentialsManager() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Jurisdiction</Label>
+              <p className="text-xs text-muted-foreground">Use this for permit portals.</p>
               <Popover open={jurisdictionOpen} onOpenChange={setJurisdictionOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -412,6 +456,61 @@ export function PortalCredentialsManager() {
               </Popover>
             </div>
             <div className="grid gap-2">
+              <Label>Utility</Label>
+              <p className="text-xs text-muted-foreground">Use this for utility coordination portals.</p>
+              <Popover open={utilityOpen} onOpenChange={setUtilityOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={utilityOpen}
+                    className="w-full justify-between font-normal"
+                    data-testid="combobox-utility"
+                  >
+                    {form.utility || "Select a utility provider..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      ref={utilityCommandInputRef}
+                      placeholder="Search utilities..."
+                      value={utilitySearch}
+                      onValueChange={setUtilitySearch}
+                      data-testid="input-utility-search"
+                    />
+                    <CommandList>
+                      <CommandEmpty>No utility providers found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredUtilities.map((u) => (
+                          <CommandItem
+                            key={u.label}
+                            value={u.label}
+                            onSelect={() => handleUtilitySelect(u.label)}
+                            data-testid={utilityOptionTestId(u.label)}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                form.utility === u.label ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span>{u.label}</span>
+                              {u.url ? (
+                                <span className="text-xs text-muted-foreground truncate max-w-[300px]">{u.url}</span>
+                              ) : null}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="portal_username">Username</Label>
               <Input
                 id="portal_username"
@@ -457,7 +556,8 @@ export function PortalCredentialsManager() {
                 data-testid="input-login-url"
               />
               <p className="text-xs text-muted-foreground">
-                Auto-filled when selecting a jurisdiction. You can edit it manually.
+                Auto-filled when you pick a permit jurisdiction. Utility portals usually leave this blank unless you know
+                the login URL.
               </p>
             </div>
           </div>
@@ -469,7 +569,7 @@ export function PortalCredentialsManager() {
               onClick={handleSave}
               disabled={
                 saving ||
-                !form.jurisdiction.trim() ||
+                !hasPortalTarget ||
                 !form.portal_username.trim() ||
                 (!editingId && !form.portal_password.trim())
               }
