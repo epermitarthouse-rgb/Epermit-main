@@ -1130,34 +1130,20 @@ export function AgentWorkflowStatus() {
         );
       }
 
-      const { data: credentials, error: credError } = await supabase
+      const { data: credRow } = await supabase
         .from("portal_credentials")
-        .select("id, portal_username, portal_password, permit_number, login_url, jurisdiction")
-        .eq("user_id", user!.id);
+        .select("login_url")
+        .eq("id", credentialId)
+        .eq("user_id", user!.id)
+        .maybeSingle();
 
-      if (credError) throw new Error("Failed to load portal credentials");
-      if (!credentials?.length)
-        throw new Error(
-          "No portal credentials found. Add credentials in Settings.",
-        );
+      const loginUrl = String(credRow?.login_url ?? "").trim();
 
-      const cred = credentials.find((c) => c.id === credentialId);
-
-      if (!cred) {
-        throw new Error(
-          "The linked credential was not found. Please re-select a credential in the sidebar dropdown under \"Portal Credential\".",
-        );
-      }
-
-      const loginUrl = String(cred.login_url ?? "").trim();
       if (!loginUrl) {
         throw new Error(
-          `Missing Portal URL for ${cred.jurisdiction || "this jurisdiction"}. Please update Settings.`,
+          `Missing Portal URL for this credential. Please update Settings.`,
         );
       }
-
-      const username = cred.portal_username;
-      const password = cred.portal_password;
 
       toast.info("Logging into portal...");
 
@@ -1165,8 +1151,11 @@ export function AgentWorkflowStatus() {
       try {
         loginRes = await fetch(`${SCRAPER_URL}/api/login`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, portalUrl: loginUrl }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ credentialId, portalUrl: loginUrl }),
         });
       } catch (fetchErr) {
         throw new Error("SCRAPER_OFFLINE");

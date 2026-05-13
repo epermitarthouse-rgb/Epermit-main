@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +26,13 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
+import {
+  PortalCredentialSafe,
+  fetchPortalCredentialsList,
+  createPortalCredentialViaApi,
+  updatePortalCredentialViaApi,
+  deletePortalCredentialViaApi,
+} from "@/lib/portalCredentialsApi";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, KeyRound, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import {
@@ -38,21 +45,36 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-export interface PortalCredential {
-  id: string;
-  user_id: string;
-  jurisdiction: string;
-  portal_username: string;
-  portal_password: string;
-  login_url: string | null;
-  permit_number: string | null;
-  project_address: string | null;
-  project_id: string | null;
-  created_at: string;
-}
+/**
+ * UI label → seeded `utility_providers.slug` mapping:
+ * PEPCO → pepco, BGE → bge, Washington Gas → washington-gas,
+ * Dominion Energy → dominion, Florida Power & Light → fpl,
+ * Consolidated Edison → con-edison, PSEG → pseg, Eversource Energy → eversource,
+ * Duke Energy → duke-energy, Georgia Power → georgia-power.
+ * Legacy row label "BGE (Exelon)" preserved (still maps to Baltimore Gas & Electric intent).
+ */
+const UCI_UTILITY_PORTALS = [
+  { jurisdiction: "PEPCO", url: "" },
+  { jurisdiction: "BGE", url: "" },
+  /** Legacy label; keep so existing saved rows stay selectable and editable */
+  { jurisdiction: "BGE (Exelon)", url: "" },
+  { jurisdiction: "Washington Gas", url: "" },
+  { jurisdiction: "Dominion Energy", url: "" },
+  { jurisdiction: "Florida Power & Light", url: "" },
+  { jurisdiction: "Consolidated Edison", url: "" },
+  { jurisdiction: "PSEG", url: "" },
+  { jurisdiction: "Eversource Energy", url: "" },
+  { jurisdiction: "Duke Energy", url: "" },
+  { jurisdiction: "Georgia Power", url: "" },
+] as const;
+
+const UCI_UTILITY_JURISDICTION_LABELS = new Set(
+  UCI_UTILITY_PORTALS.map((p) => p.jurisdiction),
+);
+
+const LEGACY_DC_LOGIN_URL = "https://washington-dc-us.avolvecloud.com/User/Index";
 
 const JURISDICTION_PORTALS = [
   { jurisdiction: "Washington DC - ProjectDox", url: "https://washington-dc-us.avolvecloud.com/User/Index" },
@@ -106,9 +128,9 @@ const JURISDICTION_PORTALS = [
   { jurisdiction: "Charles County MD", url: "https://land.charlescountymd.gov/EnerGov_Prod/SelfService" },
   { jurisdiction: "311 DC", url: "" },
   { jurisdiction: "Access DC", url: "" },
-  { jurisdiction: "BGE (Exelon)", url: "" },
   { jurisdiction: "MDOT SHA", url: "https://mdotsha.my.site.com/" },
   { jurisdiction: "OAS Avolve (General)", url: "https://oas.avolvecloud.com/Portal/" },
+  ...UCI_UTILITY_PORTALS,
 ];
 
 const defaultForm = {
@@ -120,7 +142,7 @@ const defaultForm = {
 
 export function PortalCredentialsManager() {
   const { user } = useAuth();
-  const [credentials, setCredentials] = useState<PortalCredential[]>([]);
+  const [credentials, setCredentials] = useState<PortalCredentialSafe[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -135,16 +157,12 @@ export function PortalCredentialsManager() {
   const fetchCredentials = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("portal_credentials")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    if (error) {
-      toast.error("Failed to load credentials");
-      console.error(error);
-    } else {
-      setCredentials((data as PortalCredential[]) || []);
+    try {
+      const list = await fetchPortalCredentialsList();
+      setCredentials(list);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to load credentials");
+      console.error(e);
     }
     setLoading(false);
   }, [user]);
@@ -160,12 +178,12 @@ export function PortalCredentialsManager() {
     setDialogOpen(true);
   };
 
-  const openEdit = (row: PortalCredential) => {
+  const openEdit = (row: PortalCredentialSafe) => {
     setEditingId(row.id);
     setForm({
       jurisdiction: row.jurisdiction,
       portal_username: row.portal_username,
-      portal_password: row.portal_password,
+      portal_password: "",
       login_url: row.login_url ?? "",
     });
     setJurisdictionSearch("");
@@ -184,32 +202,42 @@ export function PortalCredentialsManager() {
 
   const handleSave = async () => {
     if (!user) return;
-    if (!form.jurisdiction.trim() || !form.portal_username.trim() || !form.portal_password.trim()) {
-      toast.error("Jurisdiction, username, and password are required");
+    if (!form.jurisdiction.trim() || !form.portal_username.trim()) {
+      toast.error("Jurisdiction and username are required");
+      return;
+    }
+
+    if (!editingId && !form.portal_password.trim()) {
+      toast.error("Password is required for new credentials");
       return;
     }
 
     setSaving(true);
     try {
-      const payload: Record<string, string | null> = {
-        user_id: user.id,
-        jurisdiction: form.jurisdiction.trim(),
-        portal_username: form.portal_username.trim(),
-        portal_password: form.portal_password.trim(),
-        login_url: form.login_url.trim() || "https://washington-dc-us.avolvecloud.com/User/Index",
-      };
+      const trimmedUrl = form.login_url.trim();
+      const loginUrl = trimmedUrl
+        ? trimmedUrl
+        : UCI_UTILITY_JURISDICTION_LABELS.has(form.jurisdiction.trim())
+          ? ""
+          : LEGACY_DC_LOGIN_URL;
 
       if (editingId) {
-        const { error } = await supabase
-          .from("portal_credentials")
-          .update(payload)
-          .eq("id", editingId)
-          .eq("user_id", user.id);
-        if (error) throw error;
+        await updatePortalCredentialViaApi(editingId, {
+          jurisdiction: form.jurisdiction.trim(),
+          portal_username: form.portal_username.trim(),
+          login_url: loginUrl,
+          ...(form.portal_password.trim()
+            ? { portal_password: form.portal_password.trim() }
+            : {}),
+        });
         toast.success("Credentials updated");
       } else {
-        const { error } = await supabase.from("portal_credentials").insert(payload);
-        if (error) throw error;
+        await createPortalCredentialViaApi({
+          jurisdiction: form.jurisdiction.trim(),
+          portal_username: form.portal_username.trim(),
+          portal_password: form.portal_password.trim(),
+          login_url: loginUrl,
+        });
         toast.success("Credentials added");
       }
       setDialogOpen(false);
@@ -224,16 +252,12 @@ export function PortalCredentialsManager() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    const { error } = await supabase
-      .from("portal_credentials")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-    if (error) {
-      toast.error("Failed to delete");
-    } else {
+    try {
+      await deletePortalCredentialViaApi(id);
       toast.success("Credentials removed");
       setCredentials((prev) => prev.filter((c) => c.id !== id));
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
     }
     setDeleteId(null);
   };
@@ -253,7 +277,7 @@ export function PortalCredentialsManager() {
                 Portal Credentials
               </CardTitle>
               <CardDescription>
-                Add and manage login details for jurisdiction portals (used by the Portal Monitor Agent).
+                Add and manage logins for jurisdiction permit portals and priority utility provider portals (Portal Monitor and UCI). Passwords are stored encrypted and are never shown back.
               </CardDescription>
             </div>
             <Button onClick={openAdd} className="bg-accent hover:bg-accent/90" data-testid="button-add-credential">
@@ -283,6 +307,11 @@ export function PortalCredentialsManager() {
                     <p className="font-medium truncate" data-testid={`text-jurisdiction-${c.id}`}>{c.jurisdiction}</p>
                     <p className="text-sm text-muted-foreground truncate" data-testid={`text-username-${c.id}`}>
                       {c.portal_username}
+                      {c.password_configured ? (
+                        <Badge variant="secondary" className="ml-2 align-middle text-[10px] font-medium">
+                          Configured
+                        </Badge>
+                      ) : null}
                     </p>
                     {c.login_url && (
                       <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-url-${c.id}`}>{c.login_url}</p>
@@ -310,7 +339,7 @@ export function PortalCredentialsManager() {
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit credentials" : "Add portal credentials"}</DialogTitle>
             <DialogDescription>
-              Enter login details for a jurisdiction portal. These are used by the Portal Monitor Agent.
+              Enter portal login details. Passwords remain encrypted server-side and are never loaded into this form.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -397,10 +426,15 @@ export function PortalCredentialsManager() {
               <Input
                 id="portal_password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Portal password"
+                placeholder={
+                  editingId
+                    ? "Leave blank to keep existing password"
+                    : "Portal password"
+                }
                 value={form.portal_password}
                 onChange={(e) => setForm((f) => ({ ...f, portal_password: e.target.value }))}
                 data-testid="input-portal-password"
+                autoComplete="new-password"
               />
               <Button
                 type="button"
@@ -437,7 +471,7 @@ export function PortalCredentialsManager() {
                 saving ||
                 !form.jurisdiction.trim() ||
                 !form.portal_username.trim() ||
-                !form.portal_password.trim()
+                (!editingId && !form.portal_password.trim())
               }
               className="bg-accent hover:bg-accent/90"
               data-testid="button-save-credential"

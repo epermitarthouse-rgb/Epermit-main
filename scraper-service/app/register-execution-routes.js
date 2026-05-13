@@ -332,6 +332,8 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const { resolveStoredPortalPassword } = require("./services/portal-credentials/portal-credentials-crypto.js");
+
 const STORAGE_BUCKET_SLUG = "project-drawings";
 let resolvedBucketId = null;
 
@@ -770,7 +772,57 @@ Provide a comprehensive analysis with specific code citations. Return ONLY valid
 
 // ─── Login endpoint ──────────────────────────────────────────────────────────
 app.post("/api/login", async (req, res) => {
-  const { username, password, portalUrl } = req.body;
+  let { username, password, portalUrl } = req.body || {};
+  const credentialIdRaw = req.body?.credentialId || req.body?.credential_id;
+
+  if (credentialIdRaw && String(credentialIdRaw).trim()) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "Authentication required when using credentialId",
+      });
+    }
+    const token = authHeader.split(" ")[1];
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      token,
+    );
+    const authedUser = authData?.user;
+    if (authErr || !authedUser) {
+      return res
+        .status(401)
+        .json({ error: "Invalid or expired authentication token" });
+    }
+
+    const { data: cred, error: credErr } = await supabase
+      .from("portal_credentials")
+      .select("user_id, portal_username, portal_password, login_url")
+      .eq("id", String(credentialIdRaw).trim())
+      .maybeSingle();
+
+    if (credErr || !cred) {
+      return res.status(404).json({ error: "credential_not_found" });
+    }
+    if (cred.user_id !== authedUser.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    username = cred.portal_username;
+    try {
+      password = resolveStoredPortalPassword(cred.portal_password);
+    } catch (_) {
+      return res.status(500).json({
+        error: "credential_decrypt_failed",
+        message:
+          "Saved portal credential could not be decrypted. Check server encryption key.",
+      });
+    }
+
+    const credLogin = cred.login_url && String(cred.login_url).trim();
+    if ((!portalUrl || !String(portalUrl).trim()) && credLogin) {
+      portalUrl = credLogin;
+    }
+  }
+
   console.log(`[login] raw portalUrl from body: ${JSON.stringify(req.body.portalUrl)}`);
   const dashboardUrl =
     portalUrl && portalUrl.trim()
@@ -1616,6 +1668,8 @@ const GENERIC_PROJECTDOX_TARGET_FOLDER_KEYS = new Set([
   "approved_supporting_documents",
 ]);
 
+const { createPortalCredentialsRouter } = require("./routes/portal-credentials.routes.js");
+
 const { createExportApiRouter } = require("./routes/export-api.routes.js");
 app.use(
   createExportApiRouter({
@@ -1624,6 +1678,8 @@ app.use(
     scraperRoot: SCRAPER_ROOT,
   }),
 );
+
+app.use(createPortalCredentialsRouter({ supabase }));
 
 const { createQuickBooksRouter } = require("./routes/quickbooks.routes.js");
 app.use("/api/quickbooks", createQuickBooksRouter({ supabase }));
@@ -9609,7 +9665,15 @@ app.post("/api/permitwizard/login", async (req, res) => {
       }
 
       loginUsername = cred.portal_username;
-      loginPassword = cred.portal_password;
+      try {
+        loginPassword = resolveStoredPortalPassword(cred.portal_password);
+      } catch (e) {
+        return res.status(500).json({
+          success: false,
+          error: "credential_decrypt_failed",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
     } catch (err) {
       return res.status(500).json({
         success: false,
@@ -10139,7 +10203,15 @@ app.post("/api/filing/login", async (req, res) => {
       }
 
       loginUsername = cred.portal_username;
-      loginPassword = cred.portal_password;
+      try {
+        loginPassword = resolveStoredPortalPassword(cred.portal_password);
+      } catch (e) {
+        return res.status(500).json({
+          success: false,
+          error: "credential_decrypt_failed",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
     } catch (err) {
       return res.status(500).json({
         success: false,

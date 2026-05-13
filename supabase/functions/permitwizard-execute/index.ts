@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
+import { resolveStoredPortalPasswordAsync } from "../_shared/portalCredentialCrypto.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -338,10 +340,14 @@ async function executeAuthentication(
     return { success: false, sessionToken: null, error: errorMsg, requiresHuman: false };
   }
 
+  const decryptedPassword = await resolveStoredPortalPasswordAsync(
+    credentials.portal_password as string | null,
+  );
+
   const loginBody: Record<string, unknown> = {
     credentialId: credentials.id,
     username: credentials.portal_username,
-    password: credentials.portal_password,
+    password: decryptedPassword,
     userId: filing.user_id,
     portal_type: portalConfig.portal_type,
     portal_config: {

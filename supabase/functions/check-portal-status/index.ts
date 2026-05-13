@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
+import { resolveStoredPortalPasswordAsync } from "../_shared/portalCredentialCrypto.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -33,9 +35,13 @@ serve(async (req) => {
     if (!credential) throw new Error("No credentials found");
 
     const username = credential.portal_username;
-    const password = credential.portal_password;
-    const loginUrl = credential.login_url || "https://washington-dc-us.avolvecloud.com/User/Index";
-    
+    const password = await resolveStoredPortalPasswordAsync(
+      credential.portal_password as string | null,
+    );
+    const loginUrl =
+      credential.login_url ||
+      "https://washington-dc-us.avolvecloud.com/User/Index";
+
     // Check for "Deep Run" Capability (Do we have the ProjectID?)
     const projectUrl = project.project_url || "";
     const idMatch = projectUrl.match(/ProjectID=(\d+)/i);
