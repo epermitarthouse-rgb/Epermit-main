@@ -357,7 +357,7 @@ const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<
         ref={ref}
         data-sidebar="group-label"
         className={cn(
-          "flex min-h-8 shrink-0 items-center rounded-md px-6 pt-6 pb-2 text-[11px] font-tight font-bold uppercase tracking-[0.16em] text-ink-tertiary-light/70 outline-none ring-sidebar-ring transition-[margin,opa] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+          "flex min-h-8 shrink-0 items-center rounded-md px-6 pb-2 pt-6 text-[11px] font-tight font-bold uppercase tracking-[0.16em] text-muted-foreground/80 outline-none ring-sidebar-ring transition-[margin,opa] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
           "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
           className,
         )}
@@ -408,13 +408,13 @@ const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li
 SidebarMenuItem.displayName = "SidebarMenuItem";
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-3 overflow-hidden rounded-md border-l-2 border-transparent px-4 py-2.5 text-left text-sm font-medium font-tight text-ink-secondary-light outline-none ring-sidebar-ring transition-all duration-200 ease-out-soft hover:bg-cream-raised/60 hover:text-ink-primary-light focus-visible:ring-2 active:bg-cream-raised/50 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-ink-secondary-dark dark:hover:bg-obsidian-raised/45 dark:hover:text-ink-primary-dark dark:active:bg-obsidian-raised/40 data-[active=true]:border-gold data-[active=true]:bg-gradient-to-r data-[active=true]:from-gold/10 data-[active=true]:to-transparent data-[active=true]:font-semibold data-[active=true]:text-gold-deep data-[active=true]:shadow-none data-[active=true]:hover:from-gold/12 data-[active=true]:hover:text-gold-deep data-[active=true]:[&>svg]:text-gold-deep dark:data-[active=true]:from-gold/15 dark:data-[active=true]:to-transparent dark:data-[active=true]:text-gold dark:data-[active=true]:[&>svg]:text-gold data-[state=open]:hover:bg-cream-raised/60 dark:data-[state=open]:hover:bg-obsidian-raised/45 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!gap-0 group-data-[collapsible=icon]:!border-l-0 group-data-[collapsible=icon]:!px-2 group-data-[collapsible=icon]:!py-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full items-center gap-3 overflow-hidden rounded-md border-l-2 border-transparent px-4 py-2.5 text-left text-sm font-medium font-tight text-sidebar-foreground/90 outline-none ring-sidebar-ring transition-all duration-200 ease-out-soft hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent/80 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:border-gold data-[active=true]:bg-gradient-to-r data-[active=true]:from-gold/10 data-[active=true]:to-transparent data-[active=true]:font-semibold data-[active=true]:text-gold-deep data-[active=true]:shadow-none data-[active=true]:hover:from-gold/12 data-[active=true]:hover:text-gold-deep data-[active=true]:[&>svg]:text-gold-deep dark:data-[active=true]:from-gold/15 dark:data-[active=true]:to-transparent dark:data-[active=true]:text-gold dark:data-[active=true]:[&>svg]:text-gold data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!gap-0 group-data-[collapsible=icon]:!border-l-0 group-data-[collapsible=icon]:!px-2 group-data-[collapsible=icon]:!py-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
         default: "",
         outline:
-          "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-cream-raised/60 hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))] dark:bg-transparent dark:hover:bg-obsidian-raised/45",
+          "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))] dark:bg-transparent",
       },
       size: {
         default: "min-h-10",
