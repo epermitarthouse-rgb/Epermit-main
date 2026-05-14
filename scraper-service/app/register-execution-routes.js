@@ -1684,6 +1684,9 @@ app.use(createPortalCredentialsRouter({ supabase }));
 const { createQuickBooksRouter } = require("./routes/quickbooks.routes.js");
 app.use("/api/quickbooks", createQuickBooksRouter({ supabase }));
 
+const { createUciRouter } = require("./routes/uci.routes.js");
+app.use("/api/uci", createUciRouter({ supabase }));
+
 function isMontgomeryPortalSubtypePayload(data) {
   return (
     data &&
