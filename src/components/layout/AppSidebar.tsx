@@ -27,10 +27,12 @@ import {
   Table2,
   KeyRound,
   Rocket,
+  RadioTower,
   FileSearch,
   Tags,
   Layers,
   Flag,
+  Palette,
 } from "lucide-react";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
@@ -81,7 +83,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 const PERMIT_NUMBER_STORAGE_KEY_PREFIX = "epermit:permitNumber";
 
 const SIDEBAR_FIELD_CLASS =
-  "h-9 w-full px-3 py-2 bg-cream text-sm font-mono border border-cream-sunken rounded-md text-ink-primary-light placeholder:text-ink-tertiary-light/70 focus:border-gold focus:ring-1 focus:ring-gold/25 outline-none transition-all dark:bg-obsidian dark:border-obsidian-strong dark:text-ink-primary-dark";
+  "h-9 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring/25 dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground";
 
 const mainNavigation = [
   {
@@ -103,6 +105,13 @@ const intakeNavigation = [
     href: "/permit-wizard-filing",
     icon: Rocket,
     description: "Multi-municipality filing pipeline",
+    requiresAuth: true,
+  },
+  {
+    title: "Utility Coordination",
+    href: "/uci",
+    icon: RadioTower,
+    description: "Utility provider lifecycle and stages",
     requiresAuth: true,
   },
   {
@@ -227,6 +236,13 @@ const resourcesNavigation = [
 ];
 
 const helpNavigation = [
+  {
+    title: "Design preview",
+    href: "/design-system-preview",
+    icon: Palette,
+    description: "Theme & component mock (internal)",
+    requiresAuth: true,
+  },
   {
     title: "Documentation",
     href: "/api-docs",
@@ -629,21 +645,21 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-cream-raised bg-cream text-ink-primary-light dark:border-obsidian-raised dark:bg-obsidian dark:text-ink-primary-dark">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       {/* Header with Logo */}
-      <SidebarHeader className="border-b border-cream-raised p-6 dark:border-obsidian-raised">
+      <SidebarHeader className="border-b border-sidebar-border p-6">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild className="hover:bg-cream-raised/60 dark:hover:bg-obsidian-raised/50">
+            <SidebarMenuButton size="lg" asChild className="hover:bg-sidebar-accent/80 dark:hover:bg-sidebar-accent/80">
               <Link to="/" className="flex items-center gap-3">
-                <div className="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg bg-gold text-cream shadow-cream">
+                <div className="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg bg-gold font-medium text-sidebar-primary-foreground shadow-cream dark:text-sidebar-primary-foreground">
                   <Building2 className="size-4" />
                 </div>
-                <div className="flex min-w-0 flex-col gap-0.5 leading-tight text-left">
-                  <span className="font-display text-2xl tracking-tight text-ink-primary-light dark:text-ink-primary-dark">
+                <div className="flex min-w-0 flex-col gap-0.5 text-left leading-tight">
+                  <span className="font-display text-2xl tracking-tight text-sidebar-foreground">
                     PermitPilot
                   </span>
-                  <span className="text-[11px] font-tight font-bold uppercase leading-none tracking-[0.16em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
+                  <span className="text-[11px] font-tight font-bold uppercase leading-none tracking-[0.16em] text-muted-foreground">
                     A Commun-ET product
                   </span>
                 </div>
@@ -818,7 +834,7 @@ export function AppSidebar() {
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <div className="mx-4 my-4 rounded-lg border border-cream-sunken bg-cream-raised p-4 shadow-cream dark:border-obsidian-strong dark:bg-obsidian-raised">
+                <div className="mx-4 my-4 rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-4 shadow-sm dark:bg-sidebar-accent/25">
                   <span className="text-[11px] font-tight font-bold uppercase tracking-[0.15em] text-ink-tertiary-light dark:text-ink-tertiary-dark">
                     PROJECT
                   </span>
@@ -924,7 +940,7 @@ export function AppSidebar() {
                     </Label>
                   </div>
                   {createNewProject && (
-                    <div className="space-y-2 rounded-md border border-cream-sunken bg-cream p-2 dark:border-obsidian-strong dark:bg-obsidian">
+                    <div className="space-y-2 rounded-md border border-sidebar-border bg-sidebar-accent/30 p-2 dark:bg-sidebar-accent/20">
                       <Input
                         placeholder="Project name (default: permit #)"
                         value={newProjectName}
@@ -1097,7 +1113,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="mt-auto border-t border-cream-raised pt-4 dark:border-obsidian-raised">
+      <SidebarFooter className="mt-auto border-t border-sidebar-border pt-4">
         <SidebarMenu>
           {/* Auth Section */}
           {user ? (

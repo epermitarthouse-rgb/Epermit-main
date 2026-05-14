@@ -10,7 +10,7 @@ type SectionProps = {
 
 export const Section = ({ variant, children, className = "" }: SectionProps) => {
   const styles =
-    variant === "cream" ? "bg-cream text-ink-primary-light" : "bg-obsidian text-ink-primary-dark";
+    variant === "cream" ? "bg-background text-foreground" : "bg-obsidian text-foreground";
 
   return <section className={cn(styles, "px-6 md:px-8", className)}>{children}</section>;
 };

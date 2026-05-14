@@ -29,21 +29,21 @@ function ActiveProjectBadge() {
   const permit = project.permit_number;
   const jurisdiction = project.jurisdiction;
   return (
-    <div className="flex items-center gap-2 text-sm text-ink-primary-light/90 dark:text-ink-primary-dark truncate min-w-0" data-testid="header-active-project">
+    <div className="flex items-center gap-2 truncate min-w-0 text-sm text-foreground/90" data-testid="header-active-project">
       <Building2 className="h-3.5 w-3.5 shrink-0 text-gold" />
-      <span className="font-medium text-ink-primary-light dark:text-cream truncate" data-testid="header-project-name">
+      <span className="font-medium text-foreground truncate" data-testid="header-project-name">
         {project.name}
       </span>
       {permit && (
         <span
-          className="hidden sm:inline shrink-0 rounded-full border border-cream-sunken bg-cream px-2 py-0.5 font-mono text-[11px] tabular-nums leading-none text-ink-primary-light shadow-sm dark:bg-cream dark:text-ink-primary-light"
+          className="hidden sm:inline shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[11px] tabular-nums leading-none text-foreground shadow-sm"
           data-testid="header-permit-number"
         >
           {permit}
         </span>
       )}
       {jurisdiction && (
-        <span className="hidden md:inline-flex items-center gap-1 text-xs text-ink-primary-light/75 dark:text-ink-secondary-dark" data-testid="header-jurisdiction">
+        <span className="hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="header-jurisdiction">
           <MapPin className="h-3 w-3 shrink-0 opacity-90" />
           {jurisdiction}
         </span>
@@ -92,8 +92,8 @@ function DashboardContent({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-50 flex h-16 items-center gap-2 sm:gap-4 border-b border-cream-raised/70 bg-cream/85 backdrop-blur-md px-3 sm:px-4 lg:px-6 text-ink-primary-light dark:border-obsidian-raised/50 dark:bg-obsidian/90 dark:text-ink-primary-dark">
-          <SidebarTrigger className="shrink-0 p-2 rounded-md text-ink-secondary-light hover:text-ink-primary-light hover:bg-cream-raised/80 dark:hover:bg-obsidian-raised/50 dark:hover:text-ink-primary-dark" />
+        <header className="sticky top-0 z-50 flex h-16 items-center gap-2 sm:gap-4 border-b border-border/70 bg-background/85 px-3 text-foreground backdrop-blur-md sm:gap-4 sm:px-4 lg:px-6 dark:border-border/50">
+          <SidebarTrigger className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-muted/80 hover:text-foreground" />
           
           <div className="flex-1 min-w-0">
             <ActiveProjectBadge />
@@ -104,12 +104,12 @@ function DashboardContent({ children }: { children: ReactNode }) {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden sm:flex gap-2 border border-cream-sunken/80 bg-cream-sunken/90 px-3 font-tight text-ink-primary-light/85 hover:bg-cream-raised hover:text-ink-primary-light dark:border-obsidian-raised/50 dark:bg-obsidian-raised/50 dark:text-ink-primary-dark/90 dark:hover:bg-obsidian-raised dark:hover:text-ink-primary-dark"
+              className="hidden sm:flex gap-2 border border-border/80 bg-muted/60 px-3 font-tight text-foreground/90 hover:bg-muted hover:text-foreground dark:border-border/50 dark:bg-muted/40"
               onClick={() => setCommandOpen(true)}
             >
               <Search className="h-4 w-4 shrink-0 text-gold" />
-              <span className="text-ink-primary-light/80 dark:text-ink-primary-dark/85">Search...</span>
-              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-cream-raised bg-cream px-1.5 font-mono text-[11px] font-medium tabular-nums text-ink-secondary-light sm:flex dark:border-obsidian dark:bg-obsidian-raised dark:text-ink-secondary-dark">
+              <span className="text-muted-foreground">Search...</span>
+              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium tabular-nums text-muted-foreground sm:flex">
                 ⌘K
               </kbd>
             </Button>
@@ -119,7 +119,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
               variant="outline"
               size="sm"
               onClick={handleSignOut}
-              className="gap-2 border border-gold text-gold hover:bg-gold hover:text-cream dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-obsidian"
+              className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>
@@ -127,7 +127,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
           </div>
         </header>
         
-        <main className="flex-1 overflow-auto overflow-x-hidden bg-cream pb-16 text-ink-primary-light dark:bg-obsidian dark:text-ink-primary-dark md:pb-0">
+        <main className="flex-1 overflow-auto overflow-x-hidden bg-background pb-16 text-foreground md:pb-0">
           {children}
         </main>
         
@@ -149,7 +149,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <SelectedProjectProvider>
       <ScrapeProvider>
         <SidebarProvider>
-          <div className="flex min-h-screen w-full bg-cream text-ink-primary-light dark:bg-obsidian dark:text-ink-primary-dark">
+          <div className="flex min-h-screen w-full bg-background text-foreground">
             <AppSidebar />
             <DashboardContent>{children}</DashboardContent>
           </div>

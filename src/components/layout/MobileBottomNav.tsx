@@ -19,7 +19,7 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
     return (
       <nav
         ref={ref}
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-cream-raised bg-cream/95 text-ink-primary-light backdrop-blur supports-[backdrop-filter]:bg-cream/80 md:hidden dark:border-obsidian-raised dark:bg-obsidian/95 dark:text-ink-primary-dark dark:supports-[backdrop-filter]:bg-obsidian/80"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 text-foreground backdrop-blur supports-[backdrop-filter]:bg-background/85 md:hidden dark:border-border dark:supports-[backdrop-filter]:bg-background/85"
       >
         <div className="flex items-center justify-around h-16 px-2 pb-[env(safe-area-inset-bottom)]">
           {navItems.map((item) => {
