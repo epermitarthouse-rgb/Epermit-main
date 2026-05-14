@@ -53,6 +53,8 @@ import BaltimorePortalHome from "./pages/baltimore/BaltimorePortalHome";
 import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
 import BaltimoreRecordsListPage from "./pages/baltimore/BaltimoreRecordsListPage";
 import BaltimoreRecordDetailPage from "./pages/baltimore/BaltimoreRecordDetailPage";
+import UciDashboard from "./pages/UciDashboard";
+import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
 
 const queryClient = new QueryClient();
 
@@ -137,6 +139,8 @@ const App = () => (
                   <Route path="/api-docs" element={<APIDocumentation />} />
                   <Route path="/checklist-history" element={<ChecklistHistory />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/uci" element={<UciDashboard />} />
+                  <Route path="/design-system-preview" element={<EpermitDesignSystemPreview />} />
                   <Route path="/comment-review" element={<CommentReview />} />
                   <Route path="/response-matrix" element={<ResponseMatrix />} />
                   <Route path="/classified-comments" element={<ClassifiedComments />} />
