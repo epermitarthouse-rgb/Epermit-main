@@ -67,6 +67,25 @@ export function isFairfaxPortal(
   return false;
 }
 
+/**
+ * Arlington County VA — Accela Citizen Access (aca-prod.accela.com/ARLINGTONCO).
+ */
+export function isArlingtonPortal(
+  credential: PortalCredentialLike | null | undefined,
+): boolean {
+  if (!credential) return false;
+  const url = (credential.login_url ?? "").trim().replace(/\/+$/, "");
+  const jurisdiction = (credential.jurisdiction ?? "").trim().toLowerCase();
+  if (/\/ARLINGTONCO(\/|$)/i.test(url)) return true;
+  if (
+    url &&
+    /accela\.com/i.test(url) &&
+    /\barlington\b/i.test(jurisdiction)
+  )
+    return true;
+  return false;
+}
+
 export type PortalViewVariant =
   | "baltimore"
   | "fairfax"

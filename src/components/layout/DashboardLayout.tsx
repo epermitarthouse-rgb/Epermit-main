@@ -82,8 +82,10 @@ function DashboardContent({ children }: { children: ReactNode }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const scrape = useScrapeOptional();
 
   const handleSignOut = async () => {
+    scrape?.clearAccelaBrowserSession();
     await signOut();
     toast.success("Signed out successfully");
     navigate("/");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,20 +23,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 import { useProjects } from "@/hooks/useProjects";
 import {
   getCoordinationDetail,
   initProjectCoordination,
   listProjectCoordination,
   listUciProviders,
+  postPepcoDashboardDiscovery,
+  postPepcoDiscovery,
+  resumePepcoDiscovery,
+  submitPepcoMfaCode,
   transitionCoordination,
 } from "@/lib/uciApi";
+import { getMicrosoftMailboxStatus } from "@/lib/microsoftMailboxApi";
 import { toast } from "sonner";
 import {
   Info,
@@ -49,6 +63,7 @@ import { cn } from "@/lib/utils";
 import type {
   CoordinationRecord,
   LifecycleState,
+  UciPepcoDashboardCardMeta,
   UtilityProvider,
   UciRecordDetailResponse,
 } from "@/types/uci";
@@ -231,6 +246,20 @@ export default function UciDashboard() {
   const [reason, setReason] = useState("");
   const [transitionSaving, setTransitionSaving] = useState(false);
 
+  const [pepcoDiscoveryBusy, setPepcoDiscoveryBusy] = useState(false);
+  const [pepcoDiscoveryMsg, setPepcoDiscoveryMsg] = useState<string | null>(null);
+  const [pepcoDashboardBusy, setPepcoDashboardBusy] = useState(false);
+  const [pepcoDashboardMsg, setPepcoDashboardMsg] = useState<string | null>(null);
+  const [pepcoCodeModalOpen, setPepcoCodeModalOpen] = useState(false);
+  const [pepcoCodeModalError, setPepcoCodeModalError] = useState<string | null>(null);
+  const [pepcoCodeSubmitBusy, setPepcoCodeSubmitBusy] = useState(false);
+  const [pepcoDashboardMfaSessionId, setPepcoDashboardMfaSessionId] = useState<string | null>(null);
+  const [pepcoDashboardMfaCaptureIds, setPepcoDashboardMfaCaptureIds] = useState(false);
+  const pepcoCodeInputRef = useRef<HTMLInputElement>(null);
+  const [pepcoPendingSessionId, setPepcoPendingSessionId] = useState<string | null>(null);
+  const [pepcoResumeBusy, setPepcoResumeBusy] = useState(false);
+  const [pepcoAutoEmailMfa, setPepcoAutoEmailMfa] = useState(false);
+
   const loadProviders = useCallback(async () => {
     setProvidersLoading(true);
     try {
@@ -285,6 +314,14 @@ export default function UciDashboard() {
     setDetailOpen(true);
     setDetailLoading(true);
     setReason("");
+    setPepcoDiscoveryMsg(null);
+    setPepcoDashboardMsg(null);
+    setPepcoCodeModalOpen(false);
+    setPepcoCodeModalError(null);
+    setPepcoDashboardMfaSessionId(null);
+    setPepcoDashboardMfaCaptureIds(false);
+    if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+    setPepcoPendingSessionId(null);
     try {
       const d = await getCoordinationDetail(id);
       setDetail(d);
@@ -358,6 +395,304 @@ export default function UciDashboard() {
 
   const detailRecord = detail?.record;
   const detailProvider = detailRecord ? getEmbeddedProvider(detailRecord) : null;
+  const isPepcoCoordination =
+    String(detailProvider?.slug ?? "").toLowerCase() === "pepco";
+
+  const pepcoDashboardFromMetadata = useMemo(() => {
+    const m =
+      detailRecord?.metadata &&
+      typeof detailRecord.metadata === "object" &&
+      detailRecord.metadata !== null &&
+      !Array.isArray(detailRecord.metadata)
+        ? (detailRecord.metadata as Record<string, unknown>)
+        : null;
+    if (!m) return null;
+    const nested = m.pepco_dashboard_discovery;
+    const nestedObj =
+      nested && typeof nested === "object" && !Array.isArray(nested)
+        ? (nested as Record<string, unknown>)
+        : null;
+    const cards = Array.isArray(nestedObj?.cards)
+      ? (nestedObj!.cards as UciPepcoDashboardCardMeta[])
+      : [];
+
+    const status =
+      typeof m.pepco_dashboard_discovery_status === "string"
+        ? m.pepco_dashboard_discovery_status
+        : typeof nestedObj?.status === "string"
+          ? nestedObj.status
+          : null;
+    const lastAt =
+      typeof m.pepco_dashboard_last_discovered_at === "string"
+        ? m.pepco_dashboard_last_discovered_at
+        : typeof nestedObj?.last_discovered_at === "string"
+          ? nestedObj.last_discovered_at
+          : null;
+    const cardsFound =
+      typeof m.pepco_dashboard_cards_found === "number"
+        ? m.pepco_dashboard_cards_found
+        : typeof nestedObj?.cards_found === "number"
+          ? nestedObj.cards_found
+          : cards.length;
+    const applicationIdsFound =
+      typeof m.pepco_dashboard_application_ids_found === "number"
+        ? m.pepco_dashboard_application_ids_found
+        : typeof nestedObj?.application_ids_found === "number"
+          ? nestedObj.application_ids_found
+          : 0;
+
+    return {
+      status,
+      lastAt,
+      cardsFound,
+      applicationIdsFound,
+      cards,
+    };
+  }, [detailRecord?.metadata]);
+
+  useEffect(() => {
+    if (!detailOpen || !detailId || !isPepcoCoordination) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const st = await getMicrosoftMailboxStatus();
+        if (!cancelled) setPepcoAutoEmailMfa(Boolean(st.connected));
+      } catch {
+        if (!cancelled) setPepcoAutoEmailMfa(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailOpen, detailId, isPepcoCoordination]);
+
+  const handlePepcoDiscovery = async () => {
+    if (!detailId) return;
+    setPepcoDiscoveryBusy(true);
+    setPepcoDiscoveryMsg(null);
+    setPepcoPendingSessionId(null);
+    try {
+      const out = await postPepcoDiscovery(detailId, {
+        headed: true,
+        auto_email_mfa: pepcoAutoEmailMfa,
+      });
+      if (out.status === "human_required") {
+        toast.message(out.message || "Verification required");
+        if (out.session_id) setPepcoPendingSessionId(out.session_id);
+        setPepcoDiscoveryMsg(
+          "PEPCO MFA required. Complete the email code in the opened browser, then click Resume.",
+        );
+      } else if (out.status === "completed") {
+        setPepcoPendingSessionId(null);
+        toast.success(
+          `Login reached dashboard checkpoint (${out.checkpoint ?? "dashboard_ready"}).`,
+        );
+        setPepcoDiscoveryMsg(
+          `Checkpoint: ${out.checkpoint ?? "dashboard_ready"}. URL reached without MFA prompt.`,
+        );
+      } else {
+        setPepcoPendingSessionId(null);
+        toast.error(out.message || "PEPCO login check failed");
+        setPepcoDiscoveryMsg(out.message || "Login check failed.");
+      }
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "PEPCO discovery request failed";
+      toast.error(msg);
+      setPepcoDiscoveryMsg(msg);
+    } finally {
+      setPepcoDiscoveryBusy(false);
+    }
+  };
+
+  const handlePepcoResume = async () => {
+    if (!detailId || !pepcoPendingSessionId) return;
+    setPepcoResumeBusy(true);
+    try {
+      const out = await resumePepcoDiscovery(detailId, {
+        session_id: pepcoPendingSessionId,
+      });
+      if (out.status === "completed") {
+        setPepcoPendingSessionId(null);
+        toast.success("PEPCO dashboard reached.");
+        setPepcoDiscoveryMsg("PEPCO dashboard reached.");
+      } else if (out.status === "human_required") {
+        toast.message(out.message || "Verification still required");
+        setPepcoDiscoveryMsg(
+          "PEPCO MFA required. Complete the email code in the opened browser, then click Resume.",
+        );
+        if (out.session_id) setPepcoPendingSessionId(out.session_id);
+      } else {
+        setPepcoPendingSessionId(null);
+        toast.error(out.message || "Resume failed");
+        setPepcoDiscoveryMsg(out.message || "Resume failed.");
+      }
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "PEPCO resume request failed";
+      toast.error(msg);
+      setPepcoDiscoveryMsg(msg);
+    } finally {
+      setPepcoResumeBusy(false);
+    }
+  };
+
+  const handlePepcoDashboardDiscover = async (captureApplicationIds: boolean) => {
+    if (!detailId) return;
+    setPepcoDashboardBusy(true);
+    setPepcoDashboardMsg(null);
+    setPepcoCodeModalError(null);
+    setPepcoCodeModalOpen(false);
+    if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+    setPepcoPendingSessionId(null);
+    try {
+      const out = await postPepcoDashboardDiscovery(detailId, {
+        headed: true,
+        auto_email_mfa: pepcoAutoEmailMfa,
+        capture_application_ids: captureApplicationIds,
+      });
+      if (out.status === "human_required") {
+        if ("reason" in out && out.reason === "mfa_contact_method_selection_required") {
+          setPepcoCodeModalOpen(false);
+          if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+          toast.message(out.message || "Select Email in the PEPCO browser, then continue.");
+          setPepcoDashboardMsg(
+            typeof out.message === "string" && out.message.trim()
+              ? out.message
+              : "Select Email in the PEPCO browser, then continue.",
+          );
+        } else if (
+          "reason" in out &&
+          out.reason === "mfa_email_code_input_required" &&
+          "session_id" in out &&
+          typeof out.session_id === "string"
+        ) {
+          setPepcoDashboardMfaSessionId(out.session_id);
+          setPepcoDashboardMfaCaptureIds(
+            "capture_application_ids" in out ? out.capture_application_ids === true : captureApplicationIds,
+          );
+          setPepcoCodeModalError(null);
+          setPepcoCodeModalOpen(true);
+          toast.message("Enter the PEPCO verification code in the dialog.");
+          setPepcoDashboardMsg(
+            out.message || "Enter the verification code sent to your PEPCO email.",
+          );
+        } else {
+          toast.message(out.message || "Verification required");
+          if (out.session_id) setPepcoPendingSessionId(out.session_id);
+          setPepcoDashboardMsg(
+            "PEPCO MFA required in the dashboard flow. Complete the email code in the opened browser, then click Resume PEPCO Login and run Discover PEPCO Dashboard again.",
+          );
+        }
+      } else if (out.status === "completed") {
+        setPepcoPendingSessionId(null);
+        const cardsFound =
+          "cards_found" in out && typeof out.cards_found === "number" ? out.cards_found : undefined;
+        const idsFound =
+          "application_ids_found" in out && typeof out.application_ids_found === "number"
+            ? out.application_ids_found
+            : undefined;
+        const suffix =
+          cardsFound !== undefined
+            ? ` ${cardsFound} dashboard card${cardsFound === 1 ? "" : "s"} extracted.`
+            : "";
+        const ids =
+          idsFound !== undefined ? ` Application IDs captured: ${idsFound}.` : "";
+        toast.success(`PEPCO dashboard discovery completed.${suffix}${ids}`);
+        setPepcoDashboardMsg(out.checkpoint ?? "completed");
+      } else if (out.status === "failed") {
+        setPepcoPendingSessionId(null);
+        toast.error(out.message || "Dashboard discovery failed");
+        setPepcoDashboardMsg(out.message || "Dashboard discovery failed.");
+      } else {
+        setPepcoPendingSessionId(null);
+        toast.message("Dashboard discovery finished with an unexpected response.");
+      }
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "PEPCO dashboard discovery request failed";
+      toast.error(msg);
+      setPepcoDashboardMsg(msg);
+    } finally {
+      setPepcoDashboardBusy(false);
+    }
+  };
+
+  const handleSubmitPepcoDashboardCode = async () => {
+    if (!detailId || !pepcoDashboardMfaSessionId) return;
+    const raw = pepcoCodeInputRef.current?.value ?? "";
+    const code = raw.trim().replace(/\s+/g, "");
+    if (!/^\d{4,8}$/.test(code)) {
+      setPepcoCodeModalError("Enter a numeric code (4–8 digits).");
+      return;
+    }
+    setPepcoCodeSubmitBusy(true);
+    setPepcoCodeModalError(null);
+    try {
+      const out = await submitPepcoMfaCode(detailId, {
+        session_id: pepcoDashboardMfaSessionId,
+        code,
+        continue_action: "discover_dashboard",
+        capture_application_ids: pepcoDashboardMfaCaptureIds,
+      });
+      if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+
+      if (out.status === "completed") {
+        setPepcoCodeModalOpen(false);
+        setPepcoDashboardMfaSessionId(null);
+        const cardsFound =
+          "cards_found" in out && typeof out.cards_found === "number" ? out.cards_found : undefined;
+        const idsFound =
+          "application_ids_found" in out && typeof out.application_ids_found === "number"
+            ? out.application_ids_found
+            : undefined;
+        const suffix =
+          cardsFound !== undefined
+            ? ` ${cardsFound} card${cardsFound === 1 ? "" : "s"} saved.`
+            : "";
+        const ids =
+          idsFound !== undefined ? ` ${idsFound} application ID${idsFound === 1 ? "" : "s"} captured.` : "";
+        toast.success(`Dashboard discovery completed.${suffix}${ids}`);
+        setPepcoDashboardMsg("completed");
+      } else if (
+        out.status === "human_required" &&
+        "reason" in out &&
+        out.reason === "mfa_email_code_input_required"
+      ) {
+        setPepcoCodeModalError(
+          typeof out.message === "string"
+            ? out.message
+            : "That code was not accepted. Try again with the latest code.",
+        );
+        if ("session_id" in out && typeof out.session_id === "string") {
+          setPepcoDashboardMfaSessionId(out.session_id);
+        }
+      } else if (out.status === "failed") {
+        setPepcoCodeModalOpen(false);
+        setPepcoDashboardMfaSessionId(null);
+        toast.error(out.message || "Verification failed");
+        setPepcoDashboardMsg(out.message || "Discovery session ended.");
+      } else {
+        toast.message("Unexpected response after submitting code.");
+      }
+
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Submit code failed";
+      setPepcoCodeModalError(msg);
+      toast.error(msg);
+    } finally {
+      setPepcoCodeSubmitBusy(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -718,6 +1053,201 @@ export default function UciDashboard() {
                 ) : null}
               </div>
 
+              {isPepcoCoordination ? (
+                <div
+                  className={cn(
+                    "rounded-lg border border-teal/25 bg-cream-raised/60 p-3 dark:border-teal/35 dark:bg-obsidian/40",
+                  )}
+                >
+                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
+                    PEPCO portal
+                  </p>
+                  <div className="mb-3 flex items-start gap-2">
+                    <Checkbox
+                      id={`pepco-auto-email-${detailId ?? "row"}`}
+                      checked={pepcoAutoEmailMfa}
+                      onCheckedChange={(c) => setPepcoAutoEmailMfa(Boolean(c))}
+                      disabled={
+                        pepcoDiscoveryBusy ||
+                        pepcoResumeBusy ||
+                        pepcoDashboardBusy ||
+                        detailLoading
+                      }
+                      className={cn(
+                        "mt-1 shrink-0 border-gold/50 dark:border-cream/35",
+                        "data-[state=checked]:border-teal data-[state=checked]:bg-teal data-[state=checked]:text-white",
+                        "dark:data-[state=checked]:border-teal-soft dark:data-[state=checked]:bg-teal",
+                      )}
+                    />
+                    <div className="space-y-0.5">
+                      <Label htmlFor={`pepco-auto-email-${detailId ?? "row"}`} className={uciManualFormTextClass}>
+                        Auto-fetch email MFA code
+                      </Label>
+                      <p className={cn("text-[11px] leading-snug", uciMutedClass)}>
+                        Requires a connected Microsoft mailbox in Settings. Leave off for manual MFA only.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={uciToolbarOutlineButtonClass}
+                      disabled={
+                        pepcoDiscoveryBusy || pepcoDashboardBusy || detailLoading
+                      }
+                      aria-busy={pepcoDiscoveryBusy}
+                      onClick={() => void handlePepcoDiscovery()}
+                    >
+                      {pepcoDiscoveryBusy ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Run PEPCO Login Check
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={uciToolbarOutlineButtonClass}
+                      disabled={
+                        pepcoResumeBusy ||
+                        pepcoDashboardBusy ||
+                        detailLoading ||
+                        !pepcoPendingSessionId
+                      }
+                      aria-busy={pepcoResumeBusy}
+                      onClick={() => void handlePepcoResume()}
+                    >
+                      {pepcoResumeBusy ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Resume PEPCO Login
+                    </Button>
+                  </div>
+                  {pepcoDiscoveryMsg ? (
+                    <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoDiscoveryMsg}</p>
+                  ) : null}
+
+                  <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
+
+                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
+                    PEPCO dashboard (read-only discovery)
+                  </p>
+                  <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
+                    Extracts dashboard cards after login/MFA. Optional second pass clicks each card only to read the
+                    application ID from the URL (no overview data). Reuses the MFA options above.
+                  </p>
+
+                  <div className="mb-3 space-y-1 text-xs leading-snug">
+                    <p className={uciManualFormTextClass}>
+                      <span className="font-medium">Last discovery:</span>{" "}
+                      {pepcoDashboardFromMetadata?.lastAt
+                        ? formatWhen(pepcoDashboardFromMetadata.lastAt)
+                        : "—"}
+                    </p>
+                    <p className={uciManualFormTextClass}>
+                      <span className="font-medium">Stored status:</span>{" "}
+                      {pepcoDashboardFromMetadata?.status ?? "—"}
+                      {typeof pepcoDashboardFromMetadata?.cardsFound === "number" ? (
+                        <>
+                          {" "}
+                          · {pepcoDashboardFromMetadata.cardsFound} card
+                          {pepcoDashboardFromMetadata.cardsFound === 1 ? "" : "s"}
+                        </>
+                      ) : null}
+                      {typeof pepcoDashboardFromMetadata?.applicationIdsFound === "number" &&
+                      pepcoDashboardFromMetadata.applicationIdsFound > 0 ? (
+                        <>
+                          {" "}
+                          · {pepcoDashboardFromMetadata.applicationIdsFound} application ID
+                          {pepcoDashboardFromMetadata.applicationIdsFound === 1 ? "" : "s"}
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={uciToolbarOutlineButtonClass}
+                      disabled={
+                        pepcoDashboardBusy ||
+                        pepcoDiscoveryBusy ||
+                        pepcoResumeBusy ||
+                        detailLoading
+                      }
+                      aria-busy={pepcoDashboardBusy}
+                      onClick={() => void handlePepcoDashboardDiscover(false)}
+                    >
+                      {pepcoDashboardBusy ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Discover PEPCO Dashboard
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={uciToolbarOutlineButtonClass}
+                      disabled={
+                        pepcoDashboardBusy ||
+                        pepcoDiscoveryBusy ||
+                        pepcoResumeBusy ||
+                        detailLoading
+                      }
+                      aria-busy={pepcoDashboardBusy}
+                      onClick={() => void handlePepcoDashboardDiscover(true)}
+                    >
+                      Discover + Capture Application IDs
+                    </Button>
+                  </div>
+                  {pepcoDashboardMsg ? (
+                    <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoDashboardMsg}</p>
+                  ) : null}
+
+                  {pepcoDashboardFromMetadata && pepcoDashboardFromMetadata.cards.length > 0 ? (
+                    <div className="mt-4 overflow-x-auto rounded-md border border-cream-sunken/60 dark:border-teal/25">
+                      <Table className="min-w-[480px] text-xs">
+                        <TableHeader className={uciTableHeaderRowClass}>
+                          <TableRow className="border-cream-sunken/40 dark:border-teal/15">
+                            <TableHead className={uciTableHeadClass}>Title</TableHead>
+                            <TableHead className={uciTableHeadClass}>Address</TableHead>
+                            <TableHead className={uciTableHeadClass}>Status</TableHead>
+                            <TableHead className={uciTableHeadClass}>Job ID</TableHead>
+                            <TableHead className={uciTableHeadClass}>Application ID</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pepcoDashboardFromMetadata.cards.map((c, idx) => (
+                            <TableRow
+                              key={`${String(c.jobId ?? "")}-${String(c.applicationId ?? "")}-${idx}`}
+                              className="border-cream-sunken/35 dark:border-teal/12"
+                            >
+                              <TableCell className={uciTableCellClass}>{c.title ?? "—"}</TableCell>
+                              <TableCell className={uciTableCellClass}>{c.address ?? "—"}</TableCell>
+                              <TableCell className={uciTableCellClass}>{c.status ?? "—"}</TableCell>
+                              <TableCell className={cn(uciTableCellClass, "font-mono text-[11px]")}>
+                                {c.jobId ?? "—"}
+                              </TableCell>
+                              <TableCell className={cn(uciTableCellClass, "max-w-[200px] break-all font-mono text-[11px]")}>
+                                {c.applicationId
+                                  ? c.applicationId
+                                  : c.applicationIdError
+                                    ? `— (${c.applicationIdError})`
+                                    : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div>
                 <h4 className={cn("mb-2", uciSheetSectionTitleClass)}>Transitions</h4>
                 <div className="space-y-2">
@@ -845,6 +1375,69 @@ export default function UciDashboard() {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={pepcoCodeModalOpen}
+        onOpenChange={(open) => {
+          setPepcoCodeModalOpen(open);
+          if (!open) {
+            setPepcoCodeModalError(null);
+            if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+          }
+        }}
+      >
+        <DialogContent
+          className={cn(
+            "border-cream-sunken bg-cream text-ink-primary-light",
+            "dark:border-teal/25 dark:bg-obsidian-raised dark:text-foreground",
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-ink-primary-light dark:text-foreground">
+              Enter PEPCO verification code
+            </DialogTitle>
+            <DialogDescription className="text-ink-primary-light/85 dark:text-muted-foreground">
+              A verification code was sent to the PEPCO mailbox. Paste it here and PermitPilot will
+              continue the dashboard discovery.
+            </DialogDescription>
+          </DialogHeader>
+          {pepcoCodeModalError ? (
+            <p className="text-sm text-destructive">{pepcoCodeModalError}</p>
+          ) : null}
+          <Input
+            ref={pepcoCodeInputRef}
+            maxLength={8}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            className={uciSheetControlClass}
+            placeholder="Code from email"
+            aria-label="PEPCO verification code"
+          />
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={uciToolbarOutlineButtonClass}
+              disabled={pepcoCodeSubmitBusy}
+              onClick={() => setPepcoCodeModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-teal hover:bg-teal/90 text-white"
+              disabled={pepcoCodeSubmitBusy || !pepcoDashboardMfaSessionId}
+              aria-busy={pepcoCodeSubmitBusy}
+              onClick={() => void handleSubmitPepcoDashboardCode()}
+            >
+              {pepcoCodeSubmitBusy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Submit Code &amp; Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

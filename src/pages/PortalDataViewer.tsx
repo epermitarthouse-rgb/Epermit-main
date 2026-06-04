@@ -1493,7 +1493,15 @@ export default function PortalDataViewer() {
             credentialLoginUrl={credentialForView?.login_url ?? null}
           />
         ) : (
-          <AccelaProjectView portalData={portalData as any} />
+          <AccelaProjectView
+            portalData={portalData as any}
+            projectId={resolvedProjectId}
+            userId={user?.id ?? null}
+            permitNumber={
+              portalData?.projectNum ?? portalData?.name ?? null
+            }
+            onPortalDataRefresh={silentRefetch}
+          />
         )}
       </section>
     );

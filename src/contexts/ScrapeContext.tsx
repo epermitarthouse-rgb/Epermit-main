@@ -37,6 +37,72 @@ const TAB_STEPS = [
 ];
 
 const STORAGE_KEY = "scrape_active_session";
+const ACCELA_BROWSER_SESSION_KEY = "accela_browser_session";
+
+export type AccelaBrowserSessionPersisted = {
+  sessionId: string;
+  projectId: string;
+  portalType: "accela";
+  permitNumber: string;
+  savedAt: number;
+};
+
+const SCRAPE_TERMINAL_STATUSES = new Set([
+  "done",
+  "partial_success_plan_review_pending",
+  "partial_success_plan_review_failed",
+]);
+
+function isScrapeTerminalStatus(status: string): boolean {
+  return SCRAPE_TERMINAL_STATUSES.has(`${status || ""}`.trim());
+}
+
+function persistAccelaBrowserSession(payload: AccelaBrowserSessionPersisted) {
+  try {
+    localStorage.setItem(ACCELA_BROWSER_SESSION_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function readAccelaBrowserSessionRaw(): AccelaBrowserSessionPersisted | null {
+  try {
+    const raw = localStorage.getItem(ACCELA_BROWSER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AccelaBrowserSessionPersisted;
+    if (!parsed?.sessionId || !parsed?.projectId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function getPersistedAccelaSessionForProject(
+  projectId: string,
+): AccelaBrowserSessionPersisted | null {
+  const p = readAccelaBrowserSessionRaw();
+  if (!p?.sessionId || !p.projectId) return null;
+  if (`${p.projectId}`.trim() !== `${projectId}`.trim()) return null;
+  return {
+    sessionId: `${p.sessionId}`.trim(),
+    projectId: `${p.projectId}`.trim(),
+    portalType: "accela",
+    permitNumber: `${p.permitNumber || ""}`.trim(),
+    savedAt: Number(p.savedAt) || 0,
+  };
+}
+
+export function clearAccelaBrowserSessionStorage() {
+  try {
+    localStorage.removeItem(ACCELA_BROWSER_SESSION_KEY);
+  } catch {}
+}
+
+/** Clear legacy scrape_active_session when it belongs to the given project. */
+export function clearPersistedScrapeSessionForProject(projectId: string) {
+  const p = getPersistedSession();
+  if (!p?.projectId) return;
+  if (`${p.projectId}`.trim() !== `${projectId}`.trim()) return;
+  clearPersistedSession();
+}
 
 export type ScrapeOverlay = {
   phase: "scraping" | "done";
@@ -56,7 +122,15 @@ type ScrapeContextType = {
   scrapeMinimized: boolean;
   setScrapeMinimized: (v: boolean) => void;
   scrapeElapsed: number;
+  /** Reactive Accela browser session id (login + continue-downloads). */
+  accelaSessionId: string | null;
+  /** @deprecated Prefer accelaSessionId — kept for compatibility. */
   activeSessionId: string | null;
+  setAccelaSessionId: (
+    sessionId: string,
+    meta?: { projectId?: string; permitNumber?: string },
+  ) => void;
+  clearAccelaBrowserSession: (projectId?: string) => void;
   startScrapeSession: (sessionId: string, projectId: string, projectNum: string) => void;
   cancelScrape: () => Promise<void>;
   cleanupScrapeState: () => void;
@@ -108,10 +182,34 @@ function getPersistedSession(): { sessionId: string; projectId: string; projectN
   }
 }
 
+/** Active scrape session from localStorage when it matches the given project. */
+export function getPersistedScrapeSessionForProject(projectId: string): {
+  sessionId: string;
+  projectId: string;
+  projectNum: string;
+} | null {
+  const p = getPersistedSession();
+  if (!p?.sessionId || !p.projectId) return null;
+  if (`${p.projectId}`.trim() !== `${projectId}`.trim()) return null;
+  return {
+    sessionId: `${p.sessionId}`.trim(),
+    projectId: `${p.projectId}`.trim(),
+    projectNum: `${p.projectNum || ""}`.trim(),
+  };
+}
+
+function initialAccelaSessionIdFromStorage(): string | null {
+  const raw = readAccelaBrowserSessionRaw();
+  return raw?.sessionId ? `${raw.sessionId}`.trim() : null;
+}
+
 export function ScrapeProvider({ children }: { children: ReactNode }) {
   const [scrapeOverlay, setScrapeOverlay] = useState<ScrapeOverlay | null>(null);
   const [scrapeMinimized, setScrapeMinimized] = useState(false);
   const [scrapeElapsed, setScrapeElapsed] = useState(0);
+  const [accelaSessionId, setAccelaSessionIdState] = useState<string | null>(
+    initialAccelaSessionIdFromStorage,
+  );
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
@@ -144,6 +242,45 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
     activeProjectIdRef.current = null;
   }, []);
 
+  const setAccelaSessionId = useCallback(
+    (
+      sessionId: string,
+      meta?: { projectId?: string; permitNumber?: string },
+    ) => {
+      const sid = `${sessionId || ""}`.trim();
+      if (!sid) return;
+      setAccelaSessionIdState(sid);
+      activeSessionIdRef.current = sid;
+      const projectId = `${meta?.projectId || activeProjectIdRef.current || readAccelaBrowserSessionRaw()?.projectId || ""}`.trim();
+      const permitNumber =
+        `${meta?.permitNumber || readAccelaBrowserSessionRaw()?.permitNumber || ""}`.trim();
+      if (projectId) {
+        activeProjectIdRef.current = projectId;
+        persistAccelaBrowserSession({
+          sessionId: sid,
+          projectId,
+          portalType: "accela",
+          permitNumber,
+          savedAt: Date.now(),
+        });
+      }
+    },
+    [],
+  );
+
+  const clearAccelaBrowserSession = useCallback((projectId?: string) => {
+    setAccelaSessionIdState(null);
+    clearAccelaBrowserSessionStorage();
+    const proj = `${projectId || ""}`.trim();
+    if (proj) {
+      clearPersistedScrapeSessionForProject(proj);
+      if (`${activeProjectIdRef.current || ""}`.trim() === proj) {
+        activeSessionIdRef.current = null;
+        activeProjectIdRef.current = null;
+      }
+    }
+  }, []);
+
   const cancelScrape = useCallback(async () => {
     const sid = activeSessionIdRef.current;
     if (!sid) return;
@@ -159,11 +296,97 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
     }
     cleanupScrapeState();
     clearPersistedSession();
+    clearAccelaBrowserSession();
     setScrapeOverlay(null);
     setScrapeMinimized(false);
     setLastScrapeOutcome("cancelled");
     toast.info("Scrape cancelled");
-  }, [cleanupScrapeState]);
+  }, [cleanupScrapeState, clearAccelaBrowserSession]);
+
+  const finishTerminalScrapePoll = useCallback(
+    (
+      sessionId: string,
+      projectId: string,
+      data: {
+        status: string;
+        message?: string;
+        progress?: number;
+        total?: number;
+      },
+    ) => {
+      cleanupScrapeState();
+      clearPersistedSession();
+
+      const total = data.total ?? 0;
+      const progress = data.progress ?? 0;
+      const tabsExtracted = Math.max(progress, total, 1);
+      const status = `${data.status || ""}`.trim();
+
+      if (status === "partial_success_plan_review_pending") {
+        setScrapeOverlay((prev) =>
+          prev
+            ? {
+                ...prev,
+                phase: "done",
+                stepText:
+                  data.message ||
+                  "Plan Review partially complete — downloads pending",
+                progress: total,
+                total,
+                completedSteps: new Set(TAB_STEPS.map((t) => t.key)),
+                currentStepKey: null,
+              }
+            : null,
+        );
+        toast.info(
+          "Scrape partially complete — Plan Review downloads can be continued.",
+        );
+        setLastScrapeOutcome("done");
+      } else if (status === "partial_success_plan_review_failed") {
+        setScrapeOverlay((prev) =>
+          prev
+            ? {
+                ...prev,
+                phase: "done",
+                stepText:
+                  data.message || "Plan Review unavailable for this record",
+                progress: total,
+                total,
+                completedSteps: new Set(prev.completedSteps),
+                currentStepKey: null,
+              }
+            : null,
+        );
+        toast.warning(data.message || "Plan Review scrape did not complete.");
+        setLastScrapeOutcome("error");
+      } else {
+        setScrapeOverlay((prev) =>
+          prev
+            ? {
+                ...prev,
+                phase: "done",
+                stepText: `Scraping complete! ${tabsExtracted}/${Math.max(total, 1)} tabs extracted`,
+                progress: total,
+                total,
+                completedSteps: new Set(TAB_STEPS.map((t) => t.key)),
+                currentStepKey: null,
+              }
+            : null,
+        );
+        toast.success(
+          `Scraping complete! ${tabsExtracted} tab${tabsExtracted === 1 ? "" : "s"} extracted. Data saved.`,
+        );
+        setLastScrapeOutcome("done");
+      }
+
+      if (onScrapeCompleteRef.current) {
+        onScrapeCompleteRef.current(projectId);
+      } else {
+        setPendingCompletionProjectId(projectId);
+      }
+    },
+    [cleanupScrapeState],
+  );
 
   const monitorScrapeInBackground = useCallback((sessionId: string, projectId: string) => {
     const pollInterval = 1500;
@@ -185,39 +408,14 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
           total?: number;
         };
 
-        if (data.status === "done") {
-          cleanupScrapeState();
-          clearPersistedSession();
-          const total = data.total ?? 0;
-          const progress = data.progress ?? 0;
-          const tabsExtracted = Math.max(progress, total, 1);
-          setScrapeOverlay((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  phase: "done",
-                  stepText: `Scraping complete! ${tabsExtracted}/${Math.max(total, 1)} tabs extracted`,
-                  progress: total,
-                  total,
-                  completedSteps: new Set(TAB_STEPS.map((t) => t.key)),
-                  currentStepKey: null,
-                }
-              : null,
-          );
-          toast.success(
-            `Scraping complete! ${tabsExtracted} tab${tabsExtracted === 1 ? "" : "s"} extracted. Data saved.`,
-          );
-          setLastScrapeOutcome("done");
-          if (onScrapeCompleteRef.current) {
-            onScrapeCompleteRef.current(projectId);
-          } else {
-            setPendingCompletionProjectId(projectId);
-          }
+        if (isScrapeTerminalStatus(data.status)) {
+          finishTerminalScrapePoll(sessionId, projectId, data);
           return;
         }
         if (data.status === "cancelled") {
           cleanupScrapeState();
           clearPersistedSession();
+          clearAccelaBrowserSession();
           setScrapeOverlay(null);
           setScrapeMinimized(false);
           setLastScrapeOutcome("cancelled");
@@ -257,7 +455,11 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
       }
     };
     setTimeout(poll, pollInterval);
-  }, [cleanupScrapeState]);
+  }, [
+    cleanupScrapeState,
+    clearAccelaBrowserSession,
+    finishTerminalScrapePoll,
+  ]);
 
   const startScrapeSession = useCallback((sessionId: string, projectId: string, projectNum: string) => {
     if (eventSourceRef.current) {
@@ -277,6 +479,7 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
 
     activeSessionIdRef.current = sessionId;
     activeProjectIdRef.current = projectId;
+    setAccelaSessionId(sessionId, { projectId, permitNumber: projectNum });
 
     const completedSteps = new Set<string>();
     setScrapeOverlay({
@@ -359,7 +562,7 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
     es.onerror = () => es.close();
 
     monitorScrapeInBackground(sessionId, projectId);
-  }, [monitorScrapeInBackground]);
+  }, [monitorScrapeInBackground, setAccelaSessionId]);
 
   useEffect(() => {
     if (!reattachAttemptedRef.current) {
@@ -383,6 +586,7 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
               toast.info("Re-attaching to active scrape session...");
               activeSessionIdRef.current = persisted.sessionId;
               activeProjectIdRef.current = persisted.projectId;
+              setAccelaSessionIdState(persisted.sessionId);
               setScrapeElapsed(elapsed);
               setScrapeOverlay({
                 phase: "scraping",
@@ -397,8 +601,16 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
                 setScrapeElapsed((s) => s + 1);
               }, 1000);
               monitorScrapeInBackground(persisted.sessionId, persisted.projectId);
-            } else if (data.status === "done") {
+            } else if (isScrapeTerminalStatus(data.status)) {
               clearPersistedSession();
+              setAccelaSessionIdState(persisted.sessionId);
+              persistAccelaBrowserSession({
+                sessionId: persisted.sessionId,
+                projectId: persisted.projectId,
+                portalType: "accela",
+                permitNumber: persisted.projectNum,
+                savedAt: Date.now(),
+              });
               if (onScrapeCompleteRef.current) {
                 onScrapeCompleteRef.current(persisted.projectId);
               } else {
@@ -468,7 +680,10 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
     scrapeMinimized,
     setScrapeMinimized,
     scrapeElapsed,
-    activeSessionId: activeSessionIdRef.current,
+    accelaSessionId,
+    activeSessionId: accelaSessionId,
+    setAccelaSessionId,
+    clearAccelaBrowserSession,
     startScrapeSession,
     cancelScrape,
     cleanupScrapeState,

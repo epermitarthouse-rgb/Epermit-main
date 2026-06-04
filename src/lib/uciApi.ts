@@ -3,7 +3,9 @@ import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import type {
   LifecycleState,
   UciApplicationsListResponse,
+  UciDiscoveryResponse,
   UciInitResponse,
+  UciPepcoDashboardDiscoveryResponse,
   UciProjectCoordinationResponse,
   UciProvidersResponse,
   UciRecordDetailResponse,
@@ -140,4 +142,118 @@ export async function listCoordinationApplications(
     );
   }
   return (await res.json()) as UciApplicationsListResponse;
+}
+
+export async function postPepcoDiscovery(
+  coordinationId: string,
+  body?: { credential_id?: string; headed?: boolean; auto_email_mfa?: boolean },
+): Promise<UciDiscoveryResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `PEPCO discovery failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciDiscoveryResponse;
+}
+
+export async function resumePepcoDiscovery(
+  coordinationId: string,
+  body: { session_id: string },
+): Promise<UciDiscoveryResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/resume`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `PEPCO discovery resume failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciDiscoveryResponse;
+}
+
+export async function postPepcoDashboardDiscovery(
+  coordinationId: string,
+  body?: {
+    credential_id?: string;
+    headed?: boolean;
+    auto_email_mfa?: boolean;
+    capture_application_ids?: boolean;
+  },
+): Promise<UciPepcoDashboardDiscoveryResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/dashboard`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `PEPCO dashboard discovery failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciPepcoDashboardDiscoveryResponse;
+}
+
+export async function submitPepcoMfaCode(
+  coordinationId: string,
+  body: {
+    session_id: string;
+    code: string;
+    continue_action?: "discover_dashboard";
+    capture_application_ids?: boolean;
+  },
+): Promise<UciPepcoDashboardDiscoveryResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/submit-code`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `PEPCO submit code failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciPepcoDashboardDiscoveryResponse;
 }

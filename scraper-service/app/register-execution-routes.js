@@ -1,5 +1,4 @@
 "use strict";
-const { chromium } = require("playwright");
 const { execSync } = require("child_process");
 const ExcelJS = require("exceljs");
 const {
@@ -16,6 +15,8 @@ const { createClient } = require("@supabase/supabase-js");
 const {
   accelaLogin: accelaScraperLogin,
   scrapeAccelaRecord,
+  continueArlingtonPlanReviewDownloads,
+  arlingtonPlanReviewScopeSupportsAutoContinue,
 } = require("../accela-scraper");
 const pgcEplan = require("../pgc-eplan-scraper");
 const montgomeryProjectDox = require("../scrapers/montgomery/projectdox-scraper");
@@ -67,7 +68,14 @@ const {
   sessions,
   SESSION_IDLE_TIMEOUT_MS,
   cleanupSession,
+  rearmSessionIdleTimeout,
 } = require("./session/in-memory-store.js");
+
+const { scraperRunsHeadless } = require("../shared/browser.js");
+const {
+  launchChromiumForScraper,
+  isBrowserLaunchError,
+} = require("../shared/playwright-launch-for-scraper.js");
 
 /** Scraper service root (parent of app/). Same as legacy server.js __dirname. */
 const SCRAPER_ROOT = path.join(__dirname, "..");
@@ -76,77 +84,12 @@ const SCRAPER_ROOT = path.join(__dirname, "..");
 const BROWSER_INSTALL_MESSAGE =
   "Playwright Chromium not installed. Run: npx playwright install chromium (or npm run install-browsers in scraper-service)";
 
-function isBrowserLaunchError(err) {
-  if (!err || !err.message) return false;
-  const msg = err.message;
-  return (
-    /Executable doesn't exist/i.test(msg) ||
-    /browserType\.launch/i.test(msg) ||
-    /Playwright doesn't support/i.test(msg)
-  );
-}
-
 function sendBrowserLaunchError(res, err) {
   console.error("❌ Browser launch failed:", err.message);
   res.status(503).json({
     error: BROWSER_INSTALL_MESSAGE,
     detail: err.message,
   });
-}
-
-/**
- * Headless on Railway/production hosts (no display). Local dev defaults to headed
- * for debugging. Override: SCRAPER_HEADLESS=true|false or PLAYWRIGHT_HEADLESS=true|false.
- * @returns {boolean}
- */
-function scraperRunsHeadless() {
-  const raw = (process.env.SCRAPER_HEADLESS || process.env.PLAYWRIGHT_HEADLESS || "")
-    .trim()
-    .toLowerCase();
-  if (raw === "false" || raw === "0") return false;
-  if (raw === "true" || raw === "1") return true;
-  if (process.env.RAILWAY_ENVIRONMENT) return true;
-  if (process.env.NODE_ENV === "production") return true;
-  return false;
-}
-
-/**
- * Single browser launch path: same as startup diagnostic. No executablePath,
- * no /root/.cache or Linux-specific overrides. Use Playwright-managed Chromium only.
- * @param {{ label?: string, route?: string, file?: string }} callerInfo - For logging (e.g. label: 'quick-scrape', route: 'POST /api/login', file: 'server.js')
- * @returns {Promise<import('playwright').Browser>}
- */
-async function launchChromiumForScraper(callerInfo = {}) {
-  const label = callerInfo.label || "scraper";
-  const route = callerInfo.route || "";
-  const file = callerInfo.file || "server.js";
-  const launchOptions = {
-    headless: scraperRunsHeadless(),
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-    ],
-  };
-
-  const isQuickScrape = label === "quick-scrape";
-  if (isQuickScrape) {
-    console.log("[Quick Scrape] browser launch starting");
-    console.log("[Quick Scrape] launch options:", JSON.stringify(launchOptions));
-    console.log("[Quick Scrape] launching from:", file, route || "(login flow)");
-  }
-
-  try {
-    const browser = await chromium.launch(launchOptions);
-    if (isQuickScrape) console.log("[Quick Scrape] browser launch success");
-    return browser;
-  } catch (err) {
-    if (isQuickScrape) {
-      console.error("[Quick Scrape] browser launch failed:", err.message);
-      console.error("[Quick Scrape] full error:", err);
-    }
-    throw err;
-  }
 }
 
 async function runPlaywrightStartupDiagnostics() {
@@ -390,7 +333,7 @@ function isSupabaseStorageObjectTooLargeError(message) {
 }
 
 /** @returns {Promise<{ publicUrl: string | null, errorCode: string | null, errorMessage: string | null }>} */
-async function uploadToSupabaseStorageResult(localPath, storagePath) {
+async function uploadToSupabaseStorageResult(localPath, storagePath, uploadOpts = {}) {
   const ready = await ensureStorageBucket();
   if (!ready) return { publicUrl: null, errorCode: "bucket_unavailable", errorMessage: "bucket_unavailable" };
   try {
@@ -408,9 +351,18 @@ async function uploadToSupabaseStorageResult(localPath, storagePath) {
     };
     const contentType = mimeTypes[ext] || "application/octet-stream";
 
+    /** @type {{ contentType: string; upsert: boolean; cacheControl?: string }} */
+    const uploadPayload = {
+      contentType,
+      upsert: uploadOpts.upsert !== false,
+    };
+    if (uploadOpts.cacheControl != null && `${uploadOpts.cacheControl}` !== "") {
+      uploadPayload.cacheControl = `${uploadOpts.cacheControl}`;
+    }
+
     const { data, error } = await supabase.storage
       .from(resolvedBucketId)
-      .upload(sanitizedPath, fileBuffer, { contentType, upsert: true });
+      .upload(sanitizedPath, fileBuffer, uploadPayload);
 
     if (error) {
       const tooLarge = isSupabaseStorageObjectTooLargeError(error.message);
@@ -440,8 +392,8 @@ async function uploadToSupabaseStorageResult(localPath, storagePath) {
   }
 }
 
-async function uploadToSupabaseStorage(localPath, storagePath) {
-  const r = await uploadToSupabaseStorageResult(localPath, storagePath);
+async function uploadToSupabaseStorage(localPath, storagePath, uploadOpts = {}) {
+  const r = await uploadToSupabaseStorageResult(localPath, storagePath, uploadOpts);
   return r.publicUrl;
 }
 
@@ -1237,6 +1189,111 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
+// ─── Arlington Plan Review: continue pending downloads ───────────────────────
+app.post("/api/accela/plan-review/continue-downloads", async (req, res) => {
+  const {
+    sessionId,
+    projectId,
+    permitNumber,
+    scope,
+    userId: userIdBody,
+  } = req.body || {};
+
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId is required" });
+  }
+
+  const permitEarly = `${permitNumber || ""}`.trim();
+  const projIdEarly = `${projectId || ""}`.trim();
+  const sidPrefix = `${String(sessionId).slice(0, 10)}...`;
+  console.log(
+    `[PlanReviewContinue] request sessionId=${sidPrefix} projectId=${projIdEarly ? "set" : "missing"} userId=${userIdBody ? "set" : "missing"} permit=${permitEarly || "(missing)"} scope=${scope || "allPending"}`,
+  );
+
+  const session = sessions[sessionId];
+  console.log(
+    `[PlanReviewContinue] session exists=${!!session} hasBrowser=${!!session?.browser} hasContext=${!!session?.context} hasPage=${!!session?.page}`,
+  );
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  if (!session.browser || !session.page) {
+    return res.status(400).json({ error: "Session expired or browser not available" });
+  }
+
+  const portalUrlStr = String(session.portalUrl || "");
+  if (!portalUrlStr.toUpperCase().includes("ARLINGTONCO")) {
+    return res.status(400).json({
+      error: "Continue Plan Review downloads is only supported for Arlington County Accela",
+    });
+  }
+
+  const permit = permitEarly;
+  const projId = projIdEarly;
+  if (!permit) {
+    return res.status(400).json({ error: "permitNumber is required" });
+  }
+  if (!projId) {
+    return res.status(400).json({ error: "projectId is required" });
+  }
+
+  const userId = `${userIdBody || session.userId || ""}`.trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  if (session._timeout) clearTimeout(session._timeout);
+
+  const accelaSid = String(sessionId);
+  session._accelaSessionId = accelaSid;
+  session.touchSessionKeepalive = (documentId) => {
+    rearmSessionIdleTimeout(accelaSid);
+    console.log(
+      `[Session][keepalive] Arlington PlanReview continue download documentId=${documentId != null && `${documentId}`.trim() !== "" ? `${documentId}`.trim() : "?"}`,
+    );
+  };
+  session._scrapeActive = true;
+  session._activePlanReviewDownloads = 0;
+  console.log(
+    `[Session][scrape] active=true sid=${accelaSid} flow=arlington-plan-review-continue`,
+  );
+
+  try {
+    const result = await continueArlingtonPlanReviewDownloads(session, {
+      projectId: projId,
+      permitNumber: permit,
+      userId,
+      supabase,
+      hashPortalData,
+      uploadToSupabaseStorage,
+      sanitizeStorageKey,
+      scope: scope || "allPending",
+    });
+    session.status = result.status;
+    session.message = `Plan Review continue (${result.scope}): ${result.downloadedThisRun} downloaded this run`;
+    return res.json(result);
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.error(`[api/accela/plan-review/continue-downloads] error: ${msg}`);
+    session.status = "error";
+    session.message = `Plan Review continue failed: ${msg}`;
+    return res.status(500).json({
+      status: "error",
+      scope: scope || "allPending",
+      permitNumber: permit,
+      projectId: projId,
+      error: msg,
+    });
+  } finally {
+    session._scrapeActive = false;
+    session._activePlanReviewDownloads = 0;
+    console.log(
+      `[Session][scrape] active=false sid=${accelaSid} flow=arlington-plan-review-continue`,
+    );
+    rearmSessionIdleTimeout(accelaSid);
+  }
+});
+
 // ─── Scrape endpoint ─────────────────────────────────────────────────────────
 app.post("/api/scrape", async (req, res) => {
   const {
@@ -1283,6 +1340,7 @@ app.post("/api/scrape", async (req, res) => {
     const portalUrlStr = String(session.portalUrl || "");
     const accelaIsBaltimore = portalUrlStr.toUpperCase().includes("BALTIMORE");
     const accelaIsFairfax = portalUrlStr.toUpperCase().includes("FAIRFAX");
+    const accelaIsArlington = portalUrlStr.toUpperCase().includes("ARLINGTONCO");
     if (
       accelaIsBaltimore &&
       (!projectId || String(projectId).trim() === "")
@@ -1319,11 +1377,8 @@ app.post("/api/scrape", async (req, res) => {
       console.log(
         `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} baltimore=${accelaIsBaltimore} tabs=${JSON.stringify(baltimoreScrapeTabsArg)}`,
       );
-    } else if (!accelaIsFairfax) {
-      console.log(
-        `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} baltimore=${accelaIsBaltimore}`,
-      );
     }
+
     let fairfaxScrapeTabsArg;
     if (accelaIsFairfax) {
       const allowed = new Set(["info", "attachments"]);
@@ -1341,6 +1396,84 @@ app.post("/api/scrape", async (req, res) => {
         `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} fairfax=${accelaIsFairfax} tabs=${JSON.stringify(fairfaxScrapeTabsArg)}`,
       );
     }
+
+    let arlingtonScrapeTabsArg;
+    if (accelaIsArlington) {
+      const allowed = new Set(["info", "attachments", "plan_review"]);
+      const raw = Array.isArray(tabsParam) ? tabsParam : [];
+      const filtered = [
+        ...new Set(
+          raw
+            .map((k) => String(k).trim())
+            .filter((k) => allowed.has(k)),
+        ),
+      ];
+      const hadTabsPayload = raw.length > 0;
+      arlingtonScrapeTabsArg =
+        hadTabsPayload && filtered.length > 0
+          ? filtered
+          : hadTabsPayload
+            ? ["info", "attachments", "plan_review"]
+            : undefined;
+      const prScopeRaw = req.body?.planReviewScope;
+      const prModeRaw = req.body?.planReviewMode;
+      if (prScopeRaw != null && `${prScopeRaw}`.trim() !== "") {
+        session.arlingtonPlanReviewScope = `${prScopeRaw}`.trim();
+      } else {
+        session.arlingtonPlanReviewScope = undefined;
+      }
+      if (prModeRaw != null && `${prModeRaw}`.trim() !== "") {
+        session.arlingtonPlanReviewMode = `${prModeRaw}`.trim();
+      } else {
+        session.arlingtonPlanReviewMode = undefined;
+      }
+      if (req.body?.downloadDocuments === false) {
+        session.arlingtonDownloadDocuments = false;
+      } else {
+        session.arlingtonDownloadDocuments = undefined;
+      }
+
+      const hasPlanReviewTab =
+        Array.isArray(arlingtonScrapeTabsArg) &&
+        arlingtonScrapeTabsArg.includes("plan_review");
+      const prScopeTrim = `${session.arlingtonPlanReviewScope || ""}`.trim();
+      if (req.body?.autoContinueDownloads === false) {
+        session.arlingtonAutoContinueDownloads = false;
+      } else if (req.body?.autoContinueDownloads === true) {
+        session.arlingtonAutoContinueDownloads = true;
+      } else {
+        session.arlingtonAutoContinueDownloads =
+          hasPlanReviewTab &&
+          arlingtonPlanReviewScopeSupportsAutoContinue(prScopeTrim);
+      }
+      const maxCyclesRaw = Number(req.body?.autoContinueMaxCycles);
+      session.arlingtonAutoContinueMaxCycles =
+        Number.isFinite(maxCyclesRaw) && maxCyclesRaw > 0
+          ? Math.min(Math.floor(maxCyclesRaw), 32)
+          : 8;
+      const delayRaw = Number(req.body?.autoContinueDelayMs);
+      session.arlingtonAutoContinueDelayMs =
+        Number.isFinite(delayRaw) && delayRaw >= 0
+          ? Math.min(Math.floor(delayRaw), 60000)
+          : 2000;
+      const noProgRaw = Number(req.body?.autoContinueMaxNoProgressCycles);
+      session.arlingtonAutoContinueMaxNoProgressCycles =
+        Number.isFinite(noProgRaw) && noProgRaw > 0
+          ? Math.min(Math.floor(noProgRaw), 10)
+          : 2;
+
+      console.log(
+        `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} arlington=${accelaIsArlington} tabs=${JSON.stringify(arlingtonScrapeTabsArg ?? "(legacy default)")} planReviewScope=${session.arlingtonPlanReviewScope ?? "(default)"} planReviewMode=${session.arlingtonPlanReviewMode ?? "(none)"} downloadDocuments=${session.arlingtonDownloadDocuments === false ? "false" : "(default)"} autoContinueDownloads=${session.arlingtonAutoContinueDownloads === true}`,
+      );
+    } else if (
+      !accelaIsBaltimore &&
+      !accelaIsFairfax &&
+      !accelaIsArlington
+    ) {
+      console.log(
+        `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} tenant=accela-generic`,
+      );
+    }
     session.status = "scraping";
     session.total = 1;
     session.progress = 0;
@@ -1350,6 +1483,26 @@ app.post("/api/scrape", async (req, res) => {
       total: 1,
       portalType: "accela",
     });
+    session.arlingtonPlanReviewRetryOversizedDownloads =
+      accelaIsArlington &&
+      (req.body?.forceRetryOversizedDownloads === true ||
+        req.body?.forceRetryOversized === true ||
+        String(req.query?.forceRetryOversizedDownloads || "").toLowerCase() ===
+          "true");
+    const accelaSid = String(sessionId);
+    session._accelaSessionId = accelaSid;
+    session.touchSessionKeepalive = (documentId) => {
+      rearmSessionIdleTimeout(accelaSid);
+      console.log(
+        `[Session][keepalive] Arlington PlanReview active download documentId=${documentId != null && `${documentId}`.trim() !== "" ? `${documentId}`.trim() : "?"}`,
+      );
+    };
+    session._scrapeActive = true;
+    session._activePlanReviewDownloads = 0;
+    if (userId && String(userId).trim()) {
+      session.userId = String(userId).trim();
+    }
+    console.log(`[Session][scrape] active=true sid=${accelaSid} flow=accela`);
     scrapeAccelaRecord(
       session,
       String(permitNumber).trim(),
@@ -1361,10 +1514,32 @@ app.post("/api/scrape", async (req, res) => {
       sanitizeStorageKey,
       baltimoreScrapeTabsArg,
       fairfaxScrapeTabsArg,
+      arlingtonScrapeTabsArg,
     )
       .then(() => {
         if (session._cancelRequested) {
           console.log("   🛑 Accela scrape was cancelled — not marking as done");
+          return;
+        }
+        if (session.arlingtonPartialSuccessPlanReviewFailed === true) {
+          session.status = "partial_success_plan_review_failed";
+          session.progress = 1;
+          session.message = `Accela scrape finished with Plan Review unavailable for ${permitNumber}`;
+          console.log(
+            `   ⚠️ Accela sync ended — session status set to partial_success_plan_review_failed`,
+          );
+          return;
+        }
+        const prPending =
+          session.arlingtonPlanReviewPartialPendingDownloads === true ||
+          session.arlingtonPlanReviewTimedOutAfterProgress === true;
+        if (prPending) {
+          session.status = "partial_success_plan_review_pending";
+          session.progress = 1;
+          session.message = `Accela scrape partially complete for ${permitNumber}; Plan Review downloads pending and retryable.`;
+          console.log(
+            `   ⚠️ Accela sync ended — session status set to partial_success_plan_review_pending`,
+          );
           return;
         }
         session.status = "done";
@@ -1375,9 +1550,28 @@ app.post("/api/scrape", async (req, res) => {
         );
       })
       .catch((err) => {
+        const timedOutMsg = `${err && err.message ? err.message : err}`;
+        const hadPrProgress =
+          session.arlingtonPlanReviewCheckpointSaved === true ||
+          session.arlingtonPlanReviewPartialPendingDownloads === true;
+        if (hadPrProgress && /Accela scraping timed out/i.test(timedOutMsg)) {
+          session.status = "partial_success_plan_review_pending";
+          session.progress = 1;
+          session.message = `Accela scrape partially complete for ${permitNumber}; Plan Review downloads pending and retryable.`;
+          console.warn(
+            `   ⚠️ Accela scrape hit global timeout after Plan Review progress — partial_success_plan_review_pending`,
+          );
+          return;
+        }
         session.status = "error";
-        session.message = `Error: ${err.message}`;
-        console.error("❌ Accela scrape error:", err.message);
+        session.message = `Error: ${timedOutMsg}`;
+        console.error("❌ Accela scrape error:", timedOutMsg);
+      })
+      .finally(() => {
+        session._scrapeActive = false;
+        session._activePlanReviewDownloads = 0;
+        console.log(`[Session][scrape] active=false sid=${accelaSid} flow=accela`);
+        rearmSessionIdleTimeout(accelaSid);
       });
     return;
   }
@@ -1683,6 +1877,9 @@ app.use(createPortalCredentialsRouter({ supabase }));
 
 const { createQuickBooksRouter } = require("./routes/quickbooks.routes.js");
 app.use("/api/quickbooks", createQuickBooksRouter({ supabase }));
+
+const { createMicrosoftRouter } = require("./routes/microsoft.routes.js");
+app.use("/api/microsoft", createMicrosoftRouter({ supabase }));
 
 const { createUciRouter } = require("./routes/uci.routes.js");
 app.use("/api/uci", createUciRouter({ supabase }));

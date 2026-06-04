@@ -35,6 +35,7 @@ import {
   Stamp,
 } from "lucide-react";
 import { PortalCredentialsManager } from "@/components/settings/PortalCredentialsManager";
+import { MicrosoftMailboxConnector } from "@/components/settings/MicrosoftMailboxConnector";
 import { ArchitectProfileManager } from "@/components/settings/ArchitectProfileManager";
 import { ExportBrandingManager } from "@/components/settings/ExportBrandingManager";
 import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
@@ -804,6 +805,9 @@ export default function Settings() {
               {/* Portal Credentials Tab */}
               <TabsContent value="portals">
                 <PortalCredentialsManager />
+                <div className="mt-8">
+                  <MicrosoftMailboxConnector />
+                </div>
               </TabsContent>
 
               {/* Architect Profile Tab */}

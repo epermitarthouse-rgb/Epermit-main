@@ -191,3 +191,65 @@ export interface UciTransitionResponse {
 export interface UciApplicationsListResponse {
   applications: CoordinationApplication[];
 }
+
+/** POST /api/uci/coordination/:id/discovery/pepco (+ MFA resume) — login only */
+export type UciDiscoveryResponse =
+  | {
+      status: "human_required";
+      /** e.g. mfa_email_code, mfa_email_code_input_required, mfa_contact_method_selection_required */
+      reason: string;
+      message: string;
+      currentUrl?: string;
+      session_id?: string;
+      /** Phase 4.5 — in-app code entry continues dashboard discovery */
+      continue_action?: "discover_dashboard";
+      capture_application_ids?: boolean;
+    }
+  | {
+      status: "completed";
+      checkpoint?: string;
+      currentUrl?: string;
+      session_id?: string;
+    }
+  | {
+      status: "failed";
+      error_code?: string;
+      message: string;
+      currentUrl?: string;
+    };
+
+/** Serialized PEPCO dashboard card (persisted compact form omits rawText) */
+export interface UciPepcoDashboardCardMeta {
+  index?: number;
+  title?: string | null;
+  address?: string | null;
+  status?: string | null;
+  lastUpdated?: string | null;
+  dateSubmitted?: string | null;
+  jobId?: string | null;
+  applicationId?: string;
+  overviewUrl?: string;
+  applicationIdError?: string;
+}
+
+/** POST /api/uci/coordination/:id/discovery/pepco/dashboard — same MFA shapes + optional dashboard payload */
+export type UciPepcoDashboardDiscoveryResponse =
+  | UciDiscoveryResponse
+  | {
+      status: "completed";
+      checkpoint?: string;
+      currentUrl?: string;
+      cards_found?: number;
+      application_ids_found?: number;
+      cards?: UciPepcoDashboardCardMeta[];
+      /** Present on live API reads of cards during discovery; stripped before DB persist */
+      rawText?: unknown;
+    }
+  | {
+      status: "failed";
+      error_code?: string;
+      message?: string;
+      currentUrl?: string;
+      cards_found?: number;
+      cards?: unknown[];
+    };

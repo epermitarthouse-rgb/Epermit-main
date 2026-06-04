@@ -2,6 +2,10 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { isScraperDebugArtifactsEnabled } = require("./artifacts/debug-artifacts");
+const {
+  resolveAccelaTenantProfile,
+  ArlingtonAccelaProfile,
+} = require("./accela-tenant-profiles");
 
 function getAccelaDebugDir() {
   const dir = path.join(__dirname, "debug");
@@ -101,6 +105,52 @@ function isBaltimorePortal(page) {
 
 function isFairfaxPortal(page) {
   return !!(page && page._isFairfax);
+}
+
+function isArlingtonPortal(page) {
+  return !!(page && page._isArlington);
+}
+
+/**
+ * True when a downloaded buffer looks like an HTML/ASP.NET error page, not a binary attachment.
+ */
+function isDownloadBufferLikelyHtmlError(buf) {
+  if (!buf || buf.length === 0) return true;
+  if (
+    buf.length >= 4 &&
+    buf[0] === 0x25 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x44 &&
+    buf[3] === 0x46
+  ) {
+    return false;
+  }
+  const head = buf
+    .subarray(0, Math.min(600, buf.length))
+    .toString("latin1")
+    .trimStart();
+  if (/^<!DOCTYPE\s+html/i.test(head)) return true;
+  if (/^<\s*html[\s>]/i.test(head)) return true;
+  if (
+    /<head[\s>]/i.test(head) &&
+    (/<title>/i.test(head) || /aspx/i.test(head))
+  )
+    return true;
+  const low = head.toLowerCase();
+  if (
+    low.includes("runtime error") ||
+    low.includes("exception details") ||
+    low.includes("server error") ||
+    low.includes("could not load") ||
+    low.includes("session has expired")
+  )
+    return true;
+  return false;
+}
+
+/** Log tag for iframe attachment downloads (shared Baltimore + Arlington path). */
+function attachmentIframeDownloadLogTag(page) {
+  return isArlingtonPortal(page) ? "[Arlington Attach]" : "[Baltimore Attach]";
 }
 
 function isFairfaxGarbageRow(row) {
@@ -223,6 +273,1239 @@ function isMinimalTabsPortal(page) {
     (page._isBaltimore && BALTIMORE_MINIMAL_PORTAL_TABS) ||
     (page._isFairfax && FAIRFAX_MINIMAL_PORTAL_TABS)
   );
+}
+
+/** When Arlington sends `tabs`, run legacy extra panels only for a full preset (matches old default scrape). */
+function arlingtonRunsSupplementalAccordionPanels(arlingtonTabSet) {
+  if (!(arlingtonTabSet instanceof Set) || arlingtonTabSet.size === 0)
+    return true;
+  return (
+    arlingtonTabSet.has("info") &&
+    arlingtonTabSet.has("attachments") &&
+    arlingtonTabSet.has("plan_review")
+  );
+}
+
+/**
+ * Project Information–only scrape: splice new PI fields/docs into prior planReview.tabs
+ * without replacing Plan Set, Review Results, or Approved Documents.
+ * @param {Record<string, unknown>} priorPr
+ * @param {Record<string, unknown>} scrapedPr
+ * @returns {Record<string, unknown>}
+ */
+function mergeArlingtonSelectiveProjectInformationPlanReview(
+  priorPr,
+  scrapedPr,
+) {
+  /** @type {Record<string, unknown>} */
+  let merged;
+  try {
+    merged = structuredCloneWorksSafe(priorPr);
+  } catch (_) {
+    merged = { ...(priorPr || {}) };
+  }
+  if (!merged || typeof merged !== "object") {
+    merged = { ...(priorPr || {}) };
+  }
+
+  const priorTabs =
+    merged.tabs && typeof merged.tabs === "object" && !Array.isArray(merged.tabs)
+      ? /** @type {Record<string, unknown>} */ (merged.tabs)
+      : {};
+  const scrapedTabs =
+    scrapedPr?.tabs &&
+    typeof scrapedPr.tabs === "object" &&
+    !Array.isArray(scrapedPr.tabs)
+      ? /** @type {Record<string, unknown>} */ (scrapedPr.tabs)
+      : null;
+  const scrapedPi = scrapedTabs?.projectInformation;
+  if (scrapedPi && typeof scrapedPi === "object") {
+    /** @type {Record<string, unknown>} */
+    const nextTabs = { ...priorTabs };
+    nextTabs.projectInformation = structuredCloneWorksSafe(scrapedPi) ?? scrapedPi;
+    merged.tabs = nextTabs;
+  }
+
+  if (typeof scrapedPr?.text === "string" && `${scrapedPr.text}`.trim()) {
+    merged.text = scrapedPr.text;
+  }
+  if (scrapedPr?.screenshot != null) {
+    merged.screenshot = scrapedPr.screenshot;
+  }
+  if (typeof scrapedPr?.used === "boolean") {
+    merged.used = scrapedPr.used;
+  }
+  if (typeof scrapedPr?.shouldPersist === "boolean") {
+    merged.shouldPersist = scrapedPr.shouldPersist;
+  }
+  if (scrapedPr?.scrapeStatus != null) {
+    merged.scrapeStatus = scrapedPr.scrapeStatus;
+  }
+  if (scrapedPr?.jurisdiction != null) {
+    merged.jurisdiction = scrapedPr.jurisdiction;
+  }
+
+  return merged;
+}
+
+/**
+ * @param {unknown} tabsLike
+ * @returns {boolean}
+ */
+function arlingtonScrapedPlanReviewIsProjectInformationOnlyUpdate(
+  tabsLike,
+  /** @type {Record<string, unknown> | undefined} */ scrapedRec,
+) {
+  if (!scrapedRec || scrapedRec.shouldPersist !== true) return false;
+  const piFields = /** @type {unknown} */ (
+    tabsLike?.projectInformation?.fields
+  );
+  const piDocs = /** @type {unknown} */ (
+    tabsLike?.projectInformation?.documents
+  );
+  const piFieldCount = Array.isArray(piFields) ? piFields.length : 0;
+  const piDocCount = Array.isArray(piDocs) ? piDocs.length : 0;
+  if (piFieldCount === 0 && piDocCount === 0) return false;
+  return !arlingtonIntegratedTabsPlanSetValid(
+    /** @type {Record<string, unknown>} */ (tabsLike),
+  );
+}
+
+/**
+ * Merge scraped Arlington slices into existing portal_data so partial modes do not wipe
+ * tabs that were not part of this run.
+ * @param {Record<string, unknown>} previousPortalData
+ * @param {Record<string, unknown>} scrapedPortalData
+ * @param {Set<string>} arlingtonTabSet
+ */
+function mergeArlingtonPartialPortalData(
+  previousPortalData,
+  scrapedPortalData,
+  arlingtonTabSet,
+) {
+  if (!previousPortalData || typeof previousPortalData !== "object") {
+    return scrapedPortalData;
+  }
+  if (
+    scrapedPortalData == null ||
+    typeof scrapedPortalData !== "object" ||
+    !scrapedPortalData.tabs
+  ) {
+    return scrapedPortalData;
+  }
+  const prevTabs =
+    previousPortalData.tabs &&
+    typeof previousPortalData.tabs === "object" &&
+    !Array.isArray(previousPortalData.tabs)
+      ? { ...previousPortalData.tabs }
+      : {};
+  const nextTabs = { ...prevTabs };
+
+  /** Never replace accordion panels from a narrowed Arlington run — scraped payload omits those extractions */
+  const preserveWholeKeys = [
+    "status",
+    "reports",
+    "inspections",
+    "payments",
+    "relatedRecords",
+  ];
+  for (const k of preserveWholeKeys) {
+    if (prevTabs[k] != null && prevTabs[k] !== undefined) {
+      nextTabs[k] = prevTabs[k];
+    }
+  }
+
+  if (arlingtonTabSet.has("info")) {
+    nextTabs.info = scrapedPortalData.tabs.info ?? prevTabs.info;
+  }
+  if (arlingtonTabSet.has("attachments")) {
+    nextTabs.attachments =
+      scrapedPortalData.tabs.attachments ?? prevTabs.attachments;
+  }
+  if (arlingtonTabSet.has("plan_review")) {
+    const scrapedPr = scrapedPortalData.tabs?.planReview;
+    const priorPr = prevTabs.planReview;
+
+    /** @type {Record<string, unknown> | undefined} */
+    const scrapedRec =
+      scrapedPr && typeof scrapedPr === "object"
+        ? /** @type {Record<string, unknown>} */ (scrapedPr)
+        : undefined;
+
+    const newExplorerTabs =
+      scrapedRec?.tabs ?? scrapedRec?.arlingtonPlanReview?.tabs;
+    const mergedEmptyExplore =
+      arlingtonIntegratedPlanReviewIsEffectivelyEmpty(newExplorerTabs);
+
+    const explicitFailPersist =
+      typeof scrapedRec?.shouldPersist === "boolean" &&
+      scrapedRec.shouldPersist === false;
+
+    const preserveWeak =
+      scrapedRec?.preservePreviousPlanReview === true && priorPr != null;
+
+    const priorExplorerHasTabs =
+      priorPr &&
+      typeof priorPr === "object" &&
+      /** @type {Record<string, unknown>} */ (priorPr).tabs &&
+      typeof /** @type {Record<string, unknown>} */ (priorPr).tabs ===
+        "object";
+
+    const priorValidPersist =
+      priorPr &&
+      priorExplorerHasTabs &&
+      arlingtonPortalDataHasValidPlanSet({
+        tabs: {
+          /** @type {Record<string, unknown>} */
+          planReview: /** @type {Record<string, unknown>} */ (priorPr),
+        },
+      });
+
+    const keepPrior =
+      preserveWeak ||
+      (!!priorValidPersist &&
+        (explicitFailPersist || mergedEmptyExplore === true));
+
+    const scrapedTabsForMerge =
+      scrapedRec?.tabs && typeof scrapedRec.tabs === "object"
+        ? /** @type {Record<string, unknown>} */ (scrapedRec.tabs)
+        : newExplorerTabs && typeof newExplorerTabs === "object"
+          ? /** @type {Record<string, unknown>} */ (newExplorerTabs)
+          : null;
+
+    const projectInformationOnlyMerge =
+      priorPr != null &&
+      scrapedPr != null &&
+      priorValidPersist &&
+      scrapedTabsForMerge &&
+      arlingtonScrapedPlanReviewIsProjectInformationOnlyUpdate(
+        scrapedTabsForMerge,
+        scrapedRec,
+      );
+
+    if (projectInformationOnlyMerge) {
+      nextTabs.planReview = mergeArlingtonSelectiveProjectInformationPlanReview(
+        /** @type {Record<string, unknown>} */ (priorPr),
+        /** @type {Record<string, unknown>} */ (scrapedPr),
+      );
+      console.log(
+        "[Arlington][PlanReview] merged selective Project Information into existing planReview (preserved Plan Set / Review Results / Approved Documents)",
+      );
+    } else if (keepPrior && priorPr != null) {
+      console.log(
+        "[Arlington][PlanReview] ERMS unavailable; preserving existing Plan Review data",
+      );
+      if (explicitFailPersist) {
+        console.log(
+          "[Arlington][PlanReview] not overwriting existing planReview because shouldPersist=false",
+        );
+      } else if (mergedEmptyExplore && priorValidPersist) {
+        console.log(
+          "[Arlington][PlanReview] not overwriting existing planReview because scraped integrated tabs were empty",
+        );
+      }
+      nextTabs.planReview = priorPr;
+    } else {
+      nextTabs.planReview = scrapedPr ?? priorPr;
+    }
+  }
+
+  const out = {
+    ...previousPortalData,
+    portalType:
+      scrapedPortalData.portalType || previousPortalData.portalType || "accela",
+    schemaVersion: Math.max(
+      Number(previousPortalData.schemaVersion) || 0,
+      Number(scrapedPortalData.schemaVersion) || 0,
+    ),
+    tabs: nextTabs,
+  };
+
+  if (arlingtonTabSet.has("info")) {
+    out.name = scrapedPortalData.name ?? previousPortalData.name;
+    out.projectNum = scrapedPortalData.projectNum ?? previousPortalData.projectNum;
+    out.description =
+      scrapedPortalData.description ?? previousPortalData.description;
+    out.dashboardStatus =
+      scrapedPortalData.dashboardStatus ?? previousPortalData.dashboardStatus;
+    out.location = scrapedPortalData.location ?? previousPortalData.location;
+  } else {
+    out.name = previousPortalData.name ?? scrapedPortalData.name;
+    out.projectNum = previousPortalData.projectNum ?? scrapedPortalData.projectNum;
+    out.description =
+      previousPortalData.description ?? scrapedPortalData.description;
+    out.dashboardStatus =
+      previousPortalData.dashboardStatus ?? scrapedPortalData.dashboardStatus;
+    out.location =
+      previousPortalData.location ?? scrapedPortalData.location;
+  }
+
+  if (
+    scrapedPortalData.planReviewLastError &&
+    typeof scrapedPortalData.planReviewLastError === "object"
+  ) {
+    out.planReviewLastError = scrapedPortalData.planReviewLastError;
+  }
+
+  return out;
+}
+
+/** ── Arlington portal_data persistence: slim Plan Review tab to avoid Postgres/Supabase timeouts. ── */
+
+const PLAN_REVIEW_COMMENT_MAX = 4000;
+const PLAN_REVIEW_TOPIC_TEXT_MAX = 32000;
+const PLAN_REVIEW_SCREENSHOT_STRING_MAX_CHARS = 24000;
+const PLAN_REVIEW_DOWNLOAD_LINKS_MAX_ROWS = 80;
+const PLAN_REVIEW_LARGE_PAYLOAD_FALLBACK_BYTES = 900000;
+
+/** Arlington-only: allow long Plan Review downloads (secondaries + large PDFs). */
+const ARLINGTON_PLAN_REVIEW_GLOBAL_TIMEOUT_MS = 20 * 60 * 1000;
+/** ERMS `/PlanReviewIntegrated/Plan/DocumentStream` fetch + body read cap. */
+const ERMS_DOCUMENT_STREAM_TIMEOUT_MS = 120000;
+const ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS = 120000;
+/** Per-run download batch caps (download manager wrapper). */
+const ARLINGTON_PLAN_REVIEW_MAX_TOTAL_DOWNLOADS_PER_RUN = 15;
+const ARLINGTON_PLAN_REVIEW_MAX_PLAN_SET_DOWNLOADS_PER_RUN = 10;
+const ARLINGTON_PLAN_REVIEW_MAX_SECONDARY_DOWNLOADS_PER_RUN = 10;
+const ARLINGTON_PLAN_REVIEW_MAX_STREAM_TIMEOUTS_PER_RUN = 2;
+const ARLINGTON_PLAN_REVIEW_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN = 5;
+const ARLINGTON_PLAN_REVIEW_MIN_REMAINING_BUDGET_MS = 120000;
+/** Continue-download endpoint batch caps (slightly higher than normal scrape). */
+const ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_TOTAL_DOWNLOADS_PER_RUN = 20;
+const ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_PLAN_SET_DOWNLOADS_PER_RUN = 15;
+const ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_SECONDARY_DOWNLOADS_PER_RUN = 10;
+const ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_STREAM_TIMEOUTS_PER_RUN = 2;
+const ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN = 5;
+const ARLINGTON_PLAN_REVIEW_CONTINUE_MIN_REMAINING_BUDGET_MS = 120000;
+const ARLINGTON_PLAN_REVIEW_CONTINUE_WALL_MS = 18 * 60 * 1000;
+
+/** ERMS href fallbacks for secondary download-phase tab activation. */
+const ARLINGTON_SECONDARY_TAB_DOWNLOAD_HINTS = {
+  reviewResultsAndMarkups: {
+    panelHref: "/PlanReviewIntegrated/Plan/ReviewDocuments",
+    markerRxSource:
+      "Comment Letters & Plan Mark-ups|Review Status|Plan Mark-ups|Review Results Letter",
+  },
+  approvedDocuments: {
+    panelHref: "/PlanReviewIntegrated/Plan/ApprovedDocuments",
+    markerRxSource: "File Actions|Document Date|Approved Plan Set|Review Results Letter",
+  },
+};
+
+/** Bucket upload limit aligned with typical Supabase storage policy (avoid silent failures). */
+const SUPABASE_STORAGE_OBJECT_MAX_BYTES = 200 * 1024 * 1024;
+
+/**
+ * Resolved max upload size (bytes). Override with env `SUPABASE_STORAGE_OBJECT_MAX_BYTES`
+ * after raising the Supabase bucket / global limit.
+ * @returns {number}
+ */
+function getSupabaseStorageObjectMaxBytes() {
+  const raw = process.env.SUPABASE_STORAGE_OBJECT_MAX_BYTES;
+  if (raw != null && `${raw}`.trim() !== "") {
+    const n = Number.parseInt(`${raw}`.replace(/_/g, "").trim(), 10);
+    if (Number.isFinite(n) && n > 1024) return n;
+  }
+  return SUPABASE_STORAGE_OBJECT_MAX_BYTES;
+}
+
+/** @returns {boolean} */
+function arlingtonEnvForceRetryOversizedPlanReviewDownloads() {
+  const v =
+    `${process.env.ARLINGTON_FORCE_RETRY_OVERSIZED_PLAN_REVIEW_DOWNLOADS || ""}`
+      .trim()
+      .toLowerCase();
+  return v === "true" || v === "1";
+}
+
+/** @returns {number} */
+function portalDataUtf8ByteLength(payload) {
+  try {
+    return Buffer.byteLength(JSON.stringify(payload ?? null), "utf8");
+  } catch (_) {
+    return 0;
+  }
+}
+
+/** @returns {unknown} */
+function compactPlanReviewCommentForDb(rawComment) {
+  if (!rawComment || typeof rawComment !== "object") return rawComment;
+  const c = /** @type {Record<string, unknown>} */ (rawComment);
+  /** @type {Record<string, unknown>} */
+  const raw =
+    c.raw && typeof c.raw === "object"
+      ? /** @type {Record<string, unknown>} */ (c.raw)
+      : {};
+  const reviewer =
+    `${c.reviewer ?? raw.Reviewer ?? raw.reviewer ?? raw.reviewerName ?? raw.CreatedBy ?? raw.createdBy ?? ""}`
+      .replace(/\s+/g, " ")
+      .trim();
+  const out = {
+    commentId: `${raw.CommentId ?? raw.commentId ?? raw.Id ?? raw.id ?? ""}`.slice(
+      0,
+      120,
+    ),
+    reviewGroup: `${raw.ReviewGroup ?? raw.reviewGroup ?? ""}`.slice(0, 200),
+    reviewerName: reviewer.slice(0, 200),
+    sheet: `${raw.Sheet ?? raw.sheet ?? ""}`.slice(0, 200),
+    status: `${raw.Status ?? raw.status ?? ""}`.slice(0, 200),
+    comment: `${c.text ?? raw.CommentText ?? raw.commentText ?? raw.Text ?? raw.text ?? ""}`
+      .replace(/\s+/g, " ")
+      .slice(0, PLAN_REVIEW_COMMENT_MAX),
+  };
+  return out;
+}
+
+const PLAN_REVIEW_DOC_DB_FIELDS = [
+  "name",
+  "filename",
+  "documentType",
+  "documentDate",
+  "discipline",
+  "sheetType",
+  "revision",
+  "status",
+  "downloadStatus",
+  "publicUrl",
+  "downloadUrl",
+  "storagePath",
+  "sourceTab",
+  "sourceSection",
+  "sourceApi",
+  "secondaryCrmDocHandle",
+  "retryCount",
+  "skipReason",
+  "fileSizeBytes",
+  "secondaryDomRowIndex",
+];
+
+/** @returns {Record<string, unknown>} */
+function sanitizePlanReviewDocumentRowForDb(rawDoc) {
+  if (!rawDoc || typeof rawDoc !== "object") return {};
+  const d = /** @type {Record<string, unknown>} */ (rawDoc);
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const k of PLAN_REVIEW_DOC_DB_FIELDS) {
+    if (d[k] === undefined || d[k] === null) continue;
+    if (typeof d[k] === "string" && !String(d[k]).trim()) continue;
+    out[k] = d[k];
+  }
+  if (d.documentId != null && `${d.documentId}`.trim()) {
+    out.documentId = d.documentId;
+  }
+  if (d.action && typeof d.action === "object") {
+    const docIdInner = /** @type {Record<string, unknown>} */ (d.action)
+      .documentId;
+    if (docIdInner != null && `${docIdInner}`.trim())
+      out.action = { documentId: docIdInner };
+  }
+  return out;
+}
+
+function sanitizeDocsArrayDocsOnly(arr) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.map(sanitizePlanReviewDocumentRowForDb);
+}
+
+/** Clone via JSON — drops functions/undefined (acceptable for portal_data blobs). */
+function structuredCloneWorksSafe(obj) {
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch (_) {
+    return typeof obj === "object" && obj !== null
+      ? { .../** @type {Record<string, unknown>} */ (obj) }
+      : obj;
+  }
+}
+
+function truncateMiddleIndicator(str, max) {
+  if (typeof str !== "string") return str;
+  if (str.length <= max) return str;
+  return `${str.slice(0, Math.floor(max * 0.55))}\n…truncated ${str.length - max} chars…\n${str.slice(-Math.floor(max * 0.35))}`;
+}
+
+/** Recursive slim of `tabs.planReview.tabs` Arlington integrated shape. */
+function sanitizeArlingtonIntegratedPlanReviewTabsObject(tabs) {
+  if (!tabs || typeof tabs !== "object" || Array.isArray(tabs)) return tabs;
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const [tabKey, rawBucket] of Object.entries(tabs)) {
+    if (!rawBucket || typeof rawBucket !== "object" || Array.isArray(rawBucket)) {
+      out[tabKey] = rawBucket;
+      continue;
+    }
+    /** @type {Record<string, unknown>} */
+    const bucket = /** @type {Record<string, unknown>} */ (
+      structuredCloneWorksSafe(rawBucket)
+    );
+    if (Array.isArray(bucket.documents))
+      bucket.documents = sanitizeDocsArrayDocsOnly(bucket.documents);
+    if (Array.isArray(bucket.comments))
+      bucket.comments = bucket.comments.map(compactPlanReviewCommentForDb);
+    if (bucket.sections && typeof bucket.sections === "object") {
+      /** @type {Record<string, unknown>} */
+      const secOut = {};
+      for (const [sk, sv] of Object.entries(
+        /** @type {Record<string, unknown>} */ (bucket.sections),
+      )) {
+        if (!sv || typeof sv !== "object" || Array.isArray(sv)) {
+          secOut[sk] = sv;
+          continue;
+        }
+        const section = /** @type {Record<string, unknown>} */ (
+          structuredCloneWorksSafe(sv)
+        );
+        if (Array.isArray(section.documents)) {
+          if (tabKey === "plansAndDocuments" && sk === "planSetDocuments") {
+            arlingtonFinalizePlanSetDocumentsSink(section.documents, true);
+          }
+          section.documents = sanitizeDocsArrayDocsOnly(section.documents);
+        }
+        delete section.raw;
+        delete section.rawPayload;
+        secOut[sk] = section;
+      }
+      bucket.sections = secOut;
+    }
+    if (Array.isArray(bucket.fields)) {
+      bucket.fields = bucket.fields.map((field) =>
+        field && typeof field === "object"
+          ? {
+              label: String(field.label ?? "")
+                .replace(/\s+/g, " ")
+                .slice(0, 260),
+              value: String(field.value ?? "")
+                .replace(/\s+/g, " ")
+                .slice(0, 2000),
+            }
+          : field,
+      );
+    }
+    if (Array.isArray(bucket.requiredDocumentTypes)) {
+      bucket.requiredDocumentTypes = bucket.requiredDocumentTypes.map(
+        (req) =>
+          req && typeof req === "object"
+            ? {
+                label: String(req.label ?? req.name ?? "").slice(0, 260),
+                value:
+                  `${req.description ?? req.value ?? ""}`.slice(0, 800) ||
+                  undefined,
+              }
+            : req,
+      );
+    }
+    delete bucket.downloadCandidates;
+    delete bucket.tables;
+    delete bucket.links;
+    delete bucket.textPreview;
+    delete bucket.text;
+    delete bucket.data;
+    delete bucket.rawPayload;
+    delete bucket.raw;
+    out[tabKey] = bucket;
+  }
+  return out;
+}
+
+function sanitizePlanReviewDownloadLinksForDb(links) {
+  if (!Array.isArray(links)) return links;
+  return links.slice(0, PLAN_REVIEW_DOWNLOAD_LINKS_MAX_ROWS).map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const r = /** @type {Record<string, unknown>} */ (row);
+    return {
+      text: `${r.text ?? r.label ?? ""}`.replace(/\s+/g, " ").slice(0, 400),
+      href: `${r.href ?? r.url ?? ""}`.slice(0, 2000),
+    };
+  });
+}
+
+/** Stable row key for Arlington Plan Review resume across runs. */
+function arlingtonPlanReviewDocStableKey(doc) {
+  if (!doc || typeof doc !== "object") return "";
+  const d = /** @type {Record<string, unknown>} */ (doc);
+  const sourceTab = `${d.sourceTab || ""}`.trim();
+  let id = `${d.documentId ?? ""}`.trim();
+  if (!id && d.action && typeof d.action === "object") {
+    id = `${
+      /** @type {Record<string, unknown>} */ (d.action).documentId ?? ""
+    }`.trim();
+  }
+  const normalizedName = `${d.name || d.filename || ""}`
+    .trim()
+    .replace(/\s+/g, " ");
+  const documentDate = `${d.documentDate || ""}`.trim();
+  const rowIx =
+    d.secondaryDomRowIndex != null && `${d.secondaryDomRowIndex}`.trim() !== ""
+      ? `|r${String(d.secondaryDomRowIndex)}`
+      : "";
+  if (id) return `${sourceTab}|${id}|${documentDate}`;
+  return `${sourceTab}|${normalizedName}|${documentDate}${rowIx}`;
+}
+
+/** @returns {Map<string, { publicUrl?: string; downloadUrl?: string; storagePath?: string; downloadStatus?: string }>} */
+function arlingtonPriorPlanReviewDocUploadedByStableKey(portalPayload) {
+  /** @type {Map<string, { publicUrl?: string; downloadUrl?: string; storagePath?: string; downloadStatus?: string }>} */
+  const map = new Map();
+  const pr = portalPayload?.tabs?.planReview;
+  const buckets =
+    pr && typeof pr === "object" && typeof pr.tabs === "object" && !Array.isArray(pr.tabs)
+      ? pr.tabs
+      : null;
+  if (!buckets || typeof buckets !== "object") return map;
+
+  const seen = /** @type {unknown[]} */ ([]);
+  /** @param {unknown[]} docs */
+  const walk = (docs) => {
+    if (!Array.isArray(docs)) return;
+    for (const row of docs) {
+      seen.push(row);
+    }
+  };
+  /** @type {Record<string, unknown>} */
+  const b = buckets;
+  const pad = /** @type {unknown} */ (b.plansAndDocuments);
+  const padDoc =
+    pad && typeof pad === "object" && !Array.isArray(pad) && pad !== null
+      ? /** @type {Record<string, unknown>} */ (pad)
+      : null;
+  if (padDoc) {
+    if (Array.isArray(padDoc.documents)) walk(padDoc.documents);
+    const sections = padDoc.sections;
+    if (sections && typeof sections === "object" && !Array.isArray(sections)) {
+      for (const sk of Object.keys(sections)) {
+        const sec = /** @type {Record<string, unknown>} */ (sections)[sk];
+        if (
+          sec &&
+          typeof sec === "object" &&
+          !Array.isArray(sec) &&
+          Array.isArray(sec.documents)
+        )
+          walk(sec.documents);
+      }
+    }
+  }
+  const rrB = /** @type {unknown} */ (b.reviewResultsAndMarkups);
+  const rrO =
+    rrB && typeof rrB === "object" && !Array.isArray(rrB)
+      ? /** @type {Record<string, unknown>} */ (rrB)
+      : null;
+  if (rrO && Array.isArray(rrO.documents)) walk(rrO.documents);
+  const apB = /** @type {unknown} */ (b.approvedDocuments);
+  const apO =
+    apB && typeof apB === "object" && !Array.isArray(apB)
+      ? /** @type {Record<string, unknown>} */ (apB)
+      : null;
+  if (apO && Array.isArray(apO.documents)) walk(apO.documents);
+  const piB = /** @type {unknown} */ (b.projectInformation);
+  const piO =
+    piB && typeof piB === "object" && !Array.isArray(piB)
+      ? /** @type {Record<string, unknown>} */ (piB)
+      : null;
+  if (piO && Array.isArray(piO.documents)) walk(piO.documents);
+
+  for (const row of seen) {
+    if (!row || typeof row !== "object") continue;
+    const d = /** @type {Record<string, unknown>} */ (row);
+    const pu = /^https?:\/\//i.test(`${d.publicUrl || ""}`)
+      ? String(d.publicUrl)
+      : "";
+    const du = /^https?:\/\//i.test(`${d.downloadUrl || ""}`)
+      ? String(d.downloadUrl)
+      : "";
+    const sp = `${d.storagePath || ""}`.trim();
+    const ds = `${d.downloadStatus || ""}`.trim();
+
+    const sk = arlingtonPlanReviewDocStableKey(d);
+    if (!sk) continue;
+
+    if (ds === "oversized_for_supabase") {
+      map.set(sk, {
+        downloadStatus: "oversized_for_supabase",
+        fileSizeBytes: Number(d.fileSizeBytes) || 0,
+        skipReason:
+          `${d.skipReason || ""}`.trim() || "supabase_object_size_limit",
+      });
+      continue;
+    }
+
+    if ((!pu && !du && !sp) || !(ds === "uploaded" || ds.startsWith("aliased")))
+      continue;
+    if (!map.has(sk))
+      map.set(sk, {
+        publicUrl: pu || undefined,
+        downloadUrl: du || undefined,
+        storagePath: sp || undefined,
+        downloadStatus: ds || undefined,
+      });
+  }
+  return map;
+}
+
+/**
+ * Restore upload fields from prior `portal_data` so we skip already-stored blobs.
+ * @param {{ forceRetryOversized?: boolean; configuredMaxUploadBytes?: number }} [resumeOpts]
+ * @returns {{ alreadyDownloaded: number; pending: number }}
+ */
+function arlingtonResumePlanReviewDownloadsFromPrior(
+  integratedTabs,
+  priorPortalData,
+  logResume = false,
+  resumeOpts,
+  scopeRaw,
+) {
+  const forceRetry =
+    resumeOpts && resumeOpts.forceRetryOversized === true;
+  const configuredMaxUploadBytes =
+    typeof resumeOpts?.configuredMaxUploadBytes === "number" &&
+    Number.isFinite(resumeOpts.configuredMaxUploadBytes)
+      ? resumeOpts.configuredMaxUploadBytes
+      : getSupabaseStorageObjectMaxBytes();
+
+  const priorMap = priorPortalData
+    ? arlingtonPriorPlanReviewDocUploadedByStableKey({
+        tabs: { planReview: priorPortalData?.tabs?.planReview },
+      })
+    : new Map();
+
+  /** @param {unknown[]} docs */
+  const applyDocs = (docs) => {
+    let ad = 0;
+    let pen = 0;
+    if (!Array.isArray(docs)) return { ad: 0, pen: 0 };
+    for (const row of docs) {
+      if (!row || typeof row !== "object") continue;
+      const d = /** @type {Record<string, unknown>} */ (row);
+      const pu = /^https?:\/\//i.test(`${d.publicUrl || ""}`)
+        ? String(d.publicUrl)
+        : "";
+      const du = /^https?:\/\//i.test(`${d.downloadUrl || ""}`)
+        ? String(d.downloadUrl)
+        : "";
+      const sp = `${d.storagePath || ""}`.trim();
+      const skResume = arlingtonPlanReviewDocStableKey(d);
+      const prevResume = skResume ? priorMap.get(skResume) : null;
+      const dsRow = `${d.downloadStatus || ""}`.trim();
+      const skipReasonEff = `${d.skipReason || prevResume?.skipReason || ""}`.trim();
+      let fileSizeBytes =
+        Number(d.fileSizeBytes) || Number(prevResume?.fileSizeBytes) || 0;
+      if (fileSizeBytes && !d.fileSizeBytes) d.fileSizeBytes = fileSizeBytes;
+
+      const priorOversized =
+        prevResume?.downloadStatus === "oversized_for_supabase";
+      const rowOversized = dsRow === "oversized_for_supabase";
+      const limitSkip =
+        !skipReasonEff || skipReasonEff === "supabase_object_size_limit";
+      const isOversizedState = rowOversized || priorOversized;
+      const canRetryOversized =
+        isOversizedState &&
+        limitSkip &&
+        (forceRetry ||
+          (fileSizeBytes > 0 &&
+            configuredMaxUploadBytes > fileSizeBytes));
+
+      if (canRetryOversized) {
+        const nameGuess =
+          `${d.name || d.filename || ""}`.trim() || "(unnamed)";
+        console.log(
+          `[Arlington][PlanReview] retrying previously oversized file after storage limit increase name=${nameGuess} bytes=${fileSizeBytes}`,
+        );
+        d.status = "pending";
+        d.downloadStatus = "pending_retry_after_storage_limit_increase";
+        d.skipReason = "";
+        delete d.failureReason;
+        if (fileSizeBytes) d.fileSizeBytes = fileSizeBytes;
+        pen++;
+        continue;
+      }
+
+      if (prevResume && prevResume.downloadStatus === "oversized_for_supabase") {
+        d.downloadStatus = "oversized_for_supabase";
+        d.status = "pending";
+        if (prevResume.fileSizeBytes)
+          d.fileSizeBytes = prevResume.fileSizeBytes;
+        d.skipReason =
+          `${prevResume.skipReason || ""}`.trim() ||
+          "supabase_object_size_limit";
+        continue;
+      }
+      if (dsRow === "oversized_for_supabase") {
+        continue;
+      }
+      if (pu || du || sp) {
+        ad++;
+        continue;
+      }
+      const prev = priorMap.get(skResume);
+      if (prev && (prev.publicUrl || prev.downloadUrl || prev.storagePath)) {
+        if (prev.publicUrl) {
+          d.publicUrl = prev.publicUrl;
+          d.downloadUrl = prev.publicUrl;
+        }
+        if (prev.downloadUrl) d.downloadUrl = prev.downloadUrl;
+        if (prev.storagePath) d.storagePath = prev.storagePath;
+        if (prev.downloadStatus)
+          d.downloadStatus = prev.downloadStatus;
+        d.status = "downloaded";
+        ad++;
+      } else pen++;
+    }
+    return { ad, pen };
+  };
+
+  let alreadyDownloaded = 0;
+  let pending = 0;
+  const bucketLists = scopeRaw
+    ? arlingtonPlanReviewScopedDocBucketLists(integratedTabs, scopeRaw)
+    : [
+        integratedTabs?.plansAndDocuments?.sections?.planSetDocuments
+          ?.documents,
+        integratedTabs?.reviewResultsAndMarkups?.documents,
+        integratedTabs?.approvedDocuments?.documents,
+        integratedTabs?.projectInformation?.documents,
+        integratedTabs?.plansAndDocuments?.documents,
+      ].filter((x) => Array.isArray(x) && x.length);
+  for (const docs of bucketLists) {
+    const agg = applyDocs(/** @type {unknown[]} */ (docs));
+    alreadyDownloaded += agg.ad;
+    pending += agg.pen;
+  }
+  if (logResume && (alreadyDownloaded > 0 || pending > 0)) {
+    const scopeNote = scopeRaw ? ` scope=${scopeRaw}` : "";
+    console.log(
+      `[Arlington][PlanReview] resume: alreadyDownloaded=${alreadyDownloaded} pending=${pending}${scopeNote}`,
+    );
+  }
+  return { alreadyDownloaded, pending };
+}
+
+/** @returns {boolean} */
+function arlingtonErmsSinkDocLooksUploadComplete(doc) {
+  if (!doc || typeof doc !== "object") return false;
+  const d = /** @type {Record<string, unknown>} */ (doc);
+  const pu = /^https?:\/\//i.test(`${d.publicUrl || ""}`)
+    ? String(d.publicUrl)
+    : "";
+  const du = /^https?:\/\//i.test(`${d.downloadUrl || ""}`)
+    ? String(d.downloadUrl)
+    : "";
+  const sp = `${d.storagePath || ""}`.trim();
+  const ds = `${d.downloadStatus || ""}`.trim();
+  if (ds === "pending_retry_after_storage_limit_increase") return false;
+  if (pu || du || sp) return true;
+  return (
+    ds === "uploaded" ||
+    ds === "aliased_duplicate" ||
+    ds === "aliased_attachment" ||
+    ds === "aliased_plan_set" ||
+    ds === "oversized_for_supabase"
+  );
+}
+
+/** Row still needs a download attempt (includes metadata_only rows with ERMS ids). */
+function arlingtonPlanReviewDocNeedsDownloadAttempt(doc) {
+  if (!doc || typeof doc !== "object") return false;
+  if (arlingtonErmsSinkDocLooksUploadComplete(doc)) return false;
+  const d = /** @type {Record<string, unknown>} */ (doc);
+  const ds = `${d.downloadStatus || ""}`.trim();
+  if (
+    ds === "failed_non_retryable" ||
+    ds === "duplicate_skipped" ||
+    ds === "already_downloaded"
+  ) {
+    return false;
+  }
+  if (ds === "oversized_for_supabase") return false;
+  return true;
+}
+
+/**
+ * Document arrays included for a scrape/continue scope.
+ * @param {Record<string, unknown>} integratedTabs
+ * @param {string} [scopeRaw]
+ * @returns {unknown[][]}
+ */
+function arlingtonPlanReviewScopedDocBucketLists(integratedTabs, scopeRaw) {
+  const scope = scopeRaw
+    ? arlingtonNormalizePlanReviewActionScope(scopeRaw)
+    : "allPending";
+  /** @type {unknown[][]} */
+  const out = [];
+  if (arlingtonPlanReviewScopeAllowsPlanSet(scope)) {
+    const ps =
+      integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+    if (Array.isArray(ps) && ps.length) out.push(ps);
+    const flat = integratedTabs?.plansAndDocuments?.documents;
+    if (Array.isArray(flat) && flat.length) out.push(flat);
+  }
+  if (arlingtonPlanReviewScopeAllowsSecondaryTab(scope, "reviewResultsAndMarkups")) {
+    const rr = integratedTabs?.reviewResultsAndMarkups?.documents;
+    if (Array.isArray(rr) && rr.length) out.push(rr);
+  }
+  if (arlingtonPlanReviewScopeAllowsSecondaryTab(scope, "approvedDocuments")) {
+    const ad = integratedTabs?.approvedDocuments?.documents;
+    if (Array.isArray(ad) && ad.length) out.push(ad);
+  }
+  if (arlingtonPlanReviewScopeAllowsSecondaryTab(scope, "projectInformation")) {
+    const pi = integratedTabs?.projectInformation?.documents;
+    if (Array.isArray(pi) && pi.length) out.push(pi);
+  }
+  return out;
+}
+
+function arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(
+  integratedTabs,
+  scopeRaw,
+) {
+  let incomplete = 0;
+  const buckets = scopeRaw
+    ? arlingtonPlanReviewScopedDocBucketLists(integratedTabs, scopeRaw)
+    : [
+        integratedTabs?.plansAndDocuments?.sections?.planSetDocuments
+          ?.documents,
+        integratedTabs?.plansAndDocuments?.documents,
+        integratedTabs?.reviewResultsAndMarkups?.documents,
+        integratedTabs?.approvedDocuments?.documents,
+        integratedTabs?.projectInformation?.documents,
+      ].filter((x) => Array.isArray(x) && x.length);
+  for (const docs of buckets) {
+    for (const doc of /** @type {unknown[]} */ (docs)) {
+      if (arlingtonPlanReviewDocNeedsDownloadAttempt(doc)) incomplete++;
+    }
+  }
+  return incomplete;
+}
+
+function arlingtonCountPlanReviewUploadedDocsAcrossIntegratedTabs(integratedTabs) {
+  let n = 0;
+  /** @param {unknown[]} docs */
+  const walk = (docs) => {
+    if (!Array.isArray(docs)) return;
+    for (const doc of docs) {
+      if (arlingtonErmsSinkDocLooksUploadComplete(doc)) n++;
+    }
+  };
+  const ps = integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  walk(Array.isArray(ps) ? ps : []);
+  walk(
+    Array.isArray(integratedTabs?.plansAndDocuments?.documents)
+      ? integratedTabs.plansAndDocuments.documents
+      : [],
+  );
+  walk(Array.isArray(integratedTabs?.reviewResultsAndMarkups?.documents) ? integratedTabs.reviewResultsAndMarkups.documents : []);
+  walk(Array.isArray(integratedTabs?.approvedDocuments?.documents) ? integratedTabs.approvedDocuments.documents : []);
+  walk(Array.isArray(integratedTabs?.projectInformation?.documents) ? integratedTabs.projectInformation.documents : []);
+  return n;
+}
+
+/**
+ * Near-global scrape deadline: pause remaining unfinished PDF fetches gracefully.
+ */
+function markArlingtonPlanReviewPendingTimeoutResumeIntegrated(integratedTabs) {
+  /** @param {unknown[]} docs */
+  const apply = (docs) => {
+    if (!Array.isArray(docs)) return;
+    for (const doc of docs) {
+      if (!doc || typeof doc !== "object") continue;
+      const d = /** @type {Record<string, unknown>} */ (doc);
+      const ds = `${d.downloadStatus || ""}`.trim();
+      if (
+        ds === "metadata_only" ||
+        ds === "pending_stream_timeout" ||
+        d.status === "api_metadata"
+      )
+        continue;
+      if (arlingtonErmsSinkDocLooksUploadComplete(d)) continue;
+      d.downloadStatus = "pending_timeout_resume";
+      d.status = "pending";
+      d.skipReason = "will_resume_next_run";
+    }
+  };
+  const ps = integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  apply(Array.isArray(ps) ? ps : []);
+  apply(
+    Array.isArray(integratedTabs?.plansAndDocuments?.documents)
+      ? integratedTabs.plansAndDocuments.documents
+      : [],
+  );
+  apply(Array.isArray(integratedTabs?.reviewResultsAndMarkups?.documents) ? integratedTabs.reviewResultsAndMarkups.documents : []);
+  apply(Array.isArray(integratedTabs?.approvedDocuments?.documents) ? integratedTabs.approvedDocuments.documents : []);
+  apply(Array.isArray(integratedTabs?.projectInformation?.documents) ? integratedTabs.projectInformation.documents : []);
+}
+
+/**
+ * Persist `tabs.planReview` mid-scrape (Supabase) without touching other portal tabs.
+ */
+async function persistArlingtonPlanReviewCheckpoint({
+  supabase,
+  userId,
+  supabaseProjectId,
+  permitNumber,
+  hashPortalData,
+  planReviewTabPayload,
+}) {
+  if (
+    !supabase ||
+    !userId ||
+    typeof hashPortalData !== "function" ||
+    !planReviewTabPayload ||
+    typeof planReviewTabPayload !== "object"
+  ) {
+    return false;
+  }
+
+  const selectFields = "id, portal_data_hash, portal_data, permit_number, user_id";
+  /** @type {{ id: string; portal_data?: Record<string, unknown>; portal_data_hash?: string; permit_number?: string; user_id?: string } | null} */
+  let existingRow = null;
+  if (supabaseProjectId) {
+    const { data: rows } = await supabase
+      .from("projects")
+      .select(selectFields)
+      .eq("id", supabaseProjectId)
+      .limit(1);
+    existingRow = rows && rows.length > 0 ? rows[0] : null;
+  }
+  if (!existingRow) {
+    const { data: rows } = await supabase
+      .from("projects")
+      .select(selectFields)
+      .eq("permit_number", permitNumber)
+      .eq("user_id", userId);
+    existingRow = rows && rows.length > 0 ? rows[0] : null;
+  }
+  if (!existingRow?.id) {
+    console.warn(
+      "[Arlington][PlanReview] checkpoint skipped — no projects row yet",
+    );
+    return false;
+  }
+
+  const priorPd =
+    existingRow.portal_data && typeof existingRow.portal_data === "object"
+      ? structuredCloneWorksSafe(existingRow.portal_data)
+      : /** @type {Record<string, unknown>} */ ({});
+  const priorTabs =
+    priorPd.tabs && typeof priorPd.tabs === "object" && !Array.isArray(priorPd.tabs)
+      ? /** @type {Record<string, unknown>} */ (priorPd.tabs)
+      : {};
+
+  /** @type {Record<string, unknown>} */
+  const nextPd = {
+    ...priorPd,
+    portalType: priorPd.portalType || "accela",
+    schemaVersion: Math.max(
+      Number(priorPd.schemaVersion) || 0,
+      2,
+    ),
+    tabs: {
+      ...priorTabs,
+      planReview: planReviewTabPayload,
+    },
+  };
+
+  let portalPayloadForDb = sanitizeArlingtonPortalDataTabsPlanReviewForDb(
+    nextPd,
+  );
+  const arlingtonPlanReviewOnlyPersistSplice =
+    portalDataUtf8ByteLength(portalPayloadForDb) >
+    PLAN_REVIEW_LARGE_PAYLOAD_FALLBACK_BYTES;
+  if (arlingtonPlanReviewOnlyPersistSplice) {
+    const slimPr =
+      portalPayloadForDb.tabs &&
+      typeof portalPayloadForDb.tabs === "object" &&
+      !Array.isArray(portalPayloadForDb.tabs)
+        ? /** @type {Record<string, unknown>} */ (portalPayloadForDb.tabs)
+            .planReview
+        : null;
+    portalPayloadForDb = portalDataArlingtonSpliceMinimalPlanReviewUpdate(
+      existingRow.portal_data,
+      slimPr ?? {},
+    );
+    portalPayloadForDb =
+      sanitizeArlingtonPortalDataTabsPlanReviewForDb(portalPayloadForDb);
+  }
+
+  const newHash = hashPortalData(portalPayloadForDb);
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      portal_data: portalPayloadForDb,
+      portal_data_hash: newHash,
+      last_checked_at: new Date().toISOString(),
+    })
+    .eq("id", existingRow.id);
+  if (error) {
+    console.warn(
+      `[Arlington][PlanReview] checkpoint Supabase error: ${error.message}`,
+    );
+    return false;
+  }
+  return true;
+}
+
+/** Checkpoint payload merged into `portal_data.tabs.planReview` (integrated tabs normalized shape). */
+function buildArlingtonPlanReviewCheckpointTabSlice({
+  integratedTabs,
+  screenshotBase64,
+  combinedText,
+  partialPendingDownloads,
+  scrapeStatus,
+}) {
+  return {
+    comments: [],
+    text: `${combinedText || ""}`
+      .replace(/\s+/g, " ")
+      .slice(0, PLAN_REVIEW_TOPIC_TEXT_MAX),
+    screenshot: screenshotBase64,
+    planReviewSummary: null,
+    downloadLinks: [],
+    used: true,
+    message: null,
+    jurisdiction: "arlington_county_va",
+    tabs: structuredCloneWorksSafe(integratedTabs),
+    ...(partialPendingDownloads ? { partialPendingDownloads: true } : {}),
+    ...(scrapeStatus ? { scrapeStatus } : {}),
+  };
+}
+
+/**
+ * Strip heavy ERMS/DOM debug from `portal_data.tabs.planReview` only (Arlington).
+ * @returns {Record<string, unknown>}
+ */
+function sanitizeArlingtonPortalDataTabsPlanReviewForDb(portalPayload) {
+  if (!portalPayload || typeof portalPayload !== "object") return portalPayload;
+  const tabs = portalPayload.tabs;
+  if (
+    !tabs ||
+    typeof tabs !== "object" ||
+    !tabs.planReview ||
+    typeof tabs.planReview !== "object"
+  )
+    return portalPayload;
+
+  const planReview =
+    structuredCloneWorksSafe(tabs.planReview) ||
+    /** @type {Record<string, unknown>} */ ({});
+
+  const outPr = {};
+
+  /** @type {(keyof typeof planReview|string)[]} */
+  const passKeys = [
+    "used",
+    "message",
+    "source",
+    "jurisdiction",
+    "timeout",
+    "tenantPlanReview",
+    "preservePreviousPlanReview",
+    "partialPendingDownloads",
+    "scrapeStatus",
+    "shouldPersist",
+  ];
+  for (const k of passKeys) {
+    if (planReview[k] !== undefined) outPr[k] = planReview[k];
+  }
+
+  delete outPr.integratedTabs;
+  delete outPr.legacyExplorerTabs;
+  delete /** @type {Record<string, unknown>} */ (outPr).integratedDocCount;
+
+  if (typeof planReview.text === "string")
+    outPr.text = truncateMiddleIndicator(
+      planReview.text.replace(/\s+/g, " "),
+      PLAN_REVIEW_TOPIC_TEXT_MAX,
+    ).slice(0, PLAN_REVIEW_TOPIC_TEXT_MAX);
+
+  let shot =
+    typeof planReview.screenshot === "string"
+      ? planReview.screenshot
+      : planReview.screenshot && typeof planReview.screenshot === "object"
+        ? null
+        : null;
+  if (typeof shot === "string") {
+    if (shot.startsWith("data:") || shot.length > PLAN_REVIEW_SCREENSHOT_STRING_MAX_CHARS)
+      shot = null;
+    if (shot) outPr.screenshot = shot;
+  }
+
+  const sum = planReview.planReviewSummary;
+  if (sum != null) {
+    if (typeof sum === "string") {
+      outPr.planReviewSummary = sum.slice(0, 24000);
+    } else if (typeof sum === "object") {
+      try {
+        const s = JSON.stringify(sum);
+        if (s.length > 24000) {
+          outPr.planReviewSummary = {
+            _truncated: true,
+            bytesApprox: s.length,
+            excerpt: s.slice(0, 23800),
+          };
+        } else {
+          outPr.planReviewSummary = structuredCloneWorksSafe(sum);
+        }
+      } catch (_) {
+        /**/
+      }
+    } else outPr.planReviewSummary = sum;
+  }
+
+  if (Array.isArray(planReview.comments))
+    outPr.comments = planReview.comments.map(compactPlanReviewCommentForDb);
+
+  outPr.downloadLinks = sanitizePlanReviewDownloadLinksForDb(
+    planReview.downloadLinks,
+  );
+
+  if (planReview.tabs && typeof planReview.tabs === "object")
+    outPr.tabs = sanitizeArlingtonIntegratedPlanReviewTabsObject(
+      structuredCloneWorksSafe(planReview.tabs),
+    );
+
+  const nextTabs = { ...portalPayload.tabs, planReview: outPr };
+  return { ...portalPayload, tabs: nextTabs };
+}
+
+/**
+ * If sanitization leaves the row huge, splice only sanitized Plan Review over existing DB blob.
+ */
+function portalDataArlingtonSpliceMinimalPlanReviewUpdate(
+  previousPortalData,
+  sanitizedPlanReviewSubset,
+) {
+  if (
+    !previousPortalData ||
+    typeof previousPortalData !== "object" ||
+    !previousPortalData.tabs
+  ) {
+    return {
+      ...(typeof previousPortalData === "object" ? previousPortalData : {}),
+      tabs: {
+        ...(typeof previousPortalData?.tabs === "object"
+          ? previousPortalData.tabs
+          : {}),
+        planReview: sanitizedPlanReviewSubset,
+      },
+    };
+  }
+  try {
+    return {
+      ...previousPortalData,
+      tabs: {
+        ...structuredCloneWorksSafe(previousPortalData.tabs),
+        planReview: structuredCloneWorksSafe(sanitizedPlanReviewSubset),
+      },
+    };
+  } catch (_) {
+    return {
+      ...previousPortalData,
+      tabs: {
+        ...(typeof previousPortalData.tabs === "object"
+          ? previousPortalData.tabs
+          : {}),
+        planReview: sanitizedPlanReviewSubset,
+      },
+    };
+  }
 }
 
 /** Child frames only (main frame excluded) for navigateToRecordInfoSection / navigateToPaymentsSection. */
@@ -746,7 +2029,8 @@ async function findPanelLinkMultiContext(ctx, page, selectors, label) {
     console.log(`     [panel] "${label}": link found in record frame`);
     return { link, frame: ctx, selectorUsed: sel };
   }
-  if (!isBaltimorePortal(page)) return { link: null, frame: null, selectorUsed: null };
+  if (!isBaltimorePortal(page) && !isArlingtonPortal(page))
+    return { link: null, frame: null, selectorUsed: null };
   const main = page.mainFrame();
   if (main && main !== ctx) {
     const mainResult = await findLinkInFrame(main, selectors);
@@ -948,6 +2232,14 @@ async function dumpLoginFrameDiagnostics(frame, label) {
 async function accelaLogin(page, username, password, portalUrl) {
   const cleanUrl = portalUrl.replace(/\/$/, "").replace(/\/Login\.aspx$/i, "");
   const loginUrl = cleanUrl + "/Login.aspx";
+  const isArlingtonLoginTenant =
+    typeof portalUrl === "string" &&
+    portalUrl.toUpperCase().includes("ARLINGTONCO");
+  if (isArlingtonLoginTenant) {
+    console.log(
+      "  [Arlington][login] Shared Accela login — expecting ARLINGTONCO Dashboard or My Records after success",
+    );
+  }
   console.log(`  Navigating to Accela login: ${loginUrl}`);
   await page.goto(loginUrl, { waitUntil: "networkidle", timeout: 45000 });
   await page.waitForTimeout(3000);
@@ -1105,6 +2397,19 @@ async function accelaLogin(page, username, password, portalUrl) {
     await page.waitForTimeout(2000);
     const url = page.url();
     console.log(`  ✅ Login confirmed. URL: ${url}`);
+    if (isArlingtonLoginTenant) {
+      const title = await page.title().catch(() => "");
+      console.log(`  [Arlington][login] post-login document.title: ${title}`);
+      if (/\/Dashboard\.aspx/i.test(url)) {
+        console.log(
+          "  [Arlington][login] Landed on Dashboard.aspx — scrape will open My Records if needed",
+        );
+      } else if (/\/MyRecordsCap\.aspx/i.test(url)) {
+        console.log(
+          "  [Arlington][login] Already on MyRecordsCap — list search can proceed",
+        );
+      }
+    }
     await saveCheckpointScreenshot(page, "after_login");
     return url;
   }
@@ -1174,6 +2479,7 @@ async function accelaPermitListDocSignature(frameOrPage) {
       const sels = [
         'table[id*="PermitList"] td a',
         'table[id*="Record"] td a',
+        'table[id*="gdvPermitList"] td a',
         ".aca_grid_container td a",
         '[id*="gview_List"] td a',
       ];
@@ -1255,7 +2561,7 @@ async function tryClickAccelaPermitGridNext(page) {
     if (!clicked) continue;
 
     await waitForAccelaLoad(page);
-    const extraMs = page._isBaltimore ? 800 : 400;
+    const extraMs = page._isBaltimore ? 800 : page._isArlington ? 600 : 400;
     await page.waitForTimeout(extraMs);
 
     const sigAfter = await accelaPermitListCombinedSignature(page);
@@ -1275,9 +2581,66 @@ async function tryClickAccelaPermitGridNext(page) {
  * @returns {Promise<{ foundLink: import('playwright').ElementHandle | import('playwright').Locator | null, foundFrame: import('playwright').Page | import('playwright').Frame | null, foundInfo: Record<string, unknown> }>}
  */
 async function findPermitLinkInAccelaList(page, permitNumber) {
+  const escapeRegex = (s) =>
+    String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const arlingtonListSearch =
+    !!page._isArlington ||
+    /\/ARLINGTONCO\/Cap\/MyRecordsCap\.aspx/i.test(page.url() || "");
+
+  if (arlingtonListSearch) {
+    try {
+      const direct = await page.evaluate((pn) => {
+        function normalize(t) {
+          return String(t || "")
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toUpperCase();
+        }
+        const target = normalize(pn);
+        const links = [
+          ...document.querySelectorAll('a[href*="CapDetail.aspx"]'),
+        ].map((a) => ({
+          text: normalize(a.innerText || a.textContent || ""),
+          hrefRaw: a.getAttribute("href") || "",
+          visible: !!(
+            a.offsetWidth ||
+            a.offsetHeight ||
+            a.getClientRects().length
+          ),
+        }));
+        return links.find((x) => x.text === target) || null;
+      }, permitNumber);
+      if (direct && direct.hrefRaw) {
+        const base = page.url();
+        const absolute = /^https?:/i.test(direct.hrefRaw)
+          ? direct.hrefRaw
+          : new URL(direct.hrefRaw, base).href;
+        console.log(
+          `[Arlington] direct CapDetail match for ${permitNumber}: ${absolute}`,
+        );
+        return {
+          foundLink: null,
+          foundFrame: null,
+          foundInfo: {
+            method: "arlington-capdetail-dom",
+            text: permitNumber,
+            href: absolute,
+            frameName: "main",
+            frameUrl: base,
+          },
+        };
+      }
+    } catch (err) {
+      console.log(`[Arlington] direct CapDetail lookup warning: ${err.message}`);
+    }
+  }
+
   if (page._isFairfax) {
-    const escapeRegex = (s) =>
-      String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tenantListLabel = "Fairfax";
+    const methodMain = "fairfax-exact-main";
+    const methodScan = "fairfax-exact-scan";
     try {
       const exactMainLocator = page
         .locator("a")
@@ -1289,18 +2652,19 @@ async function findPermitLinkInAccelaList(page, permitNumber) {
         const first = exactMainLocator.first();
         const isVisible = await first.isVisible().catch(() => false);
         if (isVisible) {
-          const href = (await first.getAttribute("href").catch(() => "")) || "";
+          const href =
+            (await first.getAttribute("href").catch(() => "")) || "";
           const textRaw = (await first.innerText().catch(() => permitNumber))
             .replace(/\s+/g, " ")
             .trim();
           console.log(
-            `  [Fairfax] exact permit match found on main page: "${permitNumber}"`,
+            `  [${tenantListLabel}] exact permit match found on main page: "${permitNumber}"`,
           );
           return {
             foundLink: first,
             foundFrame: page,
             foundInfo: {
-              method: "fairfax-exact-main",
+              method: methodMain,
               text: textRaw || permitNumber,
               href,
               frameName: "main",
@@ -1329,13 +2693,13 @@ async function findPermitLinkInAccelaList(page, permitNumber) {
           .replace(/\s+/g, " ")
           .trim();
         console.log(
-          `  [Fairfax] exact permit match found via main-page anchor scan: "${permitNumber}"`,
+          `  [${tenantListLabel}] exact permit match found via main-page anchor scan: "${permitNumber}"`,
         );
         return {
           foundLink: mainExactElement,
           foundFrame: page,
           foundInfo: {
-            method: "fairfax-exact-scan",
+            method: methodScan,
             text: text || permitNumber,
             href,
             frameName: "main",
@@ -1362,7 +2726,7 @@ async function findPermitLinkInAccelaList(page, permitNumber) {
           }, permitNumber);
           if (frameExact) {
             console.log(
-              `  [Fairfax] exact permit match found in frame: "${permitNumber}"`,
+              `  [${tenantListLabel}] exact permit match found in frame: "${permitNumber}"`,
             );
             return {
               foundLink: null,
@@ -1382,11 +2746,147 @@ async function findPermitLinkInAccelaList(page, permitNumber) {
       }
 
       console.log(
-        `  [Fairfax] no exact permit match for "${permitNumber}", falling through to substring logic`,
+        `  [${tenantListLabel}] no exact permit match for "${permitNumber}", falling through to substring logic`,
       );
     } catch (err) {
       console.log(
-        `  [Fairfax] exact-match step warning (falling through): ${err.message}`,
+        `  [${tenantListLabel}] exact-match step warning (falling through): ${err.message}`,
+      );
+    }
+  }
+
+  if (arlingtonListSearch) {
+    const tenantListLabel = "Arlington";
+    const methodMain = "arlington-exact-main";
+    const methodScan = "arlington-exact-scan";
+    try {
+      const exactMainLocator = page
+        .locator("a")
+        .filter({
+          hasText: new RegExp(`^\\s*${escapeRegex(permitNumber)}\\s*$`),
+        });
+      const exactMainCount = await exactMainLocator.count();
+      if (exactMainCount > 0) {
+        const first = exactMainLocator.first();
+        const isVisible = await first.isVisible().catch(() => false);
+        if (isVisible || arlingtonListSearch) {
+          const href =
+            (await first.getAttribute("href").catch(() => "")) || "";
+          const textRaw = (await first.innerText().catch(() => permitNumber))
+            .replace(/\s+/g, " ")
+            .trim();
+          console.log(
+            `  [${tenantListLabel}] exact permit match found on main page: "${permitNumber}"`,
+          );
+          return {
+            foundLink: isVisible ? first : null,
+            foundFrame: page,
+            foundInfo: {
+              method: methodMain,
+              text: textRaw || permitNumber,
+              href,
+              frameName: "main",
+              frameUrl: page.url(),
+              openViaGoto: !isVisible,
+            },
+          };
+        }
+      }
+
+      const mainExactHandle = await page.evaluateHandle(
+        ({ target, relaxVisible }) => {
+          const anchors = Array.from(document.querySelectorAll("a"));
+          return (
+            anchors.find((a) => {
+              const txt = (a.textContent || "").trim();
+              if (txt !== target) return false;
+              if (
+                relaxVisible &&
+                String(a.getAttribute("href") || "").includes("CapDetail")
+              )
+                return true;
+              return a.offsetWidth > 0 && a.offsetHeight > 0;
+            }) || null
+          );
+        },
+        { target: permitNumber, relaxVisible: true },
+      );
+      const mainExactElement = mainExactHandle.asElement();
+      if (mainExactElement) {
+        const href =
+          (await mainExactElement.getAttribute("href").catch(() => "")) || "";
+        const text = (await mainExactElement.innerText().catch(() => ""))
+          .replace(/\s+/g, " ")
+          .trim();
+        const viz = await mainExactElement
+          .isVisible()
+          .catch(() => false);
+        console.log(
+          `  [${tenantListLabel}] exact permit match found via main-page anchor scan: "${permitNumber}"`,
+        );
+        return {
+          foundLink: viz ? mainExactElement : null,
+          foundFrame: page,
+          foundInfo: {
+            method: methodScan,
+            text: text || permitNumber,
+            href,
+            frameName: "main",
+            frameUrl: page.url(),
+            openViaGoto: !viz,
+          },
+        };
+      }
+      await mainExactHandle.dispose().catch(() => {});
+
+      for (const frame of page.frames()) {
+        if (frame === page.mainFrame()) continue;
+        try {
+          const frameExact = await frame.evaluate(({ target }) => {
+            const anchors = Array.from(document.querySelectorAll("a"));
+            const match = anchors.find((a) => {
+              const txt = (a.textContent || "").trim();
+              const cap = String(
+                a.getAttribute("href") || "",
+              ).includes("CapDetail");
+              return (
+                txt === target &&
+                (cap || !!(a.offsetWidth && a.offsetHeight))
+              );
+            });
+            if (!match) return null;
+            return {
+              text: match.textContent.trim(),
+              href: match.href || match.getAttribute("href") || "",
+            };
+          }, { target: permitNumber });
+          if (frameExact && frameExact.href) {
+            console.log(
+              `  [${tenantListLabel}] exact permit match found in frame: "${permitNumber}"`,
+            );
+            return {
+              foundLink: null,
+              foundFrame: frame,
+              foundInfo: {
+                method: "frame-evaluate",
+                text: frameExact.text,
+                href: frameExact.href,
+                frameName: frame.name() || "(unnamed)",
+                frameUrl: frame.url().substring(0, 100),
+              },
+            };
+          }
+        } catch {
+          // Cross-origin or detached frame — ignore and continue
+        }
+      }
+
+      console.log(
+        `  [${tenantListLabel}] no exact permit match for "${permitNumber}", falling through to substring logic`,
+      );
+    } catch (err) {
+      console.log(
+        `  [${tenantListLabel}] exact-match step warning (falling through): ${err.message}`,
       );
     }
   }
@@ -1480,7 +2980,12 @@ async function findPermitLinkInAccelaList(page, permitNumber) {
  */
 function shouldUseAccelaDashboardMyRecordsNav(page) {
   if (!page) return false;
-  if (!isBaltimorePortal(page) && !isFairfaxPortal(page)) return false;
+  if (
+    !isBaltimorePortal(page) &&
+    !isFairfaxPortal(page) &&
+    !isArlingtonPortal(page)
+  )
+    return false;
   const u = page.url() || "";
   if (!/\/Dashboard\.aspx/i.test(u)) return false;
   if (/\/MyRecordsCap\.aspx/i.test(u)) return false;
@@ -1548,6 +3053,56 @@ async function fairfaxNavigateDashboardToMyRecordsCap(page) {
 }
 
 /**
+ * Arlington: Dashboard → direct goto MyRecordsCap with TabName=Home&TabList=Home (confirmed tenant path).
+ * Falls back to accelaClickMyRecordsNavFromDashboard like other aca-prod tenants.
+ * @returns {Promise<boolean>}
+ */
+async function arlingtonNavigateDashboardToMyRecordsCap(page) {
+  if (/\/MyRecordsCap\.aspx/i.test(page.url() || "")) {
+    console.log(
+      `  [Arlington] already on My Records (${(page.url() || "").substring(0, 96)}…)`,
+    );
+    return true;
+  }
+  if (!/\/Dashboard\.aspx/i.test(page.url() || "")) return false;
+
+  let target;
+  try {
+    const origin = new URL(page.url() || "").origin;
+    target = `${origin}${ArlingtonAccelaProfile.myRecordsPath}`;
+  } catch (e) {
+    console.log(`  [Arlington] My Records URL build failed: ${e.message}`);
+    return false;
+  }
+  console.log(`  [Arlington] navigating Dashboard → My Records: ${target}`);
+  let directLanded = false;
+  try {
+    await page.goto(target, { waitUntil: "networkidle", timeout: 45000 });
+    await page.waitForURL(/MyRecordsCap\.aspx/i, { timeout: 20000 }).catch(() => {});
+    await waitForAccelaLoad(page);
+    await page.waitForTimeout(1500);
+    directLanded = /\/MyRecordsCap\.aspx/i.test(page.url() || "");
+  } catch (e) {
+    console.log(`  [Arlington] My Records direct goto error (${e.message})`);
+  }
+  if (directLanded) {
+    console.log(
+      `  [Arlington] My Records open OK — tenant path includes ARLINGTONCO: ${/(ARLINGTONCO)/i.test(page.url() || "")}`,
+    );
+    return true;
+  }
+  console.log(
+    "[Arlington] direct goto did not land on MyRecordsCap — trying My Records click",
+  );
+  await accelaClickMyRecordsNavFromDashboard(page);
+  const ok = /\/MyRecordsCap\.aspx/i.test(page.url() || "");
+  console.log(
+    `  [Arlington] after fallback click, MyRecordsCap=${ok} url=${(page.url() || "").substring(0, 120)}`,
+  );
+  return ok;
+}
+
+/**
  * Clicks "My Records" from Dashboard using findFieldInFrames('a:has-text("My Records")') first
  * (same as findAuthLandmark selector ladder), then findLinkInAnyContext exact match, then
  * click({ force: true }) like navigateToRecordInfoSection step 1 — not plain .click().
@@ -1582,8 +3137,1308 @@ async function accelaClickMyRecordsNavFromDashboard(page) {
   return /\/MyRecordsCap\.aspx/i.test(page.url() || "");
 }
 
+/** Priority + extra module headings seen on ACA My Records accordions */
+const ARLINGTON_MYRECORDS_ACCORDION_KNOWN = [
+  "Building",
+  "Planning",
+  "Zoning",
+  "Enforcement",
+  "Fire",
+  "Site",
+  "EnvHealth",
+  "Environmental Health",
+  "Environmental",
+];
+
+/**
+ * Expand Arlington My Records accordion panels so grids / CapDetail links are usable for search & clicks.
+ * Arlington-only — no Baltimore/Fairfax calls.
+ */
+async function expandArlingtonMyRecordsSections(page) {
+  const u = page.url() || "";
+  if (!/\/ARLINGTONCO\/Cap\/MyRecordsCap\.aspx/i.test(u)) return;
+  if (!(page._isArlington || /\/ARLINGTONCO\//i.test(u))) return;
+
+  const extraLabels = await page.evaluate(() => {
+    const norm = (s) =>
+      String(s || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    const root =
+      document.querySelector('[id*="PlaceHolderMain"]') || document.body;
+    /** @type {Set<string>} */
+    const extras = new Set();
+    root
+      .querySelectorAll(
+        '[class*="HeadBar"], [class*="Accordion"], [class*="Section"], thead th',
+      )
+      .forEach((block) => {
+        const txt = norm((block.innerText || "").split("\n")[0] || "");
+        if (
+          txt.length >= 3 &&
+          txt.length <= 42 &&
+          /^[A-Za-z0-9/&\-\s]+$/.test(txt) &&
+          !/^(Showing|Records|Apply|Submit|Welcome)/i.test(txt)
+        ) {
+          extras.add(txt);
+        }
+      });
+    return [...extras];
+  });
+
+  const ordered = [...new Set([...ARLINGTON_MYRECORDS_ACCORDION_KNOWN, ...extraLabels])];
+
+  const result = await page.evaluate((labelsToTry) => {
+    function norm(t) {
+      return String(t || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    function findToggle(label) {
+      const root =
+        document.querySelector('[id*="PlaceHolderMain"]') || document.body;
+      const cands = [];
+      root
+        .querySelectorAll(
+          'a, button, [role="button"], td, th, label, span, div[class*="Head"]',
+        )
+        .forEach((el) => {
+          if (
+            el.closest?.("footer, #footer, .footer, [id*='Privacy']") ||
+            el.closest?.("#header_main_menu")
+          )
+            return;
+          const t = norm(el.textContent || "");
+          if (t !== label) return;
+          cands.push(el);
+        });
+      cands.sort(
+        (a, b) => norm(a.textContent || "").length - norm(b.textContent || "").length,
+      );
+      return cands[0] || null;
+    }
+
+    function gridAncestorStats(toggleEl) {
+      let node = toggleEl;
+      for (let d = 0; d < 22 && node; d++) {
+        const grid =
+          node.querySelector && node.querySelector('table[id*="gdvPermitList"]');
+        if (grid) {
+          const caps = [...grid.querySelectorAll('a[href*="CapDetail.aspx"]')];
+          const cs = window.getComputedStyle(grid);
+          const hidden =
+            grid.offsetParent === null ||
+            cs.display === "none" ||
+            cs.visibility === "hidden";
+          const visibleCaps = caps.filter(
+            (a) =>
+              !!(a.offsetWidth || a.offsetHeight || a.getClientRects().length),
+          );
+          return { grid, capCount: caps.length, visibleCapCount: visibleCaps.length, hidden };
+        }
+        node = node.parentElement;
+      }
+      return null;
+    }
+
+    /** @type {string[]} */
+    const detected = [];
+    /** @type {string[]} */
+    const expansions = [];
+    /** @type {string[]} */
+    const absent = [];
+
+    for (const label of labelsToTry) {
+      const toggle = findToggle(label);
+      if (!toggle) {
+        absent.push(label);
+        continue;
+      }
+      detected.push(label);
+      const stats = gridAncestorStats(toggle);
+      let needClick = false;
+      if (!stats) needClick = true;
+      else if (stats.capCount === 0) needClick = true;
+      else if (stats.hidden) needClick = true;
+      else if (stats.visibleCapCount === 0 && stats.capCount > 0)
+        needClick = true;
+
+      if (!needClick) continue;
+      try {
+        toggle.scrollIntoView({ block: "nearest" });
+        toggle.click();
+        expansions.push(label);
+      } catch (_) {
+        try {
+          toggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          expansions.push(label);
+        } catch (_) {
+          /**/
+        }
+      }
+    }
+
+    return { detected, expansions, absent };
+  }, ordered);
+
+  const detectedList = [...new Set(result.detected || [])];
+  console.log(
+    `[Arlington][MyRecords] accordion sections detected: ${detectedList.length ? detectedList.join(", ") : "(none matched)"}`,
+  );
+  const interestingAbsent = ordered.filter((l) => !detectedList.includes(l));
+  if (interestingAbsent.length)
+    console.log(
+      `[Arlington][MyRecords] accordion headings not matched on page this run (${interestingAbsent.slice(0, 12).join(", ")}${interestingAbsent.length > 12 ? "…" : ""}) — continuing`,
+    );
+
+  for (const lab of result.expansions || []) {
+    console.log(`[Arlington][MyRecords] expanding section: ${lab}`);
+  }
+
+  await page.waitForTimeout(500).catch(() => {});
+
+  try {
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('table[id*="gdvPermitList"]').length > 0 ||
+        document.querySelectorAll('a[href*="CapDetail.aspx"]').length > 0,
+      { timeout: 30000 },
+    );
+  } catch (e) {
+    console.warn(
+      `[Arlington][MyRecords] post-accordion DOM wait warning: ${e.message}`,
+    );
+  }
+
+  const nCaps = await page
+    .evaluate(
+      () => document.querySelectorAll('a[href*="CapDetail.aspx"]').length,
+    )
+    .catch(() => 0);
+  console.log(
+    `[Arlington][MyRecords] after accordion expansion: CapDetail links=${nCaps}`,
+  );
+}
+
+/**
+ * Arlington My Records: log CapList2/CapList4 grids (main + iframe), row counts, CapDetail links.
+ */
+async function logArlingtonMyRecordsGridDiagnostics(page) {
+  if (
+    !page ||
+    !(page._isArlington || /\/ARLINGTONCO\//i.test(page.url() || ""))
+  )
+    return;
+  console.log("[Arlington][MyRecords] grid diagnostics...");
+  const gridIds = ArlingtonAccelaProfile.recordListTableIdPrefixes;
+  const summary = await page
+    .evaluate((ids) => {
+      const grids = [];
+      let totalCapDetail = 0;
+      for (const id of ids) {
+        const table = document.getElementById(id);
+        if (!table) {
+          grids.push({ id, present: false, trCount: 0, capDetailLinks: 0 });
+          continue;
+        }
+        const trs = table.querySelectorAll("tr");
+        const capLinks = table.querySelectorAll('a[href*="CapDetail"]');
+        totalCapDetail += capLinks.length;
+        let resumeInTable = 0;
+        for (const tr of trs) {
+          if (/resume\s+application/i.test((tr.textContent || "").slice(0, 200)))
+            resumeInTable += 1;
+        }
+        const sample = [];
+        for (const a of capLinks) {
+          if (sample.length >= 5) break;
+          sample.push({
+            text: (a.textContent || "").replace(/\s+/g, " ").trim().slice(0, 64),
+            href: (a.getAttribute("href") || "").slice(0, 180),
+          });
+        }
+        grids.push({
+          id,
+          present: true,
+          trCount: trs.length,
+          capDetailLinks: capLinks.length,
+          resumeRowHints: resumeInTable,
+          sampleCapDetailLinks: sample,
+        });
+      }
+      return { grids, totalCapDetailLinks: totalCapDetail };
+    }, gridIds)
+    .catch(() => ({ grids: [], totalCapDetailLinks: 0, error: true }));
+
+  for (const g of summary.grids || []) {
+    if (g.present) {
+      console.log(
+        `  [Arlington][My Records] grid ${g.id}: rows≈${g.trCount} CapDetail links=${g.capDetailLinks} sample=${JSON.stringify(g.sampleCapDetailLinks || []).slice(0, 220)}`,
+      );
+    } else {
+      console.log(`  [Arlington][My Records] grid ${g.id}: not in main document (may be iframe or empty)`);
+    }
+  }
+  console.log(
+    `  [Arlington][My Records] CapDetail links in main doc (sum grids): ${summary.totalCapDetailLinks ?? 0}`,
+  );
+
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame()) continue;
+    const inFrame = await frame
+      .evaluate((ids) => {
+        let found = 0;
+        const hitIds = [];
+        for (const id of ids) {
+          const table = document.getElementById(id);
+          if (table) {
+            found += table.querySelectorAll('a[href*="CapDetail"]').length;
+            hitIds.push(id);
+          }
+        }
+        return { found, hitIds };
+      }, gridIds)
+      .catch(() => ({ found: 0, hitIds: [] }));
+    if (inFrame.found > 0) {
+      console.log(
+        `  [Arlington][My Records] iframe "${frame.name() || "unnamed"}" url=${(frame.url() || "").slice(0, 100)} — CapDetail links=${inFrame.found} tableIds=${(inFrame.hitIds || []).join(",")}`,
+      );
+    }
+  }
+}
+
+/** Arlington visible My Records list — pager is outside `gdvPermitList`; use broad container + signature. */
+const MAX_ARLINGTON_VISIBLE_MYRECORDS_PAGES = MAX_ACCELA_PERMIT_LIST_PAGES;
+
+/**
+ * Snapshot visible list: scored broad root; permissive CapDetail collection; compact permit match.
+ */
+async function arlingtonProbeVisibleMyRecordsFrame(
+  frame,
+  permitNumber,
+  opts,
+) {
+  const logRootDiag = !!(opts && opts.logRootDiag);
+  const quietMeta = !!(opts && opts.quiet);
+  /** @typedef {{ sel: string; links: number; showing: boolean; next: boolean; score?: number }} ArlRootCand */
+  /** @typedef {{ rows: ArlRootCand[] }} ArlRootDiag */
+  /** @typedef {{ rows: ArlRootCand[], selectedSel?: string }} ArlProbeReturn */
+  const data = /** @type {ArlProbeReturn & Record<string, unknown>} */ (
+    await frame.evaluate((pn) => {
+      function norm(t) {
+        return String(t ?? "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+      function normUpperPermitTxt(t) {
+        return norm(String(t ?? "")).toUpperCase();
+      }
+
+      const ROOT_SELECTORS = [
+        "#PageResult",
+        ".ACA_Area_CapHome",
+        "#ctl00_PlaceHolderMain_PermitList",
+        "#ctl00_PlaceHolderMain_UpdatePanel1",
+        ".ThreeColumns",
+        "form",
+        "body",
+      ];
+
+      /** @returns {{ sel: string; root: HTMLElement; links: number; showing: boolean; next: boolean; score: number }[]} */
+      function scoreRootCandidates() {
+        /** @type {{ sel: string; root: HTMLElement; links: number; showing: boolean; next: boolean; score: number }[]} */
+        const list = [];
+        for (const sel of ROOT_SELECTORS) {
+          const el = document.querySelector(sel);
+          if (!(el instanceof HTMLElement)) continue;
+          const r = el.getBoundingClientRect();
+          const capDetailCount = el.querySelectorAll(
+            'a[href*="CapDetail.aspx"]',
+          ).length;
+          const innerRaw = String(el.textContent || "")
+            .replace(/\s+/g, " ")
+            .slice(0, 64000);
+          const hasShowingText =
+            /Showing\s*\d+\s*-\s*\d+\s*of\s*\d+/i.test(innerRaw);
+          const hasNextText = /Next\s*>?/i.test(innerRaw);
+          const hasRect = r.width >= 8 && r.height >= 8;
+          const visibleish = hasRect || capDetailCount > 0;
+          if (!visibleish) continue;
+          const score =
+            capDetailCount * 10 + (hasShowingText ? 5 : 0) + (hasNextText ? 3 : 0);
+          list.push({
+            sel,
+            root: el,
+            links: capDetailCount,
+            showing: hasShowingText,
+            next: hasNextText,
+            score,
+          });
+        }
+        list.sort(
+          (a, b) => b.score - a.score || b.links - a.links || a.sel.localeCompare(b.sel),
+        );
+        return list;
+      }
+
+      /** @returns {string} */
+      function compactPermitStr(t) {
+        return String(t ?? "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, "")
+          .toUpperCase();
+      }
+
+      /** Diagnostic only — never used to drop links. True if anchor→root chain hits display:none or visibility:hidden */
+      /** @returns {boolean} */
+      function hasHiddenLayoutAncestorUnderRoot(a, root) {
+        if (!(a instanceof HTMLElement) || !(root instanceof HTMLElement))
+          return false;
+        if (!root.contains(a)) return false;
+        for (
+          let n = /** @type {HTMLElement | null} */ (a);
+          n;
+          n = n.parentElement
+        ) {
+          if (!(n instanceof HTMLElement)) break;
+          const cs = window.getComputedStyle(n);
+          if (cs.display === "none" || cs.visibility === "hidden") return true;
+          if (n === root) break;
+        }
+        return false;
+      }
+
+      /** Valid CapDetail URL from `a.href` or `href` attribute — not gated on layout. */
+      /** @returns {string} */
+      function capHrefForKeep(a) {
+        if (!(a instanceof HTMLAnchorElement)) return "";
+        let resolved = "";
+        try {
+          resolved = String(a.href || "").trim();
+        } catch (_) {
+          resolved = "";
+        }
+        const attr = String(a.getAttribute("href") || "").trim();
+        return resolved || attr;
+      }
+
+      /** @returns {{ kept: HTMLAnchorElement[]; raw: number; dropped: number; samples: { text: string; href: string; reason: string }[]; hiddenAncestorNotes: { text: string }[] }} */
+      function collectCapDetailLinksPermissive(root) {
+        const rawList = [
+          ...root.querySelectorAll('a[href*="CapDetail.aspx"]'),
+        ].filter((n) => n instanceof HTMLAnchorElement);
+        /** @type {HTMLAnchorElement[]} */
+        const kept = [];
+        /** @type {{ text: string; href: string; reason: string }[]} */
+        const samples = [];
+        /** @type {{ text: string }[]} */
+        const hiddenAncestorNotes = [];
+        const maxSamples = 5;
+        const maxNotes = 12;
+
+        for (const a of rawList) {
+          const snippet = norm(
+            String(a.innerText || a.textContent || ""),
+          ).slice(0, 220);
+          const hrefCheck = capHrefForKeep(a);
+          const hrefShow = hrefCheck.slice(0, 520);
+
+          if (!root.contains(a)) {
+            if (samples.length < maxSamples)
+              samples.push({
+                text: snippet,
+                href: hrefShow,
+                reason: "not_under_root",
+              });
+            continue;
+          }
+          if (!hrefCheck) {
+            if (samples.length < maxSamples)
+              samples.push({
+                text: snippet,
+                href: hrefShow,
+                reason: "missing_href",
+              });
+            continue;
+          }
+          if (!/CapDetail\.aspx/i.test(hrefCheck)) {
+            if (samples.length < maxSamples)
+              samples.push({
+                text: snippet,
+                href: hrefShow,
+                reason: "not_capdetail",
+              });
+            continue;
+          }
+
+          if (
+            hasHiddenLayoutAncestorUnderRoot(a, root) &&
+            hiddenAncestorNotes.length < maxNotes
+          ) {
+            hiddenAncestorNotes.push({ text: snippet });
+          }
+
+          kept.push(a);
+        }
+
+        return {
+          kept,
+          raw: rawList.length,
+          dropped: rawList.length - kept.length,
+          samples,
+          hiddenAncestorNotes,
+        };
+      }
+
+      /** @returns {string} */
+      function extractActivePageNum(root) {
+        const pg =
+          root.querySelector(
+            "tr.ACA_Pagination, table.ACA_GridPaging, .aca_pagination, .ACA_GridPaging, [class*='Pagination'], [class*='pagination']",
+          ) || null;
+        if (!(pg instanceof HTMLElement)) return "";
+        const cur = pg.querySelector(
+          ".ACA_CurrentPageFont, .aca_current, [class*='CurrentPage'], [class*='Selected'], td.ACA_LinkButton_Selected",
+        );
+        if (cur instanceof HTMLElement) {
+          const tx = norm(cur.textContent || "");
+          if (/^\d+$/.test(tx)) return tx;
+        }
+        const bold = pg.querySelector("b, strong");
+        if (bold instanceof HTMLElement) {
+          const tx = norm(bold.textContent || "");
+          if (/^\d+$/.test(tx)) return tx;
+        }
+        return "";
+      }
+
+      const scored = scoreRootCandidates();
+      const rows = scored.map((c) => ({
+        sel: c.sel,
+        links: c.links,
+        showing: c.showing,
+        next: c.next,
+        score: c.score,
+      }));
+      const best = scored[0];
+      const root = best ? best.root : document.body;
+      const marker = best ? best.sel : "body";
+
+      /** Pager/range detection from textContent (not innerText — Accela hides range from innerText sometimes). */
+      const rootTextFlat = String(root.textContent || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 96000);
+      const showingM = rootTextFlat.match(/Showing\s*\d+\s*-\s*\d+\s*of\s*\d+/i);
+      const showing = showingM ? norm(showingM[0]) : "";
+
+      let heading = "";
+      const titleEl = root.querySelector(
+        ".ACA_FormTitle_Text, .ACA_PageTitle_Text, td.ACA_Title_Color, span.ACA_Title_Text",
+      );
+      if (titleEl instanceof HTMLElement)
+        heading = norm(titleEl.textContent || "").slice(0, 200);
+
+      const idxShow = rootTextFlat.toLowerCase().indexOf("showing");
+      if (idxShow > 10) {
+        const leftCh = rootTextFlat.slice(0, idxShow).trimEnd();
+        const tailGuess = leftCh.slice(-180).trim();
+        if (tailGuess.length > 5) heading = heading || tailGuess;
+      }
+
+      const pagerEl =
+        root.querySelector(
+          "tr.ACA_Pagination, table.ACA_GridPaging, .aca_pagination, .ACA_GridPaging, [class*='Pagination'], [class*='pagination']",
+        ) || null;
+
+      let pagerSnippet = "";
+      const lowRf = rootTextFlat.toLowerCase();
+      const iShowSnip = lowRf.indexOf("showing");
+      const iNextSnip = lowRf.indexOf("next");
+      if (iShowSnip !== -1) {
+        pagerSnippet = norm(rootTextFlat.slice(iShowSnip, iShowSnip + 300));
+      } else if (iNextSnip !== -1) {
+        pagerSnippet = norm(
+          rootTextFlat.slice(Math.max(0, iNextSnip - 80), iNextSnip + 160),
+        );
+      } else if (pagerEl instanceof HTMLElement) {
+        pagerSnippet = norm(pagerEl.textContent || "").slice(0, 420);
+      }
+
+      const rngM = showing.match(/Showing\s+(\d+)\s*-\s*(\d+)/i);
+      const firstRg = rngM ? rngM[1] : "";
+      const lastRg = rngM ? rngM[2] : "";
+      const activePageNum = extractActivePageNum(root);
+
+      const {
+        kept: listCaps,
+        raw: rawLinkCount,
+        dropped,
+        samples: droppedSamples,
+        hiddenAncestorNotes,
+      } = collectCapDetailLinksPermissive(root);
+
+      const firstTxt =
+        listCaps[0] instanceof HTMLElement
+          ? normUpperPermitTxt(
+              String(listCaps[0].innerText || listCaps[0].textContent || ""),
+            )
+          : "";
+      const lastTxt =
+        listCaps.length > 0
+          ? normUpperPermitTxt(
+              String(
+                listCaps[listCaps.length - 1].innerText ||
+                  listCaps[listCaps.length - 1].textContent ||
+                  "",
+              ),
+            )
+          : "";
+
+      const sortedKeys = listCaps
+        .map((a) => {
+          const u = normUpperPermitTxt(
+            String(a.innerText || a.textContent || ""),
+          );
+          const h = capHrefForKeep(a);
+          return `${u}|${h.slice(-260)}`;
+        })
+        .sort();
+
+      const rootSigChunk = rootTextFlat.slice(0, 3800);
+      const signature = [
+        showing,
+        pagerSnippet,
+        activePageNum,
+        firstRg,
+        lastRg,
+        String(listCaps.length),
+        sortedKeys.join("!"),
+        rootSigChunk,
+      ].join("###");
+
+      const compactP = compactPermitStr(String(pn ?? ""));
+      let hit = null;
+      for (const a of listCaps) {
+        const text = norm(String(a.innerText || a.textContent || ""));
+        const hrefAttr = String(a.getAttribute("href") ?? "").trim();
+        let resolved = "";
+        try {
+          resolved = String(a.href || "").trim();
+        } catch (_) {
+          resolved = "";
+        }
+        const validHref = resolved || hrefAttr;
+
+        const compactText = compactPermitStr(text);
+
+        const okExact = compactText === compactP;
+        const okHref =
+          !!compactP &&
+          validHref.toUpperCase().includes(compactP);
+        const okTextLoose =
+          !!compactP && text.replace(/\s+/g, "").toUpperCase().includes(compactP);
+        const okCombined = okExact || okHref || okTextLoose;
+
+        if (!okCombined) continue;
+
+        hit = {
+          hrefRaw: validHref,
+          text: text.trim().length ? text : String(validHref).slice(-80),
+          matchedBy: okExact ? "compactText" : okHref ? "href" : "text",
+        };
+        break;
+      }
+
+      const bodyTc = String(document.body?.textContent || "").replace(
+        /\s+/g,
+        " ",
+      );
+      const reBodyPager =
+        /Showing\s*\d+\s*-\s*\d+\s*of\s*\d+|Next\s*>?|<\s*Prev|Page\s*\d+/gi;
+      const bodyPagerSnippets = [];
+      let pm;
+      while (
+        (pm = reBodyPager.exec(bodyTc)) !== null &&
+        bodyPagerSnippets.length < 48
+      ) {
+        const frag = String(pm[0] || "").trim();
+        if (frag && !bodyPagerSnippets.includes(frag))
+          bodyPagerSnippets.push(frag);
+      }
+
+      return {
+        rootMarker: marker,
+        rootDiag: { rows },
+        showing,
+        heading,
+        pagerSnippet,
+        activePageNum,
+        signature,
+        linkCountVisible: listCaps.length,
+        rawLinkCount,
+        droppedLinkCount: dropped,
+        droppedLinkSamples: droppedSamples,
+        hiddenAncestorNotes,
+        firstVisiblePermitText: firstTxt,
+        lastVisiblePermitText: lastTxt,
+        hit,
+        pagerDiag: {
+          rootTextPreview1000: rootTextFlat.slice(0, 1000),
+          bodyPagerSnippets,
+        },
+      };
+    }, permitNumber)
+  );
+
+  if (logRootDiag && !quietMeta && data.rootDiag && Array.isArray(data.rootDiag.rows)) {
+    for (const row of data.rootDiag.rows) {
+      console.log(
+        `[Arlington][MyRecords] visible root candidates=${row.sel}:links=${row.links}:showing=${row.showing}:next=${row.next}`,
+      );
+    }
+  }
+  if (logRootDiag && !quietMeta && data.pagerDiag) {
+    const prev = String(data.pagerDiag.rootTextPreview1000 || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 1000);
+    console.log(`[Arlington][MyRecords] selected root text preview=${prev}`);
+    const sn =
+      data.pagerDiag.bodyPagerSnippets &&
+      Array.isArray(data.pagerDiag.bodyPagerSnippets)
+        ? data.pagerDiag.bodyPagerSnippets
+        : [];
+    console.log(
+      `[Arlington][MyRecords] body pager text matches=${sn.join(" | ")}`,
+    );
+  }
+  if (!quietMeta) {
+    const rawN = Number(data.rawLinkCount),
+      keptN = Number(data.linkCountVisible),
+      droppedN = Number(data.droppedLinkCount);
+    console.log(
+      `[Arlington][MyRecords] selected root=${data.rootMarker} rawLinks=${Number.isFinite(rawN) ? rawN : 0} keptLinks=${Number.isFinite(keptN) ? keptN : 0} dropped=${Number.isFinite(droppedN) ? droppedN : 0}`,
+    );
+    const samples =
+      data.droppedLinkSamples && Array.isArray(data.droppedLinkSamples)
+        ? data.droppedLinkSamples
+        : [];
+    if (samples.length) {
+      for (const s of samples) {
+        const sh = typeof s.href === "string" ? s.href : "";
+        console.log(
+          `[Arlington][MyRecords] dropped link sample text=${String(s.text || "").slice(0, 220)} href=${sh.slice(0, 520)} reason=${String(s.reason || "").slice(0, 120)}`,
+        );
+      }
+    }
+    const ancestorHints =
+      data.hiddenAncestorNotes && Array.isArray(data.hiddenAncestorNotes)
+        ? data.hiddenAncestorNotes
+        : [];
+    for (const hn of ancestorHints) {
+      console.log(
+        `[Arlington][MyRecords] note hidden ancestor for CapDetail link text=${String(hn.text || "").slice(0, 220)} but keeping href`,
+      );
+    }
+  }
+  return data;
+}
+
+/**
+ * Click Next in the scored broad root; pool includes body fallback.
+ * @returns {Promise<{ ok: boolean, ctlText: string, hrefOrOnclick: string, rootMarker: string }>}
+ */
+async function arlingtonTryClickVisibleMyRecordsPagerNext(frame, page) {
+  const res = await frame
+    .evaluate(() => {
+      function norm(t) {
+        return String(t || "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      const ROOT_SELECTORS = [
+        "#PageResult",
+        ".ACA_Area_CapHome",
+        "#ctl00_PlaceHolderMain_PermitList",
+        "#ctl00_PlaceHolderMain_UpdatePanel1",
+        ".ThreeColumns",
+        "form",
+        "body",
+      ];
+
+      /** Same root scoring as Arlington probe */
+      /** @returns {{ root: HTMLElement; marker: string }} */
+      function pickScoredRoot() {
+        /** @type {{ sel: string; root: HTMLElement; links: number; showing: boolean; next: boolean; score: number }[]} */
+        const list = [];
+        for (const sel of ROOT_SELECTORS) {
+          const el = document.querySelector(sel);
+          if (!(el instanceof HTMLElement)) continue;
+          const r = el.getBoundingClientRect();
+          const capDetailCount = el.querySelectorAll(
+            'a[href*="CapDetail.aspx"]',
+          ).length;
+          const innerRaw = String(el.textContent || "")
+            .replace(/\s+/g, " ")
+            .slice(0, 64000);
+          const hasShowingText =
+            /Showing\s*\d+\s*-\s*\d+\s*of\s*\d+/i.test(innerRaw);
+          const hasNextText = /Next\s*>?/i.test(innerRaw);
+          const hasRect = r.width >= 8 && r.height >= 8;
+          const visibleish = hasRect || capDetailCount > 0;
+          if (!visibleish) continue;
+          const score =
+            capDetailCount * 10 + (hasShowingText ? 5 : 0) + (hasNextText ? 3 : 0);
+          list.push({
+            sel,
+            root: el,
+            links: capDetailCount,
+            showing: hasShowingText,
+            next: hasNextText,
+            score,
+          });
+        }
+        list.sort(
+          (a, b) => b.score - a.score || b.links - a.links || a.sel.localeCompare(b.sel),
+        );
+        const best = list[0];
+        return best
+          ? { root: best.root, marker: best.sel }
+          : { root: document.body, marker: "body" };
+      }
+
+      /** @returns {string} */
+      function buildRaw(el) {
+        if (!(el instanceof HTMLElement)) return "";
+        /** @type {(string|null|undefined)[]} */
+        const parts = [
+          el.textContent || "",
+          el.innerText || "",
+          el instanceof HTMLInputElement ? el.value : "",
+          el.title || "",
+          el.getAttribute("aria-label"),
+          el.getAttribute("href"),
+          el.getAttribute("onclick"),
+          el.id || "",
+          el.name || "",
+          el.className || "",
+        ].filter((x) => String(x ?? "").trim() !== "");
+        return parts.join(" ");
+      }
+
+      /** @returns {HTMLElement | null} */
+      function resolveClickTarget(el) {
+        if (!(el instanceof HTMLElement)) return null;
+        const tag = el.tagName.toLowerCase();
+        if (tag === "a" || tag === "button" || tag === "input") return el;
+        if (String(el.getAttribute("onclick") || "").trim()) return el;
+        let n = /** @type {HTMLElement | null} */ (el);
+        for (let i = 0; i < 14 && n; i++) {
+          const t = n.tagName.toLowerCase();
+          if (t === "a" || t === "button" || t === "input") return n;
+          if (String(n.getAttribute("onclick") || "").trim()) return n;
+          n = n.parentElement;
+        }
+        return null;
+      }
+
+      /** @returns {boolean} */
+      function isPrevHeavy(rawL, dispL) {
+        if (/<\s*prev/i.test(rawL)) return true;
+        if (/^\s*prev\s*$/i.test(dispL)) return true;
+        if (/\bprevious\b/i.test(rawL)) return true;
+        return /\bprev\b/i.test(rawL) && !/\bpreview\b/i.test(rawL);
+      }
+
+      /** @returns {boolean} */
+      function pagerContextRaw(rawL) {
+        return (
+          /gdvpermitlist|pageresult|__dopostback|pagination|gridpaging|aca_linkbutton|pageset|\$page\$/i.test(
+            rawL,
+          ) ||
+          /\b(caplist|gdv|pagerow|pageresult)/i.test(rawL)
+        );
+      }
+
+      /** @returns {string} */
+      function displayLabel(el) {
+        if (!(el instanceof HTMLElement)) return "";
+        if (el instanceof HTMLInputElement)
+          return norm(el.value || el.textContent || "");
+        return norm(el.textContent || "");
+      }
+
+      /** @returns {{ text: string; id: string; href: string; onclick: string }[]} */
+      function mergedPagerDiagnostics(merged, ctGuess) {
+        const like =
+          /\b(next|prev|page|gdvpermitlist|pageresult|__dopostback|showing)\b|<\s*prev|pageresult|gdvpermitlist|showing\s*\d+\s*-\s*\d+\s*of/i;
+        /** @type {{ text: string; id: string; href: string; onclick: string }[]} */
+        const diag = [];
+        for (const cand of merged) {
+          if (!(cand instanceof HTMLElement)) continue;
+          const rjRaw = buildRaw(cand);
+          const rjl = rjRaw.toLowerCase();
+          if (!like.test(rjl)) continue;
+          const ct = resolveClickTarget(cand) || ctGuess;
+          const sampleText =
+            norm(displayLabel(cand) || rjRaw).slice(0, 520) || rjRaw.slice(0, 200);
+          const id = cand.id || (ct instanceof HTMLElement ? ct.id : "") || "";
+          /** @type {string} */
+          let hrefStr = "";
+          /** @type {string} */
+          let oncStr = "";
+          const link =
+            ct instanceof HTMLAnchorElement
+              ? ct
+              : ct?.closest("a") instanceof HTMLAnchorElement
+                ? /** @type {HTMLAnchorElement} */ (ct.closest("a"))
+                : null;
+          if (link) {
+            hrefStr = String(link.getAttribute("href") || "").slice(0, 520);
+            try {
+              if (!hrefStr.trim()) hrefStr = String(link.href || "").slice(0, 520);
+            } catch (_) {}
+          }
+          if (ct instanceof HTMLElement)
+            oncStr = String(ct.getAttribute("onclick") || "").slice(0, 520);
+          diag.push({ text: sampleText, id, href: hrefStr, onclick: oncStr });
+          if (diag.length >= 15) break;
+        }
+        return diag;
+      }
+
+      /** @returns {{ text: string; id: string; href: string; onclick: string }[]} */
+      function scoredRowsToDiag(rows) {
+        return rows.slice(0, 15).map((s) => {
+          const ct = s.clickTarget;
+          const sampleText = norm(String(s.textLab || "")).slice(0, 520);
+          const id =
+            (ct instanceof HTMLElement && ct.id) ||
+            (s.el instanceof HTMLElement && s.el.id) ||
+            "";
+          /** @type {string} */
+          let hrefStr = "";
+          if (ct instanceof HTMLAnchorElement) {
+            hrefStr = String(ct.getAttribute("href") || "").slice(0, 520);
+            try {
+              if (!hrefStr.trim()) hrefStr = String(ct.href || "").slice(0, 520);
+            } catch (_) {}
+          }
+          const oncStr =
+            ct instanceof HTMLElement
+              ? String(ct.getAttribute("onclick") || "").slice(0, 520)
+              : "";
+          return { text: sampleText || id || hrefStr || oncStr || "(element)", id, href: hrefStr, onclick: oncStr };
+        });
+      }
+
+      /** @typedef {{ el: HTMLElement; clickTarget: HTMLElement; score: number; textLab: string; hrefOrOnclick: string }} PagerCand */
+
+      function hrefOrClickPart(ct, rawFallback) {
+        let out = "";
+        if (ct instanceof HTMLAnchorElement) {
+          out = String(ct.getAttribute("href") || "").slice(0, 520);
+          try {
+            if (!out.trim()) out = String(ct.href || "").slice(0, 520);
+          } catch (_) {}
+        }
+        if (!out.trim() && ct instanceof HTMLElement)
+          out = String(ct.getAttribute("onclick") || "").slice(0, 520);
+        if (!out.trim()) out = rawFallback.slice(0, 260);
+        return out;
+      }
+
+      const { root, marker } = pickScoredRoot();
+      const rootTc = String(root.textContent || "").replace(/\s+/g, " ");
+
+      let currentPageNum = /** @type {number|null} */ (null);
+      const showRg = rootTc.match(/Showing\s*(\d+)\s*-\s*(\d+)\s*of\s*\d+/i);
+      if (showRg) {
+        const start = parseInt(showRg[1], 10);
+        const end = parseInt(showRg[2], 10);
+        if (
+          Number.isFinite(start) &&
+          Number.isFinite(end) &&
+          end >= start
+        ) {
+          const pageSize = end - start + 1;
+          if (pageSize > 0)
+            currentPageNum = Math.floor((start - 1) / pageSize) + 1;
+        }
+      }
+
+      const seen = new Set();
+      /** @type {HTMLElement[]} */
+      const merged = [];
+      function addAll(nl) {
+        for (const raw of nl) {
+          const n = /** @type {HTMLElement} */ (raw);
+          if (!(n instanceof HTMLElement)) continue;
+          if (!seen.has(n)) {
+            seen.add(n);
+            merged.push(n);
+          }
+        }
+      }
+      addAll(root.querySelectorAll("a,button,input,span,td"));
+      if (document.body) addAll(document.body.querySelectorAll("a,button,input,span,td"));
+
+      /** @type {PagerCand[]} */
+      const scored = [];
+
+      for (const el of merged) {
+        const rawJoined = buildRaw(el);
+        const rawL = rawJoined.toLowerCase();
+        const dispNorm = norm(el.textContent || "");
+        const dispL = dispNorm.toLowerCase();
+
+        if (isPrevHeavy(rawL, dispL)) continue;
+
+        const clickTarget = resolveClickTarget(el);
+        if (!clickTarget) continue;
+
+        if (
+          clickTarget instanceof HTMLInputElement &&
+          clickTarget.disabled
+        )
+          continue;
+
+        let score = 0;
+
+        const nextExact =
+          /^next\s*>\s*$/i.test(dispNorm) ||
+          /^next$/i.test(dispNorm) ||
+          /^next\s*>$/i.test(dispNorm);
+        if (nextExact) score = Math.max(score, 240);
+
+        if (/__dopostback/i.test(rawJoined) && /next/i.test(dispNorm))
+          score = Math.max(score, 236);
+
+        if (/\bnext\s*>\s*$/i.test(rawL)) score = Math.max(score, 230);
+        else if (/^next\s*>\s*$/i.test(dispNorm)) score = Math.max(score, 230);
+
+        const ctxStrong = pagerContextRaw(rawL);
+        if (/next/i.test(rawJoined) && ctxStrong) score = Math.max(score, 205);
+
+        if (currentPageNum != null && /^\d+$/.test(dispNorm)) {
+          const want = String(currentPageNum + 1);
+          if (dispNorm === want) {
+            score = ctxStrong
+              ? Math.max(score, 185)
+              : Math.max(score, 145);
+          }
+        }
+
+        if (
+          (/^>$/.test(dispNorm) || dispNorm === "›" || dispNorm === "▶") &&
+          /__dopostback|gdvpermitlist|\$page\$|pageresult/i.test(rawL)
+        ) {
+          score = Math.max(score, 178);
+        }
+
+        const tagLc = el.tagName.toLowerCase();
+        if (
+          (tagLc === "span" || tagLc === "font" || tagLc === "td") &&
+          /next/i.test(rawJoined)
+        ) {
+          score = Math.max(score, 165);
+        }
+
+        if (score <= 0) continue;
+
+        scored.push({
+          el,
+          clickTarget,
+          score,
+          textLab:
+            dispNorm.slice(0, 220) || rawJoined.slice(0, 120),
+          hrefOrOnclick: hrefOrClickPart(
+            /** @type {HTMLElement} */ (clickTarget),
+            rawJoined,
+          ),
+        });
+      }
+
+      scored.sort((a, b) => b.score - a.score);
+
+      /** Dedupe — one entry per clickable target */
+      /** @type {Map<HTMLElement, PagerCand>} */
+      const byTarget = new Map();
+      for (const row of scored) {
+        const prev = byTarget.get(row.clickTarget);
+        if (!prev || row.score > prev.score) byTarget.set(row.clickTarget, row);
+      }
+
+      /** @type {PagerCand[]} */
+      const scoredUnique = [...byTarget.values()].sort(
+        (a, b) => b.score - a.score,
+      );
+
+      /** @typedef {{ ok:boolean, ctlText:string, hrefOrOnclick:string, rootMarker:string, diagSamples: object[] }} PagerEv */
+
+      /** @returns {PagerEv} */
+      function failMerged() {
+        return {
+          ok: false,
+          ctlText: "(none)",
+          hrefOrOnclick: "(none)",
+          rootMarker: marker,
+          diagSamples: mergedPagerDiagnostics(merged, undefined),
+        };
+      }
+
+      const bestPick = scoredUnique[0];
+      if (!bestPick) return failMerged();
+
+      try {
+        bestPick.clickTarget.scrollIntoView({
+          block: "center",
+          inline: "nearest",
+        });
+        bestPick.clickTarget.click();
+        return {
+          ok: true,
+          ctlText: norm(bestPick.textLab).slice(0, 260),
+          hrefOrOnclick: bestPick.hrefOrOnclick.slice(0, 520),
+          rootMarker: marker,
+          diagSamples: [],
+        };
+      } catch (_) {
+        return {
+          ok: false,
+          ctlText: norm(bestPick.textLab).slice(0, 260),
+          hrefOrOnclick: bestPick.hrefOrOnclick.slice(0, 520),
+          rootMarker: marker,
+          diagSamples: scoredRowsToDiag(scoredUnique),
+        };
+      }
+    })
+    .catch(() => ({
+      ok: false,
+      ctlText: "(error)",
+      hrefOrOnclick: "(error)",
+      rootMarker: "",
+      diagSamples: [],
+    }));
+
+  if (
+    res &&
+    !res.ok &&
+    Array.isArray(res.diagSamples) &&
+    res.diagSamples.length > 0
+  ) {
+    for (const d of res.diagSamples.slice(0, 15)) {
+      console.log(
+        `[Arlington][MyRecords] pager candidate sample text=${String(d.text || "").slice(0, 520)} id=${String(d.id || "")} href=${String(d.href || "").slice(0, 520)} onclick=${String(d.onclick || "").slice(0, 520)}`,
+      );
+    }
+  }
+
+  if (res && res.ok) {
+    await waitForAccelaLoad(page).catch(() => {});
+    await page.waitForTimeout(450).catch(() => {});
+  }
+  return res;
+}
+
+/**
+ * Page the visible My Records list until match or no Next / stall.
+ */
+async function arlingtonVisibleMyRecordsPagedWalk(
+  page,
+  frame,
+  mainFi,
+  permitNumber,
+  frameLabel,
+) {
+  for (let vPage = 1; vPage <= MAX_ARLINGTON_VISIBLE_MYRECORDS_PAGES; vPage++) {
+    const probe = await arlingtonProbeVisibleMyRecordsFrame(
+      frame,
+      permitNumber,
+      { logRootDiag: vPage === 1 },
+    ).catch(() => null);
+    if (!probe) {
+      console.log(
+        `[Arlington][MyRecords] visible probe failed page=${vPage} frame=${frameLabel}`,
+      );
+      break;
+    }
+
+    const headingSafe = (probe.heading || "").slice(0, 220);
+    const showingSafe = probe.showing || "(none)";
+    console.log(
+      `[Arlington][MyRecords] visible list page=${vPage} links=${probe.linkCountVisible} heading=${headingSafe} showing=${showingSafe}`,
+    );
+
+    if (
+      probe.hit &&
+      typeof probe.hit.hrefRaw === "string" &&
+      probe.hit.hrefRaw.trim()
+    ) {
+      let baseHref = page.url();
+      if (frame !== mainFi) {
+        try {
+          baseHref = frame.url();
+        } catch (_) {
+          baseHref = page.url();
+        }
+      }
+      const absolute = /^https?:/i.test(probe.hit.hrefRaw)
+        ? probe.hit.hrefRaw
+        : new URL(probe.hit.hrefRaw, baseHref || page.url()).href;
+      console.log(
+        `[Arlington][MyRecords] visible exact match found permit=${permitNumber} page=${vPage} href=${absolute}`,
+      );
+      return {
+        foundLink: null,
+        foundFrame: frame === mainFi ? page : frame,
+        foundInfo: {
+          method: "arlington-myrecords-visible-paged",
+          text:
+            typeof probe.hit.text === "string" && probe.hit.text.trim().length > 0
+              ? probe.hit.text.trim()
+              : permitNumber,
+          href: absolute,
+          frameName: frame === mainFi ? "main" : frame.name() || "",
+          frameUrl:
+            frame === mainFi
+              ? page.url()
+              : (() => {
+                  try {
+                    return frame.url();
+                  } catch (_) {
+                    return page.url();
+                  }
+                })() || "",
+          openViaGoto: true,
+          visibleListPage: vPage,
+          rootMarker: probe.rootMarker || "",
+          matchedBy:
+            typeof probe.hit.matchedBy === "string"
+              ? probe.hit.matchedBy
+              : undefined,
+        },
+      };
+    }
+
+    const sigBefore = probe.signature || "";
+
+    const nextRes = await arlingtonTryClickVisibleMyRecordsPagerNext(
+      frame,
+      page,
+    );
+    if (!nextRes || !nextRes.ok) {
+      console.log(
+        `[Arlington][MyRecords] visible list exhausted pages=${vPage}`,
+      );
+      return null;
+    }
+
+    console.log(
+      `[Arlington][MyRecords] visible pager next found text=${nextRes.ctlText || "(none)"} href=${nextRes.hrefOrOnclick || "(none)"}`,
+    );
+    console.log(
+      `[Arlington][MyRecords] clicked visible Next page=${vPage}`,
+    );
+
+    const deadline = Date.now() + 16000;
+    let changed = false;
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(220);
+      const snap = await arlingtonProbeVisibleMyRecordsFrame(
+        frame,
+        permitNumber,
+        { quiet: true },
+      ).catch(() => null);
+      if (snap && snap.signature && snap.signature !== sigBefore) {
+        console.log(
+          `[Arlington][MyRecords] visible signature changed page=${vPage}`,
+        );
+        changed = true;
+        break;
+      }
+    }
+
+    if (!changed) {
+      console.log(
+        `[Arlington][MyRecords] visible pager stalled (no signature change) page=${vPage}`,
+      );
+      break;
+    }
+  }
+  return null;
+}
+
+/**
+ * Arlington My Records: walk visible list + broad pager; grid ids logged for diagnostics only.
+ * @returns {Promise<{foundLink:any,foundFrame:any,foundInfo: Record<string, unknown>}|null>}
+ */
+async function arlingtonFindPermitAcrossAllMyRecords(page, permitNumber) {
+  const mainFi = page.mainFrame();
+
+  /** @type {{ frame: import("playwright").Frame; label: string }[]} */
+  const contexts = [{ frame: mainFi, label: "main" }];
+  for (const frame of page.frames()) {
+    if (frame === mainFi) continue;
+    contexts.push({
+      frame,
+      label: `"${frame.name() || "unnamed"}" ${String(frame.url() || "").slice(
+        0,
+        128,
+      )}`,
+    });
+  }
+
+  for (const { frame, label } of contexts) {
+    let gridDiag = [];
+    try {
+      gridDiag = await frame.evaluate(() =>
+        [
+          ...new Set(
+            [...document.querySelectorAll('table[id*="gdvPermitList"]')]
+              .map((t) => (t instanceof HTMLTableElement && t.id ? t.id : ""))
+              .filter(Boolean),
+          ),
+        ],
+      );
+    } catch (_) {
+      gridDiag = [];
+    }
+    if (gridDiag.length) {
+      console.log(
+        `[Arlington][MyRecords] discovered grids=${gridDiag.length} ids=${gridDiag.join(", ")} frame=${label}`,
+      );
+    }
+
+    const got = await arlingtonVisibleMyRecordsPagedWalk(
+      page,
+      frame,
+      mainFi,
+      permitNumber,
+      label,
+    );
+    if (got) return got;
+  }
+
+  console.log(
+    `[Arlington][MyRecords] exhausted all grids/pages permit=${permitNumber}`,
+  );
+  return null;
+}
+
+
 async function searchPermit(page, portalUrl, permitNumber) {
   console.log(`  Searching for permit: ${permitNumber}`);
+
+  const arlingtonTenantByUrl = () =>
+    /\/ARLINGTONCO\//i.test(page.url() || "");
+  /** URL fallback when scrape reuses page without page._isArlington set */
+  const isArlingtonTenantContext =
+    !!(page._isArlington || arlingtonTenantByUrl());
 
   let isAuth = await findAuthLandmark(page);
   if (!isAuth && shouldUseAccelaDashboardMyRecordsNav(page)) {
@@ -1603,6 +4458,24 @@ async function searchPermit(page, portalUrl, permitNumber) {
       } catch (err) {
         console.log(
           `[Accela] Fairfax My Records navigation failed, continuing to normal auth failure path (${err.message})`,
+        );
+      }
+    } else if (isArlingtonPortal(page) || arlingtonTenantByUrl()) {
+      try {
+        await arlingtonNavigateDashboardToMyRecordsCap(page);
+        isAuth = await findAuthLandmark(page);
+        if (isAuth) {
+          console.log(
+            "[Accela] Arlington My Records navigation succeeded (auth landmarks now visible)",
+          );
+        } else {
+          console.log(
+            "[Accela] Arlington My Records navigation failed, continuing to normal auth failure path",
+          );
+        }
+      } catch (err) {
+        console.log(
+          `[Accela] Arlington My Records navigation failed, continuing to normal auth failure path (${err.message})`,
         );
       }
     } else {
@@ -1634,12 +4507,55 @@ async function searchPermit(page, portalUrl, permitNumber) {
   }
   console.log("  ✅ Authentication verified");
 
+  {
+    let currentUrl = page.url();
+    const arlingtonByUrl = /\/ARLINGTONCO\//i.test(currentUrl);
+    const arlingtonByProfile = isArlingtonPortal(page) || page._isArlington;
+    const isArlington = !!(arlingtonByProfile || arlingtonByUrl);
+
+    if (isArlington) {
+      console.log(
+        `[Arlington] current scrape URL before record-list nav: ${currentUrl}`,
+      );
+      page._isArlington = true;
+      if (!page._accelaTenantProfile) {
+        page._accelaTenantProfile =
+          resolveAccelaTenantProfile(page.url()) ?? ArlingtonAccelaProfile;
+      }
+    }
+
+    if (
+      isArlington &&
+      /Dashboard\.aspx/i.test(currentUrl) &&
+      !/MyRecordsCap\.aspx/i.test(currentUrl)
+    ) {
+      console.log(
+        `[Arlington] forcing Dashboard -> My Records navigation`,
+      );
+      await arlingtonNavigateDashboardToMyRecordsCap(page);
+      currentUrl = page.url();
+      console.log(`[Arlington] after My Records nav: ${currentUrl}`);
+    }
+  }
+
   if (isFairfaxPortal(page) && shouldUseAccelaDashboardMyRecordsNav(page)) {
     try {
       await fairfaxNavigateDashboardToMyRecordsCap(page);
       console.log(`  [Fairfax] after My Records navigation, URL: ${page.url()}`);
     } catch (err) {
       console.log(`  [Fairfax] My Records navigation warning: ${err.message}`);
+    }
+  } else if (
+    (isArlingtonPortal(page) || arlingtonTenantByUrl()) &&
+    shouldUseAccelaDashboardMyRecordsNav(page)
+  ) {
+    try {
+      await arlingtonNavigateDashboardToMyRecordsCap(page);
+      console.log(
+        `  [Arlington] after My Records navigation, URL: ${page.url()}`,
+      );
+    } catch (err) {
+      console.log(`  [Arlington] My Records navigation warning: ${err.message}`);
     }
   } else if (shouldUseAccelaDashboardMyRecordsNav(page)) {
     try {
@@ -1653,13 +4569,16 @@ async function searchPermit(page, portalUrl, permitNumber) {
     }
   }
 
-  const permitsTab = await findFieldInFrames(page, [
-    "#Tab_Building",
-    'a:has-text("Permits and Inspections")',
-    'a:has-text("Permits & Inspections")',
-    'a[title*="Permits"]',
-    '#header_main_menu a:has-text("Permits")',
-  ]);
+  const permitsTab =
+    isArlingtonTenantContext
+      ? null
+      : await findFieldInFrames(page, [
+          "#Tab_Building",
+          'a:has-text("Permits and Inspections")',
+          'a:has-text("Permits & Inspections")',
+          'a[title*="Permits"]',
+          '#header_main_menu a:has-text("Permits")',
+        ]);
 
   if (permitsTab) {
     console.log("  Clicking Permits tab...");
@@ -1674,18 +4593,52 @@ async function searchPermit(page, portalUrl, permitNumber) {
     if (isPublicPage) {
       throw new Error("Session dropped — redirected to public page.");
     }
-    console.log(
-      "  ⚠️ Permits tab not found, attempting to proceed on current page...",
-    );
+    if (!isArlingtonTenantContext) {
+      console.log(
+        "  ⚠️ Permits tab not found, attempting to proceed on current page...",
+      );
+    }
+  }
+
+  const arlingtonMyRecordsCtx =
+    (page._isArlington || /\/ARLINGTONCO\//i.test(page.url())) &&
+    /\/ARLINGTONCO\/Cap\/MyRecordsCap\.aspx/i.test(page.url() || "");
+
+  if (arlingtonMyRecordsCtx) {
+    console.log("[Arlington] waiting for My Records grids...");
+    try {
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('table[id*="gdvPermitList"]').length > 0 ||
+          document.querySelectorAll('a[href*="CapDetail.aspx"]').length > 0,
+        { timeout: 30000 },
+      );
+    } catch (err) {
+      console.warn("[Arlington] My Records grid wait failed:", err.message);
+    }
+    await expandArlingtonMyRecordsSections(page);
+    await logArlingtonMyRecordsGridDiagnostics(page).catch(() => {});
   }
 
   console.log("  ⏳ Waiting for records grid...");
-  const gridAppeared = await page
-    .waitForSelector(
-      'table[id*="PermitList"] tr, table[id*="Record"] tr, .aca_grid_container tr td a, [id*="gview_List"] tr',
-      { visible: true, timeout: 15000 },
-    )
-    .catch(() => null);
+  let gridAppeared = null;
+  if (arlingtonMyRecordsCtx) {
+    gridAppeared = await page
+      .waitForFunction(
+        () =>
+          document.querySelectorAll('table[id*="gdvPermitList"]').length > 0 ||
+          document.querySelectorAll('a[href*="CapDetail.aspx"]').length > 0,
+        { timeout: 15000 },
+      )
+      .then(() => ({}))
+      .catch(() => null);
+  } else {
+    const gridWaitSelector =
+      'table[id*="PermitList"] tr, table[id*="Record"] tr, .aca_grid_container tr td a, [id*="gview_List"] tr';
+    gridAppeared = await page
+      .waitForSelector(gridWaitSelector, { visible: true, timeout: 15000 })
+      .catch(() => null);
+  }
 
   if (!gridAppeared) {
     let gridInFrame = false;
@@ -1719,17 +4672,33 @@ async function searchPermit(page, portalUrl, permitNumber) {
   let foundFrame = null;
   let foundInfo = {};
 
-  const listLogTag = page._isBaltimore ? " baltimore" : "";
-  for (let listPage = 1; listPage <= MAX_ACCELA_PERMIT_LIST_PAGES; listPage++) {
-    console.log(`  [Accela search]${listLogTag} list page ${listPage}`);
-    const hit = await findPermitLinkInAccelaList(page, permitNumber);
-    foundLink = hit.foundLink;
-    foundFrame = hit.foundFrame;
-    foundInfo = hit.foundInfo;
-    if (foundLink || foundInfo.method) break;
-    if (listPage >= MAX_ACCELA_PERMIT_LIST_PAGES) break;
-    const advanced = await tryClickAccelaPermitGridNext(page);
-    if (!advanced) break;
+  if (arlingtonMyRecordsCtx) {
+    const arHit = await arlingtonFindPermitAcrossAllMyRecords(
+      page,
+      permitNumber,
+    );
+    if (arHit && arHit.foundInfo && arHit.foundInfo.method) {
+      foundLink = arHit.foundLink;
+      foundFrame = arHit.foundFrame;
+      foundInfo = arHit.foundInfo;
+    }
+  } else {
+    const listLogTag = page._isBaltimore
+      ? " baltimore"
+      : page._isArlington || arlingtonTenantByUrl()
+        ? " arlington"
+        : "";
+    for (let listPage = 1; listPage <= MAX_ACCELA_PERMIT_LIST_PAGES; listPage++) {
+      console.log(`  [Accela search]${listLogTag} list page ${listPage}`);
+      const hit = await findPermitLinkInAccelaList(page, permitNumber);
+      foundLink = hit.foundLink;
+      foundFrame = hit.foundFrame;
+      foundInfo = hit.foundInfo;
+      if (foundLink || foundInfo.method) break;
+      if (listPage >= MAX_ACCELA_PERMIT_LIST_PAGES) break;
+      const advanced = await tryClickAccelaPermitGridNext(page);
+      if (!advanced) break;
+    }
   }
 
   if (!foundLink && !foundInfo.method) {
@@ -1765,18 +4734,56 @@ async function searchPermit(page, portalUrl, permitNumber) {
       page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {}),
       foundLink.click(),
     ]);
+  } else if (
+    typeof foundInfo.href === "string" &&
+    /CapDetail\.aspx/i.test(foundInfo.href) &&
+    (foundInfo.method === "arlington-capdetail-dom" ||
+      foundInfo.openViaGoto === true)
+  ) {
+    const raw = foundInfo.href;
+    const targetUrl =
+      /^https?:/i.test(raw) ? raw : new URL(raw, urlBefore || page.url()).href;
+    console.log(
+      `[Arlington] navigating to CapDetail (${String(foundInfo.method)}): ${targetUrl.substring(0, 120)}…`,
+    );
+    await page
+      .goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 50000 })
+      .catch(async (err) => {
+        console.warn(
+          `[Arlington] CapDetail goto warning (${err.message}) — retry networkidle`,
+        );
+        await page
+          .goto(targetUrl, { waitUntil: "networkidle", timeout: 60000 })
+          .catch(() => {});
+      });
   } else if (foundFrame && foundInfo.method === "frame-evaluate") {
     const pickText = (foundInfo.text || "").replace(/\s+/g, " ").trim();
+    const relaxedArlingtonFrame =
+      page._isArlington ||
+      /\/ARLINGTONCO\//i.test(urlBefore || page.url() || "");
     await foundFrame
-      .evaluate((linkText) => {
-        const anchors = Array.from(document.querySelectorAll("a"));
-        const want = String(linkText || "").replace(/\s+/g, " ").trim();
-        const match = anchors.find((a) => {
-          const text = (a.textContent || "").replace(/\s+/g, " ").trim();
-          return text === want && a.offsetWidth > 0;
-        });
-        if (match) match.click();
-      }, pickText)
+      .evaluate(
+        ({ linkText, relaxedArlington }) => {
+          const anchors = Array.from(document.querySelectorAll("a"));
+          const want = String(linkText || "").replace(/\s+/g, " ").trim();
+          const match = anchors.find((a) => {
+            const text = (a.textContent || "").replace(/\s+/g, " ").trim();
+            if (text !== want) return false;
+            if (relaxedArlington) {
+              const h = String(
+                a.getAttribute("href") || a.href || "",
+              ).toLowerCase();
+              return h.includes("capdetail") || a.offsetWidth > 0;
+            }
+            return a.offsetWidth > 0;
+          });
+          if (match) match.click();
+        },
+        {
+          linkText: pickText,
+          relaxedArlington: relaxedArlingtonFrame,
+        },
+      )
       .catch(() => {});
     await page
       .waitForLoadState("networkidle", { timeout: 30000 })
@@ -1789,6 +4796,14 @@ async function searchPermit(page, portalUrl, permitNumber) {
   const urlAfter = page.url();
   console.log(`  [DIAG:POST_CLICK] urlBefore=${urlBefore.substring(0, 100)}`);
   console.log(`  [DIAG:POST_CLICK] urlAfter=${urlAfter.substring(0, 100)}`);
+  if (
+    (page._isArlington || /\/ARLINGTONCO\//i.test(page.url() || "")) &&
+    /CapDetail\.aspx/i.test(urlAfter || "")
+  ) {
+    console.log(
+      `  [Arlington] Record detail (CapDetail.aspx) opened — agencyCode in URL: ${/agencyCode=ARLINGTONCO/i.test(urlAfter) ? "ARLINGTONCO" : "check query"}`,
+    );
+  }
 
   const allFrames = page.frames();
   let recordFrame = null;
@@ -1911,6 +4926,555 @@ function getExtractionContext(page) {
   return page._recordFrame || page;
 }
 
+/** Arlington CapDetail: URL or tenant flag */
+function isArlingtonCapDetailPage(page) {
+  if (!page) return false;
+  const u = page.url() || "";
+  if (!/CapDetail\.aspx/i.test(u)) return false;
+  return !!(page._isArlington || /\/ARLINGTONCO\//i.test(u));
+}
+
+/**
+ * When tab clicks fail — dump candidate elements for diagnostics (Arlington only).
+ */
+async function logArlingtonDetailTabCandidates(page, label) {
+  if (!isArlingtonCapDetailPage(page)) return;
+  console.log(
+    `  [Arlington][PlanReview] top tab candidates (${label || "scan"}): URL=${(page.url() || "").slice(0, 160)}`,
+  );
+  const roots = [page];
+  for (const f of page.frames()) {
+    if (f !== page.mainFrame()) roots.push(f);
+  }
+  for (let i = 0; i < roots.length; i++) {
+    const ctx = roots[i];
+    const name = ctx === page ? "main" : `frame[${i}]`;
+    const sample = await ctx
+      .evaluate(() => {
+        const rx =
+          /Record Info|Payments|Plan Review|Attachments|Documents|Review|Approved|Project Information|OnBase/i;
+        const out = [];
+        document
+          .querySelectorAll("a, button, [role='button'], span, li")
+          .forEach((el) => {
+            const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+            if (!t || t.length > 120) return;
+            if (!rx.test(t)) return;
+            const st = window.getComputedStyle(el);
+            const vis =
+              !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+            const hidden = st.visibility === "hidden" || st.display === "none";
+            out.push({
+              text: t.slice(0, 100),
+              id: el.id || "",
+              className: String(el.className || "").slice(0, 120),
+              href:
+                el.tagName === "A"
+                  ? (el.getAttribute("href") || "").slice(0, 180)
+                  : "",
+              visibleish: vis && !hidden,
+            });
+          });
+        return out.slice(0, 40);
+      })
+      .catch(() => []);
+    const iframes = await ctx
+      .evaluate(() =>
+        [...document.querySelectorAll("iframe")].map((ifr) => ({
+          id: ifr.id || "",
+          name: ifr.name || "",
+          src: (ifr.getAttribute("src") || "").slice(0, 200),
+        })),
+      )
+      .catch(() => []);
+    console.log(
+      `    ${name}: elements≈${sample.length} — ${JSON.stringify(sample.slice(0, 12)).slice(0, 800)}`,
+    );
+    if (iframes.length)
+      console.log(
+        `    ${name}: iframes=${JSON.stringify(iframes.slice(0, 8)).slice(0, 600)}`,
+      );
+  }
+}
+
+/**
+ * Click an Arlington CapDetail top tab (Record Info, Plan Review, Payments, …).
+ * @returns {Promise<{ ok: boolean, selectorHint?: string }>}
+ */
+async function clickArlingtonTopTab(page, tabText) {
+  if (!isArlingtonCapDetailPage(page)) {
+    return { ok: false };
+  }
+  console.log(`[Arlington][Tabs] trying top tab: ${tabText}`);
+
+  const contexts = [];
+  const seen = new Set();
+  function addCtx(c) {
+    if (!c) return;
+    if (typeof c.locator !== "function" && typeof c.$ !== "function") return;
+    if (seen.has(c)) return;
+    seen.add(c);
+    contexts.push(c);
+  }
+  addCtx(page);
+  if (page._recordFrame) addCtx(page._recordFrame);
+  for (const fr of page.frames()) {
+    if (fr === page.mainFrame()) continue;
+    const u = (fr.url() || "").toLowerCase();
+    if (
+      u.includes("capdetail") ||
+      u.includes("arlingtonco") ||
+      u.includes("accela.com") ||
+      !u ||
+      u === "about:blank"
+    ) {
+      addCtx(fr);
+    }
+  }
+
+  const trySelectors = [
+    `a:has-text("${tabText}")`,
+    `button:has-text("${tabText}")`,
+    `li:has-text("${tabText}")`,
+    `span:has-text("${tabText}")`,
+    "a.par-menu.NotShowLoading",
+  ];
+
+  // Arlington: `#tab-custom_component` is Accela chrome only — documents live on Arlington ERMS; use findArlingtonExternalPlanReviewHref().
+  if (tabText === "Record Info") {
+    trySelectors.push('a[href*="CapDetail.aspx"][href*="#"]');
+    trySelectors.push('a[href*="CapDetail.aspx"]');
+  }
+  if (tabText === "Payments") {
+    trySelectors.push('a[href*="tab-fee"]');
+    trySelectors.push('a[href*="Payment"]');
+  }
+
+  for (const ctx of contexts) {
+    for (const sel of trySelectors) {
+      if (!sel) continue;
+      try {
+        let handle = null;
+        if (typeof ctx.locator === "function") {
+          const loc = ctx.locator(sel).first();
+          if ((await loc.count().catch(() => 0)) > 0) {
+            handle = await loc.elementHandle().catch(() => null);
+          }
+        }
+        if (!handle && typeof ctx.$ === "function") {
+          handle = await ctx.$(sel).catch(() => null);
+        }
+        if (!handle) continue;
+
+        const meta = await handle
+          .evaluate((el) => ({
+            tag: el.tagName,
+            text: (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80),
+            href: el.getAttribute("href") || "",
+            id: el.id || "",
+          }))
+          .catch(() => null);
+        if (!meta) continue;
+
+        const textOk =
+          meta.text === tabText || (meta.text || "").startsWith(tabText + " ");
+        /** Plan Review docs live off-site; refuse generic selectors unless href targets Arlington ERMS. */
+        if (!textOk) {
+          if (tabText !== "Plan Review") continue;
+          const hlow = String(meta.href || "").toLowerCase();
+          const externalPr =
+            /prd-ermsaccela/i.test(hlow) &&
+            /planreview/i.test(hlow) &&
+            !/aca-prod\.accela\.com/i.test(hlow);
+          if (!externalPr) continue;
+        }
+
+        const baseUrl = page.url();
+        let navigated = false;
+        try {
+          await handle.scrollIntoViewIfNeeded().catch(() => {});
+          const vis = await handle.isVisible().catch(() => false);
+          if (vis) {
+            await handle.click({ force: true, timeout: 8000 }).catch(() => {});
+          } else if (meta.href) {
+            const raw = meta.href.trim();
+            if (raw.startsWith("#")) {
+              const abs = new URL(raw, baseUrl).href;
+              await page.goto(abs, {
+                waitUntil: "domcontentloaded",
+                timeout: 25000,
+              }).catch(() => {});
+              navigated = true;
+            } else if (/^javascript:/i.test(raw)) {
+              await handle.evaluate((el) => el.click()).catch(() => {});
+            } else {
+              const abs = /^https?:/i.test(raw)
+                ? raw
+                : new URL(raw, baseUrl).href;
+              await page.goto(abs, {
+                waitUntil: "domcontentloaded",
+                timeout: 25000,
+              }).catch(() => {});
+              navigated = true;
+            }
+          } else {
+            await handle
+              .evaluate((el) =>
+                el.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+              )
+              .catch(() => {});
+          }
+        } catch (_) {
+          await handle
+            .evaluate((el) => {
+              try {
+                el.click();
+              } catch (_) {
+                el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+              }
+            })
+            .catch(() => {});
+        }
+
+        await waitForAccelaLoad(page).catch(() => {});
+        await page.waitForTimeout(600).catch(() => {});
+        console.log(
+          `[Arlington][Tabs] clicked ${tabText} via selector: ${sel.slice(0, 100)}${navigated ? " (navigation)" : ""}`,
+        );
+        return { ok: true, selectorHint: sel };
+      } catch (_) {
+        /* next */
+      }
+    }
+  }
+
+  console.log(`[Arlington][Tabs] could not activate tab: ${tabText}`);
+  return { ok: false };
+}
+
+async function ensureArlingtonRecordInfoActive(page) {
+  if (!isArlingtonCapDetailPage(page)) return { ok: false };
+  const { ok } = await clickArlingtonTopTab(page, "Record Info");
+  if (!ok) {
+    await logArlingtonDetailTabCandidates(page, "Record Info");
+  }
+
+  const signals = [
+    "#ctl00_PlaceHolderMain_lblPermitNumber",
+    "#ctl00_PlaceHolderMain_shAttachment_lblSectionTitle",
+    '[id*="shAttachment_lblSectionTitle"]',
+  ];
+
+  const textSignals = ["Application Information", "Attachments"];
+
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    const roots = [page, page._recordFrame].filter(Boolean);
+    for (const root of roots) {
+      for (const s of signals) {
+        try {
+          if (typeof root.$ === "function") {
+            const el = await root.$(s).catch(() => null);
+            if (el) {
+              console.log("  [Arlington][RecordInfo] active — found:", s);
+              return { ok: true };
+            }
+          }
+        } catch (_) {
+          /**/
+        }
+      }
+      for (const txt of textSignals) {
+        try {
+          const hit = await root
+            .evaluate((t) => {
+              const b = document.body;
+              return b
+                ? (b.innerText || "").toLowerCase().includes(t.toLowerCase())
+                : false;
+            }, txt)
+            .catch(() => false);
+          if (hit) {
+            console.log(
+              "  [Arlington][RecordInfo] active — body text includes:",
+              txt,
+            );
+            return { ok: true };
+          }
+        } catch (_) {
+          /**/
+        }
+      }
+    }
+    await page.waitForTimeout(400).catch(() => {});
+  }
+
+  const snippet = await page
+    .evaluate(() =>
+      document.body
+        ? (document.body.innerText || "").replace(/\s+/g, " ").trim().slice(0, 500)
+        : "",
+    )
+    .catch(() => "");
+  console.log(
+    `  [Arlington][RecordInfo] visible text sample after activating Record Info: ${snippet.slice(0, 400)}`,
+  );
+  const nTables = await page
+    .evaluate(() => document.querySelectorAll("table").length)
+    .catch(() => 0);
+  console.log(`  [Arlington][RecordInfo] tables found: ${nTables}`);
+  return { ok: !!ok };
+}
+
+async function ensureArlingtonPlanReviewActive(page) {
+  if (!isArlingtonCapDetailPage(page)) return { ok: false };
+  const r = await clickArlingtonTopTab(page, "Plan Review");
+  if (!r.ok) await logArlingtonDetailTabCandidates(page, "Plan Review");
+
+  const deadline = Date.now() + 20000;
+  const needles = [
+    "this record does not use plan review",
+    "Plans & Documents",
+    "Review Results & Mark-ups",
+    "Approved Documents",
+    "Project Information",
+    "OnBase Plan Review",
+  ];
+  while (Date.now() < deadline) {
+    const body = await page
+      .evaluate(() =>
+        (document.body && document.body.innerText
+          ? document.body.innerText
+          : ""
+        ).toLowerCase(),
+      )
+      .catch(() => "");
+    if (needles.some((n) => body.includes(n.toLowerCase()))) {
+      return { ok: true };
+    }
+    await page.waitForTimeout(350).catch(() => {});
+  }
+  return { ok: r.ok };
+}
+
+/**
+ * Arlington: iframe `.src` can show AttachmentsList.aspx while Playwright contentFrame URL is briefly about:blank.
+ * Wait on element src + matched child frame URL, not contentFrame alone.
+ */
+async function waitForArlingtonAttachmentFrame(page, timeoutMs = 30000) {
+  const iframeSel = ArlingtonAccelaProfile.attachmentIframeSelector;
+  const deadline = Date.now() + timeoutMs;
+  try {
+    await page.waitForFunction(
+      (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const raw = el.getAttribute("src") || "";
+        return (
+          raw &&
+          raw !== "about:blank" &&
+          /attachmentslist\.aspx/i.test(raw)
+        );
+      },
+      iframeSel,
+      { timeout: Math.min(25000, timeoutMs) },
+    );
+  } catch (_) {}
+
+  async function iframeSrcAbsolute() {
+    const h = await page.$(iframeSel).catch(() => null);
+    if (!h) return "";
+    const src = (
+      (await h.getAttribute("src").catch(() => "")) || ""
+    ).trim();
+    if (!src || src === "about:blank") return "";
+    try {
+      return new URL(src, page.url()).href;
+    } catch (_) {
+      return src;
+    }
+  }
+
+  let matchedFrame = null;
+  while (Date.now() < deadline) {
+    const absSrc = await iframeSrcAbsolute();
+    if (absSrc && /attachmentslist\.aspx/i.test(absSrc)) {
+      console.log(
+        `[Arlington][Attachments] iframe src resolved: ${absSrc.substring(0, 200)}`,
+      );
+    }
+    const frames = page.frames();
+    for (const fr of frames) {
+      let u = "";
+      try {
+        u = fr.url() || "";
+      } catch (_) {
+        /**/
+      }
+      if (/AttachmentsList\.aspx/i.test(u)) {
+        matchedFrame = fr;
+        console.log(
+          `[Arlington][Attachments] matched Playwright frame URL: ${u.substring(0, 200)}`,
+        );
+        break;
+      }
+    }
+    if (matchedFrame) {
+      return matchedFrame;
+    }
+
+    const el = await page.$(iframeSel).catch(() => null);
+    if (el) {
+      const cf = await el.contentFrame().catch(() => null);
+      const cu = cf ? cf.url() || "" : "";
+      if (cf && /AttachmentsList\.aspx/i.test(cu)) {
+        console.log(
+          `[Arlington][Attachments] matched Playwright frame URL (element contentFrame): ${cu.substring(0, 200)}`,
+        );
+        return cf;
+      }
+    }
+
+    await page.waitForTimeout(420).catch(() => {});
+  }
+  return null;
+}
+
+async function ensureArlingtonAttachmentsLoaded(page) {
+  if (!isArlingtonCapDetailPage(page)) return null;
+  await ensureArlingtonRecordInfoActive(page);
+
+  const iframeSel = ArlingtonAccelaProfile.attachmentIframeSelector;
+
+  const getIframeHandle = async () =>
+    page.$(iframeSel).catch(() => null);
+
+  let iframeEl = await getIframeHandle();
+  if (!iframeEl) {
+    await page.waitForSelector(iframeSel, { timeout: 12000 }).catch(() => {});
+    iframeEl = await getIframeHandle();
+  }
+
+  async function readSrc() {
+    const h = await getIframeHandle();
+    if (!h) return "";
+    return (await h.getAttribute("src").catch(() => "")) || "";
+  }
+
+  const clickAttachmentOpener = async () => {
+    const openSelectors = [
+      'a:has-text("Attachments")',
+      'span:has-text("Attachments")',
+      "#lnkViewRecordDocument",
+      'a[href*="tab-attachments"]',
+      'a:has-text("View Record Attachments")',
+    ];
+    for (const sel of openSelectors) {
+      const h = await page.$(sel).catch(() => null);
+      if (!h) continue;
+      try {
+        await h.click({ force: true });
+        console.log(`[Arlington][Attachments] clicked opener: ${sel}`);
+        await waitForAccelaLoad(page).catch(() => {});
+        await page.waitForTimeout(500).catch(() => {});
+        return true;
+      } catch (_) {
+        /**/
+      }
+    }
+    const invoked = await page
+      .evaluate(() => {
+        if (typeof window.ViewPeopleDocument === "function") {
+          try {
+            window.ViewPeopleDocument(false);
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
+        return false;
+      })
+      .catch(() => false);
+    if (invoked) {
+      console.log(
+        "[Arlington][Attachments] invoked ViewPeopleDocument(false) when available",
+      );
+      await page.waitForTimeout(800).catch(() => {});
+      return true;
+    }
+    return false;
+  };
+
+  let src = await readSrc();
+  console.log(
+    `[Arlington][Attachments] iframe initially: ${src ? src.slice(0, 120) : "(empty)"}`,
+  );
+
+  if (!src || src === "about:blank") {
+    await clickAttachmentOpener();
+    src = await readSrc();
+  }
+
+  const maxWait = Date.now() + 20000;
+  while (Date.now() < maxWait) {
+    const s = (await readSrc()).toLowerCase();
+    if (s && s !== "about:blank" && s.includes("attachmentslist")) {
+      const full = await readSrc();
+      console.log(
+        `[Arlington][Attachments] iframe loaded: ${full.slice(0, 180)}`,
+      );
+      break;
+    }
+    await page.waitForTimeout(400).catch(() => {});
+  }
+
+  let sFinal = await readSrc();
+  if (
+    !sFinal ||
+    sFinal === "about:blank" ||
+    !/attachmentslist/i.test(sFinal)
+  ) {
+    console.log("[Arlington][Attachments] clicked View Record Attachments (retry)");
+    await clickAttachmentOpener();
+    const retryUntil = Date.now() + 20000;
+    while (Date.now() < retryUntil) {
+      const sx = (await readSrc()).toLowerCase();
+      if (sx && sx !== "about:blank" && sx.includes("attachmentslist")) {
+        console.log(
+          `[Arlington][Attachments] iframe loaded: ${(await readSrc()).slice(0, 180)}`,
+        );
+        break;
+      }
+      await page.waitForTimeout(400).catch(() => {});
+    }
+  }
+
+  iframeEl = await getIframeHandle();
+  if (!iframeEl) {
+    console.log("[Arlington][Attachments] iframe element not in DOM");
+    return null;
+  }
+
+  const frame =
+    (await waitForArlingtonAttachmentFrame(page, 30000)) ||
+    (await waitForArlingtonAttachmentFrame(page, 10000));
+
+  if (!frame) {
+    const lastSrc = await readSrc();
+    console.log(
+      `[Arlington][Attachments] could not bind AttachmentsList frame (last iframe src snippet): ${lastSrc.slice(0, 200) || "(empty)"}`,
+    );
+    return null;
+  }
+
+  await frame.waitForSelector("table tr", { timeout: 15000 }).catch(() => {});
+  const trCount = await frame
+    .evaluate(() => document.querySelectorAll("table tr").length)
+    .catch(() => 0);
+  console.log(`[Arlington][Attachments] grid rows=${trCount}`);
+  return frame;
+}
+
 async function extractRecordHeader(page) {
   console.log("  📋 Extracting record header...");
 
@@ -1983,6 +5547,221 @@ async function extractRecordHeader(page) {
   return header;
 }
 
+/**
+ * Arlington CapDetail — extract four Record Info sections from visible text (not generic label/value tables).
+ */
+async function extractArlingtonRecordInfoSections(ctx) {
+  return ctx.evaluate(() => {
+    const STOP_LINE =
+      /^(More Details|Create Amendment|Plan Review|Payments|Attachments|Inspections?|Documents?|OnBase|Task|Help|Logout|My Account|Home|Search)$/i;
+    const TOP_NAV = /^(Collections|Logged in as|arrow_drop_down)/i;
+
+    const body = document.body ? document.body.innerText || "" : "";
+    let lines = body
+      .split(/\r?\n/)
+      .map((l) => l.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+      .filter((l) => l.length);
+
+    const markers = [
+      { id: "workLocation", label: "Work Location", re: /^Work Location\s*:?\s*$/i },
+      { id: "applicant", label: "Applicant", re: /^Applicant\s*:?\s*$/i },
+      {
+        id: "licensedProfessional",
+        label: "Licensed Professional",
+        re: /^Licensed Professional\s*:?\s*$/i,
+      },
+      { id: "owner", label: "Owner", re: /^Owner\s*:?\s*$/i },
+    ];
+
+    const findIdx = (re) => lines.findIndex((l) => re.test(l));
+
+    /** Skip chrome above first known section */
+    const idxList = [
+      findIdx(markers[0].re),
+      findIdx(markers[1].re),
+      findIdx(markers[2].re),
+      findIdx(markers[3].re),
+    ].filter((n) => n >= 0);
+    if (idxList.length) {
+      const firstOfInterest = Math.min(...idxList);
+      if (firstOfInterest > 0) lines = lines.slice(firstOfInterest);
+    }
+
+    /** Re-find after slice */
+    const located = markers.map((m) => ({
+      ...m,
+      idx: lines.findIndex((l) => m.re.test(l)),
+    }));
+
+    const found = located
+      .filter((m) => m.idx >= 0)
+      .sort((a, b) => a.idx - b.idx);
+
+    /** @type {Record<string, string[]>} */
+    const byId = {
+      workLocation: [],
+      applicant: [],
+      licensedProfessional: [],
+      owner: [],
+    };
+
+    function harvest(startIdx, endExclusive) {
+      const out = [];
+      if (startIdx < 0) return out;
+      const end = endExclusive >= 0 ? endExclusive : lines.length;
+      for (let i = startIdx + 1; i < end; i++) {
+        const line = lines[i];
+        if (/^(Record Details|Record Info)$/i.test(line)) continue;
+        if (STOP_LINE.test(line)) break;
+        if (
+          /^Work Location\b/i.test(line) ||
+          /^Applicant\b/i.test(line) ||
+          /^Licensed Professional\b/i.test(line) ||
+          /^Owner\b/i.test(line)
+        )
+          break;
+        if (/spell check|<\s*Prev|Next\s*>|Additional Results|map text|permit arlington footer/i.test(line))
+          continue;
+        if (/^Description:\s*$/i.test(line) && /spell/i.test(lines[i + 1] || "")) {
+          i += 1;
+          continue;
+        }
+        if (TOP_NAV.test(line)) continue;
+        out.push(line);
+      }
+      return out;
+    }
+
+    for (let i = 0; i < found.length; i++) {
+      const cur = found[i];
+      const next = found[i + 1];
+      const endEx = next ? next.idx : lines.length;
+      byId[cur.id] = harvest(cur.idx, endEx);
+    }
+
+    const pack = (id, labelText) => {
+      const lineArr = Array.isArray(byId[id]) ? byId[id] : [];
+      return {
+        label: labelText,
+        lines: lineArr.slice(),
+        text: lineArr.length ? lineArr.join("\n") : "",
+      };
+    };
+
+    return {
+      workLocation: pack("workLocation", "Work Location"),
+      applicant: pack("applicant", "Applicant"),
+      licensedProfessional: pack(
+        "licensedProfessional",
+        "Licensed Professional",
+      ),
+      owner: pack("owner", "Owner"),
+    };
+  });
+}
+
+/** Strip map/action UI remnants from Arlington Record Info section lines. */
+const ARLINGTON_RECORD_INFO_NOISE_PATTERNS = [
+  /^zoom in$/i,
+  /^zoom out$/i,
+  /^view additional licensed professionals>>?$/i,
+  /^view additional licensed professionals$/i,
+  /^create amendment$/i,
+  /^more details$/i,
+];
+
+function cleanArlingtonRecordInfoLines(lines) {
+  return (lines || [])
+    .map((line) => String(line || "").trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .filter(
+      (line) =>
+        !ARLINGTON_RECORD_INFO_NOISE_PATTERNS.some((rx) => rx.test(line)),
+    );
+}
+
+function extractPrimaryPhoneFromLines(lines) {
+  if (!lines || !lines.length) return "";
+  const s = lines.join("\n");
+  const m = s.match(
+    /Primary Phone\s*:\s*([0-9()+.\-\s]{10,})/i,
+  );
+  if (!m) return "";
+  return m[1].replace(/[^\d]/g, "").slice(0, 15);
+}
+
+function extractContractorNumberFromLines(lines) {
+  const s = (lines || []).join(" ");
+  const m = s.match(/\bContractor\s+(\d{5,12})\b/i);
+  return m ? m[1] : "";
+}
+
+function enrichArlingtonRecordInfoPostProcess(raw) {
+  if (!raw) return null;
+  const wl = cleanArlingtonRecordInfoLines(raw.workLocation?.lines || []);
+  const a = cleanArlingtonRecordInfoLines(raw.applicant?.lines || []);
+  const lp = cleanArlingtonRecordInfoLines(
+    raw.licensedProfessional?.lines || [],
+  );
+  const ow = cleanArlingtonRecordInfoLines(raw.owner?.lines || []);
+
+  return {
+    workLocation: {
+      label: raw.workLocation?.label || "Work Location",
+      lines: wl.slice(),
+      text: wl.length ? wl.join("\n") : "",
+    },
+    applicant: {
+      label: raw.applicant?.label || "Applicant",
+      lines: a.slice(),
+      text: a.length ? a.join("\n") : "",
+      name: a[0] || "",
+      company: a.length > 1 ? a[1] : "",
+      phone: extractPrimaryPhoneFromLines(a),
+    },
+    licensedProfessional: {
+      label: raw.licensedProfessional?.label || "Licensed Professional",
+      lines: lp.slice(),
+      text: lp.length ? lp.join("\n") : "",
+      company: "",
+      phone: extractPrimaryPhoneFromLines(lp),
+      contractorNumber: extractContractorNumberFromLines(lp),
+    },
+    owner: {
+      label: raw.owner?.label || "Owner",
+      lines: ow.slice(),
+      text: ow.length ? ow.join("\n") : "",
+      name: ow[0] || "",
+    },
+  };
+}
+
+function buildArlingtonRecordInfoTables(arlingtonRecordInfo) {
+  if (!arlingtonRecordInfo) return [];
+  const ar = arlingtonRecordInfo;
+  const rows = [];
+  const add = (key, value) => {
+    const v = value != null ? String(value).trim() : "";
+    if (v) rows.push({ key, value: v });
+  };
+  add("Work Location", ar.workLocation?.text);
+  add("Applicant", ar.applicant?.text || ar.applicant?.lines?.join("\n"));
+  add(
+    "Licensed Professional",
+    ar.licensedProfessional?.text ||
+      ar.licensedProfessional?.lines?.join("\n"),
+  );
+  add("Owner", ar.owner?.text || ar.owner?.lines?.join("\n"));
+  if (!rows.length) return [];
+  return [
+    {
+      title: "Record Info",
+      headers: ["Field", "Value"],
+      rows,
+    },
+  ];
+}
+
 async function extractRecordDetails(page) {
   console.log("  📋 Extracting record details...");
   const ctx = getExtractionContext(page);
@@ -2031,26 +5810,89 @@ async function extractRecordDetails(page) {
     }
     await saveCheckpointScreenshot(page, "after_record_details").catch(() => {});
   } else if (!fairfaxInlineHandled) {
-    const { found } = await clickAccelaNavPanel(
-      ctx,
-      page,
-      [
+    const isArlingtonDetail =
+      isArlingtonPortal(page) || isArlingtonCapDetailPage(page);
+    if (isArlingtonDetail) {
+      console.log(
+        `  [Arlington] activating Record Info tab — url=${(page.url() || "").substring(0, 140)}`,
+      );
+      await ensureArlingtonRecordInfoActive(page);
+      await saveCheckpointScreenshot(page, "after_record_details").catch(
+        () => {},
+      );
+      console.log(
+        "  [Arlington] extracting fields from Record Info / detail context",
+      );
+    } else {
+      const recordTabSelectors = [
         '[id*="TabDataList"] a:has-text("Record Details")',
-      'a:has-text("Record Details")',
-      'a:has-text("Record Detail")',
-      'a[id*="RecordDetail"]',
-    ],
-    "Record Details",
-      { expandRecordInfoFirst: true, checkpointLabel: "after_record_details" },
-    );
+        'a:has-text("Record Details")',
+        'a:has-text("Record Detail")',
+        'a[id*="RecordDetail"]',
+      ];
+      const { found } = await clickAccelaNavPanel(
+        ctx,
+        page,
+        recordTabSelectors,
+        "Record Details",
+        {
+          expandRecordInfoFirst: true,
+          checkpointLabel: "after_record_details",
+        },
+      );
 
-    if (!found) {
-      console.log("     [panel] Record Details: link not found");
-      return { fields: {}, tables: [], screenshot: null };
+      if (!found) {
+        console.log("     [panel] Record Details: link not found");
+        return { fields: {}, tables: [], screenshot: null };
+      }
     }
   }
 
   await page.waitForTimeout(1500);
+
+  if (
+    !isBaltimorePortal(page) &&
+    (isArlingtonPortal(page) || isArlingtonCapDetailPage(page))
+  ) {
+    try {
+      const raw = await extractArlingtonRecordInfoSections(ctx);
+      const hasWork =
+        raw &&
+        raw.workLocation &&
+        Array.isArray(raw.workLocation.lines) &&
+        raw.workLocation.lines.length > 0;
+      if (hasWork) {
+        const arlingtonRecordInfo =
+          enrichArlingtonRecordInfoPostProcess(raw);
+        const details = {
+          fields: {},
+          tables: buildArlingtonRecordInfoTables(arlingtonRecordInfo),
+          arlingtonRecordInfo,
+          screenshot: null,
+        };
+        if (arlingtonRecordInfo.workLocation?.text) {
+          details.fields["Work Location"] = arlingtonRecordInfo.workLocation.text;
+        }
+        const detailScreenshot = await page
+          .screenshot({ fullPage: true })
+          .catch(() => null);
+        details.screenshot = detailScreenshot
+          ? detailScreenshot.toString("base64")
+          : null;
+        console.log(
+          `  [Arlington] Record Info sections: workLocation lines=${arlingtonRecordInfo.workLocation?.lines?.length || 0} applicant=${arlingtonRecordInfo.applicant?.lines?.length || 0} licensed=${arlingtonRecordInfo.licensedProfessional?.lines?.length || 0} owner=${arlingtonRecordInfo.owner?.lines?.length || 0}`,
+        );
+        return details;
+      }
+      console.log(
+        "  [Arlington] structured Record Info missing Work Location — using generic label/value extraction",
+      );
+    } catch (err) {
+      console.log(
+        `  [Arlington] structured Record Info error: ${err.message} — using generic extraction`,
+      );
+    }
+  }
 
   const details = await ctx.evaluate(() => {
     const fields = {};
@@ -2279,6 +6121,30 @@ async function extractRecordDetails(page) {
   const count = Object.keys(details.fields).length;
   console.log(`     [panel] Record Details: ${count} fields extracted`);
   if (count === 0) console.log("     [panel] Record Details: panel empty (no data)");
+  if (
+    (isArlingtonPortal(page) || isArlingtonCapDetailPage(page)) &&
+    !details.arlingtonRecordInfo
+  ) {
+    console.log(
+      `  [Arlington] Record Info extraction summary: ${count} structured field(s) from label/value tables`,
+    );
+    if (count === 0) {
+      const preview = await page
+        .evaluate(() =>
+          document.body
+            ? (document.body.innerText || "").replace(/\s+/g, " ").trim().slice(0, 600)
+            : "",
+        )
+        .catch(() => "");
+      console.log(
+        `  [Arlington][RecordInfo] visible text sample after activating Record Info: ${preview.slice(0, 400)}`,
+      );
+      const nTab = await page
+        .evaluate(() => document.querySelectorAll("table").length)
+        .catch(() => 0);
+      console.log(`  [Arlington][RecordInfo] tables found: ${nTab}`);
+    }
+  }
   return details;
 }
 
@@ -3105,6 +6971,12180 @@ async function extractPlanReviewSummaryBaltimore(ctx) {
   });
 }
 
+/** Prefer Plan Review / OnBase iframes when hunting Arlington sub-tab anchors. */
+function arlingtonPlanReviewFrameScore(frame) {
+  let u = "";
+  let n = "";
+  try {
+    u = (frame.url() || "").toLowerCase();
+    n = (frame.name() || "").toLowerCase();
+  } catch (_) {}
+  const hay = `${u} ${n}`;
+  let s = 0;
+  if (/planreviewintegrated|prd-ermsaccela-arlingtonva|prd-ermsaccela/i.test(hay))
+    s += 28;
+  if (/iframeopenplanreview|openplanreview/.test(hay)) s += 20;
+  if (/onbase/.test(hay)) s += 15;
+  if (/plan.?review|planreview/.test(hay)) s += 10;
+  if (
+    /plans|documents|review.?results|approved|project.?information/.test(hay)
+  )
+    s += 4;
+  return s;
+}
+
+function rankFramesForArlingtonPlanReview(page) {
+  const frames = [...page.frames()].filter(Boolean);
+  frames.sort(
+    (a, b) =>
+      arlingtonPlanReviewFrameScore(b) - arlingtonPlanReviewFrameScore(a),
+  );
+  return frames;
+}
+
+async function clickArlingtonPlanReviewSubTab(page, label) {
+  const normalized = label.replace(/\s+/g, " ").trim().toLowerCase();
+  const framesRanked = rankFramesForArlingtonPlanReview(page);
+  const tried = new Set();
+  for (const frame of framesRanked) {
+    try {
+      const fid = `${frame.url()}${frame.name()}`;
+      if (tried.has(fid)) continue;
+      tried.add(fid);
+      const links = await frame.$$("a").catch(() => []);
+      for (const el of links) {
+        const raw = await el.textContent().catch(() => "");
+        const text = (raw || "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (text !== normalized) continue;
+        if (!(await el.isVisible().catch(() => false))) continue;
+        console.log(
+          `     [Arlington][Plan Review] sub-tab "${label}" click in frame ${frame.url().substring(0, 72)}`,
+        );
+        await el.click({ force: true }).catch(() => {});
+        await waitForAccelaLoad(page).catch(() => {});
+        await page.waitForTimeout(1000);
+        return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+/** Secondary tabs: short bounded click (no long Accela load wait). */
+const ARLINGTON_SECONDARY_TAB_DOM_CLICK_MS = 6000;
+
+async function clickArlingtonPlanReviewSubTabQuick(page, label) {
+  const normalized = label.replace(/\s+/g, " ").trim().toLowerCase();
+  const framesRanked = rankFramesForArlingtonPlanReview(page);
+  const tried = new Set();
+  for (const frame of framesRanked) {
+    try {
+      const fid = `${frame.url()}${frame.name()}`;
+      if (tried.has(fid)) continue;
+      tried.add(fid);
+      const links = await frame.$$("a").catch(() => []);
+      for (const el of links) {
+        const raw = await el.textContent().catch(() => "");
+        const text = (raw || "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (text !== normalized) continue;
+        if (!(await el.isVisible().catch(() => false))) continue;
+        await el.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(350).catch(() => {});
+        return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+async function clickArlingtonPlanReviewSubTabBounded(
+  page,
+  label,
+  timeoutMs = ARLINGTON_SECONDARY_TAB_DOM_CLICK_MS,
+) {
+  try {
+    return await Promise.race([
+      clickArlingtonPlanReviewSubTabQuick(page, label),
+      new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+    ]);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Arlington ERMS: click a top-level Plan Review tab inside the integrated frame only.
+ */
+async function clickArlingtonErmsTopTab(frame, page, label) {
+  const normalized = label.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!frame || typeof frame.$$ !== "function") return false;
+  try {
+    const candidates = await frame.$$('a, [role="tab"], button').catch(() => []);
+    for (const el of candidates) {
+      const raw = await el.textContent().catch(() => "");
+      const text = (raw || "").replace(/\s+/g, " ").trim().toLowerCase();
+      if (text !== normalized) continue;
+      if (!(await el.isVisible().catch(() => false))) continue;
+      console.log(
+        `[Arlington][PlanReview] clicked top tab "${label}"`,
+      );
+      await el.click({ force: true }).catch(() => {});
+      await waitForAccelaLoad(page).catch(() => {});
+      await page.waitForTimeout(380).catch(() => {});
+      return true;
+    }
+  } catch (_) {
+    /**/
+  }
+  return false;
+}
+
+/**
+ * Resolve the active top-level ERMS tab panel (`#href` target or `aria-controls`) for secondary extraction.
+ * @returns {Promise<import("playwright").ElementHandle | null>}
+ */
+async function getArlingtonActiveErmsTopTabPanel(frame, expectedLabel) {
+  if (!frame || typeof frame.evaluateHandle !== "function") return null;
+  const handle = await frame
+    .evaluateHandle((expectedLabelArg) => {
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      const exp = norm(expectedLabelArg).toLowerCase();
+
+      /** @returns {boolean} */
+      function headingMatches(navTextLower) {
+        if (!navTextLower) return false;
+        if (navTextLower === exp) return true;
+        if (exp.includes("review results")) {
+          return /review\s+results/.test(navTextLower);
+        }
+        if (exp.includes("approved documents")) {
+          return (
+            /approved/.test(navTextLower) && /document/.test(navTextLower)
+          );
+        }
+        if (exp.includes("project information"))
+          return /project\s+information/.test(navTextLower);
+        return navTextLower.includes(exp) || exp.includes(navTextLower);
+      }
+
+      /** @type {HTMLElement | null} */
+      let anchorFromLi = null;
+      const lis = [
+        ...document.querySelectorAll(
+          ".ui-tabs-nav > li, .ui-tabs .ui-tabs-nav li, ul[role=\"tablist\"] > li",
+        ),
+      ];
+      for (const li of lis) {
+        /** @type {HTMLElement} */
+        const liEl = li;
+        const a =
+          /** @type {HTMLAnchorElement | null} */ (
+            liEl.querySelector(
+              'a[href^="#"], a.ui-tabs-anchor, a[role="tab"]',
+            ) || liEl.querySelector("a")
+          );
+        const navPiece = norm(
+          a ? a.innerText || a.textContent : li.innerText || li.textContent,
+        ).toLowerCase();
+        if (!headingMatches(navPiece)) continue;
+        const isActive =
+          liEl.classList.contains("ui-tabs-active") ||
+          liEl.classList.contains("ui-state-active") ||
+          liEl.classList.contains("selected") ||
+          (a &&
+            /^true$/i.test(`${a.getAttribute("aria-selected") || ""}`)) ||
+          /^true$/i.test(`${li.getAttribute("aria-selected") || ""}`);
+        if (isActive) {
+          anchorFromLi = /** @type {HTMLElement} */ (a || liEl);
+          break;
+        }
+      }
+
+      /** @returns {HTMLElement | null} */
+      function panelFromHrefOrControls(el) {
+        if (!el) return null;
+        const hrefRaw = `${el.getAttribute("href") || ""}`.trim();
+        if (hrefRaw.startsWith("#")) {
+          try {
+            const id = hrefRaw.slice(1);
+            const byId = document.getElementById(id);
+            if (byId) return /** @type {HTMLElement} */ (byId);
+            const qp = document.querySelector(hrefRaw);
+            if (qp) return /** @type {HTMLElement} */ (qp);
+          } catch (_) {
+            /**/
+          }
+        }
+        const ac =
+          `${el.getAttribute("aria-controls") || ""}`.trim() ||
+          `${el.closest("li")?.getAttribute("aria-controls") || ""}`.trim();
+        if (ac) {
+          const p = document.getElementById(ac);
+          if (p) return /** @type {HTMLElement} */ (p);
+        }
+        return null;
+      }
+
+      /** @type {HTMLElement | null} */
+      let panel = anchorFromLi
+        ? panelFromHrefOrControls(anchorFromLi)
+        : null;
+
+      if (!panel) {
+        const loose = lis.find((li) => {
+          const liEl = /** @type {HTMLElement} */ (li);
+          const a =
+            liEl.querySelector(
+              'a[href^="#"], a.ui-tabs-anchor, a[role="tab"]',
+            ) || liEl.querySelector("a");
+          const nt = norm(
+            a ? a.innerText || a.textContent : li.innerText,
+          ).toLowerCase();
+          return headingMatches(nt);
+        });
+        if (loose) {
+          const a =
+            loose.querySelector(
+              'a[href^="#"], a.ui-tabs-anchor, a[role="tab"]',
+            ) || loose.querySelector("a");
+          panel = panelFromHrefOrControls(/** @type {HTMLElement} */ (a || loose));
+        }
+      }
+
+      if (panel && panel.tagName === "BODY") panel = null;
+
+      if (!panel) {
+        const panels = [
+          ...document.querySelectorAll(
+            '.ui-tabs-panel, [role="tabpanel"], .tab-content, .tab-pane',
+          ),
+        ].filter((el) => {
+          try {
+            const ee = /** @type {HTMLElement} */ (el);
+            if (ee.classList.contains("ui-tabs-hide")) return false;
+            if (
+              `${ee.getAttribute("aria-hidden") || ""}`.toLowerCase() ===
+              "true"
+            )
+              return false;
+            const st = getComputedStyle(ee);
+            if (st.display === "none" || st.visibility === "hidden")
+              return false;
+            const r = ee.getBoundingClientRect();
+            return r.width > 16 && r.height > 20;
+          } catch (_) {
+            return false;
+          }
+        });
+        const textOf = (el) =>
+          norm(el.innerText || el.textContent || "");
+        const heuristicPanel = panels.find((el) => {
+          const text = textOf(/** @type {HTMLElement} */ (el));
+          if (text.length < 20) return false;
+          if (exp.includes("review results")) {
+            return (
+              /Comment Letters|Plan Mark[\s\-]*ups|Review Results Letter|Review Status/i.test(
+                text,
+              ) &&
+              !/Plan Set Documents|Construction Plans|Proposed Plat\/Site Plan/i.test(
+                text,
+              )
+            );
+          }
+          if (exp.includes("approved documents")) {
+            return (
+              /Approved Plan Set|Approved Documents|Review Results Letter/i.test(
+                text,
+              ) &&
+              !/Plan Set Documents|Construction Plans|Proposed Plat\/Site Plan/i.test(
+                text,
+              )
+            );
+          }
+          if (exp.includes("project information")) {
+            return (
+              /Project Information|Project ID|Project Status|Applicant|Owner/i.test(
+                text,
+              ) &&
+              !/Plan Set Documents|Construction Plans|Proposed Plat\/Site Plan/i.test(
+                text,
+              )
+            );
+          }
+          return false;
+        });
+        panel = heuristicPanel || null;
+      }
+
+      return panel;
+    }, expectedLabel)
+    .catch(() => null);
+
+  if (!handle) return null;
+  const element = typeof handle.asElement === "function" ? handle.asElement() : null;
+  if (!element) {
+    await handle.dispose().catch(() => {});
+    return null;
+  }
+  return element;
+}
+
+/**
+ * Diagnostics for Arlington secondary tab extraction (scoped panel).
+ */
+async function logArlingtonErmsSecondaryActivePanelDiag(panelHandle, tabLabelForLog) {
+  if (!panelHandle) return;
+  try {
+    const stats = await panelHandle.evaluate((panel) => {
+      if (!(panel instanceof Element)) return null;
+      /** @type {Element} */
+      const el = panel;
+      const text = `${el.innerText || el.textContent || ""}`
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 300);
+      const tables = [...el.querySelectorAll("table")];
+      let trCount = 0;
+      for (const tb of tables) trCount += tb.querySelectorAll("tr").length;
+      const actionCount = el.querySelectorAll(
+        'input.docaction, input.img-button.docaction, input[type="image"], a[href], button',
+      ).length;
+      return {
+        preview: text,
+        tables: tables.length,
+        rows: trCount,
+        actions: actionCount,
+      };
+    });
+    if (stats && typeof stats === "object") {
+      console.log(
+        `[Arlington][PlanReview] active panel "${tabLabelForLog}" preview=${stats.preview}`,
+      );
+      console.log(
+        `[Arlington][PlanReview] active panel "${tabLabelForLog}" rows=${stats.rows} actions=${stats.actions}`,
+      );
+    }
+  } catch (_) {
+    /**/
+  }
+}
+
+/**
+ * Infer ERMS numeric PlanDoc/document id from download control onclick/href blobs.
+ * @param {string} hayRaw
+ * @returns {string}
+ */
+function arlingtonInferErmsPlanDocIdFromDomActionHaystack(hayRaw) {
+  const hay = `${hayRaw || ""}`.slice(0, 8000);
+  if (!hay.trim()) return "";
+  const patterns = [
+    /\bPlanDoc(?:ID|Id)\s*[:=]\s*['"]?(\d{5,})['"]?/i,
+    /\bplanDocId\s*[:=]\s*['"]?(\d{5,})['"]?/i,
+    /\b(?:DocumentId|DOCUMENTID|DOCUMENT_ID)\s*[:=']\s*['"]?(\d{5,})['"]?/i,
+    /InvokeDownloadDocument\D*(\d{5,})\b/i,
+    /PollDownloadDocument\D*[\(\[]\s*['"]?(\d{5,})['"]?/i,
+    /DownloadDocument\D*[\(\[]\s*['"]?(\d{5,})['"]?/i,
+    /\(?\s*['"]?\s*(\d{7,})\s*['"]?\s*\)?/,
+    /[=,]\s*['"]?\s*(\d{7,})\s*['"]?\s*[,;)}\]]/,
+  ];
+  for (const p of patterns) {
+    const m = hay.match(p);
+    const v = m && m[1] ? `${m[1]}`.trim() : "";
+    if (/^\d{5,}$/.test(v)) return v;
+  }
+  return "";
+}
+
+/**
+ * @param {Record<string, unknown>} row — raw secondary DOM row (pre-doc map).
+ * @param {string} [sourceTabKey] — `approvedDocuments`, `reviewResultsAndMarkups`, etc.
+ * @returns {boolean}
+ */
+function isArlingtonPlanSetLeak(row, sourceTabKey) {
+  if (!row || typeof row !== "object") return false;
+  const nm = `${row.name || ""}`.trim();
+
+  /** Legitimate Approved Documents packaged row — not Plan Set sheet leakage. */
+  if (
+    `${sourceTabKey || ""}` === "approvedDocuments" &&
+    /Approved Plan Set\b/i.test(nm) &&
+    !/^C-\d+/i.test(nm) &&
+    !/^RW-3329/i.test(nm)
+  ) {
+    return false;
+  }
+
+  const text = [
+    nm,
+    row.filename,
+    row.documentType,
+    row.sheetType,
+    row.description,
+    row.text,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    /^C-\d+/i.test(nm) ||
+    /^RW-3329/i.test(nm) ||
+    /SOSI - McDonalds - Arlington/i.test(nm) ||
+    /Construction Plans/i.test(text) ||
+    /Proposed Plat\/Site Plan/i.test(text) ||
+    /Plan Set Documents/i.test(text)
+  );
+}
+
+/**
+ * Discard Plan Set sheet rows leaked into RR / Approved / PI when panel resolution fails.
+ * @param {string} [tabKeyCamel] Arlington integrated tab key (for context-aware leakage).
+ * @returns {{ kept: object[], rejected: number }}
+ */
+function arlingtonFilterSecondaryDomRowsAgainstPlanSet(
+  rawRows,
+  tabLabelForLog,
+  tabKeyCamel,
+) {
+  /** @type {object[]} */
+  const kept = [];
+  let rejected = 0;
+  if (!Array.isArray(rawRows)) return { kept, rejected };
+
+  for (const row of rawRows) {
+    if (!row || typeof row !== "object") continue;
+    if (isArlingtonPlanSetLeak(row, tabKeyCamel)) rejected++;
+    else kept.push(row);
+  }
+
+  if (rejected > 0) {
+    console.log(
+      `[Arlington][PlanReview] ${`${tabLabelForLog || ""}`.trim()} rejected Plan Set leakage rows=${rejected}`,
+    );
+  }
+
+  return { kept, rejected };
+}
+
+async function extractPlanReviewTablesLinksFromFrames(page, ctx) {
+  const extractionSnippet = () => {
+    const tables = [];
+    document.querySelectorAll("table").forEach((table) => {
+      const txt = (table.innerText || "").trim();
+      if (txt.length < 12) return;
+      const rows = [];
+      table.querySelectorAll("tr").forEach((tr) => {
+        const cells = [...tr.querySelectorAll("th, td")].map((c) =>
+          (c.textContent || "").replace(/\s+/g, " ").trim(),
+        );
+        if (cells.some(Boolean)) rows.push(cells);
+      });
+      if (rows.length) tables.push({ rows });
+    });
+    const links = [...document.querySelectorAll("a[href]")]
+      .map((a) => ({
+        text: (a.textContent || "").trim().slice(0, 200),
+        href: (a.getAttribute("href") || "").slice(0, 400),
+      }))
+      .filter((x) => x.text && x.href);
+    const text = document.body ? document.body.innerText.slice(0, 10000) : "";
+    return { tables, links: links.slice(0, 120), text };
+  };
+
+  const ranked = rankFramesForArlingtonPlanReview(page);
+  const framesOrdered = [];
+  const seen = new Set();
+  for (const f of [ctx, ...ranked]) {
+    if (!f || seen.has(f)) continue;
+    seen.add(f);
+    framesOrdered.push(f);
+  }
+
+  let best = { tables: [], links: [], text: "" };
+  let bestScore = -1;
+  for (const frame of framesOrdered) {
+    if (!frame || typeof frame.evaluate !== "function") continue;
+    try {
+      const extracted = await frame.evaluate(extractionSnippet);
+      const sc =
+        (extracted.tables?.length || 0) * 10 +
+        (extracted.links?.length || 0) +
+        Math.min((extracted.text?.length || 0) / 100, 50);
+      if (sc > bestScore) {
+        bestScore = sc;
+        best = extracted;
+      }
+    } catch (_) {}
+  }
+  return best;
+}
+
+/**
+ * Exclude admin-only filenames from Arlington Plan Review tab mapping — keep them under Attachments only.
+ */
+function shouldExcludeAttachmentFromPlanReviewMapping(rawTrimmed, nameLower) {
+  const t = (rawTrimmed || "").trim();
+  if (!t) return true;
+  if (/\bpermit placard\b/i.test(nameLower)) return true;
+  if (/^invoice\b/i.test(t)) return true;
+  if (/^receipt\b/i.test(t)) return true;
+  if (/^permit\b/i.test(t) && /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(t)) return true;
+  if (/^permit\s+[0-9]/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * @returns {{ tabKey: string, sectionKey: string|null, label: string } | null}
+ */
+function classifyArlingtonAttachmentForPlanReview(att) {
+  const raw = `${att.name || att.filename || att.title || ""}`.trim();
+  const name = raw.toLowerCase();
+
+  if (shouldExcludeAttachmentFromPlanReviewMapping(raw, name)) return null;
+
+  if (
+    name.includes("review results letter") ||
+    name.includes("mark-up") ||
+    name.includes("markup")
+  ) {
+    return {
+      tabKey: "reviewResultsAndMarkups",
+      sectionKey: null,
+      label: "Review Results & Mark-ups",
+    };
+  }
+
+  if (name.includes("comment response letter")) {
+    return {
+      tabKey: "plansAndDocuments",
+      sectionKey: "commentResponseLetters",
+      label: "Comment Response Letters",
+    };
+  }
+
+  if (
+    name.includes("other supporting document") ||
+    /\bsupporting document\b/i.test(name)
+  ) {
+    return {
+      tabKey: "plansAndDocuments",
+      sectionKey: "supportingDocuments",
+      label: "Supporting Documents",
+    };
+  }
+
+  if (name.includes("approved document") || name.includes("approved")) {
+    return {
+      tabKey: "approvedDocuments",
+      sectionKey: null,
+      label: "Approved Documents",
+    };
+  }
+
+  if (
+    name.includes("plan") ||
+    name.includes("drawing") ||
+    name.includes("sheet") ||
+    name.includes("record summary")
+  ) {
+    return {
+      tabKey: "plansAndDocuments",
+      sectionKey: "planSetDocuments",
+      label: "Plan Set Documents",
+    };
+  }
+
+  return null;
+}
+
+function planReviewNormAttachmentName(att) {
+  return `${att.name || att.filename || att.title || ""}`
+    .trim()
+    .toLowerCase();
+}
+
+function attachmentRowToPlanReviewDoc(att, sourceSection, sourceTab) {
+  const url = att.viewUrl || att.publicUrl || att.downloadUrl || "";
+  const fn = att.name || att.filename || "";
+  return {
+    name: fn,
+    filename: fn,
+    documentDate: att.latest_update || att.documentDate || "",
+    size: att.size || "",
+    status: att.downloadStatus || "",
+    storagePath: att.storagePath || "",
+    publicUrl: url,
+    downloadUrl: url,
+    sourceTab: sourceTab || "attachments",
+    sourceSection,
+  };
+}
+
+/** Maps a scraped attachment row into Plan Review normalized docs (reuse upload metadata; no download). */
+function attachmentRowToArlingtonMappedPlanReviewDoc(att, classification) {
+  const url = att.viewUrl || att.publicUrl || att.downloadUrl || "";
+  const fn = att.name || att.filename || "";
+
+  return {
+    name: fn,
+    filename: fn,
+    documentDate: att.latest_update || att.documentDate || "",
+    size: att.size || "",
+    status: att.downloadStatus || "",
+    storagePath: att.storagePath || "",
+    publicUrl: url,
+    downloadUrl: url,
+    sourceTab: classification.tabKey,
+    sourceSection: classification.sectionKey || null,
+    source: "record_info_attachments",
+  };
+}
+
+function portalDownloadCandidateToPlanReviewDoc(d, sourceSection) {
+  const label = (d.text || d.label || "").trim();
+  const href = (d.href || "").trim();
+  return {
+    name: label,
+    filename: label,
+    documentDate: "",
+    size: "",
+    status: "portal_link",
+    storagePath: "",
+    publicUrl: "",
+    downloadUrl: href,
+    sourceTab: "plan_review",
+    sourceSection,
+  };
+}
+
+function planReviewDocDedupeKey(doc) {
+  const name = `${doc.name || doc.filename || ""}`.trim().toLowerCase();
+  const url = `${doc.publicUrl || doc.downloadUrl || ""}`.trim();
+  return `${name}##${url}`;
+}
+
+function arlingtonIntegratedRowDedupeKey(name, docDate, size, revision) {
+  return `${planReviewNormAttachmentName({ name })}
+###${String(docDate || "").trim().toLowerCase()}
+###${String(size || "").trim().toLowerCase()}
+###${String(revision || "").trim().toLowerCase()}`
+    .trim();
+}
+
+function attachmentDedupeSnapshotSet(rows) {
+  const s = new Set();
+  const list = Array.isArray(rows) ? rows : [];
+  for (const att of list) {
+    s.add(
+      arlingtonIntegratedRowDedupeKey(
+        att.name,
+        att.latest_update || att.documentDate || "",
+        att.size || "",
+        "",
+      ),
+    );
+  }
+  return s;
+}
+
+function arlExtractNumericDocHandleFromErmsRaw(row) {
+  if (!row || typeof row !== "object") return "";
+  const o = /** @type {Record<string, unknown>} */ (row);
+  const v =
+    o.dochandle ??
+    o.docHandle ??
+    o.DocHandle ??
+    o.DOCHANDLE ??
+    o.doc_handle ??
+    "";
+  const s = `${v ?? ""}`.trim();
+  return /^\d+$/.test(s) ? s : "";
+}
+
+function arlingtonApplyRecordInfoAttachmentAliasToSecondaryDoc(doc, srcAttRow) {
+  const url =
+    `${srcAttRow.publicUrl || srcAttRow.viewUrl || srcAttRow.downloadUrl || ""}`.trim();
+  if (!/^https?:\/\//i.test(url)) return;
+  doc.publicUrl = url;
+  doc.downloadUrl = url;
+  doc.storagePath = `${srcAttRow.storagePath || ""}`.trim();
+  doc.downloadStatus = "aliased_attachment";
+  doc.status = "downloaded";
+  doc.secondaryAliasSource = "record_info_attachments";
+}
+
+function arlingtonRecordInfoAttachmentRowHasUploadedFile(att) {
+  if (!att || typeof att !== "object") return false;
+  const url =
+    `${att.publicUrl || att.viewUrl || att.downloadUrl || ""}`.trim();
+  if (!/^https?:\/\//i.test(url)) return false;
+  return true;
+}
+
+/**
+ * Filename-only bridge: reuse Record Info attachment bytes when ERMS/API row matches.
+ */
+function arlingtonApplyRecordInfoAttachmentAliasesToSecondaryTabs(
+  norm,
+  attachList,
+) {
+  const list = Array.isArray(attachList) ? attachList : [];
+  const uploaded = list.filter(arlingtonRecordInfoAttachmentRowHasUploadedFile);
+  if (!uploaded.length) return;
+
+  /** @type {{ docs: unknown[]; tabLog: string }[]} */
+  const targets = [];
+  const rrDocs = norm?.reviewResultsAndMarkups?.documents;
+  if (Array.isArray(rrDocs))
+    targets.push({ docs: rrDocs, tabLog: "Review Results & Mark-ups" });
+  const adDocs = norm?.approvedDocuments?.documents;
+  if (Array.isArray(adDocs))
+    targets.push({ docs: adDocs, tabLog: "Approved Documents" });
+  const piDocs = norm?.projectInformation?.documents;
+  if (Array.isArray(piDocs))
+    targets.push({ docs: piDocs, tabLog: "Project Information" });
+
+  for (const { docs, tabLog } of targets) {
+    for (const raw of docs) {
+      const doc = /** @type {Record<string, unknown>} */ (raw);
+      if (!doc || typeof doc !== "object") continue;
+      const hasLoc =
+        /^https?:\/\//i.test(
+          `${doc.publicUrl || doc.downloadUrl || ""}`.trim(),
+        );
+      if (hasLoc && `${doc.downloadStatus || ""}` !== "metadata_only")
+        continue;
+      const nk = planReviewNormAttachmentName({
+        name:
+          `${doc.name || doc.filename || ""}`,
+      });
+      if (!nk) continue;
+      const hit = uploaded.find((a) => planReviewNormAttachmentName(a) === nk);
+      if (!hit) continue;
+      arlingtonApplyRecordInfoAttachmentAliasToSecondaryDoc(doc, hit);
+      console.log(
+        `[Arlington][PlanReview] secondary attachment alias ${tabLog} ${`${doc.name || doc.filename || ""}`.trim()}`,
+      );
+    }
+  }
+}
+
+/** @returns {{ downloads: number; metadataOnly: number; aliases: number }} */
+function arlingtonSummarizeSecondaryTabDocs(docs) {
+  let downloads = 0;
+  let metadataOnly = 0;
+  let aliases = 0;
+  for (const raw of docs || []) {
+    const d = /** @type {Record<string, unknown>} */ (raw);
+    if (!d || typeof d !== "object") continue;
+    const ds = `${d.downloadStatus || ""}`.trim().toLowerCase();
+    const url = `${d.publicUrl || d.downloadUrl || ""}`.trim();
+    if (ds === "aliased_attachment" || ds === "aliased_duplicate") aliases++;
+    else if (ds === "metadata_only") metadataOnly++;
+    else if (/^https?:\/\//i.test(url)) downloads++;
+    else if (ds === "uploaded") downloads++;
+  }
+  return { downloads, metadataOnly, aliases };
+}
+
+function defaultArlingtonIntegratedTabsSkeleton() {
+  return {
+    plansAndDocuments: {
+      label: "Plans & Documents",
+      sections: {
+        planSetDocuments: {
+          label: "Plan Set Documents",
+          documents: [],
+        },
+        supportingDocuments: {
+          label: "Supporting Documents",
+          documents: [],
+        },
+        commentResponseLetters: {
+          label: "Comment Response Letters",
+          documents: [],
+        },
+      },
+      documents: [],
+    },
+    reviewResultsAndMarkups: {
+      label: "Review Results & Mark-ups",
+      documents: [],
+      comments: [],
+    },
+    approvedDocuments: {
+      label: "Approved Documents",
+      documents: [],
+    },
+    projectInformation: {
+      label: "Project Information",
+      fields: [],
+      requiredDocumentTypes: [],
+      documents: [],
+    },
+  };
+}
+
+/** Arlington portal scope — only Plans & Documents → Plan Set Documents (unless Stage 2 enabled). */
+function narrowArlingtonPlanReviewNormalizedToPlanSetOnly(norm) {
+  const prOpts = ArlingtonAccelaProfile.planReview || {};
+  if (prOpts.planReviewIncludeSecondaryTabs === true && norm) {
+    try {
+      const next = defaultArlingtonIntegratedTabsSkeleton();
+      for (const key of Object.keys(next)) {
+        if (!norm[key]) continue;
+        next[key] = JSON.parse(JSON.stringify(norm[key]));
+      }
+      return next;
+    } catch (_) {
+      /** fall through to plan-set-only narrow */
+    }
+  }
+
+  const next = defaultArlingtonIntegratedTabsSkeleton();
+  try {
+    const rows =
+      norm?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+    if (Array.isArray(rows) && rows.length) {
+      next.plansAndDocuments.sections.planSetDocuments.documents =
+        JSON.parse(JSON.stringify(rows));
+    }
+    if (norm?.plansAndDocuments?.label) {
+      const lab = `${norm.plansAndDocuments.label}`.trim();
+      if (lab) next.plansAndDocuments.label = lab;
+    }
+  } catch (_) {
+    /**/
+  }
+  return next;
+}
+
+async function dismissArlingtonPlanReviewModals(page) {
+  const needles = ["no additional documents required", "submit active revision"];
+  const clickSelectors = [
+    'button:has-text("OK")',
+    '[role="button"]:has-text("OK")',
+    'input[value="OK"]',
+    'input[value="Ok"]',
+    'button:has-text("Ok")',
+    'button:has-text("CLOSE")',
+    'button:has-text("Close")',
+    'button:has-text("Continue")',
+    'input[value="Close"]',
+    'a:has-text("OK")',
+  ];
+  const maxPasses = 4;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let dismissed = false;
+    for (const fr of [...page.frames()]) {
+      let bodyTxt = "";
+      try {
+        bodyTxt =
+          fr === page.mainFrame()
+            ? await page
+                .evaluate(() =>
+                  document.body ? document.body.innerText || "" : "",
+                )
+                .catch(() => "")
+            : await fr
+                .evaluate(() =>
+                  document.body ? document.body.innerText || "" : "",
+                )
+                .catch(() => "");
+      } catch (_) {
+        /**/
+      }
+      const low = bodyTxt.toLowerCase();
+      if (!needles.some((n) => low.includes(n))) continue;
+      const urlHint =
+        typeof fr.url === "function" ? fr.url().substring(0, 120) : "";
+      console.log(
+        `[Arlington][Plan Review] modal detected: no additional documents required (${urlHint})`,
+      );
+      for (const sel of clickSelectors) {
+        try {
+          const btn = await fr.$(sel).catch(() => null);
+          if (btn && (await btn.isVisible().catch(() => false))) {
+            await btn.click({ force: true }).catch(() => {});
+            dismissed = true;
+            console.log(
+              `[Arlington][Plan Review] clicked OK modal (${sel})`,
+            );
+            break;
+          }
+        } catch (_) {}
+      }
+    }
+    if (!dismissed) break;
+    await page.waitForTimeout(550).catch(() => {});
+    await waitForAccelaLoad(page).catch(() => {});
+  }
+}
+
+async function pickArlingtonIntegratedContentFrame(page) {
+  let best = null;
+  let bestScore = -1;
+  const frames = page.frames();
+  for (const fr of frames) {
+    let u = "";
+    try {
+      u = fr.url() || "";
+    } catch (_) {
+      continue;
+    }
+    const low = u.toLowerCase();
+    if (
+      !/planreviewintegrated|prd-ermsaccela-arlingtonva|prd-ermsaccela/i.test(
+        low,
+      )
+    ) {
+      continue;
+    }
+    let score = 20;
+    if (/planreviewintegrated/i.test(low)) score += 30;
+    const nTables = await fr
+      .evaluate(() => document.querySelectorAll("table").length)
+      .catch(() => 0);
+    score += Math.min((Number(nTables) || 0) * 6, 60);
+    if (score > bestScore) {
+      bestScore = score;
+      best = fr;
+    }
+  }
+  if (best && best.url) {
+    console.log(
+      `[Arlington][Plan Review] integrated frame: ${(best.url() || "").substring(0, 220)}`,
+    );
+  }
+  return best;
+}
+
+/**
+ * Merge integrated iframe Plan Review scrape with attachment classification.
+ */
+function finalizeArlingtonPlanReviewAfterAttachments(planReview, attachmentRows) {
+  const arlPrev = planReview.arlingtonPlanReview;
+  const legacyTabs =
+    arlPrev &&
+    arlPrev.legacyExplorerTabs != null &&
+    typeof arlPrev.legacyExplorerTabs === "object"
+      ? arlPrev.legacyExplorerTabs
+      : arlPrev?.tabs;
+  const attachmentBackedNames = new Set();
+
+  const prOpts = ArlingtonAccelaProfile.planReview || {};
+  /** Arlington-only finalize — scoped to Plans & Documents → Plan Set Documents. */
+  const scopePlanSetOnly = prOpts.scopePlanSetDocumentsOnly !== false;
+  const preserveAllIntegratedTabs =
+    prOpts.planReviewIncludeSecondaryTabs === true;
+
+  const hadErmsApiDelivery =
+    arlPrev?.integratedTabsFromExternalApi === true;
+
+  const hadInternalIframeExtract =
+    arlPrev?.integratedTabsFromInternalIframe === true;
+
+  const hadExternalDomExtract =
+    arlPrev?.integratedTabsFromExternalDom === true;
+
+  const allowIframeIntegratedDocs =
+    prOpts.downloadFromIntegratedIframe === true;
+  const mapFromAttachmentsConfigured =
+    prOpts.mapDocumentsFromAttachments !== false;
+
+  /** Push Record Info classifications into buckets (only when not Plan-Set scoped). */
+  const effectiveMapAttachments =
+    preserveAllIntegratedTabs
+      ? false
+      : scopePlanSetOnly
+        ? false
+        : mapFromAttachmentsConfigured;
+
+  if (preserveAllIntegratedTabs) {
+    console.log(`[Arlington][PlanReview] scope=all_plan_review_tabs`);
+  } else if (scopePlanSetOnly) {
+    console.log(
+      `[Arlington][PlanReview] scope=plans_documents.plan_set_documents only`,
+    );
+    console.log(
+      `[Arlington][PlanReview] fallback attachments disabled`,
+    );
+  }
+  const mergedIntegratedTabs = planReview.arlingtonPlanReview?.integratedTabs;
+
+  const integratedIncoming =
+    mergedIntegratedTabs && typeof mergedIntegratedTabs === "object"
+      ? mergedIntegratedTabs
+      : null;
+
+  /** @type {ReturnType<typeof defaultArlingtonIntegratedTabsSkeleton>} */
+  let normalized;
+  try {
+    normalized = integratedIncoming
+      ? JSON.parse(JSON.stringify(integratedIncoming))
+      : defaultArlingtonIntegratedTabsSkeleton();
+  } catch (_) {
+    normalized = defaultArlingtonIntegratedTabsSkeleton();
+  }
+
+  const seen = new Set();
+
+  /** @type {unknown[]} */
+  const emptyFields = normalized.projectInformation.fields;
+  normalized.projectInformation.fields = Array.isArray(emptyFields)
+    ? emptyFields
+    : [];
+
+  function pushDoc(bucketKey, doc) {
+    if (!normalized[bucketKey]) return false;
+    const k = planReviewDocDedupeKey(doc);
+    if (!k || k === "##") return false;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    normalized[bucketKey].documents.push(doc);
+    return true;
+  }
+
+  function pushClassifiedAttachmentDoc(classified, doc) {
+    const k = planReviewDocDedupeKey(doc);
+    if (!k || k === "##") return false;
+    if (seen.has(k)) return false;
+    if (!classified || !classified.tabKey) return false;
+
+    const { tabKey, sectionKey } = classified;
+
+    seen.add(k);
+    if (
+      tabKey === "plansAndDocuments" &&
+      sectionKey &&
+      normalized.plansAndDocuments?.sections?.[sectionKey]
+    ) {
+      normalized.plansAndDocuments.sections[sectionKey].documents.push(doc);
+      return true;
+    }
+    if (normalized[tabKey] && Array.isArray(normalized[tabKey].documents)) {
+      normalized[tabKey].documents.push(doc);
+      return true;
+    }
+
+    /** rare: unknown tab bucket */
+    seen.delete(k);
+    return false;
+  }
+
+  const attachList = Array.isArray(attachmentRows) ? attachmentRows : [];
+  if (effectiveMapAttachments !== false) {
+    for (const att of attachList) {
+      const classified = classifyArlingtonAttachmentForPlanReview(att);
+      if (!classified) continue;
+      const doc = attachmentRowToArlingtonMappedPlanReviewDoc(att, classified);
+      attachmentBackedNames.add(planReviewNormAttachmentName(att));
+      pushClassifiedAttachmentDoc(classified, doc);
+    }
+  }
+
+  if (
+    !scopePlanSetOnly &&
+    allowIframeIntegratedDocs &&
+    legacyTabs &&
+    typeof legacyTabs === "object"
+  ) {
+    for (const [camelKey, section] of Object.entries(legacyTabs)) {
+      if (!section || typeof section !== "object") continue;
+      if (
+        section.found &&
+        Array.isArray(section.downloadCandidates)
+      ) {
+        for (const d of section.downloadCandidates) {
+          const doc = portalDownloadCandidateToPlanReviewDoc(d, camelKey);
+          const nm = `${doc.name || ""}`.trim().toLowerCase();
+          if (
+            nm &&
+            attachmentBackedNames.has(nm) &&
+            doc.status === "portal_link"
+          ) {
+            continue;
+          }
+          pushDoc(camelKey, doc);
+        }
+      }
+    }
+  }
+
+  if (scopePlanSetOnly && !preserveAllIntegratedTabs) {
+    normalized = narrowArlingtonPlanReviewNormalizedToPlanSetOnly(normalized);
+  }
+
+  if (preserveAllIntegratedTabs && Array.isArray(attachList) && attachList.length) {
+    arlingtonApplyRecordInfoAttachmentAliasesToSecondaryTabs(normalized, attachList);
+  }
+
+  const planSetDocCount =
+    normalized?.plansAndDocuments?.sections?.planSetDocuments?.documents
+      ?.length ?? 0;
+  const reviewResultsCount =
+    normalized?.reviewResultsAndMarkups?.documents?.length ?? 0;
+  const approvedCount = normalized?.approvedDocuments?.documents?.length ?? 0;
+  const piDocCount = normalized?.projectInformation?.documents?.length ?? 0;
+  const piFieldCount = normalized?.projectInformation?.fields?.length ?? 0;
+  const hasNormalizedDocs =
+    planSetDocCount > 0 ||
+    reviewResultsCount > 0 ||
+    approvedCount > 0 ||
+    piDocCount > 0 ||
+    (prOpts.planReviewIncludeSecondaryTabs === true && piFieldCount > 0);
+
+  console.log(
+    `[Arlington][PlanReview] Plan Set Documents extracted=${planSetDocCount}`,
+  );
+
+  const msgLow = (`${arlPrev?.message || planReview.message || ""}`).trim().toLowerCase();
+  const portalUnused = msgLow.includes("does not use plan review");
+
+  const timedOut = planReview.arlingtonPlanReview?.timeout === true;
+
+  if (
+    scopePlanSetOnly &&
+    !preserveAllIntegratedTabs &&
+    !portalUnused &&
+    !hasNormalizedDocs
+  ) {
+    console.log(
+      `[Arlington][PlanReview] extraction failed — not using Record Info attachments`,
+    );
+  }
+
+  let source = "plan_review_unknown";
+  if (portalUnused) {
+    source = "plan_review_portal_unused";
+  } else if (!hasNormalizedDocs) {
+    source = timedOut ? "plan_review_plan_set_timed_out" : "plan_review_plan_set_pending";
+  } else if (hadInternalIframeExtract) {
+    source = "plan_review_internal_iframe";
+  } else if (hadExternalDomExtract) {
+    source = "plan_review_external_page";
+  } else if (hadErmsApiDelivery) {
+    source = "plan_review_erms_api";
+  } else if (allowIframeIntegratedDocs) {
+    source = "plan_review_integrated_iframe";
+  } else {
+    source = "plan_review_plan_set_iframe_meta";
+  }
+
+
+
+  let used = false;
+
+  if (portalUnused && !hasNormalizedDocs) {
+    used = false;
+  } else if (portalUnused && hasNormalizedDocs) {
+    used = true;
+  } else {
+    used = arlPrev.used !== false;
+  }
+
+
+  /** @type {string|null} */
+  let message = arlPrev.message ?? null;
+
+  if (
+    !portalUnused &&
+    scopePlanSetOnly &&
+    !preserveAllIntegratedTabs &&
+    !hasNormalizedDocs
+  ) {
+    message = "Plan Set Documents were not extracted yet";
+  }
+
+  if (timedOut && !scopePlanSetOnly && !portalUnused && !planSetDocCount) {
+    message =
+      message ||
+      "Plan Review iframe checked, but document downloads were skipped or timed out.";
+  }
+
+  if (
+    portalUnused &&
+    hasNormalizedDocs &&
+    message &&
+    !scopePlanSetOnly
+  ) {
+    message = `${message} Attachments include plan-review-related documents; listed below.`;
+  }
+
+  const prevExtra = planReview.arlingtonPlanReview || {};
+  planReview.arlingtonPlanReview = {
+    ...prevExtra,
+    used,
+    message,
+    source,
+    tabs: normalized,
+    ...(timedOut ? { timeout: true } : {}),
+    tenantPlanReview: {
+      enabled: prOpts.enabled !== false,
+      downloadFromIntegratedIframe: !!prOpts.downloadFromIntegratedIframe,
+      mapDocumentsFromAttachments: !!effectiveMapAttachments,
+      planReviewIncludeSecondaryTabs:
+        prOpts.planReviewIncludeSecondaryTabs === true,
+      perTabExtractBudgetMs:
+        typeof prOpts.perTabExtractBudgetMs === "number"
+          ? prOpts.perTabExtractBudgetMs
+          : 45000,
+      extractBudgetMs:
+        typeof prOpts.extractBudgetMs === "number"
+          ? prOpts.extractBudgetMs
+          : 75000,
+      scopePlanSetDocumentsOnly:
+        preserveAllIntegratedTabs
+          ? false
+          : scopePlanSetOnly
+            ? true
+            : false,
+      ...(preserveAllIntegratedTabs
+        ? { planReviewEffectiveScope: "all_plan_review_tabs" }
+        : scopePlanSetOnly
+          ? { planReviewEffectiveScope: "plans_documents.plan_set_documents" }
+          : {}),
+    },
+  };
+
+  const rrDocsFin = normalized?.reviewResultsAndMarkups?.documents || [];
+  const adDocsFin = normalized?.approvedDocuments?.documents || [];
+  const piDocsFin = normalized?.projectInformation?.documents || [];
+  const rrSt = arlingtonSummarizeSecondaryTabDocs(rrDocsFin);
+  const adSt = arlingtonSummarizeSecondaryTabDocs(adDocsFin);
+  const piSt = arlingtonSummarizeSecondaryTabDocs(piDocsFin);
+  const piFieldsLen = normalized?.projectInformation?.fields?.length ?? 0;
+  if (preserveAllIntegratedTabs) {
+    console.log("[Arlington][PlanReview] final tabs=4");
+    console.log(
+      `[Arlington][PlanReview] Review Results & Mark-ups rows=${rrDocsFin.length} downloads=${rrSt.downloads} metadataOnly=${rrSt.metadataOnly} aliases=${rrSt.aliases}`,
+    );
+    console.log(
+      `[Arlington][PlanReview] Approved Documents rows=${adDocsFin.length} downloads=${adSt.downloads} metadataOnly=${adSt.metadataOnly} aliases=${adSt.aliases}`,
+    );
+    console.log(
+      `[Arlington][PlanReview] Project Information fields=${piFieldsLen} documents=${piDocsFin.length} downloads=${piSt.downloads} metadataOnly=${piSt.metadataOnly} aliases=${piSt.aliases}`,
+    );
+  }
+  delete planReview.arlingtonPlanReview.integratedTabs;
+  delete planReview.arlingtonPlanReview.integratedDocCount;
+  delete planReview.arlingtonPlanReview.integratedTabsFromExternalApi;
+  delete planReview.arlingtonPlanReview.integratedTabsFromExternalDom;
+  delete planReview.arlingtonPlanReview.integratedTabsFromInternalIframe;
+  delete planReview.arlingtonPlanReview.legacyExplorerTabs;
+
+  if (hasNormalizedDocs) {
+    planReview.downloadLinks = [];
+  }
+
+  return planReview;
+}
+
+/** Nested Plans document tabs inside Arlington ERMS integrated iframe. */
+const ARLINGTON_PLAN_NESTED_SECTIONS = [
+  ["Plan Set Documents", "planSetDocuments"],
+  ["Supporting Documents", "supportingDocuments"],
+  ["Comment Response Letters", "commentResponseLetters"],
+];
+
+async function clickArlingtonIntegratedNestedTab(page, labelText) {
+  const tgt = labelText.replace(/\s+/g, " ").trim().toLowerCase();
+  const frames = rankFramesForArlingtonPlanReview(page).filter((fr) => {
+    const u = (fr.url?.() || "").toLowerCase();
+    return (
+      /planreviewintegrated/.test(u) ||
+      /prd-ermsaccela-arlingtonva|prd-ermsaccela/i.test(u)
+    );
+  });
+  const tried = new Set();
+  for (const frame of frames) {
+    try {
+      const fid = `${frame.url()}`;
+      if (tried.has(fid)) continue;
+      tried.add(fid);
+      const anchors = await frame.$$("a, button, span, div[role]").catch(() => []);
+      for (const el of anchors) {
+        const raw = await el.textContent().catch(() => "");
+        const text = (raw || "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (!text || text !== tgt) continue;
+        if (!(await el.isVisible().catch(() => false))) continue;
+        await el.click({ force: true }).catch(() => {});
+        await waitForAccelaLoad(page).catch(() => {});
+        await page.waitForTimeout(700).catch(() => {});
+        return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+function arlingtonIntegratedHeuristicMeta(parts) {
+  const clean = (parts || []).map((x) => String(x || "").trim()).filter(Boolean);
+  const documentDate =
+    clean.find((c) =>
+      /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(c),
+    ) || "";
+  const nameGuess =
+    clean.find((c) => /\.[a-z0-9]{2,12}$/i.test(c.replace(/\s/g, ""))) ||
+    clean[0] ||
+    "";
+  let revision =
+    clean.find((c) => /^rev(ision)?[\s.:]*\w+/i.test(c))?.slice(0, 80) || "";
+  if (!revision && clean.length >= 6) revision = clean[clean.length - 2] || "";
+  let uploadStatus =
+    clean.find((c) => /pending|completed|approved|uploaded/i.test(c))?.slice(
+      0,
+      120,
+    ) || "";
+
+  let discipline =
+    clean.length > 4 ? clean[Math.min(1, clean.length - 3)] || "" : "";
+  let sheetType = clean.length > 5 ? clean[Math.min(2, clean.length - 2)] || "" : "";
+
+  let size = "";
+  const sizeCell = clean.find((c) => /\d+\s*(kb|mb|bytes?)/i.test(c));
+  if (sizeCell) size = sizeCell.slice(0, 40);
+
+  const description =
+    clean
+      .filter((_, i) => i > Math.min(5, clean.length - 5))
+      .join(" | ")
+      .slice(0, 400) ||
+    clean.join(" | ").slice(0, 400);
+
+  return {
+    name: nameGuess,
+    documentDate,
+    discipline,
+    sheetType,
+    description,
+    revision,
+    uploadStatus,
+    size,
+  };
+}
+
+const ARLINGTON_PR_ACTION_HINT =
+  /download|document|file|view|required|export|pdf|attachment|open|save/i;
+
+/** Plan Review Plan Set row: IMG download `input.docaction` (no href/onclick). */
+async function pickArlingtonPlanSetDownloadControl(rowHandle) {
+  const compound = [
+    'input.img-button.docaction[type="image"]',
+    'input.img-button.docaction[title="Download"]',
+    'input.img-button.docaction[alt="Download"]',
+    'input.docaction[src*="file_download"]',
+    'input[src*="file_download"]',
+    'input.docaction[name]',
+  ].join(", ");
+  const raw = await rowHandle.$$(compound).catch(() => []);
+
+  /** @type {{ score: number, docId: string, h: import('playwright').ElementHandle }}[] */
+  const scored = [];
+  for (const h of raw) {
+    try {
+      if (!(await h.isVisible().catch(() => false))) {
+        await h.dispose().catch(() => {});
+        continue;
+      }
+      const nameAttr = `${(await h.getAttribute("name")) || ""}`.trim();
+      const title = `${(await h.getAttribute("title")) || ""}`.trim();
+      const alt = `${(await h.getAttribute("alt")) || ""}`.trim();
+      const src = `${(await h.getAttribute("src")) || ""}`.trim();
+      const cls = `${(await h.getAttribute("class")) || ""}`;
+
+      let score = 0;
+      if (/^\d+$/.test(nameAttr)) score += 500;
+      if (/\bdocaction\b/i.test(cls) && /\bimg-button\b/i.test(cls)) score += 80;
+      if (/download/i.test(title) || /download/i.test(alt)) score += 200;
+      if (/file_download/i.test(src)) score += 150;
+      scored.push({
+        score: score || 1,
+        docId: nameAttr || "",
+        h,
+      });
+    } catch (_) {
+      await h.dispose().catch(() => {});
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const winner = scored[0] || null;
+  for (let i = 1; i < scored.length; i++) {
+    await scored[i].h.dispose().catch(() => {});
+  }
+  if (!winner) return null;
+  return {
+    docId: winner.docId || "(unknown)",
+    handle: winner.h,
+  };
+}
+
+/**
+ * @param {import('playwright').Download} download
+ * @returns {Promise<{ safeDownloadName: string, publicUrl: string, storagePath: string, downloadStatus: string }>}
+ */
+async function persistArlingtonPlaywrightDownload(
+  download,
+  rowMeta,
+  {
+    DOWNLOADS_DIR,
+    supabaseProjectId,
+    uploadFnDl,
+    sanitizeFnDl,
+    downloadedHashes,
+  },
+  rowKey,
+  downloadedRowKeys,
+) {
+  let filenameGuess = (
+    String(rowMeta.name || "plan_review_doc")
+      .split(/[\r\n|]+/)[0]
+      .trim() || `plan_review_${Date.now()}`
+  ).slice(0, 180);
+
+  let safeDownloadName =
+    `${filenameGuess}`.replace(/[\\/:*?"<>|]/g, "_");
+
+  let tryExt = /\.[a-z0-9]{2,6}$/i.test(safeDownloadName) ? "" : ".pdf";
+
+  safeDownloadName = (
+    download.suggestedFilename() || safeDownloadName + tryExt
+  ).replace(/[\\/:*?"<>|]/g, "_");
+
+  tryExt =
+    /\.[a-z0-9]{2,12}$/.test(safeDownloadName.toLowerCase()) ? "" : ".pdf";
+  safeDownloadName = /\.[a-z0-9]{2,12}$/.test(safeDownloadName.toLowerCase())
+    ? safeDownloadName
+    : `${safeDownloadName}${tryExt}`;
+
+  const filePath = path.join(DOWNLOADS_DIR, safeDownloadName);
+  await download.saveAs(filePath).catch(() => {});
+  let fileBuf = null;
+  try {
+    fileBuf = fs.readFileSync(filePath);
+  } catch (_) {
+    fileBuf = null;
+  }
+
+  let publicUrl = "";
+  let storagePath = "";
+  let downloadStatus = "no_capture";
+
+  if (!fileBuf || isDownloadBufferLikelyHtmlError(fileBuf)) {
+    downloadStatus = "failed_html_stub";
+    try {
+      fs.unlinkSync(filePath);
+    } catch (_) {
+      /**/
+    }
+    return {
+      safeDownloadName,
+      publicUrl,
+      storagePath,
+      downloadStatus,
+    };
+  }
+
+  publicUrl = await tryUploadAccelaFile(
+    filePath,
+    safeDownloadName,
+    supabaseProjectId,
+    uploadFnDl,
+    sanitizeFnDl,
+    downloadedHashes,
+  ).catch(() => "");
+
+  storagePath =
+    publicUrl && supabaseProjectId
+      ? `drawings/${supabaseProjectId}/${safeDownloadName}`
+      : "";
+  downloadStatus = publicUrl ? "uploaded" : "local_only";
+  if (publicUrl) downloadedRowKeys.add(rowKey);
+
+  return {
+    safeDownloadName,
+    publicUrl,
+    storagePath,
+    downloadStatus,
+  };
+}
+
+const ARLINGTON_ERMS_ORIGIN_FALLBACK =
+  "https://prd-ermsaccela-az.arlingtonva.us";
+
+function arlingtonResolveErmsAbsoluteUrl(originHint, candidate) {
+  const base = `${originHint || ""}`.trim().replace(/\/$/, "") ||
+    ARLINGTON_ERMS_ORIGIN_FALLBACK;
+  const c = `${candidate || ""}`.trim();
+  if (!c) return "";
+  if (/^https?:\/\//i.test(c)) return c.slice(0, 4000);
+  try {
+    const pathPart = c.startsWith("/") ? c : `/${c}`;
+    return new URL(pathPart, `${base}/`).href;
+  } catch (_) {
+    return "";
+  }
+}
+
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} label
+ * @returns {Promise<T>}
+ */
+function arlingtonPlanSetWithTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}_timeout`)), ms),
+    ),
+  ]);
+}
+
+function arlingtonPlanSetBufferLooksLikePdf(buf, contentType) {
+  if (!buf || !buf.length) return false;
+  if (isDownloadBufferLikelyHtmlError(buf)) return false;
+  const ct = `${contentType || ""}`.toLowerCase();
+  if (/pdf/i.test(ct)) {
+    return (
+      buf.length >= 4 &&
+      buf[0] === 0x25 &&
+      buf[1] === 0x50 &&
+      buf[2] === 0x44 &&
+      buf[3] === 0x46
+    );
+  }
+  if (/octet-stream/i.test(ct)) return true;
+  return false;
+}
+
+/**
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function arlingtonErmsSessionClosedMessage(err) {
+  const m = `${err && typeof err === "object" && "message" in err && err.message != null ? err.message : err || ""}`;
+  return /Request context disposed|Target page, context or browser has been closed|browser has been closed|context has been closed/i.test(
+    m,
+  );
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} downloadCtx
+ * @param {string} [documentId]
+ */
+function arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId) {
+  if (!downloadCtx || typeof downloadCtx !== "object") return;
+  const touch = downloadCtx.touchSessionKeepalive;
+  if (typeof touch === "function") {
+    touch(documentId);
+  }
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} downloadCtx
+ * @param {string} [documentId]
+ */
+function arlingtonPlanReviewDownloadBegin(downloadCtx, documentId) {
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId);
+  const session = downloadCtx && downloadCtx._arlingtonSession;
+  if (session && typeof session === "object") {
+    const s = /** @type {{ _activePlanReviewDownloads?: number }} */ (session);
+    s._activePlanReviewDownloads =
+      (Number(s._activePlanReviewDownloads) || 0) + 1;
+  }
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} downloadCtx
+ */
+function arlingtonPlanReviewDownloadEnd(downloadCtx) {
+  const session = downloadCtx && downloadCtx._arlingtonSession;
+  if (session && typeof session === "object") {
+    const s = /** @type {{ _activePlanReviewDownloads?: number }} */ (session);
+    s._activePlanReviewDownloads = Math.max(
+      0,
+      (Number(s._activePlanReviewDownloads) || 0) - 1,
+    );
+  }
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} downloadCtx
+ * @param {string} token
+ * @param {string} source
+ */
+function arlingtonPlanSetCacheErmsVerificationToken(downloadCtx, token, source) {
+  const tok = `${token || ""}`.trim();
+  if (!downloadCtx || typeof downloadCtx !== "object" || !tok) return;
+  downloadCtx.ermsVerificationToken = tok;
+  if (source) downloadCtx.ermsVerificationTokenSource = source;
+}
+
+/**
+ * Read ERMS anti-forgery token (frame, meta, HTML, cookies, cached).
+ * @param {import('playwright').Page | import('playwright').Frame | null | undefined} clickTarget
+ * @param {{ networkPage?: import('playwright').Page | null, downloadCtx?: Record<string, unknown> | null, documentId?: string }} [opts]
+ * @returns {Promise<string>}
+ */
+async function arlingtonPlanSetReadErmsVerificationToken(clickTarget, opts = {}) {
+  const networkPage = opts.networkPage || null;
+  const downloadCtx =
+    opts.downloadCtx && typeof opts.downloadCtx === "object"
+      ? opts.downloadCtx
+      : null;
+  const documentId = `${opts.documentId || ""}`.trim();
+  const docLog = documentId ? ` documentId=${documentId}` : "";
+
+  /** @type {string} */
+  let token = "";
+  /** @type {string} */
+  let source = "";
+
+  if (clickTarget && typeof clickTarget.evaluate === "function") {
+    try {
+      const frameResult = await clickTarget.evaluate(() => {
+        const exact = document.querySelector(
+          'input[name="__RequestVerificationToken"]',
+        );
+        if (exact && exact instanceof HTMLInputElement && exact.value) {
+          return { token: `${exact.value}`.trim(), source: "frame-input" };
+        }
+        for (const inp of document.querySelectorAll("input")) {
+          const n = inp.getAttribute("name") || "";
+          if (
+            n.includes("__RequestVerificationToken") &&
+            inp instanceof HTMLInputElement &&
+            inp.value
+          ) {
+            return {
+              token: `${inp.value}`.trim(),
+              source: "frame-input-name",
+            };
+          }
+        }
+        const meta = document.querySelector(
+          'meta[name="__RequestVerificationToken"], meta[name="RequestVerificationToken"]',
+        );
+        const metaVal = meta ? meta.getAttribute("content") : "";
+        if (metaVal) {
+          return { token: `${metaVal}`.trim(), source: "meta" };
+        }
+        const html = document.documentElement
+          ? document.documentElement.innerHTML
+          : "";
+        const m1 = html.match(
+          /name=["']__RequestVerificationToken["'][^>]*value=["']([^"']+)["']/i,
+        );
+        if (m1 && m1[1]) {
+          return { token: `${m1[1]}`.trim(), source: "html-regex" };
+        }
+        const m2 = html.match(
+          /value=["']([^"']+)["'][^>]*name=["']__RequestVerificationToken["']/i,
+        );
+        if (m2 && m2[1]) {
+          return { token: `${m2[1]}`.trim(), source: "html-regex" };
+        }
+        return { token: "", source: "" };
+      });
+      if (frameResult && frameResult.token) {
+        token = frameResult.token;
+        source = frameResult.source || "frame-input";
+      }
+    } catch (frameErr) {
+      if (arlingtonErmsSessionClosedMessage(frameErr)) throw frameErr;
+    }
+  }
+
+  if (!token && networkPage && typeof networkPage.context === "function") {
+    try {
+      const cookies = await networkPage.context().cookies();
+      for (const c of cookies) {
+        if (
+          (c.name || "").includes("__RequestVerificationToken") &&
+          c.value
+        ) {
+          token = `${c.value}`.trim();
+          source = "cookie";
+          break;
+        }
+      }
+    } catch (cookieErr) {
+      if (arlingtonErmsSessionClosedMessage(cookieErr)) throw cookieErr;
+    }
+  }
+
+  if (!token && downloadCtx && downloadCtx.ermsVerificationToken) {
+    token = `${downloadCtx.ermsVerificationToken}`.trim();
+    source = "cached";
+  }
+
+  if (token && source && source !== "cached") {
+    arlingtonPlanSetCacheErmsVerificationToken(downloadCtx, token, source);
+  }
+  if (token && source) {
+    console.log(
+      `[Arlington][PlanReview] verification token source=${source}${docLog}`,
+    );
+  }
+
+  return token;
+}
+
+/**
+ * @returns {{ publicUrl: string, storagePath: string, downloadStatus: string, failureReason: string }}
+ */
+function arlingtonPlanReviewSessionClosedOutcome() {
+  return {
+    publicUrl: "",
+    storagePath: "",
+    downloadStatus: "pending_session_closed",
+    failureReason: "session_closed_during_download",
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} doc
+ * @param {Record<string, unknown>} [downloadCtx]
+ */
+async function arlingtonPlanReviewMarkDocSessionClosed(doc, downloadCtx) {
+  doc.downloadStatus = "pending_session_closed";
+  doc.status = "pending";
+  doc.skipReason = "session_closed_during_download";
+  doc.retryCount = (Number(doc.retryCount) || 0) + 1;
+  if (downloadCtx && typeof downloadCtx === "object") {
+    downloadCtx.planReviewPartialPendingDownloads = true;
+    const saver = downloadCtx.savePlanReviewCheckpoint;
+    if (typeof saver === "function") {
+      await saver("sessionClosed", { reason: "session_closed_during_download" }).catch(
+        () => {},
+      );
+    }
+  }
+}
+
+function arlingtonPlanSetPdfIsSuspiciousPlaceholder(buf, docName) {
+  const n = buf ? buf.length : 0;
+  if (n > 0 && n <= 4884) {
+    console.log(
+      `[Arlington][PlanReview] Plan Set PDF rejected ${docName} reason=suspicious_small_or_duplicate bytes=${n}`,
+    );
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Poll PollDownloadDocument until PercentComplete reaches 100.
+ * @returns {Promise<{ URL?: string; url?: string; PercentComplete?: number } | null>}
+ */
+async function arlingtonPlanSetPollDownloadUntilComplete(
+  networkPage,
+  ermsOrigin,
+  streamId,
+  token,
+  downloadCtx = null,
+  documentId = "",
+) {
+  const origin = `${ermsOrigin || ARLINGTON_ERMS_ORIGIN_FALLBACK}`.replace(
+    /\/$/,
+    "",
+  );
+  const sid = `${streamId || ""}`.trim();
+  const tok = `${token || ""}`.trim();
+  if (!sid || !tok || !networkPage?.request) return null;
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId || sid);
+
+  const referer = `${origin}/PlanReviewIntegrated/plan/ViewDocuments`;
+  const pollUrl = `${origin}/PlanReviewIntegrated/Plan/PollDownloadDocument`;
+  const deadline = Date.now() + 30000;
+
+  while (Date.now() < deadline) {
+    const pollBody = new URLSearchParams();
+    pollBody.set("__RequestVerificationToken", tok);
+    pollBody.set("streamID", sid);
+
+    /** @type {import('playwright').APIResponse | null} */
+    let pollRes = null;
+    try {
+      pollRes = await arlingtonPlanSetWithTimeout(
+        networkPage.request.post(pollUrl, {
+          timeout: 30000,
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+            Referer: referer,
+          },
+          data: pollBody.toString(),
+        }),
+        35000,
+        "plan_set_poll_post",
+      );
+    } catch (pollErr) {
+      if (arlingtonErmsSessionClosedMessage(pollErr)) throw pollErr;
+      const errMsg =
+        pollErr && pollErr.message ? pollErr.message : String(pollErr);
+      console.log(
+        `[Arlington][PlanReview] Plan Set poll POST status=0 ct= error=${errMsg}`,
+      );
+      await networkPage.waitForTimeout(750).catch(() => {});
+      continue;
+    }
+
+    const status = pollRes.status();
+    const ct = `${pollRes.headers()["content-type"] || pollRes.headers()["Content-Type"] || ""}`;
+    let bodyText = "";
+    try {
+      bodyText = `${await arlingtonPlanSetWithTimeout(
+        pollRes.text(),
+        15000,
+        "plan_set_poll_body_read",
+      )}`;
+    } catch (bodyErr) {
+      bodyText = "";
+      console.log(
+        `[Arlington][PlanReview] Plan Set poll body preview= read_error=${bodyErr && bodyErr.message ? bodyErr.message : bodyErr}`,
+      );
+    }
+
+    console.log(
+      `[Arlington][PlanReview] Plan Set poll POST status=${status} ct=${ct}`,
+    );
+    console.log(
+      `[Arlington][PlanReview] Plan Set poll body preview=${bodyText.slice(0, 300)}`,
+    );
+
+    if (!pollRes.ok()) {
+      await networkPage.waitForTimeout(750).catch(() => {});
+      continue;
+    }
+
+    /** @type {{ URL?: string; url?: string; PercentComplete?: number; percentComplete?: number; ErrorMessage?: string }} */
+    let pollJson = {};
+    try {
+      pollJson = JSON.parse(bodyText || "{}");
+    } catch (_) {
+      await networkPage.waitForTimeout(750).catch(() => {});
+      continue;
+    }
+
+    const errMsg = `${pollJson.ErrorMessage || ""}`.trim();
+    if (errMsg) return null;
+
+    const pct = Number(
+      pollJson.PercentComplete ?? pollJson.percentComplete ?? 0,
+    );
+    const relUrl = `${pollJson.URL || pollJson.url || ""}`.trim();
+
+    if (pct >= 100 && relUrl) {
+      console.log(
+        `[Arlington][PlanReview] Plan Set poll complete url=${relUrl} percent=${pct}`,
+      );
+      return pollJson;
+    }
+
+    await networkPage.waitForTimeout(750).catch(() => {});
+  }
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId || sid);
+  return null;
+}
+
+/**
+ * GET DocumentStream exactly as poll URL (no streamId query).
+ * @returns {Promise<{ pdf: Buffer | null; streamTimedOut: boolean }>}
+ */
+async function arlingtonPlanSetFetchDocumentStreamAfterPoll(
+  networkPage,
+  ermsOrigin,
+  pollJson,
+  docName,
+  streamLogLabel = "Plan Set",
+  downloadCtx = null,
+  documentId = "",
+) {
+  const lb = `${streamLogLabel || "Plan Set"}`.trim() || "Plan Set";
+  console.log(
+    `[Arlington][PlanReview] ${lb} final stream fetch timeoutMs=${ERMS_DOCUMENT_STREAM_TIMEOUT_MS}`,
+  );
+  /** @returns {{ pdf: Buffer | null; streamTimedOut: boolean }} */
+  const fail = (timedOut = false) => ({ pdf: null, streamTimedOut: timedOut });
+  const origin = `${ermsOrigin || ARLINGTON_ERMS_ORIGIN_FALLBACK}`.replace(
+    /\/$/,
+    "",
+  );
+  if (!networkPage?.request || !pollJson) return fail(false);
+
+  if (!arlingtonPlanReviewCanStartDocumentStream(downloadCtx)) {
+    console.log(
+      `[Arlington][PlanReview] ${lb} final stream fetch skipped ${docName} reason=insufficient_remaining_budget`,
+    );
+    return fail(true);
+  }
+
+  const referer = `${origin}/PlanReviewIntegrated/plan/ViewDocuments`;
+  const relUrl =
+    `${pollJson.URL || pollJson.url || "/PlanReviewIntegrated/Plan/DocumentStream"}`.trim();
+  let streamUrl;
+  try {
+    const parsed = new URL(relUrl, `${origin}/`);
+    parsed.search = "";
+    parsed.hash = "";
+    streamUrl = parsed.toString();
+  } catch (_) {
+    return fail(false);
+  }
+
+  /** @type {import('playwright').APIResponse | null} */
+  let streamRes = null;
+  const streamDeadlineMs =
+    ERMS_DOCUMENT_STREAM_TIMEOUT_MS + Math.ceil(ERMS_DOCUMENT_STREAM_TIMEOUT_MS * 0.15) +
+    5000;
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId);
+  try {
+    streamRes = await arlingtonPlanSetWithTimeout(
+      networkPage.request.get(streamUrl, {
+        timeout: ERMS_DOCUMENT_STREAM_TIMEOUT_MS,
+        headers: { Referer: referer },
+      }),
+      streamDeadlineMs,
+      "plan_set_final_stream_fetch",
+    );
+  } catch (fetchErr) {
+    if (arlingtonErmsSessionClosedMessage(fetchErr)) throw fetchErr;
+    const errMsg =
+      fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr);
+    const timedOut = /timeout/i.test(errMsg);
+    console.log(
+      `[Arlington][PlanReview] ${lb} final stream fetch url=${streamUrl} status=0 ct= error=${errMsg}`,
+    );
+    return fail(timedOut);
+  }
+
+  const status = streamRes.status();
+  const ct = `${streamRes.headers()["content-type"] || streamRes.headers()["Content-Type"] || ""}`;
+  console.log(
+    `[Arlington][PlanReview] ${lb} final stream fetch url=${streamUrl} status=${status} ct=${ct}`,
+  );
+
+  if (status !== 200 || !streamRes.ok()) return fail(false);
+  if (!/pdf|octet-stream/i.test(ct.toLowerCase())) return fail(false);
+
+  /** @type {Buffer} */
+  let buf;
+  try {
+    buf = Buffer.from(
+      await arlingtonPlanSetWithTimeout(
+        streamRes.body(),
+        ERMS_DOCUMENT_STREAM_TIMEOUT_MS,
+        "plan_set_final_stream_body_read",
+      ),
+    );
+  } catch (bodyErr) {
+    const errMsg =
+      bodyErr && bodyErr.message ? bodyErr.message : String(bodyErr);
+    const timedOut = /timeout/i.test(errMsg);
+    console.log(
+      `[Arlington][PlanReview] ${lb} final stream bytes=0 error=${errMsg}`,
+    );
+    return fail(timedOut);
+  }
+
+  console.log(
+    `[Arlington][PlanReview] ${lb} final stream bytes=${buf.length}`,
+  );
+
+  if (!arlingtonPlanSetBufferLooksLikePdf(buf, ct)) return fail(false);
+  if (arlingtonPlanSetPdfIsSuspiciousPlaceholder(buf, docName)) return fail(false);
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId);
+  return { pdf: buf, streamTimedOut: false };
+}
+
+/**
+ * Invoke → Poll → DocumentStream (same Playwright cookies/session).
+ * @returns {Promise<{ pdf: Buffer | null; streamTimedOut: boolean }>}
+ */
+async function arlingtonPlanSetFetchPdfViaInvokePollStream(
+  networkPage,
+  clickTarget,
+  ermsOrigin,
+  streamId,
+  docName,
+  streamLogLabel = "Plan Set",
+  downloadCtx = null,
+  documentId = "",
+) {
+  const token = await arlingtonPlanSetReadErmsVerificationToken(clickTarget, {
+    networkPage,
+    downloadCtx,
+    documentId,
+  });
+  if (!token) {
+    console.log(
+      `[Arlington][PlanReview] ${streamLogLabel} poll skipped ${docName} reason=missing_verification_token`,
+    );
+    return { pdf: null, streamTimedOut: false };
+  }
+
+  const pollJson = await arlingtonPlanSetPollDownloadUntilComplete(
+    networkPage,
+    ermsOrigin,
+    streamId,
+    token,
+    downloadCtx,
+    documentId,
+  );
+  if (!pollJson) return { pdf: null, streamTimedOut: false };
+
+  return arlingtonPlanSetFetchDocumentStreamAfterPoll(
+    networkPage,
+    ermsOrigin,
+    pollJson,
+    docName,
+    streamLogLabel,
+    downloadCtx,
+    documentId,
+  );
+}
+
+/**
+ * Plan Set: POST InvokeDownloadDocument + follow-up file (Playwright may not emit "download").
+ * Click is dispatched inside ERMS frame (jQuery delegated handlers); network waits use parent page.
+ * @returns {Promise<{ publicUrl?: string; storagePath?: string; downloadStatus?: string; failureReason?: string }>}
+ */
+async function arlingtonPlanSetDownloadViaInvokeDownloadDocument(
+  networkPage,
+  clickTarget,
+  docIdForClick,
+  rowMeta,
+  downloadCtx,
+  rowKey,
+  prSeenRowKeys,
+  ermsOriginHint,
+  streamLogLabel = "Plan Set",
+) {
+  const ermsOrigin =
+    `${ermsOriginHint || ""}`.trim() || ARLINGTON_ERMS_ORIGIN_FALLBACK;
+  const docId = `${docIdForClick || ""}`.trim();
+  const docName =
+    String(rowMeta.name || "plan_review_doc")
+      .split(/[\r\n|]+/)[0]
+      .trim() || "plan_review_doc";
+
+  /** @type {string[]} */
+  const seen = [];
+  const onRequest = (req) => {
+    if (
+      /InvokeDownloadDocument|PollDownloadDocument|DocumentStream|DownloadDocument|document/i.test(
+        req.url(),
+      )
+    ) {
+      seen.push(`[REQ] ${req.method()} ${req.url()}`);
+    }
+  };
+  const onResponse = (res) => {
+    if (
+      /InvokeDownloadDocument|PollDownloadDocument|DocumentStream|DownloadDocument|document/i.test(
+        res.url(),
+      )
+    ) {
+      const ct = res.headers()["content-type"] || "";
+      seen.push(`[RES] ${res.status()} ${res.url()} ct=${ct}`);
+    }
+  };
+
+  networkPage.on("request", onRequest);
+  networkPage.on("response", onResponse);
+
+  const invokeMatches = (res) =>
+    /\/PlanReviewIntegrated\/Plan\/InvokeDownloadDocument/i.test(res.url()) &&
+    res.request().method() === "POST";
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, docId);
+
+  /** @type {import('playwright').Response | null} */
+  let invokeResp = null;
+  try {
+    const invokePromise = networkPage
+      .waitForResponse(invokeMatches, { timeout: 20000 })
+      .catch(() => null);
+
+    await clickTarget.evaluate((innerDocId) => {
+      const id = String(innerDocId || "");
+      /** @type {Element | null} */
+      let el = null;
+      if (/^\d+$/.test(id)) {
+        el =
+          document.querySelector(
+            `input.img-button.docaction[name="${id}"][title="Download"]`,
+          ) ||
+          document.querySelector(
+            `input.img-button.docaction[name="${id}"][alt="Download"]`,
+          ) ||
+          document.querySelector(`input.docaction[name="${id}"]`);
+      }
+      if (!el) {
+        const cand = document.querySelectorAll(
+          'input.img-button.docaction, input.docaction[name]',
+        );
+        for (const c of cand) {
+          if (
+            c instanceof HTMLElement &&
+            (c.getAttribute("name") || "") === id
+          ) {
+            el = c;
+            break;
+          }
+        }
+      }
+
+      if (!el) throw new Error(`download input not found for ${id}`);
+
+      el.scrollIntoView({ block: "center", inline: "center" });
+
+      for (const type of ["mousedown", "mouseup", "click"]) {
+        el.dispatchEvent(
+          new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          }),
+        );
+      }
+    }, docId);
+
+    invokeResp = await invokePromise;
+  } catch (e) {
+    console.log(
+      `[Arlington][PlanReview] Plan Set network seen=${seen.length ? seen.join(" | ") : "(none)"}`,
+    );
+    networkPage.off("request", onRequest);
+    networkPage.off("response", onResponse);
+    if (arlingtonErmsSessionClosedMessage(e)) {
+      return arlingtonPlanReviewSessionClosedOutcome();
+    }
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "invoke_click_failed",
+      failureReason: (e && e.message) || String(e),
+    };
+  }
+
+  console.log(
+    `[Arlington][PlanReview] Plan Set network seen=${seen.length ? seen.join(" | ") : "(none)"}`,
+  );
+  networkPage.off("request", onRequest);
+  networkPage.off("response", onResponse);
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, docId);
+
+  if (!invokeResp) {
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "invoke_timeout",
+      failureReason: "no_invoke_post_after_frame_click",
+    };
+  }
+
+  return arlingtonPlanSetProcessInvokeResponseToUpload(
+    networkPage,
+    clickTarget,
+    invokeResp,
+    rowMeta,
+    downloadCtx,
+    rowKey,
+    prSeenRowKeys,
+    ermsOriginHint,
+    docName,
+    streamLogLabel,
+    docId,
+  );
+}
+
+async function persistArlingtonPlanSetBufferPdf(
+  fileBuf,
+  rowMeta,
+  downloadCtx,
+  rowKey,
+  downloadedRowKeys,
+  uploadTabLabel = "Plan Set",
+  documentId = "",
+) {
+  const docName =
+    String(rowMeta.name || "plan_review_doc")
+      .split(/[\r\n|]+/)[0]
+      .trim() || "plan_review_doc";
+  const byteCount = fileBuf ? fileBuf.length : 0;
+  const tabLog = `${uploadTabLabel || "Plan Set"}`.trim() || "Plan Set";
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId);
+
+  console.log(
+    `[Arlington][PlanReview] ${tabLog} upload start ${docName} bytes=${byteCount}`,
+  );
+
+  if (!fileBuf || !byteCount) {
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=empty_buffer`,
+    );
+    return {
+      filename: "",
+      size: 0,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "empty_buffer",
+      failureReason: "empty_buffer",
+    };
+  }
+
+  if (isDownloadBufferLikelyHtmlError(fileBuf)) {
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=failed_html_stub`,
+    );
+    return {
+      filename: "",
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "failed_html_stub",
+      failureReason: "failed_html_stub",
+    };
+  }
+
+  if (
+    typeof byteCount === "number" &&
+    byteCount > getSupabaseStorageObjectMaxBytes()
+  ) {
+    console.log(
+      `[Arlington][PlanReview] oversized file skipped upload tab=${tabLog} name=${docName} bytes=${byteCount}`,
+    );
+    return {
+      filename: "",
+      size: byteCount,
+      fileSizeBytes: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "oversized_for_supabase",
+      failureReason: "supabase_object_size_limit",
+      skipReason: "supabase_object_size_limit",
+    };
+  }
+
+  const {
+    DOWNLOADS_DIR,
+    supabaseProjectId,
+    permitNumber: permitNumberCtx,
+    uploadFn: uploadFnDl,
+    sanitizeFn: sanitizeFnDl,
+    downloadedHashes,
+  } = downloadCtx || {};
+
+  if (!DOWNLOADS_DIR) {
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=missing_downloads_dir`,
+    );
+    return {
+      filename: "",
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "upload_failed",
+      failureReason: "missing_downloads_dir",
+    };
+  }
+
+  if (!supabaseProjectId) {
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=missing_projectId`,
+    );
+    return {
+      filename: "",
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "upload_failed",
+      failureReason: "missing_projectId",
+    };
+  }
+
+  if (typeof uploadFnDl !== "function") {
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=missing_supabase_client`,
+    );
+    return {
+      filename: "",
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "upload_failed",
+      failureReason: "missing_supabase_client",
+    };
+  }
+
+  const hashMap =
+    downloadedHashes instanceof Map ? downloadedHashes : new Map();
+
+  let filenameGuess = docName.slice(0, 180);
+  if (typeof sanitizeFnDl === "function") {
+    try {
+      const sanitized = `${sanitizeFnDl(filenameGuess) || ""}`.trim();
+      if (sanitized) filenameGuess = sanitized.slice(0, 180);
+    } catch (_) {
+      /**/
+    }
+  }
+
+  let safeDownloadName = `${filenameGuess.replace(/[\\/:*?"<>|]/g, "_")}.pdf`.replace(
+    /[\\/:*?"<>|]/g,
+    "_",
+  );
+  const contentHash8 = crypto
+    .createHash("md5")
+    .update(fileBuf)
+    .digest("hex")
+    .slice(0, 8);
+  const baseName = safeDownloadName.replace(/\.pdf$/i, "");
+  const versionedFileName = `${baseName}-${contentHash8}.pdf`;
+  const permitSlug = `${permitNumberCtx || "unknown"}`
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .slice(0, 80);
+  const storagePath = `drawings/${supabaseProjectId}/plan-review/${permitSlug}/${versionedFileName}`;
+
+  const filePath = path.join(DOWNLOADS_DIR, versionedFileName);
+  try {
+    fs.writeFileSync(filePath, fileBuf);
+  } catch (writeErr) {
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=write_failed`,
+    );
+    return {
+      filename: safeDownloadName,
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "write_failed",
+      failureReason:
+        writeErr && writeErr.message ? writeErr.message : "write_failed",
+    };
+  }
+
+  let publicUrl = "";
+  const planSetUploadOpts = { upsert: true, cacheControl: "0" };
+  try {
+    publicUrl = await uploadFnDl(filePath, storagePath, planSetUploadOpts);
+  } catch (uploadErr) {
+    const em = `${
+      uploadErr && uploadErr.message ? uploadErr.message : uploadErr
+    }`;
+    if (
+      /exceeded the maximum allowed size|maximum allowed size|too large|object too large|\b413\b|payload too large/i.test(
+        em,
+      )
+    ) {
+      console.log(
+        `[Arlington][PlanReview] oversized file skipped upload tab=${tabLog} name=${docName} bytes=${byteCount}`,
+      );
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_) {
+        /**/
+      }
+      return {
+        filename: versionedFileName,
+        size: byteCount,
+        fileSizeBytes: byteCount,
+        publicUrl: "",
+        storagePath: "",
+        downloadStatus: "oversized_for_supabase",
+        failureReason: "supabase_object_size_limit",
+        skipReason: "supabase_object_size_limit",
+      };
+    }
+
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=upload_error error=${em}`,
+    );
+    try {
+      fs.unlinkSync(filePath);
+    } catch (_) {
+      /**/
+    }
+    return {
+      filename: versionedFileName,
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "upload_failed",
+      failureReason: uploadErr && uploadErr.message ? uploadErr.message : "upload_error",
+    };
+  }
+
+  if (!publicUrl) {
+    let failReason = "upload_error";
+    if (byteCount < 1024) failReason = "file_too_small_for_upload";
+    console.log(
+      `[Arlington][PlanReview] ${tabLog} upload failed ${docName} reason=${failReason}`,
+    );
+    return {
+      filename: versionedFileName,
+      size: byteCount,
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "upload_failed",
+      failureReason: failReason,
+    };
+  }
+
+  const cacheBust = Date.now();
+  const publicUrlWithVersion = `${publicUrl}?v=${cacheBust}`;
+  downloadedRowKeys.add(rowKey);
+  hashMap.set(
+    crypto.createHash("md5").update(fileBuf).digest("hex"),
+    { fileName: versionedFileName, viewUrl: publicUrlWithVersion },
+  );
+
+  console.log(
+    `[Arlington][PlanReview] ${tabLog} upload overwrite=true cacheBust=${cacheBust}`,
+  );
+  console.log(
+    `[Arlington][PlanReview] ${tabLog} upload OK ${docName} storagePath=${storagePath}`,
+  );
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, documentId);
+
+  return {
+    filename: versionedFileName,
+    size: byteCount,
+    publicUrl: publicUrlWithVersion,
+    storagePath,
+    downloadStatus: "uploaded",
+  };
+}
+
+async function tryArlingtonIntegratedRowDownload(
+  page,
+  rowHandle,
+  rowMeta,
+  sourceTabCamel,
+  sourceSectionCamel,
+  attachmentDedupeKeys,
+  downloadedRowKeys,
+  downloadedHashes,
+  downloadCtx,
+) {
+  if (!downloadCtx) return null;
+  const {
+    DOWNLOADS_DIR,
+    supabaseProjectId,
+    uploadFn: uploadFnDl,
+    sanitizeFn: sanitizeFnDl,
+  } = downloadCtx;
+  const rowKey = arlingtonIntegratedRowDedupeKey(
+    rowMeta.name,
+    rowMeta.documentDate || "",
+    rowMeta.size || "",
+    rowMeta.revision || "",
+  );
+    if (attachmentDedupeKeys.has(rowKey) || downloadedRowKeys.has(rowKey)) {
+      return null;
+    }
+  const candidates = await rowHandle.$$(
+    'a, button, input[type="button"], input[type="submit"], img[onclick]',
+  ).catch(() => []);
+  /** @type {import('playwright').ElementHandle} */
+  let best = null;
+  for (const c of candidates) {
+    try {
+      if (!(await c.isVisible().catch(() => false))) continue;
+      const href = (
+        await c.evaluate((node) =>
+          node.getAttribute("href") || node.getAttribute("onclick") || "",
+        ).catch(() => "")
+      ).slice(0, 400);
+      const title = (
+        await c.evaluate((node) =>
+          node.getAttribute("title") ||
+          node.getAttribute("alt") ||
+          node.tagName ||
+          "",
+        ).catch(() => "")
+      ).slice(0, 200);
+      const text = (
+        ((await c.textContent().catch(() => "")) || "").trim()).slice(
+        0,
+        140,
+      );
+      const hay = `${href} ${title} ${text}`;
+      const looksAction = ARLINGTON_PR_ACTION_HINT.test(hay) || /\.pdf\b/i.test(hay);
+      if (!looksAction) continue;
+      best = c;
+      break;
+    } catch (_) {}
+  }
+  if (!best && candidates.length) {
+    /** last resort click last clickable in Actions-ish column */
+    for (let j = candidates.length - 1; j >= 0; j--) {
+      const cand = candidates[j];
+      try {
+        if (await cand.isVisible().catch(() => false)) {
+          best = cand;
+          break;
+        }
+      } catch (_) {}
+    }
+  }
+  if (!best) return null;
+
+  /** @type {import('playwright').Download|null} */
+  let download = null;
+  try {
+    const downloadPromise = page
+      .waitForEvent("download", { timeout: 15000 })
+      .catch(() => null);
+    await best.click({ force: true }).catch(() => {});
+    download = await downloadPromise;
+  } catch (_) {
+    download = null;
+  }
+
+  let downloadStatus = "no_capture";
+  let publicUrl = "";
+  let storagePath = "";
+
+  let filenameGuess = (
+    String(rowMeta.name || "plan_review_doc")
+      .split(/[\r\n|]+/)[0]
+      .trim() || `plan_review_${Date.now()}`
+  ).slice(0, 180);
+
+  let safeDownloadName =
+    `${filenameGuess}`.replace(/[\\/:*?"<>|]/g, "_");
+
+  let tryExt = /\.[a-z0-9]{2,6}$/i.test(safeDownloadName) ? "" : ".pdf";
+
+  if (download) {
+    safeDownloadName = (
+      download.suggestedFilename() || safeDownloadName + tryExt
+    ).replace(/[\\/:*?"<>|]/g, "_");
+
+    tryExt =
+      /\.[a-z0-9]{2,12}$/.test(safeDownloadName.toLowerCase()) ? "" : ".pdf";
+    safeDownloadName = /\.[a-z0-9]{2,12}$/.test(safeDownloadName.toLowerCase())
+      ? safeDownloadName
+      : `${safeDownloadName}${tryExt}`;
+
+    const filePath = path.join(DOWNLOADS_DIR, safeDownloadName);
+    await download.saveAs(filePath).catch(() => {});
+    let fileBuf = null;
+    try {
+      fileBuf = fs.readFileSync(filePath);
+    } catch (_) {
+      fileBuf = null;
+    }
+    if (!fileBuf || isDownloadBufferLikelyHtmlError(fileBuf)) {
+      downloadStatus = "failed_html_stub";
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_) {}
+    } else {
+      publicUrl = await tryUploadAccelaFile(
+        filePath,
+        safeDownloadName,
+        supabaseProjectId,
+        uploadFnDl,
+        sanitizeFnDl,
+        downloadedHashes,
+      ).catch(() => "");
+      storagePath =
+        publicUrl && supabaseProjectId
+          ? `drawings/${supabaseProjectId}/${safeDownloadName}`
+          : "";
+      downloadStatus = publicUrl ? "uploaded" : "local_only";
+      downloadedRowKeys.add(rowKey);
+    }
+  }
+  return {
+    name: rowMeta.name,
+    filename: safeDownloadName.replace(/_/g, " ") || safeDownloadName,
+    documentDate: rowMeta.documentDate || "",
+    discipline: rowMeta.discipline || "",
+    sheetType: rowMeta.sheetType || "",
+    description: rowMeta.description || "",
+    revision: rowMeta.revision || "",
+    uploadStatus: rowMeta.uploadStatus || "",
+    size: rowMeta.size || "",
+    status: downloadStatus,
+    sourceTab: sourceTabCamel,
+    sourceSection: sourceSectionCamel,
+    storagePath,
+    publicUrl,
+    downloadUrl: publicUrl,
+    downloadStatus,
+  };
+}
+
+/**
+ * @param {import('playwright').Page | import('playwright').Frame} domTarget
+ * @returns {Promise<import('playwright').ElementHandle | null>}
+ */
+async function findArlingtonPlanSetRowHandleByDocumentId(domTarget, documentId) {
+  const id = `${documentId || ""}`.trim();
+  if (!id || !/^\d+$/.test(id)) return null;
+  const jsHandle = await domTarget
+    .evaluateHandle((docId) => {
+      const div = document.querySelector("#divDocuments");
+      if (!div) return null;
+      const input =
+        div.querySelector(`input.img-button.docaction[name="${docId}"]`) ||
+        div.querySelector(`input.docaction[name="${docId}"]`);
+      if (!input) return null;
+      return input.closest("tr");
+    }, id)
+    .catch(() => null);
+  if (!jsHandle) return null;
+  const el = jsHandle.asElement();
+  if (!el) {
+    await jsHandle.dispose().catch(() => {});
+    return null;
+  }
+  return el;
+}
+
+/**
+ * @param {import('playwright').Page | import('playwright').Frame} domTarget
+ * @returns {Promise<import('playwright').ElementHandle | null>}
+ */
+async function findArlingtonPlanSetRowHandleByName(domTarget, docName) {
+  const needle = `${docName || ""}`.trim();
+  if (!needle) return null;
+  const jsHandle = await domTarget
+    .evaluateHandle((nameFull) => {
+      const div = document.querySelector("#divDocuments");
+      if (!div) return null;
+      const parts = nameFull.split(/[\s|]+/).filter((p) => p.length >= 2);
+      const needles = [nameFull, ...parts].filter(
+        (v, i, a) => a.indexOf(v) === i,
+      );
+      const rows = [...div.querySelectorAll("tr")].filter((tr) =>
+        tr.querySelector("td"),
+      );
+      for (const tr of rows) {
+        const t = (tr.innerText || "").replace(/\s+/g, " ");
+        const low = t.toLowerCase();
+        if (
+          /supporting documents|comment response letters|name\s+discipline\s+sheet|document type|upload status/i.test(
+            low,
+          )
+        )
+          continue;
+        for (const n of needles) {
+          if (n.length >= 2 && t.includes(n)) return tr;
+        }
+      }
+      return null;
+    }, needle)
+    .catch(() => null);
+  if (!jsHandle) return null;
+  const el = jsHandle.asElement();
+  if (!el) {
+    await jsHandle.dispose().catch(() => {});
+    return null;
+  }
+  return el;
+}
+
+/**
+ * Visible ERMS tabpanel only — not scoped to #divDocuments.
+ * @param {import('playwright').Page | import('playwright').Frame} domTarget
+ */
+async function findArlingtonActivePanelRowHandleByName(domTarget, docName) {
+  const needle = `${docName || ""}`.trim();
+  if (!needle) return null;
+  const jsHandle = await domTarget
+    .evaluateHandle((nameFull) => {
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      const panels = [
+        ...document.querySelectorAll(
+          '.ui-tabs-panel, [role="tabpanel"], .tab-content',
+        ),
+      ];
+      let root = null;
+      for (const p of panels) {
+        try {
+          const st = getComputedStyle(p);
+          const r = p.getBoundingClientRect();
+          if (
+            st.display !== "none" &&
+            st.visibility !== "hidden" &&
+            r.height > 10 &&
+            r.width > 20
+          ) {
+            root = p;
+            break;
+          }
+        } catch (_) {
+          /**/
+        }
+      }
+      if (!root) root = document.body;
+      const parts = nameFull.split(/[\s|]+/).filter((p) => p.length >= 2);
+      const needles = [nameFull, ...parts].filter(
+        (v, i, a) => a.indexOf(v) === i,
+      );
+      const rows = [...root.querySelectorAll("tr")].filter((tr) =>
+        tr.querySelector("td"),
+      );
+      for (const tr of rows) {
+        const t = norm(tr.innerText);
+        if (
+          /supporting documents|comment response letters|name\s+discipline\s+sheet|document type|upload status/i.test(
+            t,
+          )
+        )
+          continue;
+        for (const n of needles) {
+          if (n.length >= 2 && t.includes(n)) return tr;
+        }
+      }
+      return null;
+    }, needle)
+    .catch(() => null);
+  if (!jsHandle) return null;
+  const el = jsHandle.asElement();
+  if (!el) {
+    await jsHandle.dispose().catch(() => {});
+    return null;
+  }
+  return el;
+}
+
+/**
+ * @param {import('playwright').Page | import('playwright').Frame} domTarget
+ * @returns {Promise<import('playwright').ElementHandle | null>}
+ */
+async function findArlingtonActivePanelRowHandleByDocumentId(
+  domTarget,
+  documentId,
+) {
+  const id = `${documentId || ""}`.trim();
+  if (!id || !/^\d+$/.test(id)) return null;
+  const jsHandle = await domTarget
+    .evaluateHandle((docId) => {
+      const panels = [
+        ...document.querySelectorAll(
+          '.ui-tabs-panel, [role="tabpanel"], .tab-content',
+        ),
+      ];
+      let root = null;
+      for (const p of panels) {
+        try {
+          const st = getComputedStyle(p);
+          const r = p.getBoundingClientRect();
+          if (
+            st.display !== "none" &&
+            st.visibility !== "hidden" &&
+            r.height > 10 &&
+            r.width > 20
+          ) {
+            root = p;
+            break;
+          }
+        } catch (_) {
+          /**/
+        }
+      }
+      if (!root) root = document.body;
+      const input =
+        root.querySelector(`input.img-button.docaction[name="${docId}"]`) ||
+        root.querySelector(`input.docaction[name="${docId}"]`);
+      if (!input) return null;
+      return input.closest("tr") || input.closest("div") || input;
+    }, id)
+    .catch(() => null);
+  if (!jsHandle) return null;
+  const el = jsHandle.asElement();
+  if (!el) {
+    await jsHandle.dispose().catch(() => {});
+    return null;
+  }
+  return el;
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {{ continueRun?: boolean; logPrefix?: string }} [opts]
+ */
+function arlingtonPlanReviewInitDownloadManager(dc, opts = {}) {
+  if (!dc || typeof dc !== "object") return;
+  const continueRun = opts.continueRun === true;
+  const logPrefix = `${opts.logPrefix || "[Arlington][PlanReview]"}`.replace(
+    /\]$/,
+    "",
+  );
+  dc.planReviewDownloadsAttemptedThisRun = 0;
+  dc.planReviewDownloadsSucceededThisRun = 0;
+  dc.planReviewPlanSetDownloadsSucceededThisRun = 0;
+  dc.planReviewSecondaryDownloadsSucceededThisRun = 0;
+  dc.planReviewStreamTimeoutsThisRun = 0;
+  dc.planReviewHardFailuresThisRun = 0;
+  dc.planReviewSkippedAlreadyDownloadedThisRun = 0;
+  dc.planReviewStoppedReason = "";
+  dc.planReviewAttemptedDocIdsThisRun =
+    dc.planReviewAttemptedDocIdsThisRun instanceof Set
+      ? dc.planReviewAttemptedDocIdsThisRun
+      : new Set();
+  dc.planReviewLimits = continueRun
+    ? {
+        maxTotal: ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_TOTAL_DOWNLOADS_PER_RUN,
+        maxPlanSet: ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_PLAN_SET_DOWNLOADS_PER_RUN,
+        maxSecondary:
+          ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_SECONDARY_DOWNLOADS_PER_RUN,
+        maxStreamTimeouts:
+          ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_STREAM_TIMEOUTS_PER_RUN,
+        maxHardFailures:
+          ARLINGTON_PLAN_REVIEW_CONTINUE_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN,
+        minRemainingBudgetMs:
+          ARLINGTON_PLAN_REVIEW_CONTINUE_MIN_REMAINING_BUDGET_MS,
+      }
+    : {
+        maxTotal: ARLINGTON_PLAN_REVIEW_MAX_TOTAL_DOWNLOADS_PER_RUN,
+        maxPlanSet: ARLINGTON_PLAN_REVIEW_MAX_PLAN_SET_DOWNLOADS_PER_RUN,
+        maxSecondary: ARLINGTON_PLAN_REVIEW_MAX_SECONDARY_DOWNLOADS_PER_RUN,
+        maxStreamTimeouts: ARLINGTON_PLAN_REVIEW_MAX_STREAM_TIMEOUTS_PER_RUN,
+        maxHardFailures: ARLINGTON_PLAN_REVIEW_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN,
+        minRemainingBudgetMs: ARLINGTON_PLAN_REVIEW_MIN_REMAINING_BUDGET_MS,
+      };
+  const lim = dc.planReviewLimits;
+  console.log(
+    `${logPrefix}] batch limits total=${lim.maxTotal} planSet=${lim.maxPlanSet} secondary=${lim.maxSecondary} streamTimeouts=${lim.maxStreamTimeouts}`,
+  );
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @returns {number}
+ */
+/**
+ * Selective Plan Review scrape (approved/review only) reuses a fresh wall clock for downloads.
+ * The global Accela scrape deadline is often already exhausted after metadata extract.
+ * @param {Record<string, unknown> | null | undefined} sharedGridCtx
+ * @param {Record<string, unknown> | null | undefined} downloadCtx
+ * @param {string} scopeLabel
+ */
+function arlingtonPlanReviewRearmSelectiveDownloadBudget(
+  sharedGridCtx,
+  downloadCtx,
+  scopeLabel,
+) {
+  if (!sharedGridCtx || typeof sharedGridCtx !== "object") return;
+  const wallMs = ARLINGTON_PLAN_REVIEW_CONTINUE_WALL_MS;
+  const deadline = Date.now() + wallMs;
+  sharedGridCtx.scrapeDeadlineMs = deadline;
+  sharedGridCtx.planReviewDownloadsAbortedDeadline = false;
+  sharedGridCtx.planReviewStoppedReason = "";
+  if (downloadCtx && typeof downloadCtx === "object") {
+    downloadCtx.scrapeDeadlineMs = deadline;
+  }
+  console.log(
+    `[Arlington][PlanReview] selective scope=${scopeLabel} rearmed download budget wallMs=${wallMs}`,
+  );
+}
+
+function arlingtonPlanReviewRemainingBudgetMs(dc) {
+  if (!dc || typeof dc !== "object") return 0;
+  const deadline = Number(dc.scrapeDeadlineMs) || 0;
+  const minMs =
+    dc.planReviewLimits &&
+    typeof dc.planReviewLimits === "object" &&
+    Number(dc.planReviewLimits.minRemainingBudgetMs) > 0
+      ? Number(dc.planReviewLimits.minRemainingBudgetMs)
+      : ARLINGTON_PLAN_REVIEW_MIN_REMAINING_BUDGET_MS;
+  if (!(deadline > 0)) return minMs;
+  return Math.max(0, deadline - Date.now());
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @returns {boolean}
+ */
+function arlingtonPlanReviewCanStartDocumentStream(dc) {
+  const remaining = arlingtonPlanReviewRemainingBudgetMs(dc);
+  const minMs =
+    dc &&
+    dc.planReviewLimits &&
+    typeof dc.planReviewLimits === "object" &&
+    Number(dc.planReviewLimits.minRemainingBudgetMs) > 0
+      ? Number(dc.planReviewLimits.minRemainingBudgetMs)
+      : ARLINGTON_PLAN_REVIEW_MIN_REMAINING_BUDGET_MS;
+  return remaining >= minMs;
+}
+
+/**
+ * @param {"planSet"|"reviewResultsAndMarkups"|"approvedDocuments"|"secondary"} source
+ * @returns {boolean}
+ */
+function arlingtonPlanReviewSourceIsPlanSet(source) {
+  return source === "planSet";
+}
+
+/**
+ * @param {"planSet"|"reviewResultsAndMarkups"|"approvedDocuments"|"secondary"} source
+ * @returns {boolean}
+ */
+function arlingtonPlanReviewSourceIsSecondary(source) {
+  return (
+    source === "reviewResultsAndMarkups" ||
+    source === "approvedDocuments" ||
+    source === "secondary"
+  );
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} dc
+ */
+function arlingtonPlanReviewCountQueueTotals(integratedTabs, dc) {
+  const ps =
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  const rr = integratedTabs?.reviewResultsAndMarkups?.documents;
+  const ad = integratedTabs?.approvedDocuments?.documents;
+  const planSetTotal = Array.isArray(ps) ? ps.length : 0;
+  const reviewResultsTotal = Array.isArray(rr) ? rr.length : 0;
+  const approvedTotal = Array.isArray(ad) ? ad.length : 0;
+  let alreadyDownloaded = 0;
+  let pending = 0;
+  /** @param {unknown[]} docs */
+  const walk = (docs) => {
+    if (!Array.isArray(docs)) return;
+    for (const doc of docs) {
+      if (arlingtonErmsSinkDocLooksUploadComplete(doc)) alreadyDownloaded++;
+      else pending++;
+    }
+  };
+  walk(Array.isArray(ps) ? ps : []);
+  walk(Array.isArray(rr) ? rr : []);
+  walk(Array.isArray(ad) ? ad : []);
+  if (dc && typeof dc === "object") {
+    dc.planReviewQueueTotals = {
+      planSetTotal,
+      reviewResultsTotal,
+      approvedTotal,
+      alreadyDownloaded,
+      pendingTotal: pending,
+    };
+  }
+  return { planSetTotal, reviewResultsTotal, approvedTotal, alreadyDownloaded, pending };
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} dc
+ */
+function arlingtonPlanReviewLogDownloadQueueStart(
+  integratedTabs,
+  dc,
+  logPrefix = "[Arlington][PlanReview]",
+) {
+  const t = arlingtonPlanReviewCountQueueTotals(integratedTabs, dc);
+  console.log(
+    `${logPrefix} queue totals planSet=${t.planSetTotal} reviewResults=${t.reviewResultsTotal} approved=${t.approvedTotal} alreadyDownloaded=${t.alreadyDownloaded} pending=${t.pending}`,
+  );
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ * @returns {Record<string, number>}
+ */
+function arlingtonPlanReviewPendingByReason(integratedTabs, scopeRaw) {
+  /** @type {Record<string, number>} */
+  const by = {};
+  const buckets = scopeRaw
+    ? arlingtonPlanReviewScopedDocBucketLists(integratedTabs, scopeRaw)
+    : [
+        integratedTabs?.plansAndDocuments?.sections?.planSetDocuments
+          ?.documents,
+        integratedTabs?.reviewResultsAndMarkups?.documents,
+        integratedTabs?.approvedDocuments?.documents,
+      ].filter((x) => Array.isArray(x) && x.length);
+  for (const docs of buckets) {
+    if (!Array.isArray(docs)) continue;
+    for (const doc of docs) {
+      if (!arlingtonPlanReviewDocNeedsDownloadAttempt(doc)) continue;
+      const d =
+        doc && typeof doc === "object"
+          ? /** @type {Record<string, unknown>} */ (doc)
+          : null;
+      if (!d) continue;
+      const key =
+        `${d.downloadStatus || d.skipReason || "pending_not_attempted"}`.trim() ||
+        "pending_not_attempted";
+      by[key] = (by[key] || 0) + 1;
+    }
+  }
+  return by;
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @returns {string}
+ */
+function arlingtonPlanReviewDocHasTabOrTokenPending(doc) {
+  if (!doc || typeof doc !== "object") return false;
+  const ds = `${/** @type {Record<string, unknown>} */ (doc).downloadStatus || ""}`.trim();
+  return ds === "pending_tab_not_resolved" || ds === "pending_token_missing";
+}
+
+function arlingtonPlanReviewNextRecommendedScope(integratedTabs, dc) {
+  const rr = integratedTabs?.reviewResultsAndMarkups?.documents;
+  const ad = integratedTabs?.approvedDocuments?.documents;
+  const ps =
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  const rrList = Array.isArray(rr) ? rr : [];
+  const adList = Array.isArray(ad) ? ad : [];
+  const psList = Array.isArray(ps) ? ps : [];
+  const rrTabToken = rrList.filter(
+    (d) =>
+      !arlingtonErmsSinkDocLooksUploadComplete(d) &&
+      arlingtonPlanReviewDocHasTabOrTokenPending(d),
+  ).length;
+  const adTabToken = adList.filter(
+    (d) =>
+      !arlingtonErmsSinkDocLooksUploadComplete(d) &&
+      arlingtonPlanReviewDocHasTabOrTokenPending(d),
+  ).length;
+  const rrPending = rrList.filter(
+    (d) => !arlingtonErmsSinkDocLooksUploadComplete(d),
+  ).length;
+  const adPending = adList.filter(
+    (d) => !arlingtonErmsSinkDocLooksUploadComplete(d),
+  ).length;
+  const psPending = psList.filter(
+    (d) => !arlingtonErmsSinkDocLooksUploadComplete(d),
+  ).length;
+  if (rrTabToken > 0 || adTabToken > 0) return "secondary";
+  if (rrPending > 0) return "reviewResults";
+  if (adPending > 0) return "approvedDocuments";
+  if (psPending > 0) return "planSet";
+  if (
+    dc &&
+    (dc.planReviewPartialPendingDownloads === true ||
+      dc.planReviewDownloadsAbortedDeadline === true)
+  ) {
+    return "allPending";
+  }
+  return "complete";
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {string} reason
+ */
+function arlingtonPlanReviewMarkCheckpointSaved(dc) {
+  if (!dc || typeof dc !== "object") return;
+  dc.planReviewCheckpointSaved = true;
+  const session = dc._arlingtonSession;
+  if (session && typeof session === "object") {
+    /** @type {Record<string, unknown>} */ (session).arlingtonPlanReviewCheckpointSaved =
+      true;
+  }
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {string} reason
+ * @param {Record<string, unknown>} [extra]
+ * @returns {Promise<void>}
+ */
+async function arlingtonPlanReviewStopDownloads(dc, reason, extra = {}) {
+  if (!dc || typeof dc !== "object") return;
+  if (`${dc.planReviewStoppedReason || ""}`.trim()) return;
+  dc.planReviewStoppedReason = reason;
+  dc.planReviewDownloadsAbortedDeadline = true;
+  dc.planReviewPartialPendingDownloads = true;
+  const integ = dc.planReviewIntegratedTabs;
+  const pending =
+    integ && typeof integ === "object"
+      ? arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(integ)
+      : Number(extra.pending) || 0;
+  const downloadedThisRun = Number(dc.planReviewDownloadsSucceededThisRun) || 0;
+  console.log(
+    `[Arlington][PlanReview] stopping downloads reason=${reason} downloadedThisRun=${downloadedThisRun} pending=${pending}`,
+  );
+  const saver = dc.savePlanReviewCheckpoint;
+  if (typeof saver === "function") {
+    await saver(`stop_${reason}`, {
+      pending,
+      downloaded: downloadedThisRun,
+      ...extra,
+    }).catch(() => {});
+    arlingtonPlanReviewMarkCheckpointSaved(dc);
+  }
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {"planSet"|"reviewResultsAndMarkups"|"approvedDocuments"|"secondary"} source
+ * @returns {Promise<{ stop: boolean; reason: string }>}
+ */
+async function arlingtonPlanReviewShouldStopBeforeDoc(dc, source) {
+  if (!dc || typeof dc !== "object") return { stop: false, reason: "" };
+  if (dc.planReviewDownloadsAbortedDeadline === true) {
+    return {
+      stop: true,
+      reason: `${dc.planReviewStoppedReason || "near_global_deadline"}`.trim(),
+    };
+  }
+  const lim =
+    dc.planReviewLimits && typeof dc.planReviewLimits === "object"
+      ? dc.planReviewLimits
+      : {};
+  const maxTotal = Number(lim.maxTotal) || ARLINGTON_PLAN_REVIEW_MAX_TOTAL_DOWNLOADS_PER_RUN;
+  const maxPlanSet =
+    Number(lim.maxPlanSet) || ARLINGTON_PLAN_REVIEW_MAX_PLAN_SET_DOWNLOADS_PER_RUN;
+  const maxSecondary =
+    Number(lim.maxSecondary) || ARLINGTON_PLAN_REVIEW_MAX_SECONDARY_DOWNLOADS_PER_RUN;
+  const maxStreamT =
+    Number(lim.maxStreamTimeouts) || ARLINGTON_PLAN_REVIEW_MAX_STREAM_TIMEOUTS_PER_RUN;
+  const maxHardF =
+    Number(lim.maxHardFailures) || ARLINGTON_PLAN_REVIEW_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN;
+
+  const succeeded = Number(dc.planReviewDownloadsSucceededThisRun) || 0;
+  if (succeeded >= maxTotal) {
+    await arlingtonPlanReviewStopDownloads(dc, "batch_limit_reached");
+    return { stop: true, reason: "batch_limit_reached" };
+  }
+  if (arlingtonPlanReviewSourceIsPlanSet(source)) {
+    const psOk =
+      Number(dc.planReviewPlanSetDownloadsSucceededThisRun) || 0;
+    if (psOk >= maxPlanSet) {
+      await arlingtonPlanReviewStopDownloads(dc, "plan_set_batch_limit_reached");
+      return { stop: true, reason: "plan_set_batch_limit_reached" };
+    }
+  }
+  if (arlingtonPlanReviewSourceIsSecondary(source)) {
+    const secOk =
+      Number(dc.planReviewSecondaryDownloadsSucceededThisRun) || 0;
+    if (secOk >= maxSecondary) {
+      await arlingtonPlanReviewStopDownloads(
+        dc,
+        "secondary_batch_limit_reached",
+      );
+      return { stop: true, reason: "secondary_batch_limit_reached" };
+    }
+  }
+  const streamT = Number(dc.planReviewStreamTimeoutsThisRun) || 0;
+  if (streamT >= maxStreamT) {
+    await arlingtonPlanReviewStopDownloads(dc, "stream_timeout_limit_reached");
+    return { stop: true, reason: "stream_timeout_limit_reached" };
+  }
+  const hardF = Number(dc.planReviewHardFailuresThisRun) || 0;
+  if (hardF >= maxHardF) {
+    await arlingtonPlanReviewStopDownloads(dc, "hard_failure_limit_reached");
+    return { stop: true, reason: "hard_failure_limit_reached" };
+  }
+  const remaining = arlingtonPlanReviewRemainingBudgetMs(dc);
+  if (remaining < ARLINGTON_PLAN_REVIEW_MIN_REMAINING_BUDGET_MS) {
+    await arlingtonPlanReviewPauseDownloadsIfNearGlobalDeadline(dc);
+    return { stop: true, reason: "near_global_deadline" };
+  }
+  if (!arlingtonPlanReviewCanStartDocumentStream(dc)) {
+    await arlingtonPlanReviewPauseDownloadsIfNearGlobalDeadline(dc);
+    return { stop: true, reason: "near_global_deadline" };
+  }
+  return { stop: false, reason: "" };
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {string} documentId
+ */
+function arlingtonPlanReviewMarkDocAttemptedThisRun(dc, documentId) {
+  if (!dc || typeof dc !== "object") return;
+  const id = `${documentId || ""}`.trim();
+  if (!id) return;
+  let set = dc.planReviewAttemptedDocIdsThisRun;
+  if (!(set instanceof Set)) {
+    set = new Set();
+    dc.planReviewAttemptedDocIdsThisRun = set;
+  }
+  set.add(id);
+  dc.planReviewDownloadsAttemptedThisRun =
+    (Number(dc.planReviewDownloadsAttemptedThisRun) || 0) + 1;
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {string} documentId
+ * @returns {boolean}
+ */
+function arlingtonPlanReviewDocAlreadyAttemptedThisRun(dc, documentId) {
+  if (!dc || typeof dc !== "object") return false;
+  const set = dc.planReviewAttemptedDocIdsThisRun;
+  if (!(set instanceof Set)) return false;
+  const id = `${documentId || ""}`.trim();
+  return id ? set.has(id) : false;
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {"planSet"|"reviewResultsAndMarkups"|"approvedDocuments"|"secondary"} source
+ */
+function arlingtonPlanReviewRecordDownloadSuccess(dc, source) {
+  if (!dc || typeof dc !== "object") return;
+  dc.planReviewDownloadsSucceededThisRun =
+    (Number(dc.planReviewDownloadsSucceededThisRun) || 0) + 1;
+  if (arlingtonPlanReviewSourceIsPlanSet(source)) {
+    dc.planReviewPlanSetDownloadsSucceededThisRun =
+      (Number(dc.planReviewPlanSetDownloadsSucceededThisRun) || 0) + 1;
+  } else if (arlingtonPlanReviewSourceIsSecondary(source)) {
+    dc.planReviewSecondaryDownloadsSucceededThisRun =
+      (Number(dc.planReviewSecondaryDownloadsSucceededThisRun) || 0) + 1;
+  }
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} dc
+ */
+function arlingtonPlanReviewRecordHardFailure(dc) {
+  if (!dc || typeof dc !== "object") return;
+  dc.planReviewHardFailuresThisRun =
+    (Number(dc.planReviewHardFailuresThisRun) || 0) + 1;
+}
+
+/**
+ * @param {Record<string, unknown>} doc
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @returns {Promise<void>}
+ */
+async function arlingtonPlanReviewRecordStreamTimeout(doc, dc) {
+  if (!dc || typeof dc !== "object") return;
+  dc.planReviewStreamTimeoutsThisRun =
+    (Number(dc.planReviewStreamTimeoutsThisRun) || 0) + 1;
+  dc.planReviewPartialPendingDownloads = true;
+  const saver = dc.savePlanReviewCheckpoint;
+  if (typeof saver === "function") {
+    const integ = dc.planReviewIntegratedTabs;
+    const pending =
+      integ && typeof integ === "object"
+        ? arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(integ)
+        : 0;
+    await saver("streamTimeout", {
+      pending,
+      downloaded: Number(dc.planReviewDownloadsSucceededThisRun) || 0,
+      docName: `${doc?.name || doc?.filename || ""}`.trim(),
+    }).catch(() => {});
+    arlingtonPlanReviewMarkCheckpointSaved(dc);
+  }
+  const lim =
+    dc.planReviewLimits && typeof dc.planReviewLimits === "object"
+      ? dc.planReviewLimits
+      : {};
+  const maxStreamT =
+    Number(lim.maxStreamTimeouts) ||
+    ARLINGTON_PLAN_REVIEW_MAX_STREAM_TIMEOUTS_PER_RUN;
+  const streamT = Number(dc.planReviewStreamTimeoutsThisRun) || 0;
+  if (streamT >= maxStreamT) {
+    await arlingtonPlanReviewStopDownloads(dc, "stream_timeout_limit_reached");
+  }
+}
+
+/**
+ * @param {unknown[]} sink
+ * @param {string} tabKey
+ * @param {string} [prepReason]
+ */
+function arlingtonPlanReviewMarkSinkTabNotResolved(sink, tabKey, prepReason) {
+  if (!Array.isArray(sink)) return;
+  const skipReason = `${prepReason || ""}`.trim() || "tab_not_resolved";
+  for (const doc of sink) {
+    if (!doc || typeof doc !== "object") continue;
+    if (arlingtonErmsSinkDocLooksUploadComplete(doc)) continue;
+    const d = /** @type {Record<string, unknown>} */ (doc);
+    const docId = arlingtonPickSecondaryRowDocumentId(d);
+    if (!docId) continue;
+    d.downloadStatus = "pending_tab_not_resolved";
+    d.status = "pending";
+    d.skipReason = skipReason;
+    d.sourceTab = tabKey;
+  }
+}
+
+/**
+ * @param {import("playwright").Page | import("playwright").Frame} frame
+ * @param {string} hrefPart
+ * @returns {Promise<boolean>}
+ */
+async function arlingtonPlanReviewClickFrameHref(frame, hrefPart) {
+  if (!frame || typeof frame.evaluate !== "function") return false;
+  const part = `${hrefPart || ""}`.trim();
+  if (!part) return false;
+  try {
+    return !!(await frame.evaluate((hrefNeedle) => {
+      const needle = `${hrefNeedle || ""}`.trim();
+      if (!needle) return false;
+      const links = document.querySelectorAll("a[href]");
+      for (const a of links) {
+        const href = `${a.getAttribute("href") || ""}`;
+        if (href.includes(needle)) {
+          a.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true }),
+          );
+          return true;
+        }
+      }
+      return false;
+    }, part));
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * @param {import("playwright").Page | import("playwright").Frame | null | undefined} frame
+ * @returns {Promise<string>}
+ */
+async function arlingtonPlanReviewFrameUrlShort(frame) {
+  if (!frame || typeof frame.url !== "function") return "(no-frame)";
+  try {
+    return `${frame.url() || ""}`.slice(0, 160);
+  } catch (_) {
+    return "(url-error)";
+  }
+}
+
+/**
+ * @param {import("playwright").Page} page
+ * @param {import("playwright").Page | import("playwright").Frame} target
+ * @param {number} timeoutMs
+ * @returns {Promise<import("playwright").Page | import("playwright").Frame>}
+ */
+async function arlingtonPlanReviewRefreshErmsTarget(page, target, timeoutMs) {
+  const refreshed = await waitForArlingtonPlanReviewErmsShellReady(
+    page,
+    timeoutMs,
+  );
+  return refreshed || target;
+}
+
+/**
+ * Approved Documents readiness with panel evidence when URL did not change.
+ * @returns {Promise<{ ready: boolean; reason: string }>}
+ */
+async function arlingtonPlanReviewEvaluateApprovedTabReadyDetail(frame) {
+  if (!frame || typeof frame.evaluate !== "function") {
+    return { ready: false, reason: "no_frame" };
+  }
+  try {
+    const result = await frame.evaluate(() => {
+      const href = `${location.href || ""}`;
+      const body = document.body?.innerText || "";
+
+      if (
+        /Building Arlington/i.test(body) &&
+        /Sign Out/i.test(body) &&
+        !/File Actions/i.test(body)
+      ) {
+        return { ready: false, reason: "site_chrome_not_approved_grid" };
+      }
+
+      const hasFileActions = /File Actions/i.test(body);
+      const hasDocDate = /Document Date/i.test(body);
+      const hasDownload = /Download/i.test(body);
+      const hasApprovedPlanSet = /Approved Plan Set/i.test(body);
+      const hasRrLetter = /Review Results Letter/i.test(body);
+      const docActions = document.querySelectorAll(
+        'input.docaction, input.img-button.docaction, input[type="image"]',
+      ).length;
+      const tableRows = document.querySelectorAll("table tbody tr").length;
+      const gridStrong =
+        hasFileActions &&
+        hasDocDate &&
+        hasDownload &&
+        (hasApprovedPlanSet || hasRrLetter) &&
+        tableRows > 1 &&
+        docActions > 0;
+
+      if (gridStrong) {
+        return { ready: true, reason: "approved_grid_markers" };
+      }
+
+      if (href.includes("ApprovedDocuments") && gridStrong) {
+        return { ready: true, reason: "url_approved_documents" };
+      }
+      if (/Approved Plan Set/i.test(body) && gridStrong) {
+        return { ready: true, reason: "approved_plan_set_text" };
+      }
+      if (
+        /Review Results Letter/i.test(body) &&
+        /Approved Plan Set/i.test(body) &&
+        gridStrong
+      ) {
+        return { ready: true, reason: "rr_letter_and_approved_plan_set" };
+      }
+      if (
+        hasFileActions &&
+        hasDocDate &&
+        hasDownload &&
+        tableRows > 0 &&
+        docActions > 0
+      ) {
+        return { ready: true, reason: "file_actions_and_date" };
+      }
+      return { ready: false, reason: "approved_markers_missing" };
+    });
+    return {
+      ready: !!result?.ready,
+      reason: `${result?.reason || "approved_markers_missing"}`.trim(),
+    };
+  } catch (_) {
+    return { ready: false, reason: "evaluate_error" };
+  }
+}
+
+/**
+ * @param {import("playwright").Page} page
+ * @param {import("playwright").Page | import("playwright").Frame} domTarget
+ * @param {{ label: string; tabKey: string }} st
+ * @param {{ panelHref: string; markerRxSource: string }} hints
+ * @returns {Promise<{ ok: boolean; domTarget: import("playwright").Page | import("playwright").Frame; notResolvedReason?: string }>}
+ */
+async function arlingtonPlanReviewPrepareApprovedTabForDownload(
+  page,
+  domTarget,
+  st,
+  hints,
+) {
+  const logP = "[Arlington][PlanReview][ApprovedPrep]";
+  /** @type {string[]} */
+  const failSteps = [];
+  let target = domTarget;
+
+  console.log(
+    `${logP} before url=${await arlingtonPlanReviewFrameUrlShort(target)}`,
+  );
+
+  const hrefClick = await arlingtonPlanReviewClickFrameHref(
+    target,
+    hints.panelHref,
+  );
+  console.log(`${logP} hrefClick=${hrefClick}`);
+  if (!hrefClick) failSteps.push("approved_href_click_failed");
+  await page.waitForTimeout(800).catch(() => {});
+  target = await arlingtonPlanReviewRefreshErmsTarget(page, target, 15000);
+  console.log(
+    `${logP} after href url=${await arlingtonPlanReviewFrameUrlShort(target)}`,
+  );
+
+  let ev = await arlingtonPlanReviewEvaluateApprovedTabReadyDetail(target);
+  if (ev.ready) {
+    console.log(`${logP} ready=${ev.ready} reason=${ev.reason}`);
+    return { ok: true, domTarget: target };
+  }
+
+  let labelClick = await clickArlingtonErmsTopTab(target, page, "Approved Documents");
+  if (!labelClick) {
+    const panelEl = await clickAndResolveArlingtonErmsTopPanel(
+      page,
+      target,
+      st,
+    ).catch(() => null);
+    labelClick = !!panelEl;
+    if (panelEl && typeof panelEl.dispose === "function") {
+      await panelEl.dispose().catch(() => {});
+    }
+  }
+  console.log(`${logP} labelClick=${labelClick}`);
+  if (!labelClick) failSteps.push("approved_label_click_failed");
+  await page.waitForTimeout(800).catch(() => {});
+  target = await arlingtonPlanReviewRefreshErmsTarget(page, target, 15000);
+  console.log(
+    `${logP} after label url=${await arlingtonPlanReviewFrameUrlShort(target)}`,
+  );
+
+  ev = await arlingtonPlanReviewEvaluateApprovedTabReadyDetail(target);
+  if (ev.ready) {
+    console.log(`${logP} ready=${ev.ready} reason=${ev.reason}`);
+    return { ok: true, domTarget: target };
+  }
+
+  let directGoto = false;
+  let gotoUrl = "";
+  try {
+    const origin = new URL(target.url()).origin;
+    gotoUrl = `${origin}/PlanReviewIntegrated/Plan/ApprovedDocuments`;
+    await target.goto(gotoUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45000,
+    });
+    directGoto = true;
+    await page.waitForTimeout(800).catch(() => {});
+    target = await arlingtonPlanReviewRefreshErmsTarget(page, target, 15000);
+  } catch (_) {
+    directGoto = false;
+    failSteps.push("approved_direct_goto_failed");
+  }
+  console.log(
+    `${logP} directGoto=${directGoto} url=${gotoUrl || (await arlingtonPlanReviewFrameUrlShort(target))}`,
+  );
+
+  ev = await arlingtonPlanReviewEvaluateApprovedTabReadyDetail(target);
+  if (!ev.ready) failSteps.push("approved_markers_missing");
+  const notResolvedReason = [...new Set(failSteps)].join("|") || ev.reason;
+  console.log(`${logP} ready=${ev.ready} reason=${ev.ready ? ev.reason : notResolvedReason}`);
+
+  return {
+    ok: ev.ready,
+    domTarget: target,
+    notResolvedReason: ev.ready ? undefined : notResolvedReason,
+  };
+}
+
+/**
+ * @param {import("playwright").Page} page
+ * @param {import("playwright").Page | import("playwright").Frame} domTarget
+ * @param {{ label: string; tabKey: string }} st
+ * @returns {Promise<{ ok: boolean; domTarget: import("playwright").Page | import("playwright").Frame; notResolvedReason?: string }>}
+ */
+async function arlingtonPlanReviewPrepareSecondaryTabForDownload(page, domTarget, st) {
+  const hints =
+    ARLINGTON_SECONDARY_TAB_DOWNLOAD_HINTS[
+      /** @type {keyof typeof ARLINGTON_SECONDARY_TAB_DOWNLOAD_HINTS} */ (
+        st.tabKey
+      )
+    ];
+  if (!hints) return { ok: false, domTarget, notResolvedReason: "no_hints" };
+
+  await ensureArlingtonPlanReviewActive(page).catch(() => ({ ok: false }));
+  await page.waitForTimeout(650).catch(() => {});
+
+  let target = domTarget;
+  const refreshed = await waitForArlingtonPlanReviewErmsShellReady(page, 45000);
+  if (refreshed) target = refreshed;
+
+  if (st.tabKey === "approvedDocuments") {
+    const approvedPrep = await arlingtonPlanReviewPrepareApprovedTabForDownload(
+      page,
+      target,
+      st,
+      hints,
+    );
+    console.log(
+      `[Arlington][PlanReview] ${st.label} download-phase tab markers=${approvedPrep.ok}`,
+    );
+    return approvedPrep;
+  }
+
+  await arlingtonPlanReviewClickFrameHref(target, hints.panelHref);
+  await page.waitForTimeout(650).catch(() => {});
+
+  if (st.tabKey === "reviewResultsAndMarkups") {
+    for (const nl of ARLINGTON_REVIEW_RESULTS_DOM_SUBTABS) {
+      // eslint-disable-next-line no-await-in-loop
+      const hit = await clickArlingtonIntegratedNestedTab(page, nl);
+      if (hit) break;
+    }
+    await page.waitForTimeout(650).catch(() => {});
+  }
+
+  const markersOk = await arlingtonPlanReviewEvaluateSecondaryTabReady(
+    target,
+    st.tabKey,
+  );
+
+  console.log(
+    `[Arlington][PlanReview] ${st.label} download-phase tab markers=${markersOk}`,
+  );
+  return {
+    ok: markersOk,
+    domTarget: target,
+    notResolvedReason: markersOk ? undefined : "review_markers_missing",
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {Record<string, unknown> | null | undefined} parentDownloadCtx
+ */
+function arlingtonPlanReviewFinalizeRunStats(
+  integratedTabs,
+  dc,
+  parentDownloadCtx,
+  scopeRawArg,
+) {
+  if (!dc || typeof dc !== "object") return;
+  const scopeRaw =
+    `${scopeRawArg || dc.planReviewScope || ""}`.trim() || undefined;
+  const pendingByReason = arlingtonPlanReviewPendingByReason(
+    integratedTabs,
+    scopeRaw,
+  );
+  const pendingTotal = Object.values(pendingByReason).reduce((a, b) => a + b, 0);
+  const queue = dc.planReviewQueueTotals || {};
+  const runStats = {
+    planSetTotal: Number(queue.planSetTotal) || 0,
+    reviewResultsTotal: Number(queue.reviewResultsTotal) || 0,
+    approvedTotal: Number(queue.approvedTotal) || 0,
+    alreadyDownloaded: Number(queue.alreadyDownloaded) || 0,
+    pendingTotal,
+    pendingByReason,
+    downloadedThisRun: Number(dc.planReviewDownloadsSucceededThisRun) || 0,
+    streamTimeoutsThisRun: Number(dc.planReviewStreamTimeoutsThisRun) || 0,
+    hardFailuresThisRun: Number(dc.planReviewHardFailuresThisRun) || 0,
+    stoppedReason: `${dc.planReviewStoppedReason || "complete"}`.trim() || "complete",
+    nextRecommendedScope: arlingtonPlanReviewNextRecommendedScope(
+      integratedTabs,
+      dc,
+    ),
+    checkpointSaved: dc.planReviewCheckpointSaved === true,
+  };
+  dc.planReviewRunStats = runStats;
+  if (pendingTotal > 0 || dc.planReviewPartialPendingDownloads === true) {
+    dc.planReviewPartialPendingDownloads = true;
+  }
+  if (parentDownloadCtx && typeof parentDownloadCtx === "object") {
+    parentDownloadCtx.planReviewRunStats = runStats;
+    if (dc.planReviewPartialPendingDownloads === true) {
+      parentDownloadCtx.planReviewPartialPendingDownloads = true;
+    }
+    if (dc.planReviewCheckpointSaved === true) {
+      parentDownloadCtx.planReviewCheckpointSaved = true;
+    }
+    const session = parentDownloadCtx._arlingtonSession;
+    if (session && typeof session === "object") {
+      const s = /** @type {Record<string, unknown>} */ (session);
+      if (dc.planReviewPartialPendingDownloads === true) {
+        s.arlingtonPlanReviewPartialPendingDownloads = true;
+      }
+      if (dc.planReviewCheckpointSaved === true) {
+        s.arlingtonPlanReviewCheckpointSaved = true;
+      }
+    }
+  }
+  console.log(
+    `[Arlington][PlanReview] partial success pending=${pendingTotal} pendingByReason=${JSON.stringify(pendingByReason)} nextRecommendedScope=${runStats.nextRecommendedScope}`,
+  );
+}
+
+/**
+ * @param {object} opts
+ * @returns {Promise<{ planSetDomDownloads: number }>}
+ */
+async function runArlingtonPlanReviewDownloadPhasesAfterCheckpoint(opts) {
+  const {
+    page,
+    domTarget,
+    integratedTabs,
+    sharedGridCtx,
+    sink,
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    downloadedHashes,
+    planSetErmsOrigin,
+    prCfg,
+    downloadCtx,
+  } = opts;
+
+  let planSetDomDownloads = 0;
+  if (!sharedGridCtx) return { planSetDomDownloads };
+
+  let dlScopeRaw = null;
+  if (downloadCtx?.planReviewScope) {
+    dlScopeRaw = `${downloadCtx.planReviewScope}`.trim();
+  } else if (downloadCtx?.planReviewMode === "metadataOnly") {
+    dlScopeRaw = "metadataOnly";
+  } else if (downloadCtx?.downloadDocuments === false) {
+    dlScopeRaw = "metadataOnly";
+  }
+  const dlScope = dlScopeRaw
+    ? arlingtonNormalizePlanReviewActionScope(dlScopeRaw)
+    : "allPending";
+
+  console.log(
+    `[Arlington][PlanReview] download phase resolved scope raw=${dlScopeRaw || "(default)"} normalized=${dlScope}`,
+  );
+
+  if (dlScope === "metadataOnly") {
+    return { planSetDomDownloads };
+  }
+
+  if (sharedGridCtx && typeof sharedGridCtx === "object") {
+    /** @type {Record<string, unknown>} */ (sharedGridCtx).planReviewScope =
+      dlScopeRaw || dlScope;
+  }
+
+  const selectiveSecondaryScope =
+    dlScope === "approvedDocuments" ||
+    dlScope === "reviewResults" ||
+    dlScope === "projectInformation";
+  const selectiveLogPrefix = selectiveSecondaryScope
+    ? "[Arlington][PlanReview][Selective]"
+    : "[Arlington][PlanReview]";
+
+  if (selectiveSecondaryScope && sharedGridCtx) {
+    arlingtonPlanReviewRearmSelectiveDownloadBudget(
+      sharedGridCtx,
+      downloadCtx,
+      dlScope,
+    );
+  }
+
+  arlingtonPlanReviewInitDownloadManager(sharedGridCtx, {
+    continueRun: selectiveSecondaryScope,
+    logPrefix: selectiveLogPrefix,
+  });
+  arlingtonPlanReviewLogDownloadQueueStart(
+    integratedTabs,
+    sharedGridCtx,
+    selectiveLogPrefix,
+  );
+  if (dlScopeRaw && dlScopeRaw !== "allPending") {
+    console.log(
+      `[Arlington][PlanReview] download phases scope=${dlScope}`,
+    );
+  }
+
+  const runSecondaryDownloads =
+    arlingtonPlanReviewScopeAllowsSecondary(dlScope) &&
+    (prCfg.planReviewIncludeSecondaryTabs === true || selectiveSecondaryScope);
+
+  if (runSecondaryDownloads) {
+    const scopeNorm = arlingtonNormalizePlanReviewActionScope(dlScope);
+    if (scopeNorm === "approvedDocuments") {
+      const adList = integratedTabs?.approvedDocuments?.documents;
+      const adArr = Array.isArray(adList) ? adList : [];
+      const adPending = adArr.filter((d) =>
+        arlingtonPlanReviewDocNeedsDownloadAttempt(d),
+      ).length;
+      console.log(
+        `${selectiveLogPrefix} source=approvedDocuments total=${adArr.length} pending=${adPending} downloaded=${adArr.length - adPending}`,
+      );
+    } else if (scopeNorm === "reviewResults") {
+      const rrList = integratedTabs?.reviewResultsAndMarkups?.documents;
+      const rrArr = Array.isArray(rrList) ? rrList : [];
+      const rrPending = rrArr.filter((d) =>
+        arlingtonPlanReviewDocNeedsDownloadAttempt(d),
+      ).length;
+      console.log(
+        `${selectiveLogPrefix} source=reviewResultsAndMarkups total=${rrArr.length} pending=${rrPending} downloaded=${rrArr.length - rrPending}`,
+      );
+    }
+    await runArlingtonSecondaryTabsDownloadPhase({
+      page,
+      domTarget,
+      integratedTabs,
+      sharedGridCtx,
+      attachmentDedupeKeys,
+      prSeenRowKeys,
+      downloadedHashes,
+      planSetErmsOrigin,
+      downloadCtx,
+      scope: dlScope,
+      logPrefix: selectiveSecondaryScope ? selectiveLogPrefix : "",
+    });
+  }
+
+  if (
+    arlingtonPlanReviewScopeAllowsPlanSet(dlScope) &&
+    !sharedGridCtx.planReviewDownloadsAbortedDeadline &&
+    Array.isArray(sink) &&
+    sink.length
+  ) {
+    await clickArlingtonPlanReviewSubTab(page, "Plans & Documents");
+    await page.waitForTimeout(650).catch(() => {});
+    await clickArlingtonIntegratedNestedTab(page, "Plan Set Documents").catch(
+      () => false,
+    );
+    await page.waitForTimeout(650).catch(() => {});
+
+    const refreshed = await waitForArlingtonPlanReviewIframeReady(page, 30000);
+    const dlTarget = refreshed || domTarget;
+
+    planSetDomDownloads = await downloadArlingtonPlanSetDocumentsForSink(
+      page,
+      dlTarget,
+      sink,
+      {
+        attachmentDedupeKeys,
+        prSeenRowKeys,
+        downloadedHashes,
+        downloadCtx: sharedGridCtx,
+        ermsOrigin: planSetErmsOrigin,
+        downloadSource: "planSet",
+      },
+    );
+    console.log(
+      `[Arlington][PlanReview] Plan Set Documents rows=${sink.length} downloads=${planSetDomDownloads}`,
+    );
+  }
+
+  arlingtonPlanReviewFinalizeRunStats(
+    integratedTabs,
+    sharedGridCtx,
+    downloadCtx,
+    dlScopeRaw || dlScope,
+  );
+
+  const saver = sharedGridCtx.savePlanReviewCheckpoint;
+  if (typeof saver === "function") {
+    await saver("downloadPhasesEnd", {
+      downloaded: Number(sharedGridCtx.planReviewDownloadsSucceededThisRun) || 0,
+      pending: arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(
+        integratedTabs,
+        dlScopeRaw || dlScope,
+      ),
+    }).catch(() => {});
+    arlingtonPlanReviewMarkCheckpointSaved(sharedGridCtx);
+  }
+
+  return { planSetDomDownloads };
+}
+
+/**
+ * @param {Record<string, unknown>} downloadCtx
+ * @returns {Promise<void>}
+ */
+async function arlingtonPlanReviewMaybeCheckpointEvery5Downloads(downloadCtx) {
+  if (!downloadCtx || typeof downloadCtx !== "object") return;
+  const fn = downloadCtx.savePlanReviewCheckpoint;
+  if (typeof fn !== "function") return;
+  const integ = downloadCtx.planReviewIntegratedTabs;
+  if (!integ || typeof integ !== "object") return;
+  const prev =
+    (Number(downloadCtx.planReviewDownloadsSinceCheckpoint) || 0) + 1;
+  downloadCtx.planReviewDownloadsSinceCheckpoint = prev;
+  if (prev < 5) return;
+  downloadCtx.planReviewDownloadsSinceCheckpoint = 0;
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, "");
+  const uploaded =
+    arlingtonCountPlanReviewUploadedDocsAcrossIntegratedTabs(integ);
+  const pendingIncomplete =
+    arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(integ);
+  await fn("everyFive", {
+    downloaded: uploaded,
+    pending: pendingIncomplete,
+  }).catch(() => {});
+  arlingtonPlanReviewMarkCheckpointSaved(downloadCtx);
+}
+
+/**
+ * @param {Record<string, unknown>} downloadCtx
+ * @returns {Promise<boolean>} true when downloads must stop globally
+ */
+async function arlingtonPlanReviewPauseDownloadsIfNearGlobalDeadline(
+  downloadCtx,
+) {
+  if (!downloadCtx || typeof downloadCtx !== "object") return false;
+  const dc = /** @type {Record<string, unknown>} */ (downloadCtx);
+  if (dc.planReviewDownloadsAbortedDeadline === true) return true;
+  const deadline = Number(dc.scrapeDeadlineMs) || 0;
+  const reserveRaw = dc.reserveMsForFinalSave;
+  const reserve =
+    typeof reserveRaw === "number" && reserveRaw > 0
+      ? reserveRaw
+      : ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS;
+  if (!(deadline > 0) || !(Date.now() + reserve > deadline)) return false;
+  const integ = dc.planReviewIntegratedTabs;
+  if (integ && typeof integ === "object") {
+    markArlingtonPlanReviewPendingTimeoutResumeIntegrated(integ);
+  }
+  const pendingIncomplete =
+    integ && typeof integ === "object"
+      ? arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(integ)
+      : 0;
+  const saver =
+    typeof dc.savePlanReviewCheckpoint === "function"
+      ? /** @type {(k: string, x: Record<string, unknown>) => Promise<void>} */ (
+          dc.savePlanReviewCheckpoint
+        )
+      : null;
+  if (saver && integ && typeof integ === "object") {
+    await saver("nearTimeout", {
+      pending: pendingIncomplete,
+      downloaded: arlingtonCountPlanReviewUploadedDocsAcrossIntegratedTabs(integ),
+    }).catch(() => {});
+  }
+  console.log(
+    `[Arlington][PlanReview] nearing timeout; checkpoint saved and paused remaining downloads pending=${pendingIncomplete}`,
+  );
+  dc.planReviewDownloadsSinceCheckpoint = 0;
+  dc.planReviewDownloadsAbortedDeadline = true;
+  dc.planReviewPartialPendingDownloads = true;
+  dc.planReviewStoppedReason = dc.planReviewStoppedReason || "near_global_deadline";
+  arlingtonPlanReviewMarkCheckpointSaved(dc);
+  return true;
+}
+
+/**
+ * Shared ERMS Invoke -> Poll -> DocumentStream download loop.
+ * @returns {Promise<number>}
+ */
+async function downloadArlingtonErmsDocumentsForSink(
+  downloadPage,
+  domTarget,
+  sink,
+  {
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    downloadedHashes,
+    downloadCtx,
+    ermsOrigin: ermsOriginOpt,
+    logLabel = "Plan Set",
+    rowScope = "planSet",
+    downloadSource = "planSet",
+  },
+) {
+  if (!downloadCtx || !domTarget || !Array.isArray(sink) || !sink.length)
+    return 0;
+
+  let ermsOriginHint = `${ermsOriginOpt || ""}`.trim();
+  if (!ermsOriginHint && typeof domTarget.url === "function") {
+    try {
+      ermsOriginHint = new URL(domTarget.url()).origin;
+    } catch (_) {
+      /**/
+    }
+  }
+
+  const findRowByDocumentId =
+    rowScope === "activePanel"
+      ? findArlingtonActivePanelRowHandleByDocumentId
+      : findArlingtonPlanSetRowHandleByDocumentId;
+  const findRowByName =
+    rowScope === "activePanel"
+      ? findArlingtonActivePanelRowHandleByName
+      : findArlingtonPlanSetRowHandleByName;
+
+  let downloads = 0;
+  const seenDocumentIds = new Set();
+  for (let i = 0; i < sink.length; i++) {
+    const doc = sink[i];
+    if (downloadCtx.planReviewDownloadsAbortedDeadline === true) {
+      break;
+    }
+
+    const nameGuess = `${doc.name || doc.filename || ""}`.trim();
+    if (!nameGuess) {
+      console.log(
+        `[Arlington][PlanReview] ${logLabel} download failed  reason=no_doc_name`,
+      );
+      continue;
+    }
+
+    if (arlingtonErmsSinkDocLooksUploadComplete(doc)) {
+      if (downloadCtx && typeof downloadCtx === "object") {
+        downloadCtx.planReviewSkippedAlreadyDownloadedThisRun =
+          (Number(downloadCtx.planReviewSkippedAlreadyDownloadedThisRun) || 0) +
+          1;
+      }
+      if (`${doc.downloadStatus || ""}`.trim() === "") {
+        doc.downloadStatus = "already_downloaded";
+        doc.status = "downloaded";
+      }
+      continue;
+    }
+
+    const documentId = `${doc.documentId || doc.action?.documentId || ""}`.trim();
+    if (documentId) {
+      if (seenDocumentIds.has(documentId)) {
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} duplicate documentId=${documentId} row=${nameGuess}`,
+        );
+        doc.downloadStatus = "duplicate_skipped";
+        continue;
+      }
+      seenDocumentIds.add(documentId);
+    }
+
+    if (
+      documentId &&
+      arlingtonPlanReviewDocAlreadyAttemptedThisRun(downloadCtx, documentId)
+    ) {
+      continue;
+    }
+
+    // eslint-disable-next-line no-await-in-loop
+    const stopGate = await arlingtonPlanReviewShouldStopBeforeDoc(
+      downloadCtx,
+      downloadSource,
+    );
+    if (stopGate.stop) {
+      if (documentId && /^\d+$/.test(documentId)) {
+        doc.downloadStatus = "pending_not_attempted";
+        doc.status = "pending";
+        doc.skipReason = stopGate.reason || "batch_limit_reached";
+      }
+      break;
+    }
+
+    const rowMeta = {
+      name: nameGuess,
+      documentDate: doc.documentDate || "",
+      discipline: doc.discipline || "",
+      sheetType: doc.sheetType || doc.documentType || "",
+      description: doc.description || "",
+      revision: doc.revision || "",
+      uploadStatus: doc.uploadStatus || doc.status || "",
+      size: doc.size || "",
+    };
+
+    const rowKey = arlingtonIntegratedRowDedupeKey(
+      rowMeta.name,
+      rowMeta.documentDate || "",
+      rowMeta.size || "",
+      rowMeta.revision || "",
+    );
+
+    if (attachmentDedupeKeys.has(rowKey) || prSeenRowKeys.has(rowKey)) {
+      console.log(
+        `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=dedupe_skip`,
+      );
+      doc.downloadStatus = "duplicate_skipped";
+      continue;
+    }
+
+    /** @type {string} */
+    let docId = documentId;
+    /** @type {import('playwright').ElementHandle | null} */
+    let rowHandle = null;
+
+    if (docId) {
+      rowHandle = await findRowByDocumentId(domTarget, docId);
+      console.log(
+        `[Arlington][PlanReview] ${logLabel} download target documentId=${docId} row=${nameGuess}${rowHandle ? "" : " (row handle not resolved)"}`,
+      );
+    }
+
+    if (!docId) {
+      rowHandle = await findRowByName(domTarget, nameGuess);
+      if (!rowHandle) {
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=no_row_match`,
+        );
+        continue;
+      }
+
+      const picked = await pickArlingtonPlanSetDownloadControl(rowHandle);
+      if (!picked || !picked.handle) {
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=no_download_input`,
+        );
+        await rowHandle.dispose().catch(() => {});
+        continue;
+      }
+      docId = picked.docId || "(unknown)";
+      await picked.handle.dispose().catch(() => {});
+      await rowHandle.dispose().catch(() => {});
+      console.log(
+        `[Arlington][PlanReview] ${logLabel} download target name=${docId} row=${nameGuess}`,
+      );
+    } else if (rowHandle) {
+      await rowHandle.dispose().catch(() => {});
+    }
+
+    if ((!docId || docId === "(unknown)") && doc.sourceApi) {
+      continue;
+    }
+
+    if (!docId) {
+      continue;
+    }
+
+    arlingtonPlanReviewMarkDocAttemptedThisRun(downloadCtx, docId);
+    arlingtonPlanReviewDownloadBegin(downloadCtx, docId);
+    try {
+      let uploadOutcome = await arlingtonPlanSetDownloadViaInvokeDownloadDocument(
+        downloadPage,
+        domTarget,
+        docId,
+        rowMeta,
+        downloadCtx,
+        rowKey,
+        prSeenRowKeys,
+        ermsOriginHint,
+        logLabel,
+      );
+
+      let uploadedOk =
+        `${uploadOutcome.downloadStatus || ""}`.trim() === "uploaded" &&
+        !!`${uploadOutcome.publicUrl || ""}`.trim();
+
+      if (
+        !uploadedOk &&
+        docId &&
+        /^\d+$/.test(docId) &&
+        (doc.sourceApi || rowScope === "activePanel")
+      ) {
+        uploadOutcome = await arlingtonErmsDownloadViaDirectPlanDocInvoke(
+          downloadPage,
+          domTarget,
+          docId,
+          rowMeta,
+          downloadCtx,
+          rowKey,
+          prSeenRowKeys,
+          ermsOriginHint,
+          logLabel,
+        );
+        uploadedOk =
+          `${uploadOutcome.downloadStatus || ""}`.trim() === "uploaded" &&
+          !!`${uploadOutcome.publicUrl || ""}`.trim();
+      }
+
+      if (
+        `${uploadOutcome.failureReason || ""}`.trim() ===
+        "session_closed_during_download"
+      ) {
+        await arlingtonPlanReviewMarkDocSessionClosed(doc, downloadCtx);
+        continue;
+      }
+
+      if (uploadedOk) {
+        downloads++;
+        arlingtonPlanReviewRecordDownloadSuccess(downloadCtx, downloadSource);
+        doc.publicUrl = uploadOutcome.publicUrl;
+        doc.downloadUrl = uploadOutcome.publicUrl;
+        doc.storagePath = uploadOutcome.storagePath || "";
+        doc.size = uploadOutcome.size || doc.size || "";
+        doc.downloadStatus = "uploaded";
+        doc.status = "downloaded";
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download OK ${nameGuess}`,
+        );
+        delete doc.retryCount;
+        delete doc.skipReason;
+        await arlingtonPlanReviewMaybeCheckpointEvery5Downloads(downloadCtx);
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() ===
+        "pending_stream_timeout"
+      ) {
+        doc.downloadStatus = "pending_stream_timeout";
+        doc.status = "pending";
+        doc.skipReason = "stream_timeout";
+        doc.failureReason = "stream_timeout";
+        doc.lastAttemptAt = new Date().toISOString();
+        doc.retryCount = (Number(doc.retryCount) || 0) + 1;
+        if (downloadCtx && typeof downloadCtx === "object")
+          downloadCtx.planReviewPartialPendingDownloads = true;
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download pending stream_timeout ${nameGuess}`,
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await arlingtonPlanReviewRecordStreamTimeout(doc, downloadCtx);
+        break;
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() ===
+        "pending_token_missing"
+      ) {
+        doc.downloadStatus = "pending_token_missing";
+        doc.status = "pending";
+        doc.skipReason = "missing_verification_token";
+        doc.retryCount = (Number(doc.retryCount) || 0) + 1;
+        downloadCtx.planReviewPartialPendingDownloads = true;
+        arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download pending token_missing ${nameGuess}`,
+        );
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() ===
+        "pending_not_attempted"
+      ) {
+        doc.downloadStatus = "pending_not_attempted";
+        doc.status = "pending";
+        doc.skipReason =
+          uploadOutcome.failureReason || "insufficient_remaining_budget";
+      } else {
+        const reason =
+          uploadOutcome.failureReason ||
+          uploadOutcome.downloadStatus ||
+          "unknown";
+        const ds = `${uploadOutcome.downloadStatus || ""}`.trim();
+        if (ds === "oversized_for_supabase") {
+          doc.downloadStatus = "oversized_for_supabase";
+          doc.status = "pending";
+        } else if (/upload_failed|write_failed|failed_html/.test(ds)) {
+          doc.downloadStatus = "failed_upload";
+          doc.status = "pending";
+          arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        } else {
+          doc.downloadStatus = "failed_non_retryable";
+          doc.status = "pending";
+          arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        }
+        doc.skipReason = `${reason}`.slice(0, 200);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=${reason}`,
+        );
+        const hardF = Number(downloadCtx.planReviewHardFailuresThisRun) || 0;
+        if (hardF >= ARLINGTON_PLAN_REVIEW_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN) {
+          // eslint-disable-next-line no-await-in-loop
+          await arlingtonPlanReviewStopDownloads(
+            downloadCtx,
+            "hard_failure_limit_reached",
+          );
+          break;
+        }
+      }
+    } catch (loopErr) {
+      if (arlingtonErmsSessionClosedMessage(loopErr)) {
+        await arlingtonPlanReviewMarkDocSessionClosed(doc, downloadCtx);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download pending ${nameGuess} reason=session_closed_during_download`,
+        );
+      } else {
+        arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=${loopErr && loopErr.message ? loopErr.message : loopErr}`,
+        );
+      }
+    } finally {
+      arlingtonPlanReviewDownloadEnd(downloadCtx);
+    }
+  }
+  return downloads;
+}
+
+/**
+ * Plan Set: click IMG `input.docaction` inside #divDocuments row; mutate sink in place.
+ * @returns {Promise<number>} rows that received Supabase `publicUrl`
+ */
+async function downloadArlingtonPlanSetDocumentsForSink(
+  downloadPage,
+  domTarget,
+  sink,
+  options,
+) {
+  return downloadArlingtonErmsDocumentsForSink(
+    downloadPage,
+    domTarget,
+    sink,
+    {
+      ...options,
+      logLabel: "Plan Set",
+      rowScope: "planSet",
+      downloadSource: options.downloadSource || "planSet",
+    },
+  );
+}
+
+/**
+ * Secondary ERMS tabs: API-first download by document id (no DOM row match).
+ */
+async function downloadArlingtonActivePanelDocumentsForSink(
+  downloadPage,
+  domTarget,
+  sink,
+  sourceTabCamel,
+  sourceSectionCamel,
+  {
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    downloadedHashes,
+    downloadCtx,
+    ermsOrigin,
+    tabLabel,
+    aliasDocSources = [],
+  },
+) {
+  const label =
+    `${tabLabel || sourceTabCamel || "Plan Review tab"}`.trim() ||
+    "Plan Review tab";
+  const result = await downloadArlingtonSecondaryApiDocumentsForSink(
+    downloadPage,
+    domTarget,
+    sink,
+    {
+      attachmentDedupeKeys,
+      prSeenRowKeys,
+      downloadCtx,
+      ermsOrigin,
+      logLabel: label,
+      aliasDocSources,
+    },
+  );
+  return result.downloads;
+}
+
+/**
+ * Secondary ERMS tab rows: only rows inside resolved panel (`table tr` scoped to panel).
+ * @param {import("playwright").ElementHandle | null} panelHandle
+ * @param {string} [tabKey]
+ * @returns {Promise<object[]>}
+ */
+async function extractArlingtonSecondaryTabRowsFromPanel(panelHandle, tabKey) {
+  if (
+    !panelHandle ||
+    typeof panelHandle.evaluate !== "function"
+  ) {
+    return [];
+  }
+
+  try {
+    return await panelHandle.evaluate((panelRootArg, tabKeyIn) => {
+      const panelRoot =
+        panelRootArg instanceof Element
+          ? /** @type {Element} */ (panelRootArg)
+          : null;
+      if (!panelRoot) return [];
+
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      const BAD =
+        /Supporting\s+Documents|Comment\s+Response\s+Letters|Other\s+Supporting\s+Document|^Name\s+Discipline\s+Sheet\s+Type|Upload\s+Status$/i;
+
+      /** @type {WeakMap<Element, string[]>} */
+      const headerByTable = new WeakMap();
+
+      function extractRowAction(tr) {
+        /** @param {...string} blobs */
+        function inferDocId(...blobs) {
+          const hay = blobs.filter(Boolean).join("\n").slice(0, 8000);
+          if (!hay.trim()) return "";
+          const ps = [
+            /\bPlanDoc(?:ID|Id)\s*[:=]\s*['"]?(\d{5,})['"]?/i,
+            /\bplanDocId\s*[:=]\s*['"]?(\d{5,})['"]?/i,
+            /\b(?:DocumentId|DOCUMENTID)\s*[:=']\s*['"]?(\d{5,})['"]?/i,
+            /InvokeDownloadDocument\D*(\d{5,})\b/i,
+            /DownloadDocument\D*[\(\[]\s*['"]?(\d{5,})['"]?/i,
+            /[=,]\s*['"]?\s*(\d{7,})\s*['"]?\s*[,;)}\]]/,
+          ];
+          for (const p of ps) {
+            const m = hay.match(p);
+            const v = m && m[1] ? `${m[1]}`.trim() : "";
+            if (/^\d{5,}$/.test(v)) return v;
+          }
+          return "";
+        }
+
+        /** @returns {object} */
+        function finalizeAction(base) {
+          if (base && typeof base === "object" && base.documentId)
+            return base;
+          const onc = `${(base && base.onclick) || ""}`;
+          const hr = `${(base && base.href) || ""}`;
+          const idAttr = `${(base && base.id) || ""}`;
+          const nmAttr = `${(base && base.name) || ""}`;
+          const inferred = inferDocId(onc, hr, idAttr, nmAttr);
+          if (inferred && base && typeof base === "object") {
+            return { ...base, documentId: inferred };
+          }
+          return base || {};
+        }
+
+        /** @type {HTMLInputElement | null} */
+        let dlInput =
+          tr.querySelector("input.img-button.docaction[name]") ||
+          tr.querySelector("input.docaction[name]");
+        if (!dlInput) {
+          const imgs = [...tr.querySelectorAll('input[type="image"][name]')];
+          for (const im of imgs) {
+            const nm = `${im.getAttribute("name") || ""}`.trim();
+            if (/^\d+$/.test(nm)) {
+              dlInput = im;
+              break;
+            }
+          }
+        }
+        if (dlInput) {
+          const nameAttr = `${dlInput.getAttribute("name") || ""}`.trim();
+          const onc = `${dlInput.getAttribute("onclick") || ""}`.trim();
+          if (/^\d+$/.test(nameAttr)) {
+            return finalizeAction({
+              documentId: nameAttr,
+              title: `${dlInput.getAttribute("title") || ""}`
+                .trim()
+                .slice(0, 800),
+              alt: `${dlInput.getAttribute("alt") || ""}`.trim().slice(0, 800),
+              href: "",
+              onclick: onc.slice(0, 4000),
+              id: `${dlInput.getAttribute("id") || ""}`.trim().slice(0, 500),
+              name: nameAttr.slice(0, 260),
+            });
+          }
+          const idGuess = inferDocId(
+            onc,
+            `${dlInput.getAttribute("id") || ""}`,
+            nameAttr,
+          );
+          if (idGuess) {
+            return finalizeAction({
+              documentId: idGuess,
+              title: `${dlInput.getAttribute("title") || ""}`
+                .trim()
+                .slice(0, 800),
+              alt: `${dlInput.getAttribute("alt") || ""}`.trim().slice(0, 800),
+              href: "",
+              onclick: onc.slice(0, 4000),
+              id: `${dlInput.getAttribute("id") || ""}`.trim().slice(0, 500),
+              name: nameAttr.slice(0, 260),
+            });
+          }
+        }
+
+        const nodes = [
+          ...tr.querySelectorAll(
+            "input.docaction,input[type='image'],a,button",
+          ),
+        ].filter((el) => {
+          try {
+            return !!(el.closest("td") || el.closest("th"));
+          } catch (_) {
+            return false;
+          }
+        });
+        const scored = [];
+        for (const el of nodes) {
+          const tn = `${el.tagName || ""}`.toUpperCase();
+          let href = `${el.getAttribute("href") || ""}`.trim();
+          if (/^javascript:void/i.test(href) || /^#?$/.test(href)) href = "";
+          const onclick = `${el.getAttribute("onclick") || ""}`.trim();
+          const id = `${el.getAttribute("id") || ""}`.trim();
+          const nameAttr = `${el.getAttribute("name") || ""}`.trim();
+          const title = `${el.getAttribute("title") || ""}`.trim();
+          let alt = "";
+          if (tn === "INPUT") {
+            alt = `${el.getAttribute("alt") || ""}`.trim();
+          }
+          let score =
+            (/^\d+$/.test(nameAttr) ? 200 : 0) +
+            (/^https?:\/\//i.test(href) ? 120 : 0) +
+            (onclick ? 40 : 0) +
+            (title ? 5 : 0) +
+            (alt ? 5 : 0) +
+            (id ? 3 : 0);
+          const hayOn = `${title} ${alt} ${onclick} ${href}`.toLowerCase();
+          if (/download|open|pdf|view|sheet|mark.?up|result/.test(hayOn))
+            score += 25;
+          const inf = inferDocId(onclick, href, id, nameAttr);
+          if (inf) score += 180;
+          if (href || onclick || id || title || alt || inf)
+            scored.push({
+              score,
+              documentId: inf || "",
+              href: href.slice(0, 2000),
+              onclick: onclick.slice(0, 4000),
+              id: id.slice(0, 500),
+              name: nameAttr.slice(0, 260),
+              title: title.slice(0, 800),
+              alt: alt.slice(0, 800),
+            });
+        }
+        scored.sort((a, b) => b.score - a.score);
+        const best = scored[0];
+        if (!best)
+          return { href: "", onclick: "", id: "", title: "", alt: "" };
+        const { score: _omit, ...action } = best;
+        return finalizeAction(action);
+      }
+
+      function findCol(headers, patterns) {
+        for (let i = 0; i < headers.length; i++) {
+          const h = headers[i];
+          if (patterns.some((p) => p.test(h))) return i;
+        }
+        return -1;
+      }
+
+      function cellAt(cells, ix, fallback = "") {
+        if (ix < 0) return fallback;
+        return `${cells[ix] ?? fallback}`.trim();
+      }
+
+      /** @type {object[]} */
+      const out = [];
+      const seen = new Set();
+
+      let emittedOrdinal = -1;
+
+      for (const tr of panelRoot.querySelectorAll("table tr")) {
+        const table = tr.closest("table");
+        if (!table) continue;
+        const tds = [...tr.querySelectorAll("th,td")].filter(Boolean);
+        if (!tds.length) continue;
+        const cells = tds.map((td) => norm(td.innerText));
+        const text = norm(tr.innerText);
+        if (text.length < 3) continue;
+        if (BAD.test(text)) continue;
+
+        const onlyTh = tds.length > 0 && tds.every((e) => e.tagName === "TH");
+        const looksHeader =
+          onlyTh ||
+          (/^name$/i.test(cells[0] || "") &&
+            /\b(date|type|discipline|status|reviewer|download)\b/i.test(
+              text.toLowerCase(),
+            ));
+        if (looksHeader) {
+          headerByTable.set(
+            table,
+            cells.map((c) => c.toLowerCase()),
+          );
+          continue;
+        }
+
+        const headerCells = headerByTable.get(table) || [];
+        const nameIx = findCol(headerCells, [
+          /^name$/,
+          /file\s*name/,
+          /document\s*name/,
+          /^document$/,
+        ]);
+        const discIx = findCol(headerCells, [/discipline/]);
+        const typeIx = findCol(headerCells, [
+          /document\s*type/,
+          /sheet\s*type/,
+          /^type$/,
+        ]);
+        const statusIx = findCol(headerCells, [/status/, /review\s*result/]);
+        const reviewerIx = findCol(headerCells, [/reviewer/, /reviewed\s*by/]);
+        const dateIx = findCol(headerCells, [
+          /date/,
+          /upload/,
+          /approval/,
+          /approved/,
+        ]);
+
+        let nameGuess = cellAt(cells, nameIx >= 0 ? nameIx : 0, "");
+        if (!nameGuess) {
+          nameGuess =
+            cells.find(
+              (c) =>
+                c.length >= 8 &&
+                !/^name$/i.test(c) &&
+                !/^status$/i.test(c) &&
+                !/^date$/i.test(c),
+            ) || "";
+        }
+        if (!nameGuess || /^name$/i.test(nameGuess)) continue;
+
+        let documentDateCell = cellAt(cells, dateIx, "");
+        if (!documentDateCell) {
+          const dm = nameGuess.match(
+            /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
+          );
+          if (dm) documentDateCell = dm[1];
+        }
+
+        const action = extractRowAction(tr);
+        const hasDocaction = !!action.documentId;
+        const hasHttp =
+          action.href && /^https?:\/\//i.test(action.href);
+        if (!hasDocaction && !hasHttp && !action.onclick) continue;
+
+        emittedOrdinal += 1;
+        const tabPart = `${tabKeyIn || ""}`.trim();
+        const idPart = `${action.documentId || ""}`.trim();
+        const nmPart = norm(nameGuess).toLowerCase();
+        const dtPart = norm(documentDateCell).toLowerCase();
+        const key = /^\d+$/.test(idPart)
+          ? `${tabPart}|id:${idPart}`
+          : `${tabPart}|idx:${emittedOrdinal}|${nmPart}|${dtPart}|${norm(action.onclick || "").slice(0, 120)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        out.push({
+          name: nameGuess,
+          discipline: cellAt(cells, discIx, cells[1] || ""),
+          sheetType: cellAt(cells, typeIx, cells[2] || ""),
+          documentType: cellAt(cells, typeIx, ""),
+          documentDate: documentDateCell,
+          reviewStatus: cellAt(cells, statusIx, ""),
+          reviewer: cellAt(cells, reviewerIx, ""),
+          description: cells.slice(3).join(" | ").slice(0, 450),
+          revision: "",
+          uploadStatus: cellAt(cells, statusIx, ""),
+          text,
+          action,
+          source: "plan_review_secondary_tab_panel",
+          tabKey: tabKeyIn || "",
+          secondaryDomRowIndex: emittedOrdinal,
+        });
+      }
+
+      return out;
+    }, tabKey || "");
+  } catch (_) {
+    return [];
+  }
+}
+
+const extractArlingtonSecondaryRowsFromPanel =
+  extractArlingtonSecondaryTabRowsFromPanel;
+
+/**
+ * PR `ProjectInformation` route often nests the real form in a child iframe (e.g. innerFormFrame).
+ * @param {import("playwright").Page | import("playwright").Frame | null | undefined} prFrame
+ * @returns {Promise<import("playwright").Frame | null | undefined>}
+ */
+async function findArlingtonProjectInformationDataFrame(prFrame) {
+  /** @type {import("playwright").Frame[]} */
+  const candidates = [];
+
+  /** @param {import("playwright").Frame} f */
+  function walk(f) {
+    candidates.push(f);
+    for (const c of f.childFrames()) walk(c);
+  }
+
+  if (prFrame && typeof prFrame.childFrames === "function") {
+    walk(/** @type {import("playwright").Frame} */ (prFrame));
+  } else if (
+    prFrame &&
+    typeof prFrame.mainFrame === "function"
+  ) {
+    walk(prFrame.mainFrame());
+  } else {
+    return /** @type {import("playwright").Frame | null | undefined} */ (
+      prFrame
+    );
+  }
+
+  const fallback =
+    candidates[0] ||
+    /** @type {import("playwright").Frame | null | undefined} */ (prFrame);
+
+  /** @type {{ frame: import("playwright").Frame, diag: Record<string, unknown> | null }[]} */
+  const framed = [];
+
+  for (const frame of candidates) {
+    /** @type {Record<string, unknown> | null} */
+    const diag = await frame
+      .evaluate(() => {
+        const norm = (s) =>
+          `${s ?? ""}`
+            .trim()
+            .replace(/\s+/g, " ");
+        const text = norm(
+          document.body?.innerText || document.body?.textContent || "",
+        );
+
+        /** @returns {{ id: string, name: string, value: string, parentText: string }}[] */
+        const inputs = [
+          ...document.querySelectorAll("input, textarea, select"),
+        ].map((c) => {
+          let v = "";
+          if (c instanceof HTMLSelectElement) v = `${c.value || ""}`;
+          else if (
+            c instanceof HTMLInputElement ||
+            c instanceof HTMLTextAreaElement
+          ) {
+            v = `${c.value || ""}`;
+          }
+          if (!v.trim()) v = `${c.getAttribute("value") || ""}`;
+          return {
+            id: c.id || "",
+            name: c.name || "",
+            value: norm(v).slice(0, 300),
+            parentText: norm(
+              c.closest("tr,.row,.form-group,div,li")?.innerText || "",
+            ),
+          };
+        });
+
+        const haystack = `${text} ${JSON.stringify(inputs)}`;
+
+        const hasProjectLabels =
+          /Project ID|Plan Review Project Name|Accela CAP ID|Review Type|CPHD Case|Address/i.test(
+            haystack,
+          );
+        const hasProjectValues =
+          /LDAP23-00156|4834 LANGSTON BLVD|26REC-00000-001S7|McDonald's|113/i.test(
+            haystack,
+          );
+        /**
+         * Outer ProjectInformation shell: few controls and no "Project ID" copy;
+         * must not win on `113` alone over a nested data frame.
+         */
+        const likelyThinShell =
+          inputs.length <= 24 && !/Project\s+ID/i.test(text);
+
+        return {
+          url: location.href,
+          bodyLen: text.length,
+          preview: text.slice(0, 500),
+          inputCount: inputs.length,
+          hasProjectLabels,
+          hasProjectValues,
+          likelyThinShell,
+        };
+      })
+      .catch(() => null);
+
+    console.log(
+      `[Arlington][PlanReview] ProjectInfo frame candidate ${JSON.stringify(diag)}`,
+    );
+
+    framed.push({ frame, diag });
+  }
+
+  const labelPick = framed.find((x) => x.diag?.hasProjectLabels);
+  if (labelPick) return labelPick.frame;
+
+  const valuePick = framed.find(
+    (x) =>
+      x.diag?.hasProjectValues === true && x.diag?.likelyThinShell !== true,
+  );
+  if (valuePick) return valuePick.frame;
+
+  return fallback;
+}
+
+/**
+ * Pull PI fields from a frame document (preferred over shell `ProjectInformation` iframe body).
+ * @param {import("playwright").Frame | null | undefined} frame
+ * @returns {Promise<{ label: string, value: string, sourceTab?: string }[]>}
+ */
+async function extractArlingtonProjectInformationFieldsFromFrame(frame) {
+  if (!frame || typeof frame.evaluate !== "function") {
+    return [];
+  }
+
+  try {
+    /** @type {unknown} */
+    const raw = await frame.evaluate(() => {
+      const panel =
+        /** @type {HTMLElement | null} */ (document.body);
+      if (!panel) return [];
+
+      const norm = (s) =>
+        `${s ?? ""}`
+          .trim()
+          .replace(/\s+/g, " ");
+
+      const wanted = [
+        "Project ID",
+        "Plan Review Project Name",
+        "Accela CAP ID",
+        "Address",
+        "Review Type",
+        "CPHD Case #",
+      ];
+
+      /** @type {(el?: Element | null) => string} */
+      const readValue = (el) => {
+        if (!el) return "";
+        const tag = `${el.tagName || ""}`.toUpperCase();
+        if (tag === "SELECT") {
+          const sel = /** @type {HTMLSelectElement} */ (el);
+          const selectedText = sel.selectedOptions?.[0]?.textContent?.trim();
+          if (selectedText && selectedText !== "<None>")
+            return norm(selectedText);
+        }
+        if (
+          "value" in el &&
+          /** @type {HTMLInputElement} */ (el).value != null
+        ) {
+          return norm(
+            `${/** @type {HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement} */ (el).value}`,
+          );
+        }
+        return norm(
+          el.getAttribute?.("value") ||
+            el.innerText ||
+            el.textContent ||
+            "",
+        );
+      };
+
+      /** @type {(labelEl?: Element | null) => string} */
+      function findValueNearLabel(labelEl) {
+        if (!(labelEl instanceof Element)) return "";
+
+        const forId = labelEl.getAttribute?.("for");
+        if (
+          forId &&
+          typeof CSS !== "undefined" &&
+          typeof CSS.escape === "function"
+        ) {
+          try {
+            const byFor = panel.querySelector(`#${CSS.escape(forId)}`);
+            const v = readValue(byFor);
+            if (v) return v;
+          } catch (_) {
+            /**/
+          }
+        }
+
+        const containers = [
+          labelEl.closest("tr"),
+          labelEl.closest(".form-group"),
+          labelEl.closest(".row"),
+          labelEl.closest("li"),
+          labelEl.parentElement,
+          labelEl.parentElement?.parentElement,
+        ].filter(Boolean);
+
+        for (const container of containers) {
+          if (!container) continue;
+          const controls = [
+            ...container.querySelectorAll("input, textarea, select"),
+          ];
+          for (const c of controls) {
+            const v = readValue(c);
+            if (v) return v;
+          }
+
+          const textPieces = [...container.querySelectorAll("span, div, td")]
+            .map((x) =>
+              norm(
+                x.innerText ||
+                  /** @type {string} */ (x.textContent || ""),
+              ),
+            )
+            .filter(Boolean);
+
+          const labelText = norm(
+            labelEl.innerText ||
+              /** @type {string} */ (labelEl.textContent || ""),
+          ).replace(/:$/, "");
+
+          const nonLabel = textPieces.find((t) => {
+            const tr = t.replace(/:$/, "");
+            return (
+              t !== labelText &&
+              !wanted.some(
+                (w) =>
+                  w === tr ||
+                  w.toLowerCase() === `${tr || ""}`.toLowerCase(),
+              )
+            );
+          });
+          if (nonLabel) return nonLabel;
+        }
+
+        const next = labelEl.nextElementSibling;
+        const direct = readValue(next);
+        if (
+          direct &&
+          !wanted.includes(direct.replace(/:$/, "")) &&
+          !wanted.find(
+            (w) =>
+              w.toLowerCase() ===
+              direct.replace(/:$/, "").toLowerCase(),
+          )
+        ) {
+          return direct;
+        }
+
+        const nextControl = next?.querySelector?.(
+          "input, textarea, select",
+        );
+        return readValue(nextControl);
+      }
+
+      /** @type {{ label: string; value: string; sourceTab: string }[]} */
+      const fields = [];
+
+      for (const label of wanted) {
+        const labelEl = [
+          ...panel.querySelectorAll("label, span, div, td, th"),
+        ].find((el) => {
+          const t = norm(
+            el.innerText || /** @type {string} */ (el.textContent || ""),
+          ).replace(/:$/, "");
+          return t === label || t.toLowerCase() === label.toLowerCase();
+        });
+
+        const value = labelEl ? findValueNearLabel(labelEl) : "";
+
+        fields.push({
+          label,
+          value,
+          sourceTab: "projectInformation",
+        });
+      }
+
+      const setIfEmpty = (label, value) => {
+        const f = fields.find((x) => x.label === label);
+        const v = norm(value);
+        if (f && !`${f.value || ""}`.trim() && v) f.value = v;
+      };
+
+      const getVal = (label) => {
+        const f = fields.find((x) => x.label === label);
+        return f ? `${f.value || ""}`.trim() : "";
+      };
+
+      const rtHidden = readValue(
+        document.getElementById("ProjectData_ReviewTypeID"),
+      );
+      setIfEmpty("Review Type", rtHidden);
+
+      const pg =
+        document.querySelector(
+          "select#projectgroup, select[name='projectgroup'], select[name='ProjectGroupID']",
+        ) ||
+        document.querySelector("select[id='projectgroup']");
+      const pgText = readValue(pg);
+      setIfEmpty("Plan Review Project Name", pgText);
+      if (!getVal("Address") && pgText) {
+        const parts = pgText.split(/\s*-\s*/);
+        if (parts.length >= 2) setIfEmpty("Address", parts[0].trim());
+        else setIfEmpty("Address", pgText);
+      }
+
+      const rtSel =
+        document.querySelector(
+          "select#reviewtype, select[name='reviewtype'], select[name='ReviewTypeID']",
+        ) || document.querySelector("select[id='reviewtype']");
+      setIfEmpty("Review Type", readValue(rtSel));
+
+      return fields;
+    });
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * PI fields from resolved ERMS panel (labels + inputs, table, dl).
+ * Kept for narrow panel-scoped reads; Plan Review merge uses {@link extractArlingtonProjectInformationFieldsFromFrame}.
+ * @param {import("playwright").ElementHandle | null} panelHandle
+ * @returns {Promise<{ label: string, value: string }[]>}
+ */
+async function extractArlingtonProjectInformationFieldsFromPanel(panelHandle) {
+  if (
+    !panelHandle ||
+    typeof panelHandle.evaluate !== "function"
+  ) {
+    return [];
+  }
+
+  try {
+    const raw = await panelHandle.evaluate((panelRootArg) => {
+      const panel =
+        panelRootArg instanceof Element
+          ? /** @type {Element} */ (panelRootArg)
+          : null;
+      if (!panel) return [];
+
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+
+      const wanted = [
+        "Project ID",
+        "Plan Review Project Name",
+        "Accela CAP ID",
+        "Address",
+        "Review Type",
+        "CPHD Case #",
+      ];
+
+      /** @type {(el?: Element | null) => string} */
+      const readValue = (el) => {
+        if (!el) return "";
+        const tag = `${el.tagName || ""}`.toUpperCase();
+        if (tag === "SELECT") {
+          const sel = /** @type {HTMLSelectElement} */ (el);
+          const selectedText = sel.selectedOptions?.[0]?.textContent?.trim();
+          if (selectedText && selectedText !== "<None>")
+            return norm(selectedText);
+        }
+        if (
+          "value" in el &&
+          /** @type {HTMLInputElement} */ (el).value != null
+        ) {
+          return norm(
+            `${/** @type {HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement} */ (el).value}`,
+          );
+        }
+        return norm(
+          el.getAttribute?.("value") || el.innerText || el.textContent || "",
+        );
+      };
+
+      /** @type {(labelEl?: Element | null) => string} */
+      function findValueNearLabel(labelEl) {
+        if (!(labelEl instanceof Element)) return "";
+
+        const forId = labelEl.getAttribute?.("for");
+        if (
+          forId &&
+          typeof CSS !== "undefined" &&
+          typeof CSS.escape === "function"
+        ) {
+          try {
+            const byFor = panel.querySelector(`#${CSS.escape(forId)}`);
+            const v = readValue(byFor);
+            if (v) return v;
+          } catch (_) {
+            /**/
+          }
+        }
+
+        const containers = [
+          labelEl.closest("tr"),
+          labelEl.closest(".form-group"),
+          labelEl.closest(".row"),
+          labelEl.closest("li"),
+          labelEl.parentElement,
+          labelEl.parentElement?.parentElement,
+        ].filter(Boolean);
+
+        for (const container of containers) {
+          if (!container) continue;
+          const controls = [
+            ...container.querySelectorAll("input, textarea, select"),
+          ];
+          for (const c of controls) {
+            const v = readValue(c);
+            if (v) return v;
+          }
+
+          const textPieces = [...container.querySelectorAll("span, div, td")]
+            .map((x) =>
+              norm(x.innerText || /** @type {string} */ (x.textContent || "")),
+            )
+            .filter(Boolean);
+
+          const labelText = norm(
+            labelEl.innerText ||
+              /** @type {string} */ (labelEl.textContent || ""),
+          ).replace(/:$/, "");
+
+          const nonLabel = textPieces.find((t) => {
+            const tr = t.replace(/:$/, "");
+            return (
+              t !== labelText &&
+              !wanted.some(
+                (w) =>
+                  w === tr ||
+                  w.toLowerCase() === `${tr || ""}`.toLowerCase(),
+              )
+            );
+          });
+          if (nonLabel) return nonLabel;
+        }
+
+        const next = labelEl.nextElementSibling;
+        const direct = readValue(next);
+        if (
+          direct &&
+          !wanted.includes(direct.replace(/:$/, "")) &&
+          !wanted.find(
+            (w) =>
+              w.toLowerCase() === direct.replace(/:$/, "").toLowerCase(),
+          )
+        ) {
+          return direct;
+        }
+
+        const nextControl = next?.querySelector?.(
+          "input, textarea, select",
+        );
+        return readValue(nextControl);
+      }
+
+      /** @type {{ label: string; value: string; sourceTab: string }[]} */
+      const fields = [];
+
+      for (const label of wanted) {
+        const labelEl = [...panel.querySelectorAll("label, span, div, td, th")]
+          /** @returns {boolean} */
+          .find((el) => {
+            const t = norm(
+              el.innerText || /** @type {string} */ (el.textContent || ""),
+            ).replace(/:$/, "");
+            return t === label || t.toLowerCase() === label.toLowerCase();
+          });
+
+        const value = labelEl ? findValueNearLabel(labelEl) : "";
+
+        fields.push({
+          label,
+          value,
+          sourceTab: "projectInformation",
+        });
+      }
+
+      const setIfEmpty = (label, value) => {
+        const f = fields.find((x) => x.label === label);
+        const v = norm(value);
+        if (f && !`${f.value || ""}`.trim() && v) f.value = v;
+      };
+
+      const getVal = (label) => {
+        const f = fields.find((x) => x.label === label);
+        return f ? `${f.value || ""}`.trim() : "";
+      };
+
+      const scope = panel.ownerDocument || document;
+      const rtHidden = readValue(
+        scope.getElementById("ProjectData_ReviewTypeID"),
+      );
+      setIfEmpty("Review Type", rtHidden);
+
+      const pg =
+        panel.querySelector(
+          "select#projectgroup, select[name='projectgroup'], select[name='ProjectGroupID']",
+        ) || panel.querySelector("select[id='projectgroup']");
+      const pgText = readValue(pg);
+      setIfEmpty("Plan Review Project Name", pgText);
+      if (!getVal("Address") && pgText) {
+        const parts = pgText.split(/\s*-\s*/);
+        if (parts.length >= 2) setIfEmpty("Address", parts[0].trim());
+        else setIfEmpty("Address", pgText);
+      }
+
+      const rtSel =
+        panel.querySelector(
+          "select#reviewtype, select[name='reviewtype'], select[name='ReviewTypeID']",
+        ) || panel.querySelector("select[id='reviewtype']");
+      setIfEmpty("Review Type", readValue(rtSel));
+
+      return fields;
+    });
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * @deprecated Use extractArlingtonProjectInformationFieldsFromPanel with resolved active panel handle.
+ */
+async function extractArlingtonProjectInformationFieldsFromVisiblePanel(
+  domTarget,
+) {
+  const raw = await domTarget
+    .evaluate(() => {
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      function pickActiveTabPanelRoot() {
+        const panels = [
+          ...document.querySelectorAll(
+            '.ui-tabs-panel, [role="tabpanel"], .tab-content',
+          ),
+        ];
+        const cand = [];
+        for (const p of panels) {
+          try {
+            const el = /** @type {HTMLElement} */ (p);
+            if (el.classList.contains("ui-tabs-hide")) continue;
+            if (
+              `${el.getAttribute("aria-hidden") || ""}`.toLowerCase() ===
+              "true"
+            )
+              continue;
+            const st = getComputedStyle(el);
+            if (st.display === "none" || st.visibility === "hidden") continue;
+            const r = el.getBoundingClientRect();
+            if (r.height < 8 || r.width < 16) continue;
+            cand.push(el);
+          } catch (_) {
+            /**/
+          }
+        }
+        cand.sort((a, b) => {
+          try {
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            return rb.width * rb.height - ra.width * ra.height;
+          } catch (_) {
+            return 0;
+          }
+        });
+        return cand[0] || /** @type {HTMLElement | null} */ (document.body);
+      }
+
+      let root = pickActiveTabPanelRoot();
+      if (!root) root = /** @type {HTMLElement} */ (document.body);
+      const fields = [];
+      root.querySelectorAll("table tr").forEach((tr) => {
+        const th = tr.querySelector("th");
+        const td = tr.querySelector("td");
+        if (th && td) {
+          const label = norm(th.innerText);
+          const value = norm(td.innerText);
+          if (label && value) fields.push({ label, value });
+        }
+      });
+      root.querySelectorAll("dl").forEach((dl) => {
+        const dts = [...dl.querySelectorAll("dt")];
+        const dds = [...dl.querySelectorAll("dd")];
+        for (let i = 0; i < Math.min(dts.length, dds.length); i++) {
+          const label = norm(dts[i].innerText);
+          const value = norm(dds[i].innerText);
+          if (label) fields.push({ label, value });
+        }
+      });
+      return fields;
+    })
+    .catch(() => []);
+  return Array.isArray(raw) ? raw : [];
+}
+
+async function arlingtonIntegratedReadRowCells(rowHandle) {
+  return rowHandle.evaluate((tr) => {
+    const cells = [...tr.querySelectorAll("td, th")];
+    const parts = cells.map((c) =>
+      (c.textContent || "").replace(/\s+/g, " ").trim(),
+    );
+    const rawText = parts.join(" | ").trim();
+    return { parts, rawText };
+  });
+}
+
+async function scrapeArlingtonPlanIntegratedGrid(opts) {
+  const {
+    page,
+    logLabel,
+    sourceTabCamel,
+    sourceSectionCamel,
+    docsSink,
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    downloadedHashes,
+    downloadCtx,
+    iframeDownloadsDisabled,
+  } = opts;
+
+  const fr = await pickArlingtonIntegratedContentFrame(page);
+  if (!fr) {
+    console.log(
+      `[Arlington][Plan Review] ${logLabel}: no integrated frame matched`,
+    );
+    return { rowCount: 0, downloads: 0 };
+  }
+  await page.waitForTimeout(350).catch(() => {});
+
+  const rowHandles =
+    (await fr.$$('table tbody tr, table[class*="Grid"] tr, table tr').catch(
+      () => [],
+    )) || [];
+  /** @type {import('playwright').ElementHandle[]} */
+  const dataRows = [];
+  for (const rh of rowHandles) {
+    const onlyTh = await rh.evaluate((tr) => {
+      const cells = [...tr.querySelectorAll("th, td")];
+      return (
+        cells.length > 0 &&
+        cells.every((c) =>
+          /^th$/i.test(c.tagName) ||
+          (cells.length <= 12 && /^\s*name\b/i.test(
+            String(c.textContent || ""),
+          )),
+        )
+      );
+    }).catch(() => false);
+    if (onlyTh) continue;
+    const cellCount =
+      parseInt(await rh.evaluate((tr) => tr.querySelectorAll("td").length).catch(() => "0"),
+        10) || 0;
+    if (!cellCount) continue;
+    dataRows.push(rh);
+  }
+
+  const scanned = Math.min(dataRows.length, 120);
+
+  if (iframeDownloadsDisabled) {
+    console.log(
+      `[Arlington][Plan Review] ${logLabel} rows=${scanned} (integrated iframe downloads disabled — row scan skipped)`,
+    );
+    return { rowCount: scanned, downloads: 0 };
+  }
+
+  let downloads = 0;
+  const slice = dataRows.slice(0, Math.min(dataRows.length, 120));
+  for (const rh of slice) {
+    const { parts } = await arlingtonIntegratedReadRowCells(rh);
+    const rowMeta = arlingtonIntegratedHeuristicMeta(parts);
+
+    /** skip empty stubs */
+    if (!rowMeta.name && parts.length < 2) continue;
+
+    const docMeta = rowMeta.name
+      ? rowMeta
+      : { ...rowMeta, name: parts.join("|").slice(0, 260) };
+
+    const docObj = await tryArlingtonIntegratedRowDownload(
+      page,
+      rh,
+      docMeta,
+      sourceTabCamel,
+      sourceSectionCamel,
+      attachmentDedupeKeys,
+      prSeenRowKeys,
+      downloadedHashes,
+      downloadCtx,
+    );
+
+    if (docObj) {
+      if (
+        docObj.publicUrl ||
+        /^(uploaded|success)$/i.test(String(docObj.downloadStatus || ""))
+      ) {
+        downloads++;
+      }
+      docsSink.push(docObj);
+    }
+  }
+  console.log(
+    `[Arlington][Plan Review] ${logLabel} rows=${slice.length} downloads=${downloads}`,
+  );
+  return { rowCount: slice.length, downloads };
+}
+
+
+
+
+/** Arlington ERMS portal — authenticated off Accela (not `#tab-custom_component`). */
+function arlingtonExternalPlanReviewHrefLooksValid(absHref) {
+  const low = `${absHref || ""}`.toLowerCase().trim();
+  if (!/^https?:\/\//i.test(low)) return false;
+  if (!/prd-ermsaccela/i.test(low) || !/planreview/i.test(low)) return false;
+  if (/aca-prod\.accela\.com/i.test(low) || /capdetail\.aspx/i.test(low))
+    return false;
+  return true;
+}
+
+async function scrapeArlingtonExternalPlanHrefFromRoot(root) {
+  if (!root || typeof root.evaluate !== "function") return "";
+  try {
+    return (
+      `${await root.evaluate(() => {
+        function resolveAbs(raw) {
+          if (!raw) return "";
+          const s = `${raw}`.trim();
+          if (!s || s.startsWith("#")) return "";
+          try {
+            return new URL(s, document.baseURI || location.href).href;
+          } catch (_) {
+            return s;
+          }
+        }
+        function pickPlanReviewUrl(hRaw) {
+          const abs = resolveAbs(hRaw);
+          const low = abs.toLowerCase();
+          if (
+            !abs ||
+            !/prd-ermsaccela/i.test(low) ||
+            !/planreview/i.test(low) ||
+            /aca-prod\.accela\.com/i.test(low) ||
+            /capdetail\.aspx/i.test(low)
+          )
+            return "";
+          return abs;
+        }
+
+        const byId = document.querySelector(
+          "#ctl00_PlaceHolderMain_lnkLink4MoreInfo",
+        );
+        const fromId = pickPlanReviewUrl(byId && byId.getAttribute("href"));
+        if (fromId) return fromId;
+
+        const links = [...document.querySelectorAll("a[href]")];
+        const preferred = [];
+        for (const a of links) {
+          const cls = `${a.className || ""}`;
+          const href = `${a.getAttribute("href") || ""}`;
+          if (cls.includes("external_link")) preferred.push(a);
+          else if (
+            /prd-ermsaccela/i.test(href) ||
+            (/planreview/i.test(href) && /\.arlingtonva\.us/i.test(href))
+          )
+            preferred.push(a);
+        }
+        for (const a of preferred.length ? preferred : links) {
+          const ok = pickPlanReviewUrl(a.getAttribute("href"));
+          if (ok) return ok;
+        }
+        return "";
+      }) || ""}`
+    ).trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+async function findArlingtonExternalPlanReviewHref(page, extractionCtx) {
+  const roots = [];
+  const seen = new Set();
+  const push = (r) => {
+    if (!r || seen.has(r)) return;
+    if (typeof r.evaluate !== "function") return;
+    seen.add(r);
+    roots.push(r);
+  };
+
+  push(page);
+  push(page._recordFrame);
+  if (extractionCtx && extractionCtx !== page) push(extractionCtx);
+
+  for (const r of roots) {
+    const h = await scrapeArlingtonExternalPlanHrefFromRoot(r).catch(() => "");
+    if (h && arlingtonExternalPlanReviewHrefLooksValid(h)) return h;
+  }
+  return "";
+}
+
+async function waitForArlingtonPlanReviewViewDocumentsUrl(page, deadlineMs = 55000) {
+  const needles = [
+    /PlanReviewIntegrated\/plan\/ViewDocuments/i,
+    /PlanReviewIntegrated\/Plan\/ViewDocuments/i,
+  ];
+  const until = Date.now() + deadlineMs;
+  while (Date.now() < until) {
+    let u = "";
+    try {
+      u = `${page.url() || ""}`;
+    } catch (_) {
+      /**/
+    }
+    if (needles.some((rx) => rx.test(u))) return true;
+    await page.waitForTimeout(340).catch(() => {});
+  }
+  return false;
+}
+
+/**
+ * Playwright locator for the Arlington external ERMS Plan Review link (Cap Detail).
+ * @returns {Promise<import('playwright').Locator | null>}
+ */
+async function findArlingtonExternalPlanReviewLinkLocator(page, extractionCtx) {
+  const roots = [];
+  const seen = new Set();
+  const push = (r) => {
+    if (!r || seen.has(r)) return;
+    if (typeof r.locator !== "function") return;
+    seen.add(r);
+    roots.push(r);
+  };
+  push(page);
+  push(page._recordFrame);
+  if (extractionCtx && extractionCtx !== page) push(extractionCtx);
+
+  const baseUrl = (() => {
+    try {
+      return page.url() || "";
+    } catch (_) {
+      return "";
+    }
+  })();
+
+  for (const root of roots) {
+    const candidates = [
+      root.locator("#ctl00_PlaceHolderMain_lnkLink4MoreInfo").first(),
+      root.locator('a.external_link[href*="prd-ermsaccela"]').first(),
+      root.locator('a[href*="prd-ermsaccela"]').first(),
+      root.locator('a[href*="PlanReviewIntegrated" i]').first(),
+    ];
+    for (const lc of candidates) {
+      const cnt = await lc.count().catch(() => 0);
+      if (!cnt) continue;
+      const href = await lc.getAttribute("href").catch(() => "");
+      let abs = `${href || ""}`.trim();
+      try {
+        if (abs && baseUrl) abs = new URL(abs, baseUrl).href;
+      } catch (_) {
+        /**/
+      }
+      if (arlingtonExternalPlanReviewHrefLooksValid(abs)) return lc;
+    }
+  }
+  return null;
+}
+
+/**
+ * Click the external Plan Review link; handle new tab OR same-tab navigation to ViewDocuments.
+ * @returns {Promise<{ prPage: import('playwright').Page | null, openedNewTab: boolean }>}
+ */
+async function openArlingtonErmsPlanReviewViaExternalClick(accPage, extractionCtx) {
+  const linkLoc = await findArlingtonExternalPlanReviewLinkLocator(
+    accPage,
+    extractionCtx,
+  );
+  if (!linkLoc) {
+    console.warn(
+      "[Arlington][PlanReview] external Plan Review link element not found for click",
+    );
+    return { prPage: null, openedNewTab: false };
+  }
+
+  const context = accPage.context();
+  const navPromise = accPage.waitForURL(
+    /planreviewintegrated\/plan\/viewdocuments/i,
+    { timeout: 45000 },
+  );
+  const popupPromise = context.waitForEvent("page", { timeout: 45000 });
+
+  await linkLoc.click({ timeout: 60000 }).catch((e) => {
+    console.warn(
+      `[Arlington][PlanReview] external link click failed: ${e && e.message ? e.message : e}`,
+    );
+  });
+
+  let prPage = null;
+  let openedNewTab = false;
+  try {
+    prPage = await Promise.race([
+      popupPromise.then((p) => {
+        try {
+          openedNewTab = true;
+          console.log(
+            "[Arlington][PlanReview] external link opens new page",
+          );
+        } catch (_) {
+          /**/
+        }
+        return p;
+      }),
+      navPromise.then(() => accPage),
+    ]);
+  } catch (_) {
+    /**/
+  }
+
+  if (!prPage) {
+    try {
+      const late = await popupPromise.catch(() => null);
+      if (late) {
+        prPage = late;
+        openedNewTab = true;
+        console.log(
+          "[Arlington][PlanReview] external link opens new page (late)",
+        );
+      }
+    } catch (_) {
+      /**/
+    }
+  }
+
+  if (!prPage) {
+    try {
+      const u = `${accPage.url() || ""}`;
+      if (/planreviewintegrated\/plan\/viewdocuments/i.test(u)) prPage = accPage;
+    } catch (_) {
+      /**/
+    }
+  }
+
+  if (!prPage) {
+    return { prPage: null, openedNewTab: false };
+  }
+
+  await prPage.waitForLoadState("domcontentloaded").catch(() => {});
+  return { prPage, openedNewTab };
+}
+
+/** Arlington ERMS base URL for resolving `ReturnUrl` from SignIn redirects. */
+const ARLINGTON_ERMS_PUBLIC_ORIGIN =
+  "https://prd-ermsaccela-az.arlingtonva.us";
+
+/**
+ * Wait for post-authentication redirect from SignIn to ViewDocuments, or navigate ReturnUrl.
+ */
+async function waitForArlingtonPlanReviewPastSignIn(prPage) {
+  let u = "";
+  try {
+    u = prPage.url() || "";
+  } catch (_) {
+    return;
+  }
+  if (!/planreviewintegrated\/signin\/signin/i.test(u)) {
+    return;
+  }
+
+  console.log("[Arlington][PlanReview] SignIn redirect detected");
+
+  await Promise.race([
+    prPage.waitForURL(/PlanReviewIntegrated\/plan\/ViewDocuments/i, {
+      timeout: 60000,
+    }),
+    prPage.waitForFunction(
+      () => {
+        const text = document.body?.innerText || "";
+        return (
+          !!document.querySelector("#divDocuments") ||
+          /Plan Set Documents/i.test(text)
+        );
+      },
+      { timeout: 60000 },
+    ),
+  ]).catch(() => {});
+
+  let afterUrl = "";
+  try {
+    afterUrl = prPage.url() || "";
+  } catch (_) {
+    /**/
+  }
+  console.log(`[Arlington][PlanReview] after SignIn wait url=${afterUrl}`);
+
+  let stuckOnSignIn = false;
+  try {
+    stuckOnSignIn = /planreviewintegrated\/signin\/signin/i.test(
+      prPage.url() || "",
+    );
+  } catch (_) {
+    stuckOnSignIn = false;
+  }
+
+  if (!stuckOnSignIn) return;
+
+  let returnAbs = "";
+  try {
+    const parsed = new URL(prPage.url());
+    const ret = parsed.searchParams.get("ReturnUrl");
+    if (ret)
+      returnAbs = new URL(ret, ARLINGTON_ERMS_PUBLIC_ORIGIN).href;
+  } catch (_) {
+    /**/
+  }
+
+  if (!returnAbs) return;
+
+  console.log(
+    `[Arlington][PlanReview] SignIn stuck; navigating ReturnUrl=${returnAbs}`,
+  );
+  await prPage
+    .goto(returnAbs, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    })
+    .catch(() => {});
+
+  await Promise.race([
+    prPage.waitForURL(/PlanReviewIntegrated\/plan\/ViewDocuments/i, {
+      timeout: 60000,
+    }),
+    prPage.waitForFunction(
+      () => {
+        const text = document.body?.innerText || "";
+        return (
+          !!document.querySelector("#divDocuments") ||
+          /Plan Set Documents/i.test(text)
+        );
+      },
+      { timeout: 60000 },
+    ),
+  ]).catch(() => {});
+
+  try {
+    afterUrl = prPage.url() || "";
+  } catch (_) {
+    /**/
+  }
+  console.log(`[Arlington][PlanReview] after SignIn wait url=${afterUrl}`);
+}
+
+/**
+ * @returns {Promise<boolean>}
+ */
+async function waitForArlingtonPlanReviewPrPageLoaded(prPage) {
+  try {
+    await prPage.waitForFunction(
+      () => {
+        const href = (location.href || "").toLowerCase();
+        const bodyText = document.body?.innerText || "";
+        return (
+          href.includes("/planreviewintegrated/plan/viewdocuments") ||
+          !!document.querySelector("#divDocuments") ||
+          /Plan Set Documents/i.test(bodyText)
+        );
+      },
+      { timeout: 45000 },
+    );
+  } catch (_) {
+    return false;
+  }
+
+  let divDoc = false;
+  let planSetText = false;
+  try {
+    const peek = await prPage.evaluate(() => ({
+      div: !!document.querySelector("#divDocuments"),
+      pst: /Plan Set Documents/i.test(document.body?.innerText || ""),
+    }));
+    divDoc = peek.div;
+    planSetText = peek.pst;
+  } catch (_) {
+    /**/
+  }
+  console.log(
+    `[Arlington][PlanReview] loaded: divDocuments=${divDoc} planSetText=${planSetText}`,
+  );
+  return true;
+}
+
+function mapArlingtonDomSecondaryTabRowToDoc(row, tabKey) {
+  const doc = mapArlingtonDomPlanSetRowToDoc(row);
+  doc.sourceTab = tabKey;
+  doc.sourceSection =
+    tabKey === "plansAndDocuments" ? "planSetDocuments" : tabKey;
+  doc.source = row.source || `plan_review_${tabKey}`;
+  if (row.reviewer) doc.reviewer = `${row.reviewer}`.trim();
+  if (row.reviewStatus) doc.reviewStatus = `${row.reviewStatus}`.trim();
+  if (row.documentType) doc.documentType = `${row.documentType}`.trim();
+  if (row.documentDate) doc.documentDate = `${row.documentDate}`.trim();
+  if (
+    row.secondaryDomRowIndex != null &&
+    `${row.secondaryDomRowIndex}` !== ""
+  ) {
+    doc.secondaryDomRowIndex = row.secondaryDomRowIndex;
+  }
+  if (
+    tabKey !== "plansAndDocuments" &&
+    !`${doc.publicUrl || doc.downloadUrl || ""}`.trim()
+  ) {
+    doc.status = "plan_review_secondary_row";
+  }
+  return doc;
+}
+
+function mapArlingtonDomPlanSetRowToDoc(row) {
+  const name = `${row.name || ""}`.trim();
+  const actRaw = row.action && typeof row.action === "object" ? row.action : {};
+  /** @type {{ href?: string; onclick?: string; id?: string; title?: string; alt?: string; name?: string; documentId?: string }} */
+  const action = {};
+  const hRaw = `${actRaw.href ?? ""}`.trim();
+  if (hRaw) action.href = hRaw.slice(0, 2000);
+  const ocRaw = `${actRaw.onclick ?? ""}`.trim();
+  if (ocRaw) action.onclick = ocRaw.slice(0, 4000);
+  const idRaw = `${actRaw.id ?? ""}`.trim();
+  if (idRaw) action.id = idRaw.slice(0, 500);
+  const nameAttrRaw = `${actRaw.name ?? ""}`.trim();
+  if (nameAttrRaw) action.name = nameAttrRaw.slice(0, 260);
+  const documentIdRaw = `${actRaw.documentId ?? ""}`.trim();
+  if (documentIdRaw && /^\d+$/.test(documentIdRaw)) {
+    action.documentId = documentIdRaw.slice(0, 32);
+  }
+  if (!action.documentId) {
+    const hay = [action.onclick, action.href, action.id, action.name]
+      .filter(Boolean)
+      .join("\n");
+    const inf = arlingtonInferErmsPlanDocIdFromDomActionHaystack(hay);
+    if (/^\d+$/.test(inf)) action.documentId = inf.slice(0, 32);
+  }
+  const titRaw = `${actRaw.title ?? ""}`.trim();
+  if (titRaw) action.title = titRaw.slice(0, 800);
+  const altRaw = `${actRaw.alt ?? ""}`.trim();
+  if (altRaw) action.alt = altRaw.slice(0, 800);
+
+  let publicUrl = "";
+  let downloadUrl = "";
+  if (/^https?:\/\//i.test(hRaw) && !/^javascript:/i.test(hRaw))
+    downloadUrl = publicUrl = hRaw;
+
+  const out = {
+    name,
+    filename: name,
+    discipline: `${row.discipline || ""}`.trim(),
+    sheetType: `${row.sheetType || ""}`.trim(),
+    description: `${row.description || ""}`.trim(),
+    revision: `${row.revision || ""}`.trim(),
+    uploadStatus: `${row.uploadStatus || ""}`.trim(),
+    documentDate: "",
+    size: "",
+    status: publicUrl ? "plan_set_has_url" : "plan_set_row",
+    storagePath: "",
+    publicUrl,
+    downloadUrl,
+    sourceTab: "plansAndDocuments",
+    sourceSection: "planSetDocuments",
+    source: row.source || "plan_review_plan_set_documents",
+  };
+  if (Object.keys(action).length) out.action = action;
+  if (action.documentId) out.documentId = action.documentId;
+  return out;
+}
+
+/**
+ * Active Plan Set Documents panel only (#divDocuments scoped). Not all tables under #divDocuments.
+ * @returns {Promise<object[]>}
+ */
+async function extractArlingtonPlanSetDocumentsFromPrPageDom(domTarget) {
+  const arlingtonPlanSetRowStableKeyNode = (row) => {
+    const a = row?.action && typeof row.action === "object" ? row.action : {};
+    const id = `${a.documentId || ""}`.trim();
+    const nm = `${row.name || ""}`.trim().replace(/\s+/g, " ");
+    const di = `${row.discipline || ""}`.trim().replace(/\s+/g, " ");
+    const st = `${row.sheetType || ""}`.trim().replace(/\s+/g, " ");
+    const rev = `${row.revision || ""}`.trim().replace(/\s+/g, " ");
+    const oc = `${a.onclick || ""}`.trim().slice(0, 160);
+    if (id) return `${id}|${di}|${st}|${rev}`;
+    return `${nm}|${di}|${st}|${rev}|${oc}`;
+  };
+
+  /** @param {number} passNum */
+  const runCollectPass = (passNum) =>
+    domTarget.evaluate((passNumIn) => {
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      /** Section labels whose grids must never be scraped in Plan Set pass */
+      const EXCLUDE_HEADING =
+        /\b(Supporting Documents|Comment Response Letters|Review Results|Approved Documents|Project Information)\b/i;
+
+      /** Reject phantom / header rows in the Plan Set sheet */
+      function isRejectedName(nm) {
+        const n = norm(nm);
+        if (!n) return true;
+        const low = n.toLowerCase();
+        if (low === "document") return true;
+        if (low === "name") return true;
+        if (low === "document type") return true;
+        if (/^other supporting document\b/i.test(n)) return true;
+        if (/^sheet type\b$/i.test(n)) return true;
+        if (/^(discipline|description|revision|upload status)$/i.test(n))
+          return true;
+        /** Full header line pasted into one column */
+        if (
+          /\bName\b.*\bDiscipline\b.*\bSheet Type\b.*\bDescription\b/i.test(n)
+        ) {
+          return true;
+        }
+        return false;
+      }
+
+      function extractRowAction(tr) {
+        const dlInput =
+          tr.querySelector('input.img-button.docaction[name]') ||
+          tr.querySelector('input.docaction[name]');
+        if (dlInput) {
+          const nameAttr = `${dlInput.getAttribute("name") || ""}`.trim();
+          if (/^\d+$/.test(nameAttr)) {
+            return {
+              documentId: nameAttr,
+              title: `${dlInput.getAttribute("title") || ""}`.trim().slice(0, 800),
+              alt: `${dlInput.getAttribute("alt") || ""}`.trim().slice(0, 800),
+              href: "",
+              onclick: "",
+              id: `${dlInput.getAttribute("id") || ""}`.trim().slice(0, 500),
+            };
+          }
+        }
+
+        const nodes = [...tr.querySelectorAll("a, button, img, input, [onclick]")].filter((el) => {
+          try {
+            return !!(el.closest("td") || el.closest("th"));
+          } catch (_) {
+            return false;
+          }
+        });
+        /** Prefer real links, then elements with actionable handlers */
+        const scored = [];
+        for (const el of nodes) {
+          const tn = `${el.tagName || ""}`.toUpperCase();
+          let href = `${el.getAttribute("href") || ""}`.trim();
+          if (/^javascript:void/i.test(href) || /^#?$/.test(href)) href = "";
+          const onclick = `${el.getAttribute("onclick") || ""}`.trim();
+          const id = `${el.getAttribute("id") || ""}`.trim();
+          const title = `${el.getAttribute("title") || ""}`.trim();
+          let alt = "";
+          if (tn === "IMG" || tn === "INPUT") {
+            alt = `${el.getAttribute("alt") || ""}`.trim();
+          }
+          const role = `${el.getAttribute("role") || ""}`.trim();
+          let score =
+            (/^https?:\/\//i.test(href) ? 120 : 0) +
+            (onclick ? 40 : 0) +
+            (title ? 5 : 0) +
+            (alt ? 5 : 0) +
+            (id ? 3 : 0);
+          const hayOn = `${title} ${alt} ${onclick} ${href}`.toLowerCase();
+          if (/download|open|pdf|view|sheet/.test(hayOn)) score += 25;
+          if (tn === "A" || tn === "BUTTON" || role === "button") score += 8;
+          if (tn === "IMG" || tn === "INPUT") score += 4;
+          if (href || onclick || id || title || alt)
+            scored.push({
+              score,
+              href: href.slice(0, 2000),
+              onclick: onclick.slice(0, 4000),
+              id: id.slice(0, 500),
+              title: title.slice(0, 800),
+              alt: alt.slice(0, 800),
+            });
+        }
+        scored.sort((a, b) => b.score - a.score);
+        const best = scored[0];
+        if (!best)
+          return { href: "", onclick: "", id: "", title: "", alt: "" };
+        const { score: _omit, ...action } = best;
+        return action;
+      }
+
+      /**
+       * Scroll container for virtualized / DataTables / jqGrid plan-set grids.
+       * @param {HTMLTableElement | null} tableEl
+       * @param {Element} scopeRoot
+       * @returns {HTMLElement}
+       */
+      function resolveScrollEl(tableEl, scopeRoot) {
+        const root =
+          scopeRoot && scopeRoot.nodeType === 1 ? scopeRoot : document.body;
+        const direct = root.querySelector(
+          ".dataTables_scrollBody, .ui-jqgrid-bdiv",
+        );
+        if (
+          direct &&
+          direct instanceof HTMLElement &&
+          direct.scrollHeight > direct.clientHeight + 4
+        )
+          return direct;
+
+        /** @type {HTMLElement | null} */
+        let el = tableEl instanceof HTMLElement ? tableEl : null;
+        for (let i = 0; i < 26 && el; i++) {
+          try {
+            const st = window.getComputedStyle(el);
+            const oy = st.overflowY;
+            if (
+              (oy === "auto" || oy === "scroll" || oy === "overlay") &&
+              el.scrollHeight > el.clientHeight + 4
+            )
+              return el;
+          } catch (_) {
+            /**/
+          }
+          el = el.parentElement;
+        }
+
+        /** @type {HTMLElement | undefined} */
+        const docElm = /** @type {HTMLElement | undefined} */ (
+          document.scrollingElement || document.documentElement
+        );
+        return docElm || document.documentElement;
+      }
+
+      /**
+       * Broad fallback when tabpanel-scoped grid misses real sheet rows: scan every
+       * `tr` under `#divDocuments`, keep rows matching Arlington Plan Set patterns.
+       */
+      function fallbackExtractPlanSetRows(container) {
+        const BAD =
+          /Supporting\s+Documents|Comment\s+Response\s+Letters|Document\s+Type|Other\s+Supporting\s+Document|Name\s+Discipline\s+Sheet\s+Type|Upload\s+Status/i;
+        const DISC_RE =
+          /\b(Architectural|Forms\s+and\s+Letters|Civil|Structural|Electrical|Mechanical|Plumbing|MEP|Survey|Landscape|Geotechnical|Gas)\b/i;
+        const SHEET_RE =
+          /\b(Construction\s+Plans|Proposed\s+Plat\/Site\s+Plan|Statement\s+of|Site\s+Plan|Grading|Cover\s+Sheet)\b/i;
+        const REV_RE = /^\d{1,4}$/;
+
+        const allTr = [...container.querySelectorAll("tr")];
+        const candidates = allTr.filter((tr) => {
+          if (!tr.querySelector("td")) return false;
+          const t = norm(tr.innerText);
+          return t.length >= 2;
+        });
+
+        const rows = [];
+        const seen = new Set();
+        for (const tr of candidates) {
+          const text = norm(tr.innerText);
+          if (BAD.test(text)) continue;
+          if (EXCLUDE_HEADING.test(text)) continue;
+
+          const cells = [...tr.querySelectorAll("td")].map((td) =>
+            norm(td.innerText),
+          );
+          if (cells.length < 2) continue;
+
+          const joinedHdr = cells
+            .map((c) => c.toLowerCase())
+            .join("|")
+            .slice(0, 200);
+          if (
+            /\bname\b.*\bdiscipline\b.*\bsheet\b/i.test(joinedHdr) ||
+            /^name\|/.test(joinedHdr)
+          )
+            continue;
+
+          let name = "";
+          for (const c of cells) {
+            if (/^(C-|RW-)[0-9]/i.test(c)) {
+              name = c;
+              break;
+            }
+          }
+          if (!name) {
+            for (const c of cells) {
+              if (!c || c.length < 2) continue;
+              if (DISC_RE.test(c) || SHEET_RE.test(c)) continue;
+              if (REV_RE.test(c)) continue;
+              if (/^n\/a$/i.test(c)) continue;
+              if (BAD.test(c)) continue;
+              name = c;
+              break;
+            }
+          }
+          if (!name || isRejectedName(name)) continue;
+
+          let discipline = "";
+          let sheetType = "";
+          let revision = "";
+          for (const c of cells) {
+            if (!discipline && DISC_RE.test(c)) discipline = c;
+            else if (!sheetType && SHEET_RE.test(c)) sheetType = c;
+            else if (!revision && REV_RE.test(c) && c !== name) revision = c;
+          }
+
+          const act = extractRowAction(tr);
+          const aid = `${act.documentId || ""}`.trim();
+          const key = `${name}|${discipline}|${sheetType}|${aid}|${(act.onclick || "").slice(0, 92)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          rows.push({
+            name,
+            discipline,
+            sheetType,
+            description: "",
+            revision,
+            uploadStatus: "",
+            action: act,
+            source: "plan_review_plan_set_documents",
+          });
+        }
+        return { rows, candidateCount: candidates.length };
+      }
+
+      const divDocuments = document.querySelector("#divDocuments");
+      if (!divDocuments) {
+        const scrollElEmpty =
+          /** @type {HTMLElement} */ (
+            document.scrollingElement || document.documentElement
+          ) || document.documentElement;
+        if (passNumIn === 1) scrollElEmpty.scrollTop = 0;
+        window.__arlPrPsScroll = scrollElEmpty;
+        return {
+          rows: [],
+          visibleExtracted: 0,
+          scrollTop: scrollElEmpty.scrollTop,
+          scrollHeight: scrollElEmpty.scrollHeight,
+          clientHeight: scrollElEmpty.clientHeight || 0,
+          debug: {
+            tableCount: 0,
+            candidateCount: 0,
+            acceptedCount: 0,
+            sampleNames: [],
+          },
+        };
+      }
+
+      /**
+       * Resolve visible nested "Plan Set Documents" tabpanel (prefer active).
+       */
+      function planSetScopedRoot(container) {
+        const tabAnchors = [
+          ...container.querySelectorAll(
+            '.ui-tabs-nav a[href^="#"], ul.ui-tabs-nav li a[href^="#"], [role="tab"][href^="#"]',
+          ),
+        ].filter(Boolean);
+
+        const matchesLabel = (t) =>
+          /^plan\s*set\s*documents\b/i.test(norm(t));
+
+        /** @type {{panel: HTMLElement, rank: number}[]} */
+        const hits = [];
+
+        for (const a of tabAnchors) {
+          if (!matchesLabel(a.textContent || "")) continue;
+          const hrefRaw = `${a.getAttribute("href") || ""}`.trim();
+          if (!hrefRaw.startsWith("#")) continue;
+          const panel = container.querySelector(hrefRaw);
+          if (!panel || panel.nodeType !== 1) continue;
+          /** @type {HTMLElement} */
+          const fel = panel;
+          let rank = 0;
+          try {
+            const st = window.getComputedStyle(fel);
+            const r = fel.getBoundingClientRect();
+            const visible =
+              st.display !== "none" &&
+              st.visibility !== "hidden" &&
+              r.height > 4 &&
+              r.width > 4;
+            if (visible) rank += 100;
+          } catch (_) {
+            /**/
+          }
+          try {
+            const li = a.closest("li");
+            if (
+              li?.classList.contains("ui-tabs-active") ||
+              li?.classList.contains("ui-state-active") ||
+              a.classList.contains("ui-tabs-active") ||
+              a.getAttribute("aria-selected") === "true"
+            )
+              rank += 50;
+          } catch (_) {
+            /**/
+          }
+          hits.push({ panel: fel, rank });
+        }
+        hits.sort((x, y) => y.rank - x.rank);
+
+        /** Highest-ranked nested Plan Set tabpanel */
+        /** @type {HTMLElement} */
+        let scope = hits.length ? hits[0].panel : null;
+
+        /** If tab wiring missing, locate first visible table under Plan Set context */
+        if (!scope) {
+          const walks = [...container.querySelectorAll("table")];
+
+          outer: for (const tbl of walks) {
+            let p = tbl;
+            for (let d = 0; d < 14 && p; d++) {
+              const chunk = `${p.tagName}:${p.textContent || ""}`
+                .replace(/\s+/g, " ")
+                .slice(0, 2000)
+                .toLowerCase();
+              const siChunk = chunk.indexOf("supporting");
+              const beforeSup =
+                siChunk >= 0 ? chunk.slice(0, siChunk) : chunk;
+              if (
+                /supporting documents|comment response|review results|approved documents/i.test(
+                  chunk,
+                ) &&
+                !/plan set documents/i.test(beforeSup)
+              )
+                continue outer;
+              p = p.parentElement;
+            }
+            /** prefer table preceded by explicit Plan Set label in ancestry */
+            p = tbl;
+            let sawPlanSet = false;
+            for (let d = 0; d < 18 && p; d++) {
+              const tnorm = `${p.textContent || ""}`.replace(/\s+/g, " ");
+              if (/Plan Set Documents\b/i.test(tnorm.slice(0, 800))) {
+                sawPlanSet = true;
+                break;
+              }
+              if (EXCLUDE_HEADING.test(tnorm.slice(0, 1200))) break;
+              p = p.parentElement;
+            }
+            if (!sawPlanSet) continue;
+            scope = tbl.closest("div") || tbl;
+            break;
+          }
+        }
+
+        /** Last resort — least bad: `#divDocuments` but still filter rows aggressively */
+        if (!scope) scope = container;
+        return scope;
+      }
+
+      const scopeRoot = planSetScopedRoot(divDocuments);
+      /** Only grids inside scoped panel — not every table site-wide under #divDocuments */
+      let matrixTables = [...scopeRoot.querySelectorAll("table")];
+      matrixTables = matrixTables.filter((tb) => {
+        let anc = tb;
+        for (let i = 0; i < 12 && anc; i++) {
+          const sample = `${anc.innerText || ""}`.slice(0, 3000);
+          if (
+            EXCLUDE_HEADING.test(sample) &&
+            /\bSupporting Documents\b/i.test(sample)
+          )
+            return false;
+          anc = anc.parentElement;
+        }
+        return true;
+      });
+
+      /** Pick table showing Plan Set column headers */
+      /** @type {HTMLTableElement | null} */
+      let chosen = null;
+      for (const tb of matrixTables) {
+        const fst = tb.querySelector("tr");
+        if (!fst) continue;
+        const rowText = norm(fst.innerText).toLowerCase();
+        if (
+          /\bname\b/.test(rowText) &&
+          /\bdiscipline\b/.test(rowText) &&
+          (/\bsheet type\b|\bsheet\b/.test(rowText) || /\bupload\b/.test(rowText))
+        ) {
+          chosen = tb;
+          break;
+        }
+      }
+      if (!chosen && matrixTables[0]) chosen = matrixTables[0];
+      if (!chosen) {
+        const tableCountAll = divDocuments.querySelectorAll("table").length;
+        const fb = fallbackExtractPlanSetRows(divDocuments);
+        const scrollElFb = resolveScrollEl(null, scopeRoot);
+        if (passNumIn === 1) scrollElFb.scrollTop = 0;
+        window.__arlPrPsScroll = scrollElFb;
+        return {
+          rows: fb.rows,
+          visibleExtracted: fb.rows.length,
+          scrollTop: scrollElFb.scrollTop,
+          scrollHeight: scrollElFb.scrollHeight,
+          clientHeight: scrollElFb.clientHeight || 0,
+          debug: {
+            tableCount: tableCountAll,
+            candidateCount: fb.candidateCount,
+            acceptedCount: fb.rows.length,
+            sampleNames: fb.rows.slice(0, 3).map((r) => r.name),
+          },
+        };
+      }
+
+      const tbody = chosen.tBodies?.[0] || chosen;
+
+      /** Derive header column indices once from thead or first header row */
+      let nameIx = 0;
+      let discIx = 1;
+      let sheetIx = 2;
+      let descIx = 3;
+      let revIx = 4;
+      let upIx = 5;
+      const hdrRow =
+        chosen.tHead?.querySelector("tr") ||
+        tbody.querySelector("tr th")?.closest("tr") ||
+        tbody.querySelector("tr");
+      if (hdrRow) {
+        const hcells = [...hdrRow.querySelectorAll("th, td")].map((td) =>
+          norm(td.innerText).toLowerCase(),
+        );
+        hcells.forEach((hc, i) => {
+          if (hc.includes("name") && !/\bcompany\b|\bstreet\b/i.test(hc))
+            nameIx = i;
+          else if (hc.includes("discipline")) discIx = i;
+          else if (hc.includes("sheet")) sheetIx = i;
+          else if (hc.includes("description")) descIx = i;
+          else if (hc.includes("revision")) revIx = i;
+          else if (hc.includes("upload")) upIx = i;
+        });
+      }
+
+      /** Data rows — tbody tr excluding header repeats */
+      const hdrNormHdr = hdrRow ? norm(hdrRow.innerText).toLowerCase() : "";
+      const dataRows = [...tbody.querySelectorAll("tr")].filter((tr) => {
+        if (!tr.querySelector("td")) return false;
+        const onlyTh =
+          [...tr.children].every(
+            /** @returns {boolean} */
+            (c) => /^TH$/i.test(c.tagName),
+          ) && tr.children.length;
+        if (onlyTh) return false;
+        if (
+          hdrNormHdr &&
+          norm(tr.innerText).toLowerCase() === hdrNormHdr
+        )
+          return false;
+        return true;
+      });
+
+      /** @returns {boolean} */
+      function matchesRealPlanSheetRow(nameGuess, discipline, sheetType, text) {
+        const ng = norm(nameGuess);
+        if (!ng || isRejectedName(ng)) return false;
+        if (/name\s+discipline\s+sheet\s+type/i.test(ng)) return false;
+        if (/^actions$/i.test(ng) && norm(text).length < 48) return false;
+        const tlow = norm(text).toLowerCase();
+        if (
+          /\bclick here to upload\b|\bsubmission requirements\b|\bselect to view\b|\bselect to download\b/i.test(
+            tlow,
+          )
+        )
+          return false;
+        return ng.length >= 2;
+      }
+
+      const out = [];
+      for (const tr of dataRows) {
+        const cells = [...tr.querySelectorAll("td")].map((td) =>
+          norm(td.innerText),
+        );
+        const text = norm(tr.innerText);
+        if (cells.length < 2) continue;
+
+        let nameGuess = `${cells[nameIx] ?? cells[0] ?? ""}`.trim();
+        const discipline = `${cells[discIx] ?? ""}`.trim();
+        const sheetType = `${cells[sheetIx] ?? ""}`.trim();
+        const description = `${cells[descIx] ?? ""}`.trim();
+        const revision = `${cells[revIx] ?? ""}`.trim();
+        const uploadStatus = `${cells[upIx] ?? ""}`.trim();
+
+        /** Header row rerun */
+        const headerish =
+          /^name$/i.test(nameGuess) ||
+          (/^discipline$/i.test(norm(discipline)) && /^sheet type$/i.test(norm(sheetType)));
+        if (headerish) continue;
+
+        if (isRejectedName(nameGuess)) continue;
+
+        /** Leaked Supporting / doc-type scaffolding */
+        const rowLow = text.toLowerCase();
+        if (/\bdocument type\b/.test(rowLow) || /\bother supporting document\b/.test(rowLow))
+          continue;
+        if (/^sheet type\b$/i.test(nameGuess) || /^sheet type\b$/i.test(norm(sheetType))) {
+          /** header fragment */
+          if (!matchesRealPlanSheetRow(nameGuess, discipline, sheetType, text))
+            continue;
+        }
+
+        /** Must resemble an actual sheet row — filters meta rows */
+        if (!matchesRealPlanSheetRow(nameGuess, discipline, sheetType, text)) {
+          continue;
+        }
+
+        const action = extractRowAction(tr);
+        out.push({
+          name: nameGuess || cells[0] || "",
+          discipline,
+          sheetType,
+          description,
+          revision,
+          uploadStatus,
+          action,
+          source: "plan_review_plan_set_documents",
+        });
+      }
+      const scrollEl = resolveScrollEl(chosen, scopeRoot);
+      if (passNumIn === 1) scrollEl.scrollTop = 0;
+      window.__arlPrPsScroll = scrollEl;
+
+      const tableCountAll = divDocuments.querySelectorAll("table").length;
+      const primaryCandidates = dataRows.length;
+      let finalRows = out;
+      let candidateCount = primaryCandidates;
+      if (!finalRows.length) {
+        const fb = fallbackExtractPlanSetRows(divDocuments);
+        finalRows = fb.rows;
+        candidateCount = fb.candidateCount;
+      }
+      return {
+        rows: finalRows,
+        visibleExtracted: finalRows.length,
+        scrollTop: scrollEl.scrollTop,
+        scrollHeight: scrollEl.scrollHeight,
+        clientHeight: scrollEl.clientHeight || 0,
+        debug: {
+          tableCount: tableCountAll,
+          candidateCount,
+          acceptedCount: finalRows.length,
+          sampleNames: finalRows.slice(0, 3).map((r) => r.name),
+        },
+      };
+      }, passNum).catch(() => ({
+      rows: [],
+      visibleExtracted: 0,
+      scrollTop: 0,
+      scrollHeight: 0,
+      clientHeight: 0,
+      debug: {
+        tableCount: 0,
+        candidateCount: 0,
+        acceptedCount: 0,
+        sampleNames: [],
+      },
+    }));
+
+  const stepScrollDom = () =>
+    domTarget.evaluate(() => {
+      const elUnknown = window.__arlPrPsScroll;
+      const el =
+        elUnknown && elUnknown instanceof HTMLElement
+          ? elUnknown
+          : /** @type {HTMLElement} */ (
+              document.scrollingElement || document.documentElement
+            );
+      const ch = el.clientHeight || 0;
+      const step = Math.max(140, Math.floor(ch * 0.92) || 360);
+      const maxTop = Math.max(0, el.scrollHeight - ch);
+      const before = el.scrollTop;
+      el.scrollTop = Math.min(maxTop, before + step);
+      return {
+        before,
+        after: el.scrollTop,
+        moved: el.scrollTop > before + 0.5,
+      };
+    });
+
+  await domTarget.evaluate(() => {
+    try {
+      delete window.__arlPrPsScroll;
+    } catch (_) {
+      /**/
+    }
+  }).catch(() => {});
+
+  const seenRows = new Map();
+  /** @type {Record<string, unknown>} */
+  let lastDebugLoop = {
+    tableCount: 0,
+    candidateCount: 0,
+    acceptedCount: 0,
+    sampleNames: [],
+  };
+
+  let stableNoNew = 0;
+  let lastUniqueTotal = -1;
+
+  // eslint-disable-next-line no-await-in-loop
+  for (let pass = 1; pass <= 380; pass++) {
+    const packAwait = await runCollectPass(pass);
+    const pk =
+      packAwait && typeof packAwait === "object" ? packAwait : { rows: [] };
+    /** @type {unknown[]} */
+    const rowsSlice = Array.isArray(pk.rows) ? pk.rows : [];
+    lastDebugLoop =
+      pk.debug && typeof pk.debug === "object" ? pk.debug : lastDebugLoop;
+
+    for (const r of rowsSlice) {
+      const k = arlingtonPlanSetRowStableKeyNode(r);
+      if (!seenRows.has(k)) seenRows.set(k, r);
+    }
+
+    const u = seenRows.size;
+    if (u === lastUniqueTotal) stableNoNew++;
+    else stableNoNew = 0;
+    lastUniqueTotal = u;
+
+    const scrollTopLoop = Number(pk.scrollTop) || 0;
+    const scrollHeightLoop = Number(pk.scrollHeight) || 0;
+    const clientHeightLoop = Number(pk.clientHeight) || 0;
+    const scrollMaxLoop = Math.max(0, scrollHeightLoop - clientHeightLoop);
+
+    console.log(
+      `[Arlington][PlanReview] Plan Set collect pass=${pass} visibleRows=${rowsSlice.length} totalUnique=${u} scrollTop=${Math.round(scrollTopLoop)}/${Math.round(scrollMaxLoop)}`,
+    );
+
+    const atBottomLoop =
+      scrollTopLoop >= scrollMaxLoop - 8 ||
+      scrollHeightLoop <= clientHeightLoop + 14;
+
+    if (atBottomLoop && stableNoNew >= 2) break;
+
+    // eslint-disable-next-line no-await-in-loop
+    await stepScrollDom();
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) =>
+      setTimeout(r, 160 + Math.floor(Math.random() * 110)),
+    );
+  }
+
+  await domTarget.evaluate(() => {
+    try {
+      delete window.__arlPrPsScroll;
+    } catch (_) {
+      /**/
+    }
+  }).catch(() => {});
+
+  const finalRowsCollected = [...seenRows.values()];
+  const dLoop = lastDebugLoop || {};
+
+  console.log(
+    `[Arlington][PlanReview][DOM] #divDocuments tables=${dLoop.tableCount ?? 0}`,
+  );
+  console.log(
+    `[Arlington][PlanReview][DOM] candidate rows=${dLoop.candidateCount ?? 0}`,
+  );
+  console.log(
+    `[Arlington][PlanReview][DOM] Plan Set Documents total DOM rows=${finalRowsCollected.length}`,
+  );
+  console.log(
+    `[Arlington][PlanReview][DOM] accepted rows (final pass slice)=${dLoop.acceptedCount ?? "n/a"}`,
+  );
+  const sampleStrLoop =
+    (Array.isArray(dLoop.sampleNames) ? dLoop.sampleNames : []).join(", ") ||
+    "(none)";
+  console.log(
+    `[Arlington][PlanReview][DOM] sample accepted=${sampleStrLoop}`,
+  );
+
+  return finalRowsCollected;
+}
+
+function arlingtonLiftJsonArrays(value, depthLeft = 5) {
+  if (depthLeft <= 0) return [];
+  if (Array.isArray(value))
+    return value.filter((x) => x != null && typeof x === "object");
+  if (value === null || value === undefined || typeof value !== "object") {
+    return [];
+  }
+  const keys = [
+    "data",
+    "Items",
+    "items",
+    "Documents",
+    "documents",
+    "Results",
+    "results",
+    "Records",
+    "records",
+    "Rows",
+    "rows",
+    "value",
+    "Value",
+    "payload",
+    "Payload",
+  ];
+  const vObj = /** @type {Record<string, unknown>} */ (value);
+  for (const k of keys) {
+    if (!(k in vObj)) continue;
+    const lifted = arlingtonLiftJsonArrays(vObj[k], depthLeft - 1);
+    if (lifted.length) return lifted;
+  }
+  return [];
+}
+
+function arlingtonInferErmsDocName(record) {
+  if (!record || typeof record !== "object") return "document";
+  const keys = [
+    "FileName",
+    "fileName",
+    "Filename",
+    "filename",
+    "DocumentName",
+    "documentName",
+    "DocName",
+    "docName",
+    "SheetName",
+    "sheetName",
+    "Title",
+    "title",
+    "Name",
+    "name",
+    "Description",
+    "description",
+  ];
+  for (const k of keys) {
+    const v = record[k];
+    if (typeof v === "string" && v.trim()) return v.replace(/\s+/g, " ").slice(0, 260).trim();
+  }
+  return "document";
+}
+
+function arlingtonResolveMaybeRelative(origin, candidate) {
+  const c = `${candidate || ""}`.trim();
+  if (!c) return "";
+  if (/^https?:\/\//i.test(c)) return c;
+  try {
+    return new URL(c, `${origin.replace(/\/$/, "")}/`).href;
+  } catch (_) {
+    return "";
+  }
+}
+
+function arlingtonNormPlanReviewCell(s) {
+  return `${s || ""}`.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Drop junk sheet labels / ERMS placeholders from normalized Plan Set docs */
+function arlingtonPlanSetRejectedHydratedName(nm) {
+  const raw = `${nm || ""}`.trim();
+  if (!raw) return true;
+  const low = raw.toLowerCase();
+  if (low === "document") return true;
+  if (low === "name") return true;
+  if (low === "document type") return true;
+  if (/^other supporting document\b/i.test(raw)) return true;
+  return false;
+}
+
+/** Strip placeholder label rows (never user-facing doc names). */
+function arlingtonStripRejectedPlanReviewPlaceholderDocNames(planSink) {
+  if (!Array.isArray(planSink)) return;
+  for (let i = planSink.length - 1; i >= 0; i--) {
+    const d = planSink[i];
+    const nm = `${d?.name ?? d?.filename ?? ""}`.trim();
+    if (arlingtonPlanSetRejectedHydratedName(nm)) planSink.splice(i, 1);
+  }
+}
+
+/** @param {unknown} doc */
+function arlingtonPlanSetDocGroupedName(doc, fallbackKey) {
+  const d =
+    doc && typeof doc === "object"
+      ? /** @type {Record<string, unknown>} */ (doc)
+      : null;
+  if (!d) return `__row_${fallbackKey}`;
+  const nk = planReviewNormAttachmentName({
+    name: `${d.name ?? d.filename ?? ""}`,
+  });
+  return nk && nk.trim()
+    ? nk
+    : `__blank_name__:${fallbackKey}`;
+}
+
+/** Numeric PlanDoc identity stored on the row (resume / retry). */
+function arlingtonPlanSetDocPinnedOrInferredNumericId(doc) {
+  const d =
+    doc && typeof doc === "object"
+      ? /** @type {Record<string, unknown>} */ (doc)
+      : null;
+  if (!d) return false;
+  let pid = `${d.documentId ?? ""}`.trim();
+  if (/^\d{5,}$/.test(pid)) return true;
+  const act =
+    d.action && typeof d.action === "object"
+      ? /** @type {Record<string, unknown>} */ (d.action)
+      : null;
+  pid = `${act?.documentId ?? ""}`.trim();
+  return /^\d{5,}$/.test(pid);
+}
+
+/** Row still matches a live Plan Set download control (DOM / invoke path). */
+function arlingtonPlanSetDocRecoverableErmsInteractive(doc) {
+  const d =
+    doc && typeof doc === "object"
+      ? /** @type {Record<string, unknown>} */ (doc)
+      : null;
+  if (!d) return false;
+  if (arlingtonPlanSetDocPinnedOrInferredNumericId(doc)) return true;
+  const hay = [];
+  const act =
+    d.action && typeof d.action === "object"
+      ? /** @type {Record<string, unknown>} */ (d.action)
+      : null;
+  hay.push(act?.onclick, act?.href, act?.id, act?.name, d.documentId);
+  const inferred = arlingtonInferErmsPlanDocIdFromDomActionHaystack(
+    hay.filter(Boolean).join("\n"),
+  );
+  if (/^\d{5,}$/.test(inferred)) return true;
+  const low = hay.filter(Boolean).join("\n").toLowerCase();
+  if (
+    /\binvokedownloaddocument\b|\bdocumentstream\b|\bpolldownloaddocument\b|\bplandocid\b/.test(
+      low,
+    )
+  )
+    return true;
+  const hrefRaw = `${act?.href ?? ""}`.trim();
+  if (
+    /^https?:\/\//i.test(hrefRaw) &&
+    !/^javascript:void/i.test(hrefRaw.toLowerCase())
+  )
+    return true;
+  return false;
+}
+
+/** Rows that already hit download/stream plumbing — keep visible for retry. */
+function arlingtonPlanSetDocTemporalAttemptSignals(doc) {
+  const d =
+    doc && typeof doc === "object"
+      ? /** @type {Record<string, unknown>} */ (doc)
+      : null;
+  if (!d) return false;
+  const ds = `${d.downloadStatus || ""}`.trim();
+  const temporalStatuses = [
+    "pending_stream_timeout",
+    "pending_session_closed",
+    "pending_token_missing",
+    "pending_tab_not_resolved",
+    "pending_not_attempted",
+    "pending_timeout_resume",
+    "upload_failed",
+    "invoke_error",
+    "invoke_timeout",
+    "invoke_click_failed",
+    "empty_buffer",
+    "failed_html_stub",
+    "write_failed",
+    "no_file_buffer",
+    "no_file_after_invoke",
+    "upload_timeout",
+    "missing_document_id",
+  ];
+  if (temporalStatuses.includes(ds)) return true;
+  const rcRaw = Number(d.retryCount ?? 0);
+  if (!Number.isNaN(rcRaw) && rcRaw > 0) return true;
+  return false;
+}
+
+/**
+ * Incomplete sibling row that still maps to retryable/live ERMS chrome.
+ * Duplicate plan_set_row stubs collapse only when another row same name uploaded.
+ */
+function arlingtonPlanSetDocEligiblePendingOrRetryTwin(doc) {
+  if (arlingtonErmsSinkDocLooksUploadComplete(doc)) return false;
+  if (arlingtonPlanSetDocTemporalAttemptSignals(doc)) return true;
+  return arlingtonPlanSetDocRecoverableErmsInteractive(doc);
+}
+
+/** Phantom API/DOM row with no actionable download path once real grid harvested. */
+function arlingtonPlanSetDocStaleOrphanPlaceholder(doc, allowGlobalStaleSweep) {
+  if (!allowGlobalStaleSweep || !doc || typeof doc !== "object") return false;
+  if (arlingtonErmsSinkDocLooksUploadComplete(doc)) return false;
+  if (arlingtonPlanSetDocEligiblePendingOrRetryTwin(doc)) return false;
+  return true;
+}
+
+/**
+ * Suppress stale plan_set_row / metadata-only shadow rows after DOM harvest +
+ * normalize duplicate names (downloaded > pending-retry/actionable > orphaned stub).
+ */
+function arlingtonDedupeSuppressStalePlanSetDocuments(planSink) {
+  if (!Array.isArray(planSink) || !planSink.length) return;
+
+  arlingtonStripRejectedPlanReviewPlaceholderDocNames(planSink);
+
+  const harvested = planSink.some(
+    (d) =>
+      arlingtonErmsSinkDocLooksUploadComplete(d) ||
+      arlingtonPlanSetDocRecoverableErmsInteractive(d),
+  );
+
+  const pass1 = [];
+  for (const d of planSink) {
+    if (
+      harvested &&
+      arlingtonPlanSetDocStaleOrphanPlaceholder(d, true)
+    ) {
+      continue;
+    }
+    pass1.push(d);
+  }
+
+  /** @type {Map<string, unknown[]>} */
+  const buckets = new Map();
+  pass1.forEach((d, ix) => {
+    const nk = arlingtonPlanSetDocGroupedName(d, ix);
+    if (!buckets.has(nk)) buckets.set(nk, []);
+    buckets.get(nk).push(d);
+  });
+
+  const pass2 = [];
+  for (const grp of buckets.values()) {
+    if (!grp.length) continue;
+    const hasWinner = grp.some((docI) =>
+      arlingtonErmsSinkDocLooksUploadComplete(docI),
+    );
+
+    if (!hasWinner) {
+      for (const docI of grp) pass2.push(docI);
+      continue;
+    }
+
+    for (const docI of grp) {
+      if (arlingtonErmsSinkDocLooksUploadComplete(docI)) {
+        pass2.push(docI);
+        continue;
+      }
+      if (arlingtonPlanSetDocEligiblePendingOrRetryTwin(docI)) pass2.push(docI);
+    }
+  }
+
+  planSink.length = 0;
+  planSink.push(...pass2);
+  arlingtonStripRejectedPlanReviewPlaceholderDocNames(planSink);
+}
+
+/** Plan Set Documents only — stale stubs + sibling dedupe + scaffolding strip. */
+function arlingtonFinalizePlanSetDocumentsSink(planSink, quiet) {
+  if (!Array.isArray(planSink) || !planSink.length) return;
+  const before = planSink.length;
+  arlingtonDedupeSuppressStalePlanSetDocuments(planSink);
+  const after = planSink.length;
+  if (before !== after && !quiet) {
+    console.log(
+      `[Arlington][PlanReview] Plan Set cleanup removed=${before - after} stale/metadata-dup placeholders (final=${after})`,
+    );
+  }
+}
+
+function arlingtonErmsRowDiscipline(row) {
+  if (!row || typeof row !== "object") return "";
+  return `${row.Discipline ?? row.discipline ?? ""}`.trim();
+}
+
+function arlingtonErmsRowSheetType(row) {
+  if (!row || typeof row !== "object") return "";
+  return `${row.SheetType ?? row.sheetType ?? ""}`.trim();
+}
+
+/** True when the API row carries an explicit sheet/document identity (not Discipline/SheetType alone). */
+function arlingtonRequiredSheetHasExplicitDocumentName(row) {
+  if (!row || typeof row !== "object") return false;
+  const identityKeys = [
+    "FileName",
+    "fileName",
+    "Filename",
+    "filename",
+    "DocumentName",
+    "documentName",
+    "DocName",
+    "docName",
+    "SheetName",
+    "sheetName",
+    "Title",
+    "title",
+  ];
+  for (const k of identityKeys) {
+    const v = row[k];
+    if (
+      typeof v === "string" &&
+      v.trim() &&
+      !arlingtonPlanSetRejectedHydratedName(v.trim())
+    )
+      return true;
+  }
+  const nm = row.Name ?? row.name;
+  if (
+    typeof nm === "string" &&
+    nm.trim() &&
+    !arlingtonPlanSetRejectedHydratedName(nm.trim())
+  )
+    return true;
+  return false;
+}
+
+/** RequiredPlanSheets rows that only describe discipline/type — not standalone documents */
+function arlingtonRequiredPlanSheetRowIsMetadataOnly(row) {
+  if (!row || typeof row !== "object") return true;
+  if (arlingtonRequiredSheetHasExplicitDocumentName(row)) return false;
+  const inferred = arlingtonInferErmsDocName(row);
+  return arlingtonPlanSetRejectedHydratedName(inferred);
+}
+
+function arlingtonFindDomPlanRowMatch(planSink, discipline, sheetType) {
+  if (!Array.isArray(planSink)) return null;
+  const ad = arlingtonNormPlanReviewCell(discipline);
+  const ast = arlingtonNormPlanReviewCell(sheetType);
+  let domMatch =
+    planSink.find(
+      (d) =>
+        arlingtonNormPlanReviewCell(d.discipline) === ad &&
+        arlingtonNormPlanReviewCell(d.sheetType) === ast,
+    ) || null;
+  if (!domMatch && ad) {
+    const hits = planSink.filter(
+      (d) => arlingtonNormPlanReviewCell(d.discipline) === ad,
+    );
+    if (hits.length === 1) domMatch = hits[0];
+  }
+  return domMatch;
+}
+
+/**
+ * Merge RequiredPlanSheets into Plan Set sink: DOM rows stay primary; API only enriches matches or fills when DOM empty.
+ */
+function arlingtonApplyRequiredPlanSheetsToPlanSink(
+  planSink,
+  requiredRows,
+  origin,
+) {
+  const domRowCount = Array.isArray(planSink) ? planSink.length : 0;
+
+  console.log(`[Arlington][PlanReview] DOM Plan Set rows=${domRowCount}`);
+
+  const metadataOnlyAll =
+    requiredRows.length === 0 ||
+    requiredRows.every(
+      (r) =>
+        !r ||
+        typeof r !== "object" ||
+        arlingtonRequiredPlanSheetRowIsMetadataOnly(r),
+    );
+
+  console.log(
+    `[Arlington][PlanReview] API RequiredPlanSheets metadata-only=${metadataOnlyAll}`,
+  );
+
+  if (domRowCount > 0) {
+    for (const row of requiredRows) {
+      if (!row || typeof row !== "object") continue;
+      const metaOnly = arlingtonRequiredPlanSheetRowIsMetadataOnly(row);
+      const apiDoc = arlingtonApiRowToPlanReviewDoc(
+        origin,
+        row,
+        "planSetDocuments",
+      );
+
+      if (!metaOnly && arlingtonPlanSetRejectedHydratedName(apiDoc.name))
+        continue;
+
+      const domMatch = arlingtonFindDomPlanRowMatch(
+        planSink,
+        arlingtonErmsRowDiscipline(row),
+        arlingtonErmsRowSheetType(row),
+      );
+      if (!domMatch) continue;
+
+      const urlGuess = arlingtonInferErmsDocUrl(origin, row);
+      if (urlGuess && !`${domMatch.publicUrl || ""}`.trim()) {
+        domMatch.publicUrl = urlGuess;
+        domMatch.downloadUrl = urlGuess;
+        domMatch.status = "plan_set_has_url";
+      }
+
+      if (apiDoc.revision && !`${domMatch.revision || ""}`.trim())
+        domMatch.revision = apiDoc.revision;
+      if (apiDoc.documentDate && !`${domMatch.documentDate || ""}`.trim())
+        domMatch.documentDate = apiDoc.documentDate;
+      if (apiDoc.size && !`${domMatch.size || ""}`.trim())
+        domMatch.size = apiDoc.size;
+    }
+  } else if (!metadataOnlyAll) {
+    for (const row of requiredRows) {
+      if (!row || typeof row !== "object") continue;
+      if (arlingtonRequiredPlanSheetRowIsMetadataOnly(row)) continue;
+      const doc = arlingtonApiRowToPlanReviewDoc(
+        origin,
+        row,
+        "planSetDocuments",
+      );
+      if (arlingtonPlanSetRejectedHydratedName(doc.name)) continue;
+      planSink.push(doc);
+    }
+  }
+}
+
+function arlingtonInferErmsDocUrl(origin, row) {
+  if (!row || typeof row !== "object") return "";
+  const keys = [
+    "DownloadUrl",
+    "downloadUrl",
+    "ViewUrl",
+    "viewUrl",
+    "FileUrl",
+    "fileUrl",
+    "Url",
+    "url",
+    "Href",
+    "href",
+    "RelativeUrl",
+    "relativeUrl",
+    "PortalUrl",
+    "portalUrl",
+  ];
+  /** @type {string[]} */
+  const candidates = [];
+  for (const k of keys) {
+    const raw = `${/** @type {Record<string, unknown>} */ (row)[k] || ""}`.trim();
+    if (raw) candidates.push(arlingtonResolveMaybeRelative(origin, raw));
+  }
+  for (const c of candidates) {
+    const low = c.toLowerCase();
+    if (/^https?:\/\//i.test(c) && /\.pdf\b/i.test(low)) return c;
+  }
+  for (const c of candidates) {
+    if (/^https?:\/\//i.test(c) && /download/i.test(c.toLowerCase())) return c;
+  }
+  for (const c of candidates) {
+    if (/^https?:\/\//i.test(c)) return c;
+  }
+  return "";
+}
+
+function arlingtonApiRowToPlanReviewDoc(origin, row, sourceSectionCamel) {
+  const nameGuess = arlingtonInferErmsDocName(row);
+  const urlGuess = arlingtonInferErmsDocUrl(origin, row);
+  let docDate = "";
+  let sizeGuess = "";
+  let revision = "";
+  if (
+    typeof row === "object" &&
+    row
+  ) {
+    if (typeof row.DocumentDate === "string") docDate = row.DocumentDate.trim();
+    if (typeof row.documentDate === "string")
+      docDate = row.documentDate.trim();
+    const szRaw = `${row.FileSize ?? row.fileSize ?? row.Size ?? ""}`.slice(
+      0,
+      40,
+    );
+    if (szRaw) sizeGuess = szRaw.trim();
+    const revRaw = `${row.RevisionNumber ?? row.revision ?? ""}`
+      .toString()
+      .slice(0, 80);
+    if (revRaw.trim()) revision = revRaw.trim();
+  }
+  const discipline = `${row?.Discipline ?? row?.discipline ?? ""}`.trim();
+  const sheetType = `${row?.SheetType ?? row?.sheetType ?? ""}`.trim();
+
+  return {
+    name: nameGuess,
+    filename: nameGuess,
+    discipline,
+    sheetType,
+    documentDate: docDate.slice(0, 80),
+    size: sizeGuess,
+    status: urlGuess ? "api_link" : "api_metadata",
+    storagePath: "",
+    publicUrl: urlGuess,
+    downloadUrl: urlGuess,
+    sourceTab: "plansAndDocuments",
+    sourceSection: sourceSectionCamel,
+    source: "plan_review_erms_api",
+    revision,
+  };
+}
+
+function arlingtonExtractErmsPlanDocId(row) {
+  if (!row || typeof row !== "object") return "";
+  const ids = arlingtonCollectErmsCandidateIdsFromObject(row);
+  return ids.length ? ids[0] : "";
+}
+
+const ARLINGTON_ERMS_DOC_ID_KEYS = [
+  "DocumentID",
+  "DocumentId",
+  "documentId",
+  "documentID",
+  "ID",
+  "Id",
+  "id",
+  "PlanDocID",
+  "PlanDocId",
+  "planDocId",
+  "plandocid",
+  "FileID",
+  "FileId",
+  "fileId",
+  "fileID",
+  "AttachmentID",
+  "AttachmentId",
+  "attachmentId",
+  "attachmentID",
+  "DocId",
+  "docId",
+  "ResponseLetterID",
+  "ResponseLetterId",
+  "responseLetterId",
+  "LetterID",
+  "LetterId",
+  "letterId",
+  "ApplicationDocID",
+  "ApplicationDocId",
+  "applicationDocId",
+];
+
+const ARLINGTON_ERMS_DOC_ID_NESTED_KEYS = [
+  "Document",
+  "document",
+  "File",
+  "file",
+  "Attachment",
+  "attachment",
+  "PlanDocument",
+  "planDocument",
+];
+
+function arlingtonCollectErmsCandidateIdsFromObject(obj, prefix, out) {
+  const found = out || new Map();
+  if (!obj || typeof obj !== "object") return found;
+  const o = /** @type {Record<string, unknown>} */ (obj);
+  for (const k of ARLINGTON_ERMS_DOC_ID_KEYS) {
+    const v = `${o[k] ?? ""}`.trim();
+    if (/^\d+$/.test(v)) {
+      found.set(prefix ? `${prefix}.${k}` : k, v);
+    }
+  }
+  for (const nest of ARLINGTON_ERMS_DOC_ID_NESTED_KEYS) {
+    if (o[nest] && typeof o[nest] === "object") {
+      arlingtonCollectErmsCandidateIdsFromObject(
+        o[nest],
+        prefix ? `${prefix}.${nest}` : nest,
+        found,
+      );
+    }
+  }
+  return found;
+}
+
+function arlingtonCollectSecondaryRowCandidateIds(doc) {
+  /** @type {Map<string, string>} */
+  const found = new Map();
+  if (!doc || typeof doc !== "object") return found;
+  arlingtonCollectErmsCandidateIdsFromObject(doc, "", found);
+  if (doc.raw && typeof doc.raw === "object") {
+    arlingtonCollectErmsCandidateIdsFromObject(doc.raw, "raw", found);
+  }
+  if (doc.raw && typeof doc.raw === "object") {
+    const dhRaw = arlExtractNumericDocHandleFromErmsRaw(
+      /** @type {Record<string, unknown>} */ (doc.raw),
+    );
+    if (dhRaw) found.set("dochandle", dhRaw);
+  }
+  const topId = `${doc.documentId || doc.action?.documentId || ""}`.trim();
+  if (/^\d+$/.test(topId)) found.set("documentId", topId);
+
+  if (doc.action && typeof doc.action === "object") {
+    const ac = /** @type {Record<string, unknown>} */ (doc.action);
+    const hay = [
+      ac.onclick,
+      ac.href,
+      ac.id,
+      ac.name,
+      ac.title,
+      ac.alt,
+    ]
+      .map((x) => `${x ?? ""}`)
+      .join("\n");
+    const inf = arlingtonInferErmsPlanDocIdFromDomActionHaystack(hay);
+    if (/^\d+$/.test(inf)) found.set("action.inferredDocumentId", inf);
+  }
+  return found;
+}
+
+function arlingtonPickSecondaryRowDocumentId(doc) {
+  const candidates = arlingtonCollectSecondaryRowCandidateIds(doc);
+  const preferKeys = [
+    "documentId",
+    "action.documentId",
+    "action.inferredDocumentId",
+    "PlanDocId",
+    "PlanDocID",
+    "planDocId",
+    "plandocid",
+    "raw.PlanDocId",
+    "raw.PlanDocID",
+    "raw.planDocId",
+    "DocumentId",
+    "DocumentID",
+    "raw.DocumentId",
+    "raw.DocumentID",
+  ];
+  for (const k of preferKeys) {
+    const v = `${candidates.get(k) || ""}`.trim();
+    if (/^\d+$/.test(v)) return v;
+  }
+  for (const [k, v] of candidates.entries()) {
+    if (/dochandle/i.test(k)) continue;
+    if (/^\d+$/.test(`${v || ""}`.trim())) return `${v}`.trim();
+  }
+  return "";
+}
+
+function arlingtonFormatSecondaryRowCandidateIds(doc) {
+  const candidates = arlingtonCollectSecondaryRowCandidateIds(doc);
+  if (!candidates.size) return "none";
+  return [...candidates.entries()].map(([k, v]) => `${k}=${v}`).join(", ");
+}
+
+function arlingtonApplySecondaryDocAlias(target, source) {
+  target.publicUrl = `${source.publicUrl || ""}`.trim();
+  target.downloadUrl = `${source.downloadUrl || source.publicUrl || ""}`.trim();
+  target.storagePath = `${source.storagePath || ""}`.trim();
+  target.downloadStatus = "aliased_duplicate";
+  target.status = "downloaded";
+  if (!target.documentId && source.documentId) {
+    target.documentId = source.documentId;
+  }
+  if (!target.action?.documentId && source.documentId) {
+    target.action = { ...(target.action || {}), documentId: source.documentId };
+  }
+}
+
+/**
+ * Fallback when Approved “Approved Plan Set…” row has no downloadable id on DOM:
+ * reuse an uploaded Plan Set artifact only for that package row.
+ * @param {Record<string, unknown>} target
+ * @param {Record<string, unknown>} source
+ */
+function arlingtonApplyApprovedDocumentsPlanSetFallbackAlias(
+  target,
+  source,
+) {
+  target.publicUrl = `${source.publicUrl || ""}`.trim();
+  target.downloadUrl = `${source.downloadUrl || source.publicUrl || ""}`.trim();
+  target.storagePath = `${source.storagePath || ""}`.trim();
+  target.downloadStatus = "aliased_plan_set";
+  target.status = "downloaded";
+  if (!target.documentId && source.documentId) {
+    target.documentId = source.documentId;
+  }
+  if (!target.action?.documentId && source.documentId) {
+    target.action = { ...(target.action || {}), documentId: source.documentId };
+  }
+}
+
+function arlingtonPlanReviewDocIsUploaded(d) {
+  if (!d || typeof d !== "object") return false;
+  const hasUrl = !!`${d.publicUrl || d.downloadUrl || ""}`.trim();
+  return (
+    hasUrl &&
+    (`${d.downloadStatus || ""}`.trim() === "uploaded" ||
+      `${d.downloadStatus || ""}`.trim() === "aliased_duplicate" ||
+      `${d.downloadStatus || ""}`.trim() === "aliased_attachment" ||
+      `${d.downloadStatus || ""}`.trim() === "aliased_plan_set" ||
+      `${d.status || ""}`.trim() === "downloaded")
+  );
+}
+
+/** Plan Set documents list from persisted `portal_data` (Arlington integrated shape). */
+function arlingtonPortalDataPlanSetDocuments(portalData) {
+  const pr = portalData?.tabs?.planReview;
+  if (!pr || typeof pr !== "object") return undefined;
+  const tabs =
+    pr.tabs ||
+    (pr.arlingtonPlanReview && typeof pr.arlingtonPlanReview === "object"
+      ? /** @type {Record<string, unknown>} */ (pr.arlingtonPlanReview).tabs
+      : null);
+  return tabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+}
+
+/**
+ * Prior DB row has a usable Plan Set (rows + at least one URL/id/uploaded doc).
+ * @param {Record<string, unknown> | null | undefined} portalData
+ */
+function arlingtonPortalDataHasValidPlanSet(portalData) {
+  const docs = arlingtonPortalDataPlanSetDocuments(portalData);
+  if (!Array.isArray(docs) || docs.length === 0) return false;
+  return docs.some((d) => {
+    if (!d || typeof d !== "object") return false;
+    if (`${d.publicUrl || ""}`.trim() || `${d.downloadUrl || ""}`.trim())
+      return true;
+    const id = `${d.documentId || d.action?.documentId || ""}`.trim();
+    if (id) return true;
+    if (arlingtonPlanReviewDocIsUploaded(d)) return true;
+    if (`${d.storagePath || ""}`.trim()) return true;
+    return false;
+  });
+}
+
+/**
+ * @param {ReturnType<typeof defaultArlingtonIntegratedTabsSkeleton> | null | undefined} integratedTabs
+ */
+function arlingtonIntegratedTabsPlanSetValid(integratedTabs) {
+  const docs =
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  if (!Array.isArray(docs) || docs.length < 1) return false;
+  return docs.some((d) => {
+    if (!d || typeof d !== "object") return false;
+    if (`${d.publicUrl || ""}`.trim() || `${d.downloadUrl || ""}`.trim())
+      return true;
+    const id = `${d.documentId || d.action?.documentId || ""}`.trim();
+    return !!id;
+  });
+}
+
+/**
+ * True when the integrated tabs object has none of the user-visible Arlington Plan Review payloads.
+ * @param {Record<string, unknown> | null | undefined} tabsLike
+ */
+function arlingtonIntegratedPlanReviewIsEffectivelyEmpty(tabsLike) {
+  if (!tabsLike || typeof tabsLike !== "object") return true;
+  const ps = tabsLike?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  const rr = tabsLike?.reviewResultsAndMarkups?.documents;
+  const ad = tabsLike?.approvedDocuments?.documents;
+  const piFields = tabsLike?.projectInformation?.fields;
+  const len = (a) => (Array.isArray(a) ? a.length : 0);
+  return (
+    len(ps) === 0 &&
+    len(rr) === 0 &&
+    len(ad) === 0 &&
+    (!Array.isArray(piFields) || piFields.length === 0)
+  );
+}
+
+/**
+ * Replace scraped Plan Review with the existing DB blob when ERA/MS/OnBase failed or produced an empty skeleton.
+ * @returns {boolean} whether prior planReview was restored
+ */
+function arlingtonMaybePreservePlanReviewInPortalPayload(
+  portalPayloadForDb,
+  existingPortalData,
+  /** @type {{ newIntegratedTabsEmpty: boolean }} */ opts,
+) {
+  if (
+    !portalPayloadForDb ||
+    typeof portalPayloadForDb !== "object" ||
+    !existingPortalData ||
+    typeof existingPortalData !== "object"
+  ) {
+    return false;
+  }
+  const newWrap = portalPayloadForDb.tabs?.planReview;
+  const priorWrap = existingPortalData.tabs?.planReview;
+  if (
+    !newWrap ||
+    typeof newWrap !== "object" ||
+    priorWrap == null ||
+    typeof priorWrap !== "object"
+  )
+    return false;
+
+  const priorHasTabs =
+    priorWrap.tabs && typeof priorWrap.tabs === "object";
+
+  const newTabs = /** @type {Record<string, unknown>} */ (newWrap).tabs;
+  const newIntegratedEmptyExplicit =
+    arlingtonIntegratedPlanReviewIsEffectivelyEmpty(newTabs);
+
+  const newIntegratedEmpty =
+    opts?.newIntegratedTabsEmpty === true || newIntegratedEmptyExplicit;
+
+  const priorValid = priorHasTabs
+    ? arlingtonPortalDataHasValidPlanSet({
+        tabs: { planReview: priorWrap },
+      })
+    : false;
+
+  const explicitShouldNotPersist =
+    typeof /** @type {Record<string, unknown>} */ (newWrap).shouldPersist ===
+      "boolean" &&
+    /** @type {Record<string, unknown>} */ (newWrap).shouldPersist === false;
+
+  /** @type {Record<string, unknown>} */
+  const nw = /** @type {Record<string, unknown>} */ (newWrap);
+  const preserveWeak = nw.preservePreviousPlanReview === true;
+
+  const mustPreserve =
+    preserveWeak ||
+    (!!priorHasTabs &&
+      priorValid &&
+      (explicitShouldNotPersist || newIntegratedEmpty));
+
+  console.log(
+    "[Arlington][PlanReview] ERMS unavailable; preserving existing Plan Review data",
+  );
+  if (explicitShouldNotPersist) {
+    console.log(
+      "[Arlington][PlanReview] not overwriting existing planReview because shouldPersist=false",
+    );
+  }
+
+  portalPayloadForDb.tabs = portalPayloadForDb.tabs || {};
+  /** @type {Record<string, unknown>} */
+  const tabsOut = /** @type {Record<string, unknown>} */ (
+    portalPayloadForDb.tabs
+  );
+  tabsOut.planReview =
+    structuredCloneWorksSafe(priorWrap) ?? /** @type {unknown} */ (priorWrap);
+
+  const errPrev = portalPayloadForDb.planReviewLastError;
+  if (errPrev && typeof errPrev === "object") {
+    portalPayloadForDb.planReviewLastError = errPrev;
+  } else {
+    portalPayloadForDb.planReviewLastError = {
+      type: "erms_iframe_not_ready",
+      message:
+        "Plan Review iframe did not load / OnBase session failed",
+      at: new Date().toISOString(),
+    };
+  }
+  return true;
+}
+
+function arlingtonWeakNewPlanReview(integratedTabs) {
+  return !arlingtonIntegratedTabsPlanSetValid(integratedTabs);
+}
+
+function arlingtonFindUploadedPlanReviewDoc(
+  docLists,
+  { documentId, rowKey, normalizedName },
+) {
+  const lists = Array.isArray(docLists) ? docLists : [docLists];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const d of list) {
+      if (!arlingtonPlanReviewDocIsUploaded(d)) continue;
+      if (documentId) {
+        const id = `${d.documentId || d.action?.documentId || ""}`.trim();
+        if (id && id === documentId) return d;
+      }
+      if (rowKey) {
+        const k = arlingtonIntegratedRowDedupeKey(
+          d.name || d.filename || "",
+          d.documentDate || "",
+          d.size || "",
+          d.revision || "",
+        );
+        if (k === rowKey) return d;
+      }
+      if (normalizedName) {
+        const nm = planReviewNormAttachmentName(d);
+        if (nm && nm === normalizedName) return d;
+      }
+    }
+  }
+  return null;
+}
+
+/** Plan Set / secondary alias: document id, dedupe key, then normalized filename. */
+function arlingtonFindSecondaryDocAlias(docLists, { documentId, rowKey, name }) {
+  const normalizedName = name
+    ? planReviewNormAttachmentName({ name })
+    : "";
+  return (
+    arlingtonFindUploadedPlanReviewDoc(docLists, { documentId }) ||
+    arlingtonFindUploadedPlanReviewDoc(docLists, { rowKey }) ||
+    (normalizedName
+      ? arlingtonFindUploadedPlanReviewDoc(docLists, { normalizedName })
+      : null)
+  );
+}
+
+function arlingtonSecondaryTabDocDedupeKey(doc) {
+  return `${doc?.documentId || doc?.action?.documentId || ""}|${doc?.name || doc?.filename || ""}|${doc?.sourceApi || ""}`;
+}
+
+function arlingtonMergeSecondaryTabDocuments(dest, incoming) {
+  if (!Array.isArray(dest) || !Array.isArray(incoming)) return;
+  const seen = new Set(dest.map((d) => arlingtonSecondaryTabDocDedupeKey(d)));
+  for (const doc of incoming) {
+    if (!doc || typeof doc !== "object") continue;
+    const key = arlingtonSecondaryTabDocDedupeKey(doc);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dest.push(doc);
+  }
+}
+
+function arlingtonApiRowToSecondaryTabDoc(origin, row, tabKey, sourceApi) {
+  const nameGuess = arlingtonInferErmsDocName(row);
+  const planDocId = arlingtonExtractErmsPlanDocId(row);
+  let docDate = "";
+  let sizeGuess = "";
+  let revision = "";
+  let discipline = "";
+  let sheetType = "";
+  let reviewStatus = "";
+  let reviewer = "";
+  let documentType = "";
+  if (row && typeof row === "object") {
+    const o = /** @type {Record<string, unknown>} */ (row);
+    docDate = `${o.DocumentDate ?? o.documentDate ?? o.ApprovalDate ?? o.approvalDate ?? o.Date ?? o.date ?? ""}`.trim();
+    sizeGuess = `${o.FileSize ?? o.fileSize ?? o.Size ?? o.size ?? ""}`.trim().slice(0, 40);
+    revision = `${o.RevisionNumber ?? o.revision ?? ""}`.trim().slice(0, 80);
+    discipline = `${o.Discipline ?? o.discipline ?? ""}`.trim();
+    sheetType = `${o.SheetType ?? o.sheetType ?? ""}`.trim();
+    reviewStatus = `${o.Status ?? o.status ?? o.ReviewStatus ?? o.reviewStatus ?? ""}`.trim();
+    reviewer = `${o.Reviewer ?? o.reviewer ?? o.ReviewedBy ?? o.reviewedBy ?? ""}`.trim();
+    documentType = `${o.DocumentType ?? o.documentType ?? o.DocType ?? o.docType ?? o.Type ?? o.type ?? ""}`.trim();
+    if (sourceApi === "Comments") {
+      const commentName = `${o.CommentText ?? o.commentText ?? o.Subject ?? o.subject ?? o.Title ?? o.title ?? ""}`.trim();
+      if (commentName) {
+        /** prefer comment text as display name when present */
+      }
+    }
+  }
+
+  let displayName = nameGuess;
+  if (sourceApi === "Comments" && row && typeof row === "object") {
+    const o = /** @type {Record<string, unknown>} */ (row);
+    const c = `${o.CommentText ?? o.commentText ?? o.Subject ?? o.subject ?? ""}`.trim();
+    if (c) displayName = c.slice(0, 260);
+  }
+
+  /** @type {Record<string, unknown>} */
+  const out = {
+    name: displayName,
+    filename: displayName,
+    discipline,
+    sheetType: sheetType || documentType,
+    documentType,
+    documentDate: docDate.slice(0, 80),
+    size: sizeGuess,
+    reviewStatus,
+    reviewer,
+    revision,
+    status: "metadata_only",
+    downloadStatus: "metadata_only",
+    storagePath: "",
+    publicUrl: "",
+    downloadUrl: "",
+    sourceTab: tabKey,
+    source: "api_fallback",
+    sourceApi,
+    raw: row,
+  };
+
+  if (planDocId) {
+    out.documentId = planDocId;
+    out.action = { documentId: planDocId };
+  }
+  const crmDh = arlExtractNumericDocHandleFromErmsRaw(row);
+  if (crmDh) out.secondaryCrmDocHandle = crmDh;
+
+  return out;
+}
+
+function arlingtonAccelaDocTypeToField(row) {
+  if (!row || typeof row !== "object") return null;
+  const o = /** @type {Record<string, unknown>} */ (row);
+  const label = `${o.DocTypeName ?? o.docTypeName ?? o.Name ?? o.name ?? o.Type ?? o.type ?? ""}`.trim();
+  if (!label) return null;
+  const parts = [];
+  for (const k of [
+    "Description",
+    "description",
+    "Required",
+    "required",
+    "Category",
+    "category",
+    "Status",
+    "status",
+  ]) {
+    const v = `${o[k] ?? ""}`.trim();
+    if (v) parts.push(v);
+  }
+  return { label: label.slice(0, 200), value: parts.join(" | ").slice(0, 500) };
+}
+
+function arlingtonApiRowToCommentEntry(row) {
+  if (!row || typeof row !== "object") return null;
+  const o = /** @type {Record<string, unknown>} */ (row);
+  const text = `${o.CommentText ?? o.commentText ?? o.Text ?? o.text ?? o.Subject ?? o.subject ?? o.Description ?? o.description ?? ""}`.trim();
+  if (!text) return null;
+  const reviewer = `${o.Reviewer ?? o.reviewer ?? o.CreatedBy ?? o.createdBy ?? o.UserName ?? o.userName ?? ""}`.trim();
+  const documentDate = `${o.CommentDate ?? o.commentDate ?? o.Date ?? o.date ?? o.CreatedDate ?? o.createdDate ?? ""}`.trim();
+  return {
+    text: text.slice(0, 2000),
+    reviewer: reviewer.slice(0, 120),
+    documentDate: documentDate.slice(0, 80),
+    sourceApi: "Comments",
+    raw: row,
+  };
+}
+
+function arlingtonMergeCommentEntries(dest, incoming) {
+  if (!Array.isArray(dest) || !Array.isArray(incoming)) return;
+  for (const c of incoming) {
+    if (!c || !c.text) continue;
+    const key = `${c.text}`.slice(0, 120).toLowerCase();
+    const exists = dest.some(
+      (d) =>
+        `${d?.text || ""}`.slice(0, 120).toLowerCase() === key,
+    );
+    if (!exists) dest.push(c);
+  }
+}
+
+/** Dedupe within a tab — matches UI expectation (name + date + logical tab bucket). */
+function arlingtonDomSecondaryDedupeKey(doc) {
+  if (!doc || typeof doc !== "object") return "";
+  const d = /** @type {Record<string, unknown>} */ (doc);
+  const tab = `${d.sourceTab || ""}`.trim().toLowerCase();
+  let id = `${d.documentId ?? ""}`.trim();
+  if (!id && d.action && typeof d.action === "object") {
+    id = `${
+      /** @type {Record<string, unknown>} */ (d.action).documentId ?? ""
+    }`.trim();
+  }
+  const n = `${d.name || d.filename || ""}`.trim().replace(/\s+/g, " ").toLowerCase();
+  const date = `${d.documentDate || ""}`.trim().replace(/\s+/g, " ").toLowerCase();
+  const rowIx =
+    d.secondaryDomRowIndex != null && `${d.secondaryDomRowIndex}` !== ""
+      ? `|r${String(d.secondaryDomRowIndex)}`
+      : "";
+  if (/^\d+$/.test(id)) return `${tab}|id:${id}`;
+  return `${tab}|norow|${n}|${date}${rowIx}`;
+}
+
+function arlingtonMergeSecondaryDomDocuments(dest, incoming) {
+  if (!Array.isArray(dest) || !Array.isArray(incoming)) return;
+  const seen = new Set(dest.map((d) => arlingtonDomSecondaryDedupeKey(d)));
+  for (const doc of incoming) {
+    if (!doc || typeof doc !== "object") continue;
+    const k = arlingtonDomSecondaryDedupeKey(doc);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    dest.push(doc);
+  }
+}
+
+/**
+ * API hydrate for secondary tabs: comments + PI field metadata only.
+ * Review Results / Approved **document rows** must come from active ERMS tab DOM first;
+ * ResponseLetters/ApplicationDocs APIs are fallback when DOM yields zero rows (see below).
+ */
+function arlingtonApplyApiRowsToSecondaryTabsCommentsAndPi(
+  integratedTabs,
+  apiRows,
+  origin,
+) {
+  if (!integratedTabs || !apiRows) return;
+
+  const rrComments = integratedTabs.reviewResultsAndMarkups?.comments;
+  const piFields = integratedTabs.projectInformation?.fields;
+  const piReqTypes = integratedTabs.projectInformation?.requiredDocumentTypes;
+
+  for (const row of apiRows.comments || []) {
+    if (!row || typeof row !== "object") continue;
+    const commentEntry = arlingtonApiRowToCommentEntry(row);
+    if (Array.isArray(rrComments) && commentEntry) {
+      arlingtonMergeCommentEntries(rrComments, [commentEntry]);
+    }
+  }
+
+  if (Array.isArray(piFields) || Array.isArray(piReqTypes)) {
+    for (const row of apiRows.accelaDocTypes || []) {
+      const field = arlingtonAccelaDocTypeToField(row);
+      if (field) {
+        if (Array.isArray(piFields)) {
+          const exists = piFields.some(
+            (f) =>
+              `${f?.label || ""}`.trim().toLowerCase() ===
+              `${field.label || ""}`.trim().toLowerCase(),
+          );
+          if (!exists) piFields.push(field);
+        }
+        if (Array.isArray(piReqTypes)) {
+          const exists = piReqTypes.some(
+            (f) =>
+              `${f?.label || ""}`.trim().toLowerCase() ===
+              `${field.label || ""}`.trim().toLowerCase(),
+          );
+          if (!exists) piReqTypes.push(field);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Restore RR/AD from prior portal_data or mark dom_extraction_failed when empty.
+ * @param {ReturnType<typeof defaultArlingtonIntegratedTabsSkeleton>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} priorPortalData
+ */
+function arlingtonRestoreSecondaryFromPriorOrMarkDomFailed(
+  integratedTabs,
+  priorPortalData,
+) {
+  if (!integratedTabs) return;
+  const priorTabs = priorPortalData?.tabs?.planReview?.tabs;
+  const rrDest = integratedTabs.reviewResultsAndMarkups;
+  const adDest = integratedTabs.approvedDocuments;
+  if (!rrDest || !adDest) return;
+
+  delete rrDest.secondaryExtractionStatus;
+  delete adDest.secondaryExtractionStatus;
+
+  const priorRr = priorTabs?.reviewResultsAndMarkups?.documents;
+  const priorAd = priorTabs?.approvedDocuments?.documents;
+
+  if (
+    Array.isArray(rrDest.documents) &&
+    rrDest.documents.length === 0 &&
+    Array.isArray(priorRr) &&
+    priorRr.length
+  ) {
+    rrDest.documents = structuredCloneWorksSafe(priorRr);
+  }
+  if (
+    Array.isArray(adDest.documents) &&
+    adDest.documents.length === 0 &&
+    Array.isArray(priorAd) &&
+    priorAd.length
+  ) {
+    adDest.documents = structuredCloneWorksSafe(priorAd);
+  }
+
+  if (Array.isArray(rrDest.documents) && rrDest.documents.length === 0) {
+    rrDest.secondaryExtractionStatus = "dom_extraction_failed";
+  }
+  if (Array.isArray(adDest.documents) && adDest.documents.length === 0) {
+    adDest.secondaryExtractionStatus = "dom_extraction_failed";
+  }
+}
+
+/**
+ * When iframe+Plan Set succeeded but RR/AD DOM both stayed empty, never replace RR/Approved
+ * with misleading API metadata-only rows — restore prior or mark dom failure; optional PI docs still merged.
+ *
+ * @param {Record<string, unknown> | null | undefined} priorPortalData
+ */
+function arlingtonMaybeApplySecondaryApiAfterDom(
+  integratedTabs,
+  prApiSecondaryFallback,
+  planSetErmsOrigin,
+  planReviewState,
+  existingValidPlanReview,
+  priorPortalData,
+) {
+  if (!prApiSecondaryFallback) return;
+
+  const nfNonApi = (arr) =>
+    Array.isArray(arr)
+      ? arr.filter((d) => d && `${d.source || ""}` !== "api_fallback")
+          .length
+      : 0;
+
+  const rrN = nfNonApi(integratedTabs.reviewResultsAndMarkups?.documents);
+  const adN = nfNonApi(integratedTabs.approvedDocuments?.documents);
+
+  const secondaryDomBothEmpty =
+    planReviewState &&
+    planReviewState.iframeReady === true &&
+    planReviewState.planSetValid === true &&
+    rrN === 0 &&
+    adN === 0;
+
+  if (secondaryDomBothEmpty) {
+    console.log(
+      "[Arlington][PlanReview] secondary DOM failed; not replacing secondary tabs with API fallback metadata",
+    );
+    arlingtonRestoreSecondaryFromPriorOrMarkDomFailed(
+      integratedTabs,
+      priorPortalData,
+    );
+    if (planReviewState && typeof planReviewState === "object") {
+      planReviewState.suppressedSecondaryApiMetadata = true;
+      planReviewState.secondaryDomExtractionFailed = true;
+    }
+    if (existingValidPlanReview) return;
+    arlingtonApplySecondaryApiDocumentsWhenDomEmpty(
+      integratedTabs,
+      prApiSecondaryFallback,
+      planSetErmsOrigin,
+      {
+        existingValidPlanReview,
+        planReviewStateRef: planReviewState,
+        skipRrAndApprovedApi: true,
+      },
+    );
+    return;
+  }
+
+  arlingtonApplySecondaryApiDocumentsWhenDomEmpty(
+    integratedTabs,
+    prApiSecondaryFallback,
+    planSetErmsOrigin,
+    {
+      existingValidPlanReview,
+      planReviewStateRef: planReviewState,
+    },
+  );
+}
+
+/**
+ * Fallback only: when DOM did not populate document rows for RR / Approved / PI docs.
+ * Skips document-level API merge when DB already has a valid Plan Set (preserve path).
+ * @param {{
+ *   existingValidPlanReview?: boolean,
+ *   planReviewStateRef?: { usedApiFallback?: boolean } | null,
+ *   skipRrAndApprovedApi?: boolean,
+ * }} opts
+ */
+function arlingtonApplySecondaryApiDocumentsWhenDomEmpty(
+  integratedTabs,
+  apiRows,
+  origin,
+  opts,
+) {
+  if (!integratedTabs || !apiRows) return;
+  const {
+    existingValidPlanReview = false,
+    planReviewStateRef = null,
+    skipRrAndApprovedApi = false,
+  } = opts && typeof opts === "object" ? opts : {};
+
+  if (existingValidPlanReview) {
+    console.log(
+      "[Arlington][PlanReview] API document fallback skipped (existing valid Plan Review in DB)",
+    );
+    return;
+  }
+
+  const rrSink = integratedTabs.reviewResultsAndMarkups?.documents;
+  const adSink = integratedTabs.approvedDocuments?.documents;
+
+  if (!skipRrAndApprovedApi && Array.isArray(rrSink) && rrSink.length === 0) {
+    const nBefore = rrSink.length;
+    for (const row of apiRows.responseLetters || []) {
+      if (!row || typeof row !== "object") continue;
+      arlingtonMergeSecondaryTabDocuments(rrSink, [
+        arlingtonApiRowToSecondaryTabDoc(
+          origin,
+          row,
+          "reviewResultsAndMarkups",
+          "ResponseLetters",
+        ),
+      ]);
+    }
+    for (const row of apiRows.comments || []) {
+      if (!row || typeof row !== "object") continue;
+      arlingtonMergeSecondaryTabDocuments(rrSink, [
+        arlingtonApiRowToSecondaryTabDoc(
+          origin,
+          row,
+          "reviewResultsAndMarkups",
+          "Comments",
+        ),
+      ]);
+    }
+    if (
+      rrSink.length > nBefore &&
+      planReviewStateRef &&
+      typeof planReviewStateRef === "object"
+    ) {
+      planReviewStateRef.usedApiFallback = true;
+    }
+    console.log(
+      `[Arlington][PlanReview] Review Results fallback API rows=${(apiRows.responseLetters || []).length} + comments-docs=${(apiRows.comments || []).length} (DOM empty)`,
+    );
+  }
+
+  if (!skipRrAndApprovedApi && Array.isArray(adSink) && adSink.length === 0) {
+    const nBefore = adSink.length;
+    for (const row of apiRows.applicationDocs || []) {
+      if (!row || typeof row !== "object") continue;
+      arlingtonMergeSecondaryTabDocuments(adSink, [
+        arlingtonApiRowToSecondaryTabDoc(
+          origin,
+          row,
+          "approvedDocuments",
+          "ApplicationDocs",
+        ),
+      ]);
+    }
+    if (
+      adSink.length > nBefore &&
+      planReviewStateRef &&
+      typeof planReviewStateRef === "object"
+    ) {
+      planReviewStateRef.usedApiFallback = true;
+    }
+    console.log(
+      `[Arlington][PlanReview] Approved Documents fallback ApplicationDocs=${(apiRows.applicationDocs || []).length} (DOM empty)`,
+    );
+  }
+
+  const piDocs = integratedTabs.projectInformation?.documents;
+  if (Array.isArray(piDocs) && piDocs.length === 0) {
+    const nBefore = piDocs.length;
+    for (const row of apiRows.accelaDocTypes || []) {
+      if (!row || typeof row !== "object") continue;
+      const planDocId = arlingtonExtractErmsPlanDocId(row);
+      if (!planDocId) continue;
+      arlingtonMergeSecondaryTabDocuments(piDocs, [
+        arlingtonApiRowToSecondaryTabDoc(
+          origin,
+          row,
+          "projectInformation",
+          "AccelaDocTypes",
+        ),
+      ]);
+    }
+    if (
+      piDocs.length > nBefore &&
+      planReviewStateRef &&
+      typeof planReviewStateRef === "object"
+    ) {
+      planReviewStateRef.usedApiFallback = true;
+    }
+  }
+}
+
+/** @deprecated Prefer comments+pi hydrate + DOM + fallback helpers */
+function arlingtonApplyApiRowsToSecondaryTabs(integratedTabs, apiRows, origin) {
+  arlingtonApplyApiRowsToSecondaryTabsCommentsAndPi(integratedTabs, apiRows, origin);
+  arlingtonApplySecondaryApiDocumentsWhenDomEmpty(integratedTabs, apiRows, origin, {});
+}
+
+/**
+ * Process invoke JSON/binary -> poll -> DocumentStream -> Supabase (shared tail).
+ */
+async function arlingtonPlanSetProcessInvokeResponseToUpload(
+  networkPage,
+  clickTarget,
+  invokeResp,
+  rowMeta,
+  downloadCtx,
+  rowKey,
+  prSeenRowKeys,
+  ermsOriginHint,
+  docName,
+  successLogLabel = "Plan Set",
+  documentId = "",
+) {
+  const ermsOrigin =
+    `${ermsOriginHint || ""}`.trim() || ARLINGTON_ERMS_ORIGIN_FALLBACK;
+
+  const ist = invokeResp ? invokeResp.status() : 0;
+  const ict = invokeResp
+    ? `${invokeResp.headers()["content-type"] || invokeResp.headers()["Content-Type"] || ""}`
+    : "";
+
+  console.log(
+    `[Arlington][PlanReview] Plan Set invoke POST status=${ist} ct=${ict}`,
+  );
+
+  /** @type {Buffer | null} */
+  let fileBuf = null;
+  /** @type {string} */
+  let streamId = "";
+  /** @type {boolean} */
+  let invokeStreamTimedOut = false;
+
+  const ictLow = ict.toLowerCase();
+  if (
+    invokeResp &&
+    (/\bpdf\b|octet-stream|download/i.test(ictLow) ||
+      /\.pdf/i.test(invokeResp.url()))
+  ) {
+    try {
+      fileBuf = Buffer.from(
+        await arlingtonPlanSetWithTimeout(
+          invokeResp.body(),
+          15000,
+          "plan_set_invoke_body_read",
+        ),
+      );
+    } catch (_) {
+      fileBuf = null;
+    }
+    console.log(
+      `[Arlington][PlanReview] Plan Set invoke body preview=[binary ${fileBuf ? fileBuf.length : 0} bytes]`,
+    );
+  } else {
+    let invokeBodyText = "";
+    try {
+      invokeBodyText = `${await arlingtonPlanSetWithTimeout(
+        invokeResp.text(),
+        15000,
+        "plan_set_invoke_body_read",
+      )}`;
+    } catch (readErr) {
+      invokeBodyText = "";
+      console.log(
+        `[Arlington][PlanReview] Plan Set invoke body preview= read_error=${readErr && readErr.message ? readErr.message : readErr}`,
+      );
+    }
+    if (invokeBodyText) {
+      console.log(
+        `[Arlington][PlanReview] Plan Set invoke body preview=${invokeBodyText.slice(0, 300)}`,
+      );
+    }
+
+    try {
+      const invokeJson = JSON.parse(invokeBodyText || "{}");
+      streamId = `${invokeJson.StreamID || invokeJson.streamId || invokeJson.StreamId || ""}`.trim();
+      const invokeErr = `${invokeJson.ErrorMessage || ""}`.trim();
+      if (invokeErr) {
+        return {
+          publicUrl: "",
+          storagePath: "",
+          downloadStatus: "invoke_error",
+          failureReason: invokeErr.slice(0, 500),
+        };
+      }
+    } catch (_) {
+      /**/
+    }
+
+    if (streamId) {
+      console.log(
+        `[Arlington][PlanReview] ${successLogLabel} streamId=${streamId} documentId=${documentId || "(from invoke)"}`,
+      );
+      try {
+        const streamPack = await arlingtonPlanSetFetchPdfViaInvokePollStream(
+          networkPage,
+          clickTarget,
+          ermsOrigin,
+          streamId,
+          docName,
+          successLogLabel,
+          downloadCtx,
+          documentId,
+        );
+        invokeStreamTimedOut = !!streamPack.streamTimedOut;
+        fileBuf = streamPack.pdf;
+      } catch (streamErr) {
+        if (arlingtonErmsSessionClosedMessage(streamErr)) {
+          return arlingtonPlanReviewSessionClosedOutcome();
+        }
+        throw streamErr;
+      }
+    }
+  }
+
+  if (invokeStreamTimedOut && (!fileBuf || !Buffer.byteLength(fileBuf))) {
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "pending_stream_timeout",
+      failureReason: "stream_timeout",
+    };
+  }
+  if (
+    fileBuf &&
+    fileBuf.length &&
+    arlingtonPlanSetPdfIsSuspiciousPlaceholder(fileBuf, docName)
+  ) {
+    fileBuf = null;
+  }
+
+  if (fileBuf && fileBuf.length) {
+    let uploaded;
+    try {
+      uploaded = await arlingtonPlanSetWithTimeout(
+        persistArlingtonPlanSetBufferPdf(
+          fileBuf,
+          rowMeta,
+          downloadCtx,
+          rowKey,
+          prSeenRowKeys,
+          successLogLabel,
+          documentId,
+        ),
+        60000,
+        "plan_set_upload",
+      );
+    } catch (uploadErr) {
+      if (arlingtonErmsSessionClosedMessage(uploadErr)) {
+        return arlingtonPlanReviewSessionClosedOutcome();
+      }
+      return {
+        publicUrl: "",
+        storagePath: "",
+        downloadStatus: "upload_timeout",
+        failureReason:
+          uploadErr && uploadErr.message ? uploadErr.message : String(uploadErr),
+      };
+    }
+
+    if (
+      `${uploaded.publicUrl || ""}`.trim() &&
+      `${uploaded.downloadStatus || ""}`.trim() === "uploaded"
+    ) {
+      console.log(
+        `[Arlington][PlanReview] ${successLogLabel} download OK ${docName} via InvokeDownloadDocument->PollDownloadDocument->DocumentStream documentId=${documentId || "(unknown)"}`,
+      );
+      if (clickTarget && typeof clickTarget.page === "function") {
+        await dismissBlockingModalsInArlingtonPlanReviewFrame(clickTarget).catch(
+          () => {},
+        );
+      }
+    }
+    return uploaded;
+  }
+
+  return {
+    publicUrl: "",
+    storagePath: "",
+    downloadStatus: "no_file_buffer",
+    failureReason: streamId
+      ? "invoke_poll_stream_failed"
+      : "no_file_after_invoke",
+  };
+}
+
+/**
+ * API/direct path: POST InvokeDownloadDocument with plandocid (no DOM click).
+ */
+async function arlingtonErmsDownloadViaDirectPlanDocInvoke(
+  networkPage,
+  clickTarget,
+  planDocId,
+  rowMeta,
+  downloadCtx,
+  rowKey,
+  prSeenRowKeys,
+  ermsOriginHint,
+  logLabel = "Plan Review",
+) {
+  const ermsOrigin =
+    `${ermsOriginHint || ""}`.trim() || ARLINGTON_ERMS_ORIGIN_FALLBACK;
+  const docId = `${planDocId || ""}`.trim();
+  const docName =
+    String(rowMeta.name || "plan_review_doc")
+      .split(/[\r\n|]+/)[0]
+      .trim() || "plan_review_doc";
+
+  if (!/^\d+$/.test(docId)) {
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "invoke_error",
+      failureReason: "invalid_plan_doc_id",
+    };
+  }
+
+  let token = "";
+  try {
+    token = await arlingtonPlanSetReadErmsVerificationToken(clickTarget, {
+      networkPage,
+      downloadCtx,
+      documentId: docId,
+    });
+  } catch (tokenErr) {
+    if (arlingtonErmsSessionClosedMessage(tokenErr)) {
+      return arlingtonPlanReviewSessionClosedOutcome();
+    }
+    throw tokenErr;
+  }
+  if (!token) {
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "pending_token_missing",
+      failureReason: "missing_verification_token",
+    };
+  }
+
+  const referer = `${ermsOrigin.replace(/\/$/, "")}/PlanReviewIntegrated/plan/ViewDocuments`;
+  const invokeBody = new URLSearchParams();
+  invokeBody.set("__RequestVerificationToken", token);
+  invokeBody.set("plandocid", docId);
+
+  if (!arlingtonPlanReviewCanStartDocumentStream(downloadCtx)) {
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "pending_not_attempted",
+      failureReason: "insufficient_remaining_budget",
+    };
+  }
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, docId);
+
+  /** @type {import('playwright').APIResponse | null} */
+  let apiInvoke = null;
+  try {
+    apiInvoke = await arlingtonPlanSetWithTimeout(
+      networkPage.request.post(
+        `${ermsOrigin.replace(/\/$/, "")}/PlanReviewIntegrated/Plan/InvokeDownloadDocument`,
+        {
+          timeout: 30000,
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+            Referer: referer,
+          },
+          data: invokeBody.toString(),
+        },
+      ),
+      35000,
+      "plan_set_direct_invoke_post",
+    );
+  } catch (invokeErr) {
+    if (arlingtonErmsSessionClosedMessage(invokeErr)) {
+      return arlingtonPlanReviewSessionClosedOutcome();
+    }
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "invoke_error",
+      failureReason:
+        invokeErr && invokeErr.message ? invokeErr.message : String(invokeErr),
+    };
+  }
+
+  arlingtonPlanReviewTouchKeepalive(downloadCtx, docId);
+
+  const status = apiInvoke.status();
+  const ct = `${apiInvoke.headers()["content-type"] || apiInvoke.headers()["Content-Type"] || ""}`;
+  console.log(
+    `[Arlington][PlanReview] ${logLabel} InvokeDownloadDocument POST status=${status} ct=${ct} plandocid=${docId}`,
+  );
+
+  const bodyText = `${await apiInvoke.text().catch(() => "")}`;
+  console.log(
+    `[Arlington][PlanReview] ${logLabel} invoke body preview=${bodyText.slice(0, 300)}`,
+  );
+
+  const fakeResp = {
+    status: () => status,
+    headers: () => ({ "content-type": ct }),
+    url: () => `${ermsOrigin}/PlanReviewIntegrated/Plan/InvokeDownloadDocument`,
+    text: async () => bodyText,
+    body: async () => Buffer.from(bodyText),
+  };
+
+  return arlingtonPlanSetProcessInvokeResponseToUpload(
+    networkPage,
+    clickTarget,
+    /** @type {import('playwright').Response} */ (fakeResp),
+    rowMeta,
+    downloadCtx,
+    rowKey,
+    prSeenRowKeys,
+    ermsOriginHint,
+    docName,
+    logLabel,
+    docId,
+  );
+}
+
+/**
+ * API-first ERMS download by plandocid — no DOM row or panel click required.
+ */
+async function downloadArlingtonErmsDocumentById({
+  networkPage,
+  tokenTarget,
+  documentId,
+  doc,
+  rowMeta,
+  downloadCtx,
+  rowKey,
+  prSeenRowKeys,
+  ermsOrigin,
+  logLabel = "Plan Review",
+}) {
+  const docId = `${documentId || doc?.documentId || doc?.action?.documentId || ""}`.trim();
+  if (!/^\d+$/.test(docId)) {
+    return {
+      publicUrl: "",
+      storagePath: "",
+      downloadStatus: "metadata_only",
+      failureReason: "missing_document_id",
+    };
+  }
+
+  return arlingtonErmsDownloadViaDirectPlanDocInvoke(
+    networkPage,
+    tokenTarget,
+    docId,
+    rowMeta,
+    downloadCtx,
+    rowKey,
+    prSeenRowKeys,
+    ermsOrigin,
+    logLabel,
+  );
+}
+
+/**
+ * Public helper: Invoke → Poll → DocumentStream by ERMS document id (no DOM row).
+ */
+async function downloadErmsDocumentById({
+  documentId,
+  doc,
+  sourceTab,
+  prFrame,
+  networkPage,
+  projectId,
+  permitNumber,
+  userId,
+  downloadCtx,
+  rowKey,
+  prSeenRowKeys,
+  ermsOrigin,
+  logLabel,
+}) {
+  const nameGuess =
+    `${doc?.name || doc?.filename || ""}`.trim() || "plan_review_doc";
+  const rowMeta = {
+    name: nameGuess,
+    documentDate: doc?.documentDate || "",
+    discipline: doc?.discipline || "",
+    sheetType: doc?.sheetType || doc?.documentType || "",
+    description: doc?.description || "",
+    revision: doc?.revision || "",
+    uploadStatus: doc?.uploadStatus || doc?.status || "",
+    size: doc?.size || "",
+  };
+  const ctx =
+    downloadCtx ||
+    (projectId || permitNumber
+      ? {
+          supabaseProjectId: projectId,
+          permitNumber,
+          userId,
+        }
+      : null);
+
+  return downloadArlingtonErmsDocumentById({
+    networkPage: networkPage || (prFrame && typeof prFrame.page === "function" ? prFrame.page() : prFrame),
+    tokenTarget: prFrame,
+    documentId,
+    doc,
+    rowMeta,
+    downloadCtx: ctx,
+    rowKey,
+    prSeenRowKeys,
+    ermsOrigin,
+    logLabel: logLabel || sourceTab || "Plan Review",
+  });
+}
+
+/**
+ * Secondary tabs: download API rows by document id; alias Plan Set duplicates.
+ * @returns {Promise<{ downloads: number; metadataOnly: number; aliases: number }>}
+ */
+async function downloadArlingtonSecondaryApiDocumentsForSink(
+  networkPage,
+  tokenTarget,
+  sink,
+  {
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    downloadCtx,
+    ermsOrigin,
+    logLabel = "Plan Review",
+    aliasDocSources = [],
+    downloadSource = "secondary",
+  },
+) {
+  if (!downloadCtx || !Array.isArray(sink) || !sink.length) {
+    return { downloads: 0, metadataOnly: 0, aliases: 0 };
+  }
+
+  let downloads = 0;
+  let metadataOnly = 0;
+  let aliases = 0;
+
+  for (const doc of sink) {
+    if (downloadCtx.planReviewDownloadsAbortedDeadline === true) {
+      break;
+    }
+    const nameGuess =
+      `${doc.name || doc.filename || ""}`.trim() || "(unnamed)";
+
+    const dsEarly = `${doc.downloadStatus || ""}`.trim();
+    if (arlingtonErmsSinkDocLooksUploadComplete(doc)) {
+      if (
+        dsEarly === "aliased_duplicate" ||
+        dsEarly === "aliased_attachment" ||
+        dsEarly === "aliased_plan_set"
+      ) {
+        aliases++;
+      }
+      continue;
+    }
+
+    console.log(
+      `[Arlington][PlanReview][Secondary] row sourceApi=${doc.sourceApi || "?"} name=${nameGuess} ids=${arlingtonFormatSecondaryRowCandidateIds(doc)}`,
+    );
+
+    const docId = arlingtonPickSecondaryRowDocumentId(doc);
+
+    const skipAliasDup =
+      `${doc.sourceTab || ""}` === "approvedDocuments" &&
+      `${doc.source || ""}` !== "api_fallback" &&
+      /Approved Plan Set\b/i.test(nameGuess) &&
+      !!docId;
+
+    if (docId) {
+      console.log(
+        `[Arlington][PlanReview] ${logLabel} download target documentId=${docId} row=${nameGuess}`,
+      );
+    }
+
+    const rowMeta = {
+      name: nameGuess,
+      documentDate: doc.documentDate || "",
+      discipline: doc.discipline || "",
+      sheetType: doc.sheetType || doc.documentType || "",
+      description: doc.description || "",
+      revision: doc.revision || "",
+      uploadStatus: doc.uploadStatus || doc.status || "",
+      size: doc.size || "",
+    };
+    const rowKey = `${arlingtonIntegratedRowDedupeKey(
+      rowMeta.name,
+      rowMeta.documentDate || "",
+      rowMeta.size || "",
+      rowMeta.revision || "",
+    )}###pid:${docId || "none"}###dom:${doc.secondaryDomRowIndex ?? "na"}`;
+
+    const aliasMatch = skipAliasDup
+      ? null
+      : arlingtonFindSecondaryDocAlias(aliasDocSources, {
+          documentId: docId,
+          rowKey,
+          name: nameGuess,
+        });
+    if (aliasMatch) {
+      const approvedPackFallback =
+        `${doc.sourceTab || ""}` === "approvedDocuments" &&
+        `${doc.source || ""}` !== "api_fallback" &&
+        /Approved Plan Set\b/i.test(nameGuess) &&
+        !docId;
+      if (approvedPackFallback) {
+        arlingtonApplyApprovedDocumentsPlanSetFallbackAlias(doc, aliasMatch);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} approved Plan Set packaged row aliased to Plan Set artifact ${nameGuess}`,
+        );
+      } else {
+        arlingtonApplySecondaryDocAlias(doc, aliasMatch);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} duplicate aliased ${nameGuess}`,
+        );
+      }
+      aliases++;
+      continue;
+    }
+
+    const dedupeHit =
+      attachmentDedupeKeys.has(rowKey) || prSeenRowKeys.has(rowKey);
+
+    if (!docId) {
+      doc.downloadStatus = "metadata_only";
+      doc.status = doc.status || "api_metadata";
+      metadataOnly++;
+      continue;
+    }
+
+    if (arlingtonPlanReviewDocAlreadyAttemptedThisRun(downloadCtx, docId)) {
+      continue;
+    }
+
+    // eslint-disable-next-line no-await-in-loop
+    const stopGate = await arlingtonPlanReviewShouldStopBeforeDoc(
+      downloadCtx,
+      downloadSource,
+    );
+    if (stopGate.stop) {
+      doc.downloadStatus = "pending_not_attempted";
+      doc.status = "pending";
+      doc.skipReason = stopGate.reason || "batch_limit_reached";
+      break;
+    }
+
+    arlingtonPlanReviewMarkDocAttemptedThisRun(downloadCtx, docId);
+    arlingtonPlanReviewDownloadBegin(downloadCtx, docId);
+    try {
+      const uploadOutcome = await downloadErmsDocumentById({
+        documentId: docId,
+        doc,
+        sourceTab: logLabel,
+        prFrame: tokenTarget,
+        networkPage,
+        downloadCtx,
+        rowKey,
+        prSeenRowKeys,
+        ermsOrigin,
+        logLabel,
+      });
+
+      const uploadedOk =
+        `${uploadOutcome.downloadStatus || ""}`.trim() === "uploaded" &&
+        !!`${uploadOutcome.publicUrl || ""}`.trim();
+
+      if (
+        `${uploadOutcome.failureReason || ""}`.trim() ===
+        "session_closed_during_download"
+      ) {
+        await arlingtonPlanReviewMarkDocSessionClosed(doc, downloadCtx);
+        continue;
+      }
+
+      if (uploadedOk) {
+        downloads++;
+        arlingtonPlanReviewRecordDownloadSuccess(downloadCtx, downloadSource);
+        doc.publicUrl = uploadOutcome.publicUrl;
+        doc.downloadUrl = uploadOutcome.publicUrl;
+        doc.storagePath = uploadOutcome.storagePath || "";
+        doc.size = uploadOutcome.size || doc.size || "";
+        doc.documentId = docId;
+        doc.action = { ...(doc.action || {}), documentId: docId };
+        doc.downloadStatus = "uploaded";
+        doc.status = "downloaded";
+        delete doc.retryCount;
+        delete doc.skipReason;
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download OK ${nameGuess}`,
+        );
+        await arlingtonPlanReviewMaybeCheckpointEvery5Downloads(downloadCtx);
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() ===
+        "pending_stream_timeout"
+      ) {
+        doc.downloadStatus = "pending_stream_timeout";
+        doc.status = "pending";
+        doc.skipReason = "stream_timeout";
+        doc.failureReason = "stream_timeout";
+        doc.lastAttemptAt = new Date().toISOString();
+        doc.retryCount = (Number(doc.retryCount) || 0) + 1;
+        if (downloadCtx && typeof downloadCtx === "object")
+          downloadCtx.planReviewPartialPendingDownloads = true;
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download pending stream_timeout ${nameGuess}`,
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await arlingtonPlanReviewRecordStreamTimeout(doc, downloadCtx);
+        break;
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() ===
+        "pending_token_missing"
+      ) {
+        doc.downloadStatus = "pending_token_missing";
+        doc.status = "pending";
+        doc.skipReason = "missing_verification_token";
+        doc.retryCount = (Number(doc.retryCount) || 0) + 1;
+        downloadCtx.planReviewPartialPendingDownloads = true;
+        arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download pending token_missing ${nameGuess}`,
+        );
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() ===
+        "pending_not_attempted"
+      ) {
+        doc.downloadStatus = "pending_not_attempted";
+        doc.status = "pending";
+        doc.skipReason =
+          uploadOutcome.failureReason || "insufficient_remaining_budget";
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() === "oversized_for_supabase"
+      ) {
+        doc.downloadStatus = "oversized_for_supabase";
+        doc.status = "pending";
+        doc.skipReason =
+          `${uploadOutcome.skipReason || ""}`.trim() ||
+          "supabase_object_size_limit";
+        doc.fileSizeBytes =
+          Number(uploadOutcome.fileSizeBytes ?? uploadOutcome.size) || 0;
+        console.log(
+          `[Arlington][PlanReview] oversized file skipped upload tab=${logLabel} name=${nameGuess} bytes=${doc.fileSizeBytes || uploadOutcome.size || 0}`,
+        );
+      } else if (dedupeHit) {
+        const aliasRetry = skipAliasDup
+          ? null
+          : arlingtonFindSecondaryDocAlias(aliasDocSources, {
+              documentId: docId,
+              rowKey,
+              name: nameGuess,
+            });
+        if (aliasRetry) {
+          const approvedPackFallback =
+            `${doc.sourceTab || ""}` === "approvedDocuments" &&
+            `${doc.source || ""}` !== "api_fallback" &&
+            /Approved Plan Set\b/i.test(nameGuess);
+          if (approvedPackFallback) {
+            arlingtonApplyApprovedDocumentsPlanSetFallbackAlias(
+              doc,
+              aliasRetry,
+            );
+          } else {
+            arlingtonApplySecondaryDocAlias(doc, aliasRetry);
+          }
+          console.log(
+            `[Arlington][PlanReview] ${logLabel} duplicate aliased ${nameGuess}`,
+          );
+          aliases++;
+        } else {
+          console.log(
+            `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=${uploadOutcome.failureReason || uploadOutcome.downloadStatus || "unknown"}`,
+          );
+        }
+      } else if (
+        `${uploadOutcome.downloadStatus || ""}`.trim() === "metadata_only"
+      ) {
+        doc.downloadStatus = "metadata_only";
+        doc.status = doc.status || "api_metadata";
+        metadataOnly++;
+      } else {
+        const reason =
+          uploadOutcome.failureReason ||
+          uploadOutcome.downloadStatus ||
+          "unknown";
+        const ds = `${uploadOutcome.downloadStatus || ""}`.trim();
+        if (ds === "oversized_for_supabase") {
+          doc.downloadStatus = "oversized_for_supabase";
+        } else if (/upload_failed|write_failed|failed_html/.test(ds)) {
+          doc.downloadStatus = "failed_upload";
+          arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        } else {
+          doc.downloadStatus = "failed_non_retryable";
+          arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        }
+        doc.status = "pending";
+        doc.skipReason = `${reason}`.slice(0, 200);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=${reason}`,
+        );
+        const hardF = Number(downloadCtx.planReviewHardFailuresThisRun) || 0;
+        if (hardF >= ARLINGTON_PLAN_REVIEW_MAX_HARD_DOWNLOAD_FAILURES_PER_RUN) {
+          // eslint-disable-next-line no-await-in-loop
+          await arlingtonPlanReviewStopDownloads(
+            downloadCtx,
+            "hard_failure_limit_reached",
+          );
+          break;
+        }
+      }
+    } catch (loopErr) {
+      if (arlingtonErmsSessionClosedMessage(loopErr)) {
+        await arlingtonPlanReviewMarkDocSessionClosed(doc, downloadCtx);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download pending ${nameGuess} reason=session_closed_during_download`,
+        );
+      } else {
+        arlingtonPlanReviewRecordHardFailure(downloadCtx);
+        console.log(
+          `[Arlington][PlanReview] ${logLabel} download failed ${nameGuess} reason=${loopErr && loopErr.message ? loopErr.message : loopErr}`,
+        );
+      }
+    } finally {
+      arlingtonPlanReviewDownloadEnd(downloadCtx);
+    }
+  }
+
+  return { downloads, metadataOnly, aliases };
+}
+
+async function fetchArlingtonPlanReviewPortalPayload(
+  page,
+  pathWithSlashAndMaybeQuery,
+  originOverride,
+) {
+  const pathname = pathWithSlashAndMaybeQuery.startsWith("/")
+    ? pathWithSlashAndMaybeQuery
+    : `/${pathWithSlashAndMaybeQuery}`;
+  let origin = "";
+  if (originOverride && `${originOverride}`.trim()) {
+    try {
+      origin = new URL(originOverride).origin;
+    } catch (_) {
+      origin = `${originOverride}`.replace(/\/$/, "");
+    }
+  } else {
+    try {
+      origin = new URL(page.url()).origin;
+    } catch (_) {
+      origin = "";
+    }
+  }
+  const absUrl = `${origin}${pathname}`;
+  let status = 0;
+  let textBody = "";
+
+  try {
+    if (typeof page.request?.get === "function") {
+      const res = await page.request.get(absUrl, { timeout: 45000 }).catch(() => null);
+      if (res) {
+        status = res.status();
+        textBody =
+          `${(await res.text().catch(() => "")) || ""}`.slice(0, 2_500_000);
+      }
+    }
+  } catch (_) {
+    /**/
+  }
+
+  if (!textBody.trim()) {
+    try {
+      const ev = await page
+        .evaluate(async (u) => {
+          try {
+            const r = await fetch(u, {
+              credentials: "include",
+              cache: "no-store",
+            });
+            return {
+              status: r.status,
+              text: `${(await r.text().catch(() => "")) || ""}`,
+            };
+          } catch (_) {
+            return { status: 0, text: "" };
+          }
+        }, absUrl)
+        .catch(() => null);
+      if (ev && typeof ev === "object") {
+        status = Number(ev.status) || status;
+        textBody = `${ev.text || ""}`.slice(0, 2_500_000);
+      }
+    } catch (_) {
+      /**/
+    }
+  }
+
+  /** @type {unknown} */
+  let json = null;
+  const trimmed = `${textBody}`.trim();
+  if (/^[{[]/.test(trimmed)) {
+    try {
+      json = JSON.parse(trimmed);
+    } catch (_) {
+      json = null;
+    }
+  }
+  return { absUrl, status, rawText: trimmed, json };
+}
+
+async function arlingtonPlanReviewApiHydrateTabs(
+  page,
+  permitProjectId,
+  integratedTabs,
+  hydrateOpts,
+) {
+  const proj = encodeURIComponent(`${permitProjectId || ""}`.trim());
+  const ermsOrigin =
+    hydrateOpts &&
+    typeof hydrateOpts === "object" &&
+    typeof hydrateOpts.ermsOrigin === "string"
+      ? hydrateOpts.ermsOrigin.trim()
+      : "";
+
+  /** @returns {unknown[]} */
+  const rowsFrom = (parsed) => {
+    if (!parsed || !parsed.json || typeof parsed.json !== "object")
+      return arlingtonLiftJsonArrays(parsed?.json ?? null);
+    if (Array.isArray(parsed.json))
+      return /** @type {unknown[]} */ (parsed.json);
+    const lifted = arlingtonLiftJsonArrays(parsed.json);
+    return lifted.length ? lifted : [];
+  };
+
+  let origin = "";
+  try {
+    origin = ermsOrigin
+      ? new URL(ermsOrigin).origin
+      : new URL(page.url()).origin;
+  } catch (_) {
+    origin = ermsOrigin ? ermsOrigin.replace(/\/$/, "") : "";
+  }
+
+  const requiredParsed = await fetchArlingtonPlanReviewPortalPayload(
+    page,
+    `/PlanReviewPortalService/api/document/RequiredPlanSheets?project=${proj}`,
+    origin,
+  );
+  const requiredRows = rowsFrom(requiredParsed);
+  {
+    const rawJ = requiredParsed.json;
+    const rawType =
+      rawJ === null || rawJ === undefined
+        ? String(rawJ)
+        : Array.isArray(rawJ)
+          ? "array"
+          : typeof rawJ;
+    console.log(
+      `[Arlington][PlanReview][DEBUG] RequiredPlanSheets raw type=${rawType}`,
+    );
+    let rawKeys = "(n/a)";
+    if (rawJ && typeof rawJ === "object") {
+      rawKeys = Array.isArray(rawJ)
+        ? `[array length=${rawJ.length}]`
+        : Object.keys(rawJ).join(",");
+    }
+    console.log(
+      `[Arlington][PlanReview][DEBUG] RequiredPlanSheets raw keys=${rawKeys}`,
+    );
+    let firstRawPreview = "(none)";
+    try {
+      if (Array.isArray(rawJ) && rawJ.length) {
+        firstRawPreview = JSON.stringify(rawJ.slice(0, 2));
+      } else if (rawJ && typeof rawJ === "object" && !Array.isArray(rawJ)) {
+        const liftedPreview = arlingtonLiftJsonArrays(rawJ);
+        firstRawPreview = JSON.stringify(
+          liftedPreview.slice(0, 2),
+        );
+      } else if (rawJ != null) {
+        firstRawPreview = JSON.stringify(rawJ).slice(0, 800);
+      }
+    } catch (_) {
+      firstRawPreview = "(stringify error)";
+    }
+    console.log(
+      `[Arlington][PlanReview][DEBUG] RequiredPlanSheets first item=${firstRawPreview}`,
+    );
+  }
+  console.log(
+    `[Arlington][PlanReview] API RequiredPlanSheets count=${requiredRows.length}`,
+  );
+
+  const planSink =
+    integratedTabs.plansAndDocuments.sections.planSetDocuments.documents;
+  arlingtonApplyRequiredPlanSheetsToPlanSink(planSink, requiredRows, origin);
+  try {
+    const firstNorm =
+      planSink.length > 0 ? planSink[0] : null;
+    console.log(
+      `[Arlington][PlanReview][DEBUG] PlanSet normalized first item=${firstNorm ? JSON.stringify(firstNorm) : "(none)"}`,
+    );
+  } catch (_) {
+    console.log(
+      "[Arlington][PlanReview][DEBUG] PlanSet normalized first item=(log error)",
+    );
+  }
+
+  const appParsed = await fetchArlingtonPlanReviewPortalPayload(
+    page,
+    `/PlanReviewPortalService/api/document/ApplicationDocs?project=${proj}`,
+    origin,
+  );
+  const appRows = rowsFrom(appParsed);
+  console.log(
+    `[Arlington][PlanReview] ApplicationDocs api rows=${appRows.length}`,
+  );
+
+  const rlParsed = await fetchArlingtonPlanReviewPortalPayload(
+    page,
+    `/PlanReviewPortalService/api/document/ResponseLetters?project=${proj}`,
+    origin,
+  );
+  const rlRows = rowsFrom(rlParsed);
+  console.log(
+    `[Arlington][PlanReview] ResponseLetters api rows=${rlRows.length}`,
+  );
+
+  const cmParsed = await fetchArlingtonPlanReviewPortalPayload(
+    page,
+    `/PlanReviewPortalService/api/PlanReviewData/Comments?identifier=${proj}`,
+    origin,
+  );
+  const cmRows = rowsFrom(cmParsed);
+  console.log(
+    `[Arlington][PlanReview] Comments api rows=${cmRows.length}`,
+  );
+
+  const dtParsed = await fetchArlingtonPlanReviewPortalPayload(
+    page,
+    `/PlanReviewPortalService/api/planreviewdata/AccelaDocTypes?identifier=${proj}`,
+    origin,
+  );
+  const dtRows = rowsFrom(dtParsed);
+  console.log(
+    `[Arlington][PlanReview] AccelaDocTypes api rows=${dtRows.length}`,
+  );
+
+  const includeSecondary =
+    (hydrateOpts &&
+      typeof hydrateOpts === "object" &&
+      hydrateOpts.includeSecondaryTabs === true) ||
+    ArlingtonAccelaProfile.planReview?.planReviewIncludeSecondaryTabs === true;
+
+  if (includeSecondary) {
+    arlingtonApplyApiRowsToSecondaryTabsCommentsAndPi(integratedTabs, {
+      responseLetters: rlRows,
+      applicationDocs: appRows,
+      comments: cmRows,
+      accelaDocTypes: dtRows,
+    }, origin);
+    console.log(
+      `[Arlington][PlanReview] secondary API hydrate: comments+PI fields only (Review Results / Approved document rows deferred to DOM-first)`,
+    );
+  }
+
+  return {
+    planRowCount: requiredRows.length,
+    responseLettersCount: rlRows.length,
+    applicationDocsCount: appRows.length,
+    commentsCount: cmRows.length,
+    accelaDocTypesCount: dtRows.length,
+    secondaryApiFallback:
+      includeSecondary
+        ? {
+            responseLetters: rlRows,
+            applicationDocs: appRows,
+            comments: cmRows,
+            accelaDocTypes: dtRows,
+          }
+        : null,
+  };
+}
+
+async function dismissArlingtonPlanReviewViewDocsPopups(page) {
+  let detected = false;
+  let closed = false;
+
+  outer: for (let pass = 0; pass < 10; pass++) {
+    /** @returns {Promise<{ found:boolean, selectors:string[], textClose:boolean}>} */
+
+    const peek = await page
+      .evaluate(() => ({
+        dlg: [...document.querySelectorAll(".ui-dialog")].some((el) => {
+          const st = window.getComputedStyle(el);
+          return (
+            st.display !== "none" &&
+            st.visibility !== "hidden" &&
+            el.offsetWidth > 24 &&
+            el.offsetHeight > 24
+          );
+        }),
+      }))
+      .catch(() => ({ dlg: false }));
+    const dialogVisible =
+      peek &&
+      typeof peek === "object" &&
+      /** @type {{ dlg?:boolean}} */ (peek).dlg === true;
+
+    if (!dialogVisible) break outer;
+    detected = true;
+
+    const clickSelectors = [
+      ".ui-dialog-titlebar-close",
+      ".ui-icon-closethick",
+      "button[aria-label*='Close' i]",
+      '[title*="Close" i]',
+    ];
+    for (const sel of clickSelectors) {
+      const handles = await page.$$(sel).catch(() => []);
+      for (const h of handles) {
+        try {
+          if (!(await h.isVisible().catch(() => false))) continue;
+          await h.click({ force: true, timeout: 4000 }).catch(() => {});
+          closed = true;
+          await page.waitForTimeout(400).catch(() => {});
+          continue outer;
+        } catch (_) {
+          /**/
+        }
+      }
+    }
+
+    const textClose = await page
+      .evaluate(() => {
+        const buttons = [...document.querySelectorAll("button, a, [role='button']")];
+        for (const b of buttons) {
+          const t = (b.textContent || "").replace(/\s+/g, " ").trim();
+          if (!/^close$/i.test(t) || t.length > 12) continue;
+          const st = window.getComputedStyle(b);
+          if (st.display === "none" || st.visibility === "hidden") continue;
+          try {
+            b.click();
+            return true;
+          } catch (_) {
+            /**/
+          }
+        }
+        return false;
+      })
+      .catch(() => false);
+    if (textClose) {
+      closed = true;
+      await page.waitForTimeout(400).catch(() => {});
+      continue;
+    }
+
+    break;
+  }
+
+  const suffix = detected ? (closed ? "closed" : "detected") : "skipped";
+  console.log(`[Arlington][PlanReview] popup ${suffix}`);
+}
+
+/**
+ * Locate Arlington ERMS integrated iframe (`iFrameOpenPlanReview` / PlanReviewIntegrated).
+ * @returns {import('playwright').Frame | null}
+ */
+function pickArlingtonPlanReviewErmsFrame(page) {
+  for (const f of page.frames()) {
+    try {
+      if (f.name() === "iFrameOpenPlanReview") return f;
+    } catch (_) {
+      /**/
+    }
+  }
+  for (const f of page.frames()) {
+    try {
+      const u = `${f.url() || ""}`;
+      if (/planreviewintegrated/i.test(u)) return f;
+    } catch (_) {
+      /**/
+    }
+  }
+  return null;
+}
+
+/**
+ * ERMS shell readiness (core tabs only) — safe for Review/Approved secondary pages.
+ * @returns {Promise<import('playwright').Frame | null>}
+ */
+async function waitForArlingtonPlanReviewErmsShellReady(
+  page,
+  timeoutMs = 60000,
+) {
+  console.log(
+    "[Arlington][PlanReview] waiting for ERMS iframe shell (secondary-safe)",
+  );
+  const deadline = Date.now() + timeoutMs;
+  const pollMs = 500;
+  /** @type {number} */
+  let lastDiagLog = 0;
+
+  while (Date.now() < deadline) {
+    const fr = pickArlingtonPlanReviewErmsFrame(page);
+    if (fr) {
+      const snap = await fr
+        .evaluate(() => {
+          const bodyText =
+            document.body?.innerText || document.body?.textContent || "";
+          const hasCoreTabs =
+            /Plans\s*&\s*Documents/i.test(bodyText) &&
+            /Review Results\s*&\s*Mark-ups/i.test(bodyText) &&
+            /Approved Documents/i.test(bodyText) &&
+            /Project Information/i.test(bodyText);
+          const notBlank =
+            bodyText.replace(/\s+/g, " ").trim().length > 500;
+          return {
+            ok: notBlank && hasCoreTabs,
+            bodyLen: bodyText.length,
+            hasCoreTabs,
+          };
+        })
+        .catch(() => null);
+
+      const now = Date.now();
+      if (now - lastDiagLog >= 2500 || !snap) {
+        lastDiagLog = now;
+        const s = snap || { bodyLen: 0, hasCoreTabs: false };
+        console.log(
+          `[Arlington][PlanReview] ERMS shell check bodyLen=${s.bodyLen} coreTabs=${s.hasCoreTabs}`,
+        );
+      }
+
+      if (snap?.ok) {
+        console.log(
+          `[Arlington][PlanReview] ERMS shell ready coreTabs=${snap.hasCoreTabs}`,
+        );
+        return fr;
+      }
+    }
+
+    await page.waitForTimeout(pollMs).catch(() => {});
+  }
+
+  console.log(
+    `[Arlington][PlanReview] ERMS shell not ready within ${timeoutMs}ms`,
+  );
+  return null;
+}
+
+/**
+ * Secondary tab readiness: URL + panel markers (not Plan Set #divDocuments).
+ * @param {import("playwright").Page | import("playwright").Frame} frame
+ * @param {string} tabKey
+ * @returns {Promise<boolean>}
+ */
+async function arlingtonPlanReviewEvaluateSecondaryTabReady(frame, tabKey) {
+  if (tabKey === "approvedDocuments") {
+    const detail = await arlingtonPlanReviewEvaluateApprovedTabReadyDetail(frame);
+    return detail.ready;
+  }
+
+  const hints =
+    ARLINGTON_SECONDARY_TAB_DOWNLOAD_HINTS[
+      /** @type {keyof typeof ARLINGTON_SECONDARY_TAB_DOWNLOAD_HINTS} */ (
+        tabKey
+      )
+    ];
+  if (!hints || typeof frame.evaluate !== "function") return false;
+  const urlNeedle =
+    tabKey === "reviewResultsAndMarkups"
+      ? "ReviewDocuments"
+      : tabKey === "approvedDocuments"
+        ? "ApprovedDocuments"
+        : "";
+  if (!urlNeedle) return false;
+  try {
+    return !!(await frame.evaluate(
+      ({ urlNeedle, markerRxSource }) => {
+        const href = `${location.href || ""}`;
+        if (!href.includes(urlNeedle)) return false;
+        const body = document.body?.innerText || "";
+        let rx;
+        try {
+          rx = new RegExp(markerRxSource, "i");
+        } catch (_) {
+          return false;
+        }
+        if (rx.test(body)) return true;
+        if (/File Actions|Document Date|Download|Name/i.test(body)) return true;
+        const rows = document.querySelectorAll(
+          'tr, [role="row"], .grid-row, table tbody tr, a[href*="Download"]',
+        );
+        return !!(rows && rows.length > 0);
+      },
+      { urlNeedle, markerRxSource: hints.markerRxSource },
+    ));
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Strong readiness: ERMS shell + Plan markers (not merely ViewDocuments URL).
+ * @returns {Promise<import('playwright').Frame | null>}
+ */
+async function waitForArlingtonPlanReviewErmsContentReady(
+  page,
+  timeoutMs = 60000,
+) {
+  console.log("[Arlington][PlanReview] waiting for ERMS iframe DOM (gated readiness)");
+  const deadline = Date.now() + timeoutMs;
+  const pollMs = 500;
+  /** @type {number} */
+  let lastDiagLog = 0;
+
+  while (Date.now() < deadline) {
+    const fr = pickArlingtonPlanReviewErmsFrame(page);
+    /** @type {string} */
+    let fuShort = "(no-frame)";
+
+    if (fr) {
+      try {
+        fuShort = `${fr.url() || ""}`.slice(0, 200);
+      } catch (_) {
+        fuShort = "(frame-url-error)";
+      }
+      const snap = await fr
+        .evaluate(() => {
+          const bodyText =
+            document.body?.innerText || document.body?.textContent || "";
+          const hasCoreTabs =
+            /Plans\s*&\s*Documents/i.test(bodyText) &&
+            /Review Results\s*&\s*Mark-ups/i.test(bodyText) &&
+            /Approved Documents/i.test(bodyText) &&
+            /Project Information/i.test(bodyText);
+          const hasPlanSet =
+            !!document.querySelector("#divDocuments") ||
+            /Plan Set Documents/i.test(bodyText);
+          const notBlank =
+            bodyText.replace(/\s+/g, " ").trim().length > 1000;
+          const ok = notBlank && hasCoreTabs && hasPlanSet;
+          return {
+            ok,
+            bodyLen: bodyText.length,
+            divDocuments: !!document.querySelector("#divDocuments"),
+            hasCoreTabs,
+            hasPlanSetText: /Plan Set Documents/i.test(bodyText),
+          };
+        })
+        .catch(() => null);
+
+      const now = Date.now();
+      if (now - lastDiagLog >= 2500 || !snap) {
+        lastDiagLog = now;
+        const s =
+          snap || {
+            bodyLen: 0,
+            divDocuments: false,
+            hasCoreTabs: false,
+            hasPlanSetText: false,
+          };
+        console.log(
+          `[Arlington][PlanReview] iframe ready check url=${fuShort} bodyLen=${s.bodyLen} divDocuments=${s.divDocuments} coreTabs=${s.hasCoreTabs} planSetText=${s.hasPlanSetText}`,
+        );
+      }
+
+      if (snap?.ok) {
+        console.log(
+          `[Arlington][PlanReview] iframe ready confirmed divDocuments=${snap.divDocuments} coreTabs=${snap.hasCoreTabs} planSetText=${snap.hasPlanSetText}`,
+        );
+        return fr;
+      }
+    } else {
+      const now = Date.now();
+      if (now - lastDiagLog >= 2500) {
+        lastDiagLog = now;
+        console.log(
+          `[Arlington][PlanReview] iframe ready check url=(no-frame) bodyLen=0 divDocuments=false coreTabs=false planSetText=false`,
+        );
+      }
+    }
+
+    await page.waitForTimeout(pollMs).catch(() => {});
+  }
+
+  console.log(
+    `[Arlington][PlanReview] iframe not ready within ${timeoutMs}ms`,
+  );
+  return null;
+}
+
+/**
+ * Gated readiness with one Plan Review tab retry (re-click + re-poll).
+ * @returns {Promise<import('playwright').Frame | null>}
+ */
+async function waitForArlingtonPlanReviewIframeReady(page, timeoutMs = 60000) {
+  let fr = await waitForArlingtonPlanReviewErmsContentReady(page, timeoutMs);
+  if (fr) return fr;
+  console.log(
+    "[Arlington][PlanReview] iframe readiness retry — re-activating Plan Review tab",
+  );
+  await ensureArlingtonPlanReviewActive(page).catch(() => ({ ok: false }));
+  await page.waitForTimeout(3000).catch(() => {});
+  await waitForAccelaLoad(page).catch(() => {});
+  fr = await waitForArlingtonPlanReviewErmsContentReady(page, timeoutMs);
+  if (!fr) {
+    console.log(
+      "[Arlington][PlanReview] iframe not ready after retries; marking extraction failed",
+    );
+  }
+  return fr;
+}
+
+/**
+ * Dismiss blocking modals only inside the ERMS Plan Review frame (not Accela shell).
+ */
+async function dismissBlockingModalsInArlingtonPlanReviewFrame(fr) {
+  const accelaNeedles = [
+    "no additional documents required",
+    "submit active revision",
+  ];
+  const clickSelectors = [
+    'button:has-text("OK")',
+    '[role="button"]:has-text("OK")',
+    'input[value="OK"]',
+    'input[value="Ok"]',
+    'button:has-text("Ok")',
+    'button:has-text("CLOSE")',
+    'button:has-text("Close")',
+    'button:has-text("Continue")',
+    'input[value="Close"]',
+    'a:has-text("OK")',
+  ];
+  const parentPage = fr.page();
+  for (let pass = 0; pass < 3; pass++) {
+    const state = await fr
+      .evaluate((needles) => {
+        const body = (document.body?.innerText || "").toLowerCase();
+        const hasDiv = !!document.querySelector("#divDocuments");
+        const accela = needles.some((n) => body.includes(n));
+        const jqueryDlg = [...document.querySelectorAll(".ui-dialog")].some(
+          (el) => {
+            const st = window.getComputedStyle(el);
+            return (
+              st.display !== "none" &&
+              st.visibility !== "hidden" &&
+              el.offsetWidth > 24 &&
+              el.offsetHeight > 24
+            );
+          },
+        );
+        return { blocked: !hasDiv && (accela || jqueryDlg) };
+      }, accelaNeedles)
+      .catch(() => ({ blocked: false }));
+
+    if (!state.blocked) break;
+
+    let clicked = false;
+    for (const sel of clickSelectors) {
+      const btn = await fr.$(sel).catch(() => null);
+      if (btn && (await btn.isVisible().catch(() => false))) {
+        await btn.click({ force: true }).catch(() => {});
+        clicked = true;
+        console.log(
+          `[Arlington][PlanReview] frame modal dismissed (${sel}) pass=${pass + 1}`,
+        );
+        break;
+      }
+    }
+    if (!clicked) {
+      const closed = await fr
+        .evaluate(() => {
+          for (const sel of [
+            ".ui-dialog-titlebar-close",
+            ".ui-icon-closethick",
+          ]) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const st = window.getComputedStyle(el);
+            if (st.display === "none" || st.visibility === "hidden") continue;
+            try {
+              el.click();
+              return sel;
+            } catch (_) {
+              /**/
+            }
+          }
+          return "";
+        })
+        .catch(() => "");
+      if (closed) {
+        console.log(
+          `[Arlington][PlanReview] frame jquery dialog closed (${closed}) pass=${pass + 1}`,
+        );
+      }
+    }
+    await parentPage.waitForTimeout(500).catch(() => {});
+  }
+}
+
+async function restoreArlingtonCapDetailAfterErms(page, savedCapUrl) {
+  if (!`${savedCapUrl || ""}`.includes("CapDetail.aspx")) return;
+  try {
+    await page.goto(`${savedCapUrl}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+  } catch (_) {
+    /**/
+  }
+  await waitForAccelaLoad(page).catch(() => {});
+  await page.waitForTimeout(380).catch(() => {});
+}
+
+const ARLINGTON_SECONDARY_TAB_SPECS = [
+  { label: "Review Results & Mark-ups", tabKey: "reviewResultsAndMarkups" },
+  { label: "Approved Documents", tabKey: "approvedDocuments" },
+  { label: "Project Information", tabKey: "projectInformation" },
+];
+
+/** Nested row within Review Results & Mark-ups (visible document grid). */
+const ARLINGTON_REVIEW_RESULTS_DOM_SUBTABS = [
+  "Comment Letters & Plan Mark-ups",
+  "Comment Letters & Plan Markups",
+  "Comment Letters",
+  "Plan Mark-ups",
+];
+
+const ARLINGTON_SECONDARY_REVIEW_RESULTS_RE =
+  /Comment Letters|Plan Mark-ups|Review Results Letter|Review Status|Document Date|Download/i;
+
+const ARLINGTON_SECONDARY_APPROVED_RE =
+  /Approved Plan Set|Approved Documents|Document Date|Download/i;
+
+const ARLINGTON_SECONDARY_PROJECT_INFO_RE =
+  /Project Information|Project ID|Project Status|Applicant|Owner/i;
+
+/** @returns {RegExp} */
+function arlingtonSecondaryExpectedRegex(tabKey) {
+  if (tabKey === "reviewResultsAndMarkups")
+    return ARLINGTON_SECONDARY_REVIEW_RESULTS_RE;
+  if (tabKey === "approvedDocuments") return ARLINGTON_SECONDARY_APPROVED_RE;
+  return ARLINGTON_SECONDARY_PROJECT_INFO_RE;
+}
+
+const ARLINGTON_APPROVED_PANEL_CHROME_RE =
+  /Building Arlington|Jobs\s*•\s*Services A-Z|Sign Out|Projects Settings Profile|en Español|ePlan Review Help/i;
+
+const ARLINGTON_APPROVED_PANEL_GRID_RE =
+  /File Actions|Document Date|Download|Approved Plan Set|Review Results Letter/i;
+
+/**
+ * @param {import("playwright").ElementHandle | null | undefined} panelHandle
+ * @returns {Promise<{ acceptable: boolean; reason: string; id: string; rows: number; actions: number; markerHits: number; preview: string }>}
+ */
+async function arlingtonEvaluateApprovedDocumentsPanelStrength(panelHandle) {
+  if (!panelHandle || typeof panelHandle.evaluate !== "function") {
+    return {
+      acceptable: false,
+      reason: "no_panel",
+      id: "",
+      rows: 0,
+      actions: 0,
+      markerHits: 0,
+      preview: "",
+    };
+  }
+  try {
+    const stats = await panelHandle.evaluate((root) => {
+      if (!(root instanceof Element)) return null;
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      const el = /** @type {HTMLElement} */ (root);
+      const text = norm(el.innerText || el.textContent || "");
+      const id = `${el.id || ""}`.trim();
+      const tables = [...el.querySelectorAll("table")];
+      let trCount = 0;
+      for (const tb of tables) trCount += tb.querySelectorAll("tr").length;
+      const docActions = el.querySelectorAll(
+        'input.docaction, input.img-button.docaction, input[type="image"]',
+      ).length;
+      const actionCount = el.querySelectorAll(
+        'input.docaction, input.img-button.docaction, input[type="image"], a[href], button',
+      ).length;
+      const markerHits = [
+        /File Actions/i.test(text),
+        /Document Date/i.test(text),
+        /Download/i.test(text),
+        /Approved Plan Set/i.test(text),
+        /Review Results Letter/i.test(text),
+      ].filter(Boolean).length;
+      return {
+        id,
+        preview: text.slice(0, 300),
+        rows: trCount,
+        actions: actionCount,
+        docActions,
+        markerHits,
+      };
+    });
+    if (!stats || typeof stats !== "object") {
+      return {
+        acceptable: false,
+        reason: "panel_not_element",
+        id: "",
+        rows: 0,
+        actions: 0,
+        markerHits: 0,
+        preview: "",
+      };
+    }
+    const id = `${stats?.id || ""}`.trim();
+    const preview = `${stats?.preview || ""}`.trim();
+    const rows = Number(stats?.rows) || 0;
+    const actions = Number(stats?.actions) || 0;
+    const docActions = Number(stats?.docActions) || 0;
+    const markerHits = Number(stats?.markerHits) || 0;
+
+    if (/arlington-header/i.test(id)) {
+      return {
+        acceptable: false,
+        reason: "arlington_header_id",
+        id,
+        rows,
+        actions,
+        markerHits,
+        preview,
+      };
+    }
+    if (/Building Arlington/i.test(preview)) {
+      return {
+        acceptable: false,
+        reason: "site_chrome_building_arlington",
+        id,
+        rows,
+        actions,
+        markerHits,
+        preview,
+      };
+    }
+    if (
+      /Jobs\s*•\s*Services A-Z/i.test(preview) ||
+      /Sign Out/i.test(preview) ||
+      /Projects Settings Profile/i.test(preview)
+    ) {
+      return {
+        acceptable: false,
+        reason: "site_chrome_nav",
+        id,
+        rows,
+        actions,
+        markerHits,
+        preview,
+      };
+    }
+    if (rows === 0 && markerHits < 2) {
+      return {
+        acceptable: false,
+        reason: "no_rows_weak_markers",
+        id,
+        rows,
+        actions,
+        markerHits,
+        preview,
+      };
+    }
+    if (markerHits < 2 || docActions < 1) {
+      return {
+        acceptable: false,
+        reason: "grid_markers_insufficient",
+        id,
+        rows,
+        actions,
+        markerHits,
+        preview,
+      };
+    }
+    if (rows < 2 && markerHits < 4) {
+      return {
+        acceptable: false,
+        reason: "rows_and_markers_weak",
+        id,
+        rows,
+        actions,
+        markerHits,
+        preview,
+      };
+    }
+    return {
+      acceptable: true,
+      reason: "approved_grid_ok",
+      id,
+      rows,
+      actions,
+      markerHits,
+      preview,
+    };
+  } catch (_) {
+    return {
+      acceptable: false,
+      reason: "evaluate_error",
+      id: "",
+      rows: 0,
+      actions: 0,
+      markerHits: 0,
+      preview: "",
+    };
+  }
+}
+
+const ARLINGTON_PROJECT_INFORMATION_HREF =
+  "/PlanReviewIntegrated/Plan/ProjectInformation";
+
+/**
+ * @param {import("playwright").Page | import("playwright").Frame | null | undefined} frame
+ */
+async function arlingtonPlanReviewEvaluateProjectInformationBodyMarkers(frame) {
+  if (!frame || typeof frame.evaluate !== "function") {
+    return {
+      projectId: false,
+      projectName: false,
+      accelaCap: false,
+      address: false,
+      reviewType: false,
+      cphdCase: false,
+    };
+  }
+  try {
+    return await frame.evaluate(() => {
+      const text =
+        document.body?.innerText || document.body?.textContent || "";
+      return {
+        projectId: /Project ID/i.test(text),
+        projectName: /Plan Review Project Name/i.test(text),
+        accelaCap: /Accela CAP ID/i.test(text),
+        address: /\bAddress\b/i.test(text),
+        reviewType: /Review Type/i.test(text),
+        cphdCase: /CPHD Case/i.test(text),
+      };
+    });
+  } catch (_) {
+    return {
+      projectId: false,
+      projectName: false,
+      accelaCap: false,
+      address: false,
+      reviewType: false,
+      cphdCase: false,
+    };
+  }
+}
+
+/**
+ * Navigate ERMS to Project Information and wait for form body markers.
+ * @returns {Promise<{ root: import("playwright").Page | import("playwright").Frame; markers: Record<string, boolean> }>}
+ */
+async function arlingtonPrepareArlingtonProjectInformationErmsFrame(page, ermsRoot) {
+  const logP = "[Arlington][PlanReview][ProjectInfo]";
+  let root = ermsRoot;
+  const beforeUrl = await arlingtonPlanReviewFrameUrlShort(root);
+  console.log(`${logP} before url=${beforeUrl}`);
+
+  const refreshed = await waitForArlingtonPlanReviewErmsShellReady(page, 45000);
+  if (refreshed) root = refreshed;
+
+  let hrefClick = false;
+  let currentUrl = await arlingtonPlanReviewFrameUrlShort(root);
+  if (!/ProjectInformation/i.test(currentUrl)) {
+    hrefClick = await arlingtonPlanReviewClickFrameHref(
+      root,
+      ARLINGTON_PROJECT_INFORMATION_HREF,
+    );
+    if (!hrefClick && typeof root.url === "function") {
+      try {
+        const origin = new URL(root.url()).origin;
+        await root.goto(`${origin}${ARLINGTON_PROJECT_INFORMATION_HREF}`, {
+          waitUntil: "domcontentloaded",
+          timeout: 60000,
+        });
+        hrefClick = true;
+      } catch (_) {
+        /**/
+      }
+    }
+    await page.waitForTimeout(1200).catch(() => {});
+    root =
+      (await waitForArlingtonPlanReviewErmsShellReady(page, 45000)) || root;
+  }
+
+  currentUrl = await arlingtonPlanReviewFrameUrlShort(root);
+  if (!/ProjectInformation/i.test(currentUrl)) {
+    const tabClicked = await clickArlingtonErmsTopTab(
+      root,
+      page,
+      "Project Information",
+    ).catch(() => false);
+    if (tabClicked) {
+      await page.waitForTimeout(1000).catch(() => {});
+      root =
+        (await waitForArlingtonPlanReviewErmsShellReady(page, 45000)) || root;
+    }
+  }
+
+  const afterUrl = await arlingtonPlanReviewFrameUrlShort(root);
+  console.log(
+    `${logP} hrefClick=${hrefClick} after click url=${afterUrl}`,
+  );
+
+  await root
+    .waitForFunction(
+      () => {
+        const text =
+          document.body?.innerText || document.body?.textContent || "";
+        return (
+          /Project ID/i.test(text) &&
+          /Plan Review Project Name/i.test(text) &&
+          /Accela CAP ID/i.test(text)
+        );
+      },
+      { timeout: 15000, polling: 250 },
+    )
+    .catch(() => null);
+
+  await dismissBlockingModalsInArlingtonPlanReviewFrame(root).catch(() => {});
+
+  const markers = await arlingtonPlanReviewEvaluateProjectInformationBodyMarkers(
+    root,
+  );
+  console.log(
+    `${logP} bodyMarkers projectId=${!!markers.projectId} projectName=${!!markers.projectName} accelaCap=${!!markers.accelCap} address=${!!markers.address} reviewType=${!!markers.reviewType} cphdCase=${!!markers.cphdCase}`,
+  );
+
+  return { root, markers };
+}
+
+/**
+ * @param {import("playwright").Page} page
+ * @param {import("playwright").Page | import("playwright").Frame} ermsRoot
+ * @returns {Promise<{ label: string; value: string; sourceTab?: string }[]>}
+ */
+async function arlingtonExtractArlingtonProjectInformationFields(page, ermsRoot) {
+  const logP = "[Arlington][PlanReview][ProjectInfo]";
+  const { root, markers } =
+    await arlingtonPrepareArlingtonProjectInformationErmsFrame(page, ermsRoot);
+
+  let dataFrame = await findArlingtonProjectInformationDataFrame(root);
+  let dataUrl = dataFrame
+    ? await arlingtonPlanReviewFrameUrlShort(dataFrame)
+    : "(none)";
+  console.log(
+    `${logP} dataFrameFound=${!!dataFrame} url=${dataUrl}`,
+  );
+
+  /** @type {import("playwright").Page | import("playwright").Frame} */
+  let extractTarget = dataFrame || root;
+  let piFields = await extractArlingtonProjectInformationFieldsFromFrame(
+    extractTarget,
+  );
+
+  if (
+    piFields.length === 0 &&
+    (markers.projectId || markers.projectName || markers.accelCap)
+  ) {
+    /** @type {import("playwright").Frame[]} */
+    const frames = [];
+    const walk = (f) => {
+      frames.push(f);
+      for (const c of f.childFrames()) walk(c);
+    };
+    if (typeof root.childFrames === "function") {
+      walk(/** @type {import("playwright").Frame} */ (root));
+    }
+    for (const fr of frames) {
+      const attempt = await extractArlingtonProjectInformationFieldsFromFrame(
+        fr,
+      );
+      if (attempt.length > piFields.length) {
+        piFields = attempt;
+        dataFrame = fr;
+        dataUrl = await arlingtonPlanReviewFrameUrlShort(fr);
+      }
+      if (piFields.length >= 4) break;
+    }
+    console.log(
+      `${logP} dataFrameFound=${!!dataFrame} url=${dataUrl} (frame sweep)`,
+    );
+  }
+
+  console.log(`${logP} fields=${piFields.length}`);
+  return piFields;
+}
+
+/**
+ * @param {ReturnType<typeof defaultArlingtonIntegratedTabsSkeleton>} integratedTabs
+ * @param {{ label: string; value: string }[]} piFields
+ */
+function arlingtonMergeProjectInformationFieldsDest(integratedTabs, piFields) {
+  if (!Array.isArray(piFields) || !piFields.length) return;
+  const destFields = integratedTabs?.projectInformation?.fields;
+  if (!Array.isArray(destFields)) return;
+  destFields.length = 0;
+  for (const f of piFields) {
+    if (!f || !f.label) continue;
+    destFields.push({
+      label: `${f.label}`.trim(),
+      value: `${f.value != null ? f.value : ""}`.trim().slice(0, 2000),
+    });
+  }
+  const nFields = integratedTabs.projectInformation?.fields?.length ?? 0;
+  const nDocs = integratedTabs.projectInformation?.documents?.length ?? 0;
+  console.log(
+    `[Arlington][PlanReview] Project Information fields=${nFields} documents=${nDocs}`,
+  );
+  for (const f of integratedTabs.projectInformation?.fields || []) {
+    if (!f || !`${f.label || ""}`.trim()) continue;
+    console.log(
+      `[Arlington][PlanReview] Project Information field ${`${f.label}`.trim()}=${`${f.value != null ? f.value : ""}`.trim()}`,
+    );
+  }
+}
+
+/**
+ * Keep session.data in sync with portal_data written/preserved for DB.
+ * @param {Record<string, unknown>} session
+ * @param {string} permitNumber
+ * @param {Record<string, unknown>} portalPayloadForDb
+ */
+function arlingtonSyncSessionDataPortalPayload(session, permitNumber, portalPayloadForDb) {
+  if (!session || !`${permitNumber || ""}`.trim() || !portalPayloadForDb) return;
+  session.data = session.data || {};
+  session.data[permitNumber] = portalPayloadForDb;
+}
+
+/**
+ * @param {import("playwright").Page} page
+ * @param {import("playwright").Page | import("playwright").Frame} ermsRoot
+ * @param {{ label: string; tabKey: string }} st
+ * @param {RegExp} expectedRegex
+ * @returns {Promise<import("playwright").ElementHandle | null>}
+ */
+async function clickAndResolveArlingtonApprovedDocumentsPanel(
+  page,
+  ermsRoot,
+  st,
+  expectedRegex,
+) {
+  const maxAttempts = 5;
+  const waitMs = 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let root = ermsRoot;
+    const refreshed = await waitForArlingtonPlanReviewErmsShellReady(page, 45000);
+    if (refreshed) root = refreshed;
+
+    /** @type {import("playwright").ElementHandle | null} */
+    let panelEl = await arlingtonClickErmsTopTabAndWait(
+      root,
+      st.label,
+      expectedRegex,
+    ).catch(() => null);
+
+    if (panelEl) {
+      const strength = await arlingtonEvaluateApprovedDocumentsPanelStrength(
+        panelEl,
+      );
+      if (strength.acceptable) {
+        console.log(
+          `[Arlington][PlanReview] Approved Documents panel resolved attempt=${attempt} id=${strength.id || "(none)"} rows=${strength.rows} actions=${strength.actions} markers=${strength.markerHits}`,
+        );
+        return panelEl;
+      }
+      console.log(
+        `[Arlington][PlanReview] Approved Documents panel weak attempt=${attempt} reason=${strength.reason} id=${strength.id || "(none)"} rows=${strength.rows} actions=${strength.actions} preview=${strength.preview.slice(0, 120)}`,
+      );
+      await panelEl.dispose().catch(() => {});
+      panelEl = null;
+    } else {
+      console.log(
+        `[Arlington][PlanReview] Approved Documents panel not resolved attempt=${attempt}`,
+      );
+    }
+
+    if (attempt < maxAttempts) {
+      await page.waitForTimeout(waitMs).catch(() => {});
+    }
+  }
+
+  console.log(
+    `[Arlington][PlanReview] active panel "${st.label}" not resolved after ${maxAttempts} attempts (header/nav rejected or grid missing)`,
+  );
+  return null;
+}
+
+/**
+ * Restore prior Approved Documents rows or mark DOM extraction failed.
+ * @param {ReturnType<typeof defaultArlingtonIntegratedTabsSkeleton>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} priorPortalData
+ * @param {{ secondaryDomExtractionFailed?: boolean; secondaryDomValid?: boolean; failureReason?: string | null }} [planReviewStateRef]
+ */
+function arlingtonRestoreApprovedDocumentsFromPriorOrMarkFailed(
+  integratedTabs,
+  priorPortalData,
+  planReviewStateRef,
+) {
+  if (!integratedTabs?.approvedDocuments) return;
+  const adDest = integratedTabs.approvedDocuments;
+  const priorAd =
+    priorPortalData?.tabs?.planReview?.tabs?.approvedDocuments?.documents;
+  const priorCount = Array.isArray(priorAd) ? priorAd.length : 0;
+
+  if (Array.isArray(adDest.documents) && adDest.documents.length === 0) {
+    if (priorCount > 0) {
+      adDest.documents = structuredCloneWorksSafe(priorAd);
+      console.log(
+        `[Arlington][PlanReview] Approved Documents DOM weak — preserved ${priorCount} prior row(s)`,
+      );
+      if (planReviewStateRef && typeof planReviewStateRef === "object") {
+        planReviewStateRef.secondaryDomExtractionFailed = true;
+        planReviewStateRef.secondaryDomValid = false;
+        planReviewStateRef.failureReason =
+          `${planReviewStateRef.failureReason || ""} approved_dom_weak_preserved_prior`.trim();
+      }
+    } else {
+      adDest.secondaryExtractionStatus = "dom_extraction_failed";
+      console.log(
+        "[Arlington][PlanReview] Approved Documents DOM weak — no prior rows; marked dom_extraction_failed",
+      );
+      if (planReviewStateRef && typeof planReviewStateRef === "object") {
+        planReviewStateRef.secondaryDomExtractionFailed = true;
+        planReviewStateRef.secondaryDomValid = false;
+        planReviewStateRef.failureReason =
+          `${planReviewStateRef.failureReason || ""} approved_dom_extraction_failed`.trim();
+      }
+    }
+  }
+}
+
+/**
+ * Pick the active ERMS tabpanel: hash href / aria-controls first, then content score.
+ * @param {import("playwright").Page | import("playwright").Frame} frame
+ * @param {string} label
+ * @param {RegExp} expectedRegex
+ * @param {{ panelHref?: string; ariaControls?: string }} [hints]
+ * @returns {Promise<import("playwright").ElementHandle | null>}
+ */
+async function arlingtonResolveActiveErmsPanel(
+  frame,
+  label,
+  expectedRegex,
+  hints,
+) {
+  const panelHref = `${hints?.panelHref || ""}`.trim();
+  const ariaControls = `${hints?.ariaControls || ""}`.trim();
+
+  const handle = await frame.evaluateHandle(
+    ({
+      expectedSource,
+      panelHrefRaw,
+      ariaControlsRaw,
+      panelLabelRaw,
+    }) => {
+      const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+      const panelLabelNorm = `${panelLabelRaw || ""}`.trim();
+      const labelIsProjectInformation =
+        panelLabelNorm === "Project Information";
+      const labelIsApprovedDocuments =
+        panelLabelNorm === "Approved Documents";
+
+      const projectInfoLabels = [
+        "Project ID",
+        "Plan Review Project Name",
+        "Accela CAP ID",
+        "Address",
+        "Review Type",
+        "CPHD Case #",
+      ];
+
+      const badProjectInfoContainer =
+        /arlington-header|header|footer|nav|main|page|subcontent|maincontent|wrap|menu|help/i;
+
+      const chromeText =
+        /Building Arlington|Jobs|Services A-Z|en Español|Help|Sign Out|Custom Help Menu/i;
+
+      const approvedChromeText =
+        /Building Arlington|Jobs\s*•\s*Services A-Z|Sign Out|Projects Settings Profile|en Español|ePlan Review Help/i;
+
+      /**
+       * Approved Documents must be the ERMS document grid, not site header/nav.
+       * @param {HTMLElement} el
+       * @param {string} text
+       * @param {number} rows
+       * @param {number} docActions
+       */
+      function approvedDocumentsPanelUnacceptable(el, text, rows, docActions) {
+        if (!labelIsApprovedDocuments || !el) return false;
+        const idRaw = `${el.id || ""}`.trim();
+        if (/arlington-header/i.test(idRaw)) return true;
+        if (/Building Arlington/i.test(text)) return true;
+        if (
+          /Jobs\s*•\s*Services A-Z/i.test(text) ||
+          /Sign Out/i.test(text) ||
+          /Projects Settings Profile/i.test(text)
+        ) {
+          return true;
+        }
+        const markerHits = [
+          /File Actions/i.test(text),
+          /Document Date/i.test(text),
+          /Download/i.test(text),
+          /Approved Plan Set/i.test(text),
+          /Review Results Letter/i.test(text),
+        ].filter(Boolean).length;
+        if (rows === 0 && markerHits < 2) return true;
+        if (markerHits < 2 || docActions < 1) return true;
+        if (rows < 2 && markerHits < 4) return true;
+        return false;
+      }
+
+      /**
+       * PI tab must land on real form markup, not page chrome wrappers.
+       * @param {HTMLElement | null | undefined} el
+       */
+      function projectInformationPanelUnacceptable(el) {
+        if (!labelIsProjectInformation || !el) return false;
+        const textInner = norm(el.innerText || el.textContent || "");
+        if (
+          badProjectInfoContainer.test(
+            `${el.id || ""} ${el.className || ""}`,
+          )
+        ) {
+          return true;
+        }
+        if (chromeText.test(textInner)) return true;
+        const labelHits = projectInfoLabels.filter((x) =>
+          new RegExp(
+            x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            "i",
+          ).test(textInner),
+        ).length;
+        const formControls = el.querySelectorAll(
+          "input, textarea, select",
+        ).length;
+        if (labelHits < 2 || formControls < 1) return true;
+        return false;
+      }
+
+      let expected;
+      try {
+        expected = new RegExp(expectedSource, "i");
+      } catch (_) {
+        expected = /^$/;
+      }
+
+      /** @returns {HTMLElement | null} */
+      function pickHrefPanel() {
+        const raw = `${panelHrefRaw || ""}`.trim();
+        if (!raw || raw.toLowerCase() === "#") return null;
+        let sel = "";
+        try {
+          if (raw.startsWith("#")) sel = raw;
+          else {
+            const m = raw.match(/#([\w\-:.]+)\s*$/);
+            sel = m ? `#${m[1]}` : "";
+          }
+        } catch (_) {
+          sel = "";
+        }
+        if (!sel) return null;
+        try {
+          const el = /** @type {HTMLElement | null} */ (
+            document.querySelector(sel)
+          );
+          const t = norm(el?.innerText || el?.textContent || "");
+          if (el && t.length > 40) return el;
+        } catch (_) {
+          /**/
+        }
+        return null;
+      }
+
+      /** @returns {HTMLElement | null} */
+      function pickAriaPanel() {
+        const idRaw = `${ariaControlsRaw || ""}`.trim();
+        if (!idRaw) return null;
+        try {
+          const el = /** @type {HTMLElement | null} */ (
+            document.getElementById(idRaw)
+          );
+          const t = norm(el?.innerText || el?.textContent || "");
+          if (el && t.length > 40) return el;
+        } catch (_) {
+          /**/
+        }
+        return null;
+      }
+
+      const linked = pickHrefPanel() || pickAriaPanel();
+      if (linked && !projectInformationPanelUnacceptable(linked)) {
+        if (labelIsApprovedDocuments) {
+          const lt = norm(linked.innerText || linked.textContent || "");
+          const lRows = linked.querySelectorAll("tr").length;
+          const lDocActions = linked.querySelectorAll(
+            "input.docaction,input.img-button.docaction,input[type='image']",
+          ).length;
+          if (
+            !approvedDocumentsPanelUnacceptable(
+              linked,
+              lt,
+              lRows,
+              lDocActions,
+            )
+          ) {
+            return linked;
+          }
+        } else {
+          return linked;
+        }
+      }
+
+      const planSetLeak =
+        /Plan Set Documents|Proposed Plat\/Site Plan|Construction Plans|C-401|RW-3329 McDonalds 1 of 7/i;
+
+      const hasPlanSetInstructions =
+        /Document Upload Instructions and Tips|Plan Set Documents Must be|Proposed Plat\/Site Plan|Construction Plans/i;
+
+      const broadIds = /^(main|page|subcontent|maincontent)$/i;
+
+      const panelSelectors = [
+        ".ui-tabs-panel",
+        '[role="tabpanel"]',
+        ".tab-content",
+        ".tab-pane",
+        "div[id]",
+        "section",
+      ].join(",");
+
+      const candidates = [...document.querySelectorAll(panelSelectors)]
+        .map((el) => {
+          const text = norm(el.innerText || el.textContent);
+          let rect = { width: 0, height: 0 };
+          try {
+            const r = el.getBoundingClientRect?.();
+            if (r)
+              rect = { width: r.width || 0, height: r.height || 0 };
+          } catch (_) {
+            /**/
+          }
+          const tables = el.querySelectorAll("table").length;
+          const rows = el.querySelectorAll("tr").length;
+          const actions = el.querySelectorAll(
+            "input.docaction,input[type='image'],a,button",
+          ).length;
+          const docActions = el.querySelectorAll(
+            "input.docaction,input.img-button.docaction,input[type='image']",
+          ).length;
+
+          const expectedHit = expected.test(text);
+          const badPlanSetOnly =
+            planSetLeak.test(text) && !expectedHit;
+
+          /** @type {number} */
+          let score = 0;
+          if (expectedHit) score += 1000;
+          if (tables) score += tables * 20;
+          if (rows) score += rows * 5;
+          if (actions) score += actions;
+          if (rect.width > 0 && rect.height > 0) score += 25;
+          const clsRole = `${el.className || ""} ${el.getAttribute("role") || ""}`;
+          if (/ui-tabs-panel|tabpanel|tab-content|tab-pane/i.test(clsRole))
+            score += 50;
+          const pid = `${el.id || ""}`.trim();
+          if (broadIds.test(pid)) score -= 10000;
+          if (hasPlanSetInstructions.test(text) && !expectedHit)
+            score -= 10000;
+
+          if (labelIsProjectInformation) {
+            const idCls = `${el.id || ""} ${el.className || ""}`;
+            if (badProjectInfoContainer.test(idCls))
+              score -= 100000;
+            if (chromeText.test(text)) score -= 100000;
+            const labelHits = projectInfoLabels.filter((x) =>
+              new RegExp(
+                x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                "i",
+              ).test(text),
+            ).length;
+            const formControls = el.querySelectorAll(
+              "input, textarea, select",
+            ).length;
+            if (labelHits >= 2) score += 5000;
+            if (formControls > 0) score += 1000;
+            if (labelHits < 2) score -= 10000;
+          }
+          if (labelIsApprovedDocuments) {
+            const idCls = `${el.id || ""} ${el.className || ""}`;
+            if (/arlington-header/i.test(idCls)) score -= 200000;
+            if (approvedChromeText.test(text)) score -= 200000;
+            const markerHits = [
+              /File Actions/i.test(text),
+              /Document Date/i.test(text),
+              /Download/i.test(text),
+              /Approved Plan Set/i.test(text),
+              /Review Results Letter/i.test(text),
+            ].filter(Boolean).length;
+            if (markerHits >= 3) score += 4000;
+            if (rows > 1) score += rows * 12;
+            if (docActions > 0) score += docActions * 8;
+            if (tables > 0) score += tables * 40;
+            if (
+              approvedDocumentsPanelUnacceptable(el, text, rows, docActions)
+            ) {
+              score -= 250000;
+            }
+          }
+          if (
+            `${el.getAttribute("aria-hidden") || ""}`.toLowerCase() === "true"
+          )
+            score -= 800;
+          try {
+            const st = getComputedStyle(el);
+            if (st.display === "none" || st.visibility === "hidden")
+              score -= 2000;
+          } catch (_) {
+            /**/
+          }
+          if (
+            typeof el.closest === "function" &&
+            el.closest("#divDocuments")
+          ) {
+            score -= 50000;
+          }
+          if (badPlanSetOnly) score -= 10000;
+
+          return {
+            el,
+            score,
+            text,
+            id: el.id || "",
+            className: String(el.className || ""),
+            role: el.getAttribute("role") || "",
+            ariaHidden: el.getAttribute("aria-hidden") || "",
+            tables,
+            rows,
+            actions,
+            expectedHit,
+            badPlanSetOnly,
+          };
+        })
+        .filter((x) => {
+          if (x.text.length <= 20 || x.score <= 0) return false;
+          if (!labelIsApprovedDocuments) return true;
+          const docActions = x.el.querySelectorAll(
+            "input.docaction,input.img-button.docaction,input[type='image']",
+          ).length;
+          return !approvedDocumentsPanelUnacceptable(
+            x.el,
+            x.text,
+            x.rows,
+            docActions,
+          );
+        })
+        .sort((a, b) => b.score - a.score);
+
+      return candidates[0]?.el || null;
+    },
+    {
+      expectedSource: expectedRegex.source,
+      panelHrefRaw: panelHref,
+      ariaControlsRaw: ariaControls,
+      panelLabelRaw: label,
+    },
+  );
+
+  const element =
+    typeof handle?.asElement === "function"
+      ? handle.asElement()
+      : null;
+
+  if (!element) {
+    await handle.dispose().catch(() => {});
+    console.log(
+      `[Arlington][PlanReview] active panel not resolved for ${label}`,
+    );
+    return null;
+  }
+
+  const diag = await element.evaluate((el) => {
+    const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+    const text = norm(el.innerText || el.textContent || "");
+    const projectInfoLabels = [
+      "Project ID",
+      "Plan Review Project Name",
+      "Accela CAP ID",
+      "Address",
+      "Review Type",
+      "CPHD Case #",
+    ];
+    const labelHits = projectInfoLabels.filter((x) =>
+      new RegExp(
+        x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i",
+      ).test(text),
+    ).length;
+    const controls =
+      el.querySelectorAll("input, textarea, select").length;
+    const base = {
+      id: el.id || "",
+      className: String(el.className || ""),
+      role: el.getAttribute("role") || "",
+      ariaHidden: el.getAttribute("aria-hidden") || "",
+      preview: norm(el.innerText || el.textContent).slice(0, 700),
+      tables: el.querySelectorAll("table").length,
+      rows: el.querySelectorAll("tr").length,
+      actions: el.querySelectorAll(
+        "input.docaction,input[type='image'],a,button",
+      ).length,
+      controls,
+      labelHits,
+    };
+    return base;
+  });
+
+  if (`${label}`.trim() === "Project Information") {
+    console.log(
+      `[Arlington][PlanReview] Project Information resolved panel id=${diag.id ?? ""} controls=${diag.controls ?? 0} labels=${diag.labelHits ?? 0}`,
+    );
+  }
+
+  if (`${label}`.trim() === "Approved Documents") {
+    const strength = await arlingtonEvaluateApprovedDocumentsPanelStrength(
+      element,
+    );
+    if (!strength.acceptable) {
+      console.log(
+        `[Arlington][PlanReview] active panel rejected weak Approved Documents id=${strength.id || diag.id || ""} reason=${strength.reason} rows=${strength.rows} preview=${(strength.preview || diag.preview || "").slice(0, 120)}`,
+      );
+      await element.dispose().catch(() => {});
+      return null;
+    }
+  }
+
+  console.log(`[Arlington][PlanReview] active panel "${label}" ${JSON.stringify(diag)}`);
+
+  return /** @type {import("playwright").ElementHandle} */ (element);
+}
+
+/**
+ * Strict top-tab click + wait for active tab / markers, then resolve active panel handle.
+ * @param {import("playwright").Page | import("playwright").Frame} frame
+ * @param {string} label
+ * @param {RegExp} expectedRegex
+ * @returns {Promise<import("playwright").ElementHandle | null>}
+ */
+async function arlingtonClickErmsTopTabAndWait(frame, label, expectedRegex) {
+  const parentPage =
+    typeof frame.waitForTimeout === "function"
+      ? frame
+      : frame.page?.();
+
+  const beforeSig = await frame.evaluate(() => {
+    const body =
+      document.body?.innerText || document.body?.textContent || "";
+    return body.replace(/\s+/g, " ").trim().slice(0, 3000);
+  });
+
+  /** @type {{ panelHref?: string; ariaControls?: string }} */
+  let panelHints = {};
+
+  const clicked = await frame.evaluate((tabLabel) => {
+    const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+    const normLabel = norm(tabLabel);
+    const lower = normLabel.toLowerCase();
+
+    function txtOf(el) {
+      return norm(el.innerText || el.textContent || "");
+    }
+
+    /** @returns {Element | null} */
+    function pickTarget() {
+      const prio = [
+        ".ui-tabs-nav a",
+        "a[href^='#']",
+        "a",
+        "button",
+        'li[role="tab"] a',
+        "li",
+        "span",
+      ];
+      for (const sel of prio) {
+        const nodes = [...document.querySelectorAll(sel)];
+        /** @type {Element | undefined} */
+        const exact = nodes.find(
+          (e) =>
+            txtOf(e).length > 0 &&
+            txtOf(e).toLowerCase() === lower,
+        );
+        if (exact) return exact;
+        /** @type {Element | undefined} */
+        const inc = nodes.find(
+          (e) =>
+            txtOf(e).length > 0 &&
+            txtOf(e).toLowerCase().includes(lower),
+        );
+        if (inc) return inc;
+      }
+      return null;
+    }
+
+    /** @returns {HTMLElement | null} */
+    function resolveClickable(target) {
+      if (!(target instanceof Element)) return null;
+      /** @type {HTMLElement | null} */
+      let clickEl = target.matches("a,button,input,[onclick]")
+        ? /** @type {HTMLElement} */ (target)
+        : null;
+      if (!clickEl) {
+        clickEl =
+          /** @type {HTMLElement | null} */ (
+            target.querySelector("a[href],button,input,[onclick]")
+          );
+      }
+      if (!clickEl) {
+        clickEl =
+          /** @type {HTMLElement | null} */ (
+            target.closest("a,button,input,[onclick]")
+          );
+      }
+      if (!clickEl && target.matches("[onclick]"))
+        clickEl = /** @type {HTMLElement} */ (target);
+
+      const tagU = `${target.tagName || ""}`.toUpperCase();
+      if (
+        !clickEl &&
+        tagU === "LI" &&
+        target.getAttribute("onclick")
+      ) {
+        clickEl = /** @type {HTMLElement} */ (target);
+      }
+
+      return clickEl;
+    }
+
+    const target = pickTarget();
+    if (!target) {
+      return {
+        ok: false,
+        reason: "tab_not_found",
+        label: tabLabel,
+        targetTag: "",
+        clickableTag: "",
+        clickableHref: "",
+        clickableId: "",
+        clickableClass: "",
+        panelHref: "",
+        ariaControls: "",
+      };
+    }
+
+    const clickable = resolveClickable(target);
+    if (!clickable) {
+      return {
+        ok: false,
+        reason: "no_clickable_child",
+        label: tabLabel,
+        targetTag: target.tagName,
+        clickableTag: "",
+        clickableHref: "",
+        clickableId: `${target.id || ""}`,
+        clickableClass: String(target.className || ""),
+        panelHref: "",
+        ariaControls: "",
+      };
+    }
+
+    clickable.click();
+
+    const hrefRaw = `${clickable.getAttribute("href") || ""}`.trim();
+    const ariaControlsRaw =
+      `${clickable.getAttribute("aria-controls") || ""}`.trim();
+
+    return {
+      ok: true,
+      reason: "",
+      label: tabLabel,
+      targetTag: target.tagName,
+      clickableTag: clickable.tagName,
+      clickableHref: hrefRaw,
+      clickableId: clickable.id || "",
+      clickableClass: String(clickable.className || ""),
+      panelHref: hrefRaw,
+      ariaControls: ariaControlsRaw,
+    };
+  }, label);
+
+  if (clicked?.ok) {
+    console.log(
+      `[Arlington][PlanReview] top tab click ${label}: targetTag=${clicked.targetTag || "?"} clickableTag=${clicked.clickableTag || "?"} clickableHref=${clicked.clickableHref || ""} clickableId=${clicked.clickableId || ""} clickableClass=${clicked.clickableClass || ""}`,
+    );
+    panelHints = {
+      panelHref: `${clicked.clickableHref || clicked.panelHref || ""}`.trim(),
+      ariaControls: `${clicked.ariaControls || ""}`.trim(),
+    };
+  } else {
+    console.log(
+      `[Arlington][PlanReview] top tab click ${label}: FAILED reason=${`${clicked?.reason || "unknown"}`.trim()} targetTag=${clicked?.targetTag || "?"} clickableTag=?`,
+    );
+  }
+
+  if (!clicked || !clicked.ok) {
+    let fb = false;
+    if (typeof parentPage.waitForTimeout === "function") {
+      fb = await clickArlingtonErmsTopTab(frame, parentPage, label).catch(
+        () => false,
+      );
+      if (!fb)
+        fb = await clickArlingtonPlanReviewSubTab(parentPage, label).catch(
+          () => false,
+        );
+      if (!fb)
+        fb = await clickArlingtonPlanReviewSubTab(
+          /** @type {import("playwright").Page} */ (frame),
+          label,
+        ).catch(() => false);
+    }
+    if (!fb) return null;
+    panelHints = {};
+  }
+
+  await frame
+    .waitForFunction(
+      ({ expectedSource, beforeSig: bs, tabLabel: tl }) => {
+        const body =
+          document.body?.innerText || document.body?.textContent || "";
+        let expectedOk = false;
+        try {
+          expectedOk = new RegExp(expectedSource, "i").test(body);
+        } catch (_) {
+          expectedOk = false;
+        }
+        if (expectedOk) return true;
+
+        const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
+        const lowNeedle = norm(tl).toLowerCase();
+        if (!lowNeedle) return false;
+
+        /** @returns {boolean} */
+        const cnActive = (el) => {
+          if (!el) return false;
+          const c =
+            (el.getAttribute && el.getAttribute("class")) ||
+            `${/** @type {{ className?: unknown }} */ (el).className ?? ""}`;
+          return /ui-tabs-active|ui-state-active|\bactive\b|\bselected\b/i.test(
+            `${c}`,
+          );
+        };
+
+        for (const li of document.querySelectorAll(
+          '.ui-tabs-nav li, ul[role="tablist"] li[role="tab"]',
+        )) {
+          if (!cnActive(li)) continue;
+          const tlLi = norm(li.innerText || "").toLowerCase();
+          if (
+            tlLi.includes(lowNeedle) ||
+            lowNeedle.includes(tlLi)
+          )
+            return true;
+          const a = li.querySelector("a");
+          if (
+            a &&
+            norm(a.innerText || "").toLowerCase().includes(lowNeedle)
+          )
+            return true;
+        }
+
+        for (const a of document.querySelectorAll(
+          '.ui-tabs-nav a.ui-state-active, a.ui-tabs-anchor.ui-state-active, [role="tab"].ui-state-active',
+        )) {
+          if (
+            cnActive(a) &&
+            norm(a.innerText || "").toLowerCase().includes(lowNeedle)
+          )
+            return true;
+        }
+
+        const current = body.replace(/\s+/g, " ").trim().slice(0, 3000);
+        return current !== bs;
+      },
+      {
+        expectedSource: expectedRegex.source,
+        beforeSig,
+        tabLabel: label,
+      },
+      { timeout: 10000, polling: 250 },
+    )
+    .catch(() => null);
+
+  if (`${label}`.trim() === "Project Information") {
+    await frame
+      .waitForFunction(
+        () => {
+          const text =
+            document.body?.innerText || document.body?.textContent || "";
+          return (
+            /Project ID/i.test(text) &&
+            /Plan Review Project Name/i.test(text) &&
+            /Accela CAP ID/i.test(text)
+          );
+        },
+        { timeout: 10000, polling: 250 },
+      )
+      .catch(() => null);
+  }
+
+  if (typeof parentPage?.waitForTimeout === "function") {
+    await parentPage.waitForTimeout(1500).catch(() => {});
+  }
+
+  await dismissBlockingModalsInArlingtonPlanReviewFrame(frame).catch(
+    () => {},
+  );
+
+  return await arlingtonResolveActiveErmsPanel(
+    frame,
+    label,
+    expectedRegex,
+    panelHints,
+  );
+}
+
+/**
+ * Click ERMS secondary top-level tab and resolve the scored active panel.
+ * @returns {Promise<import("playwright").ElementHandle | null>}
+ */
+async function clickAndResolveArlingtonErmsTopPanel(page, ermsRoot, st) {
+  const re = arlingtonSecondaryExpectedRegex(st.tabKey);
+
+  if (st.tabKey === "approvedDocuments") {
+    return clickAndResolveArlingtonApprovedDocumentsPanel(
+      page,
+      ermsRoot,
+      st,
+      re,
+    );
+  }
+
+  if (st.tabKey === "projectInformation") {
+    return arlingtonClickErmsTopTabAndWait(ermsRoot, st.label, re).catch(
+      () => null,
+    );
+  }
+
+  /** @type {import("playwright").ElementHandle | null} */
+  let panelEl = await arlingtonClickErmsTopTabAndWait(
+    ermsRoot,
+    st.label,
+    re,
+  ).catch(() => null);
+
+  if (!panelEl) {
+    console.log(
+      `[Arlington][PlanReview] active panel "${st.label}" not resolved after top tab click; DOM extraction skipped for this tab`,
+    );
+    return null;
+  }
+
+  return panelEl;
+}
+
+/**
+ * @returns {Promise<{ domRowCount: number }>}
+ */
+async function arlingtonSecondaryTabOptionalDomMerge(
+  page,
+  domTarget,
+  st,
+  integratedTabs,
+  mergeOpts,
+) {
+  const priorPortalData =
+    mergeOpts && typeof mergeOpts === "object"
+      ? mergeOpts.priorPortalData
+      : null;
+  const planReviewStateRef =
+    mergeOpts && typeof mergeOpts === "object"
+      ? mergeOpts.planReviewStateRef
+      : null;
+  let domRowCount = 0;
+  /** @type {import("playwright").Page | import("playwright").Frame} */
+  const ermsRoot = domTarget;
+  const parentPage = ermsRoot.page ? ermsRoot.page() : page;
+
+  /** @type {import("playwright").ElementHandle | null} */
+  let panelEl = null;
+  try {
+    if (st.tabKey === "projectInformation") {
+      const piFields = await arlingtonExtractArlingtonProjectInformationFields(
+        parentPage,
+        ermsRoot,
+      );
+      arlingtonMergeProjectInformationFieldsDest(integratedTabs, piFields);
+    }
+
+    panelEl = await clickAndResolveArlingtonErmsTopPanel(page, ermsRoot, st);
+    if (!panelEl) {
+      if (st.tabKey === "approvedDocuments") {
+        arlingtonRestoreApprovedDocumentsFromPriorOrMarkFailed(
+          integratedTabs,
+          priorPortalData,
+          planReviewStateRef,
+        );
+      }
+      if (st.tabKey === "projectInformation") {
+        return {
+          domRowCount:
+            integratedTabs.projectInformation?.documents?.length ?? 0,
+        };
+      }
+      return { domRowCount };
+    }
+
+    await logArlingtonErmsSecondaryActivePanelDiag(panelEl, st.label);
+
+    const extractMapped = async (p) => {
+      let rawSec = await extractArlingtonSecondaryRowsFromPanel(
+        p,
+        st.tabKey,
+      );
+      const filtered = arlingtonFilterSecondaryDomRowsAgainstPlanSet(
+        rawSec,
+        st.label,
+        st.tabKey,
+      );
+      rawSec = filtered.kept;
+
+      const mapped = rawSec.map((r) =>
+        mapArlingtonDomSecondaryTabRowToDoc(r, st.tabKey),
+      );
+      return mapped;
+    };
+
+    /** @type {Awaited<ReturnType<typeof extractMapped>>} */
+    let mapped = await extractMapped(panelEl);
+
+    if (
+      st.tabKey === "reviewResultsAndMarkups" &&
+      mapped.length === 0
+    ) {
+      for (const nl of ARLINGTON_REVIEW_RESULTS_DOM_SUBTABS) {
+        // eslint-disable-next-line no-await-in-loop
+        const hit = await clickArlingtonIntegratedNestedTab(page, nl);
+        if (hit) break;
+      }
+      await parentPage.waitForTimeout(1000).catch(() => {});
+      await panelEl.dispose().catch(() => {});
+      panelEl = await arlingtonResolveActiveErmsPanel(
+        ermsRoot,
+        st.label,
+        ARLINGTON_SECONDARY_REVIEW_RESULTS_RE,
+      );
+      if (panelEl) {
+        await logArlingtonErmsSecondaryActivePanelDiag(panelEl, st.label).catch(
+          () => {},
+        );
+        mapped = await extractMapped(panelEl);
+      }
+    }
+
+    domRowCount = mapped.length;
+
+    if (
+      st.tabKey === "approvedDocuments" ||
+      st.tabKey === "reviewResultsAndMarkups"
+    ) {
+      const dest = integratedTabs[st.tabKey]?.documents;
+      if (Array.isArray(dest) && mapped.length > 0) {
+        dest.length = 0;
+        arlingtonMergeSecondaryDomDocuments(dest, mapped);
+      } else if (st.tabKey === "approvedDocuments" && mapped.length === 0) {
+        arlingtonRestoreApprovedDocumentsFromPriorOrMarkFailed(
+          integratedTabs,
+          priorPortalData,
+          planReviewStateRef,
+        );
+      }
+      return { domRowCount };
+    }
+
+    const dest = integratedTabs[st.tabKey]?.documents;
+    if (Array.isArray(dest)) {
+      if (mapped.length > 0 && st.tabKey === "projectInformation") {
+        dest.length = 0;
+      }
+      arlingtonMergeSecondaryDomDocuments(dest, mapped);
+    }
+
+    return { domRowCount };
+  } catch (secErr) {
+    console.warn(
+      `[Arlington][PlanReview] ${st.label} merge: ${secErr && secErr.message ? secErr.message : secErr}`,
+    );
+    return { domRowCount };
+  } finally {
+    if (panelEl && typeof panelEl.dispose === "function") {
+      await panelEl.dispose().catch(() => {});
+    }
+  }
+}
+
+function arlingtonSecondaryTabRowCount(integratedTabs, tabKey) {
+  const tab = integratedTabs[tabKey];
+  if (!tab) return 0;
+  const docCount = Array.isArray(tab.documents) ? tab.documents.length : 0;
+  if (tabKey === "reviewResultsAndMarkups") {
+    const commentCount = Array.isArray(tab.comments) ? tab.comments.length : 0;
+    return Math.max(docCount, commentCount);
+  }
+  return docCount;
+}
+
+async function runArlingtonSecondaryTabsExtractPhase(opts) {
+  const {
+    page,
+    domTarget,
+    integratedTabs,
+    priorPortalData,
+    planReviewStateRef,
+  } = opts;
+  const scopeNorm = opts.scope
+    ? arlingtonNormalizePlanReviewActionScope(opts.scope)
+    : null;
+
+  for (const st of ARLINGTON_SECONDARY_TAB_SPECS) {
+    if (
+      scopeNorm &&
+      !arlingtonPlanReviewScopeAllowsSecondaryTab(scopeNorm, st.tabKey)
+    ) {
+      continue;
+    }
+    let domRowCount = 0;
+    try {
+      const mergeOut = await arlingtonSecondaryTabOptionalDomMerge(
+        page,
+        domTarget,
+        st,
+        integratedTabs,
+        { priorPortalData, planReviewStateRef },
+      );
+      domRowCount =
+        mergeOut && typeof mergeOut.domRowCount === "number"
+          ? mergeOut.domRowCount
+          : 0;
+
+      if (st.tabKey !== "projectInformation") {
+        console.log(
+          `[Arlington][PlanReview] ${st.label} DOM rows=${domRowCount} downloads=0`,
+        );
+      }
+    } catch (secErr) {
+      console.warn(
+        `[Arlington][PlanReview] tab "${st.label}": ${secErr && secErr.message ? secErr.message : secErr}`,
+      );
+      const rowCount = arlingtonSecondaryTabRowCount(integratedTabs, st.tabKey);
+      const fieldCount =
+        integratedTabs.projectInformation?.fields?.length ?? 0;
+      if (st.tabKey === "projectInformation") {
+        console.log(
+          `[Arlington][PlanReview] Project Information fields=${fieldCount} documents=${rowCount} (after tab error)`,
+        );
+      } else {
+        console.log(
+          `[Arlington][PlanReview] ${st.label} DOM rows=${domRowCount} downloads=0`,
+        );
+      }
+    }
+  }
+}
+
+async function runArlingtonSecondaryTabsDownloadPhase(opts) {
+  const {
+    page,
+    domTarget,
+    integratedTabs,
+    sharedGridCtx,
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    planSetErmsOrigin,
+    downloadCtx,
+  } = opts;
+
+  const planSetSink =
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents ||
+    [];
+
+  const scopeNorm = opts.scope
+    ? arlingtonNormalizePlanReviewActionScope(opts.scope)
+    : "allPending";
+  const continueLogPrefix =
+    typeof opts.logPrefix === "string" ? opts.logPrefix : "";
+
+  for (const st of ARLINGTON_SECONDARY_TAB_SPECS) {
+    if (st.tabKey === "projectInformation") continue;
+    if (
+      opts.scope &&
+      !arlingtonPlanReviewScopeAllowsSecondaryTab(scopeNorm, st.tabKey)
+    ) {
+      continue;
+    }
+
+    let dls = 0;
+    let metadataOnly = 0;
+    let aliases = 0;
+    let domRowCount =
+      arlingtonSecondaryTabRowCount(integratedTabs, st.tabKey) || 0;
+    let uniqEstimate = 0;
+    try {
+      const sinkSec = integratedTabs[st.tabKey]?.documents;
+      const sinkArr = Array.isArray(sinkSec) ? sinkSec : [];
+      const pendingSec = sinkArr.filter(
+        (d) => !arlingtonErmsSinkDocLooksUploadComplete(d),
+      ).length;
+      const downloadedSec = sinkArr.length - pendingSec;
+      if (continueLogPrefix) {
+        console.log(
+          `${continueLogPrefix} source=${st.tabKey} total=${sinkArr.length} pending=${pendingSec} downloaded=${downloadedSec}`,
+        );
+      }
+      const aliasDocSources = [
+        planSetSink,
+        integratedTabs.reviewResultsAndMarkups?.documents,
+        integratedTabs.approvedDocuments?.documents,
+        integratedTabs.projectInformation?.documents,
+      ].filter((list) => Array.isArray(list) && list.length);
+
+      uniqEstimate =
+        Array.isArray(sinkSec) && sinkSec.length
+          ? new Set(sinkSec.map((d) => arlingtonDomSecondaryDedupeKey(d))).size
+          : 0;
+
+      let dlTarget = domTarget;
+      let tabReady = true;
+      if (
+        sharedGridCtx &&
+        Array.isArray(sinkSec) &&
+        sinkSec.length &&
+        (st.tabKey === "reviewResultsAndMarkups" ||
+          st.tabKey === "approvedDocuments")
+      ) {
+        const prep = await arlingtonPlanReviewPrepareSecondaryTabForDownload(
+          page,
+          domTarget,
+          st,
+        );
+        dlTarget = prep.domTarget;
+        tabReady = prep.ok;
+        if (!tabReady) {
+          arlingtonPlanReviewMarkSinkTabNotResolved(
+            sinkSec,
+            st.tabKey,
+            prep.notResolvedReason,
+          );
+          console.log(
+            `[Arlington][PlanReview] ${st.label} download-phase tab not resolved; marked pending_tab_not_resolved reason=${prep.notResolvedReason || "tab_not_resolved"}`,
+          );
+          const saver = sharedGridCtx.savePlanReviewCheckpoint;
+          if (typeof saver === "function") {
+            // eslint-disable-next-line no-await-in-loop
+            await saver("tabNotResolved", {
+              tab: st.tabKey,
+              pending: arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(
+                integratedTabs,
+              ),
+            }).catch(() => {});
+            arlingtonPlanReviewMarkCheckpointSaved(sharedGridCtx);
+            if (downloadCtx && typeof downloadCtx === "object") {
+              arlingtonPlanReviewMarkCheckpointSaved(downloadCtx);
+            }
+          }
+        }
+      }
+
+      if (
+        sharedGridCtx &&
+        Array.isArray(sinkSec) &&
+        sinkSec.length &&
+        tabReady
+      ) {
+        const result = await downloadArlingtonSecondaryApiDocumentsForSink(
+          page,
+          dlTarget,
+          sinkSec,
+          {
+            attachmentDedupeKeys,
+            prSeenRowKeys,
+            downloadCtx: sharedGridCtx,
+            ermsOrigin: planSetErmsOrigin,
+            logLabel: st.label,
+            aliasDocSources,
+            downloadSource: st.tabKey,
+          },
+        );
+        dls = result.downloads;
+        metadataOnly = result.metadataOnly;
+        aliases = result.aliases;
+      } else if (Array.isArray(sinkSec) && sinkSec.length) {
+        for (const doc of sinkSec) {
+          if (!arlingtonPickSecondaryRowDocumentId(doc)) {
+            doc.downloadStatus = "metadata_only";
+            doc.status = doc.status || "api_metadata";
+            metadataOnly++;
+          }
+        }
+      }
+
+      if (st.tabKey !== "projectInformation") {
+        console.log(
+          `[Arlington][PlanReview] ${st.label} DOM rows=${domRowCount} unique=${uniqEstimate} downloads=${dls}`,
+        );
+      }
+    } catch (secErr) {
+      console.warn(
+        `[Arlington][PlanReview] tab "${st.label}" download-phase: ${secErr && secErr.message ? secErr.message : secErr}`,
+      );
+      const rowCount = arlingtonSecondaryTabRowCount(integratedTabs, st.tabKey);
+      const fieldCount =
+        integratedTabs.projectInformation?.fields?.length ?? 0;
+      if (st.tabKey === "projectInformation") {
+        console.log(
+          `[Arlington][PlanReview] Project Information fields=${fieldCount} documents=${rowCount} (after tab error)`,
+        );
+      } else {
+        console.log(
+          `[Arlington][PlanReview] ${st.label} DOM rows=${domRowCount} unique=${uniqEstimate} downloads=${dls}`,
+        );
+      }
+    }
+  }
+}
+
+async function runArlingtonSecondaryTabsExtractAndDownload(opts) {
+  await runArlingtonSecondaryTabsExtractPhase(opts);
+  await runArlingtonSecondaryTabsDownloadPhase(opts);
+}
+
+async function extractPlanReviewArlington(page, ctx, downloadCtx) {
+  if (
+    !downloadCtx ||
+    !downloadCtx.DOWNLOADS_DIR ||
+    typeof downloadCtx.uploadFn !== "function"
+  ) {
+    console.warn(
+      "  [Arlington][Plan Review] Arlington integrated Plan Review deferred — missing downloadCtx (run after Attachments)",
+    );
+    return {
+      comments: [],
+      text: "",
+      screenshot: null,
+      planReviewSummary: null,
+      downloadLinks: [],
+      arlingtonPlanReview: {
+        used: false,
+        message: null,
+        tabs: null,
+      },
+    };
+  }
+
+  const attachmentDedupeKeys = attachmentDedupeSnapshotSet(
+    downloadCtx.attachmentRows,
+  );
+  const prSeenRowKeys = new Set();
+  const downloadedHashes =
+    downloadCtx.downloadedHashes instanceof Map
+      ? downloadCtx.downloadedHashes
+      : new Map();
+
+  const tenantPrCfg = ArlingtonAccelaProfile.planReview || {};
+  const { prCfg, downloadScope: scrapeDownloadScope } =
+    arlingtonResolveScrapePlanReviewCfg(tenantPrCfg, downloadCtx);
+  if (scrapeDownloadScope) {
+    console.log(
+      `[Arlington][PlanReview] selective scrape scope=${scrapeDownloadScope}`,
+    );
+    downloadCtx.planReviewScope = scrapeDownloadScope;
+  }
+  const selectiveScrapeScope =
+    scrapeDownloadScope &&
+    scrapeDownloadScope !== "allPending" &&
+    scrapeDownloadScope !== "all" &&
+    scrapeDownloadScope !== "metadataOnly"
+      ? scrapeDownloadScope
+      : null;
+  const skipPlanSetExtract =
+    selectiveScrapeScope === "approvedDocuments" ||
+    selectiveScrapeScope === "reviewResults" ||
+    selectiveScrapeScope === "projectInformation";
+  const unusedSnippet = (
+    prCfg.unusedMessageIncludes || "this record does not use plan review"
+  )
+    .toString()
+    .trim()
+    .toLowerCase();
+  const tabLabelToKey = prCfg.expectedTabKeys || {};
+  const subTabLabels = Array.isArray(prCfg.expectedTabs)
+    ? prCfg.expectedTabs
+    : [
+        "Plans & Documents",
+        "Review Results & Mark-ups",
+        "Approved Documents",
+        "Project Information",
+      ];
+
+
+  console.log("  📋 [Arlington] Extracting plan review (tenant profile)...");
+
+  const permitProjectId =
+    `${downloadCtx.permitNumber || downloadCtx.recordNumber || ""}`.trim();
+  if (!permitProjectId) {
+    console.warn(
+      "[Arlington][PlanReview] permitNumber missing on downloadCtx — REST calls may fail",
+    );
+  }
+
+  if (!isArlingtonCapDetailPage(page)) {
+    console.log(
+      "     [Arlington][Plan Review] Arlington Cap Detail page required",
+    );
+    return {
+      comments: [],
+      text: "",
+      screenshot: null,
+      planReviewSummary: null,
+      downloadLinks: [],
+      arlingtonPlanReview: {
+        used: false,
+        message:
+          "Could not scrape Plan Review — browser was not on an Arlington permit detail page.",
+        tabs: null,
+      },
+    };
+  }
+
+  await ensureArlingtonRecordInfoActive(page);
+
+  /** @type {string|null} */
+  let screenshotBase64 = await page
+    .screenshot({ fullPage: true })
+    .catch(() => null);
+  screenshotBase64 = screenshotBase64
+    ? screenshotBase64.toString("base64")
+    : null;
+  const savedCapDetailUrl = page.url();
+
+
+
+  const bodyCheck = await ctx.evaluate((snippet) => {
+    const body = document.body ? document.body.innerText : "";
+    const low = body.toLowerCase();
+    if (!snippet || !low.includes(snippet)) {
+      return { unused: false, message: null };
+    }
+    const rx =
+      /this record does not use plan review[^.]*(?:\.|$)/i;
+    const m = body.match(rx);
+    return {
+      unused: true,
+      message: m
+        ? m[0].trim()
+        : "This record does not use plan review.",
+    };
+  }, unusedSnippet);
+
+  if (bodyCheck.unused) {
+    console.log(
+      `     [Arlington][Plan Review] not used on this record: ${bodyCheck.message}`,
+    );
+    return {
+      comments: [],
+      text: bodyCheck.message || "",
+      screenshot: screenshotBase64,
+      planReviewSummary: null,
+      downloadLinks: [],
+      arlingtonPlanReview: {
+        used: false,
+        message: bodyCheck.message,
+        tabs: null,
+      },
+    };
+  }
+
+  let integratedTabs = defaultArlingtonIntegratedTabsSkeleton();
+
+  const existingValidPlanReview = arlingtonPortalDataHasValidPlanSet(
+    downloadCtx.priorPortalData,
+  );
+  const planReviewState = {
+    iframeReady: false,
+    domReady: false,
+    planSetValid: false,
+    secondaryTabsValid: false,
+    secondaryDomValid: false,
+    suppressedSecondaryApiMetadata: false,
+    secondaryDomExtractionFailed: false,
+    usedApiFallback: false,
+    shouldPersist: false,
+    failureReason: null,
+    tabs: null,
+    partialPendingDownloads: false,
+  };
+
+  const iframeDownloadsDisabled =
+    prCfg.downloadFromIntegratedIframe !== true;
+
+  const extractBudgetMs =
+    typeof prCfg.extractBudgetMs === "number" ? prCfg.extractBudgetMs : 75000;
+  const perTabMsCfg =
+    typeof prCfg.perTabExtractBudgetMs === "number"
+      ? prCfg.perTabExtractBudgetMs
+      : 45000;
+  const budgetMs =
+    prCfg.planReviewIncludeSecondaryTabs === true
+      ? Math.max(extractBudgetMs, 90000 + 3 * perTabMsCfg)
+      : extractBudgetMs;
+  const prDeadline = Date.now() + budgetMs;
+  if (prCfg.planReviewIncludeSecondaryTabs === true) {
+    console.log(
+      `[Arlington][PlanReview] secondary tabs enabled=true extractBudgetMs=${budgetMs}`,
+    );
+  }
+  /** @type {boolean} */
+  let timedOut = false;
+
+  const sharedGridCtx =
+    iframeDownloadsDisabled
+      ? null
+      : {
+          DOWNLOADS_DIR: downloadCtx.DOWNLOADS_DIR,
+          supabaseProjectId: downloadCtx.supabaseProjectId,
+          permitNumber:
+            `${downloadCtx.permitNumber || downloadCtx.recordNumber || ""}`.trim(),
+          uploadFn: downloadCtx.uploadFn,
+          sanitizeFn: downloadCtx.sanitizeFn,
+          downloadedHashes,
+          supabaseStorageObjectMaxBytes: getSupabaseStorageObjectMaxBytes(),
+          forceRetryOversizedDownloads:
+            downloadCtx.forceRetryOversizedDownloads === true ||
+            downloadCtx.forceRetryOversized === true,
+          planReviewScope: scrapeDownloadScope || downloadCtx.planReviewScope,
+        };
+
+  const runPlanReviewPersistCheckpoint = async (
+    phase,
+    /** @type {Record<string, unknown>} */ extra,
+  ) => {
+    if (
+      !downloadCtx.supabase ||
+      !downloadCtx.userId ||
+      typeof downloadCtx.hashPortalData !== "function"
+    )
+      return;
+    const sg =
+      sharedGridCtx && typeof sharedGridCtx === "object"
+        ? /** @type {Record<string, unknown>} */ (sharedGridCtx)
+        : null;
+    const checkpointScope =
+      selectiveScrapeScope || scrapeDownloadScope || downloadCtx?.planReviewScope;
+    const inc = arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(
+      integratedTabs,
+      checkpointScope || undefined,
+    );
+    const partial =
+      inc > 0 ||
+      !!(sg && sg.planReviewDownloadsAbortedDeadline === true) ||
+      !!(sg && sg.planReviewPartialPendingDownloads === true);
+    const aborted = !!(sg && sg.planReviewDownloadsAbortedDeadline === true);
+    const slice = buildArlingtonPlanReviewCheckpointTabSlice({
+      integratedTabs,
+      screenshotBase64,
+      combinedText:
+        typeof extra.text === "string"
+          ? `${extra.text}`
+          : `[Arlington][PlanReview] checkpoint phase=${phase}`,
+      partialPendingDownloads: partial,
+      scrapeStatus: aborted ? "partial_pending_downloads" : undefined,
+    });
+    await persistArlingtonPlanReviewCheckpoint({
+      supabase: downloadCtx.supabase,
+      userId: downloadCtx.userId,
+      supabaseProjectId: downloadCtx.supabaseProjectId,
+      permitNumber:
+        `${downloadCtx.permitNumber || downloadCtx.recordNumber || ""}`.trim(),
+      hashPortalData: downloadCtx.hashPortalData,
+      planReviewTabPayload: slice,
+    });
+    if (sharedGridCtx && typeof sharedGridCtx === "object") {
+      arlingtonPlanReviewMarkCheckpointSaved(
+        /** @type {Record<string, unknown>} */ (sharedGridCtx),
+      );
+    }
+    arlingtonPlanReviewMarkCheckpointSaved(downloadCtx);
+    if (phase === "metadata") {
+      const ps =
+        integratedTabs?.plansAndDocuments?.sections?.planSetDocuments
+          ?.documents?.length ?? 0;
+      const rr =
+        integratedTabs?.reviewResultsAndMarkups?.documents?.length ?? 0;
+      const appr =
+        integratedTabs?.approvedDocuments?.documents?.length ?? 0;
+      const pif =
+        integratedTabs?.projectInformation?.fields?.length ?? 0;
+      console.log(
+        `[Arlington][PlanReview] metadata checkpoint saved planSet=${ps} reviewResults=${rr} approved=${appr} projectFields=${pif}`,
+      );
+    }
+  };
+
+  if (sharedGridCtx) {
+    Object.assign(sharedGridCtx, {
+      planReviewIntegratedTabs: integratedTabs,
+      touchSessionKeepalive:
+        typeof downloadCtx.touchSessionKeepalive === "function"
+          ? downloadCtx.touchSessionKeepalive
+          : null,
+      _arlingtonSession: downloadCtx._arlingtonSession || null,
+      ermsVerificationToken: downloadCtx.ermsVerificationToken || "",
+      scrapeDeadlineMs:
+        typeof downloadCtx.scrapeDeadlineMs === "number"
+          ? downloadCtx.scrapeDeadlineMs
+          : 0,
+      reserveMsForFinalSave:
+        typeof downloadCtx.reserveMsForFinalSave === "number"
+          ? downloadCtx.reserveMsForFinalSave
+          : ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
+      planReviewDownloadsSinceCheckpoint: 0,
+      planReviewDownloadsAbortedDeadline: false,
+      planReviewPartialPendingDownloads: false,
+      savePlanReviewCheckpoint: /** @type {(...a: unknown[]) => Promise<void>} */ (
+        async (phaseTag, xs) => {
+          const x =
+            xs && typeof xs === "object" && !Array.isArray(xs)
+              ? /** @type {Record<string, unknown>} */ (xs)
+              : {};
+          await runPlanReviewPersistCheckpoint(String(phaseTag || ""), x);
+          if (phaseTag === "everyFive") {
+            console.log(
+              `[Arlington][PlanReview] checkpoint saved after 5 downloads downloaded=${x.downloaded ?? "?"} pending=${x.pending ?? "?"}`,
+            );
+          }
+        }
+      ),
+    });
+  }
+
+  /** When scoped to Plan Set only, iframe row scans skip Supporting / CRL nested grids. */
+  const scopePlanSetOnly = prCfg.scopePlanSetDocumentsOnly !== false;
+  const scopedNestedPlanSections = scopePlanSetOnly
+    ? /** @type {typeof ARLINGTON_PLAN_NESTED_SECTIONS} */ ([
+        ["Plan Set Documents", "planSetDocuments"],
+      ])
+    : ARLINGTON_PLAN_NESTED_SECTIONS;
+
+  /**
+   * Scoped: internal Accela Plan Review tab + `iFrameOpenPlanReview`.
+   * Legacy (non-scoped): optional external popup link + restore CapDetail.
+   */
+  let ermsComplete = false;
+  let triedErmsNavigation = false;
+  /** Playwright-download successes inside Plan Set grid (supplement to API URLs). */
+  let planSetDomDownloads = 0;
+  let usedExternalDomFlow = false;
+  let usedInternalIframeFlow = false;
+  let usedApiHydrate = false;
+  /** True after scoped internal path attempted (avoid Accela modal loop on failure). */
+  let attemptedScopedInternalPr = false;
+
+  if (scopePlanSetOnly) {
+    attemptedScopedInternalPr = true;
+    console.log(
+      "[Arlington][PlanReview] using internal Accela Plan Review tab",
+    );
+    const prActivate = await ensureArlingtonPlanReviewActive(page);
+    if (!prActivate.ok) {
+      console.log("     [Arlington][Plan Review] tab not found");
+      await logArlingtonDetailTabCandidates(page, "Plan Review");
+      return {
+        comments: [],
+        text: "",
+        screenshot: screenshotBase64,
+        planReviewSummary: null,
+        downloadLinks: [],
+        arlingtonPlanReview: {
+          used: false,
+          message: "Plan Review tab not found",
+          tabs: null,
+        },
+      };
+    }
+
+    await page.waitForTimeout(1200).catch(() => {});
+    await waitForAccelaLoad(page).catch(() => {});
+
+    const prFrame = await waitForArlingtonPlanReviewIframeReady(page, 60000);
+    planReviewState.iframeReady = !!prFrame;
+
+    if (!prFrame) {
+      planReviewState.failureReason =
+        `${planReviewState.failureReason || ""} iframe_not_ready`.trim();
+      console.warn(
+        "[Arlington][PlanReview] iFrameOpenPlanReview / PlanReviewIntegrated frame not ready",
+      );
+    } else {
+      planReviewState.domReady = true;
+      await dismissBlockingModalsInArlingtonPlanReviewFrame(prFrame);
+
+      const piOnlyScrape = scrapeDownloadScope === "projectInformation";
+      const sink =
+        integratedTabs.plansAndDocuments.sections.planSetDocuments.documents;
+
+      let planSetErmsOrigin = "";
+      try {
+        planSetErmsOrigin = new URL(prFrame.url()).origin;
+      } catch (_) {
+        /**/
+      }
+
+      /** @type {{ responseLetters?: unknown[]; applicationDocs?: unknown[]; comments?: unknown[]; accelaDocTypes?: unknown[] } | null} */
+      let prApiSecondaryFallback = null;
+
+      if (skipPlanSetExtract) {
+        console.log(
+          `[Arlington][PlanReview] selective scope=${selectiveScrapeScope} — skipping Plan Set extract/API hydrate`,
+        );
+      }
+
+      if (!piOnlyScrape && !skipPlanSetExtract) {
+        await clickArlingtonPlanReviewSubTab(page, "Plans & Documents");
+        await page.waitForTimeout(650).catch(() => {});
+        await clickArlingtonIntegratedNestedTab(
+          page,
+          "Plan Set Documents",
+        ).catch(() => false);
+        await page.waitForTimeout(650).catch(() => {});
+
+        const rawRows = await extractArlingtonPlanSetDocumentsFromPrPageDom(
+          prFrame,
+        );
+        for (const r of rawRows) {
+          sink.push(mapArlingtonDomPlanSetRowToDoc(r));
+        }
+
+        if (`${permitProjectId || ""}`.trim()) {
+          const hydrateRet = await arlingtonPlanReviewApiHydrateTabs(
+            page,
+            permitProjectId,
+            integratedTabs,
+            {
+              ermsOrigin: planSetErmsOrigin,
+              scopedDomPrimaryPlanSet: scopePlanSetOnly,
+              includeSecondaryTabs:
+                prCfg.planReviewIncludeSecondaryTabs === true,
+            },
+          );
+          prApiSecondaryFallback = hydrateRet.secondaryApiFallback || null;
+          usedApiHydrate = true;
+        }
+      } else if (piOnlyScrape) {
+        console.log(
+          "[Arlington][PlanReview] scope=projectInformation — skipping Plan Set extract/downloads",
+        );
+      }
+
+      if (prCfg.planReviewIncludeSecondaryTabs === true) {
+        await runArlingtonSecondaryTabsExtractPhase({
+          page,
+          domTarget: prFrame,
+          integratedTabs,
+          sharedGridCtx,
+          attachmentDedupeKeys,
+          prSeenRowKeys,
+          downloadedHashes,
+          planSetErmsOrigin,
+          scope: scrapeDownloadScope,
+          priorPortalData: downloadCtx?.priorPortalData,
+          planReviewStateRef: planReviewState,
+        });
+      }
+
+      if (selectiveScrapeScope === "approvedDocuments") {
+        const adAfterExtract =
+          integratedTabs.approvedDocuments?.documents?.length ?? 0;
+        if (adAfterExtract === 0) {
+          arlingtonRestoreApprovedDocumentsFromPriorOrMarkFailed(
+            integratedTabs,
+            downloadCtx?.priorPortalData,
+            planReviewState,
+          );
+        }
+      }
+
+      if (!piOnlyScrape && prApiSecondaryFallback) {
+        arlingtonMaybeApplySecondaryApiAfterDom(
+          integratedTabs,
+          prApiSecondaryFallback,
+          planSetErmsOrigin,
+          planReviewState,
+          existingValidPlanReview,
+          downloadCtx?.priorPortalData,
+        );
+      }
+
+      await runPlanReviewPersistCheckpoint("metadata", {}).catch(() => {});
+      if (!piOnlyScrape) {
+        arlingtonResumePlanReviewDownloadsFromPrior(
+          integratedTabs,
+          downloadCtx?.priorPortalData,
+          true,
+          {
+            forceRetryOversized:
+              downloadCtx?.forceRetryOversizedDownloads === true ||
+              downloadCtx?.forceRetryOversized === true ||
+              arlingtonEnvForceRetryOversizedPlanReviewDownloads(),
+            configuredMaxUploadBytes: getSupabaseStorageObjectMaxBytes(),
+          },
+          selectiveScrapeScope || undefined,
+        );
+      }
+
+      const dlOut = await runArlingtonPlanReviewDownloadPhasesAfterCheckpoint({
+        page,
+        domTarget: prFrame,
+        integratedTabs,
+        sharedGridCtx,
+        sink,
+        attachmentDedupeKeys,
+        prSeenRowKeys,
+        downloadedHashes,
+        planSetErmsOrigin,
+        prCfg,
+        downloadCtx,
+      });
+      planSetDomDownloads = dlOut.planSetDomDownloads;
+
+      if (
+        selectiveScrapeScope === "approvedDocuments" ||
+        selectiveScrapeScope === "reviewResults"
+      ) {
+        planReviewState.planSetValid = false;
+      } else {
+        planReviewState.planSetValid =
+          arlingtonIntegratedTabsPlanSetValid(integratedTabs);
+        if (planReviewState.domReady && sink.length === 0) {
+          console.log(
+            "[Arlington][PlanReview] Plan Set returned 0 despite ready iframe; treating as invalid DOM extraction",
+          );
+        }
+      }
+
+      const shCap = await page
+        .screenshot({ fullPage: true })
+        .catch(() => null);
+      if (shCap) {
+        screenshotBase64 = shCap.toString("base64");
+      }
+      ermsComplete = true;
+      usedInternalIframeFlow = true;
+    }
+  } else {
+    const candidateExternalPr =
+      `${await findArlingtonExternalPlanReviewHref(page, ctx)}`.trim();
+    if (
+      candidateExternalPr &&
+      arlingtonExternalPlanReviewHrefLooksValid(candidateExternalPr)
+    ) {
+      triedErmsNavigation = true;
+      console.log(
+        `[Arlington][PlanReview] external link found: ${candidateExternalPr}`,
+      );
+      try {
+        const opened = await openArlingtonErmsPlanReviewViaExternalClick(
+          page,
+          ctx,
+        );
+        let prPage = opened.prPage;
+        const openedNewTab = opened.openedNewTab;
+
+        if (!prPage) {
+          console.warn(
+            "[Arlington][PlanReview] could not open external Plan Review page (click produced no navigation or popup)",
+          );
+        } else {
+          let prUrl = "";
+          try {
+            prUrl = prPage.url();
+          } catch (_) {
+            /**/
+          }
+          console.log(
+            `[Arlington][PlanReview] initial external page url=${prUrl}`,
+          );
+
+          await waitForArlingtonPlanReviewPastSignIn(prPage);
+
+          const loadedOk =
+            await waitForArlingtonPlanReviewPrPageLoaded(prPage);
+          if (!loadedOk) {
+            console.warn(
+              "[Arlington][PlanReview] timed out waiting for Plan Review DOM signals",
+            );
+          }
+
+          if (loadedOk) {
+            usedExternalDomFlow = true;
+            planReviewState.iframeReady = true;
+            planReviewState.domReady = true;
+
+            await dismissArlingtonPlanReviewViewDocsPopups(prPage);
+
+            const topOk = await clickArlingtonPlanReviewSubTab(
+              prPage,
+              "Plans & Documents",
+            );
+            if (topOk) {
+              await prPage.waitForTimeout(650).catch(() => {});
+            }
+            const nestOk = await clickArlingtonIntegratedNestedTab(
+              prPage,
+              "Plan Set Documents",
+            ).catch(() => false);
+            if (nestOk) {
+              await prPage.waitForTimeout(650).catch(() => {});
+            }
+
+            const rawRows = await extractArlingtonPlanSetDocumentsFromPrPageDom(
+              prPage,
+            );
+            const sink =
+              integratedTabs.plansAndDocuments.sections.planSetDocuments
+                .documents;
+            for (const r of rawRows) {
+              sink.push(mapArlingtonDomPlanSetRowToDoc(r));
+            }
+
+            let planSetErmsOrigin = "";
+            try {
+              planSetErmsOrigin = new URL(prPage.url()).origin;
+            } catch (_) {
+              /**/
+            }
+
+            /** @type {{ responseLetters?: unknown[]; applicationDocs?: unknown[]; comments?: unknown[]; accelaDocTypes?: unknown[] } | null} */
+            let prApiSecondaryFallback = null;
+
+            if (`${permitProjectId || ""}`.trim()) {
+              const hydrateRet = await arlingtonPlanReviewApiHydrateTabs(
+                prPage,
+                permitProjectId,
+                integratedTabs,
+                {
+                  ermsOrigin: planSetErmsOrigin,
+                  scopedDomPrimaryPlanSet: scopePlanSetOnly,
+                  includeSecondaryTabs:
+                    prCfg.planReviewIncludeSecondaryTabs === true,
+                },
+              );
+              prApiSecondaryFallback = hydrateRet.secondaryApiFallback || null;
+              usedApiHydrate = true;
+            }
+
+            if (prCfg.planReviewIncludeSecondaryTabs === true) {
+              await runArlingtonSecondaryTabsExtractPhase({
+                page: prPage,
+                domTarget: prPage,
+                integratedTabs,
+                sharedGridCtx,
+                attachmentDedupeKeys,
+                prSeenRowKeys,
+                downloadedHashes,
+                planSetErmsOrigin,
+              });
+            }
+
+            if (prApiSecondaryFallback) {
+              arlingtonMaybeApplySecondaryApiAfterDom(
+                integratedTabs,
+                prApiSecondaryFallback,
+                planSetErmsOrigin,
+                planReviewState,
+                existingValidPlanReview,
+                downloadCtx?.priorPortalData,
+              );
+            }
+
+            await runPlanReviewPersistCheckpoint("metadata", {}).catch(() => {});
+            arlingtonResumePlanReviewDownloadsFromPrior(
+              integratedTabs,
+              downloadCtx?.priorPortalData,
+              true,
+              {
+                forceRetryOversized:
+                  downloadCtx?.forceRetryOversizedDownloads === true ||
+                  downloadCtx?.forceRetryOversized === true ||
+                  arlingtonEnvForceRetryOversizedPlanReviewDownloads(),
+                configuredMaxUploadBytes: getSupabaseStorageObjectMaxBytes(),
+              },
+            );
+
+            const dlOutExt =
+              await runArlingtonPlanReviewDownloadPhasesAfterCheckpoint({
+                page: prPage,
+                domTarget: prPage,
+                integratedTabs,
+                sharedGridCtx,
+                sink,
+                attachmentDedupeKeys,
+                prSeenRowKeys,
+                downloadedHashes,
+                planSetErmsOrigin,
+                prCfg,
+                downloadCtx,
+              });
+            planSetDomDownloads = dlOutExt.planSetDomDownloads;
+
+            planReviewState.planSetValid =
+              arlingtonIntegratedTabsPlanSetValid(integratedTabs);
+            if (planReviewState.domReady && sink.length === 0) {
+              console.log(
+                "[Arlington][PlanReview] Plan Set returned 0 despite ready iframe; treating as invalid DOM extraction",
+              );
+            }
+
+            const shErms = await prPage
+              .screenshot({ fullPage: true })
+              .catch(() => null);
+            if (shErms) {
+              screenshotBase64 = shErms.toString("base64");
+            }
+            ermsComplete = true;
+          }
+
+          if (prPage !== page && openedNewTab) {
+            await prPage.close().catch(() => {});
+          }
+        }
+      } catch (ermsWalkErr) {
+        console.warn(
+          `[Arlington][PlanReview] ERMS walk error: ${ermsWalkErr.message}`,
+        );
+      } finally {
+        await restoreArlingtonCapDetailAfterErms(page, savedCapDetailUrl);
+        await waitForAccelaLoad(page).catch(() => {});
+        await ensureArlingtonRecordInfoActive(page).catch(() => ({
+          ok: false,
+        }));
+      }
+    }
+  }
+
+  if (!ermsComplete && (triedErmsNavigation || attemptedScopedInternalPr)) {
+    integratedTabs = defaultArlingtonIntegratedTabsSkeleton();
+  }
+
+  /** @type {Record<string, object>} */
+  const tabsNamed = {};
+
+  if (!ermsComplete) {
+    if (scopePlanSetOnly) {
+      console.log(
+        "[Arlington][PlanReview] scoped Plan Review incomplete — skipping Accela modal/sub-tab loop",
+      );
+    } else {
+    const prActivate = await ensureArlingtonPlanReviewActive(page);
+    if (!prActivate.ok) {
+      console.log("     [Arlington][Plan Review] tab not found");
+      await logArlingtonDetailTabCandidates(page, "Plan Review");
+      return {
+        comments: [],
+        text: "",
+        screenshot: screenshotBase64,
+        planReviewSummary: null,
+        downloadLinks: [],
+        arlingtonPlanReview: {
+          used: false,
+          message: "Plan Review tab not found",
+          tabs: null,
+        },
+      };
+    }
+
+    await page.waitForTimeout(1200).catch(() => {});
+    await waitForAccelaLoad(page).catch(() => {});
+    await dismissArlingtonPlanReviewModals(page);
+    await page.waitForTimeout(450).catch(() => {});
+
+    for (const label of subTabLabels) {
+    if (Date.now() > prDeadline) {
+      timedOut = true;
+      console.log(
+        "[Arlington][Plan Review] extract budget exhausted before finishing Plan Review sub-tabs — returning partial text",
+      );
+      break;
+    }
+
+    const safeCheckpoint = `arlington_pr_${label
+      .replace(/[^a-z0-9]+/gi, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48)}`;
+    try {
+      let subFound = await clickArlingtonPlanReviewSubTab(page, label);
+      if (!subFound) {
+        const panelTry = await clickAccelaNavPanel(
+          ctx,
+          page,
+          [
+            `a:has-text("${label}")`,
+            `[id*="TabDataList"] a:has-text("${label}")`,
+            `[id*="tabData"] a:has-text("${label}")`,
+          ],
+          label,
+          {
+            checkpointLabel: safeCheckpoint,
+            expandRecordInfoFirst: false,
+          },
+        );
+        subFound = panelTry.found;
+      }
+      await page.waitForTimeout(550);
+      await waitForAccelaLoad(page).catch(() => {});
+
+      if (!subFound) {
+        tabsNamed[label] = {
+          found: false,
+          reason: "sub-tab link not found",
+          tables: [],
+          links: [],
+          textPreview: "",
+        };
+        continue;
+      }
+
+      const extracted = await extractPlanReviewTablesLinksFromFrames(page, ctx);
+
+      const downloadLinks = (extracted.links || []).filter((x) => {
+        const h = (x.href || "").toLowerCase();
+        return (
+          /\.pdf(\?|$)/i.test(h) ||
+          /download|fileupload|filedownload|blob:/i.test(h)
+        );
+      });
+
+      tabsNamed[label] = {
+        found: true,
+        tables: extracted.tables,
+        links: extracted.links,
+        downloadCandidates: downloadLinks.slice(0, 40),
+        textPreview: extracted.text.slice(0, 4000),
+      };
+
+      if (!iframeDownloadsDisabled) {
+        await pickArlingtonIntegratedContentFrame(page).catch(() => null);
+      }
+
+      const tabCamel = tabLabelToKey[label] || `${label.replace(/\s+/g, "")}`;
+      const logTop = tabLogTitles[tabCamel] || label;
+
+      if (!iframeDownloadsDisabled && sharedGridCtx) {
+        if (tabCamel === "plansAndDocuments") {
+          let sawNestedRows = false;
+          for (const [nestedLabel, sectionKey] of scopedNestedPlanSections) {
+            await clickArlingtonIntegratedNestedTab(page, nestedLabel);
+            await waitForAccelaLoad(page).catch(() => {});
+            await page.waitForTimeout(600).catch(() => {});
+
+            const sinkSection =
+              integratedTabs.plansAndDocuments.sections[sectionKey].documents;
+
+            await scrapeArlingtonPlanIntegratedGrid({
+              page,
+              logLabel: nestedLabel,
+              sourceTabCamel: tabCamel,
+              sourceSectionCamel: sectionKey,
+              docsSink: sinkSection,
+              attachmentDedupeKeys,
+              prSeenRowKeys,
+              downloadedHashes,
+              downloadCtx: sharedGridCtx,
+              iframeDownloadsDisabled: false,
+            });
+            sawNestedRows = sawNestedRows || sinkSection.length > 0;
+          }
+          const flatDocs = integratedTabs.plansAndDocuments.documents || [];
+          if (!sawNestedRows) {
+            await scrapeArlingtonPlanIntegratedGrid({
+              page,
+              logLabel: logTop,
+              sourceTabCamel: tabCamel,
+              sourceSectionCamel: "_root",
+              docsSink: flatDocs,
+              attachmentDedupeKeys,
+              prSeenRowKeys,
+              downloadedHashes,
+              downloadCtx: sharedGridCtx,
+              iframeDownloadsDisabled: false,
+            });
+          }
+        } else if (integratedTabs[tabCamel]?.documents) {
+          await scrapeArlingtonPlanIntegratedGrid({
+            page,
+            logLabel: logTop,
+            sourceTabCamel: tabCamel,
+            sourceSectionCamel: "_root",
+            docsSink: integratedTabs[tabCamel].documents,
+            attachmentDedupeKeys,
+            prSeenRowKeys,
+            downloadedHashes,
+            downloadCtx: sharedGridCtx,
+            iframeDownloadsDisabled: false,
+          });
+        }
+      } else if (iframeDownloadsDisabled) {
+        console.log(
+          `[Arlington][Plan Review] ${logTop}: integrated iframe downloads disabled — skipping row scan`,
+        );
+      }
+    } catch (err) {
+      console.log(
+        `     [Arlington][Plan Review] sub-tab "${label}" error: ${err.message}`,
+      );
+      tabsNamed[label] = {
+        found: false,
+        reason: err.message || "error",
+        tables: [],
+        links: [],
+        textPreview: "",
+      };
+    }
+  }
+  }
+  }
+
+  /** Explorer snapshot tabs — iframe legacy path or ERMS API synthetic explorer. */
+  const tabsCamel = {};
+  /** @type {string} */
+  let combinedText = "";
+  /** @type {unknown[]} */
+  let flatDownloads = [];
+
+  if (ermsComplete) {
+    const planDocs =
+      integratedTabs.plansAndDocuments.sections.planSetDocuments.documents ||
+      [];
+    const explain = [
+      `Plan_Set=${planDocs.length}`,
+      `iframe_dl=${planSetDomDownloads}`,
+    ].join(" | ");
+    const ermsExplainPrefix = usedInternalIframeFlow
+      ? "[Arlington ERMS iframe iFrameOpenPlanReview]"
+      : "[Arlington ERMS ViewDocuments]";
+
+    const secondaryIntegrated =
+      prCfg.planReviewIncludeSecondaryTabs === true;
+
+    for (const label of subTabLabels) {
+      const camel = tabLabelToKey[label] || `${label.replace(/\s+/g, "")}`;
+      if (camel === "plansAndDocuments") {
+        tabsCamel[camel] = {
+          label,
+          found: true,
+          tables: [],
+          links: [],
+          downloadCandidates: [],
+          textPreview:
+            `${ermsExplainPrefix} Plans & Documents — ${explain}`,
+        };
+      } else if (secondaryIntegrated) {
+        let textPreview =
+          `${ermsExplainPrefix} ${label}`;
+        /** @type {boolean} */
+        let foundFlag = true;
+        if (camel === "reviewResultsAndMarkups") {
+          const d =
+            integratedTabs.reviewResultsAndMarkups?.documents || [];
+          const c =
+            integratedTabs.reviewResultsAndMarkups?.comments || [];
+          textPreview += ` — ERMS/API+integrated docs=${d.length} comments=${c.length}`;
+        } else if (camel === "approvedDocuments") {
+          const d = integratedTabs.approvedDocuments?.documents || [];
+          textPreview += ` — ERMS/API+integrated docs=${d.length}`;
+        } else if (camel === "projectInformation") {
+          const fld = integratedTabs.projectInformation?.fields || [];
+          const d = integratedTabs.projectInformation?.documents || [];
+          textPreview += ` — ERMS/API+integrated fields=${fld.length} docs=${d.length}`;
+        } else {
+          textPreview += " — integrated secondary tab placeholder";
+          foundFlag = false;
+        }
+        tabsCamel[camel] = {
+          label,
+          found: foundFlag,
+          tables: [],
+          links: [],
+          downloadCandidates: [],
+          textPreview,
+        };
+      } else {
+        tabsCamel[camel] = {
+          label,
+          found: false,
+          reason: "Deferred in ERMS-focused phase.",
+          tables: [],
+          links: [],
+          downloadCandidates: [],
+          textPreview: "",
+        };
+      }
+    }
+    combinedText = Object.entries(tabsCamel)
+      .map(
+        ([k, v]) => `## ${v.label || k}\n${v.textPreview || v.reason || ""}`,
+      )
+      .join("\n\n")
+      .trim();
+    flatDownloads = [];
+    console.log(
+      `     [Arlington][Plan Review] ERMS explorer snapshot tabs=${Object.keys(tabsCamel).length}`,
+    );
+  } else {
+    for (const [label, payload] of Object.entries(tabsNamed)) {
+      const camel = tabLabelToKey[label];
+      if (camel) tabsCamel[camel] = { ...payload, label };
+      else tabsCamel[label.replace(/\s+/g, "")] = { ...payload, label };
+    }
+    combinedText = Object.entries(tabsNamed)
+      .map(
+        ([label, v]) =>
+          `## ${label}\n${v.textPreview || (v.found === false ? v.reason || "" : "")}`,
+      )
+      .join("\n\n")
+      .trim();
+    flatDownloads = Object.values(tabsNamed).flatMap(
+      (v) => v.downloadCandidates || [],
+    );
+    console.log(
+      `     [Arlington][Plan Review] sub-tabs collected: ${Object.keys(tabsNamed).length}, textLen=${combinedText.length}`,
+    );
+  }
+
+  if (timedOut && prCfg.scopePlanSetDocumentsOnly === false) {
+    console.log(
+      "[Arlington][Plan Review] Budget timeout — finalize will rely on mapped Record Info attachments for tab documents.",
+    );
+  } else if (timedOut) {
+    console.log(
+      "[Arlington][Plan Review] Budget timeout — Plan Set extraction may be partial (scoped: no Record Info fallback).",
+    );
+  }
+
+  arlingtonFinalizePlanSetDocumentsSink(
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents,
+  );
+  arlingtonStripRejectedPlanReviewPlaceholderDocNames(
+    integratedTabs?.reviewResultsAndMarkups?.documents,
+  );
+  arlingtonStripRejectedPlanReviewPlaceholderDocNames(
+    integratedTabs?.approvedDocuments?.documents,
+  );
+  arlingtonStripRejectedPlanReviewPlaceholderDocNames(
+    integratedTabs?.projectInformation?.documents,
+  );
+
+  /** Count successful uploads in integrated payloads (public URLs), after cleanup. */
+  let integratedUploadedTally = 0;
+  (function tallyPublic(norm) {
+    const walkDocs = (arr) => {
+      if (!Array.isArray(arr)) return;
+      for (const d of arr) {
+        if (d && d.publicUrl && String(d.publicUrl).startsWith("http"))
+          integratedUploadedTally++;
+      }
+    };
+    walkDocs(norm?.plansAndDocuments?.documents);
+    if (norm?.plansAndDocuments?.sections) {
+      for (const s of Object.values(norm.plansAndDocuments.sections)) {
+        walkDocs(s?.documents);
+      }
+    }
+    walkDocs(norm?.reviewResultsAndMarkups?.documents);
+    walkDocs(norm?.approvedDocuments?.documents);
+    walkDocs(norm?.projectInformation?.documents);
+  })(integratedTabs);
+
+  try {
+    const n =
+      integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents
+        ?.length ?? 0;
+    console.log(`[Arlington][PlanReview] final Plan Set Documents=${n}`);
+  } catch (_) {
+    /**/
+  }
+
+  planReviewState.tabs = integratedTabs;
+
+  const approvedDocCount = Array.isArray(
+    integratedTabs?.approvedDocuments?.documents,
+  )
+    ? integratedTabs.approvedDocuments.documents.length
+    : 0;
+  const reviewDocCount = Array.isArray(
+    integratedTabs?.reviewResultsAndMarkups?.documents,
+  )
+    ? integratedTabs.reviewResultsAndMarkups.documents.length
+    : 0;
+
+  const nfNonApi = (arr) =>
+    Array.isArray(arr)
+      ? arr.filter((d) => d && `${d.source || ""}` !== "api_fallback")
+          .length
+      : 0;
+
+  if (selectiveScrapeScope === "approvedDocuments") {
+    planReviewState.planSetValid = false;
+    const adDomOk =
+      !planReviewState.secondaryDomExtractionFailed &&
+      nfNonApi(integratedTabs.approvedDocuments?.documents) > 0;
+    planReviewState.secondaryTabsValid = adDomOk;
+    planReviewState.secondaryDomValid = adDomOk;
+  } else if (selectiveScrapeScope === "reviewResults") {
+    planReviewState.planSetValid = false;
+    planReviewState.secondaryTabsValid =
+      nfNonApi(integratedTabs.reviewResultsAndMarkups?.documents) > 0;
+    planReviewState.secondaryDomValid = planReviewState.secondaryTabsValid;
+  } else if (selectiveScrapeScope === "projectInformation") {
+    planReviewState.planSetValid = false;
+    const projectInfoFieldCount =
+      integratedTabs?.projectInformation?.fields?.length || 0;
+    const projectInfoDocCount =
+      integratedTabs?.projectInformation?.documents?.length || 0;
+    planReviewState.secondaryTabsValid =
+      projectInfoFieldCount > 0 || projectInfoDocCount > 0;
+    planReviewState.secondaryDomValid = planReviewState.secondaryTabsValid;
+  } else {
+    planReviewState.planSetValid =
+      arlingtonIntegratedTabsPlanSetValid(integratedTabs);
+    planReviewState.secondaryTabsValid =
+      nfNonApi(integratedTabs.reviewResultsAndMarkups?.documents) > 0 ||
+      nfNonApi(integratedTabs.approvedDocuments?.documents) > 0;
+    planReviewState.secondaryDomValid = planReviewState.secondaryTabsValid;
+  }
+
+  const statusScope =
+    selectiveScrapeScope || scrapeDownloadScope || downloadCtx?.planReviewScope;
+  const incompletesLeft =
+    prCfg.planReviewIncludeSecondaryTabs === true ||
+    selectiveScrapeScope === "planSet"
+      ? arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(
+          integratedTabs,
+          statusScope || undefined,
+        )
+      : 0;
+  const abortedDl =
+    !!(sharedGridCtx &&
+      /** @type {Record<string, unknown>} */ (
+        sharedGridCtx
+      ).planReviewDownloadsAbortedDeadline === true);
+  const downloadedThisRun =
+    Number(
+      sharedGridCtx &&
+        /** @type {Record<string, unknown>} */ (sharedGridCtx)
+          .planReviewDownloadsSucceededThisRun,
+    ) || 0;
+  const attemptedThisRun =
+    Number(
+      sharedGridCtx &&
+        /** @type {Record<string, unknown>} */ (sharedGridCtx)
+          .planReviewDownloadsAttemptedThisRun,
+    ) || 0;
+  /** @type {string|undefined} */
+  let scrapeStatusOut;
+  if (abortedDl || incompletesLeft > 0) {
+    planReviewState.partialPendingDownloads = true;
+    if (selectiveScrapeScope && downloadedThisRun === 0 && attemptedThisRun === 0) {
+      scrapeStatusOut = "partial_pending_downloads";
+      console.log(
+        `[Arlington][PlanReview] selective scope=${selectiveScrapeScope} finished with pending=${incompletesLeft} downloadsAttempted=0`,
+      );
+    } else {
+      scrapeStatusOut = "partial_pending_downloads";
+    }
+  }
+  if (
+    sharedGridCtx &&
+    /** @type {Record<string, unknown>} */ (sharedGridCtx)
+      .planReviewPartialPendingDownloads === true
+  ) {
+    planReviewState.partialPendingDownloads = true;
+  }
+
+  if (
+    selectiveScrapeScope &&
+    (selectiveScrapeScope === "approvedDocuments" ||
+      selectiveScrapeScope === "reviewResults") &&
+    sharedGridCtx
+  ) {
+    const scopedAd =
+      selectiveScrapeScope === "approvedDocuments"
+        ? integratedTabs?.approvedDocuments?.documents
+        : integratedTabs?.reviewResultsAndMarkups?.documents;
+    const rowCount = Array.isArray(scopedAd) ? scopedAd.length : 0;
+    const needsDl = Array.isArray(scopedAd)
+      ? scopedAd.filter((d) => arlingtonPlanReviewDocNeedsDownloadAttempt(d)).length
+      : 0;
+    if (rowCount > 0 && needsDl > 0 && downloadedThisRun === 0 && attemptedThisRun === 0) {
+      planReviewState.partialPendingDownloads = true;
+      scrapeStatusOut = "partial_pending_downloads";
+      console.log(
+        `[Arlington][PlanReview] selective scope=${selectiveScrapeScope} rows=${rowCount} needDownload=${needsDl} but no download attempts this run`,
+      );
+    }
+  }
+
+  if (
+    (prCfg.planReviewIncludeSecondaryTabs === true ||
+      selectiveScrapeScope === "planSet") &&
+    incompletesLeft === 0 &&
+    !abortedDl &&
+    ermsComplete &&
+    sharedGridCtx
+  ) {
+    const scopeNote = statusScope ? ` scope=${statusScope}` : "";
+    console.log(
+      `[Arlington][PlanReview] all plan review downloads complete${scopeNote}`,
+    );
+  }
+
+  const preservePreviousPlanReview =
+    !selectiveScrapeScope &&
+    existingValidPlanReview &&
+    arlingtonWeakNewPlanReview(integratedTabs);
+
+  if (selectiveScrapeScope === "approvedDocuments") {
+    planReviewState.shouldPersist =
+      planReviewState.iframeReady === true && approvedDocCount > 0;
+  } else if (selectiveScrapeScope === "reviewResults") {
+    planReviewState.shouldPersist =
+      planReviewState.iframeReady === true && reviewDocCount > 0;
+  } else if (selectiveScrapeScope === "projectInformation") {
+    const projectInfoFieldCount =
+      integratedTabs?.projectInformation?.fields?.length || 0;
+    const projectInfoDocCount =
+      integratedTabs?.projectInformation?.documents?.length || 0;
+    planReviewState.shouldPersist =
+      planReviewState.iframeReady === true &&
+      (projectInfoFieldCount > 0 || projectInfoDocCount > 0);
+    console.log(
+      `[Arlington][PlanReview] projectInformation persist check fields=${projectInfoFieldCount} documents=${projectInfoDocCount} shouldPersist=${planReviewState.shouldPersist}`,
+    );
+  } else {
+    planReviewState.shouldPersist =
+      (planReviewState.iframeReady && planReviewState.planSetValid) ||
+      (!existingValidPlanReview && planReviewState.usedApiFallback === true);
+  }
+
+  if (
+    selectiveScrapeScope === "projectInformation" &&
+    !planReviewState.shouldPersist
+  ) {
+    scrapeStatusOut = scrapeStatusOut || "partial_success_plan_review_failed";
+  }
+
+  let persistReason = "ok";
+  if (preservePreviousPlanReview)
+    persistReason = "preserve_existing_valid_plan_set_over_weak_new";
+  else if (
+    selectiveScrapeScope === "projectInformation" &&
+    !planReviewState.shouldPersist
+  )
+    persistReason = "project_information_empty_or_iframe_not_ready";
+  else if (!planReviewState.shouldPersist)
+    persistReason = "incomplete_or_no_persist_rule_match";
+
+  console.log(
+    `[Arlington][PlanReview] persist decision iframeReady=${planReviewState.iframeReady} planSetValid=${planReviewState.planSetValid} secondaryDomValid=${planReviewState.secondaryDomValid} usedApiFallback=${planReviewState.usedApiFallback} suppressedSecondaryApiMetadata=${planReviewState.suppressedSecondaryApiMetadata} existingValid=${existingValidPlanReview} shouldPersist=${planReviewState.shouldPersist} reason=${persistReason}`,
+  );
+
+  if (preservePreviousPlanReview) {
+    console.log(
+      "[Arlington][PlanReview] weak/failed extraction detected; preserving existing valid planReview",
+    );
+  }
+
+  return {
+    comments: [],
+    text: combinedText,
+    screenshot: screenshotBase64,
+    planReviewSummary: null,
+    downloadLinks: flatDownloads,
+    arlingtonPlanReview: {
+      used: true,
+      message: null,
+      ...(timedOut ? { timeout: true } : {}),
+      tabs: tabsCamel,
+      legacyExplorerTabs: tabsCamel,
+      integratedTabs,
+      ...(ermsComplete && usedInternalIframeFlow
+        ? { integratedTabsFromInternalIframe: true }
+        : {}),
+      ...(ermsComplete && usedExternalDomFlow
+        ? { integratedTabsFromExternalDom: true }
+        : {}),
+      ...(ermsComplete && usedApiHydrate
+        ? { integratedTabsFromExternalApi: true }
+        : {}),
+      integratedDocCount: integratedUploadedTally,
+      planReviewState,
+      preservePreviousPlanReview,
+      existingValidPlanReviewSnapshot: existingValidPlanReview,
+      ...(planReviewState.partialPendingDownloads === true
+        ? { partialPendingDownloads: true }
+        : {}),
+      ...(scrapeStatusOut ? { scrapeStatus: scrapeStatusOut } : {}),
+      ...(sharedGridCtx && sharedGridCtx.planReviewRunStats
+        ? { runStats: sharedGridCtx.planReviewRunStats }
+        : {}),
+    },
+  };
+}
 async function extractPlanReview(page) {
   console.log("  📋 Extracting plan review...");
   const ctx = getExtractionContext(page);
@@ -3117,6 +19157,22 @@ async function extractPlanReview(page) {
     //   const planReview = await extractPlanReviewSummaryBaltimore(ctx);
     //   console.log("[Baltimore] Plan Review result:", planReview);
     // }
+    return {
+      comments: [],
+      text: "",
+      screenshot: null,
+      planReviewSummary: null,
+      downloadLinks: [],
+    };
+  }
+
+  if (
+    isArlingtonPortal(page) ||
+    isArlingtonCapDetailPage(page)
+  ) {
+    console.log(
+      "     [panel] Arlington Plan Review is deferred until after Attachments",
+    );
     return {
       comments: [],
       text: "",
@@ -3656,6 +19712,38 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
     baltimoreDlState,
   } = deps;
 
+  const attachTag = attachmentIframeDownloadLogTag(page);
+
+  let link = baltimoreRowFilenameLinkLocator(frame, att.name);
+  let found = (await link.count()) > 0;
+
+  if (!found && isArlingtonPortal(page)) {
+    try {
+      const escapeRegex = (s) =>
+        String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const shortName = String(att.name || "").trim().slice(0, 120);
+      const alt = frame
+        .locator("a[id*='lnkFileName'], a[href*='__doPostBack'][id*='FileName']")
+        .filter({
+          hasText: new RegExp(
+            `^\\s*${escapeRegex(shortName)}\\s*$`,
+            "i",
+          ),
+        });
+      if ((await alt.count()) > 0) {
+        link = alt.first();
+        found = true;
+        console.log(
+          `       ${attachTag} filename link resolved via lnkFileName for "${shortName.slice(0, 64)}"`,
+        );
+      }
+    } catch (e) {
+      console.log(
+        `       ${attachTag} Arlington lnkFileName fallback error: ${e.message}`,
+      );
+    }
+  }
+
   const iframeLinks = await frame
     .evaluate(() =>
       [...document.querySelectorAll("a")]
@@ -3684,14 +19772,11 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
   const visibleFilenamesForLog = Array.isArray(iframeLinks)
     ? [...iframeLinks]
     : [];
-  let link = baltimoreRowFilenameLinkLocator(frame, att.name);
-  let found = (await link.count()) > 0;
-
   if (!found) {
     att.downloadStatus = "failed";
     att.downloadError = "link_not_found";
   console.log(
-      `[Baltimore Attach] FAIL ${att.name} link_not_found filesOnPage=${JSON.stringify(visibleFilenamesForLog.slice(0, 12))}`,
+      `${attachTag} FAIL ${att.name} link_not_found filesOnPage=${JSON.stringify(visibleFilenamesForLog.slice(0, 12))}`,
     );
     return;
   }
@@ -3879,29 +19964,44 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
       bodyBuffer,
       sourceLabel,
     ) => {
+      const rawBuf =
+        bodyBuffer && Buffer.isBuffer(bodyBuffer)
+          ? bodyBuffer
+          : bodyBuffer
+            ? Buffer.from(bodyBuffer)
+            : null;
+      if (rawBuf && isDownloadBufferLikelyHtmlError(rawBuf)) {
+        att.downloadStatus = "failed";
+        att.downloadError = "html_error_body";
+        console.log(
+          `       ⚠️ ${attachTag} REJECT (${sourceLabel}) — response body looks like HTML error page`,
+        );
+        return { safeName: null, storagePath: null, publicUrl: null };
+      }
       const safeName = (
         fileNameHint ||
         att.name ||
         `baltimore_${Date.now()}.pdf`
       ).replace(/[\\/:*?"<>|]/g, "_");
       const localPath = path.join(DOWNLOADS_DIR, safeName);
-      fs.writeFileSync(localPath, bodyBuffer);
+      fs.writeFileSync(localPath, rawBuf);
       const storagePath = `drawings/${supabaseProjectId}/${safeName}`;
       const publicUrl = await uploadFn(localPath, storagePath);
       if (publicUrl) {
         att.viewUrl = publicUrl;
+        att.storagePath = storagePath;
         att.downloadStatus = "uploaded";
         try {
           fs.unlinkSync(localPath);
         } catch (_) {}
         console.log(
-          `       ✅ Baltimore capture via ${sourceLabel}: ${safeName}`,
+          `       ✅ ${attachTag} capture via ${sourceLabel}: ${safeName}`,
         );
       } else {
         att.downloadStatus = "local";
         att.viewUrl = "";
         console.log(
-          `       ⚠️ Baltimore capture local only via ${sourceLabel}: ${safeName}`,
+          `       ⚠️ ${attachTag} capture local only via ${sourceLabel}: ${safeName}`,
         );
       }
       return { safeName, storagePath, publicUrl };
@@ -3915,21 +20015,40 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
       const fileName = download.suggestedFilename() || att.name;
       const localPath = path.join(DOWNLOADS_DIR, fileName);
       await download.saveAs(localPath);
-      const storagePath = `drawings/${supabaseProjectId}/${fileName}`;
-      const publicUrl = await uploadFn(localPath, storagePath);
-      baltimoreUploadKey = storagePath;
-      baltimoreCapturePath = "A(download event)";
-      if (publicUrl) {
-        att.viewUrl = publicUrl;
-        att.downloadStatus = "uploaded";
+      let fileBuf;
+      try {
+        fileBuf = fs.readFileSync(localPath);
+      } catch (e) {
+        att.downloadStatus = "failed";
+        att.downloadError = `read_saved_file: ${e.message}`;
+        console.log(`       ⚠️ ${attachTag} REJECT ${fileName} — could not read saved file`);
+      }
+      if (fileBuf && isDownloadBufferLikelyHtmlError(fileBuf)) {
+        att.downloadStatus = "failed";
+        att.downloadError = "saved_file_html_error_page";
         try {
           fs.unlinkSync(localPath);
         } catch (_) {}
-      } else {
-        att.downloadStatus = "local";
-        att.viewUrl = "";
+        console.log(
+          `       ⚠️ ${attachTag} REJECT ${fileName} — saved file looks like HTML (portal error)`,
+        );
+      } else if (fileBuf) {
+        const storagePath = `drawings/${supabaseProjectId}/${fileName}`;
+        const publicUrl = await uploadFn(localPath, storagePath);
+        baltimoreUploadKey = storagePath;
+        baltimoreCapturePath = "A(download event)";
+        if (publicUrl) {
+          att.viewUrl = publicUrl;
+          att.downloadStatus = "uploaded";
+          try {
+            fs.unlinkSync(localPath);
+          } catch (_) {}
+        } else {
+          att.downloadStatus = "local";
+          att.viewUrl = "";
+        }
+        captured = true;
       }
-      captured = true;
     }
 
     // B) popup/new page path
@@ -3949,6 +20068,22 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
         const popupName = popupDl.suggestedFilename() || att.name;
         const popupLocal = path.join(DOWNLOADS_DIR, popupName);
         await popupDl.saveAs(popupLocal);
+        let popupBuf;
+        try {
+          popupBuf = fs.readFileSync(popupLocal);
+        } catch (_) {
+          popupBuf = null;
+        }
+        if (popupBuf && isDownloadBufferLikelyHtmlError(popupBuf)) {
+          att.downloadStatus = "failed";
+          att.downloadError = "popup_saved_file_html_error_page";
+          try {
+            fs.unlinkSync(popupLocal);
+          } catch (_) {}
+          console.log(
+            `       ⚠️ ${attachTag} REJECT popup save ${popupName} — HTML error page`,
+          );
+        } else if (popupBuf) {
         const popupStorage = `drawings/${supabaseProjectId}/${popupName}`;
         const popupUrlUploaded = await uploadFn(popupLocal, popupStorage);
         baltimoreUploadKey = popupStorage;
@@ -3965,6 +20100,7 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
         }
         captured = true;
         popupDownloaded = true;
+        }
       }
       if (!popupDownloaded && popupUrl && /pdf|fileupload|attachment/i.test(popupUrl)) {
         const popupResp = await context.request
@@ -3985,9 +20121,11 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
               buf,
               "B(popup response)",
             );
-            baltimoreUploadKey = up.storagePath;
-            baltimoreCapturePath = "B(popup response)";
-            captured = true;
+            if (up.storagePath) {
+              baltimoreUploadKey = up.storagePath;
+              baltimoreCapturePath = "B(popup response)";
+              captured = true;
+            }
           }
         }
       }
@@ -4011,10 +20149,12 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
             body,
             "C(response interception)",
           );
+          if (up.storagePath) {
           baltimoreUploadKey = up.storagePath;
           baltimoreCapturePath = "C(response interception)";
           captured = true;
           break;
+          }
         }
       }
     }
@@ -4048,9 +20188,11 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
               buf,
               "D(frame navigation)",
             );
-            baltimoreUploadKey = up.storagePath;
-            baltimoreCapturePath = "D(frame navigation)";
-            captured = true;
+            if (up.storagePath) {
+              baltimoreUploadKey = up.storagePath;
+              baltimoreCapturePath = "D(frame navigation)";
+              captured = true;
+            }
           }
         }
       }
@@ -4062,16 +20204,16 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
     if (!captured) {
       att.downloadStatus = "failed";
       att.downloadError = "click_no_download";
-      console.log(`[Baltimore Attach] FAIL ${att.name} click_no_download`);
+      console.log(`${attachTag} FAIL ${att.name} click_no_download`);
     } else if (
       att.viewUrl &&
       ["uploaded", "success"].includes(att.downloadStatus)
     ) {
       console.log(
-        `[Baltimore Attach] OK ${att.name} path=${baltimoreCapturePath || "?"}`,
+        `${attachTag} OK ${att.name} path=${baltimoreCapturePath || "?"}`,
       );
     } else if (captured) {
-      console.log(`[Baltimore Attach] FAIL ${att.name} captured_but_no_public_url`);
+      console.log(`${attachTag} FAIL ${att.name} captured_but_no_public_url`);
     }
   } catch (dlErr) {
     if (baltimoreDlState.onResponse) {
@@ -4079,7 +20221,7 @@ async function downloadBaltimoreAttachmentForRow(page, att, frame, deps) {
     }
     att.downloadStatus = "failed";
     att.downloadError = dlErr.message;
-    console.log(`[Baltimore Attach] FAIL ${att.name} ${dlErr.message}`);
+    console.log(`${attachTag} FAIL ${att.name} ${dlErr.message}`);
   }
 }
 
@@ -4192,6 +20334,87 @@ async function extractAttachments(
     } catch (e) {
       console.log(`  [Baltimore] Skipped Attachments — navigation failed`);
       console.log(`  [Baltimore] ${e.message}`);
+      return { attachments: [], screenshot: null };
+    }
+  } else if (isArlingtonPortal(page) || isArlingtonCapDetailPage(page)) {
+    try {
+      baltimoreAttachmentFrame = await ensureArlingtonAttachmentsLoaded(page);
+      if (!baltimoreAttachmentFrame) {
+        return { attachments: [], screenshot: null };
+      }
+
+      console.log(
+        `  [Arlington][Attachments] using iframe frame: ${(
+          baltimoreAttachmentFrame.url() || ""
+        ).substring(0, 130)}`,
+      );
+
+      const gid = ArlingtonAccelaProfile.attachmentGridId;
+      try {
+        await baltimoreAttachmentFrame.waitForSelector(
+          `#${gid}, table[id="${gid}"]`,
+          { timeout: 15000 },
+        );
+      } catch (e) {
+        console.log(
+          `  [Arlington][Attachments] grid #${gid} optional wait: ${e.message}`,
+        );
+      }
+      try {
+        await baltimoreAttachmentFrame.waitForSelector("table tr", {
+          timeout: 10000,
+        });
+      } catch (e) {
+        console.log(
+          `  [Arlington][Attachments] no rows in attachment iframe — ${e.message}`,
+        );
+        const brief =
+          typeof baltimoreAttachmentFrame.evaluate === "function"
+            ? await baltimoreAttachmentFrame
+                .evaluate(() => ({
+                  tables: document.querySelectorAll("table").length,
+                  bodySnippet:
+                    document.body &&
+                    typeof document.body.innerText === "string"
+                      ? document.body.innerText
+                          .replace(/\s+/g, " ")
+                          .trim()
+                          .slice(0, 520)
+                      : "",
+                }))
+                .catch(() => null)
+            : null;
+        if (brief) {
+          console.log(
+            `  [Arlington][Attachments] iframe body/table probe: ${JSON.stringify(brief)}`,
+          );
+        }
+        return { attachments: [], screenshot: null };
+      }
+
+      const rowProbe = await baltimoreAttachmentFrame
+        .evaluate((gridId) => {
+          const t =
+            document.getElementById(gridId) ||
+            document.querySelector(`table[id="${gridId}"]`);
+          return {
+            gridFound: !!t,
+            trCount: t ? t.querySelectorAll("tr").length : 0,
+            fileLinks: t
+              ? t.querySelectorAll(
+                  "a[href*='__doPostBack'][id*='lnkFileName'], a[onclick*='__doPostBack']",
+                ).length
+              : 0,
+          };
+        }, gid)
+        .catch(() => null);
+      if (rowProbe) {
+        console.log(
+          `  [Arlington][Attachments] grid probe: ${JSON.stringify(rowProbe)}`,
+        );
+      }
+    } catch (e) {
+      console.log(`  [Arlington][Attachments] setup failed: ${e.message}`);
       return { attachments: [], screenshot: null };
     }
   } else {
@@ -4334,6 +20557,12 @@ async function extractAttachments(
   };
   let attachments;
   if (baltimoreAttachmentFrame) {
+    const iframeDlTag = attachmentIframeDownloadLogTag(page);
+    if (isArlingtonPortal(page)) {
+      console.log(
+        "  [Arlington][Attachments] row scan, paging, and filename-link downloads use the shared iframe path (Baltimore-style)",
+      );
+    }
     attachments = [];
     const seenNames = new Set();
     const seenPageSigs = new Set();
@@ -4352,7 +20581,7 @@ async function extractAttachments(
       );
       if (!pageReady.ready) {
         console.log(
-          `[Baltimore Attach] page ${pageIdx + 1} readiness timeout — stop`,
+          `${iframeDlTag} page ${pageIdx + 1} readiness timeout — stop`,
         );
         break;
       }
@@ -4360,7 +20589,7 @@ async function extractAttachments(
       const pageSig = `${sigObj.rowKeys}##${sigObj.viewStateTail}`;
       if (seenPageSigs.has(pageSig)) {
         console.log(
-          `[Baltimore Attach] duplicate WebForms page signature — stop (page ${pageIdx + 1})`,
+          `${iframeDlTag} duplicate WebForms page signature — stop (page ${pageIdx + 1})`,
         );
         break;
       }
@@ -4369,7 +20598,7 @@ async function extractAttachments(
       const batch = await fr.evaluate(accelaExtractAttachmentRowsInPage, true);
       const namesOnPage = batch.map((r) => r.name);
       console.log(
-        `[Baltimore Attach] page ${pageIdx + 1} filenames: ${JSON.stringify(namesOnPage)}`,
+        `${iframeDlTag} page ${pageIdx + 1} filenames: ${JSON.stringify(namesOnPage)}`,
       );
 
       for (const row of batch) {
@@ -4385,17 +20614,17 @@ async function extractAttachments(
         } catch (e) {
           row.downloadStatus = "failed";
           row.downloadError = e.message;
-          console.log(`[Baltimore Attach] FAIL ${row.name} ${e.message}`);
+          console.log(`${iframeDlTag} FAIL ${row.name} ${e.message}`);
         }
       }
 
       const nextPb = await baltimoreParseAttachmentNextPostBack(fr);
       if (!nextPb) {
-        console.log(`[Baltimore Attach] no further pages (no Next > postback)`);
+        console.log(`${iframeDlTag} no further pages (no Next > postback)`);
         break;
       }
       console.log(
-        `[Baltimore Attach] form-post page ${pageIdx + 1}→${pageIdx + 2} __EVENTTARGET=${nextPb.target}`,
+        `${iframeDlTag} form-post page ${pageIdx + 1}→${pageIdx + 2} __EVENTTARGET=${nextPb.target}`,
       );
       const postRes = await baltimoreSubmitAttachmentIframeFormPost(
         fr,
@@ -4404,7 +20633,7 @@ async function extractAttachments(
       );
       if (!postRes.ok) {
         console.log(
-          `[Baltimore Attach] WebForms POST failed: ${postRes.error || postRes.status}`,
+          `${iframeDlTag} WebForms POST failed: ${postRes.error || postRes.status}`,
         );
         break;
       }
@@ -4415,7 +20644,7 @@ async function extractAttachments(
     const fail = attachments.filter((a) => a.downloadStatus === "failed")
       .length;
     console.log(
-      `[Baltimore Attach] summary: found=${attachments.length} downloaded=${ok} failed=${fail}`,
+      `${iframeDlTag} summary: found=${attachments.length} downloaded=${ok} failed=${fail}`,
     );
   } else {
     attachments = await ctx.evaluate(accelaExtractAttachmentRowsInPage);
@@ -4500,6 +20729,9 @@ async function extractAttachments(
               downloadedHashes,
             );
             att.viewUrl = viewUrl;
+            if (viewUrl && supabaseProjectId) {
+              att.storagePath = `drawings/${supabaseProjectId}/${safeDlName}`;
+            }
             att.downloadStatus = viewUrl ? "success" : "uploaded_no_url";
             console.log(
               `       ✅ Downloaded: ${att.name} → ${viewUrl || "(local)"}`,
@@ -4560,6 +20792,9 @@ async function extractAttachments(
             downloadedHashes,
           );
           att.viewUrl = viewUrl;
+          if (viewUrl && supabaseProjectId) {
+            att.storagePath = `drawings/${supabaseProjectId}/${safeName}`;
+          }
           att.downloadStatus = viewUrl ? "success" : "uploaded_no_url";
           console.log(
             `       ✅ Downloaded: ${safeName} → ${viewUrl || "(local)"}`,
@@ -5044,6 +21279,7 @@ async function scrapeAccelaRecord(
   sanitizeStorageKey,
   baltimoreTabs,
   fairfaxTabs,
+  arlingtonTabs,
 ) {
   const { portalUrl } = session;
   const page =
@@ -5053,8 +21289,18 @@ async function scrapeAccelaRecord(
       "No authenticated page found in session — cannot start Accela scrape",
     );
   }
+  const accelaTenantProfile = resolveAccelaTenantProfile(portalUrl);
+  page._accelaTenantProfile = accelaTenantProfile;
+  page._isArlington = !!(
+    accelaTenantProfile && accelaTenantProfile.key === "arlington_county_va"
+  );
   page._isBaltimore = (typeof portalUrl === "string" && portalUrl.toUpperCase().includes("BALTIMORE"));
   page._isFairfax = (typeof portalUrl === "string" && portalUrl.toUpperCase().includes("FAIRFAX"));
+  if (page._isArlington && accelaTenantProfile) {
+    console.log(
+      `  [Arlington] Accela tenant profile: key=${accelaTenantProfile.key} agencyCode=${accelaTenantProfile.agencyCode} baseUrl=${accelaTenantProfile.baseUrl}`,
+    );
+  }
   const baltimoreTabSet =
     page._isBaltimore &&
     Array.isArray(baltimoreTabs) &&
@@ -5067,6 +21313,25 @@ async function scrapeAccelaRecord(
     fairfaxTabs.length > 0
       ? new Set(fairfaxTabs.map((k) => String(k).trim()))
       : null;
+  const arlingtonTabSet =
+    page._isArlington &&
+    Array.isArray(arlingtonTabs) &&
+    arlingtonTabs.length > 0
+      ? new Set(arlingtonTabs.map((k) => String(k).trim()))
+      : null;
+  const wantsArlingtonInfo =
+    !page._isArlington || !arlingtonTabSet || arlingtonTabSet.has("info");
+  const wantsArlingtonAttachments =
+    !page._isArlington ||
+    !arlingtonTabSet ||
+    arlingtonTabSet.has("attachments");
+  const wantsArlingtonPlanReview =
+    !page._isArlington ||
+    !arlingtonTabSet ||
+    arlingtonTabSet.has("plan_review");
+  const arlingtonExtras = !(
+    page._isArlington && !arlingtonRunsSupplementalAccordionPanels(arlingtonTabSet)
+  );
   const wantsBaltimoreInfo =
     !page._isBaltimore || !baltimoreTabSet || baltimoreTabSet.has("info");
   const wantsBaltimoreAttachments =
@@ -5091,6 +21356,11 @@ async function scrapeAccelaRecord(
         : "(tabs: default all)",
     );
   }
+  if (page._isArlington && arlingtonTabSet) {
+    console.log(
+      `  [Arlington] scrape tab scope (API tabs): ${[...arlingtonTabSet].join(", ")} — supplemental panels=${arlingtonExtras}`,
+    );
+  }
   const currentUrl = page.url();
   console.log(`  [GUARD] Starting scrape on existing page. URL: ${currentUrl}`);
   if (currentUrl === "about:blank" || !currentUrl || currentUrl === "") {
@@ -5098,19 +21368,57 @@ async function scrapeAccelaRecord(
       `Authenticated page is blank (url=${currentUrl}) — session may be corrupt`,
     );
   }
-  const TIMEOUT = 600000;
+  const extendArlingtonPlanReviewTimeout =
+    page._isArlington &&
+    (!arlingtonTabSet || arlingtonTabSet.has("plan_review"));
+
+  const TIMEOUT = extendArlingtonPlanReviewTimeout
+    ? ARLINGTON_PLAN_REVIEW_GLOBAL_TIMEOUT_MS
+    : 600000;
+
+  if (extendArlingtonPlanReviewTimeout) {
+    console.log(
+      `[Arlington][PlanReview] using extended global timeout=${TIMEOUT}`,
+    );
+  }
+
   const startTime = Date.now();
+  const accelaSid = `${session._accelaSessionId || ""}`.trim();
 
   const checkTimeout = () => {
-    if (Date.now() - startTime > TIMEOUT)
-      throw new Error("Accela scraping timed out (10 minute limit)");
+    if (Date.now() - startTime > TIMEOUT) {
+      if (
+        page._isArlington &&
+        (session.arlingtonPlanReviewCheckpointSaved === true ||
+          session.arlingtonPlanReviewPartialPendingDownloads === true)
+      ) {
+        session.arlingtonPlanReviewTimedOutAfterProgress = true;
+        session.arlingtonPlanReviewPartialPendingDownloads = true;
+        console.log(
+          `  [Arlington][PlanReview] global scrape wall reached after checkpoint/progress — continuing as partial success`,
+        );
+        return;
+      }
+      throw new Error(
+        `Accela scraping timed out (${Math.max(1, Math.round(TIMEOUT / 60000))} minute limit)`,
+      );
+    }
   };
 
   console.log(
     `[Scrape] requested projectId=${supabaseProjectId || "(none)"} permitNumber=${permitNumber}`,
   );
 
+  const hadScrapeActive = session._scrapeActive === true;
+  if (!hadScrapeActive) {
+    session._scrapeActive = true;
+    if (accelaSid) {
+      console.log(`[Session][scrape] active=true sid=${accelaSid} flow=accela`);
+    }
+  }
+
   try {
+    session.arlingtonPartialSuccessPlanReviewFailed = false;
     session.message = `${permitNumber} → Searching...`;
     await searchPermit(page, portalUrl, permitNumber);
     checkTimeout();
@@ -5161,9 +21469,10 @@ async function scrapeAccelaRecord(
 
     let details = { fields: {}, tables: [], screenshot: null };
     const wantsRecordDetailsTab =
-      (!page._isBaltimore && !page._isFairfax) ||
       (page._isBaltimore && wantsBaltimoreInfo) ||
-      (page._isFairfax && wantsFairfaxInfo);
+      (page._isFairfax && wantsFairfaxInfo) ||
+      (!page._isBaltimore && !page._isFairfax && !page._isArlington) ||
+      (page._isArlington && wantsArlingtonInfo);
     if (wantsRecordDetailsTab) {
       try {
         session.message = `${permitNumber} → Record Details`;
@@ -5172,15 +21481,21 @@ async function scrapeAccelaRecord(
         console.log(`  [scrape] Record Details section error: ${err.message}`);
       }
     } else {
-      const tabSkipLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
-      console.log(
-        `  [scrape] (skip) Record Details — ${tabSkipLabel} tab selection (info off)`,
-      );
+      if (page._isBaltimore || page._isFairfax) {
+        const tabSkipLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
+        console.log(
+          `  [scrape] (skip) Record Details — ${tabSkipLabel} tab selection (info off)`,
+        );
+      } else if (page._isArlington) {
+        console.log(
+          "  [scrape] (skip) Record Details — Arlington tab preset (record info off)",
+        );
+      }
     }
     checkTimeout();
 
     let processingStatus = { departments: [], screenshot: null };
-    if (!isMinimalTabsPortal(page)) {
+    if (!isMinimalTabsPortal(page) && (!page._isArlington || arlingtonExtras)) {
       try {
     session.message = `${permitNumber} → Processing Status`;
         processingStatus = await extractProcessingStatus(page);
@@ -5188,9 +21503,15 @@ async function scrapeAccelaRecord(
         console.log(`  [scrape] Processing Status section error: ${err.message}`);
       }
     } else {
+      if (isMinimalTabsPortal(page)) {
       console.log(
         "  [scrape] (skip) Processing Status — BALTIMORE_MINIMAL_PORTAL_TABS",
       );
+      } else if (page._isArlington && !arlingtonExtras) {
+        console.log(
+          "  [scrape] (skip) Processing Status — Arlington narrowed tab preset",
+        );
+      }
     }
     checkTimeout();
 
@@ -5201,12 +21522,19 @@ async function scrapeAccelaRecord(
       planReviewSummary: null,
       downloadLinks: [],
     };
+    let arlingtonNewPlanReviewIntegratedEmpty = false;
     if (!isMinimalTabsPortal(page)) {
-      try {
+      if (page._isArlington && wantsArlingtonPlanReview) {
+        console.log(
+          "  [scrape] (defer) Plan Review — Arlington until after Attachments",
+        );
+      } else if (!page._isArlington) {
+        try {
     session.message = `${permitNumber} → Plan Review`;
-        planReview = await extractPlanReview(page);
-      } catch (err) {
-        console.log(`  [scrape] Plan Review section error: ${err.message}`);
+          planReview = await extractPlanReview(page);
+        } catch (err) {
+          console.log(`  [scrape] Plan Review section error: ${err.message}`);
+        }
       }
     } else {
       console.log("  [scrape] (skip) Plan Review — BALTIMORE_MINIMAL_PORTAL_TABS");
@@ -5214,7 +21542,7 @@ async function scrapeAccelaRecord(
     checkTimeout();
 
     let relatedRecords = { records: [], screenshot: null };
-    if (!isMinimalTabsPortal(page)) {
+    if (!isMinimalTabsPortal(page) && (!page._isArlington || arlingtonExtras)) {
       try {
     session.message = `${permitNumber} → Related Records`;
         relatedRecords = await extractRelatedRecords(page);
@@ -5222,17 +21550,24 @@ async function scrapeAccelaRecord(
         console.log(`  [scrape] Related Records section error: ${err.message}`);
       }
     } else {
+      if (isMinimalTabsPortal(page)) {
       console.log(
         "  [scrape] (skip) Related Records — BALTIMORE_MINIMAL_PORTAL_TABS",
       );
+      } else if (page._isArlington && !arlingtonExtras) {
+        console.log(
+          "  [scrape] (skip) Related Records — Arlington narrowed tab preset",
+        );
+      }
     }
     checkTimeout();
 
     let attachments = { attachments: [], screenshot: null };
     const wantsAttachmentsTab =
-      (!page._isBaltimore && !page._isFairfax) ||
       (page._isBaltimore && wantsBaltimoreAttachments) ||
-      (page._isFairfax && wantsFairfaxAttachments);
+      (page._isFairfax && wantsFairfaxAttachments) ||
+      (!page._isBaltimore && !page._isFairfax && !page._isArlington) ||
+      (page._isArlington && wantsArlingtonAttachments);
     if (wantsAttachmentsTab) {
       try {
         session.message = `${permitNumber} → Attachments`;
@@ -5248,12 +21583,170 @@ async function scrapeAccelaRecord(
         console.log(`  [scrape] Attachments section error: ${err.message}`);
       }
     } else {
-      const tabSkipLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
-      console.log(
-        `  [scrape] (skip) Attachments — ${tabSkipLabel} tab selection (attachments off)`,
-      );
+      if (page._isBaltimore || page._isFairfax) {
+        const tabSkipLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
+        console.log(
+          `  [scrape] (skip) Attachments — ${tabSkipLabel} tab selection (attachments off)`,
+        );
+      } else if (page._isArlington) {
+        console.log(
+          "  [scrape] (skip) Attachments — Arlington tab preset (attachments off)",
+        );
+      }
     }
     checkTimeout();
+
+    if (
+      page._isArlington &&
+      !isMinimalTabsPortal(page) &&
+      wantsArlingtonPlanReview
+    ) {
+      try {
+        session.message = `${permitNumber} → Plan Review`;
+        const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
+        if (!fs.existsSync(DOWNLOADS_ROOT)) {
+          fs.mkdirSync(DOWNLOADS_ROOT, { recursive: true });
+        }
+        const planReviewHashes = new Map();
+        /** @type {Record<string, unknown> | null} */
+        let arlingtonPriorPortalForPr = null;
+        if (supabase && userId) {
+          if (supabaseProjectId) {
+            const { data: prow } = await supabase
+              .from("projects")
+              .select("portal_data")
+              .eq("id", supabaseProjectId)
+              .maybeSingle();
+            arlingtonPriorPortalForPr = prow?.portal_data ?? null;
+          }
+          if (!arlingtonPriorPortalForPr) {
+            const { data: pr2 } = await supabase
+              .from("projects")
+              .select("portal_data")
+              .eq("permit_number", permitNumber)
+              .eq("user_id", userId)
+              .limit(1);
+            arlingtonPriorPortalForPr = pr2?.[0]?.portal_data ?? null;
+          }
+        }
+        planReview = await extractPlanReviewArlington(
+          page,
+          getExtractionContext(page),
+          {
+            DOWNLOADS_DIR: DOWNLOADS_ROOT,
+            supabaseProjectId,
+            uploadFn: uploadToSupabaseStorage,
+            sanitizeFn: sanitizeStorageKey,
+            downloadedHashes: planReviewHashes,
+            attachmentRows: attachments.attachments || [],
+            permitNumber,
+            priorPortalData: arlingtonPriorPortalForPr,
+            supabase,
+            userId,
+            hashPortalData,
+            scrapeDeadlineMs: startTime + TIMEOUT,
+            reserveMsForFinalSave:
+              ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
+            touchSessionKeepalive:
+              typeof session.touchSessionKeepalive === "function"
+                ? session.touchSessionKeepalive.bind(session)
+                : null,
+            _arlingtonSession: session,
+            forceRetryOversizedDownloads:
+              session.arlingtonPlanReviewRetryOversizedDownloads === true ||
+              arlingtonEnvForceRetryOversizedPlanReviewDownloads(),
+            planReviewScope: session.arlingtonPlanReviewScope,
+            planReviewMode: session.arlingtonPlanReviewMode,
+            downloadDocuments: session.arlingtonDownloadDocuments,
+          },
+        );
+        const arlPr = planReview?.arlingtonPlanReview;
+        if (arlPr?.partialPendingDownloads === true) {
+          session.arlingtonPlanReviewPartialPendingDownloads = true;
+        }
+        if (
+          arlPr?.scrapeStatus === "partial_pending_downloads" ||
+          arlPr?.runStats?.checkpointSaved === true
+        ) {
+          session.arlingtonPlanReviewCheckpointSaved = true;
+        }
+        if (arlPr?.runStats) {
+          session.arlingtonPlanReviewRunStats = arlPr.runStats;
+        }
+      } catch (err) {
+        console.log(
+          `  [scrape] Arlington Plan Review (deferred) error: ${err.message}`,
+        );
+      }
+      checkTimeout();
+    }
+
+    if (page._isArlington && wantsArlingtonPlanReview) {
+      planReview = finalizeArlingtonPlanReviewAfterAttachments(
+        planReview,
+        attachments.attachments,
+      );
+      const pt = planReview?.arlingtonPlanReview?.tabs;
+      if (pt && typeof pt === "object") {
+        arlingtonNewPlanReviewIntegratedEmpty =
+          arlingtonIntegratedPlanReviewIsEffectivelyEmpty(
+            /** @type {Record<string, unknown>} */ (pt),
+          );
+      }
+
+      if (
+        session.arlingtonAutoContinueDownloads === true &&
+        arlingtonPlanReviewScopeSupportsAutoContinue(
+          session.arlingtonPlanReviewScope,
+        )
+      ) {
+        const continueScope = arlingtonPlanReviewMapScrapeScopeToContinueScope(
+          session.arlingtonPlanReviewScope,
+        );
+        try {
+          session.message = `${permitNumber} → Continuing Plan Review downloads automatically...`;
+          const autoSummary = await runArlingtonPlanReviewAutoContinueLoop({
+            session,
+            projectId: supabaseProjectId,
+            userId,
+            permitNumber,
+            scope: continueScope,
+            maxCycles: session.arlingtonAutoContinueMaxCycles ?? 8,
+            delayMs: session.arlingtonAutoContinueDelayMs ?? 2000,
+            maxNoProgressCycles:
+              session.arlingtonAutoContinueMaxNoProgressCycles ?? 2,
+            supabase,
+            hashPortalData,
+            uploadToSupabaseStorage,
+            sanitizeStorageKey,
+          });
+          if (
+            autoSummary.finalStatus === "partial_success_plan_review_pending" ||
+            autoSummary.finalStatus === "partial_success_no_downloads"
+          ) {
+            session.arlingtonPlanReviewPartialPendingDownloads = true;
+            session.arlingtonPlanReviewCheckpointSaved = true;
+          } else if (autoSummary.finalStatus === "complete") {
+            session.arlingtonPlanReviewPartialPendingDownloads = false;
+          }
+          const pendingLeft = Number(autoSummary.pending) || 0;
+          const cyc = Number(autoSummary.cycles) || 0;
+          if (pendingLeft > 0) {
+            session.message = `${permitNumber} → Plan Review partially complete (${pendingLeft} pending after ${cyc} auto-continue cycle(s))`;
+          } else {
+            session.message = `${permitNumber} → Plan Review downloads complete (${cyc} auto-continue cycle(s))`;
+          }
+        } catch (autoErr) {
+          const autoMsg =
+            autoErr && autoErr.message ? autoErr.message : String(autoErr);
+          console.warn(
+            `  [scrape] Arlington Plan Review auto-continue error: ${autoMsg}`,
+          );
+          session.arlingtonPlanReviewPartialPendingDownloads = true;
+        }
+        checkTimeout();
+      }
+    }
 
     let inspections = {
       inspections: [],
@@ -5261,7 +21754,7 @@ async function scrapeAccelaRecord(
       completed: [],
       screenshot: null,
     };
-    if (!isMinimalTabsPortal(page)) {
+    if (!isMinimalTabsPortal(page) && (!page._isArlington || arlingtonExtras)) {
       try {
     session.message = `${permitNumber} → Inspections`;
         inspections = await extractInspections(page);
@@ -5269,41 +21762,119 @@ async function scrapeAccelaRecord(
         console.log(`  [scrape] Inspections section error: ${err.message}`);
       }
     } else {
-      console.log(
-        "  [scrape] (skip) Inspections — BALTIMORE_MINIMAL_PORTAL_TABS",
-      );
+      if (isMinimalTabsPortal(page)) {
+        console.log(
+          "  [scrape] (skip) Inspections — BALTIMORE_MINIMAL_PORTAL_TABS",
+        );
+      } else if (page._isArlington && !arlingtonExtras) {
+        console.log(
+          "  [scrape] (skip) Inspections — Arlington narrowed tab preset",
+        );
+      }
     }
     checkTimeout();
 
     let payments = { payments: [], screenshot: null };
-    if (!isMinimalTabsPortal(page)) {
+    if (!isMinimalTabsPortal(page) && !page._isArlington) {
       try {
     session.message = `${permitNumber} → Payments`;
         payments = await extractPayments(page);
       } catch (err) {
         console.log(`  [scrape] Payments section error: ${err.message}`);
       }
+    } else if (page._isArlington) {
+      console.log("  [scrape] (skip) Payments — Arlington tenant scope");
     } else {
       console.log("  [scrape] (skip) Payments — BALTIMORE_MINIMAL_PORTAL_TABS");
     }
 
     const isBaltimore = page._isBaltimore === true;
     const isFairfaxTenant = page._isFairfax === true;
+    const isArlingtonTenant = page._isArlington === true;
     const isBaltimoreOrFairfaxPayload = isBaltimore || isFairfaxTenant;
     const portalData = {
       portalType: "accela",
-      ...(isBaltimoreOrFairfaxPayload ? { schemaVersion: 2 } : {}),
+      ...(isBaltimoreOrFairfaxPayload || isArlingtonTenant
+        ? { schemaVersion: 2 }
+        : {}),
       name: header.record_number || permitNumber,
       projectNum: permitNumber,
       description: header.record_type || "",
       location:
+        (isArlingtonTenant &&
+          details.arlingtonRecordInfo?.workLocation?.text) ||
         details.fields["Work Location"] ||
         details.fields["Address"] ||
         details.fields["Location"] ||
         "",
       dashboardStatus: header.record_status || "",
       tabs: {
-        info: {
+        info: (() => {
+          if (
+            isArlingtonTenant &&
+            details.arlingtonRecordInfo &&
+            details.arlingtonRecordInfo.workLocation &&
+            Array.isArray(details.arlingtonRecordInfo.workLocation.lines) &&
+            details.arlingtonRecordInfo.workLocation.lines.length > 0
+          ) {
+            const ar = details.arlingtonRecordInfo;
+            const recordStatusDisplay = (header.record_status || "")
+              .replace(/^Record Status:\s*/i, "")
+              .trim();
+            const expirationDisplay = (header.expiration_date || "")
+              .replace(/^Expiration Date:\s*/i, "")
+              .trim();
+            return {
+              title: "Record Info",
+              jurisdiction: "arlington_county_va",
+              tables: details.tables || [],
+              fields: header,
+              keyValues: [
+                {
+                  key: "Record Number",
+                  value: header.record_number || "",
+                },
+                {
+                  key: "Record Type",
+                  value: header.record_type || "",
+                },
+                {
+                  key: "Record Status",
+                  value: recordStatusDisplay,
+                },
+                {
+                  key: "Expiration Date",
+                  value: expirationDisplay,
+                },
+                {
+                  key: "Work Location",
+                  value: ar.workLocation?.text || "",
+                },
+                {
+                  key: "Applicant",
+                  value:
+                    ar.applicant?.text ||
+                    (ar.applicant?.lines || []).join("\n") ||
+                    "",
+                },
+                {
+                  key: "Licensed Professional",
+                  value:
+                    ar.licensedProfessional?.text ||
+                    (ar.licensedProfessional?.lines || []).join("\n") ||
+                    "",
+                },
+                {
+                  key: "Owner",
+                  value:
+                    ar.owner?.text || (ar.owner?.lines || []).join("\n") || "",
+                },
+              ],
+              arlingtonRecordInfo: ar,
+              screenshot: details.screenshot,
+            };
+          }
+          return {
           tables: (() => {
             if (!isBaltimoreOrFairfaxPayload) return details.tables;
             const keepAlways = new Set([
@@ -5397,7 +21968,8 @@ async function scrapeAccelaRecord(
             });
           })(),
           screenshot: details.screenshot,
-        },
+        };
+        })(),
         status: {
           departments: processingStatus.departments,
           tables:
@@ -5430,7 +22002,9 @@ async function scrapeAccelaRecord(
                 ]
               : []),
             ...(planReview.text &&
-            (!isBaltimoreOrFairfaxPayload || planReview.comments.length > 0)
+            (!isBaltimoreOrFairfaxPayload ||
+              planReview.comments.length > 0 ||
+              isArlingtonTenant)
               ? [
                   {
                     fileName: "Plan Review - Review Comments",
@@ -5551,8 +22125,72 @@ async function scrapeAccelaRecord(
           keyValues: [],
           screenshot: relatedRecords.screenshot,
         },
+        planReview: (() => {
+          const base = {
+            comments: planReview.comments || [],
+            text: planReview.text || "",
+            screenshot: planReview.screenshot || null,
+            planReviewSummary: planReview.planReviewSummary || null,
+            downloadLinks: planReview.downloadLinks || [],
+          };
+          if (planReview.arlingtonPlanReview) {
+            const arlPr = planReview.arlingtonPlanReview;
+            return {
+              ...base,
+              used: arlPr.used,
+              message: arlPr.message,
+              source: arlPr.source || null,
+              tabs: arlPr.tabs,
+              jurisdiction: "arlington_county_va",
+              ...(arlPr.timeout === true ? { timeout: true } : {}),
+              tenantPlanReview: arlPr.tenantPlanReview || undefined,
+              ...(arlPr.partialPendingDownloads === true
+                ? { partialPendingDownloads: true }
+                : {}),
+              ...(arlPr.scrapeStatus ? { scrapeStatus: arlPr.scrapeStatus } : {}),
+              ...(arlPr.preservePreviousPlanReview === true
+                ? { preservePreviousPlanReview: true }
+                : {}),
+              ...(typeof arlPr.planReviewState?.shouldPersist === "boolean"
+                ? { shouldPersist: arlPr.planReviewState.shouldPersist }
+                : {}),
+            };
+          }
+          return base;
+        })(),
       },
     };
+
+    if (
+      page._isArlington &&
+      wantsArlingtonPlanReview &&
+      planReview?.arlingtonPlanReview?.planReviewState
+    ) {
+      const st = /** @type {Record<string, unknown>} */ (
+        planReview.arlingtonPlanReview.planReviewState
+      );
+      const iframeReadyVal = !!st.iframeReady;
+      const planSetValidVal = !!st.planSetValid;
+
+      const explicitMayNotPersist =
+        typeof st.shouldPersist === "boolean" && !st.shouldPersist;
+
+      const extractionFailedPersist =
+        explicitMayNotPersist ||
+        (!iframeReadyVal && !planSetValidVal);
+
+      if (extractionFailedPersist) {
+        portalData.planReviewLastError = {
+          type: iframeReadyVal
+            ? "plan_review_extraction_incomplete"
+            : "erms_iframe_not_ready",
+          message:
+            "Plan Review iframe did not load / OnBase session failed",
+          at: new Date().toISOString(),
+        };
+        session.arlingtonPartialSuccessPlanReviewFailed = true;
+      }
+    }
 
     if (isMinimalTabsPortal(page)) {
       const minimalTabs = {};
@@ -5576,7 +22214,116 @@ async function scrapeAccelaRecord(
       "(info = Record Details)",
     );
 
-    session.data[permitNumber] = portalData;
+    const arlingtonPrTabForResponse =
+      page._isArlington &&
+      portalData.tabs?.planReview &&
+      typeof portalData.tabs.planReview === "object"
+        ? /** @type {Record<string, unknown>} */ (portalData.tabs.planReview)
+        : null;
+    const arlingtonRestorePlanReviewForResponse =
+      !!arlingtonPrTabForResponse &&
+      (arlingtonPrTabForResponse.preservePreviousPlanReview === true ||
+        (typeof arlingtonPrTabForResponse.shouldPersist === "boolean" &&
+          arlingtonPrTabForResponse.shouldPersist === false));
+
+    if (
+      arlingtonRestorePlanReviewForResponse &&
+      supabase &&
+      userId
+    ) {
+      /** @type {Record<string, unknown> | null} */
+      let priorPdRestore = null;
+      if (supabaseProjectId) {
+        const { data: prow } = await supabase
+          .from("projects")
+          .select("portal_data")
+          .eq("id", supabaseProjectId)
+          .maybeSingle();
+        priorPdRestore = prow?.portal_data ?? null;
+      }
+      if (!priorPdRestore) {
+        const { data: pr2 } = await supabase
+          .from("projects")
+          .select("portal_data")
+          .eq("permit_number", permitNumber)
+          .eq("user_id", userId)
+          .limit(1);
+        priorPdRestore = pr2?.[0]?.portal_data ?? null;
+      }
+      const priorPr = priorPdRestore?.tabs?.planReview;
+      if (priorPr != null && typeof priorPr === "object") {
+        console.log(
+          "[Arlington][PlanReview] weak/failed extraction detected; preserving existing valid planReview for API response",
+        );
+        portalData.tabs.planReview =
+          structuredCloneWorksSafe(priorPr) ?? priorPr;
+      }
+      delete /** @type {Record<string, unknown>} */ (
+        portalData.tabs.planReview || {}
+      ).preservePreviousPlanReview;
+    }
+
+    let portalPayloadForDb = portalData;
+    if (
+      page._isArlington &&
+      arlingtonTabSet &&
+      !(
+        arlingtonTabSet.has("info") &&
+        arlingtonTabSet.has("attachments") &&
+        arlingtonTabSet.has("plan_review")
+      ) &&
+      supabase &&
+      userId
+    ) {
+      let priorPd = null;
+      if (supabaseProjectId) {
+        const { data: prow } = await supabase
+          .from("projects")
+          .select("portal_data")
+          .eq("id", supabaseProjectId)
+          .maybeSingle();
+        priorPd = prow?.portal_data ?? null;
+      }
+      if (!priorPd) {
+        const { data: pr2 } = await supabase
+          .from("projects")
+          .select("portal_data")
+          .eq("permit_number", permitNumber)
+          .eq("user_id", userId)
+          .limit(1);
+        priorPd = pr2?.[0]?.portal_data ?? null;
+      }
+      if (priorPd) {
+        portalPayloadForDb = mergeArlingtonPartialPortalData(
+          priorPd,
+          portalData,
+          arlingtonTabSet,
+        );
+        console.log(
+          "  [Arlington] merged partial scrape into existing portal_data (preserve untouched tabs)",
+        );
+      }
+    }
+
+    if (page._isArlington) {
+      const bytesBefore = portalDataUtf8ByteLength(portalPayloadForDb);
+      console.log("[PortalData] payload bytes before sanitize=", bytesBefore);
+      portalPayloadForDb =
+        sanitizeArlingtonPortalDataTabsPlanReviewForDb(portalPayloadForDb);
+      const bytesAfter = portalDataUtf8ByteLength(portalPayloadForDb);
+      const prWrap = portalPayloadForDb?.tabs?.planReview;
+      const planReviewBytes = portalDataUtf8ByteLength(
+        prWrap != null ? { tabs: { planReview: prWrap } } : { tabs: {} },
+      );
+      console.log("[PortalData] payload bytes after sanitize=", bytesAfter);
+      console.log("[PortalData] planReview bytes=", planReviewBytes);
+    }
+
+    arlingtonSyncSessionDataPortalPayload(
+      session,
+      permitNumber,
+      portalPayloadForDb,
+    );
 
     console.log(`  📊 Extraction summary: info.fields=${Object.keys(details.fields).length} | status.departments=${processingStatus.departments.length} | relatedRecords=${relatedRecords.records.length} | attachments=${attachments.attachments.length} | inspections=${inspections.inspections.length + inspections.upcoming.length + inspections.completed.length} | payments=${payments.payments.length}`);
 
@@ -5584,15 +22331,14 @@ async function scrapeAccelaRecord(
       session.message = `${permitNumber} → Syncing to database...`;
       console.log(`\n  💾 Syncing ${permitNumber} to Supabase...`);
       console.log(
-        `  📌 supabaseProjectId=${supabaseProjectId || "(none)"}, userId=${userId}, portalType=${portalData.portalType}`,
+        `  📌 supabaseProjectId=${supabaseProjectId || "(none)"}, userId=${userId}, portalType=${portalPayloadForDb.portalType}`,
       );
-      const newHash = hashPortalData(portalData);
 
       let existingRow = null;
       const selectFields =
         page._isBaltimore || page._isFairfax
           ? "id, portal_data_hash, portal_data, permit_number, user_id"
-          : "id, portal_data_hash";
+          : "id, portal_data_hash, portal_data";
 
       if (page._isBaltimore || page._isFairfax) {
         const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
@@ -5640,6 +22386,66 @@ async function scrapeAccelaRecord(
         }
       }
 
+      const arlingtonPlanReviewOnlyPersistSplice =
+        page._isArlington &&
+        arlingtonTabSet &&
+        arlingtonTabSet.size === 1 &&
+        arlingtonTabSet.has("plan_review");
+
+      if (
+        arlingtonPlanReviewOnlyPersistSplice &&
+        existingRow?.portal_data &&
+        portalDataUtf8ByteLength(portalPayloadForDb) >
+          PLAN_REVIEW_LARGE_PAYLOAD_FALLBACK_BYTES
+      ) {
+        const slimPr =
+          portalPayloadForDb.tabs && typeof portalPayloadForDb.tabs === "object"
+            ? /** @type {Record<string, unknown>} */ (
+                portalPayloadForDb.tabs
+              ).planReview
+            : null;
+        const beforeAll = portalDataUtf8ByteLength(portalPayloadForDb);
+        portalPayloadForDb = portalDataArlingtonSpliceMinimalPlanReviewUpdate(
+          existingRow.portal_data,
+          slimPr ?? {},
+        );
+        portalPayloadForDb =
+          sanitizeArlingtonPortalDataTabsPlanReviewForDb(portalPayloadForDb);
+        arlingtonSyncSessionDataPortalPayload(
+          session,
+          permitNumber,
+          portalPayloadForDb,
+        );
+        console.log(
+          `[PortalData] Arlington plan_review-only splice: ${beforeAll}b → ${portalDataUtf8ByteLength(portalPayloadForDb)}b (DB blob + sanitized planReview)`,
+        );
+      }
+
+      if (
+        page._isArlington &&
+        existingRow?.portal_data &&
+        portalPayloadForDb?.tabs &&
+        wantsArlingtonPlanReview
+      ) {
+        const preserved = arlingtonMaybePreservePlanReviewInPortalPayload(
+          portalPayloadForDb,
+          existingRow.portal_data,
+          { newIntegratedTabsEmpty: arlingtonNewPlanReviewIntegratedEmpty },
+        );
+        if (preserved) {
+          arlingtonSyncSessionDataPortalPayload(
+            session,
+            permitNumber,
+            portalPayloadForDb,
+          );
+          console.log(
+            "[Arlington][PlanReview] session.data synced with preserved planReview for API response",
+          );
+        }
+      }
+
+      const newHash = hashPortalData(portalPayloadForDb);
+
       const isLegacyBaltimore =
         (page._isBaltimore || page._isFairfax) &&
         existingRow?.portal_data &&
@@ -5675,7 +22481,7 @@ async function scrapeAccelaRecord(
         const updatePayload = {
           portal_status: header.record_status || "Scraped",
           last_checked_at: new Date().toISOString(),
-          portal_data: portalData,
+          portal_data: portalPayloadForDb,
           portal_data_hash: newHash,
           permit_number: permitNumber,
         };
@@ -5708,12 +22514,12 @@ async function scrapeAccelaRecord(
             name: header.record_number || permitNumber,
             permit_number: permitNumber,
             description: header.record_type || "",
-            address: portalData.location || "",
-            jurisdiction: portalData.jurisdiction || "Unknown",
+            address: portalPayloadForDb.location || "",
+            jurisdiction: portalPayloadForDb.jurisdiction || "Unknown",
             status: "draft",
             portal_status: header.record_status || "Unknown",
             last_checked_at: new Date().toISOString(),
-            portal_data: portalData,
+            portal_data: portalPayloadForDb,
             portal_data_hash: newHash,
           })
           .select("id, portal_data");
@@ -5742,10 +22548,48 @@ async function scrapeAccelaRecord(
       }
     }
 
-    console.log(`  ✅ Accela scrape complete for ${permitNumber}`);
-    return portalData;
+    const prIframeFailed =
+      page._isArlington &&
+      session.arlingtonPartialSuccessPlanReviewFailed === true;
+    const prPartial =
+      page._isArlington &&
+      (session.arlingtonPlanReviewPartialPendingDownloads === true ||
+        session.arlingtonPlanReviewTimedOutAfterProgress === true ||
+        (planReview?.arlingtonPlanReview &&
+          (planReview.arlingtonPlanReview.partialPendingDownloads === true ||
+            planReview.arlingtonPlanReview.scrapeStatus ===
+              "partial_pending_downloads")));
+    if (prIframeFailed) {
+      console.log(
+        `  ⚠️ Accela scrape finished for ${permitNumber} status=partial_success_plan_review_failed`,
+      );
+    } else if (prPartial) {
+      console.log(
+        `  ✅ Accela scrape complete for ${permitNumber} status=partial_pending_downloads`,
+      );
+    } else {
+      console.log(`  ✅ Accela scrape complete for ${permitNumber}`);
+    }
+
+    arlingtonSyncSessionDataPortalPayload(
+      session,
+      permitNumber,
+      portalPayloadForDb,
+    );
+
+    return portalPayloadForDb;
   } catch (err) {
     throw err;
+  } finally {
+    if (!hadScrapeActive) {
+      session._scrapeActive = false;
+      session._activePlanReviewDownloads = 0;
+      if (accelaSid) {
+        console.log(
+          `[Session][scrape] active=false sid=${accelaSid} flow=accela`,
+        );
+      }
+    }
   }
 }
 
@@ -5936,13 +22780,968 @@ async function extractBaltimoreRecordDetails(contentFrame) {
   }
 }
 
+const ARLINGTON_PLAN_REVIEW_CONTINUE_SCOPES = new Set([
+  "allPending",
+  "secondary",
+  "planSet",
+  "reviewResults",
+  "approvedDocuments",
+]);
+
+const ARLINGTON_PLAN_REVIEW_SCRAPE_SCOPES = new Set([
+  "metadataOnly",
+  "planSet",
+  "reviewResults",
+  "approvedDocuments",
+  "projectInformation",
+  "secondary",
+  "all",
+]);
+
+/** Scrape + continue download scope normalization (includes projectInformation). */
+function arlingtonNormalizePlanReviewActionScope(scope) {
+  const s = `${scope || "allPending"}`.trim();
+  if (s === "projectInformation" || s === "metadataOnly" || s === "all") {
+    return s;
+  }
+  return arlingtonPlanReviewNormalizeContinueScope(s);
+}
+
+/**
+ * Apply optional /api/scrape planReviewScope (defaults to tenant profile when omitted).
+ * @param {typeof ArlingtonAccelaProfile.planReview} tenantPrCfg
+ * @param {{ planReviewScope?: string; planReviewMode?: string; downloadDocuments?: boolean }} downloadCtx
+ */
+function arlingtonResolveScrapePlanReviewCfg(tenantPrCfg, downloadCtx) {
+  const cfg = { ...(tenantPrCfg || {}) };
+  let scope =
+    downloadCtx && downloadCtx.planReviewScope != null
+      ? `${downloadCtx.planReviewScope}`.trim()
+      : "";
+  if (!scope && downloadCtx?.planReviewMode === "metadataOnly") {
+    scope = "metadataOnly";
+  }
+  if (!scope && downloadCtx?.downloadDocuments === false) {
+    scope = "metadataOnly";
+  }
+  if (!scope || !ARLINGTON_PLAN_REVIEW_SCRAPE_SCOPES.has(scope)) {
+    return { prCfg: cfg, downloadScope: null };
+  }
+
+  if (scope === "metadataOnly") {
+    return {
+      prCfg: {
+        ...cfg,
+        downloadFromIntegratedIframe: false,
+        planReviewIncludeSecondaryTabs: true,
+        scopePlanSetDocumentsOnly: true,
+      },
+      downloadScope: "metadataOnly",
+    };
+  }
+
+  if (scope === "planSet") {
+    return {
+      prCfg: {
+        ...cfg,
+        planReviewIncludeSecondaryTabs: false,
+        scopePlanSetDocumentsOnly: true,
+        downloadFromIntegratedIframe: cfg.downloadFromIntegratedIframe !== false,
+      },
+      downloadScope: "planSet",
+    };
+  }
+
+  if (
+    scope === "reviewResults" ||
+    scope === "approvedDocuments" ||
+    scope === "secondary"
+  ) {
+    return {
+      prCfg: {
+        ...cfg,
+        planReviewIncludeSecondaryTabs: true,
+        scopePlanSetDocumentsOnly: true,
+        downloadFromIntegratedIframe: cfg.downloadFromIntegratedIframe !== false,
+      },
+      downloadScope: scope,
+    };
+  }
+
+  if (scope === "projectInformation") {
+    return {
+      prCfg: {
+        ...cfg,
+        planReviewIncludeSecondaryTabs: true,
+        scopePlanSetDocumentsOnly: true,
+        downloadFromIntegratedIframe: false,
+      },
+      downloadScope: "projectInformation",
+    };
+  }
+
+  if (scope === "all") {
+    return {
+      prCfg: {
+        ...cfg,
+        planReviewIncludeSecondaryTabs: true,
+        scopePlanSetDocumentsOnly: true,
+        downloadFromIntegratedIframe: cfg.downloadFromIntegratedIframe !== false,
+      },
+      downloadScope: "allPending",
+    };
+  }
+
+  return { prCfg: cfg, downloadScope: null };
+}
+
+/** @param {string} [scope] */
+function arlingtonPlanReviewNormalizeContinueScope(scope) {
+  const s = `${scope || "allPending"}`.trim();
+  return ARLINGTON_PLAN_REVIEW_CONTINUE_SCOPES.has(s) ? s : "allPending";
+}
+
+/** @param {string} scope @param {string} tabKey */
+function arlingtonPlanReviewScopeAllowsSecondaryTab(scope, tabKey) {
+  const s = arlingtonNormalizePlanReviewActionScope(scope);
+  if (s === "projectInformation") {
+    return tabKey === "projectInformation";
+  }
+  if (tabKey === "projectInformation") {
+    return s === "allPending" || s === "all" || s === "secondary";
+  }
+  if (s === "planSet") return false;
+  if (s === "reviewResults") return tabKey === "reviewResultsAndMarkups";
+  if (s === "approvedDocuments") return tabKey === "approvedDocuments";
+  if (s === "secondary") {
+    return (
+      tabKey === "reviewResultsAndMarkups" || tabKey === "approvedDocuments"
+    );
+  }
+  return (
+    tabKey === "reviewResultsAndMarkups" || tabKey === "approvedDocuments"
+  );
+}
+
+/** @param {string} scope */
+function arlingtonPlanReviewScopeAllowsPlanSet(scope) {
+  const s = arlingtonNormalizePlanReviewActionScope(scope);
+  if (
+    s === "projectInformation" ||
+    s === "reviewResults" ||
+    s === "approvedDocuments"
+  ) {
+    return false;
+  }
+  return s === "allPending" || s === "all" || s === "planSet" || s === "secondary";
+}
+
+/** @param {string} scope */
+function arlingtonPlanReviewScopeAllowsSecondary(scope) {
+  const s = arlingtonNormalizePlanReviewActionScope(scope);
+  return (
+    s === "allPending" ||
+    s === "all" ||
+    s === "secondary" ||
+    s === "reviewResults" ||
+    s === "approvedDocuments" ||
+    s === "projectInformation"
+  );
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} portalData
+ * @returns {Record<string, unknown> | null}
+ */
+function arlingtonPlanReviewHydrateIntegratedTabsFromPortalData(portalData) {
+  const prTab = portalData?.tabs?.planReview;
+  const tabs = prTab?.tabs;
+  if (!tabs || typeof tabs !== "object" || Array.isArray(tabs)) return null;
+  const hasStructure =
+    tabs.plansAndDocuments != null ||
+    tabs.reviewResultsAndMarkups != null ||
+    tabs.approvedDocuments != null;
+  if (!hasStructure) return null;
+  return structuredCloneWorksSafe(
+    /** @type {Record<string, unknown>} */ (tabs),
+  );
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ */
+function arlingtonPlanReviewCountSourceStats(integratedTabs) {
+  /** @param {unknown[] | undefined} docs */
+  const countDocs = (docs) => {
+    const list = Array.isArray(docs) ? docs : [];
+    let downloaded = 0;
+    let pending = 0;
+    for (const d of list) {
+      if (arlingtonErmsSinkDocLooksUploadComplete(d)) downloaded++;
+      else pending++;
+    }
+    return { total: list.length, downloaded, pending };
+  };
+  const ps =
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments?.documents;
+  const rr = integratedTabs?.reviewResultsAndMarkups?.documents;
+  const ad = integratedTabs?.approvedDocuments?.documents;
+  const psC = countDocs(Array.isArray(ps) ? ps : []);
+  const rrC = countDocs(Array.isArray(rr) ? rr : []);
+  const adC = countDocs(Array.isArray(ad) ? ad : []);
+  return {
+    planSetTotal: psC.total,
+    planSetDownloaded: psC.downloaded,
+    planSetPending: psC.pending,
+    reviewResultsTotal: rrC.total,
+    reviewResultsDownloaded: rrC.downloaded,
+    reviewResultsPending: rrC.pending,
+    approvedTotal: adC.total,
+    approvedDownloaded: adC.downloaded,
+    approvedPending: adC.pending,
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} integratedTabs
+ * @param {Record<string, unknown> | null | undefined} dc
+ * @param {string} scope
+ * @param {string} permitNumber
+ * @param {string} projectId
+ */
+function arlingtonPlanReviewBuildContinueResponse(
+  integratedTabs,
+  dc,
+  scope,
+  permitNumber,
+  projectId,
+) {
+  const scopeNorm = arlingtonPlanReviewNormalizeContinueScope(scope);
+  const stats = arlingtonPlanReviewCountSourceStats(integratedTabs);
+  const pendingByReason = arlingtonPlanReviewPendingByReason(
+    integratedTabs,
+    scopeNorm,
+  );
+  const pendingTotal = Object.values(pendingByReason).reduce((a, b) => a + b, 0);
+  const downloadedThisRun = Number(dc?.planReviewDownloadsSucceededThisRun) || 0;
+  const attemptedThisRun = Number(dc?.planReviewDownloadsAttemptedThisRun) || 0;
+  const skippedAlreadyDownloaded =
+    Number(dc?.planReviewSkippedAlreadyDownloadedThisRun) || 0;
+  const stoppedReason =
+    `${dc?.planReviewStoppedReason || ""}`.trim() ||
+    (pendingTotal > 0 ? "pending_remain" : "complete");
+  let status = "complete";
+  if (pendingTotal > 0) {
+    status =
+      downloadedThisRun > 0
+        ? "partial_success_plan_review_pending"
+        : "partial_success_no_downloads";
+  }
+  return {
+    status,
+    scope: scopeNorm,
+    permitNumber,
+    projectId,
+    ...stats,
+    downloadedThisRun,
+    attemptedThisRun,
+    skippedAlreadyDownloaded,
+    pendingByReason,
+    stoppedReason,
+    nextRecommendedScope: arlingtonPlanReviewNextRecommendedScope(
+      integratedTabs,
+      dc,
+    ),
+  };
+}
+
+/** @param {string} [planReviewScope] Scrape or continue scope label. */
+function arlingtonPlanReviewScopeSupportsAutoContinue(planReviewScope) {
+  const raw = `${planReviewScope || ""}`.trim();
+  if (!raw || raw === "projectInformation" || raw === "metadataOnly") {
+    return false;
+  }
+  if (raw === "all" || raw === "allPending") return true;
+  const norm = arlingtonNormalizePlanReviewActionScope(raw);
+  return (
+    norm === "allPending" ||
+    norm === "planSet" ||
+    norm === "reviewResults" ||
+    norm === "approvedDocuments" ||
+    norm === "secondary"
+  );
+}
+
+/** @param {string} [planReviewScope] */
+function arlingtonPlanReviewMapScrapeScopeToContinueScope(planReviewScope) {
+  const raw = `${planReviewScope || ""}`.trim();
+  if (raw === "all") return "allPending";
+  return arlingtonPlanReviewNormalizeContinueScope(raw);
+}
+
+/** @param {Record<string, number>} pendingByReason */
+function arlingtonPlanReviewOnlyNonRetryablePendingRemain(pendingByReason) {
+  const entries = Object.entries(pendingByReason || {}).filter(
+    ([, n]) => Number(n) > 0,
+  );
+  if (entries.length === 0) return false;
+  return entries.every(([key]) => {
+    const k = `${key}`.trim().toLowerCase();
+    return (
+      k === "failed_non_retryable" ||
+      k === "duplicate_skipped" ||
+      k === "already_downloaded" ||
+      k.includes("non_retryable") ||
+      k.includes("unavailable") ||
+      k === "pending_tab_not_resolved" ||
+      k === "pending_token_missing"
+    );
+  });
+}
+
+/** @param {Record<string, number>} pendingByReason */
+function arlingtonPlanReviewPendingCount(pendingByReason) {
+  return Object.values(pendingByReason || {}).reduce(
+    (a, b) => a + (Number(b) || 0),
+    0,
+  );
+}
+
+/** @param {Record<string, unknown>} session */
+function arlingtonPlanReviewSessionIsUsable(session) {
+  try {
+    return !!(
+      session?.page &&
+      session?.browser &&
+      typeof session.browser.isConnected === "function" &&
+      session.browser.isConnected()
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * In-process auto-continue loop after initial Arlington Plan Review scrape phase.
+ * @param {object} opts
+ */
+async function runArlingtonPlanReviewAutoContinueLoop(opts) {
+  const {
+    session,
+    projectId,
+    userId,
+    permitNumber,
+    scope,
+    maxCycles = 8,
+    delayMs = 2000,
+    maxNoProgressCycles = 2,
+    supabase,
+    hashPortalData,
+    uploadToSupabaseStorage,
+    sanitizeStorageKey,
+    initialResultOrStats,
+  } = opts;
+
+  const logP = "[Arlington][PlanReview][AutoContinue]";
+  const scopeNorm = arlingtonPlanReviewNormalizeContinueScope(scope);
+  const permit = `${permitNumber || ""}`.trim();
+  const projId = `${projectId || ""}`.trim();
+
+  if (!arlingtonPlanReviewScopeSupportsAutoContinue(scope)) {
+    console.log(`${logP} skipped scope=${scopeNorm} (not a document auto-continue scope)`);
+    return {
+      stoppedReason: "scope_not_supported",
+      cycles: 0,
+      pending: 0,
+      finalStatus: "complete",
+    };
+  }
+
+  if (!arlingtonPlanReviewSessionIsUsable(session)) {
+    console.log(`${logP} stopping reason=session_invalid cycles=0 pending=?`);
+    return {
+      stoppedReason: "session_invalid",
+      cycles: 0,
+      pending: 0,
+      finalStatus: "partial_success_plan_review_pending",
+    };
+  }
+
+  console.log(
+    `${logP} enabled scope=${scopeNorm} maxCycles=${maxCycles}`,
+  );
+
+  let cycle = 0;
+  let noProgressCycles = 0;
+  /** @type {Record<string, unknown>|null} */
+  let lastResult =
+    initialResultOrStats && typeof initialResultOrStats === "object"
+      ? initialResultOrStats
+      : null;
+  let stoppedReason = "complete";
+  let finalStatus = "complete";
+
+  const sleep = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+  while (cycle < maxCycles) {
+    if (session._cancelRequested) {
+      stoppedReason = "cancelled";
+      finalStatus = "partial_success_plan_review_pending";
+      break;
+    }
+
+    if (!arlingtonPlanReviewSessionIsUsable(session)) {
+      stoppedReason = "session_invalid";
+      finalStatus = "partial_success_plan_review_pending";
+      break;
+    }
+
+    const pendingBefore = lastResult?.pendingByReason
+      ? arlingtonPlanReviewPendingCount(
+          /** @type {Record<string, number>} */ (lastResult.pendingByReason),
+        )
+      : null;
+
+    console.log(
+      `${logP} cycle=${cycle + 1} pendingBefore=${pendingBefore != null ? pendingBefore : "?"}`,
+    );
+
+    if (pendingBefore === 0 && (cycle > 0 || lastResult)) {
+      stoppedReason = "complete";
+      finalStatus = "complete";
+      session.arlingtonPlanReviewPartialPendingDownloads = false;
+      break;
+    }
+
+    if (cycle > 0) {
+      session.message = `${permit} → Continuing pending Plan Review downloads automatically...`;
+      await sleep(delayMs);
+    }
+
+    let result;
+    try {
+      result = await continueArlingtonPlanReviewDownloads(session, {
+        projectId: projId,
+        permitNumber: permit,
+        userId,
+        supabase,
+        hashPortalData,
+        uploadToSupabaseStorage,
+        sanitizeStorageKey,
+        scope: scopeNorm,
+      });
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      if (/browser|page|session|not available|not found/i.test(msg)) {
+        stoppedReason = "session_invalid";
+      } else if (/auth|login|sign in|navigation|Plan Review tab/i.test(msg)) {
+        stoppedReason = "auth_or_navigation_failure";
+        finalStatus = "failed";
+      } else {
+        stoppedReason = "error";
+        finalStatus = "partial_success_plan_review_pending";
+      }
+      console.log(
+        `${logP} stopping reason=${stoppedReason} cycles=${cycle + 1} pending=?`,
+      );
+      session.arlingtonPlanReviewPartialPendingDownloads = true;
+      return {
+        stoppedReason,
+        cycles: cycle + 1,
+        pending: pendingBefore ?? 0,
+        finalStatus,
+        error: msg,
+      };
+    }
+
+    lastResult = result;
+    const pendingAfter = arlingtonPlanReviewPendingCount(result.pendingByReason);
+    const downloaded = Number(result.downloadedThisRun) || 0;
+    const attempted = Number(result.attemptedThisRun) || 0;
+
+    console.log(
+      `${logP} cycle=${cycle + 1} downloadedThisRun=${downloaded} attemptedThisRun=${attempted} pendingAfter=${pendingAfter} status=${result.status}`,
+    );
+
+    if (result.status === "complete" || pendingAfter === 0) {
+      stoppedReason = "complete";
+      finalStatus = "complete";
+      session.arlingtonPlanReviewPartialPendingDownloads = false;
+      break;
+    }
+
+    if (downloaded > 0 || attempted > 0) {
+      noProgressCycles = 0;
+    } else {
+      noProgressCycles += 1;
+    }
+
+    if (noProgressCycles >= maxNoProgressCycles) {
+      stoppedReason = "no_progress";
+      finalStatus = "partial_success_plan_review_pending";
+      session.arlingtonPlanReviewPartialPendingDownloads = true;
+      break;
+    }
+
+    if (arlingtonPlanReviewOnlyNonRetryablePendingRemain(result.pendingByReason)) {
+      stoppedReason = "only_non_retryable_remaining";
+      finalStatus = "partial_success_plan_review_pending";
+      session.arlingtonPlanReviewPartialPendingDownloads = true;
+      break;
+    }
+
+    if (cycle + 1 >= maxCycles) {
+      stoppedReason = "max_cycles";
+      finalStatus = "partial_success_plan_review_pending";
+      session.arlingtonPlanReviewPartialPendingDownloads = true;
+      break;
+    }
+
+    finalStatus =
+      result.status === "partial_success_no_downloads"
+        ? "partial_success_no_downloads"
+        : "partial_success_plan_review_pending";
+    session.arlingtonPlanReviewPartialPendingDownloads = true;
+    session.arlingtonPlanReviewCheckpointSaved = true;
+
+    cycle += 1;
+  }
+
+  const pendingEnd = lastResult?.pendingByReason
+    ? arlingtonPlanReviewPendingCount(
+        /** @type {Record<string, number>} */ (lastResult.pendingByReason),
+      )
+    : 0;
+
+  console.log(
+    `${logP} stopping reason=${stoppedReason} cycles=${cycle + (lastResult ? 1 : 0)} pending=${pendingEnd}`,
+  );
+
+  if (finalStatus === "complete") {
+    session.arlingtonPlanReviewPartialPendingDownloads = false;
+  }
+
+  return {
+    stoppedReason,
+    cycles: cycle + (lastResult ? 1 : 0),
+    pending: pendingEnd,
+    finalStatus,
+    lastResult,
+  };
+}
+
+/**
+ * @param {object} opts
+ * @returns {Promise<{ planSetDomDownloads: number }>}
+ */
+async function runArlingtonPlanReviewContinueDownloadPhases(opts) {
+  const {
+    page,
+    domTarget,
+    integratedTabs,
+    sharedGridCtx,
+    sink,
+    attachmentDedupeKeys,
+    prSeenRowKeys,
+    downloadedHashes,
+    planSetErmsOrigin,
+    downloadCtx,
+    scope,
+    logPrefix = "[Arlington][PlanReview][Continue]",
+  } = opts;
+
+  let planSetDomDownloads = 0;
+  if (!sharedGridCtx) return { planSetDomDownloads };
+
+  const scopeNorm = arlingtonPlanReviewNormalizeContinueScope(scope);
+  arlingtonPlanReviewInitDownloadManager(sharedGridCtx, {
+    continueRun: true,
+    logPrefix,
+  });
+  arlingtonPlanReviewLogDownloadQueueStart(
+    integratedTabs,
+    sharedGridCtx,
+    logPrefix,
+  );
+
+  if (arlingtonPlanReviewScopeAllowsSecondary(scopeNorm)) {
+    await runArlingtonSecondaryTabsDownloadPhase({
+      page,
+      domTarget,
+      integratedTabs,
+      sharedGridCtx,
+      attachmentDedupeKeys,
+      prSeenRowKeys,
+      downloadedHashes,
+      planSetErmsOrigin,
+      downloadCtx,
+      scope: scopeNorm,
+      logPrefix,
+    });
+  }
+
+  if (
+    arlingtonPlanReviewScopeAllowsPlanSet(scopeNorm) &&
+    !sharedGridCtx.planReviewDownloadsAbortedDeadline &&
+    Array.isArray(sink) &&
+    sink.length
+  ) {
+    const psArr = sink;
+    const pendingPs = psArr.filter(
+      (d) => !arlingtonErmsSinkDocLooksUploadComplete(d),
+    ).length;
+    console.log(
+      `${logPrefix} source=planSet total=${psArr.length} pending=${pendingPs} downloaded=${psArr.length - pendingPs}`,
+    );
+
+    await clickArlingtonPlanReviewSubTab(page, "Plans & Documents");
+    await page.waitForTimeout(650).catch(() => {});
+    await clickArlingtonIntegratedNestedTab(page, "Plan Set Documents").catch(
+      () => false,
+    );
+    await page.waitForTimeout(650).catch(() => {});
+
+    const refreshed = await waitForArlingtonPlanReviewIframeReady(page, 30000);
+    const dlTarget = refreshed || domTarget;
+
+    planSetDomDownloads = await downloadArlingtonPlanSetDocumentsForSink(
+      page,
+      dlTarget,
+      sink,
+      {
+        attachmentDedupeKeys,
+        prSeenRowKeys,
+        downloadedHashes,
+        downloadCtx: sharedGridCtx,
+        ermsOrigin: planSetErmsOrigin,
+        downloadSource: "planSet",
+      },
+    );
+    console.log(
+      `${logPrefix} Plan Set Documents rows=${sink.length} downloads=${planSetDomDownloads}`,
+    );
+  }
+
+  arlingtonPlanReviewFinalizeRunStats(
+    integratedTabs,
+    sharedGridCtx,
+    downloadCtx,
+  );
+
+  const saver = sharedGridCtx.savePlanReviewCheckpoint;
+  if (typeof saver === "function") {
+    await saver("continueDownloadsEnd", {
+      downloaded: Number(sharedGridCtx.planReviewDownloadsSucceededThisRun) || 0,
+      pending: arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(
+        integratedTabs,
+      ),
+      scope: scopeNorm,
+    }).catch(() => {});
+    arlingtonPlanReviewMarkCheckpointSaved(sharedGridCtx);
+  }
+
+  return { planSetDomDownloads };
+}
+
+/**
+ * Resume pending Arlington Plan Review downloads from saved portal_data/checkpoint.
+ * @param {Record<string, unknown>} session
+ */
+async function continueArlingtonPlanReviewDownloads(
+  session,
+  {
+    projectId,
+    permitNumber,
+    userId,
+    supabase,
+    hashPortalData,
+    uploadToSupabaseStorage,
+    sanitizeStorageKey,
+    scope: scopeRaw,
+  },
+) {
+  const scope = arlingtonPlanReviewNormalizeContinueScope(scopeRaw);
+  const logPrefix = "[Arlington][PlanReview][Continue]";
+  const permit = `${permitNumber || ""}`.trim();
+  const projId = `${projectId || ""}`.trim();
+
+  console.log(
+    `${logPrefix} start permit=${permit} projectId=${projId || "(none)"} scope=${scope}`,
+  );
+
+  const page = session.page;
+  if (!page || !session.browser || !session.browser.isConnected()) {
+    throw new Error("Session browser or page is not available");
+  }
+
+  const portalUrlStr = `${session.portalUrl || ""}`;
+  if (!portalUrlStr.toUpperCase().includes("ARLINGTONCO")) {
+    throw new Error("Continue Plan Review downloads requires an Arlington Accela session");
+  }
+
+  page._isArlington = true;
+
+  if (!userId || !supabase || typeof hashPortalData !== "function") {
+    throw new Error("userId, supabase, and hashPortalData are required");
+  }
+
+  const selectFields = "id, portal_data, permit_number, user_id";
+  let portalData = null;
+  if (projId) {
+    const { data: rows } = await supabase
+      .from("projects")
+      .select(selectFields)
+      .eq("id", projId)
+      .limit(1);
+    portalData = rows?.[0]?.portal_data ?? null;
+  }
+  if (!portalData && permit) {
+    const { data: rows } = await supabase
+      .from("projects")
+      .select(selectFields)
+      .eq("permit_number", permit)
+      .eq("user_id", userId)
+      .limit(1);
+    portalData = rows?.[0]?.portal_data ?? null;
+  }
+
+  const integratedTabs =
+    arlingtonPlanReviewHydrateIntegratedTabsFromPortalData(portalData);
+  if (!integratedTabs) {
+    throw new Error(
+      "Saved Plan Review metadata is missing or unusable — run a normal scrape with plan_review first",
+    );
+  }
+
+  const priorPortal =
+    portalData && typeof portalData === "object"
+      ? structuredCloneWorksSafe(portalData)
+      : null;
+
+  arlingtonResumePlanReviewDownloadsFromPrior(
+    integratedTabs,
+    priorPortal,
+    true,
+    {
+      forceRetryOversized:
+        session.arlingtonPlanReviewRetryOversizedDownloads === true ||
+        arlingtonEnvForceRetryOversizedPlanReviewDownloads(),
+      configuredMaxUploadBytes: getSupabaseStorageObjectMaxBytes(),
+    },
+  );
+
+  const attachmentDedupeKeys = new Set();
+  const prSeenRowKeys = new Set();
+  const downloadedHashes =
+    session._downloadedHashes instanceof Map
+      ? session._downloadedHashes
+      : new Map();
+
+  const pathMod = require("path");
+  const fsMod = require("fs");
+  const DOWNLOADS_ROOT = pathMod.join(__dirname, "downloads");
+  if (!fsMod.existsSync(DOWNLOADS_ROOT)) {
+    fsMod.mkdirSync(DOWNLOADS_ROOT, { recursive: true });
+  }
+
+  const wallStart = Date.now();
+  const scrapeDeadlineMs = wallStart + ARLINGTON_PLAN_REVIEW_CONTINUE_WALL_MS;
+
+  /** @type {string|null} */
+  let screenshotBase64 = await page
+    .screenshot({ fullPage: true })
+    .catch(() => null);
+  screenshotBase64 = screenshotBase64
+    ? screenshotBase64.toString("base64")
+    : null;
+
+  const sink =
+    integratedTabs?.plansAndDocuments?.sections?.planSetDocuments
+      ?.documents || [];
+
+  const downloadCtx = {
+    DOWNLOADS_DIR: DOWNLOADS_ROOT,
+    supabaseProjectId: projId,
+    uploadFn: uploadToSupabaseStorage,
+    sanitizeFn: sanitizeStorageKey,
+    downloadedHashes,
+    attachmentRows: [],
+    permitNumber: permit,
+    priorPortalData: priorPortal,
+    supabase,
+    userId,
+    hashPortalData,
+    scrapeDeadlineMs,
+    reserveMsForFinalSave: ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
+    touchSessionKeepalive:
+      typeof session.touchSessionKeepalive === "function"
+        ? session.touchSessionKeepalive.bind(session)
+        : null,
+    _arlingtonSession: session,
+    forceRetryOversizedDownloads:
+      session.arlingtonPlanReviewRetryOversizedDownloads === true,
+  };
+
+  const sharedGridCtx = {
+    DOWNLOADS_DIR: DOWNLOADS_ROOT,
+    supabaseProjectId: projId,
+    permitNumber: permit,
+    uploadFn: uploadToSupabaseStorage,
+    sanitizeFn: sanitizeStorageKey,
+    downloadedHashes,
+    supabaseStorageObjectMaxBytes: getSupabaseStorageObjectMaxBytes(),
+    forceRetryOversizedDownloads:
+      downloadCtx.forceRetryOversizedDownloads === true,
+    planReviewIntegratedTabs: integratedTabs,
+    touchSessionKeepalive: downloadCtx.touchSessionKeepalive,
+    _arlingtonSession: session,
+    ermsVerificationToken: "",
+    scrapeDeadlineMs,
+    reserveMsForFinalSave: ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
+    planReviewDownloadsSinceCheckpoint: 0,
+    planReviewDownloadsAbortedDeadline: false,
+    planReviewPartialPendingDownloads: false,
+    planReviewDownloadsAttemptedThisRun: 0,
+  };
+
+  const runPlanReviewPersistCheckpoint = async (
+    phase,
+    /** @type {Record<string, unknown>} */ extra,
+  ) => {
+    const inc =
+      arlingtonCountPlanReviewIncompleteDocsAcrossIntegratedTabs(integratedTabs);
+    const partial =
+      inc > 0 ||
+      sharedGridCtx.planReviewDownloadsAbortedDeadline === true ||
+      sharedGridCtx.planReviewPartialPendingDownloads === true;
+    const slice = buildArlingtonPlanReviewCheckpointTabSlice({
+      integratedTabs,
+      screenshotBase64,
+      combinedText:
+        typeof extra.text === "string"
+          ? `${extra.text}`
+          : `[Arlington][PlanReview][Continue] checkpoint phase=${phase}`,
+      partialPendingDownloads: partial,
+      scrapeStatus: partial ? "partial_pending_downloads" : undefined,
+    });
+    await persistArlingtonPlanReviewCheckpoint({
+      supabase,
+      userId,
+      supabaseProjectId: projId,
+      permitNumber: permit,
+      hashPortalData,
+      planReviewTabPayload: slice,
+    });
+    arlingtonPlanReviewMarkCheckpointSaved(sharedGridCtx);
+    arlingtonPlanReviewMarkCheckpointSaved(downloadCtx);
+  };
+
+  sharedGridCtx.savePlanReviewCheckpoint = async (phaseTag, xs) => {
+    const x =
+      xs && typeof xs === "object" && !Array.isArray(xs)
+        ? /** @type {Record<string, unknown>} */ (xs)
+        : {};
+    await runPlanReviewPersistCheckpoint(String(phaseTag || ""), x);
+  };
+
+  await runPlanReviewPersistCheckpoint("continueHydrate", {}).catch(() => {});
+
+  if (!isArlingtonCapDetailPage(page)) {
+    session.message = `${permit} → Searching...`;
+    await searchPermit(page, portalUrlStr, permit);
+  }
+
+  await ensureArlingtonRecordInfoActive(page);
+
+  const prActivate = await ensureArlingtonPlanReviewActive(page);
+  if (!prActivate.ok) {
+    throw new Error("Plan Review tab not found on Accela record");
+  }
+
+  await page.waitForTimeout(1200).catch(() => {});
+  await waitForAccelaLoad(page).catch(() => {});
+
+  const prFrame =
+    (await waitForArlingtonPlanReviewErmsShellReady(page, 60000)) ||
+    (await waitForArlingtonPlanReviewIframeReady(page, 45000));
+  if (!prFrame) {
+    throw new Error("Plan Review ERMS iframe not ready");
+  }
+
+  await dismissBlockingModalsInArlingtonPlanReviewFrame(prFrame);
+
+  let planSetErmsOrigin = "";
+  try {
+    planSetErmsOrigin = new URL(prFrame.url()).origin;
+  } catch (_) {
+    /**/
+  }
+
+  try {
+    await runArlingtonPlanReviewContinueDownloadPhases({
+      page,
+      domTarget: prFrame,
+      integratedTabs,
+      sharedGridCtx,
+      sink,
+      attachmentDedupeKeys,
+      prSeenRowKeys,
+      downloadedHashes,
+      planSetErmsOrigin,
+      downloadCtx,
+      scope,
+      logPrefix,
+    });
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.warn(`${logPrefix} error during download phases: ${msg}`);
+    await runPlanReviewPersistCheckpoint("continueError", { text: msg }).catch(
+      () => {},
+    );
+    throw err;
+  }
+
+  const response = arlingtonPlanReviewBuildContinueResponse(
+    integratedTabs,
+    sharedGridCtx,
+    scope,
+    permit,
+    projId,
+  );
+
+  const pendingTotal = Object.values(response.pendingByReason).reduce(
+    (a, b) => a + b,
+    0,
+  );
+  console.log(
+    `${logPrefix} stopping reason=${response.stoppedReason} downloadedThisRun=${response.downloadedThisRun} pending=${pendingTotal}`,
+  );
+  console.log(
+    `${logPrefix} status=${response.status} pending=${pendingTotal} pendingByReason=${JSON.stringify(response.pendingByReason)} nextRecommendedScope=${response.nextRecommendedScope}`,
+  );
+
+  if (response.status === "partial_success_plan_review_pending") {
+    session.arlingtonPlanReviewPartialPendingDownloads = true;
+    session.arlingtonPlanReviewCheckpointSaved = true;
+  } else if (response.status === "complete") {
+    session.arlingtonPlanReviewPartialPendingDownloads = false;
+  }
+
+  return response;
+}
+
 module.exports = {
   accelaLogin,
   scrapeAccelaRecord,
+  continueArlingtonPlanReviewDownloads,
+  arlingtonPlanReviewScopeSupportsAutoContinue,
   findLinkInAnyContext,
   clickAndWaitForContent,
   navigateToRecordInfoSection,
   navigateToPaymentsSection,
+  resolveAccelaTenantProfile,
+  isArlingtonPortal,
 };
 
 /*

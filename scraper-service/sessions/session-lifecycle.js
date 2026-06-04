@@ -25,9 +25,13 @@ function createSessionLifecycle(sessions) {
   function cleanupSession(sid, reason = "unknown") {
     const s = sessions[sid];
     if (!s) return;
-    if (reason === "idle_timeout" && s._scrapeActive === true) {
+    const activePrDl = Number(s._activePlanReviewDownloads) || 0;
+    if (
+      reason === "idle_timeout" &&
+      (s._scrapeActive === true || activePrDl > 0)
+    ) {
       console.log(
-        `[Session][cleanup] skipped sid=${sid} reason=idle_timeout scrapeActive=true`,
+        `[Session][cleanup] skipped sid=${sid} reason=idle_timeout scrapeActive=${!!s._scrapeActive} activePlanReviewDownloads=${activePrDl}`,
       );
       rearmSessionIdleTimeout(sid);
       return;

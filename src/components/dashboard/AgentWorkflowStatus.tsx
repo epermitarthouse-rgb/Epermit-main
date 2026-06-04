@@ -13,7 +13,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
-import { useScrape } from "@/contexts/ScrapeContext";
+import {
+  useScrape,
+  getPersistedAccelaSessionForProject,
+  getPersistedScrapeSessionForProject,
+} from "@/contexts/ScrapeContext";
+import { isArlingtonAccelaStaleSessionScrapeError } from "@/lib/arlingtonAccelaSession";
+import {
+  arlingtonPlanReviewDocumentScrapeOpts,
+  arlingtonPlanReviewProjectInformationScrapeOpts,
+  type ArlingtonScrapeTabOpts,
+} from "@/lib/arlingtonPlanReviewScrapeScope";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
@@ -34,6 +44,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  isArlingtonPortal,
   isBaltimorePortal,
   isFairfaxPortal,
   isMontgomeryProjectDoxPortalCredential,
@@ -607,6 +618,7 @@ export function AgentWorkflowStatus() {
   );
   const isBaltimoreCred = isBaltimorePortal(linkedPortalCredential ?? null);
   const isFairfaxCred = isFairfaxPortal(linkedPortalCredential ?? null);
+  const isArlingtonCred = isArlingtonPortal(linkedPortalCredential ?? null);
   const isMinimalTabsCred = isBaltimoreCred || isFairfaxCred;
 
   const [washingtonScrapeTabs, setWashingtonScrapeTabs] = useState<
@@ -1082,6 +1094,8 @@ export function AgentWorkflowStatus() {
     washingtonOpts?: { tabs: string[]; targetFolders?: string[] },
     baltimoreOpts?: { tabs: string[] },
     fairfaxOpts?: { tabs: string[] },
+    arlingtonOpts?: ArlingtonScrapeTabOpts,
+    runOpts?: { arlingtonPortalMonitor?: boolean },
   ) => {
     const projectIdToUse = projectBySelectedId?.id ?? latestProjectId;
     const permitNumberToUse =
@@ -1145,38 +1159,26 @@ export function AgentWorkflowStatus() {
         );
       }
 
-      toast.info("Logging into portal...");
+      const useArlingtonCustomTabsEarly =
+        isArlingtonCred &&
+        !!arlingtonOpts?.tabs &&
+        arlingtonOpts.tabs.length > 0;
 
-      let loginRes: Response;
-      try {
-        loginRes = await fetch(`${SCRAPER_URL}/api/login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ credentialId, portalUrl: loginUrl }),
-        });
-      } catch (fetchErr) {
-        throw new Error("SCRAPER_OFFLINE");
-      }
+      const arlingtonPortalMonitor =
+        runOpts?.arlingtonPortalMonitor === true &&
+        useArlingtonCustomTabsEarly;
 
-      if (!loginRes.ok) {
-        const errData = await loginRes.json().catch(() => ({}));
-        throw new Error(
-          errData.error || `Scraper login failed (${loginRes.status})`,
-        );
-      }
-
-      const loginData = (await loginRes.json()) as { sessionId?: string };
-      const { sessionId } = loginData;
-      if (!sessionId || String(sessionId).trim() === "") {
-        throw new Error(
-          "Login succeeded but response had no sessionId — cannot start scrape.",
-        );
-      }
-
-      toast.success("Scraping started — you can continue using the app.");
+      const resolveAccelaSessionForProject = (projId: string): string | null => {
+        const fromState = `${scrape.accelaSessionId || ""}`.trim();
+        if (fromState) return fromState;
+        const persisted = getPersistedAccelaSessionForProject(projId);
+        if (persisted?.sessionId) return persisted.sessionId;
+        const legacyActive = `${scrape.activeSessionId || ""}`.trim();
+        if (legacyActive) return legacyActive;
+        const legacyScrape = getPersistedScrapeSessionForProject(projId);
+        if (legacyScrape?.sessionId) return legacyScrape.sessionId;
+        return null;
+      };
 
       const useWashingtonCustomTabs =
         isWashingtonProjectDoxCred &&
@@ -1193,49 +1195,149 @@ export function AgentWorkflowStatus() {
         !!fairfaxOpts?.tabs &&
         fairfaxOpts.tabs.length > 0;
 
-      const scrapeBody: Record<string, unknown> = {
-        sessionId,
-        permitNumber: String(permitNumberToUse).trim(),
-        userId: user!.id,
-        projectId: projectIdToUse,
-      };
+      const useArlingtonCustomTabs =
+        isArlingtonCred &&
+        !!arlingtonOpts?.tabs &&
+        arlingtonOpts.tabs.length > 0;
 
-      if (useBaltimoreCustomTabs) {
-        scrapeBody.tabs = baltimoreOpts!.tabs;
-      } else if (useFairfaxCustomTabs) {
-        scrapeBody.tabs = fairfaxOpts!.tabs;
-      } else if (useWashingtonCustomTabs) {
-        scrapeBody.tabs = washingtonOpts!.tabs;
-        if (
-          washingtonOpts!.tabs.includes("files") &&
-          washingtonOpts!.targetFolders &&
-          washingtonOpts!.targetFolders.length > 0
-        ) {
-          scrapeBody.targetFolders = washingtonOpts!.targetFolders;
+      const maxAttempts = arlingtonPortalMonitor ? 2 : 1;
+      let scrapeStarted = false;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const forceFreshLogin = attempt > 0;
+
+        if (forceFreshLogin) {
+          console.info(
+            "[Arlington][AccelaSession] stale session detected; clearing and re-login",
+          );
+          scrape.clearAccelaBrowserSession(projectIdToUse);
+          toast.info("Reconnecting to Arlington Accela...");
         }
-      } else {
-        scrapeBody.scrapeMode = scrapeMode;
+
+        let sessionId: string | null = null;
+        if (useArlingtonCustomTabsEarly && !forceFreshLogin) {
+          sessionId = resolveAccelaSessionForProject(projectIdToUse);
+        }
+
+        if (!sessionId) {
+          toast.info(
+            forceFreshLogin ? "Reconnecting to portal..." : "Logging into portal...",
+          );
+
+          let loginRes: Response;
+          try {
+            loginRes = await fetch(`${SCRAPER_URL}/api/login`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ credentialId, portalUrl: loginUrl }),
+            });
+          } catch {
+            throw new Error("SCRAPER_OFFLINE");
+          }
+
+          if (!loginRes.ok) {
+            const errData = await loginRes.json().catch(() => ({}));
+            throw new Error(
+              errData.error || `Scraper login failed (${loginRes.status})`,
+            );
+          }
+
+          const loginData = (await loginRes.json()) as { sessionId?: string };
+          sessionId = loginData.sessionId ? String(loginData.sessionId).trim() : "";
+          if (!sessionId) {
+            throw new Error(
+              "Login succeeded but response had no sessionId — cannot start scrape.",
+            );
+          }
+        } else {
+          toast.info("Using active portal session...");
+        }
+
+        scrape.setAccelaSessionId(sessionId, {
+          projectId: projectIdToUse,
+          permitNumber: String(permitNumberToUse).trim(),
+        });
+
+        const scrapeBody: Record<string, unknown> = {
+          sessionId,
+          permitNumber: String(permitNumberToUse).trim(),
+          userId: user!.id,
+          projectId: projectIdToUse,
+        };
+
+        if (useArlingtonCustomTabs) {
+          scrapeBody.tabs = arlingtonOpts!.tabs;
+          if (arlingtonOpts!.planReviewScope) {
+            scrapeBody.planReviewScope = arlingtonOpts!.planReviewScope;
+          }
+          if (arlingtonOpts!.autoContinueDownloads != null) {
+            scrapeBody.autoContinueDownloads = arlingtonOpts!.autoContinueDownloads;
+          }
+        } else if (useBaltimoreCustomTabs) {
+          scrapeBody.tabs = baltimoreOpts!.tabs;
+        } else if (useFairfaxCustomTabs) {
+          scrapeBody.tabs = fairfaxOpts!.tabs;
+        } else if (useWashingtonCustomTabs) {
+          scrapeBody.tabs = washingtonOpts!.tabs;
+          if (
+            washingtonOpts!.tabs.includes("files") &&
+            washingtonOpts!.targetFolders &&
+            washingtonOpts!.targetFolders.length > 0
+          ) {
+            scrapeBody.targetFolders = washingtonOpts!.targetFolders;
+          }
+        } else {
+          scrapeBody.scrapeMode = scrapeMode;
+        }
+
+        if (forceFreshLogin) {
+          console.info(
+            `[Arlington][AccelaSession] retrying scrape with fresh sessionId=${String(sessionId).slice(0, 8)}`,
+          );
+        }
+
+        console.info("[portal chain] login OK; calling /api/scrape", {
+          sessionIdPrefix: String(sessionId).slice(0, 12),
+          projectId: projectIdToUse,
+          permit: String(permitNumberToUse).trim(),
+          tabs: scrapeBody.tabs ?? "(default scrapeMode)",
+        });
+
+        const scrapeRes = await fetch(`${SCRAPER_URL}/api/scrape`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(scrapeBody),
+        });
+
+        if (!scrapeRes.ok) {
+          const errData = await scrapeRes.json().catch(() => ({}));
+          const errMsg = String(errData.error || "Failed to start scrape").trim();
+          if (
+            arlingtonPortalMonitor &&
+            attempt === 0 &&
+            isArlingtonAccelaStaleSessionScrapeError(errMsg)
+          ) {
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        toast.success("Scraping started — you can continue using the app.");
+        scrape.startScrapeSession(
+          sessionId,
+          projectIdToUse,
+          String(permitNumberToUse).trim(),
+        );
+        scrapeStarted = true;
+        break;
       }
 
-      console.info("[portal chain] login OK; calling /api/scrape", {
-        sessionIdPrefix: String(sessionId).slice(0, 12),
-        projectId: projectIdToUse,
-        permit: String(permitNumberToUse).trim(),
-        tabs: scrapeBody.tabs ?? "(default scrapeMode)",
-      });
-
-      const scrapeRes = await fetch(`${SCRAPER_URL}/api/scrape`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scrapeBody),
-      });
-
-      if (!scrapeRes.ok) {
-        const errData = await scrapeRes.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to start scrape");
+      if (!scrapeStarted) {
+        throw new Error("Failed to start scrape after session recovery.");
       }
-
-      scrape.startScrapeSession(sessionId, projectIdToUse, String(permitNumberToUse).trim());
     } catch (error) {
       console.error(error);
       scrape.cleanupScrapeState();
@@ -1265,6 +1367,12 @@ export function AgentWorkflowStatus() {
       }
     }
   };
+
+  /** Arlington County Accela Portal Monitor — stale session clear + single retry. */
+  const runArlingtonPortalMonitorCheck = (arlingtonOpts: ArlingtonScrapeTabOpts) =>
+    runManualCheck("standard", undefined, undefined, undefined, arlingtonOpts, {
+      arlingtonPortalMonitor: true,
+    });
 
   const chainRunning = chainPhase !== "idle" && chainPhase !== "complete";
 
@@ -1307,6 +1415,9 @@ export function AgentWorkflowStatus() {
                       tabs: o.tabs,
                       targetFolders: o.targetFolders,
                     });
+                  }
+                  if (isArlingtonCred) {
+                    return runArlingtonPortalMonitorCheck({ tabs: ["info"] });
                   }
                   if (isBaltimoreCred) {
                     return runManualCheck(
@@ -1359,12 +1470,16 @@ export function AgentWorkflowStatus() {
                       ? "baltimore-scrape-tab-picker"
                       : isFairfaxCred
                         ? "fairfax-scrape-tab-picker"
-                        : isWashingtonProjectDoxCred
-                          ? "washington-scrape-tab-picker"
-                          : undefined
+                        : isArlingtonCred
+                          ? "arlington-scrape-tab-picker"
+                          : isWashingtonProjectDoxCred
+                            ? "washington-scrape-tab-picker"
+                            : undefined
                   }
                   className={
-                    isWashingtonProjectDoxCred || isMinimalTabsCred
+                    isWashingtonProjectDoxCred ||
+                    isMinimalTabsCred ||
+                    isArlingtonCred
                       ? "max-h-[min(80vh,22rem)] w-[min(100vw-2rem,17rem)] overflow-y-auto"
                       : undefined
                   }
@@ -1540,6 +1655,90 @@ export function AgentWorkflowStatus() {
                       >
                         <Layers className="h-4 w-4 mr-2" />
                         Scrape all
+                      </DropdownMenuItem>
+                    </>
+                  ) : isArlingtonCred ? (
+                    <>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck({ tabs: ["info"] })
+                        }
+                        data-testid="menu-scrape-arlington-quick"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Quick Scrape (Record Info Only)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck({ tabs: ["attachments"] })
+                        }
+                        data-testid="menu-scrape-arlington-attachments"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Attachments Only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck(
+                            arlingtonPlanReviewDocumentScrapeOpts("all"),
+                          )
+                        }
+                        data-testid="menu-scrape-arlington-plan-review-complete"
+                        title="Includes Plans & Documents, Review Results & Mark-ups, Approved Documents, and Project Information."
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Plan Review Complete
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck(
+                            arlingtonPlanReviewDocumentScrapeOpts("planSet"),
+                          )
+                        }
+                        data-testid="menu-scrape-arlington-pr-plan-set"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Plan Review - Plans & Documents
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck(
+                            arlingtonPlanReviewDocumentScrapeOpts("reviewResults"),
+                          )
+                        }
+                        data-testid="menu-scrape-arlington-pr-review-results"
+                      >
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Plan Review - Review Results & Mark-ups
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck(
+                            arlingtonPlanReviewDocumentScrapeOpts("approvedDocuments"),
+                          )
+                        }
+                        data-testid="menu-scrape-arlington-pr-approved"
+                      >
+                        <FileBox className="h-4 w-4 mr-2" />
+                        Plan Review - Approved Documents
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() =>
+                          runArlingtonPortalMonitorCheck(
+                            arlingtonPlanReviewProjectInformationScrapeOpts(),
+                          )
+                        }
+                        data-testid="menu-scrape-arlington-pr-project-info"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Plan Review - Project Information
                       </DropdownMenuItem>
                     </>
                   ) : isMinimalTabsCred ? (

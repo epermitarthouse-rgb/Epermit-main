@@ -1,6 +1,17 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+
+/** Max wait for initial getSession before unblocking route guards. */
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 9000;
+
+function safeAuthErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return "unknown error";
+}
 
 // 1. Define Types
 export interface SubscriptionStatus {
@@ -78,22 +89,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session?.user?.id]);
 
+  const bootstrapFinishedRef = useRef(false);
+
   useEffect(() => {
+    console.log("[AuthProvider] init start");
+
+    const finishInitialLoading = () => {
+      setLoading(false);
+      if (!bootstrapFinishedRef.current) {
+        bootstrapFinishedRef.current = true;
+        console.log("[AuthProvider] init complete loading=false");
+      }
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      console.warn("[AuthProvider] getSession timeout; clearing loading");
+      finishInitialLoading();
+    }, AUTH_BOOTSTRAP_TIMEOUT_MS);
+
     const {
       data: { subscription: authSubscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+      finishInitialLoading();
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: nextSession }, error }) => {
+        if (error) throw error;
+        setSession(nextSession);
+        setUser(nextSession?.user ?? null);
+        console.log(`[AuthProvider] getSession success hasSession=${!!nextSession}`);
+      })
+      .catch((err) => {
+        console.error(`[AuthProvider] getSession failed ${safeAuthErrorMessage(err)}`);
+        setSession(null);
+        setUser(null);
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+        finishInitialLoading();
+      });
 
-    return () => authSubscription.unsubscribe();
+    return () => {
+      window.clearTimeout(timeoutId);
+      authSubscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
