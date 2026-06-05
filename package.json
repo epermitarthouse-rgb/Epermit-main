@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend:parallel\" \"npm run dev:scraper:parallel\"",
+    "dev": "concurrently -n frontend,scraper,ingestion -c blue,green,yellow \"npm run dev:frontend:parallel\" \"npm run dev:scraper:parallel\" \"npm run dev:ingestion-worker:safe\"",
     "dev:classic": "concurrently \"npm run dev:frontend\" \"npm run dev:scraper\"",
     "dev:frontend": "vite",
     "dev:frontend:parallel": "vite --config vite.config.parallel.ts",
@@ -15,6 +15,8 @@
     "lint": "eslint .",
     "theme:check": "bash scripts/check-theme-regressions.sh",
     "preview": "vite preview",
+    "dev:ingestion-worker": "cd document-ingestion-worker && npm install && node dev.js",
+    "dev:ingestion-worker:safe": "cd document-ingestion-worker && node dev.js",
     "tunnel": "npx ngrok http 3000",
     "demo": "npm run dev & sleep 5 && npx ngrok http 3000"
   },
@@ -62,6 +64,7 @@
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.462.0",
+    "mammoth": "^1.12.0",
     "mapbox-gl": "^3.17.0",
     "next-themes": "^0.3.0",
     "openai": "^6.27.0",
@@ -81,6 +84,7 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
     "vite-plugin-pwa": "^1.2.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {

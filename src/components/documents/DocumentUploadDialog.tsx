@@ -152,7 +152,7 @@ export function DocumentUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg w-[calc(100%-2rem)] overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isNewVersion ? 'Upload New Version' : 'Upload Documents'}
@@ -160,21 +160,23 @@ export function DocumentUploadDialog({
           <DialogDescription>
             {isNewVersion
               ? 'Upload a new version of this document'
-              : 'Add one or more documents to this project (max 50MB per file)'}
+              : `Add one or more documents to this project (max ${MAX_FILE_SIZE_MB}MB per file)`}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           {uploadError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{uploadError}</AlertDescription>
+              <AlertDescription className="break-words">{uploadError}</AlertDescription>
             </Alert>
           )}
 
           {/* Drop zone */}
           <div
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+            className={`min-w-0 w-full overflow-hidden border-2 border-dashed rounded-lg p-4 sm:p-6 transition-colors ${
+              files.length > 0 ? 'text-left' : 'text-center'
+            } ${
               dragActive
                 ? 'border-primary bg-primary/5'
                 : 'border-muted-foreground/25 hover:border-muted-foreground/50'
@@ -185,35 +187,43 @@ export function DocumentUploadDialog({
             onDrop={handleDrop}
           >
             {files.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0 w-full">
                 {files.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between bg-muted/50 p-2 rounded">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <File className="h-5 w-5 text-muted-foreground shrink-0" />
-                      <div className="text-left min-w-0">
-                        <p className="font-medium text-sm truncate">{file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatFileSize(file.size)}
-                        </p>
-                      </div>
+                  <div
+                    key={index}
+                    className="flex items-start gap-2 min-w-0 w-full rounded bg-muted/50 p-2"
+                  >
+                    <File className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <p
+                        className="font-medium text-sm truncate"
+                        title={file.name}
+                      >
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {formatFileSize(file.size)}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeFile(index)}
                       className="shrink-0 h-8 w-8"
+                      aria-label={`Remove ${file.name}`}
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                <div className="flex items-center justify-between pt-2 border-t">
-                  <p className="text-sm text-muted-foreground">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t min-w-0">
+                  <p className="text-sm text-muted-foreground truncate min-w-0">
                     {files.length} file{files.length !== 1 ? 's' : ''} • {formatFileSize(totalSize)} total
                   </p>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="shrink-0"
                     onClick={() => document.getElementById('file-upload')?.click()}
                   >
                     Add More

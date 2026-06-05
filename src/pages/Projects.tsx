@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects, CreateProjectData, UpdateProjectData } from '@/hooks/useProjects';
+import { useSelectedProject } from '@/contexts/SelectedProjectContext';
 import { Project, ProjectStatus, STATUS_ORDER, PROJECT_STATUS_CONFIG } from '@/types/project';
 import { KanbanColumn } from '@/components/projects/KanbanColumn';
 import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
@@ -45,6 +46,7 @@ export default function Projects() {
     deleteProject,
     getProjectsByStatus 
   } = useProjects();
+  const { setSelectedProjectId } = useSelectedProject();
 
   // View state
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
@@ -108,11 +110,13 @@ export default function Projects() {
 
   const handleEditProject = (project: Project) => {
     setSelectedProject(project);
+    setSelectedProjectId(project.id);
     setFormDialogOpen(true);
   };
 
   const handleViewProject = (project: Project) => {
     setSelectedProject(project);
+    setSelectedProjectId(project.id);
     setDetailDialogOpen(true);
   };
 
@@ -127,7 +131,11 @@ export default function Projects() {
       if (selectedProject) {
         await updateProject(selectedProject.id, data);
       } else {
-        await createProject(data as CreateProjectData);
+        const created = await createProject(data as CreateProjectData);
+        if (created) {
+          setSelectedProjectId(created.id);
+          setSelectedProject(created);
+        }
       }
       setFormDialogOpen(false);
     } finally {

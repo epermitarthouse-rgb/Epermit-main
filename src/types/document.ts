@@ -39,6 +39,78 @@ export interface ProjectDocument {
   description: string | null;
   created_at: string;
   updated_at: string;
+  ai_ingestion_status?: AiIngestionStatus | null;
+  ai_ingested_at?: string | null;
+  ai_ingestion_error?: string | null;
+  ai_chunk_count?: number | null;
+}
+
+export type AiIngestionStatus =
+  | 'not_started'
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'low_text'
+  | 'unsupported'
+  | 'partial';
+
+export type ProjectDocumentUploadStep = 'auth' | 'validation' | 'storage' | 'database';
+
+export interface ProjectDocumentUploadResult {
+  document: ProjectDocument | null;
+  error?: string;
+  step?: ProjectDocumentUploadStep;
+}
+
+export const AI_INGESTION_STATUS_LABELS: Record<AiIngestionStatus, string> = {
+  not_started: 'Not prepared',
+  queued: 'Queued',
+  processing: 'Processing',
+  completed: 'Ready for AI',
+  failed: 'Failed',
+  low_text: 'OCR needed',
+  unsupported: 'Unsupported',
+  partial: 'Partial',
+};
+
+export type DocumentIngestionJobStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'partial'
+  | 'cancelled';
+
+export interface DocumentIngestionJob {
+  id: string;
+  project_id: string;
+  document_id: string;
+  user_id: string;
+  status: DocumentIngestionJobStatus;
+  progress: Record<string, unknown>;
+  total_pages: number | null;
+  processed_pages: number;
+  failed_pages: number;
+  total_chunks: number;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface IngestionProgressInfo {
+  jobId: string;
+  status: DocumentIngestionJobStatus | 'queued';
+  phase?: string;
+  currentPage?: number;
+  processedPages?: number;
+  totalPages?: number;
+  totalChunks?: number;
+  error?: string;
+  updatedAt?: string;
+  isStuck?: boolean;
 }
 
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -97,6 +169,148 @@ export const DISCIPLINE_OPTIONS: { value: DocumentDiscipline; label: string }[] 
   { value: 'structural', label: 'Structural' },
 ];
 
-// Max file size: 50MB
-export const MAX_FILE_SIZE_MB = 50;
+// Max file size for project document uploads (plan sets, submittals, etc.)
+export const MAX_FILE_SIZE_MB = 250;
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+/** MIME types allowed by the project-documents storage bucket. */
+export const PROJECT_DOCUMENT_ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'application/dwg',
+  'application/dxf',
+  'application/zip',
+  'application/x-zip-compressed',
+] as const;
+
+const PROJECT_DOCUMENT_EXT_TO_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  dwg: 'application/dwg',
+  dxf: 'application/dxf',
+  zip: 'application/zip',
+};
+
+const PROJECT_DOCUMENT_ALLOWED_SET = new Set<string>(PROJECT_DOCUMENT_ALLOWED_MIME_TYPES);
+
+/**
+ * Resolve a storage-safe content type for project document uploads.
+ * Extension is preferred for DOCX because browsers often report application/zip.
+ */
+export function resolveProjectDocumentContentType(file: File): string | null {
+  const lower = file.name.toLowerCase();
+  const dot = lower.lastIndexOf('.');
+  const ext = dot >= 0 ? lower.slice(dot + 1) : '';
+
+  if (ext === 'docx') {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+
+  const declared = (file.type || '').trim().toLowerCase();
+  if (declared && PROJECT_DOCUMENT_ALLOWED_SET.has(declared)) {
+    return declared;
+  }
+
+  const fromExt = ext ? PROJECT_DOCUMENT_EXT_TO_MIME[ext] : undefined;
+  if (fromExt) return fromExt;
+
+  return null;
+}
+
+/**
+ * Sanitize a user filename for Supabase Storage object keys.
+ * Preserves extension; store the original name in project_documents.file_name.
+ */
+export function sanitizeStorageFileName(fileName: string): string {
+  const normalized = fileName.replace(/[/\\]+/g, '_').trim();
+  const lastDot = normalized.lastIndexOf('.');
+  const hasExt = lastDot > 0 && lastDot < normalized.length - 1;
+  const ext = hasExt
+    ? normalized.slice(lastDot + 1).toLowerCase().replace(/[^a-z0-9]/g, '')
+    : '';
+  let stem = hasExt ? normalized.slice(0, lastDot) : normalized;
+
+  stem = stem
+    .replace(/[[\](){}]/g, '_')
+    .replace(/&/g, '_and_')
+    .replace(/'/g, '_')
+    .replace(/,/g, '_')
+    .replace(/[^a-zA-Z0-9.]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (!stem) {
+    stem = 'document';
+  }
+
+  const maxStem = 200;
+  if (stem.length > maxStem) {
+    stem = stem.slice(0, maxStem).replace(/_+$/, '');
+  }
+
+  return ext ? `${stem}.${ext}` : stem;
+}
+
+/** Build a storage-safe project-documents object path; keeps original name for DB display. */
+export function buildProjectDocumentStoragePath(
+  userId: string,
+  projectId: string,
+  originalFileName: string,
+  timestamp: number = Date.now(),
+): { filePath: string; storageFileName: string } {
+  const storageFileName = sanitizeStorageFileName(originalFileName);
+  const filePath = `${userId}/${projectId}/${timestamp}_${storageFileName}`;
+  return { filePath, storageFileName };
+}
+
+export function formatCommentLetterSaveError(
+  result: ProjectDocumentUploadResult,
+): string {
+  if (!result.error) {
+    return 'Failed to save comment letter to project documents';
+  }
+  if (result.step === 'storage') {
+    return `Failed to save comment letter during storage upload: ${result.error}`;
+  }
+  if (result.step === 'database') {
+    return `Failed to save comment letter during database insert: ${result.error}`;
+  }
+  if (result.step === 'validation') {
+    return `Failed to save comment letter: ${result.error}`;
+  }
+  if (result.step === 'auth') {
+    return `Failed to save comment letter: ${result.error}`;
+  }
+  return `Failed to save comment letter: ${result.error}`;
+}
+
+/** Map Supabase/storage errors to a user-friendly upload message. */
+export function formatProjectDocumentUploadError(err: unknown): string {
+  const msg =
+    err && typeof err === "object" && "message" in err
+      ? String((err as { message?: string }).message ?? "")
+      : err instanceof Error
+        ? err.message
+        : String(err ?? "");
+
+  if (/mime type.*not supported|invalid mime/i.test(msg)) {
+    return 'Upload failed: this file type is not allowed for project documents. Use PDF, DOCX, PNG, JPG, or other supported plan/document formats.';
+  }
+
+  if (/invalid key|storage path was rejected|unsafe.*path/i.test(msg)) {
+    return 'Upload failed: storage path was rejected. Filename has unsupported characters.';
+  }
+
+  if (/maximum|too large|413|payload|size limit|file_size_limit|entity too large/i.test(msg)) {
+    return `Upload failed: the file may exceed the ${MAX_FILE_SIZE_MB}MB storage limit configured for this project. If the file is smaller, your Supabase storage bucket limit may need to be updated.`;
+  }
+  return msg.trim() || "Failed to upload document";
+}

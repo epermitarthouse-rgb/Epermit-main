@@ -94,5 +94,14 @@ verify_jwt = false
 [functions.guardian-quality-agent]
 verify_jwt = false
 
+[functions.parse-manual-comment-letter]
+verify_jwt = false
+
+[functions.ingest-project-document]
+verify_jwt = false
+
+[functions.generate-grounded-response]
+verify_jwt = false
+
 [functions.export-response-package]
 verify_jwt = false

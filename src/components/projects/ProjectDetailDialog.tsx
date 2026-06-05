@@ -400,7 +400,7 @@ export function ProjectDetailDialog({
           </TabsContent>
 
           <TabsContent value="documents" className="mt-0 pb-1 outline-none focus-visible:ring-0">
-            <ProjectDocumentsSection projectId={project.id} />
+            <ProjectDocumentsSection projectId={project.id} projectName={project.name} />
           </TabsContent>
 
           <TabsContent value="epermit" className="mt-0 space-y-4 pb-1 outline-none focus-visible:ring-0">

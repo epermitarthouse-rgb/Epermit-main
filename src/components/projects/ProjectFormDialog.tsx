@@ -21,7 +21,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Loader2, Sparkles, Info, KeyRound } from 'lucide-react';
@@ -134,26 +133,24 @@ const projectSchema = z.object({
 
 type FormErrors = Partial<Record<keyof z.infer<typeof projectSchema>, string>>;
 
-// Info button component
+// Info button component — uses portaled TooltipContent (see ui/tooltip) to avoid dialog clipping
 function FieldInfo({ info }: { info: string }) {
   return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="ml-1 inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => e.preventDefault()}
-          >
-            <Info className="h-3.5 w-3.5" />
-            <span className="sr-only">More info</span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs bg-popover text-popover-foreground border shadow-md z-50">
-          <p className="text-sm">{info}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="ml-1 inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          onClick={(e) => e.preventDefault()}
+        >
+          <Info className="h-3.5 w-3.5" />
+          <span className="sr-only">More info</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="max-w-xs">
+        <p className="text-sm leading-relaxed">{info}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

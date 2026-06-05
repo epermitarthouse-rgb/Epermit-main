@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, Fragment, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/useAuth";
-import { useSelectedProject } from "@/contexts/SelectedProjectContext";
+import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import { ReviewTimer, type ReviewTimerHandle } from "@/components/shadow/ReviewTimer";
 import { supabase } from "@/lib/supabase";
+import {
+  autoDraftPayloadFromRow,
+  buildFullCommentContext,
+  groundedDraftPayloadFromRow,
+  parseStoredCodeReferences,
+} from "@/lib/groundedCommentContext";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -32,7 +38,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useGroundedDraftQueue } from "@/hooks/useGroundedDraftQueue";
+import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ExportPackageDialog } from "@/components/response-matrix/ExportPackageDialog";
+import { ResponseMatrixExportMenu } from "@/components/response-matrix/ResponseMatrixExportMenu";
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
@@ -206,44 +215,274 @@ function MarkupStatusBadge({ commentId, projectId }: { commentId: string; projec
   );
 }
 
-function ResponseCell({
-  row,
-  draftingId,
-  onUpdate,
-}: {
-  row: ParsedCommentRow;
-  draftingId: string | null;
-  onUpdate: (value: string) => void;
-}) {
-  const isDrafting = draftingId === row.id;
-  const text = row.response_text ?? "";
-  const [justFilled, setJustFilled] = useState(false);
-  useEffect(() => {
-    if (!isDrafting && text.length > 0) {
-      setJustFilled(true);
-      const t = setTimeout(() => setJustFilled(false), 400);
-      return () => clearTimeout(t);
-    }
-  }, [isDrafting, text.length]);
+function commentPreviewText(row: ParsedCommentRow): string {
+  const ctx = buildFullCommentContext(row);
+  const primary = ctx.display_primary_text;
+  if (primary.length >= 12) return primary;
+  const previous = row.previous_comment_text?.trim() ?? "";
+  if (previous) return previous;
+  return row.original_text?.trim() ?? "";
+}
+
+function ConfidenceBadge({ value }: { value: string | null | undefined }) {
+  if (!value) return null;
+  const v = value.toLowerCase();
+  const cls =
+    v === "high"
+      ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-600/35"
+      : v === "low"
+        ? "bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-600/35"
+        : "bg-sky-500/15 text-sky-900 dark:text-sky-300 border-sky-600/35";
   return (
-    <div className={cn("space-y-1", justFilled && "response-text-fade-in")}>
-      <Textarea
-        value={text}
-        onChange={(e) => onUpdate(e.target.value)}
-        placeholder={isDrafting ? "Drafting..." : "Official response..."}
-        className={cn(
-          "min-h-[80px] resize-y border-cream-sunken bg-cream-raised text-ink-primary-light placeholder:text-ink-tertiary-light shadow-inner",
-          "dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light",
-          "transition-shadow duration-200",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/35 focus-visible:border-cream-sunken focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+    <Badge variant="outline" className={cn("text-[10px] font-medium capitalize", cls)}>
+      {value} confidence
+    </Badge>
+  );
+}
+
+function RelevanceBadge({ value }: { value?: string }) {
+  if (!value) return null;
+  const v = value.toLowerCase();
+  const cls =
+    v === "high"
+      ? "text-emerald-800 dark:text-emerald-300"
+      : v === "low"
+        ? "text-amber-800 dark:text-amber-300"
+        : "text-sky-800 dark:text-sky-300";
+  return <span className={cn("text-xs font-semibold uppercase tracking-wide", cls)}>{value}</span>;
+}
+
+function EvidenceCitationCard({ item, index }: { item: GroundedEvidenceItem; index: number }) {
+  return (
+    <div className="rounded-lg border border-cream-sunken bg-cream-raised p-3 space-y-1.5 shadow-sm dark:border-border/60 dark:bg-obsidian-raised/40">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold text-ink-primary-light dark:text-ink-primary-dark">
+          Citation {index + 1}
+        </p>
+        <RelevanceBadge value={item.relevance} />
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">File</dt>
+        <dd className="text-ink-primary-light dark:text-ink-primary-dark break-all">{item.file_name ?? "Document"}</dd>
+        {item.page_number != null && (
+          <>
+            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Page</dt>
+            <dd className="text-ink-primary-light dark:text-ink-primary-dark">{item.page_number}</dd>
+          </>
         )}
-        disabled={isDrafting}
-      />
-      <p className="text-xs text-ink-tertiary-light text-right tabular-nums">
-        {text.length} characters
-      </p>
+        {item.sheet_label && (
+          <>
+            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Sheet</dt>
+            <dd className="text-ink-primary-light dark:text-ink-primary-dark font-mono-data">{item.sheet_label}</dd>
+          </>
+        )}
+        {item.sheet_title && (
+          <>
+            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Title</dt>
+            <dd className="text-ink-primary-light dark:text-ink-primary-dark">{item.sheet_title}</dd>
+          </>
+        )}
+      </dl>
+      {item.snippet && (
+        <div className="pt-1 border-t border-cream-sunken/80 dark:border-border/50">
+          <p className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-1">Evidence</p>
+          <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark whitespace-pre-wrap break-words leading-relaxed">
+            {item.snippet}
+          </p>
+        </div>
+      )}
     </div>
   );
+}
+
+function DetailSection({
+  title,
+  children,
+  variant = "default",
+}: {
+  title: string;
+  children: ReactNode;
+  variant?: "default" | "warning" | "action";
+}) {
+  const borderCls =
+    variant === "warning"
+      ? "border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10"
+      : variant === "action"
+        ? "border-teal/35 bg-teal/5 dark:bg-teal/10"
+        : "border-cream-sunken bg-cream-raised/80 dark:border-border/60 dark:bg-obsidian-raised/30";
+  return (
+    <section className={cn("rounded-lg border p-4 space-y-2", borderCls)}>
+      <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-ink-secondary-light dark:text-ink-secondary-dark">
+        {title}
+      </h4>
+      <div className="text-sm text-ink-primary-light dark:text-ink-primary-dark leading-relaxed whitespace-pre-wrap break-words">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function CommentDetailPanel({
+  row,
+  isAutoDrafting,
+  onUpdateResponse,
+  onUpdateAssigned,
+  onUpdateSheetRef,
+}: {
+  row: ParsedCommentRow;
+  isAutoDrafting: boolean;
+  onUpdateResponse: (value: string) => void;
+  onUpdateAssigned: (value: string) => void;
+  onUpdateSheetRef: (value: string) => void;
+}) {
+  const ctx = buildFullCommentContext(row);
+  const previous = row.previous_comment_text?.trim() ?? "";
+  const existing = row.existing_response_text?.trim() ?? "";
+  const evidence = Array.isArray(row.grounded_evidence) ? row.grounded_evidence : [];
+  const [editingResponse, setEditingResponse] = useState(false);
+  const responseText = row.response_text ?? "";
+
+  return (
+    <div className="px-4 py-5 sm:px-6 bg-cream-sunken/40 dark:bg-obsidian/50 border-t border-cream-sunken dark:border-border/50 space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <DetailSection title="City / reviewer comment">
+            {(row.reviewer_name || row.comment_number) && (
+              <p className="text-xs font-mono uppercase tracking-wide text-ink-secondary-light mb-2">
+                {[row.reviewer_name, row.comment_number ? `#${row.comment_number}` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+            {ctx.original_text ? (
+              <p>{ctx.original_text}</p>
+            ) : row.original_text?.trim() ? (
+              <p>{row.original_text.trim()}</p>
+            ) : (
+              <p className="text-ink-tertiary-light italic">No current comment line.</p>
+            )}
+            {row.ingest_source === "manual_letter" && (
+              <Badge variant="outline" className="mt-2 text-[10px] border-teal/40 text-teal">
+                Manual uploaded comment
+              </Badge>
+            )}
+          </DetailSection>
+
+          {previous ? (
+            <DetailSection title="Previous reviewer comment" variant="warning">
+              <p>{previous}</p>
+            </DetailSection>
+          ) : null}
+
+          {existing ? (
+            <DetailSection title="Existing letter response">
+              <p className="text-ink-secondary-light dark:text-ink-secondary-dark">{existing}</p>
+            </DetailSection>
+          ) : null}
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <ConfidenceBadge value={row.grounded_confidence} />
+            {row.grounded_generated_at && (
+              <span className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">
+                Grounded {new Date(row.grounded_generated_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+
+          <DetailSection title="Suggested response" variant="action">
+            {editingResponse || !responseText ? (
+              <Textarea
+                value={responseText}
+                onChange={(e) => onUpdateResponse(e.target.value)}
+                placeholder={isAutoDrafting ? "Drafting..." : "Official response..."}
+                disabled={isAutoDrafting}
+                className="min-h-[100px] resize-y border-cream-sunken bg-cream text-ink-primary-light dark:bg-obsidian dark:text-ink-primary-dark"
+              />
+            ) : (
+              <p>{responseText}</p>
+            )}
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setEditingResponse((v) => !v)}
+              >
+                {editingResponse ? "Done editing" : "Edit response"}
+              </Button>
+              <span className="text-xs text-ink-tertiary-light tabular-nums">{responseText.length} chars</span>
+            </div>
+          </DetailSection>
+
+          {row.required_action?.trim() ? (
+            <DetailSection title="Required plan revision">{row.required_action}</DetailSection>
+          ) : null}
+
+          {row.missing_info_or_risk?.trim() ? (
+            <DetailSection title="Missing / needs confirmation" variant="warning">
+              {row.missing_info_or_risk}
+            </DetailSection>
+          ) : null}
+
+          {evidence.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-ink-secondary-light dark:text-ink-secondary-dark">
+                Evidence found ({evidence.length})
+              </h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {evidence.map((item, i) => (
+                  <EvidenceCitationCard key={i} item={item} index={i} />
+                ))}
+              </div>
+            </div>
+          ) : row.grounded_generated_at ? (
+            <DetailSection title="Evidence found" variant="warning">
+              No plan citations returned. Confirm drawings are prepared for AI or revise manually.
+            </DetailSection>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 pt-1">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark">Assigned to</label>
+              <Input
+                value={row.assigned_to ?? ""}
+                onChange={(e) => onUpdateAssigned(e.target.value)}
+                placeholder="Name or email"
+                className="border-cream-sunken bg-cream-raised dark:bg-obsidian-raised"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark">Sheet reference</label>
+              <Input
+                value={row.sheet_reference ?? ""}
+                onChange={(e) => onUpdateSheetRef(e.target.value)}
+                placeholder="e.g. A1.02"
+                className="border-cream-sunken bg-cream-raised dark:bg-obsidian-raised"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">Plan markup</span>
+            <MarkupStatusBadge commentId={row.id} projectId={row.project_id} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export interface GroundedEvidenceItem {
+  document_id?: string;
+  file_name?: string;
+  page_number?: number | null;
+  sheet_label?: string | null;
+  sheet_title?: string | null;
+  snippet?: string;
+  relevance?: string;
 }
 
 export interface ParsedCommentRow {
@@ -258,20 +497,104 @@ export interface ParsedCommentRow {
   assigned_to: string | null;
   sheet_reference: string | null;
   created_at: string;
+  reviewer_name?: string | null;
+  comment_number?: string | null;
+  previous_comment_text?: string | null;
+  existing_response_text?: string | null;
+  code_references?: string[] | string | null;
+  ingest_source?: string | null;
+  source_document_id?: string | null;
+  grounded_evidence?: GroundedEvidenceItem[] | null;
+  required_action?: string | null;
+  missing_info_or_risk?: string | null;
+  grounded_confidence?: string | null;
+  grounded_generated_at?: string | null;
+}
+
+function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand: () => void }) {
+  const ctx = buildFullCommentContext(row);
+  const preview = commentPreviewText(row);
+  const previous = row.previous_comment_text?.trim() ?? "";
+  const hasPreviousContext = Boolean(previous && ctx.should_expand_previous);
+
+  return (
+    <div className="max-w-[240px] space-y-1">
+      {(row.reviewer_name || row.comment_number) && (
+        <p className="text-[10px] font-mono uppercase tracking-wide text-ink-secondary-light dark:text-ink-secondary-dark truncate">
+          {[row.reviewer_name, row.comment_number ? `#${row.comment_number}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
+      <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark line-clamp-2 leading-snug" title={preview}>
+        {preview || "—"}
+      </p>
+      {hasPreviousContext && (
+        <p className="text-xs font-medium text-amber-800 dark:text-amber-300 line-clamp-1" title={previous}>
+          Previous: {previous.slice(0, 80)}
+          {previous.length > 80 ? "…" : ""}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onExpand}
+        className="text-xs text-teal hover:underline font-medium"
+      >
+        View full comment
+      </button>
+    </div>
+  );
+}
+
+function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
+  const text = row.response_text?.trim() ?? "";
+  const hasGrounded = Boolean(row.grounded_generated_at || row.grounded_confidence);
+  return (
+    <div className="max-w-[200px] space-y-1.5">
+      {text ? (
+        <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark line-clamp-2" title={text}>
+          {text}
+        </p>
+      ) : (
+        <p className="text-sm text-ink-tertiary-light italic">No response yet</p>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {hasGrounded && <ConfidenceBadge value={row.grounded_confidence} />}
+        {row.required_action?.trim() && (
+          <Badge variant="outline" className="text-[10px] border-teal/30 text-teal">
+            Has action
+          </Badge>
+        )}
+        {row.missing_info_or_risk?.trim() && (
+          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-800 dark:text-amber-300">
+            Gap noted
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function commentMatrixSourceLabel(rows: ParsedCommentRow[]): string {
+  const hasPortal = rows.some((r) => r.ingest_source === "raw_ref");
+  const hasManual = rows.some((r) => r.ingest_source === "manual_letter");
+  if (hasPortal && hasManual) return "Portal and manual uploaded comments";
+  if (hasManual) return "Manual uploaded comments";
+  if (hasPortal) return "Portal comments";
+  return "Parsed comments";
 }
 
 export default function ResponseMatrix() {
   const { user, loading: authLoading } = useAuth();
-  const { selectedProjectId: sidebarProjectId } = useSelectedProject();
+  const { projectId } = useResolvedProjectId();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const projectIdParam = searchParams.get("projectId") ?? searchParams.get("project") ?? searchParams.get("project_id");
   const filterPending = searchParams.get("filter") === "pending";
-
-  const projectId = projectIdParam ?? sidebarProjectId;
   const [saving, setSaving] = useState(false);
   const timerRef = useRef<ReviewTimerHandle>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [validateOpen, setValidateOpen] = useState(false);
   const [validateResult, setValidateResult] = useState<{
     complete: boolean;
@@ -302,7 +625,9 @@ export default function ResponseMatrix() {
     if (!projectId) return [];
     const { data, error } = await supabase
       .from("parsed_comments")
-      .select("*")
+      .select(
+        "id, project_id, original_text, discipline, code_reference, status, page_number, response_text, assigned_to, sheet_reference, created_at, reviewer_name, comment_number, previous_comment_text, existing_response_text, code_references, ingest_source, source_document_id, grounded_evidence, required_action, missing_info_or_risk, grounded_confidence, grounded_generated_at",
+      )
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
     if (error) {
@@ -354,12 +679,9 @@ export default function ResponseMatrix() {
   const runAutoDraft = useCallback(async (row: ParsedCommentRow) => {
     setDraftingId(row.id);
     try {
+      const invokeBody = autoDraftPayloadFromRow(row);
       const { data, error } = await supabase.functions.invoke("generate-response", {
-        body: {
-          comment_text: row.original_text,
-          code_reference: row.code_reference || "",
-          discipline: row.discipline,
-        },
+        body: invokeBody,
       });
       if (error) throw error;
       const payload = data as { suggested_response?: string } | null;
@@ -385,6 +707,123 @@ export default function ResponseMatrix() {
       setDraftingId(null);
     }
   }, [queryClient]);
+
+  const executeGroundedDraftById = useCallback(
+    async (commentId: string) => {
+      const row =
+        rows.find((r) => r.id === commentId) ??
+        queryClient
+          .getQueryData<ParsedCommentRow[]>(["parsed_comments", projectId])
+          ?.find((r) => r.id === commentId);
+      if (!row) throw new Error("Comment not found");
+
+      const invokeBody = groundedDraftPayloadFromRow(row);
+      const { data, error } = await supabase.functions.invoke("generate-grounded-response", {
+        body: invokeBody,
+      });
+      if (error) throw error;
+
+      const result = data as {
+        error?: string;
+        code?: string;
+        suggested_response?: string;
+        required_action?: string;
+        missing_info_or_risk?: string;
+        confidence?: string;
+        evidence?: GroundedEvidenceItem[];
+      } | null;
+
+      if (result?.code === "no_prepared_documents" || result?.error) {
+        throw new Error(
+          result.error ??
+            "No AI-prepared documents found. Go to Project Documents and click Prepare for AI on the plan set.",
+        );
+      }
+
+      const text = result?.suggested_response ?? "";
+      const sheetRef =
+        result?.evidence?.find((e) => e.relevance === "high" && e.sheet_label)?.sheet_label ??
+        result?.evidence?.find((e) => e.sheet_label)?.sheet_label ??
+        null;
+
+      queryClient.setQueryData<ParsedCommentRow[]>(["parsed_comments", row.project_id], (prev) =>
+        (prev ?? []).map((r) =>
+          r.id === row.id
+            ? {
+                ...r,
+                response_text: text,
+                sheet_reference: sheetRef ?? r.sheet_reference,
+                grounded_evidence: result?.evidence ?? [],
+                required_action: result?.required_action ?? null,
+                missing_info_or_risk: result?.missing_info_or_risk ?? null,
+                grounded_confidence: result?.confidence ?? null,
+                grounded_generated_at: new Date().toISOString(),
+              }
+            : r,
+        ),
+      );
+
+      setExpandedRowIds((prev) => new Set(prev).add(row.id));
+      toast.success(
+        `Grounded draft ready (${result?.confidence ?? "unknown"} confidence, ${result?.evidence?.length ?? 0} citations)`,
+      );
+    },
+    [rows, queryClient, projectId],
+  );
+
+  const {
+    statusById: groundedStatusById,
+    errorById: groundedErrorById,
+    batchProgress: groundedBatchProgress,
+    enqueue: enqueueGrounded,
+    isBusy: isGroundedBusy,
+    resetStatus: resetGroundedStatus,
+  } = useGroundedDraftQueue(executeGroundedDraftById, 2);
+
+  const runGroundedDraft = useCallback(
+    (row: ParsedCommentRow) => {
+      resetGroundedStatus(row.id);
+      enqueueGrounded([row.id]);
+    },
+    [enqueueGrounded, resetGroundedStatus],
+  );
+
+  const runBatchGrounded = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) {
+        toast.error("Select at least one comment");
+        return;
+      }
+      for (const id of ids) resetGroundedStatus(id);
+      const added = enqueueGrounded(ids);
+      if (added === 0) toast.info("Selected comments are already generating");
+    },
+    [enqueueGrounded, resetGroundedStatus],
+  );
+
+  const toggleExpandRow = useCallback((id: string) => {
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectRow = useCallback((id: string) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedRowIds((prev) =>
+      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)),
+    );
+  }, [rows]);
 
   const runValidateCompleteness = useCallback(async () => {
     if (!projectId) {
@@ -527,6 +966,8 @@ export default function ResponseMatrix() {
     }
   }, [user, rows, fetchComments]);
 
+  const matrixSourceLabel = commentMatrixSourceLabel(withoutMetadata);
+
   if (authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
@@ -557,6 +998,9 @@ export default function ResponseMatrix() {
               </h1>
               <p className="text-ink-secondary-light text-sm mt-2 max-w-2xl leading-relaxed">
                 Manage and draft official responses to permit comments.
+                {withoutMetadata.length > 0 ? (
+                  <span className="block mt-1 text-ink-tertiary-light">{matrixSourceLabel}</span>
+                ) : null}
               </p>
               <div className="h-0.5 w-16 mt-2 bg-gradient-to-r from-gold/70 to-transparent rounded-full" />
             </div>
@@ -633,6 +1077,7 @@ export default function ResponseMatrix() {
                 </DropdownMenuContent>
               </DropdownMenu>
               <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
+              <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
               <div className="ml-auto">
                 <Button variant="gold" onClick={saveChanges} disabled={saving || rows.length === 0} className="shrink-0">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
@@ -828,189 +1273,243 @@ export default function ResponseMatrix() {
               <Badge variant="secondary">Showing pending comments only</Badge>
             </p>
           )}
+          <p className="text-sm text-ink-secondary-light mb-2">{matrixSourceLabel}</p>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={selectedRowIds.size === 0 || Boolean(groundedBatchProgress)}
+              onClick={() => runBatchGrounded([...selectedRowIds])}
+              className="border-teal/40 text-teal hover:bg-teal/10"
+            >
+              <Sparkles className="h-4 w-4 mr-1.5" />
+              Generate Grounded for Selected ({selectedRowIds.size})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
+              onClick={() =>
+                runBatchGrounded(
+                  rows
+                    .filter(
+                      (r) =>
+                        !r.response_text?.trim() ||
+                        (r.status ?? "").toLowerCase() === "pending" ||
+                        (r.status ?? "").toLowerCase() === "pending review",
+                    )
+                    .map((r) => r.id),
+                )
+              }
+              className="border-teal/40 text-teal hover:bg-teal/10"
+            >
+              Generate Grounded for Pending
+            </Button>
+            {groundedBatchProgress && (
+              <span className="text-sm text-ink-secondary-light dark:text-ink-secondary-dark flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-teal" />
+                Generating {groundedBatchProgress.completed + groundedBatchProgress.active} of{" "}
+                {groundedBatchProgress.total}…
+              </span>
+            )}
+          </div>
           <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
             <div className="overflow-x-auto bg-gradient-to-b from-cream via-cream-raised/95 to-cream-raised">
             <Table
               wrapperClassName="rounded-none border-0 shadow-none bg-transparent dark:border-0"
-              className="w-full min-w-[900px]"
+              className="w-full min-w-[960px]"
             >
               <TableHeader className="dark:[&_tr]:!bg-transparent">
                 <TableRow className="border-b border-obsidian-raised/70 !bg-obsidian-raised hover:!bg-obsidian dark:!border-obsidian-raised/55 dark:!bg-obsidian-raised dark:hover:!bg-obsidian">
-                  <TableHead className="w-[120px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                  <TableHead className="w-10 table-head-sticky px-2 py-3">
+                    <Checkbox
+                      checked={rows.length > 0 && selectedRowIds.size === rows.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all comments"
+                    />
+                  </TableHead>
+                  <TableHead className="w-10 table-head-sticky px-2 py-3" />
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
                     Status
                   </TableHead>
-                  <TableHead className="w-[100px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
                     Discipline
                   </TableHead>
-                  <TableHead className="min-w-[220px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
-                    City Comment
+                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                    Comment
                   </TableHead>
-                  <TableHead className="w-[140px] table-head-sticky px-4 py-3 font-mono-data sm:px-5 sm:py-3.5 text-left text-[10px] uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
                     Code Ref.
                   </TableHead>
-                  <TableHead className="min-w-[300px] w-full table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
+                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
                     Response
                   </TableHead>
-                  <TableHead className="w-[100px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
-                    Auto-Draft
-                  </TableHead>
-                  <TableHead className="min-w-[240px] w-[260px] table-head-sticky whitespace-normal px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark sm:px-5 sm:py-3.5">
-                    Assigned To
-                  </TableHead>
-                  <TableHead className="w-[80px] table-head-sticky px-4 py-3 sm:px-5 sm:py-3.5 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
-                    Markup
-                  </TableHead>
-                  <TableHead className="w-[100px] table-head-sticky px-4 py-3 font-mono-data sm:px-5 sm:py-3.5 text-left text-[10px] uppercase tracking-[0.16em] text-ink-secondary-dark dark:text-ink-secondary-dark">
-                    Sheet Ref.
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                    Draft
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row, idx) => (
-                  <TableRow
-                    key={row.id}
-                    className={cn(
-                      "!border-transparent border-t border-cream-sunken bg-cream hover:!bg-cream-sunken/50 dark:bg-cream dark:hover:!bg-cream-sunken/50 dark:!border-transparent",
-                      idx % 2 === 1 &&
-                        "!bg-cream-raised hover:!bg-cream-sunken/50 dark:!bg-cream-raised dark:hover:!bg-cream-sunken/50",
-                      "text-ink-primary-light transition-colors duration-150",
-                      statusBorderClass(row.status),
-                    )}
-                  >
-                    <TableCell className="align-middle w-[120px] text-ink-primary-light dark:!text-ink-primary-light">
-                      <Select
-                        value={row.status}
-                        onValueChange={(v) => updateRow(row.id, "status", v)}
+                {rows.map((row, idx) => {
+                  const isExpanded = expandedRowIds.has(row.id);
+                  const isAutoDrafting = draftingId === row.id;
+                  const groundedStatus = groundedStatusById[row.id] ?? "idle";
+                  const groundedBusy = isGroundedBusy(row.id);
+                  const groundedError = groundedErrorById[row.id];
+
+                  return (
+                    <Fragment key={row.id}>
+                      <TableRow
+                        className={cn(
+                          "!border-transparent border-t border-cream-sunken bg-cream hover:!bg-cream-sunken/50 dark:bg-cream dark:hover:!bg-cream-sunken/50",
+                          idx % 2 === 1 && "!bg-cream-raised hover:!bg-cream-sunken/50 dark:!bg-cream-raised",
+                          "text-ink-primary-light transition-colors duration-150",
+                          statusBorderClass(row.status),
+                          isExpanded && "!bg-cream-sunken/60 dark:!bg-obsidian-raised/40",
+                        )}
                       >
-                        <SelectTrigger
-                          className={cn(
-                            "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold text-ink-primary-dark shadow-sm ring-offset-transparent",
-                            "bg-obsidian hover:bg-obsidian-raised",
-                            "dark:bg-obsidian dark:text-ink-primary-dark dark:hover:bg-obsidian-raised dark:ring-offset-obsidian",
-                            "!text-ink-primary-dark text-[11px] leading-tight hover:!text-ink-primary-dark md:text-xs",
-                            "focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
-                            "dark:!text-ink-primary-dark dark:hover:!text-ink-primary-dark [&>span:first-child]:!text-ink-primary-dark",
-                            "[&>span:first-child[data-placeholder]]:!text-ink-tertiary-dark",
-                            "[&_svg]:!h-4 [&_svg]:!w-4 [&_svg]:!shrink-0 [&_svg]:!opacity-95 [&_svg]:!text-ink-secondary-dark dark:[&_svg]:!text-ink-secondary-dark",
-                            "[&>span:first-child]:truncate",
-                            statusSelectTriggerAccentClass(row.status),
-                          )}
-                        >
-                          {/* Explicit children ⇒ Radix does not portal ItemText badge nodes into trigger (fixes dark emerald on obsidian pill). */}
-                          <SelectValue>{row.status}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent
-                          position="popper"
-                          sideOffset={4}
-                          className={cn(
-                            "z-[200] rounded-lg border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream",
-                            "dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light",
-                          )}
-                        >
-                          {STATUS_OPTIONS.map((s) => (
-                            <SelectItem
-                              key={s}
-                              value={s}
+                        <TableCell className="align-middle w-10 px-2">
+                          <Checkbox
+                            checked={selectedRowIds.has(row.id)}
+                            onCheckedChange={() => toggleSelectRow(row.id)}
+                            aria-label={`Select comment ${row.comment_number ?? row.id}`}
+                          />
+                        </TableCell>
+                        <TableCell className="align-middle w-10 px-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            onClick={() => toggleExpandRow(row.id)}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="align-middle w-[120px]">
+                          <Select value={row.status} onValueChange={(v) => updateRow(row.id, "status", v)}>
+                            <SelectTrigger
                               className={cn(
-                                "rounded-md py-2.5 pl-8 pr-2 text-sm font-tight text-ink-primary-light",
-                                "outline-none cursor-pointer transition-colors dark:text-ink-primary-light",
-                                "data-[highlighted]:bg-cream-sunken data-[highlighted]:text-ink-primary-light",
-                                "dark:data-[highlighted]:bg-cream-sunken dark:data-[highlighted]:text-ink-primary-light",
-                                "aria-selected:bg-gold-soft/70 aria-selected:border-l-[3px] aria-selected:border-l-gold aria-selected:text-ink-primary-light",
+                                "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold text-ink-primary-dark shadow-sm",
+                                "bg-obsidian hover:bg-obsidian-raised dark:bg-obsidian dark:hover:bg-obsidian-raised",
+                                "!text-ink-primary-dark text-[11px] md:text-xs",
+                                statusSelectTriggerAccentClass(row.status),
                               )}
                             >
-                              <span
-                                className={cn(
-                                  "inline-flex max-w-[min(18rem,var(--radix-select-trigger-width))] whitespace-normal rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                                  statusBadgeClass(s),
-                                )}
-                              >
-                                {s}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="align-middle text-ink-primary-light dark:!text-ink-primary-light">
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full px-2.5 py-1 text-xs font-medium border max-w-[200px] truncate",
-                          disciplineBadgeClass(row.discipline),
-                          "contrast-more:bg-muted contrast-more:text-foreground contrast-more:border-border contrast-more:ring-0",
-                        )}
-                      >
-                        {row.discipline}
-                      </span>
-                    </TableCell>
-                    <TableCell className="max-w-[280px] align-top text-sm text-ink-secondary-light dark:!text-ink-secondary-light">
-                      {row.original_text}
-                    </TableCell>
-                    <TableCell className="min-w-[140px] w-[140px] align-top text-ink-primary-light dark:!text-ink-primary-light">
-                      {row.code_reference?.trim() ? (
-                        <CodeRefChip value={row.code_reference} />
-                      ) : (
-                        <span className="text-ink-tertiary-light">-</span>
+                              <SelectValue>{row.status}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent position="popper" sideOffset={4}>
+                              {STATUS_OPTIONS.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", statusBadgeClass(s))}>
+                                    {s}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="align-middle">
+                          <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium border max-w-[120px] truncate", disciplineBadgeClass(row.discipline))}>
+                            {row.discipline}
+                          </span>
+                        </TableCell>
+                        <TableCell className="align-top py-3">
+                          <CommentPreviewCell row={row} onExpand={() => toggleExpandRow(row.id)} />
+                        </TableCell>
+                        <TableCell className="align-top py-3">
+                          {(() => {
+                            const refs = parseStoredCodeReferences(row.code_references);
+                            const primary = row.code_reference?.trim() || refs[0] || "";
+                            if (!primary && refs.length === 0) {
+                              return <span className="text-ink-tertiary-light">—</span>;
+                            }
+                            return (
+                              <div className="space-y-1">
+                                {primary ? <CodeRefChip value={primary} /> : null}
+                                {refs.length > 1 ? (
+                                  <p className="text-[10px] text-ink-secondary-light dark:text-ink-secondary-dark">
+                                    +{refs.length - 1} more
+                                  </p>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell className="align-top py-3">
+                          <div className="space-y-1">
+                            {modifiedCommentIds.has(row.id) && (
+                              <Badge variant="secondary" className="bg-amber-500/15 text-amber-800 border-amber-500/30 text-[10px]">
+                                <PenLine className="h-3 w-3 mr-0.5" />
+                                Modified
+                              </Badge>
+                            )}
+                            <ResponsePreviewCell row={row} />
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top py-3">
+                          <div className="flex flex-col gap-1.5">
+                            <Button
+                              variant="outlineGold"
+                              size="sm"
+                              onClick={() => runAutoDraft(row)}
+                              disabled={isAutoDrafting}
+                              className="shrink-0 w-full"
+                            >
+                              {isAutoDrafting ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              ) : (
+                                <Wand2 className="h-4 w-4 auto-draft-icon mr-1" />
+                              )}
+                              Auto
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => runGroundedDraft(row)}
+                              disabled={groundedBusy || isAutoDrafting}
+                              className="shrink-0 w-full border-teal/40 text-teal hover:bg-teal/10"
+                              title="Draft using uploaded plan evidence"
+                            >
+                              {groundedBusy ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              ) : groundedStatus === "error" ? (
+                                <RotateCcw className="h-4 w-4 mr-1" />
+                              ) : (
+                                <Sparkles className="h-4 w-4 mr-1" />
+                              )}
+                              {groundedStatus === "queued" ? "Queued" : "Grounded"}
+                            </Button>
+                            {groundedError && (
+                              <p className="text-[10px] text-red-700 dark:text-red-400 leading-tight" title={groundedError}>
+                                Failed — retry
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow className="hover:!bg-transparent">
+                          <TableCell colSpan={8} className="p-0">
+                            <CommentDetailPanel
+                              row={row}
+                              isAutoDrafting={isAutoDrafting}
+                              onUpdateResponse={(v) => updateRow(row.id, "response_text", v)}
+                              onUpdateAssigned={(v) => updateRow(row.id, "assigned_to", v)}
+                              onUpdateSheetRef={(v) => updateRow(row.id, "sheet_reference", v)}
+                            />
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableCell>
-                    <TableCell className="min-w-[300px] align-top p-2 text-ink-primary-light dark:!text-ink-primary-light">
-                      <div className="space-y-1">
-                        {modifiedCommentIds.has(row.id) && (
-                          <Badge
-                            variant="secondary"
-                            className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]"
-                            data-testid={`badge-modified-${row.id}`}
-                          >
-                            <PenLine className="h-3 w-3 mr-0.5" />
-                            Modified
-                          </Badge>
-                        )}
-                        <ResponseCell
-                          row={row}
-                          draftingId={draftingId}
-                          onUpdate={(v) => updateRow(row.id, "response_text", v)}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-[100px] align-top text-ink-primary-light dark:!text-ink-primary-light">
-                      <Button
-                        variant="outlineGold"
-                        size="sm"
-                        onClick={() => runAutoDraft(row)}
-                        disabled={draftingId === row.id}
-                        className="shrink-0 transition-transform hover:scale-[1.02] hover:shadow-md [&_svg]:shrink-0 inline-flex items-center"
-                      >
-                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                          {draftingId === row.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Wand2 className="h-4 w-4 auto-draft-icon" />
-                          )}
-                        </span>
-                        <span className="ml-1 hidden sm:inline">Auto-Draft</span>
-                      </Button>
-                    </TableCell>
-                    <TableCell className="min-w-[240px] max-w-none w-[260px] align-top whitespace-normal p-2 text-ink-primary-light dark:!text-ink-primary-light">
-                      <Input
-                        value={row.assigned_to ?? ""}
-                        onChange={(e) => updateRow(row.id, "assigned_to", e.target.value)}
-                        placeholder="Name or email"
-                        className="h-9 min-h-9 w-full min-w-[12rem] max-w-none border-cream-sunken bg-cream-raised text-sm leading-normal text-ink-primary-light shadow-inner placeholder:text-ink-tertiary-light focus-visible:border-cream-sunken focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light md:text-sm"
-                      />
-                    </TableCell>
-                    <TableCell className="w-[80px] align-middle text-ink-primary-light dark:!text-ink-primary-light">
-                      <MarkupStatusBadge commentId={row.id} projectId={row.project_id} />
-                    </TableCell>
-                    <TableCell className="align-top p-2 text-ink-primary-light dark:!text-ink-primary-light">
-                      <Input
-                        value={row.sheet_reference ?? ""}
-                        onChange={(e) => updateRow(row.id, "sheet_reference", e.target.value)}
-                        placeholder="e.g. A1.02"
-                        className="h-8 border-cream-sunken bg-cream-raised text-ink-primary-light shadow-inner placeholder:text-ink-tertiary-light focus-visible:border-cream-sunken focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light dark:placeholder:text-ink-tertiary-light"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
             </div>
