@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { isGroundedValidationSkip } from "@/lib/groundedCommentContext";
 
 export type GroundedJobStatus = "idle" | "queued" | "loading" | "success" | "error";
 
@@ -40,9 +41,22 @@ export function useGroundedDraftQueue(
           await runOne(id);
           setStatus(id, "success");
         } catch (err) {
-          const message = err instanceof Error ? err.message : "Grounded draft failed";
-          setErrorById((prev) => ({ ...prev, [id]: message }));
-          setStatus(id, "error");
+          if (isGroundedValidationSkip(err)) {
+            setStatusById((prev) => {
+              const next = { ...prev };
+              delete next[id];
+              return next;
+            });
+            setErrorById((prev) => {
+              const next = { ...prev };
+              delete next[id];
+              return next;
+            });
+          } else {
+            const message = err instanceof Error ? err.message : "Grounded draft failed";
+            setErrorById((prev) => ({ ...prev, [id]: message }));
+            setStatus(id, "error");
+          }
         } finally {
           activeRef.current -= 1;
           batchCompletedRef.current += 1;

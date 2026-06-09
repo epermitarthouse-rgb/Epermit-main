@@ -26,6 +26,25 @@ export interface GroundedCommentContext {
 
 const PLACEHOLDER_ORIGINAL_RE = /^see previous comments?\.?$/i;
 
+const UNUSABLE_TEXT_LITERALS = new Set(["null", "undefined"]);
+
+export const GROUNDED_NO_REVIEW_TEXT_MESSAGE =
+  "Cannot generate grounded response because this comment has no review text. Please edit the comment and add text first.";
+
+/** Treat null, undefined, empty, whitespace, and literal "null"/"undefined" as empty. */
+export function sanitizeGroundedTextField(value: string | null | undefined): string {
+  if (value == null) return "";
+  const trimmed = String(value).trim();
+  if (!trimmed) return "";
+  if (UNUSABLE_TEXT_LITERALS.has(trimmed.toLowerCase())) return "";
+  return trimmed;
+}
+
+export function hasGroundedReviewText(input: GroundedCommentInput): boolean {
+  const ctx = buildGroundedCommentContext(input);
+  return Boolean(ctx.original_text || ctx.previous_comment_text);
+}
+
 export function parseStoredCodeReferences(
   raw: string[] | string | null | undefined,
 ): string[] {
@@ -48,25 +67,30 @@ export function parseStoredCodeReferences(
 export function buildGroundedCommentContext(
   input: GroundedCommentInput,
 ): GroundedCommentContext {
-  const rawOriginal = (input.original_text ?? "").trim();
-  const previous = (input.previous_comment_text ?? "").trim();
-  const existing = (input.existing_response_text ?? "").trim();
+  const rawOriginal = sanitizeGroundedTextField(input.original_text);
+  const previous = sanitizeGroundedTextField(input.previous_comment_text);
+  const existing = sanitizeGroundedTextField(input.existing_response_text);
+  const discipline = sanitizeGroundedTextField(input.discipline);
+  const reviewerName = sanitizeGroundedTextField(input.reviewer_name);
+  const commentNumber = sanitizeGroundedTextField(input.comment_number);
 
   const original =
     rawOriginal && !PLACEHOLDER_ORIGINAL_RE.test(rawOriginal) ? rawOriginal : "";
 
-  const codeRefs = parseStoredCodeReferences(input.code_references);
-  const primaryCode = (input.code_reference ?? "").trim();
+  const codeRefs = parseStoredCodeReferences(input.code_references)
+    .map((ref) => sanitizeGroundedTextField(ref))
+    .filter(Boolean);
+  const primaryCode = sanitizeGroundedTextField(input.code_reference);
   const code_references = [...new Set([primaryCode, ...codeRefs].filter(Boolean))];
 
   const retrievalParts = [
     original,
     previous,
     existing ? `Existing applicant response: ${existing}` : "",
-    input.discipline ? `Discipline: ${input.discipline}` : "",
+    discipline ? `Discipline: ${discipline}` : "",
     code_references.length > 0 ? `Code references: ${code_references.join(", ")}` : "",
-    input.reviewer_name ? `Reviewer: ${input.reviewer_name}` : "",
-    input.comment_number ? `Comment number: ${input.comment_number}` : "",
+    reviewerName ? `Reviewer: ${reviewerName}` : "",
+    commentNumber ? `Comment number: ${commentNumber}` : "",
   ].filter(Boolean);
 
   const promptSections: string[] = [];
@@ -89,11 +113,7 @@ export function buildGroundedCommentContext(
     previous ||
     existing;
 
-  const has_substantive_content =
-    (original.length >= 8) ||
-    (previous.length >= 12) ||
-    (existing.length >= 8) ||
-    (rawOriginal.length >= 8 && !PLACEHOLDER_ORIGINAL_RE.test(rawOriginal));
+  const has_substantive_content = Boolean(original || previous);
 
   return {
     original_text: original,
@@ -113,18 +133,18 @@ export function buildFullCommentContext(
   },
 ) {
   const ctx = buildGroundedCommentContext(input);
-  const rawOriginal = (input.original_text ?? "").trim();
+  const rawOriginal = sanitizeGroundedTextField(input.original_text);
   return {
     ...ctx,
-    reviewer_name: (input.reviewer_name ?? "").trim(),
-    comment_number: (input.comment_number ?? "").trim(),
-    discipline: (input.discipline ?? "").trim(),
-    code_reference: (input.code_reference ?? "").trim(),
+    reviewer_name: sanitizeGroundedTextField(input.reviewer_name),
+    comment_number: sanitizeGroundedTextField(input.comment_number),
+    discipline: sanitizeGroundedTextField(input.discipline),
+    code_reference: sanitizeGroundedTextField(input.code_reference),
     ingest_source: input.ingest_source ?? null,
     source_document_id: input.source_document_id ?? null,
     is_manual_letter: input.ingest_source === "manual_letter",
     is_portal: input.ingest_source === "raw_ref",
-    display_primary_text: ctx.original_text || ctx.previous_comment_text || rawOriginal,
+    display_primary_text: ctx.original_text || ctx.previous_comment_text,
     should_expand_previous: Boolean(
       ctx.previous_comment_text &&
         (!ctx.original_text || ctx.original_text.length < 48 || PLACEHOLDER_ORIGINAL_RE.test(rawOriginal)),

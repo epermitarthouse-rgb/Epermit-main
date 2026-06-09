@@ -39,4 +39,21 @@ const placeholder = buildGroundedCommentContext({
 assert(placeholder.retrieval_query_text.includes("floor layout"), "Placeholder original still retrieves previous");
 assert(placeholder.original_text === "", "Placeholder original stripped from active text");
 
+const shortManual = buildGroundedCommentContext({
+  original_text: "test",
+  previous_comment_text: "null",
+  discipline: "Architecture",
+});
+
+assert(shortManual.has_substantive_content, "Short manual comment text is substantive");
+assert(shortManual.previous_comment_text === "", "Literal null previous is sanitized away");
+assert(shortManual.retrieval_query_text.includes("test"), "Short manual text included in retrieval query");
+
+const emptyReview = buildGroundedCommentContext({
+  original_text: "",
+  previous_comment_text: "null",
+});
+
+assert(!emptyReview.has_substantive_content, "No usable review text is not substantive");
+
 console.log("groundedCommentContext.selftest.ts: all assertions passed");

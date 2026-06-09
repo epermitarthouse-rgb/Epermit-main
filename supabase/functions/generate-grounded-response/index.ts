@@ -8,6 +8,8 @@ import {
 import { embedTexts, vectorToPg } from "../_shared/documentIngestion.ts";
 import {
   buildGroundedCommentContext,
+  GROUNDED_NO_REVIEW_TEXT_MESSAGE,
+  sanitizeGroundedTextField,
 } from "../_shared/groundedCommentContext.ts";
 
 interface RetrievedChunk {
@@ -42,10 +44,10 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const projectId = (body.project_id ?? body.projectId) as string | undefined;
     const commentId = (body.comment_id ?? body.commentId) as string | undefined;
-    const discipline = String(body.discipline ?? "").trim();
-    const codeReference = String(body.code_reference ?? body.codeReference ?? "").trim();
-    const reviewerName = String(body.reviewer_name ?? body.reviewerName ?? "").trim();
-    const commentNumber = String(body.comment_number ?? body.commentNumber ?? "").trim();
+    const discipline = sanitizeGroundedTextField(body.discipline);
+    const codeReference = sanitizeGroundedTextField(body.code_reference ?? body.codeReference);
+    const reviewerName = sanitizeGroundedTextField(body.reviewer_name ?? body.reviewerName);
+    const commentNumber = sanitizeGroundedTextField(body.comment_number ?? body.commentNumber);
 
     const auth = await requireAuthProjectAccess(req, projectId);
     if (!auth.ok) return auth.response;
@@ -77,9 +79,9 @@ serve(async (req) => {
       dbComment = data;
     }
 
-    const bodyCommentText = String(body.comment_text ?? body.commentText ?? "").trim();
-    const bodyPrevious = String(body.previous_comment_text ?? body.previousCommentText ?? "").trim();
-    const bodyExisting = String(body.existing_response_text ?? body.existingResponseText ?? "").trim();
+    const bodyCommentText = sanitizeGroundedTextField(body.comment_text ?? body.commentText);
+    const bodyPrevious = sanitizeGroundedTextField(body.previous_comment_text ?? body.previousCommentText);
+    const bodyExisting = sanitizeGroundedTextField(body.existing_response_text ?? body.existingResponseText);
     const bodyCodeRefs = body.code_references ?? body.codeReferences;
 
     const commentContext = buildGroundedCommentContext({
@@ -98,7 +100,10 @@ serve(async (req) => {
     });
 
     if (!commentContext.has_substantive_content) {
-      return jsonResponse({ error: "comment_text or previous_comment_text is required" }, 400);
+      return jsonResponse({
+        error: GROUNDED_NO_REVIEW_TEXT_MESSAGE,
+        code: "no_review_text",
+      }, 400);
     }
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY");

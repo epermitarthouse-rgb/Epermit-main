@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -12,13 +10,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,7 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProjects } from "@/hooks/useProjects";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
-import { ReviewTimer, type ReviewTimerHandle } from "@/components/shadow/ReviewTimer";
+import type { ReviewTimerHandle } from "@/components/shadow/ReviewTimer";
 import { supabase } from "@/lib/supabase";
 import { isTaxonomyDiscipline } from "@/lib/commentDisciplineTaxonomy";
 import { parsePgcRawRefDisplayText } from "@/lib/parsePgcRawRefDisplayText";
@@ -41,15 +32,31 @@ import {
   extractDocumentForCommentParse,
   fileToBase64,
   isLegacyDocFile,
+  isLegacyXlsFile,
+  isSpreadsheetFile,
   LEGACY_DOC_ERROR_MESSAGE,
+  LEGACY_XLS_ERROR_MESSAGE,
 } from "@/utils/extractDocumentText";
 import { formatCommentLetterSaveError, type ProjectDocument } from "@/types/document";
 import {
   isManualCommentLetter,
   type ManualLetterCommentScope,
 } from "@/lib/commentReviewManualLetter";
+import {
+  COMMENT_REVIEW_DISCIPLINES,
+  createPastedSingleCommentRow,
+  markRowsAsParsed,
+  savedCommentToUploadRow,
+  type ParsedRow,
+} from "@/lib/commentReviewUploadRow";
+import {
+  CommentReviewInputPanel,
+  type CommentInputMethod,
+} from "@/components/comment-review/CommentReviewInputPanel";
+import { CommentReviewExtractedPanel } from "@/components/comment-review/CommentReviewExtractedPanel";
+import { ManualCommentFormDialog } from "@/components/comment-review/ManualCommentFormDialog";
 import { toast } from "sonner";
-import { FileImage, Loader2, CheckCircle2, Upload, ArrowLeft, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,26 +70,10 @@ import {
 import { Section } from "@/components/ui/Section";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 
-const DISCIPLINES = ["Architecture", "MEP", "Structural", "Zoning", "Fire", "DOEE", "Energy"] as const;
-
 interface ParserSummary {
   total: number;
   by_section: Record<string, number>;
   by_discipline: Record<string, number>;
-}
-
-export interface ParsedRow {
-  original_text: string;
-  discipline: string;
-  code_reference: string | null;
-  reviewer_name?: string | null;
-  comment_number?: string | null;
-  previous_comment_text?: string | null;
-  existing_response_text?: string | null;
-  code_references?: string[];
-  source_page?: number | null;
-  source_file?: string | null;
-  confidence?: number;
 }
 
 interface ParsedCommentRow {
@@ -96,6 +87,8 @@ interface ParsedCommentRow {
   ingest_source: "raw_ref" | "fallback_llm" | "manual_letter" | null;
   source_document_id?: string | null;
   previous_comment_text?: string | null;
+  existing_response_text?: string | null;
+  code_references?: string[] | string | null;
   reviewer_name?: string | null;
   comment_number?: string | null;
 }
@@ -211,18 +204,24 @@ export default function CommentReview() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [commentFormOpen, setCommentFormOpen] = useState(false);
+  const [commentFormMode, setCommentFormMode] = useState<"add" | "edit">("add");
+  const [editingRow, setEditingRow] = useState<ParsedRow | null>(null);
+  const [commentInputMethod, setCommentInputMethod] = useState<CommentInputMethod>("upload");
+  const reviewListClearedRef = useRef(false);
+  const reviewListHydratedForRef = useRef<string | null>(null);
   const timerRef = useRef<ReviewTimerHandle>(null);
 
   const disciplineOptions = useMemo(() => {
     const fromRows = uploadRows.map((r) => r.discipline).filter(Boolean);
-    return [...new Set([...DISCIPLINES, ...fromRows])];
+    return [...new Set([...COMMENT_REVIEW_DISCIPLINES, ...fromRows])];
   }, [uploadRows]);
 
   const fetchComments = useCallback(async (): Promise<ParsedCommentRow[]> => {
     if (!projectId) return [];
     const { data, error } = await supabase
       .from("parsed_comments")
-      .select("id, project_id, original_text, discipline, code_reference, status, page_number, ingest_source, source_document_id, previous_comment_text, reviewer_name, comment_number")
+      .select("id, project_id, original_text, discipline, code_reference, status, page_number, ingest_source, source_document_id, previous_comment_text, existing_response_text, code_references, reviewer_name, comment_number")
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
     if (error) {
@@ -284,6 +283,38 @@ export default function CommentReview() {
 
   const canParseLetter = Boolean(projectId && (originalUploadFile || sourceDocumentId));
   const parseButtonLabel = uploadRows.length > 0 ? "Re-parse document" : "Parse comments";
+
+  const savedCommentsForSelectedLetter = useMemo(
+    () =>
+      portalComments.filter(
+        (row) =>
+          row.ingest_source === "manual_letter" &&
+          row.source_document_id === sourceDocumentId,
+      ),
+    [portalComments, sourceDocumentId],
+  );
+
+  useEffect(() => {
+    reviewListClearedRef.current = false;
+    reviewListHydratedForRef.current = null;
+  }, [sourceDocumentId]);
+
+  useEffect(() => {
+    if (!sourceDocumentId || parsing || parseAttempted) return;
+    if (reviewListClearedRef.current) return;
+    if (uploadRows.length > 0) return;
+    if (reviewListHydratedForRef.current === sourceDocumentId) return;
+    if (savedCommentsForSelectedLetter.length === 0) return;
+
+    setUploadRows(savedCommentsForSelectedLetter.map(savedCommentToUploadRow));
+    reviewListHydratedForRef.current = sourceDocumentId;
+  }, [
+    sourceDocumentId,
+    parsing,
+    parseAttempted,
+    uploadRows.length,
+    savedCommentsForSelectedLetter,
+  ]);
 
   useEffect(() => {
     if (!projectId) {
@@ -778,6 +809,19 @@ export default function CommentReview() {
         return;
       }
 
+      if (isLegacyXlsFile(file) || file.type === "application/vnd.ms-excel") {
+        setFileSelectionError(LEGACY_XLS_ERROR_MESSAGE);
+        setOriginalUploadFile(null);
+        setSourceDocumentId(null);
+        resetExtractedParseState();
+        setImagePreview((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        toast.error(LEGACY_XLS_ERROR_MESSAGE);
+        return;
+      }
+
       if (projectManualLetterCount > 0) {
         setPendingConfirm({ kind: "newUpload", file });
         return;
@@ -927,7 +971,9 @@ export default function CommentReview() {
 
       if (payload?.error) throw new Error(payload.error);
 
-      const comments = Array.isArray(payload?.comments) ? payload.comments : [];
+      const comments = markRowsAsParsed(
+        Array.isArray(payload?.comments) ? payload.comments : [],
+      );
       const summary = payload?.parser_summary ?? null;
       if (summary) {
         console.log("[CommentReview] parser_summary", summary);
@@ -965,19 +1011,140 @@ export default function CommentReview() {
     persistCommentLetter,
   ]);
 
-  const updateUploadRow = (index: number, field: keyof ParsedRow, value: string | null) => {
+  const invokeCommentParser = useCallback(
+    async (
+      invokeBody: Record<string, unknown>,
+    ): Promise<{
+      comments: Array<Omit<ParsedRow, "row_source" | "_clientId">>;
+      parse_method?: string;
+      parser_summary?: ParserSummary;
+    }> => {
+      const { data, error } = await supabase.functions.invoke("parse-manual-comment-letter", {
+        body: invokeBody,
+      });
+      if (error) throw error;
+
+      const payload = data as {
+        comments?: Array<Omit<ParsedRow, "row_source" | "_clientId">>;
+        parse_method?: string;
+        parser_summary?: ParserSummary;
+        error?: string;
+      } | null;
+
+      if (payload?.error) throw new Error(payload.error);
+
+      return {
+        comments: Array.isArray(payload?.comments) ? payload.comments : [],
+        parse_method: payload?.parse_method,
+        parser_summary: payload?.parser_summary ?? undefined,
+      };
+    },
+    [],
+  );
+
+  const handleParsePastedComments = useCallback(
+    async ({
+      text,
+      sourceLabel,
+      discipline,
+    }: {
+      text: string;
+      sourceLabel: string;
+      discipline: string;
+    }) => {
+      if (!projectId) {
+        toast.error("Select a project in the sidebar before parsing");
+        return;
+      }
+      setParsing(true);
+      try {
+        const { comments, parse_method, parser_summary } = await invokeCommentParser({
+          fullText: text,
+          sourceFileName: sourceLabel,
+          pages: [{ pageNumber: 1, text }],
+        });
+
+        const parsedRows = markRowsAsParsed(comments, { sourceLabel }).map((row) => ({
+          ...row,
+          discipline: row.discipline?.trim() || discipline || "Architecture",
+        }));
+
+        setUploadRows((prev) => [...prev, ...parsedRows]);
+        if (parser_summary) {
+          setParserSummary(parser_summary);
+        }
+        setLastParseMethod(parse_method ?? "pasted_text");
+        setParseStatus(`Pasted ${parsedRows.length} comment${parsedRows.length !== 1 ? "s" : ""}`);
+        toast.success(
+          parsedRows.length > 0
+            ? `Parsed ${parsedRows.length} comment${parsedRows.length === 1 ? "" : "s"} from paste`
+            : "No comments found in pasted text",
+        );
+      } catch (err: unknown) {
+        console.error(err);
+        toast.error(err instanceof Error ? err.message : "Failed to parse pasted comments");
+      } finally {
+        setParsing(false);
+      }
+    },
+    [projectId, invokeCommentParser],
+  );
+
+  const handleAddPastedSingleComment = useCallback(
+    ({
+      text,
+      sourceLabel,
+      discipline,
+    }: {
+      text: string;
+      sourceLabel: string;
+      discipline: string;
+    }) => {
+      const row = createPastedSingleCommentRow({ text, sourceLabel, discipline });
+      setUploadRows((prev) => [...prev, row]);
+      toast.success("Comment added to review list");
+    },
+    [],
+  );
+
+  const openAddCommentForm = useCallback(() => {
+    setCommentFormMode("add");
+    setEditingRow(null);
+    setCommentFormOpen(true);
+  }, []);
+
+  const openEditCommentForm = useCallback((row: ParsedRow) => {
+    setCommentFormMode("edit");
+    setEditingRow(row);
+    setCommentFormOpen(true);
+  }, []);
+
+  const handleSaveCommentFromDialog = useCallback((row: ParsedRow, mode: "add" | "edit") => {
+    if (mode === "add") {
+      setUploadRows((prev) => [...prev, row]);
+      toast.success("Comment added to review list");
+      return;
+    }
     setUploadRows((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, [field]: value ?? r[field] } : r))
+      prev.map((existing) => (existing._clientId === row._clientId ? row : existing)),
     );
-  };
+    toast.success("Comment updated");
+  }, []);
+
+  const removeUploadRow = useCallback((clientId: string) => {
+    setUploadRows((prev) => prev.filter((row) => row._clientId !== clientId));
+    toast.info("Comment removed from review list");
+  }, []);
 
   const clearExtractedRows = useCallback(() => {
+    reviewListClearedRef.current = true;
+    reviewListHydratedForRef.current = null;
     setUploadRows([]);
     setParserSummary(null);
     setParseStatus(null);
     setLastParseMethod(null);
     setParseAttempted(false);
-    toast.info("Cleared extracted comments from the review table");
+    toast.info("Cleared review list");
   }, []);
 
   const deleteManualLetterComments = useCallback(
@@ -999,7 +1166,7 @@ export default function CommentReview() {
   );
 
   const insertApprovedRows = useCallback(
-    async (docId: string) => {
+    async (docId: string | null) => {
       if (!projectId) return 0;
       const toInsert = uploadRows.map((r) => ({
         project_id: projectId,
@@ -1035,7 +1202,7 @@ export default function CommentReview() {
         await timerRef.current.stopAndSave();
       }
       try {
-        let docId = sourceDocumentId;
+        let docId: string | null = sourceDocumentId;
         if (!docId && originalUploadFile) {
           const saveResult = await persistCommentLetter();
           if (!saveResult.docId) {
@@ -1043,10 +1210,6 @@ export default function CommentReview() {
             return;
           }
           docId = saveResult.docId;
-        }
-        if (!docId) {
-          toast.error("Missing source document for manual letter comments");
-          return;
         }
 
         if (newUploadReplaceProject) {
@@ -1062,8 +1225,24 @@ export default function CommentReview() {
         }
 
         const inserted = await insertApprovedRows(docId);
-        toast.success(`Saved ${inserted} comment${inserted === 1 ? "" : "s"}`);
+        if (import.meta.env.DEV) {
+          console.info("[CommentReview] Approved rows saved to parsed_comments", {
+            projectId,
+            inserted,
+            sourceDocumentId: docId,
+            manualRows: uploadRows.filter((r) => r.row_source === "manual").length,
+            rows: uploadRows.map((r) => ({
+              row_source: r.row_source,
+              original_text: r.original_text?.slice(0, 60),
+              discipline: r.discipline,
+            })),
+          });
+        }
+        toast.success(`Saved ${inserted} comment${inserted === 1 ? "" : "s"} to this project`);
+        reviewListClearedRef.current = false;
+        reviewListHydratedForRef.current = null;
         resetExtractedParseState();
+        await queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
         await refetchComments();
       } catch (err: unknown) {
         console.error(err);
@@ -1075,7 +1254,7 @@ export default function CommentReview() {
     [
       user,
       projectId,
-      uploadRows.length,
+      uploadRows,
       sourceDocumentId,
       originalUploadFile,
       persistCommentLetter,
@@ -1083,6 +1262,7 @@ export default function CommentReview() {
       deleteManualLetterComments,
       insertApprovedRows,
       resetExtractedParseState,
+      queryClient,
       refetchComments,
     ],
   );
@@ -1470,337 +1650,86 @@ export default function CommentReview() {
         )}
 
         {projectId && (
-          <Accordion type="single" collapsible className="w-full rounded-xl border border-cream-sunken bg-cream-raised shadow-cream">
-            <AccordionItem value="upload" className="border-border px-1">
-              <AccordionTrigger>Optional: Upload a document to parse</AccordionTrigger>
+          <Accordion
+            type="single"
+            collapsible
+            defaultValue="add-comments"
+            className="w-full rounded-xl border border-cream-sunken bg-cream-raised shadow-cream dark:border-obsidian-raised dark:bg-obsidian/30"
+          >
+            <AccordionItem value="add-comments" className="border-border px-1">
+              <AccordionTrigger className="text-sm font-medium hover:no-underline">
+                Add comments
+              </AccordionTrigger>
               <AccordionContent>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Letter / Document</CardTitle>
-                      <CardDescription>
-                        Upload a permit comment letter for parsing. The parser reads the full document, extracts reviewer sections and Comment N blocks, then lets you review before saving.
-                      </CardDescription>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {COMMENT_LETTER_SUPPORTED_FORMATS_HINT}
-                      </p>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {commentLetters.length > 0 ? (
-                        <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <Label className="text-xs uppercase tracking-wide text-ink-tertiary-light">
-                              Saved comment letter{commentLetters.length !== 1 ? "s" : ""}
-                            </Label>
-                            {commentLetters.length > 1 ? (
-                              <Select
-                                value={sourceDocumentId ?? undefined}
-                                onValueChange={handleSelectLetter}
-                              >
-                                <SelectTrigger className="h-8 max-w-[240px]">
-                                  <SelectValue placeholder="Select letter" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {commentLetters.map((letter) => (
-                                    <SelectItem key={letter.id} value={letter.id}>
-                                      {letter.file_name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : null}
-                          </div>
-                          {selectedLetter ? (
-                            <div className="text-sm space-y-1">
-                              <p className="font-medium text-ink-primary-light break-all">
-                                {selectedLetter.file_name}
-                              </p>
-                              <p className="text-xs text-ink-secondary-light">
-                                Uploaded {formatLetterDate(selectedLetter.created_at)}
-                              </p>
-                              <p className="text-xs font-mono-data text-ink-tertiary-light break-all">
-                                Source document: {selectedLetter.id}
-                              </p>
-                              <p className="text-xs text-ink-secondary-light">
-                                Saved manual-letter comments: {savedManualLetterCount}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-ink-tertiary-light">
-                          No saved comment letters for this project yet. Upload a letter below.
-                        </p>
-                      )}
-
-                      <div className="border-2 border-dashed border-gold/30 rounded-xl p-6 flex flex-col items-center justify-center min-h-[180px] bg-cream-sunken/40">
-                        {imagePreview ? (
-                          <img
-                            src={imagePreview}
-                            alt="Letter preview"
-                            className="max-h-[240px] w-auto object-contain rounded border"
-                          />
-                        ) : originalUploadFile ? (
-                          <div className="text-center space-y-2">
-                            <FileImage className="h-10 w-10 text-teal mx-auto" />
-                            <p className="text-sm font-medium text-ink-primary-light">{originalUploadFile.name}</p>
-                            <p className="text-xs text-ink-tertiary-light">
-                              {sourceDocumentId ? "New upload (not saved until parse)" : "Ready to parse"}
-                            </p>
-                          </div>
-                        ) : selectedLetter ? (
-                          <div className="text-center space-y-2">
-                            <FileImage className="h-10 w-10 text-teal mx-auto" />
-                            <p className="text-sm font-medium text-ink-primary-light">{selectedLetter.file_name}</p>
-                            <p className="text-xs text-ink-tertiary-light">Saved letter selected</p>
-                          </div>
-                        ) : (
-                          <Upload className="h-10 w-10 text-teal mb-2" />
-                        )}
-                        <Input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*,application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,.doc,application/msword"
-                          onChange={handleFileChange}
-                          className="mt-2 max-w-xs"
-                        />
-                      </div>
-                      {fileSelectionError && (
-                        <p className="text-sm text-amber-700 dark:text-amber-400" role="alert">
-                          {fileSelectionError}
-                        </p>
-                      )}
-                      {parseStatus && (
-                        <p className="text-sm text-ink-secondary-light">
-                          {parseStatus}
-                          {lastParseMethod ? (
-                            <span className="text-ink-tertiary-light"> · {lastParseMethod}</span>
-                          ) : null}
-                        </p>
-                      )}
-                      {parserSummary && parserSummary.total > 0 ? (
-                        <div
-                          className="text-xs rounded-md border border-border bg-muted/30 p-2 space-y-1"
-                          role="status"
-                          aria-label="Parser summary"
-                        >
-                          <p className="font-medium text-ink-primary-light">
-                            Parser summary — {parserSummary.total} total
-                          </p>
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-ink-secondary-light font-mono-data">
-                            {Object.entries(parserSummary.by_discipline).map(([discipline, count]) => (
-                              <span key={discipline}>
-                                {discipline}: {count}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : savedManualLetterCount > 0 && uploadRows.length === 0 ? (
-                        <div className="text-xs rounded-md border border-border bg-muted/20 p-2">
-                          <p className="font-medium text-ink-primary-light">
-                            Saved from this letter — {savedManualLetterCount} comment
-                            {savedManualLetterCount !== 1 ? "s" : ""}
-                          </p>
-                          <p className="text-ink-tertiary-light mt-1">
-                            Re-parse to refresh extracted rows before approving replacements.
-                          </p>
-                        </div>
-                      ) : null}
-                      {savedManualLetterCount > 0 ? (
-                        <p className="text-xs text-amber-700 dark:text-amber-400">
-                          {savedManualLetterCount} approved manual-letter comment
-                          {savedManualLetterCount !== 1 ? "s" : ""} saved for this letter.
-                          Approve All replaces them after confirmation; re-parse alone does not change saved rows.
-                        </p>
-                      ) : null}
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          variant="gold"
-                          onClick={() => void runParse()}
-                          disabled={parsing || !canParseLetter}
-                          className="w-full"
-                          size="sm"
-                        >
-                          {parsing ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          ) : (
-                            <RotateCcw className="h-4 w-4 mr-2" />
-                          )}
-                          {parsing ? "Parsing…" : parseButtonLabel}
-                        </Button>
-                        {(originalUploadFile || sourceDocumentId) ? (
-                          <>
-                            {savedManualLetterCount > 0 ? (
-                              <Button
-                                variant="outline"
-                                onClick={() => setPendingConfirm({ kind: "clearSaved" })}
-                                disabled={parsing || saving || !sourceDocumentId}
-                                className="w-full"
-                                size="sm"
-                              >
-                                Clear saved comments from this letter
-                              </Button>
-                            ) : null}
-                            <Button
-                              variant="outline"
-                              onClick={() =>
-                                setPendingConfirm({ kind: "deleteLetter", alsoDeleteComments: true })
-                              }
-                              disabled={parsing || saving}
-                              className="w-full text-destructive hover:text-destructive"
-                              size="sm"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete uploaded letter
-                            </Button>
-                          </>
-                        ) : null}
-                      </div>
+                <div className="grid grid-cols-1 gap-5 pt-1 lg:grid-cols-2 lg:gap-6">
+                  <Card className="border-border/50 shadow-none dark:bg-obsidian/20">
+                    <CardContent className="pt-5">
+                      <CommentReviewInputPanel
+                        inputMethod={commentInputMethod}
+                        onInputMethodChange={setCommentInputMethod}
+                        supportedFormatsHint={COMMENT_LETTER_SUPPORTED_FORMATS_HINT}
+                        commentLetters={commentLetters}
+                        selectedLetter={selectedLetter}
+                        sourceDocumentId={sourceDocumentId}
+                        onSelectLetter={handleSelectLetter}
+                        savedManualLetterCount={savedManualLetterCount}
+                        imagePreview={imagePreview}
+                        originalUploadFile={originalUploadFile}
+                        fileInputRef={fileInputRef}
+                        onFileChange={handleFileChange}
+                        fileSelectionError={fileSelectionError}
+                        isSpreadsheetFile={isSpreadsheetFile}
+                        formatLetterDate={formatLetterDate}
+                        parseStatus={parseStatus}
+                        lastParseMethod={lastParseMethod}
+                        parserSummary={parserSummary}
+                        uploadRowsCount={uploadRows.length}
+                        parsing={parsing}
+                        saving={saving}
+                        canParseLetter={canParseLetter}
+                        parseButtonLabel={parseButtonLabel}
+                        onParseDocument={() => void runParse()}
+                        onClearSaved={() => setPendingConfirm({ kind: "clearSaved" })}
+                        onDeleteLetter={() =>
+                          setPendingConfirm({ kind: "deleteLetter", alsoDeleteComments: true })
+                        }
+                        disciplineOptions={disciplineOptions}
+                        onParsePasted={handleParsePastedComments}
+                        onAddPastedSingle={handleAddPastedSingleComment}
+                      />
                     </CardContent>
                   </Card>
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base">Extracted comments</CardTitle>
-                          <CardDescription>Edit then Approve All to save to the project.</CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          {uploadRows.length > 0 ? (
-                            <Button variant="outline" size="sm" onClick={clearExtractedRows} disabled={saving || parsing}>
-                              Clear extracted comments
-                            </Button>
-                          ) : null}
-                          <ReviewTimer ref={timerRef} projectId={projectId} commentCount={uploadRows.length} />
-                          <Button
-                            variant="gold"
-                            size="sm"
-                            onClick={requestApproveAll}
-                            disabled={saving || uploadRows.length === 0}
-                          >
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                            Approve All
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {uploadRows.length === 0 ? (
-                        <p className="text-muted-foreground text-sm py-4">
-                          {selectedLetter || originalUploadFile
-                            ? "Select a saved letter or upload a new one, then parse comments."
-                            : "Upload a document and click Parse comments."}
-                          {savedManualLetterCount > 0
-                            ? ` ${savedManualLetterCount} comment${savedManualLetterCount !== 1 ? "s" : ""} already saved for the selected letter.`
-                            : ""}
-                        </p>
-                      ) : (
-                        <div className="border border-border rounded-lg overflow-auto max-h-[360px]">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="table-head-sticky w-[56px]">#</TableHead>
-                                <TableHead className="table-head-sticky w-[100px]">Page</TableHead>
-                                <TableHead className="table-head-sticky w-[120px]">Reviewer</TableHead>
-                                <TableHead className="table-head-sticky min-w-[180px]">Comment</TableHead>
-                                <TableHead className="table-head-sticky w-[120px]">Discipline</TableHead>
-                                <TableHead className="table-head-sticky min-w-[120px]">Code refs</TableHead>
-                                <TableHead className="table-head-sticky w-[100px]">Primary code</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {uploadRows.map((row, i) => (
-                                <TableRow key={i}>
-                                  <TableCell className="font-mono-data text-xs align-top">
-                                    {row.comment_number ?? "—"}
-                                  </TableCell>
-                                  <TableCell className="font-mono-data text-xs align-top">
-                                    {row.source_page ?? "—"}
-                                  </TableCell>
-                                  <TableCell className="text-xs align-top max-w-[120px]">
-                                    <Input
-                                      value={row.reviewer_name ?? ""}
-                                      onChange={(e) => updateUploadRow(i, "reviewer_name", e.target.value || null)}
-                                      placeholder="Reviewer"
-                                      className="h-8 text-xs"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      value={row.original_text}
-                                      onChange={(e) => updateUploadRow(i, "original_text", e.target.value)}
-                                      className="min-w-[160px] text-sm"
-                                      placeholder={row.previous_comment_text ? "Active comment (optional)" : "Comment text"}
-                                    />
-                                    {row.previous_comment_text ? (
-                                      <details
-                                        className="mt-1.5 text-xs group"
-                                        open={!row.original_text?.trim() || row.original_text.trim().length < 40}
-                                      >
-                                        <summary className="cursor-pointer list-none text-amber-700 dark:text-amber-400 font-medium hover:underline">
-                                          Previous comment (full reviewer text)
-                                          <span className="text-ink-tertiary-light font-normal ml-1">
-                                            ({row.previous_comment_text.length} chars)
-                                          </span>
-                                        </summary>
-                                        <p className="mt-1.5 p-2 rounded border border-border/60 bg-muted/40 text-ink-secondary-light whitespace-pre-wrap max-h-48 overflow-y-auto">
-                                          {row.previous_comment_text}
-                                        </p>
-                                      </details>
-                                    ) : (
-                                      <p className="text-[11px] text-ink-tertiary-light mt-1 line-clamp-3" title={row.original_text}>
-                                        Preview: {row.original_text || "—"}
-                                      </p>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Select
-                                      value={row.discipline}
-                                      onValueChange={(v) => updateUploadRow(i, "discipline", v)}
-                                    >
-                                      <SelectTrigger className="h-8">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {disciplineOptions.map((d) => (
-                                          <SelectItem key={d} value={d}>
-                                            {d}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </TableCell>
-                                  <TableCell className="text-xs align-top max-w-[160px]">
-                                    {row.code_references && row.code_references.length > 0 ? (
-                                      <p className="whitespace-pre-wrap break-words text-ink-secondary-light" title={row.code_references.join(", ")}>
-                                        {row.code_references.join(", ")}
-                                      </p>
-                                    ) : (
-                                      <span className="text-ink-tertiary-light">—</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      value={row.code_reference ?? ""}
-                                      onChange={(e) => updateUploadRow(i, "code_reference", e.target.value || null)}
-                                      placeholder="e.g. IBC 1004.3"
-                                      className="h-8 text-sm"
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <CommentReviewExtractedPanel
+                    projectId={projectId}
+                    uploadRows={uploadRows}
+                    savedManualLetterCount={savedManualLetterCount}
+                    saving={saving}
+                    parsing={parsing}
+                    timerRef={timerRef}
+                    onApproveAll={requestApproveAll}
+                    onAddComment={openAddCommentForm}
+                    onClearReviewList={clearExtractedRows}
+                    onEditRow={openEditCommentForm}
+                    onDeleteRow={removeUploadRow}
+                  />
                 </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
         )}
       </div>
+
+      <ManualCommentFormDialog
+        open={commentFormOpen}
+        onOpenChange={(open) => {
+          setCommentFormOpen(open);
+          if (!open) setEditingRow(null);
+        }}
+        mode={commentFormMode}
+        initialRow={editingRow}
+        disciplineOptions={disciplineOptions}
+        onSave={handleSaveCommentFromDialog}
+      />
 
       <AlertDialog open={pendingConfirm != null} onOpenChange={(open) => !open && setPendingConfirm(null)}>
         <AlertDialogContent>

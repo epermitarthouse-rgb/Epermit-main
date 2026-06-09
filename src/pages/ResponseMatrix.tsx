@@ -27,6 +27,9 @@ import { supabase } from "@/lib/supabase";
 import {
   autoDraftPayloadFromRow,
   buildFullCommentContext,
+  getGroundedDraftValidationError,
+  GROUNDED_NO_REVIEW_TEXT_MESSAGE,
+  GroundedValidationSkip,
   groundedDraftPayloadFromRow,
   parseStoredCodeReferences,
 } from "@/lib/groundedCommentContext";
@@ -91,10 +94,26 @@ const REPORT_METADATA_PHRASES = [
   "No data found.",
 ];
 
-function isReportMetadataRow(row: { original_text?: string | null }): boolean {
+function isReportMetadataRow(row: {
+  original_text?: string | null;
+  previous_comment_text?: string | null;
+  ingest_source?: string | null;
+}): boolean {
+  // Manual / uploaded / pasted workflow rows are never portal report metadata.
+  if (row.ingest_source === "manual_letter" || row.ingest_source === "fallback_llm") {
+    return false;
+  }
   const t = (row.original_text ?? "").trim();
-  if (t.length < 15) return true;
-  return REPORT_METADATA_PHRASES.some((phrase) => t.includes(phrase));
+  const previous = (row.previous_comment_text ?? "").trim();
+  const combined = t || previous;
+  if (combined.length < 15) return true;
+  return REPORT_METADATA_PHRASES.some((phrase) => combined.includes(phrase));
+}
+
+function manualCommentSourceBadgeLabel(row: {
+  source_document_id?: string | null;
+}): string {
+  return row.source_document_id ? "Manual uploaded comments" : "Manual entry";
 }
 
 function statusBorderClass(status: string | null): string {
@@ -217,11 +236,7 @@ function MarkupStatusBadge({ commentId, projectId }: { commentId: string; projec
 
 function commentPreviewText(row: ParsedCommentRow): string {
   const ctx = buildFullCommentContext(row);
-  const primary = ctx.display_primary_text;
-  if (primary.length >= 12) return primary;
-  const previous = row.previous_comment_text?.trim() ?? "";
-  if (previous) return previous;
-  return row.original_text?.trim() ?? "";
+  return ctx.display_primary_text;
 }
 
 function ConfidenceBadge({ value }: { value: string | null | undefined }) {
@@ -336,8 +351,8 @@ function CommentDetailPanel({
   onUpdateSheetRef: (value: string) => void;
 }) {
   const ctx = buildFullCommentContext(row);
-  const previous = row.previous_comment_text?.trim() ?? "";
-  const existing = row.existing_response_text?.trim() ?? "";
+  const previous = ctx.previous_comment_text;
+  const existing = ctx.existing_response_text;
   const evidence = Array.isArray(row.grounded_evidence) ? row.grounded_evidence : [];
   const [editingResponse, setEditingResponse] = useState(false);
   const responseText = row.response_text ?? "";
@@ -347,23 +362,21 @@ function CommentDetailPanel({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <DetailSection title="City / reviewer comment">
-            {(row.reviewer_name || row.comment_number) && (
+            {(ctx.reviewer_name || ctx.comment_number) && (
               <p className="text-xs font-mono uppercase tracking-wide text-ink-secondary-light mb-2">
-                {[row.reviewer_name, row.comment_number ? `#${row.comment_number}` : null]
+                {[ctx.reviewer_name, ctx.comment_number ? `#${ctx.comment_number}` : null]
                   .filter(Boolean)
                   .join(" · ")}
               </p>
             )}
-            {ctx.original_text ? (
-              <p>{ctx.original_text}</p>
-            ) : row.original_text?.trim() ? (
-              <p>{row.original_text.trim()}</p>
+            {ctx.display_primary_text ? (
+              <p>{ctx.display_primary_text}</p>
             ) : (
-              <p className="text-ink-tertiary-light italic">No current comment line.</p>
+              <p className="text-ink-tertiary-light italic">No comment text</p>
             )}
             {row.ingest_source === "manual_letter" && (
               <Badge variant="outline" className="mt-2 text-[10px] border-teal/40 text-teal">
-                Manual uploaded comment
+                {manualCommentSourceBadgeLabel(row)}
               </Badge>
             )}
           </DetailSection>
@@ -514,20 +527,28 @@ export interface ParsedCommentRow {
 function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand: () => void }) {
   const ctx = buildFullCommentContext(row);
   const preview = commentPreviewText(row);
-  const previous = row.previous_comment_text?.trim() ?? "";
+  const previous = ctx.previous_comment_text;
   const hasPreviousContext = Boolean(previous && ctx.should_expand_previous);
 
   return (
     <div className="max-w-[240px] space-y-1">
-      {(row.reviewer_name || row.comment_number) && (
+      {(ctx.reviewer_name || ctx.comment_number) && (
         <p className="text-[10px] font-mono uppercase tracking-wide text-ink-secondary-light dark:text-ink-secondary-dark truncate">
-          {[row.reviewer_name, row.comment_number ? `#${row.comment_number}` : null]
+          {[ctx.reviewer_name, ctx.comment_number ? `#${ctx.comment_number}` : null]
             .filter(Boolean)
             .join(" · ")}
         </p>
       )}
-      <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark line-clamp-2 leading-snug" title={preview}>
-        {preview || "—"}
+      <p
+        className={cn(
+          "text-sm line-clamp-2 leading-snug",
+          preview
+            ? "text-ink-primary-light dark:text-ink-primary-dark"
+            : "text-ink-tertiary-light italic",
+        )}
+        title={preview || undefined}
+      >
+        {preview || "No comment text"}
       </p>
       {hasPreviousContext && (
         <p className="text-xs font-medium text-amber-800 dark:text-amber-300 line-clamp-1" title={previous}>
@@ -645,6 +666,18 @@ export default function ResponseMatrix() {
   });
 
   const withoutMetadata = (allRows ?? []).filter((r) => !isReportMetadataRow(r));
+  if (import.meta.env.DEV && allRows.length > withoutMetadata.length) {
+    const excluded = allRows.filter((r) => isReportMetadataRow(r));
+    console.info("[ResponseMatrix] Excluded metadata rows", {
+      projectId,
+      excludedCount: excluded.length,
+      reasons: excluded.map((r) => ({
+        id: r.id,
+        ingest_source: r.ingest_source,
+        textPreview: (r.original_text ?? r.previous_comment_text ?? "").slice(0, 40),
+      })),
+    });
+  }
   const rows =
     filterPending && withoutMetadata.length > 0
       ? withoutMetadata.filter(
@@ -733,11 +766,21 @@ export default function ResponseMatrix() {
         evidence?: GroundedEvidenceItem[];
       } | null;
 
-      if (result?.code === "no_prepared_documents" || result?.error) {
+      if (result?.code === "no_review_text") {
+        const message = result.error ?? GROUNDED_NO_REVIEW_TEXT_MESSAGE;
+        toast.error(message);
+        throw new GroundedValidationSkip(message);
+      }
+
+      if (result?.code === "no_prepared_documents") {
         throw new Error(
           result.error ??
             "No AI-prepared documents found. Go to Project Documents and click Prepare for AI on the plan set.",
         );
+      }
+
+      if (result?.error) {
+        throw new Error(result.error);
       }
 
       const text = result?.suggested_response ?? "";
@@ -782,6 +825,11 @@ export default function ResponseMatrix() {
 
   const runGroundedDraft = useCallback(
     (row: ParsedCommentRow) => {
+      const validationError = getGroundedDraftValidationError(row);
+      if (validationError) {
+        toast.error(validationError);
+        return;
+      }
       resetGroundedStatus(row.id);
       enqueueGrounded([row.id]);
     },
@@ -794,11 +842,35 @@ export default function ResponseMatrix() {
         toast.error("Select at least one comment");
         return;
       }
-      for (const id of ids) resetGroundedStatus(id);
-      const added = enqueueGrounded(ids);
+      const validIds: string[] = [];
+      let skipped = 0;
+      for (const id of ids) {
+        const row =
+          rows.find((r) => r.id === id) ??
+          queryClient
+            .getQueryData<ParsedCommentRow[]>(["parsed_comments", projectId])
+            ?.find((r) => r.id === id);
+        if (!row) continue;
+        if (getGroundedDraftValidationError(row)) {
+          skipped += 1;
+          continue;
+        }
+        validIds.push(id);
+      }
+      if (validIds.length === 0) {
+        toast.error(GROUNDED_NO_REVIEW_TEXT_MESSAGE);
+        return;
+      }
+      if (skipped > 0) {
+        toast.info(
+          `Skipped ${skipped} comment${skipped === 1 ? "" : "s"} with no review text`,
+        );
+      }
+      for (const id of validIds) resetGroundedStatus(id);
+      const added = enqueueGrounded(validIds);
       if (added === 0) toast.info("Selected comments are already generating");
     },
-    [enqueueGrounded, resetGroundedStatus],
+    [enqueueGrounded, resetGroundedStatus, rows, queryClient, projectId],
   );
 
   const toggleExpandRow = useCallback((id: string) => {

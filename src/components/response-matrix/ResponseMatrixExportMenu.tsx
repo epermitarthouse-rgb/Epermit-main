@@ -13,15 +13,74 @@ import { toast } from "sonner";
 import {
   buildResponseMatrixExportFilename,
   buildResponseMatrixExportRecords,
+  chunkArray,
+  EXPORT_BATCH_SIZE,
   exportResponseMatrixCsv,
   exportResponseMatrixXlsx,
   type ResponseMatrixExportComment,
   type ResponseMatrixProjectMeta,
 } from "@/lib/responseMatrixExport";
 
+const EXPORT_ERROR_TOAST =
+  "Export failed. Please try again or contact support.";
+
 interface ResponseMatrixExportMenuProps {
   projectId: string | null;
   rows: ResponseMatrixExportComment[];
+}
+
+async function fetchMarkupByCommentId(
+  projectId: string,
+  commentIds: string[],
+): Promise<Record<string, string>> {
+  const markupByCommentId: Record<string, string> = {};
+  if (commentIds.length === 0) return markupByCommentId;
+
+  for (const batch of chunkArray(commentIds, EXPORT_BATCH_SIZE)) {
+    const { data, error } = await supabase
+      .from("plan_markups")
+      .select("comment_id, status")
+      .eq("project_id", projectId)
+      .in("comment_id", batch);
+
+    if (error) {
+      console.warn("[ResponseMatrixExport] plan_markups lookup failed:", error);
+      continue;
+    }
+
+    for (const markup of data ?? []) {
+      if (markup.comment_id) {
+        markupByCommentId[markup.comment_id] = markup.status;
+      }
+    }
+  }
+
+  return markupByCommentId;
+}
+
+async function fetchSourceDocumentById(
+  sourceDocumentIds: string[],
+): Promise<Record<string, string>> {
+  const sourceDocumentById: Record<string, string> = {};
+  if (sourceDocumentIds.length === 0) return sourceDocumentById;
+
+  for (const batch of chunkArray(sourceDocumentIds, EXPORT_BATCH_SIZE)) {
+    const { data, error } = await supabase
+      .from("project_documents")
+      .select("id, file_name")
+      .in("id", batch);
+
+    if (error) {
+      console.warn("[ResponseMatrixExport] project_documents lookup failed:", error);
+      continue;
+    }
+
+    for (const doc of data ?? []) {
+      sourceDocumentById[doc.id] = doc.file_name;
+    }
+  }
+
+  return sourceDocumentById;
 }
 
 async function fetchExportContext(
@@ -32,51 +91,32 @@ async function fetchExportContext(
   markupByCommentId: Record<string, string>;
   sourceDocumentById: Record<string, string>;
 }> {
-  const commentIds = rows.map((row) => row.id);
+  const projectRows = rows.filter((row) => row.project_id === projectId);
+  const commentIds = projectRows.map((row) => row.id);
   const sourceDocumentIds = [
-    ...new Set(rows.map((row) => row.source_document_id).filter(Boolean)),
+    ...new Set(projectRows.map((row) => row.source_document_id).filter(Boolean)),
   ] as string[];
 
-  const [projectResult, markupResult, documentsResult] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("name, permit_number, jurisdiction")
-      .eq("id", projectId)
-      .maybeSingle(),
-    commentIds.length > 0
-      ? supabase
-          .from("plan_markups")
-          .select("comment_id, status")
-          .eq("project_id", projectId)
-          .in("comment_id", commentIds)
-      : Promise.resolve({ data: [], error: null }),
-    sourceDocumentIds.length > 0
-      ? supabase
-          .from("project_documents")
-          .select("id, file_name")
-          .in("id", sourceDocumentIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+  const projectResult = await supabase
+    .from("projects")
+    .select("name, permit_number, jurisdiction")
+    .eq("id", projectId)
+    .maybeSingle();
 
-  if (projectResult.error) throw projectResult.error;
-  if (markupResult.error) throw markupResult.error;
-  if (documentsResult.error) throw documentsResult.error;
+  if (projectResult.error) {
+    console.warn("[ResponseMatrixExport] projects lookup failed:", projectResult.error);
+  }
+
+  const [markupByCommentId, sourceDocumentById] = await Promise.all([
+    fetchMarkupByCommentId(projectId, commentIds),
+    fetchSourceDocumentById(sourceDocumentIds),
+  ]);
 
   const project: ResponseMatrixProjectMeta = {
     name: projectResult.data?.name?.trim() || "Project",
     permit_number: projectResult.data?.permit_number ?? null,
     jurisdiction: projectResult.data?.jurisdiction ?? null,
   };
-
-  const markupByCommentId: Record<string, string> = {};
-  for (const markup of markupResult.data ?? []) {
-    markupByCommentId[markup.comment_id] = markup.status;
-  }
-
-  const sourceDocumentById: Record<string, string> = {};
-  for (const doc of documentsResult.data ?? []) {
-    sourceDocumentById[doc.id] = doc.file_name;
-  }
 
   return { project, markupByCommentId, sourceDocumentById };
 }
@@ -91,7 +131,8 @@ export function ResponseMatrixExportMenu({ projectId, rows }: ResponseMatrixExpo
         toast.error("Select a project first");
         return;
       }
-      if (rows.length === 0) {
+      const projectRows = rows.filter((row) => row.project_id === projectId);
+      if (projectRows.length === 0) {
         toast.error("No comments to export");
         return;
       }
@@ -100,14 +141,20 @@ export function ResponseMatrixExportMenu({ projectId, rows }: ResponseMatrixExpo
       try {
         const { project, markupByCommentId, sourceDocumentById } = await fetchExportContext(
           projectId,
-          rows,
+          projectRows,
         );
         const records = buildResponseMatrixExportRecords(
-          rows,
+          projectRows,
           project,
           markupByCommentId,
           sourceDocumentById,
         );
+
+        if (records.length === 0) {
+          toast.error("No comments to export");
+          return;
+        }
+
         const filename = buildResponseMatrixExportFilename(project, formatType);
 
         if (formatType === "csv") {
@@ -117,11 +164,11 @@ export function ResponseMatrixExportMenu({ projectId, rows }: ResponseMatrixExpo
         }
 
         toast.success(
-          `Exported ${rows.length} comment${rows.length === 1 ? "" : "s"} as ${formatType.toUpperCase()} (${format(new Date(), "MMM d, yyyy")})`,
+          `Exported ${projectRows.length} comment${projectRows.length === 1 ? "" : "s"} as ${formatType.toUpperCase()} (${format(new Date(), "MMM d, yyyy")})`,
         );
       } catch (error) {
         console.error("Response Matrix export failed:", error);
-        toast.error(error instanceof Error ? error.message : "Export failed");
+        toast.error(EXPORT_ERROR_TOAST);
       } finally {
         setExporting(false);
       }
@@ -150,17 +197,23 @@ export function ResponseMatrixExportMenu({ projectId, rows }: ResponseMatrixExpo
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          onClick={() => runExport("csv")}
           disabled={disabled}
           data-testid="menu-export-response-matrix-csv"
+          onSelect={(event) => {
+            event.preventDefault();
+            void runExport("csv");
+          }}
         >
           <FileSpreadsheet className="h-4 w-4 mr-2" />
           Export CSV
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => runExport("xlsx")}
           disabled={disabled}
           data-testid="menu-export-response-matrix-xlsx"
+          onSelect={(event) => {
+            event.preventDefault();
+            void runExport("xlsx");
+          }}
         >
           <FileSpreadsheet className="h-4 w-4 mr-2" />
           Export XLSX

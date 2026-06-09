@@ -4,6 +4,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import mammoth from "mammoth";
+import * as XLSX from "xlsx";
 import {
   buildFullTextWithPageMarkers,
   type DocumentPageText,
@@ -31,14 +32,124 @@ export type DocumentExtractionResult =
     };
 
 export const COMMENT_LETTER_SUPPORTED_FORMATS_HINT =
-  "Supported: PDF, DOCX, PNG, JPG. Legacy .DOC files are not supported — please save as DOCX or PDF.";
+  "Supported: PDF, DOCX, XLSX, CSV, PNG, JPG. Legacy DOC/XLS may require conversion.";
 
 export const LEGACY_DOC_ERROR_MESSAGE =
   "Legacy .DOC files are not supported. Please open the file in Word/Google Docs and save it as .DOCX or PDF.";
 
+export const LEGACY_XLS_ERROR_MESSAGE =
+  "Legacy .XLS files are not supported yet. Please upload XLSX or CSV.";
+
 export function isLegacyDocFile(file: File): boolean {
   const name = file.name.toLowerCase();
   return name.endsWith(".doc") && !name.endsWith(".docx");
+}
+
+export function isLegacyXlsFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".xls") && !name.endsWith(".xlsx");
+}
+
+export function isSpreadsheetFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return (
+    name.endsWith(".xlsx") ||
+    name.endsWith(".csv") ||
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    file.type === "text/csv" ||
+    file.type === "application/csv"
+  );
+}
+
+function formatSpreadsheetRows(sheetName: string, rows: string[][]): string {
+  const lines = [`Sheet: ${sheetName}`];
+  rows.forEach((row, index) => {
+    const cells = row.map((cell) => String(cell ?? "").trim());
+    if (cells.some((cell) => cell.length > 0)) {
+      lines.push(`Row ${index + 1}: ${cells.join(" | ")}`);
+    }
+  });
+  return lines.join("\n");
+}
+
+/** Parse CSV text into rows while preserving quoted fields. */
+export function parseCsvText(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field.trim());
+      field = "";
+    } else if (ch === "\n" || (ch === "\r" && next === "\n")) {
+      row.push(field.trim());
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = [];
+      field = "";
+      if (ch === "\r") i++;
+    } else if (ch !== "\r") {
+      field += ch;
+    }
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field.trim());
+    if (row.some((cell) => cell.length > 0)) rows.push(row);
+  }
+
+  return rows;
+}
+
+/** Extract CSV rows into readable text for the comment parser. */
+export async function extractCsvText(file: File): Promise<DocumentPageText[]> {
+  const raw = await file.text();
+  const rows = parseCsvText(raw.replace(/^\uFEFF/, ""));
+  return [{ pageNumber: 1, text: formatSpreadsheetRows("CSV", rows) }];
+}
+
+/** Extract all XLSX sheets into readable text for the comment parser. */
+export async function extractXlsxText(file: File): Promise<DocumentPageText[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+  const pages: DocumentPageText[] = [];
+
+  workbook.SheetNames.forEach((sheetName, index) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: "",
+      raw: false,
+    }) as string[][];
+    pages.push({
+      pageNumber: index + 1,
+      text: formatSpreadsheetRows(sheetName, rows),
+    });
+  });
+
+  if (pages.length === 0) {
+    return [{ pageNumber: 1, text: "Sheet: Workbook\n" }];
+  }
+
+  return pages;
 }
 
 /** Extract text from all pages of a PDF; track pages with little text for OCR fallback. */
@@ -92,7 +203,49 @@ export async function extractDocumentForCommentParse(
     };
   }
 
+  if (isLegacyXlsFile(file) || file.type === "application/vnd.ms-excel") {
+    return {
+      kind: "unsupported_doc",
+      message: LEGACY_XLS_ERROR_MESSAGE,
+    };
+  }
+
   const sourceFileName = file.name;
+  const lowerName = file.name.toLowerCase();
+
+  if (
+    lowerName.endsWith(".csv") ||
+    file.type === "text/csv" ||
+    file.type === "application/csv"
+  ) {
+    const pages = await extractCsvText(file);
+    const fullText = buildFullTextWithPageMarkers(pages);
+    return {
+      kind: "text",
+      pages,
+      fullText,
+      sourceFileName,
+      sparsePageNumbers: pages[0].text.length < MIN_TOTAL_TEXT_CHARS ? [1] : [],
+    };
+  }
+
+  if (
+    lowerName.endsWith(".xlsx") ||
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ) {
+    const pages = await extractXlsxText(file);
+    const fullText = buildFullTextWithPageMarkers(pages);
+    const sparsePageNumbers = pages
+      .filter((page) => page.text.length < MIN_PAGE_TEXT_CHARS)
+      .map((page) => page.pageNumber);
+    return {
+      kind: "text",
+      pages,
+      fullText,
+      sourceFileName,
+      sparsePageNumbers,
+    };
+  }
 
   if (
     file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
@@ -133,7 +286,7 @@ export async function extractDocumentForCommentParse(
 
   return {
     kind: "unsupported_doc",
-    message: "Unsupported file type. Please upload PDF, DOCX, or an image.",
+    message: "Unsupported file type. Please upload PDF, DOCX, XLSX, CSV, or an image.",
   };
 }
 

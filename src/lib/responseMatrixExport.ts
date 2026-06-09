@@ -29,7 +29,7 @@ export interface ResponseMatrixExportComment {
   code_references?: string[] | string | null;
   ingest_source?: string | null;
   source_document_id?: string | null;
-  grounded_evidence?: ResponseMatrixExportEvidence[] | null;
+  grounded_evidence?: ResponseMatrixExportEvidence[] | string | null;
   required_action?: string | null;
   missing_info_or_risk?: string | null;
   grounded_confidence?: string | null;
@@ -71,27 +71,75 @@ export const RESPONSE_MATRIX_EXPORT_HEADERS = [
 export type ResponseMatrixExportHeader = (typeof RESPONSE_MATRIX_EXPORT_HEADERS)[number];
 export type ResponseMatrixExportRecord = Record<ResponseMatrixExportHeader, string>;
 
-export function ingestSourceExportLabel(source: string | null | undefined): string {
-  if (source === "manual_letter") return "Manual uploaded comments";
-  if (source === "raw_ref") return "Portal comments";
-  if (source === "fallback_llm") return "Parsed comment letter (LLM fallback)";
-  return source?.trim() || "";
+/** Coerce any value to a safe export string. Never throws. */
+export function safeText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => safeText(item)).filter(Boolean).join("; ");
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+  return "";
 }
 
-export function formatEvidenceCitations(
-  evidence: ResponseMatrixExportEvidence[] | null | undefined,
-): string {
-  if (!Array.isArray(evidence) || evidence.length === 0) return "";
+export function formatConfidence(value: unknown): string {
+  return safeText(value);
+}
 
-  return evidence
+export function normalizeGroundedEvidence(
+  raw: unknown,
+): ResponseMatrixExportEvidence[] {
+  if (raw == null || raw === "") return [];
+
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter((item) => item && typeof item === "object")
+    .map((item) => item as ResponseMatrixExportEvidence);
+}
+
+export function ingestSourceExportLabel(source: unknown): string {
+  const text = safeText(source);
+  if (text === "manual_letter") return "Manual uploaded comments";
+  if (text === "raw_ref") return "Portal comments";
+  if (text === "fallback_llm") return "Parsed comment letter (LLM fallback)";
+  return text;
+}
+
+export function formatEvidenceCitations(evidence: unknown): string {
+  const items = normalizeGroundedEvidence(evidence);
+  if (items.length === 0) return "";
+
+  return items
     .map((item, index) => {
       const lines = [`Citation ${index + 1}:`];
-      if (item.file_name) lines.push(`File: ${item.file_name}`);
+      const fileName = safeText(item.file_name);
+      if (fileName) lines.push(`File: ${fileName}`);
       if (item.page_number != null) lines.push(`Page: ${item.page_number}`);
-      if (item.sheet_label) lines.push(`Sheet: ${item.sheet_label}`);
-      if (item.sheet_title) lines.push(`Title: ${item.sheet_title}`);
-      if (item.snippet) lines.push(`Snippet: ${item.snippet}`);
-      if (item.relevance) lines.push(`Relevance: ${item.relevance}`);
+      const sheetLabel = safeText(item.sheet_label);
+      if (sheetLabel) lines.push(`Sheet: ${sheetLabel}`);
+      const sheetTitle = safeText(item.sheet_title);
+      if (sheetTitle) lines.push(`Title: ${sheetTitle}`);
+      const snippet = safeText(item.snippet);
+      if (snippet) lines.push(`Snippet: ${snippet}`);
+      const relevance = safeText(item.relevance);
+      if (relevance) lines.push(`Relevance: ${relevance}`);
       return lines.join("\n");
     })
     .join("\n\n");
@@ -99,17 +147,18 @@ export function formatEvidenceCitations(
 
 export function formatCodeReferences(row: ResponseMatrixExportComment): string {
   const refs = parseStoredCodeReferences(row.code_references);
-  const primary = row.code_reference?.trim() || "";
+  const primary = safeText(row.code_reference);
   const all = [...new Set([primary, ...refs].filter(Boolean))];
   return all.join("; ");
 }
 
-function formatIsoDate(value: string | null | undefined): string {
-  if (!value) return "";
+function formatIsoDate(value: unknown): string {
+  const text = safeText(value);
+  if (!text) return "";
   try {
-    return format(new Date(value), "yyyy-MM-dd HH:mm");
+    return format(new Date(text), "yyyy-MM-dd HH:mm");
   } catch {
-    return value;
+    return text;
   }
 }
 
@@ -138,39 +187,67 @@ export function buildResponseMatrixExportFilename(
   return `response-matrix-${slug}-${date}.${extension}`;
 }
 
+function emptyExportRecord(project: ResponseMatrixProjectMeta): ResponseMatrixExportRecord {
+  return RESPONSE_MATRIX_EXPORT_HEADERS.reduce((acc, header) => {
+    if (header === "Project Name") acc[header] = project.name;
+    else if (header === "Permit Number") acc[header] = project.permit_number ?? "";
+    else if (header === "Jurisdiction") acc[header] = project.jurisdiction ?? "";
+    else acc[header] = "";
+    return acc;
+  }, {} as ResponseMatrixExportRecord);
+}
+
+export function flattenExportRow(
+  row: ResponseMatrixExportComment,
+  project: ResponseMatrixProjectMeta,
+  markupByCommentId: Record<string, string>,
+  sourceDocumentById: Record<string, string>,
+): ResponseMatrixExportRecord {
+  try {
+    return {
+      "Project Name": project.name,
+      "Permit Number": project.permit_number ?? "",
+      Jurisdiction: project.jurisdiction ?? "",
+      Status: safeText(row.status),
+      Discipline: safeText(row.discipline),
+      "Reviewer Name": safeText(row.reviewer_name),
+      "Comment Number": safeText(row.comment_number),
+      "City / Reviewer Comment": safeText(row.original_text),
+      "Previous Reviewer Comment": safeText(row.previous_comment_text),
+      "Existing Response Text": safeText(row.existing_response_text),
+      "Code Reference": formatCodeReferences(row),
+      "Suggested Response": safeText(row.response_text),
+      "Required Action": safeText(row.required_action),
+      "Missing Info / Risk": safeText(row.missing_info_or_risk),
+      Confidence: formatConfidence(row.grounded_confidence),
+      "Sheet Reference": safeText(row.sheet_reference),
+      "Evidence Citations": formatEvidenceCitations(row.grounded_evidence),
+      "Assigned To": safeText(row.assigned_to),
+      Markup: markupStatusLabel(markupByCommentId[row.id]),
+      "Source Type": ingestSourceExportLabel(row.ingest_source),
+      "Source Document": row.source_document_id
+        ? sourceDocumentById[row.source_document_id] ?? safeText(row.source_document_id)
+        : "",
+      "Grounded Generated At": formatIsoDate(row.grounded_generated_at),
+      "Comment Created At": formatIsoDate(row.created_at),
+    };
+  } catch (error) {
+    console.warn("[ResponseMatrixExport] Skipped malformed row:", row.id, error);
+    const fallback = emptyExportRecord(project);
+    fallback["City / Reviewer Comment"] = safeText(row.original_text) || `[Export error for comment ${row.id}]`;
+    return fallback;
+  }
+}
+
 export function buildResponseMatrixExportRecords(
   rows: ResponseMatrixExportComment[],
   project: ResponseMatrixProjectMeta,
   markupByCommentId: Record<string, string>,
   sourceDocumentById: Record<string, string>,
 ): ResponseMatrixExportRecord[] {
-  return rows.map((row) => ({
-    "Project Name": project.name,
-    "Permit Number": project.permit_number ?? "",
-    Jurisdiction: project.jurisdiction ?? "",
-    Status: row.status ?? "",
-    Discipline: row.discipline ?? "",
-    "Reviewer Name": row.reviewer_name?.trim() ?? "",
-    "Comment Number": row.comment_number?.trim() ?? "",
-    "City / Reviewer Comment": row.original_text?.trim() ?? "",
-    "Previous Reviewer Comment": row.previous_comment_text?.trim() ?? "",
-    "Existing Response Text": row.existing_response_text?.trim() ?? "",
-    "Code Reference": formatCodeReferences(row),
-    "Suggested Response": row.response_text?.trim() ?? "",
-    "Required Action": row.required_action?.trim() ?? "",
-    "Missing Info / Risk": row.missing_info_or_risk?.trim() ?? "",
-    Confidence: row.grounded_confidence?.trim() ?? "",
-    "Sheet Reference": row.sheet_reference?.trim() ?? "",
-    "Evidence Citations": formatEvidenceCitations(row.grounded_evidence),
-    "Assigned To": row.assigned_to?.trim() ?? "",
-    Markup: markupStatusLabel(markupByCommentId[row.id]),
-    "Source Type": ingestSourceExportLabel(row.ingest_source),
-    "Source Document": row.source_document_id
-      ? sourceDocumentById[row.source_document_id] ?? row.source_document_id
-      : "",
-    "Grounded Generated At": formatIsoDate(row.grounded_generated_at),
-    "Comment Created At": formatIsoDate(row.created_at),
-  }));
+  return rows.map((row) =>
+    flattenExportRow(row, project, markupByCommentId, sourceDocumentById),
+  );
 }
 
 export function escapeCsvCell(value: string): string {
@@ -214,31 +291,32 @@ export function exportResponseMatrixXlsx(
   const rows = [
     [...RESPONSE_MATRIX_EXPORT_HEADERS],
     ...records.map((record) =>
-      RESPONSE_MATRIX_EXPORT_HEADERS.map((header) => record[header] ?? ""),
+      RESPONSE_MATRIX_EXPORT_HEADERS.map((header) => safeText(record[header])),
     ),
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  worksheet["!cols"] = RESPONSE_MATRIX_EXPORT_HEADERS.map((header, colIndex) => {
+  worksheet["!cols"] = RESPONSE_MATRIX_EXPORT_HEADERS.map((header) => {
     const maxCell = records.reduce((max, record) => {
-      const len = String(record[header] ?? "").length;
+      const len = safeText(record[header]).length;
       return Math.max(max, len);
     }, header.length);
     return { wch: Math.min(60, Math.max(12, Math.ceil(maxCell / 4) + header.length)) };
   });
   worksheet["!views"] = [{ state: "frozen", ySplit: 1, activeCell: "A2" }];
 
-  for (let r = 1; r < rows.length; r += 1) {
-    for (let c = 0; c < RESPONSE_MATRIX_EXPORT_HEADERS.length; c += 1) {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      const cell = worksheet[addr];
-      if (cell && typeof cell.v === "string" && cell.v.includes("\n")) {
-        cell.s = { alignment: { wrapText: true, vertical: "top" } };
-      }
-    }
-  }
-
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Response Matrix");
   XLSX.writeFile(workbook, filename);
+}
+
+export const EXPORT_BATCH_SIZE = 150;
+
+export function chunkArray<T>(items: T[], size: number): T[][] {
+  if (items.length === 0) return [];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
 }
