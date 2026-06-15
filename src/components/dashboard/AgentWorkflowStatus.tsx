@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EyebrowDark, SectionTitle } from "@/components/ui/Typography";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { isArlingtonAccelaStaleSessionScrapeError } from "@/lib/arlingtonAccelaS
 import {
   arlingtonPlanReviewDocumentScrapeOpts,
   arlingtonPlanReviewProjectInformationScrapeOpts,
+  arlingtonScrapeAllOpts,
   type ArlingtonScrapeTabOpts,
 } from "@/lib/arlingtonPlanReviewScrapeScope";
 import { supabase } from "@/lib/supabase";
@@ -44,7 +45,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  isArlingtonPortal,
+  isArlingtonPortalContext,
   isBaltimorePortal,
   isFairfaxPortal,
   isMontgomeryProjectDoxPortalCredential,
@@ -55,6 +56,17 @@ import {
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 
 const SCRAPER_URL = getScraperBaseUrl();
+
+const ARLINGTON_SCRAPE_MENU_OPTIONS = [
+  "Scrape All",
+  "Quick Scrape (Record Info Only)",
+  "Attachments Only",
+  "Plan Review Complete",
+  "Plan Review - Plans & Documents",
+  "Plan Review - Review Results & Mark-ups",
+  "Plan Review - Approved Documents",
+  "Plan Review - Project Information",
+] as const;
 
 /** Washington / general ProjectDox–style scraper modes */
 type GeneralScrapeMode =
@@ -206,6 +218,7 @@ export function AgentWorkflowStatus() {
     permit_number: string | null;
     jurisdiction: string | null;
     credential_id: string | null;
+    portal_data: unknown;
   } | null>(null);
 
   const [chainPhase, setChainPhase] = useState<ChainPhase>("idle");
@@ -559,7 +572,7 @@ export function AgentWorkflowStatus() {
     if (selectedProjectId) {
       const { data: sel } = await supabase
         .from("projects")
-        .select("id, permit_number, jurisdiction, credential_id")
+        .select("id, permit_number, jurisdiction, credential_id, portal_data")
         .eq("id", selectedProjectId)
         .eq("user_id", user.id)
         .maybeSingle();
@@ -570,6 +583,7 @@ export function AgentWorkflowStatus() {
               permit_number: (sel.permit_number as string) ?? null,
               jurisdiction: (sel.jurisdiction as string) ?? null,
               credential_id: (sel.credential_id as string) ?? null,
+              portal_data: sel.portal_data ?? null,
             }
           : null,
       );
@@ -618,8 +632,26 @@ export function AgentWorkflowStatus() {
   );
   const isBaltimoreCred = isBaltimorePortal(linkedPortalCredential ?? null);
   const isFairfaxCred = isFairfaxPortal(linkedPortalCredential ?? null);
-  const isArlingtonCred = isArlingtonPortal(linkedPortalCredential ?? null);
+  const arlingtonPortalContext = useMemo(
+    () =>
+      isArlingtonPortalContext({
+        selectedCredential: linkedPortalCredential ?? null,
+        portalUrl: linkedPortalCredential?.login_url ?? null,
+        portalType: "accela",
+        portalData: projectBySelectedId?.portal_data ?? null,
+        project: projectBySelectedId,
+      }),
+    [linkedPortalCredential, projectBySelectedId],
+  );
+  const isArlingtonCred = arlingtonPortalContext.isArlington;
   const isMinimalTabsCred = isBaltimoreCred || isFairfaxCred;
+
+  useEffect(() => {
+    if (!isArlingtonCred) return;
+    console.log(
+      `[ArlingtonUI] scrape options source=Arlington options=${JSON.stringify([...ARLINGTON_SCRAPE_MENU_OPTIONS])}`,
+    );
+  }, [isArlingtonCred, arlingtonPortalContext.source]);
 
   const [washingtonScrapeTabs, setWashingtonScrapeTabs] = useState<
     Record<WashingtonTabKey, boolean>
@@ -1374,6 +1406,12 @@ export function AgentWorkflowStatus() {
       arlingtonPortalMonitor: true,
     });
 
+  const runArlingtonScrapeAll = () => {
+    const payload = arlingtonScrapeAllOpts();
+    console.log("[ArlingtonUI] scrape all request payload=", payload);
+    return runArlingtonPortalMonitorCheck(payload);
+  };
+
   const chainRunning = chainPhase !== "idle" && chainPhase !== "complete";
 
   const steps = [
@@ -1659,6 +1697,16 @@ export function AgentWorkflowStatus() {
                     </>
                   ) : isArlingtonCred ? (
                     <>
+                      <DropdownMenuItem
+                        disabled={chainRunning}
+                        onClick={() => runArlingtonScrapeAll()}
+                        data-testid="menu-scrape-arlington-all"
+                        title="Record Info, Attachments, and Plan Review (all scopes) with auto-continue downloads."
+                      >
+                        <Layers className="h-4 w-4 mr-2" />
+                        Scrape All
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         disabled={chainRunning}
                         onClick={() =>

@@ -72,6 +72,8 @@ import {
   isBaltimorePortal,
   isFairfaxPortal,
   isProjectDoxUrl,
+  isArlingtonPortalContext,
+  buildEmptyArlingtonAccelaPortalShell,
   resolvePortalView,
 } from "@/lib/portalView";
 import { cn } from "@/lib/utils";
@@ -914,6 +916,12 @@ export default function PortalDataViewer() {
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(
     null,
   );
+  const [resolvedPermitNumber, setResolvedPermitNumber] = useState<string | null>(
+    null,
+  );
+  const [resolvedCredentialId, setResolvedCredentialId] = useState<string | null>(
+    null,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [expectedPortalType, setExpectedPortalType] = useState<string | null>(
     null,
@@ -983,6 +991,8 @@ export default function PortalDataViewer() {
       );
     }
         setResolvedProjectId(null);
+        setResolvedPermitNumber(null);
+        setResolvedCredentialId(null);
         setExpectedPortalType(null);
         setCredentialForView(null);
         setNoPermitConfigured(false);
@@ -1045,6 +1055,8 @@ export default function PortalDataViewer() {
         setPortalStatus(null);
         setLastCheckedAt(null);
         setResolvedProjectId(null);
+        setResolvedPermitNumber(null);
+        setResolvedCredentialId(null);
         setExpectedPortalType(null);
         setCredentialForView(null);
       } else {
@@ -1079,6 +1091,8 @@ export default function PortalDataViewer() {
           setPortalStatus((project.portal_status as string) ?? null);
           setLastCheckedAt(null);
           setResolvedProjectId(project.id);
+          setResolvedPermitNumber(project.permit_number ?? null);
+          setResolvedCredentialId(project.credential_id ?? null);
           if (import.meta.env.DEV)
             console.log(
               `[PortalDataViewer] empty state: no saved portal_data for project ${project.id}${!project.credential_id ? " (no credential linked)" : ""}`,
@@ -1103,11 +1117,15 @@ export default function PortalDataViewer() {
             setPortalStatus((project.portal_status as string) ?? null);
             setLastCheckedAt((project.last_checked_at as string) ?? null);
             setResolvedProjectId(project.id);
+            setResolvedPermitNumber(project.permit_number ?? null);
+            setResolvedCredentialId(project.credential_id ?? null);
           } else {
             setPortalData(pd);
             setPortalStatus((project.portal_status as string) ?? null);
             setLastCheckedAt((project.last_checked_at as string) ?? null);
             setResolvedProjectId(project.id);
+            setResolvedPermitNumber(project.permit_number ?? null);
+            setResolvedCredentialId(project.credential_id ?? null);
             if (import.meta.env.DEV) {
               console.log(
                 `[PortalDataViewer] ✅ saved data rendered immediately: project=${project.id}, portalType=${actualType}, expectedType=${credExpectedType ?? "none"}`,
@@ -1378,6 +1396,132 @@ export default function PortalDataViewer() {
     );
   }
 
+  const accelaExpectedByCredential = expectedPortalType === "accela";
+  const arlingtonViewerContext = isArlingtonPortalContext({
+    selectedCredential: credentialForView,
+    portalType: expectedPortalType ?? portalData?.portalType ?? null,
+    portalData,
+    project: resolvedPermitNumber ? { permit_number: resolvedPermitNumber } : null,
+  });
+  const shouldRenderArlingtonAccelaShell =
+    accelaExpectedByCredential &&
+    arlingtonViewerContext.isArlington &&
+    !!resolvedProjectId &&
+    (!portalData || !portalData.tabs);
+  const arlingtonAccelaPortalData = shouldRenderArlingtonAccelaShell
+    ? (() => {
+        const shell = buildEmptyArlingtonAccelaPortalShell(
+          resolvedPermitNumber ??
+            portalData?.projectNum ??
+            portalData?.name ??
+            null,
+        );
+        if (!portalData) return shell;
+        return {
+          ...shell,
+          ...portalData,
+          tabs: portalData.tabs ?? shell.tabs,
+        };
+      })()
+    : null;
+
+  const lastCheckedStr = lastCheckedAt
+    ? `Last checked: ${formatDistanceToNow(new Date(lastCheckedAt), { addSuffix: true })}`
+    : null;
+
+  const renderAccelaPortalSection = (
+    accelaPortalDataForView: NonNullable<typeof arlingtonAccelaPortalData>,
+  ) => {
+    const accelaPortalView = credentialForView
+      ? resolvePortalView(
+          credentialForView,
+          accelaPortalDataForView.portalType ?? null,
+          accelaPortalDataForView,
+        )
+      : null;
+
+    if (import.meta.env.DEV) {
+      console.log(
+        `[PortalDataViewer] rendering UI: expectedPortalType=${expectedPortalType}, portalData.portalType=${accelaPortalDataForView.portalType}, renderAccelaUI=true, credentialForView=${credentialForView ? "set" : "null"}, accelaPortalView=${accelaPortalView}, arlingtonContext=${arlingtonViewerContext.isArlington}`,
+      );
+    }
+
+    return (
+      <section
+        className="py-6 px-4 sm:px-6 max-w-5xl"
+        data-testid="portal-data-viewer"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-foreground">
+              Portal Data
+            </h1>
+            {loading && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+            {lastCheckedStr && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {lastCheckedStr}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+            className={cn(PORTAL_ACTION_BUTTON_OUTLINE, "gap-2")}
+            data-testid="button-refresh"
+          >
+            <RefreshCw className={cn(refreshing && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+        {accelaPortalView === "baltimore" ? (
+          <BaltimorePortalDataView
+            portalData={accelaPortalDataForView as any}
+            projectId={resolvedProjectId}
+            permitNumber={
+              accelaPortalDataForView?.projectNum ??
+              accelaPortalDataForView?.name ??
+              resolvedPermitNumber
+            }
+            credentialLoginUrl={credentialForView?.login_url ?? null}
+          />
+        ) : accelaPortalView === "fairfax" ? (
+          <FairfaxPortalDataView
+            portalData={accelaPortalDataForView as any}
+            projectId={resolvedProjectId}
+            permitNumber={
+              accelaPortalDataForView?.projectNum ??
+              accelaPortalDataForView?.name ??
+              resolvedPermitNumber
+            }
+            credentialLoginUrl={credentialForView?.login_url ?? null}
+          />
+        ) : (
+          <AccelaProjectView
+            portalData={accelaPortalDataForView as any}
+            projectId={resolvedProjectId}
+            userId={user?.id ?? null}
+            credentialId={resolvedCredentialId}
+            permitNumber={
+              accelaPortalDataForView?.projectNum ??
+              accelaPortalDataForView?.name ??
+              resolvedPermitNumber
+            }
+            credentialLoginUrl={credentialForView?.login_url ?? null}
+            credentialJurisdiction={credentialForView?.jurisdiction ?? null}
+            onPortalDataRefresh={silentRefetch}
+          />
+        )}
+      </section>
+    );
+  };
+
+  if (shouldRenderArlingtonAccelaShell && arlingtonAccelaPortalData) {
+    return renderAccelaPortalSection(arlingtonAccelaPortalData);
+  }
+
   if (!portalData) {
     const emptyLabel =
       expectedPortalType === "accela"
@@ -1409,10 +1553,6 @@ export default function PortalDataViewer() {
     );
   }
 
-  const lastCheckedStr = lastCheckedAt
-    ? `Last checked: ${formatDistanceToNow(new Date(lastCheckedAt), { addSuffix: true })}`
-    : null;
-
   if (!portalData?.tabs) {
     const noTabsLabel =
       expectedPortalType === "accela"
@@ -1433,78 +1573,8 @@ export default function PortalDataViewer() {
     expectedPortalType === "accela" ||
     (!expectedPortalType && portalData.portalType === "accela");
 
-  /** Derive Baltimore / Fairfax at render from stored credential; do not rely on a separate boolean. */
-  const isBaltimore = renderAccelaUI && credentialForView !== null && isBaltimorePortal(credentialForView);
-  const isFairfax = renderAccelaUI && credentialForView !== null && isFairfaxPortal(credentialForView);
-  const accelaPortalView =
-    renderAccelaUI && credentialForView
-      ? resolvePortalView(credentialForView, portalData.portalType ?? null)
-      : null;
-
-  if (import.meta.env.DEV)
-    console.log(
-      `[PortalDataViewer] rendering UI: expectedPortalType=${expectedPortalType}, portalData.portalType=${portalData.portalType}, renderAccelaUI=${renderAccelaUI}, credentialForView=${credentialForView ? "set" : "null"}, isBaltimore=${isBaltimore}, isFairfax=${isFairfax}, accelaPortalView=${accelaPortalView}`,
-    );
   if (renderAccelaUI) {
-    return (
-      <section
-        className="py-6 px-4 sm:px-6 max-w-5xl"
-        data-testid="portal-data-viewer"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-foreground">
-              Portal Data
-            </h1>
-            {loading && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            )}
-            {lastCheckedStr && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {lastCheckedStr}
-              </p>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            onClick={handleManualRefresh}
-            disabled={refreshing}
-            className={cn(PORTAL_ACTION_BUTTON_OUTLINE, "gap-2")}
-            data-testid="button-refresh"
-          >
-            <RefreshCw
-              className={cn(refreshing && "animate-spin")}
-            />
-            Refresh
-          </Button>
-        </div>
-        {accelaPortalView === "baltimore" ? (
-          <BaltimorePortalDataView
-            portalData={portalData as any}
-            projectId={resolvedProjectId}
-            permitNumber={portalData?.projectNum ?? portalData?.name ?? null}
-            credentialLoginUrl={credentialForView?.login_url ?? null}
-          />
-        ) : accelaPortalView === "fairfax" ? (
-          <FairfaxPortalDataView
-            portalData={portalData as any}
-            projectId={resolvedProjectId}
-            permitNumber={portalData?.projectNum ?? portalData?.name ?? null}
-            credentialLoginUrl={credentialForView?.login_url ?? null}
-          />
-        ) : (
-          <AccelaProjectView
-            portalData={portalData as any}
-            projectId={resolvedProjectId}
-            userId={user?.id ?? null}
-            permitNumber={
-              portalData?.projectNum ?? portalData?.name ?? null
-            }
-            onPortalDataRefresh={silentRefetch}
-          />
-        )}
-      </section>
-    );
+    return renderAccelaPortalSection(portalData as any);
   }
 
   const infoTab = portalData.tabs?.info;

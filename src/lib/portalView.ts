@@ -6,6 +6,8 @@
 export interface PortalCredentialLike {
   login_url?: string | null;
   jurisdiction?: string | null;
+  name?: string | null;
+  profile_name?: string | null;
 }
 
 /**
@@ -76,6 +78,7 @@ export function isArlingtonPortal(
   if (!credential) return false;
   const url = (credential.login_url ?? "").trim().replace(/\/+$/, "");
   const jurisdiction = (credential.jurisdiction ?? "").trim().toLowerCase();
+  const name = `${credential.name ?? credential.profile_name ?? ""}`.trim();
   if (/\/ARLINGTONCO(\/|$)/i.test(url)) return true;
   if (
     url &&
@@ -83,12 +86,155 @@ export function isArlingtonPortal(
     /\barlington\b/i.test(jurisdiction)
   )
     return true;
+  if (/\barlington county\b/i.test(name)) return true;
   return false;
+}
+
+export type ArlingtonPortalContextSource =
+  | "credential"
+  | "portalUrl"
+  | "portalData"
+  | "project"
+  | "agencyCode"
+  | null;
+
+export interface ArlingtonPortalContextInput {
+  selectedCredential?: PortalCredentialLike | null;
+  portalUrl?: string | null;
+  portalType?: string | null;
+  portalData?: unknown;
+  project?: {
+    portal_url?: string | null;
+    agency_code?: string | null;
+    agencyCode?: string | null;
+    municipality_key?: string | null;
+    jurisdiction?: string | null;
+    credential?: PortalCredentialLike | null;
+    [key: string]: unknown;
+  } | null;
+}
+
+export interface ArlingtonPortalContextResult {
+  isArlington: boolean;
+  source: ArlingtonPortalContextSource;
+}
+
+function urlIndicatesArlingtonCo(url: string | null | undefined): boolean {
+  const raw = `${url ?? ""}`.trim();
+  if (!raw) return false;
+  return /\/ARLINGTONCO(\/|$)/i.test(raw);
+}
+
+function portalDataIndicatesArlington(portalData: unknown): boolean {
+  if (!portalData || typeof portalData !== "object") return false;
+  const pd = portalData as Record<string, unknown>;
+  const tabs = pd.tabs;
+  if (tabs && typeof tabs === "object" && !Array.isArray(tabs)) {
+    const t = tabs as Record<string, unknown>;
+    for (const key of ["info", "attachments", "planReview"]) {
+      const slice = t[key];
+      if (!slice || typeof slice !== "object") continue;
+      const jurisdiction = `${(slice as Record<string, unknown>).jurisdiction ?? ""}`.trim();
+      if (jurisdiction === "arlington_county_va") return true;
+      if (/\barlington\b/i.test(jurisdiction)) return true;
+    }
+  }
+  for (const field of ["jurisdiction", "agencyCode", "agency_code", "tenant"]) {
+    const val = `${pd[field] ?? ""}`.trim();
+    if (val === "arlington_county_va" || /^ARLINGTONCO$/i.test(val)) return true;
+    if (/\barlington\b/i.test(val)) return true;
+  }
+  if (urlIndicatesArlingtonCo(`${pd.portalUrl ?? pd.portalBaseUrl ?? ""}`)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when any reliable signal indicates Arlington County Accela — used for portal
+ * renderer selection independent of scrape completeness (planReview, attachments, etc.).
+ */
+export function isArlingtonPortalContext(
+  input: ArlingtonPortalContextInput,
+): ArlingtonPortalContextResult {
+  const cred =
+    input.selectedCredential ??
+    input.project?.credential ??
+    null;
+
+  if (isArlingtonPortal(cred)) {
+    return { isArlington: true, source: "credential" };
+  }
+
+  const portalUrl = `${input.portalUrl ?? input.project?.portal_url ?? cred?.login_url ?? ""}`.trim();
+  if (portalUrl && urlIndicatesArlingtonCo(portalUrl)) {
+    return { isArlington: true, source: "portalUrl" };
+  }
+
+  const agencyCode = `${input.project?.agency_code ?? input.project?.agencyCode ?? ""}`.trim();
+  if (/^ARLINGTONCO$/i.test(agencyCode)) {
+    return { isArlington: true, source: "agencyCode" };
+  }
+
+  const municipalityKey = `${input.project?.municipality_key ?? ""}`.trim();
+  if (municipalityKey === "arlington_county_va") {
+    return { isArlington: true, source: "project" };
+  }
+
+  if (input.portalType === "accela" && cred) {
+    const jurisdiction = `${cred.jurisdiction ?? input.project?.jurisdiction ?? ""}`.trim();
+    const profileName = `${cred.name ?? cred.profile_name ?? ""}`.trim();
+    if (/\barlington\b/i.test(jurisdiction) || /\barlington county\b/i.test(profileName)) {
+      return { isArlington: true, source: "credential" };
+    }
+  }
+
+  if (portalDataIndicatesArlington(input.portalData)) {
+    return { isArlington: true, source: "portalData" };
+  }
+
+  return { isArlington: false, source: null };
+}
+
+/** Minimal Accela portal_data shell for Arlington before the first scrape. */
+export function buildEmptyArlingtonAccelaPortalShell(permitNumber?: string | null) {
+  const pn = `${permitNumber ?? ""}`.trim();
+  return {
+    portalType: "accela",
+    name: pn,
+    projectNum: pn,
+    description: "",
+    location: "",
+    dashboardStatus: "",
+    tabs: {
+      info: {
+        fields: pn ? { record_number: pn } : {},
+        keyValues: [],
+        tables: [],
+        jurisdiction: "arlington_county_va",
+      },
+      attachments: {
+        tables: [],
+        keyValues: [],
+        jurisdiction: "arlington_county_va",
+      },
+      planReview: {
+        jurisdiction: "arlington_county_va",
+        tabs: {},
+      },
+      status: { departments: [] },
+      inspections: { tables: [] },
+      relatedRecords: { tables: [] },
+      payments: { tables: [] },
+      reports: { pdfs: [] },
+    },
+  };
 }
 
 export type PortalViewVariant =
   | "baltimore"
   | "fairfax"
+  | "arlington"
   | "accela"
   | "projectdox"
   | "generic";
@@ -171,10 +317,20 @@ export function isWashingtonStyleProjectDoxCredential(
  */
 export function resolvePortalView(
   credential: PortalCredentialLike | null | undefined,
-  portalTypeFromData?: string | null
+  portalTypeFromData?: string | null,
+  portalData?: unknown,
 ): PortalViewVariant {
   if (isBaltimorePortal(credential)) return "baltimore";
   if (isFairfaxPortal(credential)) return "fairfax";
+  if (
+    isArlingtonPortalContext({
+      selectedCredential: credential,
+      portalType: portalTypeFromData ?? null,
+      portalData,
+    }).isArlington
+  ) {
+    return "arlington";
+  }
   if (portalTypeFromData === "accela") return "accela";
   if (portalTypeFromData === "projectdox") return "projectdox";
   const url = (credential?.login_url ?? "").toLowerCase();

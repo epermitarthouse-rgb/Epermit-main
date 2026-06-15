@@ -9,9 +9,13 @@ export type ArlingtonPlanReviewContinueScope =
 
 export type ArlingtonPlanReviewContinueResponse = {
   status: string;
-  scope: ArlingtonPlanReviewContinueScope;
+  scope?: ArlingtonPlanReviewContinueScope;
   permitNumber: string;
   projectId: string;
+  sessionId?: string;
+  activeSessionFound?: boolean;
+  loginRequired?: boolean;
+  message?: string;
   planSetTotal?: number;
   planSetDownloaded?: number;
   planSetPending?: number;
@@ -33,6 +37,9 @@ export type ArlingtonPlanReviewContinueResponse = {
 export const CLIENT_MISSING_ACCELA_SESSION_MSG =
   "Active Accela session not found. Please login to Accela again from Portal Monitor, then continue downloads.";
 
+export const ARLINGTON_PLAN_REVIEW_LOGIN_REQUIRED_MSG =
+  "Login required. Please complete Accela login, then resume pending downloads.";
+
 async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   if (!text) return {};
@@ -52,16 +59,19 @@ export function mapContinuePlanReviewError(
   if (/userid is required/i.test(lower)) {
     return "User ID missing. Refresh the page and try again.";
   }
+  if (/credential_not_linked|no portal credential/i.test(lower)) {
+    return "No portal credential linked to this project. Link a credential in Settings, then try again.";
+  }
   if (/session not found/i.test(lower)) {
-    return "Accela session not found. Please login again.";
+    return ARLINGTON_PLAN_REVIEW_LOGIN_REQUIRED_MSG;
   }
   if (
     /session expired|browser not available|browser unavailable/i.test(lower)
   ) {
-    return "Accela session expired or browser unavailable. Please login again.";
+    return ARLINGTON_PLAN_REVIEW_LOGIN_REQUIRED_MSG;
   }
   if (err) return err;
-  return `Continue Plan Review downloads failed (${status})`;
+  return `Resume Plan Review downloads failed (${status})`;
 }
 
 /** Clear persisted Accela browser session when backend confirms session is dead. */
@@ -75,6 +85,7 @@ export function shouldClearAccelaBrowserSessionOnError(message: string): boolean
   );
 }
 
+/** @deprecated Prefer resumeAccelaPlanReviewPendingDownloads */
 export async function continueAccelaPlanReviewDownloads({
   sessionId,
   projectId,
@@ -102,6 +113,66 @@ export async function continueAccelaPlanReviewDownloads({
   });
 
   const body = await parseJsonSafe(res);
+  if (!res.ok) {
+    throw new Error(mapContinuePlanReviewError(body, res.status));
+  }
+
+  return body as ArlingtonPlanReviewContinueResponse;
+}
+
+/** Smart pending-only resume — auto-login when session is missing/stale. */
+export async function resumeAccelaPlanReviewPendingDownloads({
+  sessionId,
+  projectId,
+  userId,
+  permitNumber,
+  credentialId,
+  accessToken,
+}: {
+  sessionId?: string | null;
+  projectId: string;
+  userId: string;
+  permitNumber: string;
+  credentialId?: string | null;
+  accessToken?: string | null;
+}): Promise<ArlingtonPlanReviewContinueResponse> {
+  const base = getScraperBaseUrl();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token = `${accessToken || ""}`.trim();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${base}/api/accela/plan-review/resume-downloads`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      sessionId: sessionId || undefined,
+      projectId,
+      userId,
+      permitNumber,
+      credentialId: credentialId || undefined,
+    }),
+  });
+
+  const body = await parseJsonSafe(res);
+
+  if (body.loginRequired === true || body.status === "login_required") {
+    return {
+      ...(body as ArlingtonPlanReviewContinueResponse),
+      status: "login_required",
+      loginRequired: true,
+      message:
+        String(body.message || "").trim() ||
+        ARLINGTON_PLAN_REVIEW_LOGIN_REQUIRED_MSG,
+      permitNumber,
+      projectId,
+      sessionId: body.sessionId ? String(body.sessionId) : sessionId || undefined,
+    };
+  }
+
   if (!res.ok) {
     throw new Error(mapContinuePlanReviewError(body, res.status));
   }

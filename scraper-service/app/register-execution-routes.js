@@ -16,7 +16,10 @@ const {
   accelaLogin: accelaScraperLogin,
   scrapeAccelaRecord,
   continueArlingtonPlanReviewDownloads,
+  resumeArlingtonPlanReviewPendingDownloads,
   arlingtonPlanReviewScopeSupportsAutoContinue,
+  arlingtonPlanReviewSessionBrowserUsable,
+  detectAccelaHumanLoginRequired,
 } = require("../accela-scraper");
 const pgcEplan = require("../pgc-eplan-scraper");
 const montgomeryProjectDox = require("../scrapers/montgomery/projectdox-scraper");
@@ -1294,6 +1297,307 @@ app.post("/api/accela/plan-review/continue-downloads", async (req, res) => {
   }
 });
 
+// ─── Arlington Plan Review: smart pending-only resume ────────────────────────
+app.post("/api/accela/plan-review/resume-downloads", async (req, res) => {
+  const logP = "[Arlington][PlanReview][Resume]";
+  const {
+    sessionId: sessionIdBody,
+    projectId,
+    permitNumber,
+    userId: userIdBody,
+    credentialId: credentialIdBody,
+  } = req.body || {};
+
+  const permit = `${permitNumber || ""}`.trim();
+  const projId = `${projectId || ""}`.trim();
+  if (!permit) {
+    return res.status(400).json({ error: "permitNumber is required" });
+  }
+  if (!projId) {
+    return res.status(400).json({ error: "projectId is required" });
+  }
+
+  const userId = `${userIdBody || ""}`.trim();
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  /** @type {Record<string, unknown> | undefined} */
+  let session =
+    sessionIdBody && sessions[sessionIdBody]
+      ? sessions[sessionIdBody]
+      : undefined;
+  let sessionId = sessionIdBody ? String(sessionIdBody) : "";
+  let activeSessionFound = arlingtonPlanReviewSessionBrowserUsable(session);
+
+  console.log(`${logP} active session found=${activeSessionFound}`);
+
+  if (!activeSessionFound) {
+    console.log(`${logP} session missing; starting login flow`);
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        status: "login_required",
+        loginRequired: true,
+        message:
+          "Login required. Please complete Accela login, then resume pending downloads.",
+        error: "Authentication required for automatic Accela login",
+      });
+    }
+    const token = authHeader.split(" ")[1];
+    const { data: authData, error: authErr } = await supabase.auth.getUser(
+      token,
+    );
+    const authedUser = authData?.user;
+    if (authErr || !authedUser || authedUser.id !== userId) {
+      return res.status(401).json({
+        status: "login_required",
+        loginRequired: true,
+        message:
+          "Login required. Please complete Accela login, then resume pending downloads.",
+        error: "Invalid or expired authentication token",
+      });
+    }
+
+    let credentialId = `${credentialIdBody || ""}`.trim();
+    if (!credentialId) {
+      const { data: projRow } = await supabase
+        .from("projects")
+        .select("credential_id")
+        .eq("id", projId)
+        .maybeSingle();
+      credentialId = `${projRow?.credential_id || ""}`.trim();
+    }
+    if (!credentialId) {
+      return res.status(400).json({
+        status: "login_required",
+        loginRequired: true,
+        message:
+          "No portal credential linked to this project. Link a credential in Settings, then resume pending downloads.",
+        error: "credential_not_linked",
+      });
+    }
+
+    const { data: cred, error: credErr } = await supabase
+      .from("portal_credentials")
+      .select("user_id, portal_username, portal_password, login_url")
+      .eq("id", credentialId)
+      .maybeSingle();
+    if (credErr || !cred || cred.user_id !== userId) {
+      return res.status(404).json({
+        error: "credential_not_found",
+        message: "Portal credential not found for this project.",
+      });
+    }
+
+    const username = cred.portal_username;
+    let password;
+    try {
+      password = resolveStoredPortalPassword(cred.portal_password);
+    } catch (_) {
+      return res.status(500).json({
+        error: "credential_decrypt_failed",
+        message: "Saved portal credential could not be decrypted.",
+      });
+    }
+
+    const portalUrlRaw =
+      cred.login_url && String(cred.login_url).trim()
+        ? String(cred.login_url).trim()
+        : DEFAULT_DASHBOARD_URL;
+    const dashboardUrl = portalUrlRaw
+      .replace(/\/+$/, "")
+      .replace(/\/User\/Index$/i, "");
+    if (!dashboardUrl.toUpperCase().includes("ARLINGTONCO")) {
+      return res.status(400).json({
+        error:
+          "Resume Plan Review downloads is only supported for Arlington County Accela",
+      });
+    }
+
+    let browser;
+    try {
+      browser = await launchChromiumForScraper({
+        label: "arlington-plan-review-resume",
+        route: "POST /api/accela/plan-review/resume-downloads",
+        file: "register-execution-routes.js",
+      });
+      const context = await browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 2,
+        acceptDownloads: true,
+      });
+      const page = await context.newPage();
+
+      try {
+        await accelaScraperLogin(page, username, password, dashboardUrl);
+      } catch (loginErr) {
+        const loginMsg =
+          loginErr && loginErr.message ? loginErr.message : String(loginErr);
+        const humanLogin = await detectAccelaHumanLoginRequired(page);
+        if (humanLogin && browser) {
+          sessionId =
+            Date.now().toString(36) + Math.random().toString(36).slice(2);
+          sessions[sessionId] = {
+            status: "awaiting_manual_login",
+            portalType: "accela",
+            portalUrl: dashboardUrl,
+            projects: [],
+            browser,
+            context,
+            page,
+            username,
+            password,
+            dashboardUrl,
+            userId,
+            message:
+              "Accela login requires manual completion — complete login in browser, then resume.",
+            progress: 0,
+            total: 0,
+            data: {},
+          };
+          sessions[sessionId]._timeout = setTimeout(
+            () => cleanupSession(sessionId, "idle_timeout"),
+            SESSION_IDLE_TIMEOUT_MS,
+          );
+          return res.json({
+            status: "login_required",
+            loginRequired: true,
+            sessionId,
+            permitNumber: permit,
+            projectId: projId,
+            message:
+              "Login required. Please complete Accela login, then resume pending downloads.",
+            error: loginMsg,
+          });
+        }
+        if (browser) await browser.close().catch(() => {});
+        throw loginErr;
+      }
+
+      sessionId =
+        Date.now().toString(36) + Math.random().toString(36).slice(2);
+      sessions[sessionId] = {
+        status: "logged_in",
+        portalType: "accela",
+        portalUrl: dashboardUrl,
+        projects: [],
+        browser,
+        context,
+        page,
+        username,
+        password,
+        dashboardUrl,
+        userId,
+        message: "Logged in to Accela — resuming Plan Review downloads",
+        progress: 0,
+        total: 0,
+        data: {},
+      };
+      sessions[sessionId]._timeout = setTimeout(
+        () => cleanupSession(sessionId, "idle_timeout"),
+        SESSION_IDLE_TIMEOUT_MS,
+      );
+      session = sessions[sessionId];
+      activeSessionFound = false;
+    } catch (err) {
+      if (browser) await browser.close().catch(() => {});
+      const msg = err && err.message ? err.message : String(err);
+      console.error(`${logP} login error: ${msg}`);
+      return res.status(500).json({
+        status: "error",
+        loginRequired: true,
+        message:
+          "Login required. Please complete Accela login, then resume pending downloads.",
+        permitNumber: permit,
+        projectId: projId,
+        error: msg,
+      });
+    }
+  }
+
+  if (!session || !sessionId) {
+    return res.status(400).json({
+      status: "login_required",
+      loginRequired: true,
+      message:
+        "Login required. Please complete Accela login, then resume pending downloads.",
+      error: "Session not available",
+    });
+  }
+
+  const humanLoginStill = await detectAccelaHumanLoginRequired(session.page);
+  if (humanLoginStill) {
+    if (session._timeout) clearTimeout(session._timeout);
+    session._timeout = setTimeout(
+      () => cleanupSession(sessionId, "idle_timeout"),
+      SESSION_IDLE_TIMEOUT_MS,
+    );
+    return res.json({
+      status: "login_required",
+      loginRequired: true,
+      sessionId,
+      permitNumber: permit,
+      projectId: projId,
+      message:
+        "Login required. Please complete Accela login, then resume pending downloads.",
+    });
+  }
+
+  if (session._timeout) clearTimeout(session._timeout);
+  session._accelaSessionId = String(sessionId);
+  session.touchSessionKeepalive = (documentId) => {
+    rearmSessionIdleTimeout(String(sessionId));
+    console.log(
+      `[Session][keepalive] Arlington PlanReview resume download documentId=${documentId != null && `${documentId}`.trim() !== "" ? `${documentId}`.trim() : "?"}`,
+    );
+  };
+  session._scrapeActive = true;
+  session._activePlanReviewDownloads = 0;
+  console.log(
+    `[Session][scrape] active=true sid=${sessionId} flow=arlington-plan-review-resume`,
+  );
+
+  try {
+    const result = await resumeArlingtonPlanReviewPendingDownloads(session, {
+      projectId: projId,
+      permitNumber: permit,
+      userId,
+      supabase,
+      hashPortalData,
+      uploadToSupabaseStorage,
+      sanitizeStorageKey,
+    });
+    session.status = result.status;
+    session.message = `Plan Review resume: ${result.downloadedThisRun ?? 0} downloaded this run`;
+    return res.json({
+      ...result,
+      sessionId,
+      activeSessionFound,
+    });
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.error(`${logP} error: ${msg}`);
+    session.status = "error";
+    session.message = `Plan Review resume failed: ${msg}`;
+    return res.status(500).json({
+      status: "error",
+      permitNumber: permit,
+      projectId: projId,
+      sessionId,
+      error: msg,
+    });
+  } finally {
+    session._scrapeActive = false;
+    session._activePlanReviewDownloads = 0;
+    console.log(
+      `[Session][scrape] active=false sid=${sessionId} flow=arlington-plan-review-resume`,
+    );
+    rearmSessionIdleTimeout(String(sessionId));
+  }
+});
+
 // ─── Scrape endpoint ─────────────────────────────────────────────────────────
 app.post("/api/scrape", async (req, res) => {
   const {
@@ -1436,15 +1740,21 @@ app.post("/api/scrape", async (req, res) => {
       const hasPlanReviewTab =
         Array.isArray(arlingtonScrapeTabsArg) &&
         arlingtonScrapeTabsArg.includes("plan_review");
+      const hasAttachmentsTab =
+        Array.isArray(arlingtonScrapeTabsArg) &&
+        arlingtonScrapeTabsArg.includes("attachments");
       const prScopeTrim = `${session.arlingtonPlanReviewScope || ""}`.trim();
       if (req.body?.autoContinueDownloads === false) {
         session.arlingtonAutoContinueDownloads = false;
+        session.arlingtonAutoContinueAttachments = false;
       } else if (req.body?.autoContinueDownloads === true) {
-        session.arlingtonAutoContinueDownloads = true;
+        session.arlingtonAutoContinueDownloads = hasPlanReviewTab;
+        session.arlingtonAutoContinueAttachments = hasAttachmentsTab;
       } else {
         session.arlingtonAutoContinueDownloads =
           hasPlanReviewTab &&
           arlingtonPlanReviewScopeSupportsAutoContinue(prScopeTrim);
+        session.arlingtonAutoContinueAttachments = hasAttachmentsTab;
       }
       const maxCyclesRaw = Number(req.body?.autoContinueMaxCycles);
       session.arlingtonAutoContinueMaxCycles =
@@ -1463,7 +1773,7 @@ app.post("/api/scrape", async (req, res) => {
           : 2;
 
       console.log(
-        `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} arlington=${accelaIsArlington} tabs=${JSON.stringify(arlingtonScrapeTabsArg ?? "(legacy default)")} planReviewScope=${session.arlingtonPlanReviewScope ?? "(default)"} planReviewMode=${session.arlingtonPlanReviewMode ?? "(none)"} downloadDocuments=${session.arlingtonDownloadDocuments === false ? "false" : "(default)"} autoContinueDownloads=${session.arlingtonAutoContinueDownloads === true}`,
+        `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} arlington=${accelaIsArlington} tabs=${JSON.stringify(arlingtonScrapeTabsArg ?? "(legacy default)")} planReviewScope=${session.arlingtonPlanReviewScope ?? "(default)"} planReviewMode=${session.arlingtonPlanReviewMode ?? "(none)"} downloadDocuments=${session.arlingtonDownloadDocuments === false ? "false" : "(default)"} autoContinueDownloads=${session.arlingtonAutoContinueDownloads === true} autoContinueAttachments=${session.arlingtonAutoContinueAttachments === true}`,
       );
     } else if (
       !accelaIsBaltimore &&
@@ -1533,6 +1843,18 @@ app.post("/api/scrape", async (req, res) => {
         const prPending =
           session.arlingtonPlanReviewPartialPendingDownloads === true ||
           session.arlingtonPlanReviewTimedOutAfterProgress === true;
+        const attPending =
+          session.arlingtonAttachmentsPartialPending === true ||
+          session.arlingtonAttachmentsTimedOutAfterProgress === true;
+        if (attPending) {
+          session.status = "partial_success_attachments_pending";
+          session.progress = 1;
+          session.message = `Accela scrape partially complete for ${permitNumber}; Attachments downloads pending and retryable.`;
+          console.log(
+            `   ⚠️ Accela sync ended — session status set to partial_success_attachments_pending`,
+          );
+          return;
+        }
         if (prPending) {
           session.status = "partial_success_plan_review_pending";
           session.progress = 1;
@@ -1554,6 +1876,21 @@ app.post("/api/scrape", async (req, res) => {
         const hadPrProgress =
           session.arlingtonPlanReviewCheckpointSaved === true ||
           session.arlingtonPlanReviewPartialPendingDownloads === true;
+        const hadAttProgress =
+          session.arlingtonAttachmentsCheckpointSaved === true ||
+          session.arlingtonAttachmentsPartialPending === true;
+        if (
+          hadAttProgress &&
+          /Accela scraping timed out/i.test(timedOutMsg)
+        ) {
+          session.status = "partial_success_attachments_pending";
+          session.progress = 1;
+          session.message = `Accela scrape partially complete for ${permitNumber}; Attachments downloads pending and retryable.`;
+          console.warn(
+            `   ⚠️ Accela scrape hit global timeout after Attachments progress — partial_success_attachments_pending`,
+          );
+          return;
+        }
         if (hadPrProgress && /Accela scraping timed out/i.test(timedOutMsg)) {
           session.status = "partial_success_plan_review_pending";
           session.progress = 1;

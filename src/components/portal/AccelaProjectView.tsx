@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { filterArlingtonPlanSetDocumentsForUi } from "@/lib/arlingtonPlanSetDocumentsCleanup";
+import { isArlingtonPortalContext } from "@/lib/portalView";
 import { ArlingtonPlanReviewContinuePanel } from "@/components/portal/ArlingtonPlanReviewContinuePanel";
 import {
   CheckCircle2,
@@ -43,8 +44,51 @@ interface AccelaAttachment {
   size: string;
   latest_update: string;
   viewUrl?: string;
+  publicUrl?: string;
+  downloadUrl?: string;
+  url?: string;
+  fileUrl?: string;
+  storagePath?: string;
+  status?: string;
   downloadStatus?: string;
   downloadError?: string;
+  downloaded?: boolean;
+  saved?: boolean;
+}
+
+function accelaAttachmentOpenUrl(
+  att: AccelaAttachment & Record<string, unknown>,
+): string {
+  const candidates = [
+    att.viewUrl,
+    att.publicUrl,
+    att.downloadUrl,
+    att.url,
+    att.fileUrl,
+  ];
+  for (const u of candidates) {
+    const s = `${u ?? ""}`.trim();
+    if (/^https?:\/\//i.test(s)) return s;
+  }
+  return "";
+}
+
+function accelaAttachmentIsSaved(
+  att: AccelaAttachment & Record<string, unknown>,
+): boolean {
+  if (
+    att.downloadStatus === "failed" ||
+    att.downloadStatus === "failed_non_retryable"
+  ) {
+    return false;
+  }
+  if (accelaAttachmentOpenUrl(att)) return true;
+  if (`${att.storagePath ?? ""}`.trim()) return true;
+  const ds = `${att.downloadStatus ?? ""}`.toLowerCase();
+  if (ds === "uploaded" || ds === "success") return true;
+  if (att.status === "saved") return true;
+  if (att.downloaded === true || att.saved === true) return true;
+  return false;
 }
 
 interface AccelaInspectionRow {
@@ -88,6 +132,8 @@ interface ArlingtonPlanReviewDocRow {
   revision?: string;
   uploadStatus?: string;
   downloadStatus?: string;
+  downloaded?: boolean;
+  saved?: boolean;
   storagePath?: string;
   publicUrl?: string;
   downloadUrl?: string;
@@ -433,17 +479,20 @@ function arlingtonPlanReviewDocHasStoredFile(
 function arlingtonPlanReviewDocIsDownloaded(
   doc: ArlingtonPlanReviewDocRow,
 ): boolean {
+  if (doc.downloaded === true || doc.saved === true) return true;
+
   const ds = `${doc.downloadStatus ?? ""}`.trim();
   const statusLo = `${doc.status ?? ""}`.trim().toLowerCase();
 
   if (ARLINGTON_PLAN_REVIEW_PENDING_DOWNLOAD_STATUSES.has(ds)) return false;
   if (ds === "failed_non_retryable" || ds === "metadata_only") return false;
 
+  if (statusLo === "downloaded" || statusLo === "saved") return true;
+
   if (ds === "plan_set_row" || ds === "plan_review_secondary_row") {
     return arlingtonPlanReviewDocHasStoredFile(doc) || statusLo === "downloaded";
   }
 
-  if (statusLo === "downloaded") return true;
   if (arlingtonPlanReviewDocHasStoredFile(doc)) return true;
   if (
     ds === "uploaded" ||
@@ -1071,7 +1120,10 @@ interface AccelaProjectViewProps {
   projectId?: string | null;
   userId?: string | null;
   permitNumber?: string | null;
+  credentialId?: string | null;
   onPortalDataRefresh?: () => void | Promise<void>;
+  credentialLoginUrl?: string | null;
+  credentialJurisdiction?: string | null;
 }
 
 export default function AccelaProjectView({
@@ -1079,7 +1131,10 @@ export default function AccelaProjectView({
   projectId = null,
   userId = null,
   permitNumber: permitNumberProp = null,
+  credentialId = null,
   onPortalDataRefresh,
+  credentialLoginUrl = null,
+  credentialJurisdiction = null,
 }: AccelaProjectViewProps) {
   const [activeTab, setActiveTab] = useState("info");
 
@@ -1130,8 +1185,66 @@ export default function AccelaProjectView({
   );
 
   const planReviewTab = portalData.tabs?.planReview;
-  const isArlingtonPortalUi =
-    planReviewTab?.jurisdiction === "arlington_county_va";
+  const arlingtonPortalContext = useMemo(
+    () =>
+      isArlingtonPortalContext({
+        selectedCredential:
+          credentialLoginUrl || credentialJurisdiction
+            ? {
+                login_url: credentialLoginUrl,
+                jurisdiction: credentialJurisdiction,
+              }
+            : null,
+        portalUrl: credentialLoginUrl,
+        portalType: portalData.portalType,
+        portalData,
+        project: permitNumberProp ? { permit_number: permitNumberProp } : null,
+      }),
+    [
+      credentialLoginUrl,
+      credentialJurisdiction,
+      portalData,
+      permitNumberProp,
+    ],
+  );
+  const isArlingtonPortalUi = arlingtonPortalContext.isArlington;
+  const isArlingtonFilesContext =
+    isArlingtonPortalUi ||
+    portalData.tabs?.attachments?.jurisdiction === "arlington_county_va";
+
+  useEffect(() => {
+    if (!isArlingtonPortalUi || !arlingtonPortalContext.source) return;
+    console.log(
+      `[ArlingtonUI] using Arlington portal renderer source=${arlingtonPortalContext.source}`,
+    );
+    console.log(
+      "[ArlingtonUI] generic Accela renderer skipped for Arlington context",
+    );
+  }, [isArlingtonPortalUi, arlingtonPortalContext.source]);
+
+  useEffect(() => {
+    if (!isArlingtonFilesContext || attachmentRows.length === 0) return;
+    let saved = 0;
+    let pending = 0;
+    let failed = 0;
+    for (const att of attachmentRows) {
+      const row = att as AccelaAttachment & Record<string, unknown>;
+      if (
+        row.downloadStatus === "failed" ||
+        row.downloadStatus === "failed_non_retryable"
+      ) {
+        failed++;
+      } else if (accelaAttachmentIsSaved(row)) {
+        saved++;
+      } else {
+        pending++;
+      }
+    }
+    console.log(
+      `[ArlingtonUI][Files] rendered saved=${saved} pending=${pending} failed=${failed} total=${attachmentRows.length}`,
+    );
+  }, [isArlingtonFilesContext, attachmentRows]);
+
   const planReviewUseIntegratedUi =
     !!planReviewTab &&
     shouldUseArlingtonIntegratedPlanReviewUI(planReviewTab);
@@ -1160,7 +1273,8 @@ export default function AccelaProjectView({
   const infoTab = portalData.tabs?.info;
   const isArlingtonStructuredRecordInfo =
     !!infoTab?.arlingtonRecordInfo &&
-    (infoTab?.jurisdiction === "arlington_county_va" ||
+    (isArlingtonPortalUi ||
+      infoTab?.jurisdiction === "arlington_county_va" ||
       planReviewTab?.jurisdiction === "arlington_county_va");
   const arlingtonRecordSections = infoTab?.arlingtonRecordInfo;
 
@@ -1182,7 +1296,7 @@ export default function AccelaProjectView({
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Accela Record
+                {isArlingtonPortalUi ? "Arlington County Record" : "Accela Record"}
               </p>
               <h2
                 className="text-lg font-semibold text-foreground truncate"
@@ -1515,16 +1629,23 @@ export default function AccelaProjectView({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {attachmentRows.map((att, idx) => (
+                        {attachmentRows.map((att, idx) => {
+                          const fileUrl = accelaAttachmentOpenUrl(
+                            att as AccelaAttachment & Record<string, unknown>,
+                          );
+                          const fileSaved = accelaAttachmentIsSaved(
+                            att as AccelaAttachment & Record<string, unknown>,
+                          );
+                          return (
                           <TableRow
                             key={idx}
                             className="border-border"
                             data-testid={`file-row-${idx}`}
                           >
                             <TableCell className="max-w-[300px]">
-                              {att.viewUrl ? (
+                              {fileUrl ? (
                                 <a
-                                  href={att.viewUrl}
+                                  href={fileUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-primary hover:text-primary/90 hover:underline flex items-center gap-1 text-sm"
@@ -1558,7 +1679,7 @@ export default function AccelaProjectView({
                                   <XCircle className="h-3 w-3 mr-1" />
                                   Failed
                                 </Badge>
-                              ) : att.viewUrl ? (
+                              ) : fileSaved ? (
                                 <Badge
                                   variant="outline"
                                   className="bg-success/15 text-success border-success/35 text-[10px]"
@@ -1570,7 +1691,8 @@ export default function AccelaProjectView({
                               )}
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   ) : (
@@ -1745,6 +1867,7 @@ export default function AccelaProjectView({
                     <ArlingtonPlanReviewContinuePanel
                       projectId={projectId}
                       userId={userId}
+                      credentialId={credentialId}
                       permitNumber={
                         permitNumberProp ||
                         recordNumber ||

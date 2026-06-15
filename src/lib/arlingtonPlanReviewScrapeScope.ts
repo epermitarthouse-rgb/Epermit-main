@@ -35,3 +35,15 @@ export function arlingtonPlanReviewProjectInformationScrapeOpts(): ArlingtonScra
     autoContinueDownloads: false,
   };
 }
+
+/**
+ * Full Arlington scrape — backend accepts tabs info, attachments, plan_review only.
+ * Supplemental accordion panels (status, relatedRecords, etc.) run when all three are included.
+ */
+export function arlingtonScrapeAllOpts(): ArlingtonScrapeTabOpts {
+  return {
+    tabs: ["info", "attachments", "plan_review"],
+    planReviewScope: "all",
+    autoContinueDownloads: true,
+  };
+}

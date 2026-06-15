@@ -12,6 +12,8 @@ export interface ArlingtonPlanSetCleanupRow {
   storagePath?: string;
   publicUrl?: string;
   downloadUrl?: string;
+  downloaded?: boolean;
+  saved?: boolean;
   documentId?: string;
   retryCount?: number | string;
   action?: {
@@ -59,6 +61,7 @@ function inferPlanDocIdHaystack(hayRaw: string): string {
 }
 
 function looksUploadComplete(doc: ArlingtonPlanSetCleanupRow): boolean {
+  if (doc.downloaded === true || doc.saved === true) return true;
   const pu = /^https?:\/\//i.test(`${doc.publicUrl || ""}`)
     ? String(doc.publicUrl)
     : "";
@@ -67,7 +70,9 @@ function looksUploadComplete(doc: ArlingtonPlanSetCleanupRow): boolean {
     : "";
   const sp = `${doc.storagePath || ""}`.trim();
   const ds = `${doc.downloadStatus || ""}`.trim();
+  const st = `${doc.status || ""}`.trim().toLowerCase();
   if (pu || du || sp) return true;
+  if (st === "downloaded" || st === "saved") return true;
   return (
     ds === "uploaded" ||
     ds === "aliased_duplicate" ||
@@ -107,6 +112,66 @@ function recoverableErmsInteractive(doc: ArlingtonPlanSetCleanupRow): boolean {
   return false;
 }
 
+function actionHaystack(doc: ArlingtonPlanSetCleanupRow): string {
+  const act = doc.action;
+  return `${act?.title ?? ""} ${act?.alt ?? ""} ${act?.onclick ?? ""} ${act?.href ?? ""} ${act?.name ?? ""}`
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function hasRealDownloadInput(doc: ArlingtonPlanSetCleanupRow): boolean {
+  if (looksUploadComplete(doc)) return true;
+  const act = doc.action;
+  const docId = `${doc.documentId ?? act?.documentId ?? ""}`.trim();
+  if (/^\d+$/.test(docId)) {
+    const tit = `${act?.title ?? ""} ${act?.alt ?? ""}`.toLowerCase();
+    if (/browse|download/.test(tit)) return true;
+    const oc = `${act?.onclick ?? ""}`.toLowerCase();
+    if (
+      /\binvokedownloaddocument\b|\bpolldownloaddocument\b|\bdocumentstream\b/.test(
+        oc,
+      )
+    )
+      return true;
+    if (/browse|download/.test(oc)) return true;
+  }
+  const hay = actionHaystack(doc).toLowerCase();
+  if (/browse\s*\.*\s*download|download\s*\.*\s*browse/.test(hay)) return true;
+  if (/\bbrowse\b/.test(hay) && /\bdownload\b/.test(hay)) return true;
+  const hrefRaw = `${act?.href ?? ""}`.trim();
+  if (
+    /^https?:\/\//i.test(hrefRaw) &&
+    !/^javascript:void/i.test(hrefRaw.toLowerCase())
+  )
+    return true;
+  const low = [act?.onclick, act?.href, act?.id, act?.name, doc.documentId]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  if (
+    /\binvokedownloaddocument\b|\bpolldownloaddocument\b|\bdocumentstream\b/.test(
+      low,
+    )
+  )
+    return true;
+  return false;
+}
+
+/** Delete-only portal shadows — no Browse/Download input. */
+function isDeleteOnlyInactive(doc: ArlingtonPlanSetCleanupRow): boolean {
+  if (looksUploadComplete(doc)) return false;
+  if (hasRealDownloadInput(doc)) return false;
+  const ds = `${doc.downloadStatus ?? ""}`.trim();
+  const st = `${doc.status ?? ""}`.trim();
+  if (ds === "inactive_delete_only" || st === "plan_set_delete_only_inactive")
+    return true;
+  const hay = actionHaystack(doc).toLowerCase();
+  if (!/\bdelete\b/.test(hay)) return false;
+  if (/browse\s*\.*\s*download|download\s*\.*\s*browse/.test(hay)) return false;
+  if (/\bbrowse\b/.test(hay) && /\bdownload\b/.test(hay)) return false;
+  return true;
+}
+
 function temporalAttemptSignals(doc: ArlingtonPlanSetCleanupRow): boolean {
   const ds = `${doc.downloadStatus || ""}`.trim();
   const temporal = [
@@ -129,6 +194,7 @@ function temporalAttemptSignals(doc: ArlingtonPlanSetCleanupRow): boolean {
 }
 
 function eligiblePendingOrRetryTwin(doc: ArlingtonPlanSetCleanupRow): boolean {
+  if (isDeleteOnlyInactive(doc)) return false;
   if (looksUploadComplete(doc)) return false;
   if (temporalAttemptSignals(doc)) return true;
   return recoverableErmsInteractive(doc);
@@ -153,7 +219,10 @@ export function filterArlingtonPlanSetDocumentsForUi(
   if (!Array.isArray(docs) || docs.length === 0) return [...docs];
 
   const pass0 = docs.filter(
-    (d) => d && typeof d === "object",
+    (d) =>
+      d &&
+      typeof d === "object" &&
+      !isDeleteOnlyInactive(d as ArlingtonPlanSetCleanupRow),
   ) as ArlingtonPlanSetCleanupRow[];
 
   const harvested = pass0.some(
