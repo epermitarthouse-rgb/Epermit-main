@@ -25,9 +25,42 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { chromium } = require("playwright");
 const pgcProgress = require("./pgc-progress-logger");
 const { isScraperDebugArtifactsEnabled } = require("./artifacts/debug-artifacts");
+const { countUniquePgcDomReviewComments } = require("./lib/pgcDomReviewStructuredRows.js");
+
+/**
+ * Optional live scrape progress hook (wired from server session via runPgcProductionPipeline).
+ * @param {((event: Record<string, unknown>) => void) | null | undefined} onProgress
+ * @param {Record<string, unknown>} event
+ */
+function pgcEmitScrapeProgress(onProgress, event) {
+  if (typeof onProgress !== "function") return;
+  const reportName = String(event.reportName || "").trim();
+  const shortName =
+    reportName.length > 80 ? `${reportName.slice(0, 77)}…` : reportName;
+  try {
+    onProgress({
+      event_type: event.event_type || "report_progress",
+      stage: event.stage || "reports",
+      status: event.status || "running",
+      user_message: event.user_message,
+      technical_message:
+        event.technical_message || event.user_message || "Reports in progress.",
+      progress_current: event.progress_current,
+      progress_total: event.progress_total,
+      reportName: reportName || undefined,
+      metadata: {
+        ...(event.metadata && typeof event.metadata === "object" ? event.metadata : {}),
+        ...(reportName ? { reportName: shortName || reportName } : {}),
+      },
+    });
+  } catch (_) {
+    /* non-fatal */
+  }
+}
 
 // Load .env from scraper-service first, then repo root (do not require server.js).
 require("dotenv").config({ path: path.join(__dirname, ".env") });
@@ -438,6 +471,15 @@ function scraperRunsHeadless() {
 function normalizeText(s) {
   if (s == null) return "";
   return String(s).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Case/whitespace tolerant permit match for dashboard discovery. */
+function pgcPermitKeysMatch(a, b) {
+  const na = normalizeText(a).toLowerCase();
+  const nb = normalizeText(b).toLowerCase();
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  return na.replace(/\s+/g, "") === nb.replace(/\s+/g, "");
 }
 
 /**
@@ -1933,6 +1975,209 @@ async function advancePgcGrdProjectsPagerWithAjaxWait(page, beforeSnap) {
 }
 
 /**
+ * Click a specific numbered My Projects dashboard page and wait for igGrid AJAX refresh.
+ * @param {import('playwright').Page} page
+ * @param {number} wantPage 1-based dashboard page index
+ * @param {string} [previousRowSignature]
+ */
+async function clickPgcDashboardGridPage(page, wantPage, previousRowSignature) {
+  const want = Math.max(1, Math.floor(Number(wantPage) || 1));
+  const beforeSnap = await readPgcGrdProjectsPagingSnapshot(page);
+  if (
+    beforeSnap.currentPage === want &&
+    (!previousRowSignature || beforeSnap.rowSignature === previousRowSignature || want === 1)
+  ) {
+    return { ok: true, snap: beforeSnap, alreadyOnPage: true };
+  }
+
+  const g = beforeSnap.gridId || "igGrid";
+  console.log(
+    `[PGC][${g}] pager click → dashboard page ${want} (was ${beforeSnap.currentPage}) label="${beforeSnap.pagerLabel}"`,
+  );
+
+  const pagerRootSel = beforeSnap.pagerDomId
+    ? `#${beforeSnap.pagerDomId}`
+    : "#grdTasksResults_pager, #grdProjects_pager";
+  const pager = page.locator(pagerRootSel).first();
+  let clicked = false;
+
+  if ((await pager.count()) > 0) {
+    const byRole = pager
+      .getByRole("link", { name: new RegExp(`^\\s*${want}\\s*$`) })
+      .first();
+    if (await byRole.isVisible().catch(() => false)) {
+      await byRole.click({ timeout: 12000 });
+      clicked = true;
+    } else {
+      const numLink = pager
+        .locator("a.ui-iggrid-pagelink, .ui-iggrid-pagelink, span.ui-iggrid-pagelink")
+        .filter({ hasText: new RegExp(`^\\s*${want}\\s*$`) })
+        .first();
+      if (await numLink.isVisible().catch(() => false)) {
+        await numLink.click({ timeout: 12000 });
+        clicked = true;
+      }
+    }
+  }
+
+  if (!clicked) {
+    return { ok: false, snap: beforeSnap, error: "pager_page_link_not_found" };
+  }
+
+  const prev = { ...beforeSnap };
+  const deadline = Date.now() + 22000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(220);
+    const snap = await readPgcGrdProjectsPagingSnapshot(page);
+    if (
+      snap.currentPage === want ||
+      snap.pagerLabel !== prev.pagerLabel ||
+      snap.rowSignature !== prev.rowSignature ||
+      snap.firstPermit !== prev.firstPermit
+    ) {
+      console.log(
+        `[PGC][${snap.gridId || g}] grid refreshed dashboardPage=${snap.currentPage} label="${snap.pagerLabel}" rows=${snap.rowCount} firstPermit=${snap.firstPermit || "n/a"}`,
+      );
+      return { ok: true, snap };
+    }
+  }
+
+  if (previousRowSignature) {
+    const changed = await waitForPgcProjectRowSignatureChange(
+      page,
+      previousRowSignature,
+      8000,
+    );
+    if (changed) {
+      const snap = await readPgcGrdProjectsPagingSnapshot(page);
+      return { ok: true, snap };
+    }
+  }
+
+  return { ok: false, snap: await readPgcGrdProjectsPagingSnapshot(page), error: "pager_refresh_timeout" };
+}
+
+/**
+ * Reset My Projects igGrid to dashboard page 1 before targeted search.
+ * @param {import('playwright').Page} page
+ */
+async function resetPgcDashboardGridToPageOne(page) {
+  const snap = await readPgcGrdProjectsPagingSnapshot(page);
+  console.log(
+    `[PGC] Dashboard grid before reset | dashboardPage=${snap.currentPage} label="${snap.pagerLabel}" rows=${snap.rowCount}`,
+  );
+  const onFirstPage =
+    snap.currentPage <= 1 && (!snap.range || snap.range.start <= 1);
+  if (onFirstPage) {
+    console.log("[PGC] Dashboard grid already on page 1");
+    return { ok: true, snap, alreadyOnPage: true };
+  }
+
+  const prevSig = snap.rowSignature;
+  let nav = await clickPgcDashboardGridPage(page, 1, prevSig);
+  if (nav.ok && nav.snap && nav.snap.currentPage <= 1) {
+    return nav;
+  }
+
+  const pagerRootSel = snap.pagerDomId
+    ? `#${snap.pagerDomId}`
+    : "#grdTasksResults_pager, #grdProjects_pager";
+  for (let i = 0; i < 14; i++) {
+    const cur = await readPgcGrdProjectsPagingSnapshot(page);
+    if (cur.currentPage <= 1 && (!cur.range || cur.range.start <= 1)) {
+      console.log("[PGC] Dashboard grid reset to page 1 via prev navigation");
+      return { ok: true, snap: cur };
+    }
+    const prevBtn = page
+      .locator(
+        `${pagerRootSel} .ui-iggrid-prevpage:not(.ui-state-disabled), ${pagerRootSel} .ui-iggrid-paging-prev:not(.ui-state-disabled)`,
+      )
+      .first();
+    if (!(await prevBtn.isVisible().catch(() => false))) break;
+    const sigBefore = cur.rowSignature;
+    await prevBtn.click({ timeout: 10000 }).catch(() => {});
+    await waitForPgcProjectRowSignatureChange(page, sigBefore, 12000).catch(
+      () => {},
+    );
+    await waitForProjectGrid(page);
+  }
+
+  const finalSnap = await readPgcGrdProjectsPagingSnapshot(page);
+  const ok =
+    finalSnap.currentPage <= 1 &&
+    (!finalSnap.range || finalSnap.range.start <= 1);
+  if (!ok) {
+    console.warn(
+      `[PGC] Dashboard grid reset to page 1 failed | still on page ${finalSnap.currentPage} label="${finalSnap.pagerLabel}"`,
+    );
+  }
+  return { ok, snap: finalSnap };
+}
+
+/**
+ * Pick best dashboard row for explicit target; prefer ProjectID when permit duplicates exist.
+ * @param {object[]} rows
+ * @param {string} targetPermit
+ * @param {string} targetPid
+ */
+function pickPgcDashboardMatchingRow(rows, targetPermit, targetPid) {
+  const pid = String(targetPid || "").trim();
+  const permit = normalizeText(targetPermit || "");
+  if (!pid && !permit) return null;
+
+  /** @type {object[]} */
+  const idMatches = [];
+  /** @type {object[]} */
+  const permitMatches = [];
+  for (const r of rows || []) {
+    if (pid && String(r.projectID) === pid) idMatches.push(r);
+    else if (permit && pgcPermitKeysMatch(r.projectNumber, permit)) {
+      permitMatches.push(r);
+    }
+  }
+  if (idMatches.length) return idMatches[0];
+  if (permitMatches.length) return permitMatches[0];
+  return null;
+}
+
+/**
+ * Confirm the target row is visible on the current dashboard grid page.
+ * @param {import('playwright').Page} page
+ * @param {object} row
+ * @param {string} [targetPermit]
+ * @param {string} [targetPid]
+ */
+async function verifyPgcDashboardTargetRowVisible(
+  page,
+  row,
+  targetPermit,
+  targetPid,
+) {
+  const pid = String(targetPid || row?.projectID || "").trim();
+  const permit = normalizeText(targetPermit || row?.projectNumber || "");
+  const pack = await readProjectRows(page);
+  const found = pickPgcDashboardMatchingRow(pack.rows, permit, pid);
+  if (!found) {
+    return { ok: false, reason: "row_not_visible_on_current_page" };
+  }
+  if (pid && String(found.projectID) !== pid) {
+    return { ok: false, reason: "project_id_mismatch" };
+  }
+  if (permit && !pgcPermitKeysMatch(found.projectNumber, permit)) {
+    return { ok: false, reason: "permit_mismatch" };
+  }
+  return { ok: true, row: found };
+}
+
+/** @param {string} [mode] */
+function pgcIsFilesOnlyScrapeMode(mode) {
+  const m = String(mode || "")
+    .trim()
+    .toLowerCase();
+  return m === "scrape_files_only" || m === "files";
+}
+
+/**
  * @param {import('playwright').Page} page
  * @param {boolean} preferNum
  * @param {string} previousPageRowSignature from rowSignatureFromIds(ids on this page)
@@ -1965,7 +2210,7 @@ async function advancePgcProjectGridPage(
 
 /**
  * @param {import('playwright').Page} page
- * @param {{ initialMode: PaginationMode, viewAllVisible: boolean, targetPermit?: string }} ctx
+ * @param {{ initialMode: PaginationMode, viewAllVisible: boolean, targetPermit?: string, targetProjectId?: string, targetedCollectionOnly?: boolean, scrapeMode?: string }} ctx
  */
 async function collectAllProjects(page, ctx) {
   await assertPgcHomeBootstrapped(page);
@@ -1989,14 +2234,48 @@ async function collectAllProjects(page, ctx) {
   const targetPermit = hasExplicitTargetPermit
     ? normalizeText(String(ctx.targetPermit))
     : "";
-  const fullEnumeration = !hasExplicitTargetPermit;
+  const targetProjectId = String(ctx?.targetProjectId || "").trim();
+  const hasExplicitTargetProjectId = !!targetProjectId;
+  const targetedCollectionOnly =
+    !!ctx?.targetedCollectionOnly || pgcIsFilesOnlyScrapeMode(ctx?.scrapeMode);
+  const hasExplicitTarget =
+    hasExplicitTargetPermit || hasExplicitTargetProjectId || targetedCollectionOnly;
+  const fullEnumeration =
+    !hasExplicitTargetPermit &&
+    !hasExplicitTargetProjectId &&
+    !targetedCollectionOnly;
 
   console.log(
-    `[PGC] collectAllProjects: explicitTargetPermit=${hasExplicitTargetPermit} fullEnumeration=${fullEnumeration} searchTarget=${targetPermit || "(none)"}`,
+    `[PGC] collectAllProjects: explicitTargetPermit=${hasExplicitTargetPermit} explicitTargetProjectId=${hasExplicitTargetProjectId} targetedCollectionOnly=${targetedCollectionOnly} fullEnumeration=${fullEnumeration} searchTarget=${targetPermit || "(none)"} projectId=${targetProjectId || "(none)"}`,
   );
 
   if (paginationMode === "view_all") {
     paginationMode = "next_button";
+  }
+
+  if (!fullEnumeration) {
+    await resetPgcDashboardGridToPageOne(page);
+    await waitForProjectGrid(page);
+  }
+
+  if (!fullEnumeration && !targetPermit && !targetProjectId) {
+    console.log(
+      "[PGC] collectAllProjects: targeted mode without permit/projectId — skipping dashboard enumeration",
+    );
+    return {
+      projects: [],
+      paginationMode,
+      pagesVisited: 0,
+      viewAllClicked,
+      rawRowsScanned: 0,
+      validRowsWithProjectId: 0,
+      uniqueProjectCount: 0,
+      skippedNoProjectId: 0,
+      duplicateRowsSkipped: 0,
+      linkPatternSummary,
+      targetFound: false,
+      loopExitReason: "targeted_without_permit_or_id",
+    };
   }
 
   /** @type {string} */
@@ -2053,28 +2332,32 @@ async function collectAllProjects(page, ctx) {
     lastSignature = sig;
 
     let newOnThisPage = 0;
-    for (const row of pack.rows) {
-      const id = row.projectID;
-      if (uniqueById.has(id)) {
-        duplicateRowsSkipped++;
-        continue;
+    const matchedRow = pickPgcDashboardMatchingRow(
+      pack.rows,
+      targetPermit,
+      targetProjectId,
+    );
+    if (fullEnumeration) {
+      for (const row of pack.rows) {
+        const id = row.projectID;
+        if (uniqueById.has(id)) {
+          duplicateRowsSkipped++;
+          continue;
+        }
+        const { _linkSource, ...clean } = row;
+        uniqueById.set(id, clean);
+        newOnThisPage++;
       }
-      const { _linkSource, ...clean } = row;
-      uniqueById.set(id, clean);
-      newOnThisPage++;
+    } else if (matchedRow) {
+      const { _linkSource, ...clean } = matchedRow;
+      uniqueById.set(matchedRow.projectID, clean);
+      newOnThisPage = 1;
     }
-    const foundTarget =
-      hasExplicitTargetPermit &&
-      !!targetPermit &&
-      pack.rows.some(
-        (r) =>
-          normalizeText(r.projectNumber).toLowerCase() ===
-          targetPermit.toLowerCase(),
-      );
+    const foundTarget = !fullEnumeration && !!matchedRow;
     if (foundTarget) {
       loopExitReason = "found_explicit_target_permit";
       console.log(
-        `[PGC] Found explicit target permit ${targetPermit} on discovery page ${pageNum} (dashboardPage=${gridSnap.currentPage})`,
+        `[PGC] Found explicit target ${targetPermit || targetProjectId} on discovery page ${pageNum} (dashboardPage=${gridSnap.currentPage}) projectID=${matchedRow.projectID}`,
       );
       break;
     }
@@ -2133,15 +2416,27 @@ async function collectAllProjects(page, ctx) {
     `[PGC] collectAllProjects finished: exitReason=${loopExitReason} pagesVisited=${pagesVisited} uniqueCount=${uniqueById.size}`,
   );
 
-  const projects = Array.from(uniqueById.values());
+  let projects = Array.from(uniqueById.values());
   const targetFound =
-    hasExplicitTargetPermit &&
-    !!targetPermit &&
+    !fullEnumeration &&
     projects.some(
       (p) =>
-        normalizeText(p.projectNumber).toLowerCase() ===
-        targetPermit.toLowerCase(),
+        (targetProjectId && String(p.projectID) === targetProjectId) ||
+        (targetPermit && pgcPermitKeysMatch(p.projectNumber, targetPermit)),
     );
+  if (!fullEnumeration && (targetPermit || targetProjectId) && targetFound) {
+    projects = projects.filter(
+      (p) =>
+        (targetProjectId && String(p.projectID) === targetProjectId) ||
+        (targetPermit && pgcPermitKeysMatch(p.projectNumber, targetPermit)),
+    );
+    if (targetProjectId) {
+      const byId = projects.find(
+        (p) => String(p.projectID) === targetProjectId,
+      );
+      if (byId) projects = [byId];
+    }
+  }
   return {
     projects,
     paginationMode,
@@ -2252,6 +2547,10 @@ async function gotoPgcProjectTab(page, projectId, tabName, extraParams = "") {
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     const u = page.url();
+    if (pgcUrlIsSessionEnded(u)) {
+      errors.push("session_ended after Project/Index navigation");
+      return { ok: false, url: u, errors, triedUrl: url, baseUsed: PGC_PROJECT_UI_INDEX };
+    }
     if (/\/login/i.test(u) || /sessionended|session\s*end/i.test(u)) {
       errors.push("login/session after Project/Index navigation");
       return { ok: false, url: u, errors, triedUrl: url, baseUsed: PGC_PROJECT_UI_INDEX };
@@ -3737,6 +4036,313 @@ function pgcProjectDetailEntryUrlOk(url, projectId) {
   );
 }
 
+/** @param {string} url */
+function pgcUrlIsSessionEnded(url) {
+  return /SessionEnded\.aspx/i.test(String(url || ""));
+}
+
+/** ProjectDox auth cookie names we expect after SSO (names only — never log values). */
+const PGC_PROJECTDOX_SESSION_COOKIE_HINTS = [
+  "ASP.NET_SessionId",
+  ".ASPXAUTH",
+  "FedAuth",
+  "__RequestVerificationToken",
+];
+
+/**
+ * Log cookie name presence per domain when ProjectDox session is missing (no values).
+ * @param {import('playwright').BrowserContext} context
+ * @param {string} tag
+ */
+async function logPgcProjectDoxSessionCookieDiagnostics(context, tag) {
+  const urls = [PGC_BASE, PGC_WEBUI, PGC_DASHBOARD_URL].filter(Boolean);
+  const cookies = await context.cookies(urls).catch(() => []);
+  /** @type {Record<string, string[]>} */
+  const namesByDomain = {};
+  for (const c of cookies) {
+    const d = String(c.domain || "(no-domain)");
+    if (!namesByDomain[d]) namesByDomain[d] = [];
+    if (!namesByDomain[d].includes(c.name)) namesByDomain[d].push(c.name);
+  }
+  const webuiNames = [
+    ...new Set(
+      cookies
+        .filter((c) =>
+          /projectdox|eplans/i.test(`${c.domain || ""}${c.path || ""}`),
+        )
+        .map((c) => c.name),
+    ),
+  ];
+  const missingHints = PGC_PROJECTDOX_SESSION_COOKIE_HINTS.filter(
+    (n) => !webuiNames.includes(n),
+  );
+  console.log(
+    `[PGC] ProjectDox session cookie audit [${tag}] domains:`,
+    Object.keys(namesByDomain).join(", ") || "(none)",
+  );
+  console.log(
+    `[PGC] ProjectDox session cookie audit [${tag}] webui cookie names present (${webuiNames.length}):`,
+    webuiNames,
+  );
+  if (missingHints.length) {
+    console.warn(
+      `[PGC] ProjectDox session cookie audit [${tag}] likely missing auth cookie names:`,
+      missingHints,
+    );
+  }
+  return { namesByDomain, webuiNames, missingHints };
+}
+
+/**
+ * Verify authenticated Project/Index context before Task 6.
+ * @param {import('playwright').Page} page
+ * @param {string} projectID
+ * @param {string} [permitNumber]
+ * @param {{ requireFilesTab?: boolean }} [opts]
+ */
+async function verifyPgcProjectDoxSessionReady(
+  page,
+  projectID,
+  permitNumber,
+  opts = {},
+) {
+  const pid = String(projectID || "").trim();
+  const permit = normalizeText(permitNumber || "");
+  const url = page.url();
+  const sessionEnded = pgcUrlIsSessionEnded(url);
+  const loginish = /\/login/i.test(url) || /b2clogin/i.test(url);
+  const hasProjectUrl =
+    pgcProjectDetailEntryUrlOk(url, pid) ||
+    url.includes(`ProjectID=${pid}`) ||
+    url.includes(`ProjectID%3D${pid}`) ||
+    url.includes(`ProjectID%3d${pid}`);
+  const requireFilesTab = opts.requireFilesTab === true;
+  const hasFilesTab = /tab=filesTab/i.test(url);
+  const permitInBody =
+    !permit ||
+    (await page
+      .evaluate(
+        (p) => {
+          const body = (document.body?.innerText || "").toLowerCase();
+          return body.includes(String(p).toLowerCase());
+        },
+        permit,
+      )
+      .catch(() => false));
+  const tabChrome = await page
+    .evaluate(() =>
+      !!document.querySelector(
+        '[role="tablist"], #project-tabs, a[href*="filesTab"], a[href*="infoTab"], a[href*="projectStatusTab"]',
+      ),
+    )
+    .catch(() => false);
+
+  const ok =
+    !sessionEnded &&
+    !loginish &&
+    hasProjectUrl &&
+    tabChrome &&
+    (permitInBody || hasProjectUrl) &&
+    (!requireFilesTab || hasFilesTab);
+
+  /** @type {string | null} */
+  let error = null;
+  if (sessionEnded) error = "session_ended";
+  else if (loginish) error = "login_redirect";
+  else if (!hasProjectUrl) error = "project_url_missing";
+  else if (!tabChrome) error = "project_tab_chrome_missing";
+  else if (requireFilesTab && !hasFilesTab) error = "files_tab_url_missing";
+
+  return {
+    ok,
+    url,
+    sessionEnded,
+    loginish,
+    hasProjectUrl,
+    hasFilesTab,
+    permitInBody,
+    tabChrome,
+    error,
+  };
+}
+
+/**
+ * Open target project via dashboard launchRemote/SSO (not cold Project/Index goto).
+ * One controlled re-login if SessionEnded. Returns the Page that holds ProjectDox session.
+ * @param {import('playwright').Page} page portal/dashboard page (same browser context)
+ * @param {{ projectID?: string, projectId?: string, projectNumber?: string, projectNum?: string }} project
+ * @param {string} dashboardUrl
+ * @param {{
+ *   recoveryCredentials?: { email: string, password: string, loginUrl?: string, credentialsSource?: string } | null,
+ * }} [opts]
+ */
+async function ensurePgcProjectDoxSessionOpen(page, project, dashboardUrl, opts = {}) {
+  const projectID = String(
+    project.projectID || project.projectId || "",
+  ).trim();
+  const permit = normalizeText(
+    project.projectNumber || project.projectNum || "",
+  );
+  const recoveryCreds = opts.recoveryCredentials || null;
+  /** @type {import('playwright').Page} */
+  let workPage = page;
+  let recovered = false;
+
+  const attemptOpen = async (tag) => {
+    const openRes = await openProjectViaDashboardRow(
+      workPage,
+      dashboardUrl,
+      projectID,
+      { projectNumber: permit },
+    );
+    if (!openRes.ok) {
+      return {
+        ok: false,
+        error: "dashboard_row_open_failed",
+        reason: openRes.reason || "unknown",
+        tag,
+      };
+    }
+    if (openRes.detailPage) {
+      workPage = openRes.detailPage;
+    }
+    await workPage.waitForLoadState("domcontentloaded").catch(() => {});
+    const verify = await verifyPgcProjectDoxSessionReady(
+      workPage,
+      projectID,
+      permit,
+      { requireFilesTab: false },
+    );
+    if (!verify.ok) {
+      return {
+        ok: false,
+        error: verify.error || "session_not_ready",
+        verify,
+        tag,
+      };
+    }
+    return { ok: true, verify, openVia: openRes.via, tag };
+  };
+
+  let r = await attemptOpen("primary");
+  if (!r.ok && r.error === "session_ended" && recoveryCreds) {
+    console.warn(
+      "[PGC] SessionEnded during project open — controlled re-login and dashboard reopen",
+    );
+    await logPgcProjectDoxSessionCookieDiagnostics(
+      page.context(),
+      "session_ended_before_recovery",
+    );
+    await performPgcLogin(
+      page,
+      recoveryCreds.email,
+      recoveryCreds.password,
+      recoveryCreds.loginUrl || resolvePgcLoginUrl(dashboardUrl),
+      {
+        credentialsSource:
+          recoveryCreds.credentialsSource || "saved_portal_settings",
+      },
+    );
+    await waitForProjectGrid(page);
+    workPage = page;
+    recovered = true;
+    r = await attemptOpen("after_relogin");
+  }
+
+  if (!r.ok) {
+    await logPgcProjectDoxSessionCookieDiagnostics(
+      page.context(),
+      "session_open_failed",
+    );
+    return {
+      ok: false,
+      page: workPage,
+      error: r.error || "project_dox_session_not_established",
+      diagnostics: r,
+      recovered,
+    };
+  }
+
+  const filesNav = await openPgcFilesTab(workPage, projectID);
+  const filesVerify = await verifyPgcProjectDoxSessionReady(
+    workPage,
+    projectID,
+    permit,
+    { requireFilesTab: true },
+  );
+  if (!filesVerify.ok) {
+    await logPgcProjectDoxSessionCookieDiagnostics(
+      page.context(),
+      "files_tab_verify_failed",
+    );
+    return {
+      ok: false,
+      page: workPage,
+      error: filesVerify.error || "files_tab_session_not_ready",
+      diagnostics: { open: r, filesNav, filesVerify },
+      recovered,
+    };
+  }
+
+  console.log(
+    `[PGC] ProjectDox session ready | ProjectID ${projectID}${permit ? ` (${permit})` : ""} | files tab URL verified`,
+  );
+  return {
+    ok: true,
+    page: workPage,
+    url: workPage.url(),
+    recovered,
+    diagnostics: { open: r, filesNav, filesVerify },
+  };
+}
+
+/**
+ * Re-resolve a single permit row on the live dashboard (no full enumeration).
+ * @param {import('playwright').Page} page
+ * @param {string} dashboardUrl
+ * @param {{ projectNum?: string, projectId?: string, id?: string, name?: string }} target
+ * @returns {Promise<{ ok: boolean, target: typeof target, row?: object, dashboardPage?: number }>}
+ */
+async function resolvePgcExplicitTargetOnDashboard(page, dashboardUrl, target) {
+  const permit = normalizeText(target.projectNum || target.name || "");
+  const pid = String(target.projectId || target.id || "").trim();
+  if (!permit && !pid) {
+    return { ok: false, target };
+  }
+
+  const paging = await ensurePgcTargetRowVisibleOnDashboard(
+    page,
+    dashboardUrl,
+    permit,
+    { projectId: pid, resetToFirstPage: true },
+  );
+  if (!paging.ok || !paging.row || paging.verified !== true) {
+    console.warn(
+      `[PGC] Explicit target row not re-resolved on dashboard | permit=${permit || "(none)"} projectId=${pid || "(none)"} reason=${paging.reason || "not_found"}`,
+    );
+    return { ok: false, target };
+  }
+
+  console.log(
+    `[PGC] Files Only explicit target resolved | ${paging.row.projectNumber} (ID ${paging.row.projectID}) on dashboard page ${paging.dashboardPage ?? paging.pagesVisited ?? "?"}`,
+  );
+  return {
+    ok: true,
+    target: {
+      ...target,
+      id: paging.row.projectID,
+      projectId: paging.row.projectID,
+      projectNum: paging.row.projectNumber,
+      name: paging.row.projectNumber,
+      description: paging.row.description || target.description || "",
+      location: paging.row.location || target.location || "",
+      status: paging.row.status || target.status || "",
+    },
+    row: paging.row,
+    dashboardPage: paging.dashboardPage,
+  };
+}
+
 /**
  * True only when the popup is past the SSO bridge and shows real project UI (per user criteria).
  * Does not succeed on SSO URL alone; does not use ProjectID in the SSO query as proof of detail.
@@ -3950,6 +4556,24 @@ async function openProjectViaDashboardRow(page, dashboardUrl, projectId, opts = 
 
   /** @type {{ label: string, loc: import('playwright').Locator }[]} */
   const locatorAttempts = [];
+  if (pid) {
+    locatorAttempts.push(
+      {
+        label: "remote-content-launchRemote-ProjectID",
+        loc: page
+          .locator(`a.remote-content[href*="launchRemote"][href*="${pid}"]`)
+          .first(),
+      },
+      {
+        label: "launchRemote-href-with-ProjectID",
+        loc: page.locator(`a[href*="launchRemote"][href*="${pid}"]`).first(),
+      },
+      {
+        label: "href-ProjectID-plain",
+        loc: page.locator(`a[href*="ProjectID=${pid}"]`).first(),
+      },
+    );
+  }
   if (permit) {
     const esc = pgcRegexEscape(permit);
     locatorAttempts.push({
@@ -3969,34 +4593,29 @@ async function openProjectViaDashboardRow(page, dashboardUrl, projectId, opts = 
         .first(),
     });
   }
-  locatorAttempts.push(
-    {
-      label: "remote-content-launchRemote-ProjectID",
-      loc: page
-        .locator(`a.remote-content[href*="launchRemote"][href*="${pid}"]`)
-        .first(),
-    },
-    {
-      label: "launchRemote-href-with-ProjectID",
-      loc: page.locator(`a[href*="launchRemote"][href*="${pid}"]`).first(),
-    },
-    {
-      label: "href-ProjectID-plain",
-      loc: page.locator(`a[href*="ProjectID=${pid}"]`).first(),
-    },
-    {
-      label: "href-ProjectID-encoded",
-      loc: page.locator(`a[href*="ProjectID%3D${pid}"]`).first(),
-    },
-    {
-      label: "onclick-ProjectID",
-      loc: page.locator(`a[onclick*="ProjectID=${pid}"]`).first(),
-    },
-    {
-      label: "any-onclick-ProjectID",
-      loc: page.locator(`[onclick*="ProjectID=${pid}"]`).first(),
-    },
-  );
+  if (pid) {
+    locatorAttempts.push(
+      {
+        label: "href-ProjectID-encoded",
+        loc: page.locator(`a[href*="ProjectID%3D${pid}"]`).first(),
+      },
+      {
+        label: "onclick-ProjectID",
+        loc: page.locator(`a[onclick*="ProjectID=${pid}"]`).first(),
+      },
+      {
+        label: "any-onclick-ProjectID",
+        loc: page.locator(`[onclick*="ProjectID=${pid}"]`).first(),
+      },
+    );
+  } else {
+    locatorAttempts.push(
+      {
+        label: "href-ProjectID-encoded-fallback",
+        loc: page.locator(`a[href*="ProjectID%3D"]`).first(),
+      },
+    );
+  }
 
   for (const { label, loc } of locatorAttempts) {
     try {
@@ -4200,7 +4819,7 @@ async function openProjectViaDashboardRow(page, dashboardUrl, projectId, opts = 
  * @param {import('playwright').Page} page
  * @param {string} dashboardUrl
  * @param {string} [targetPermitRaw]
- * @param {{ projectId?: string }} [opts]
+ * @param {{ projectId?: string, resetToFirstPage?: boolean }} [opts]
  */
 async function ensurePgcTargetRowVisibleOnDashboard(
   page,
@@ -4238,6 +4857,11 @@ async function ensurePgcTargetRowVisibleOnDashboard(
     .catch(() => {});
   await waitForProjectGrid(page);
 
+  if (opts.resetToFirstPage !== false) {
+    await resetPgcDashboardGridToPageOne(page);
+    await waitForProjectGrid(page);
+  }
+
   const pagerGuess = await detectPaginationMode(page);
   let paginationMode = pagerGuess.mode;
   if (paginationMode === "view_all") paginationMode = "next_button";
@@ -4253,27 +4877,36 @@ async function ensurePgcTargetRowVisibleOnDashboard(
   for (let i = 0; i < MAX_PAGER_PAGES; i++) {
     const pageNum = i + 1;
     const pack = await readProjectRows(page);
-    const row = pack.rows.find((r) => {
-      if (
-        targetPermit &&
-        normalizeText(r.projectNumber).toLowerCase() ===
-          targetPermit.toLowerCase()
-      ) {
-        return true;
-      }
-      if (targetPid && String(r.projectID) === targetPid) return true;
-      return false;
-    });
+    const row = pickPgcDashboardMatchingRow(
+      pack.rows,
+      targetPermit,
+      targetPid,
+    );
     if (row) {
-      console.log(
-        `[PGC][discovery-paging] matched ${targetLabel} on discovery page ${pageNum}/${MAX_PAGER_PAGES} (mode=${paginationMode})`,
-      );
-      return {
-        ok: true,
+      const gridSnap = await readPgcGrdProjectsPagingSnapshot(page);
+      const verified = await verifyPgcDashboardTargetRowVisible(
+        page,
         row,
-        pagesVisited: pageNum,
-        paginationMode,
-      };
+        targetPermit,
+        targetPid,
+      );
+      if (!verified.ok) {
+        console.warn(
+          `[PGC][discovery-paging] matched ${targetLabel} but row verification failed: ${verified.reason}`,
+        );
+      } else {
+        console.log(
+          `[PGC][discovery-paging] matched ${targetLabel} on discovery page ${pageNum} (dashboardPage=${gridSnap.currentPage}) projectID=${verified.row.projectID}`,
+        );
+        return {
+          ok: true,
+          row: verified.row,
+          pagesVisited: pageNum,
+          dashboardPage: gridSnap.currentPage,
+          paginationMode,
+          verified: true,
+        };
+      }
     }
 
     const idsOnPage = pack.rows.map((r) => r.projectID);
@@ -5900,9 +6533,85 @@ function makeAbsolutePortalUrl(raw) {
   return `${PGC_BASE}/${s.replace(/^\/+/, "")}`;
 }
 
+function isSupabaseStoragePublicUrl(url) {
+  return /supabase\.co\/storage\//i.test(String(url || "").trim());
+}
+
+function isPgcEphemeralPortalFileUrl(url) {
+  const s = String(url || "").trim();
+  if (!s || isSupabaseStoragePublicUrl(s)) return false;
+  if (/^blob:|^data:/i.test(s)) return false;
+  if (
+    /princegeorgescountymd\.gov|eplans\.princegeorges/i.test(s) &&
+    /(ActiveXViewer|FileViewer|BravaServer|viewfile|sessionended|\/login\b)/i.test(
+      s,
+    )
+  ) {
+    return true;
+  }
+  if (/ProjectDox/i.test(s) && !isSupabaseStoragePublicUrl(s)) return true;
+  return false;
+}
+
 /**
- * Canonical PGC viewer URL (same tab the scraper opens after viewFile). Used when no
- * storage publicUrl exists so UI can still link every API-known file by FileID.
+ * After Supabase upload, bind storage URLs to folder file rows and strip ephemeral portal links.
+ * @param {Awaited<ReturnType<typeof harvestProjectFilesAndSampleDownloads>>} filesOut
+ */
+function finalizePgcFolderFileUrls(filesOut) {
+  /** @type {Map<string, { publicUrl?: string }>} */
+  const uploadedById = new Map();
+  for (const df of filesOut.downloadedFiles || []) {
+    const id = String(df.fileID || "").trim();
+    if (!id || !df.publicUrl) continue;
+    uploadedById.set(id, df);
+  }
+
+  for (const folder of filesOut.folders || []) {
+    for (const f of folder.files || []) {
+      const id = String(f.fileId || "").trim();
+      const uploaded = id ? uploadedById.get(id) : null;
+      if (
+        uploaded?.publicUrl &&
+        isSupabaseStoragePublicUrl(uploaded.publicUrl)
+      ) {
+        f.publicUrl = uploaded.publicUrl;
+        f.viewUrl = uploaded.publicUrl;
+        f.downloadUrl = uploaded.publicUrl;
+        if (!f.downloadStatus) f.downloadStatus = "ok";
+        continue;
+      }
+
+      const failed =
+        String(f.downloadStatus || "").toLowerCase() === "failed" ||
+        String(f.downloadStatus || "")
+          .toLowerCase()
+          .startsWith("failed_");
+      const activationSkipped =
+        String(f.downloadStatus || "").toLowerCase() === "activation_skipped";
+
+      if (failed) {
+        f.viewUrl = null;
+        f.publicUrl = null;
+        if (isPgcEphemeralPortalFileUrl(f.downloadUrl)) f.downloadUrl = null;
+        continue;
+      }
+
+      if (activationSkipped) {
+        if (isPgcEphemeralPortalFileUrl(f.viewUrl)) f.viewUrl = null;
+        if (isPgcEphemeralPortalFileUrl(f.publicUrl)) f.publicUrl = null;
+        if (isPgcEphemeralPortalFileUrl(f.downloadUrl)) f.downloadUrl = null;
+        continue;
+      }
+
+      if (isPgcEphemeralPortalFileUrl(f.viewUrl)) f.viewUrl = null;
+      if (isPgcEphemeralPortalFileUrl(f.publicUrl)) f.publicUrl = null;
+      if (isPgcEphemeralPortalFileUrl(f.downloadUrl)) f.downloadUrl = null;
+    }
+  }
+}
+
+/**
+ * Canonical PGC viewer URL (scraper-only; never persisted as user-facing open link).
  * @param {string | number | null | undefined} fileId
  * @returns {string | null}
  */
@@ -6141,6 +6850,263 @@ function isPgcBravaPublishToPdfUrl(url) {
   return /\/pdf$/i.test(path);
 }
 
+/** Normalize Brava publish URL for dedupe (origin + path, no query). */
+function pgcNormalizePublishUrl(url) {
+  try {
+    const u = new URL(String(url || ""));
+    return `${u.origin}${u.pathname}`;
+  } catch (_) {
+    return String(url || "").split(/[?#]/)[0];
+  }
+}
+
+/**
+ * Collect all Brava publish PDF URLs visible in browser context + optional response records.
+ * @param {import('playwright').Page} viewerPage
+ * @param {Array<Record<string, unknown>>} [responseRecords]
+ */
+function pgcCollectBravaPublishUrlsFromViewer(viewerPage, responseRecords) {
+  /** @type {Set<string>} */
+  const urls = new Set();
+  try {
+    for (const p of viewerPage.context().pages()) {
+      const u = p.url();
+      if (isPgcBravaPublishToPdfUrl(u)) urls.add(pgcNormalizePublishUrl(u));
+    }
+  } catch (_) {}
+  try {
+    for (const f of viewerPage.frames()) {
+      const u = f.url() || "";
+      if (isPgcBravaPublishToPdfUrl(u)) urls.add(pgcNormalizePublishUrl(u));
+    }
+  } catch (_) {}
+  for (const r of responseRecords || []) {
+    const u = String(r.url || "");
+    if (isPgcBravaPublishToPdfUrl(u)) urls.add(pgcNormalizePublishUrl(u));
+  }
+  return urls;
+}
+
+/**
+ * Close viewer/Brava/export tabs; keep the main ProjectDox work page.
+ * @param {import('playwright').Page} workPage
+ */
+async function pgcCloseStaleBravaAndViewerTabs(workPage) {
+  const ctx = workPage.context();
+  let closed = 0;
+  for (const p of [...ctx.pages()]) {
+    if (p === workPage) continue;
+    let u = "";
+    try {
+      u = p.url();
+    } catch (_) {
+      await p.close().catch(() => {});
+      closed += 1;
+      continue;
+    }
+    const shouldClose =
+      /ActiveXViewer\.aspx/i.test(u) ||
+      isPgcBravaPublishToPdfUrl(u) ||
+      /\/BravaServer\//i.test(u) ||
+      /:8443/i.test(u);
+    if (shouldClose) {
+      await p.close().catch(() => {});
+      closed += 1;
+    }
+  }
+  if (closed > 0) {
+    console.log(`[PGC] Brava | closed ${closed} stale viewer/export tab(s)`);
+  }
+  return closed;
+}
+
+function pgcExtractFileIdFromViewerUrl(url) {
+  const m = String(url || "").match(/[?&]FileID=(\d+)/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Verify ActiveXViewer belongs to the file we intend to export.
+ * @param {import('playwright').Page} viewerPage
+ * @param {{ name?: string|null, fileId?: string|null }} fileMeta
+ */
+async function verifyPgcViewerMatchesFile(viewerPage, fileMeta) {
+  const wantId = fileMeta.fileId != null ? String(fileMeta.fileId).trim() : "";
+  const wantName = normalizeText(String(fileMeta.name || ""));
+  let viewerUrl = "";
+  try {
+    viewerUrl = viewerPage.url();
+  } catch (_) {
+    return { ok: false, error: "viewer_page_closed" };
+  }
+
+  const idFromUrl = pgcExtractFileIdFromViewerUrl(viewerUrl);
+  if (wantId && idFromUrl && idFromUrl !== wantId) {
+    return {
+      ok: false,
+      error: "viewer_file_id_mismatch",
+      diagnostics: { wantId, idFromUrl, viewerUrl: viewerUrl.slice(0, 300) },
+    };
+  }
+
+  if (wantId || wantName) {
+    const meta = await viewerPage
+      .evaluate(
+        ({ wantId: wid, wantName: wn }) => {
+          const url = location.href || "";
+          const idMatch = url.match(/[?&]FileID=(\d+)/i);
+          const idFromUrlLocal = idMatch ? idMatch[1] : "";
+          const body = String(document.body?.innerText || "");
+          const title = String(document.title || "");
+          const combined = `${title}\n${body}`.slice(0, 8000);
+          const hasId = wid
+            ? combined.includes(wid) || idFromUrlLocal === wid
+            : false;
+          const hasName = wn
+            ? combined.toLowerCase().includes(wn.toLowerCase())
+            : false;
+          return {
+            idFromUrl: idFromUrlLocal,
+            hasId,
+            hasName,
+            title: title.slice(0, 200),
+          };
+        },
+        { wantId, wantName },
+      )
+      .catch(() => null);
+
+    if (
+      meta &&
+      wantId &&
+      idFromUrl &&
+      meta.idFromUrl &&
+      meta.idFromUrl !== wantId
+    ) {
+      return { ok: false, error: "viewer_file_id_mismatch", diagnostics: meta };
+    }
+    if (meta && wantId && !idFromUrl && !meta.hasId && !meta.hasName) {
+      return {
+        ok: false,
+        error: "viewer_file_identity_unverified",
+        diagnostics: meta,
+      };
+    }
+    if (meta && wantName && !meta.hasName && wantId && !meta.hasId) {
+      return {
+        ok: false,
+        error: "viewer_filename_not_seen",
+        diagnostics: meta,
+      };
+    }
+  }
+
+  return { ok: true, viewerUrl, fileIdFromUrl: idFromUrl };
+}
+
+/**
+ * Find a Brava publish PDF URL that appeared after export started and was not used before.
+ * @param {import('playwright').Page} viewerPage
+ * @param {Array<Record<string, unknown>>} responseRecords
+ * @param {{ prePublishSnapshot?: Set<string>, usedPublishedPdfUrls?: Set<string>, exportStartedAt?: number }} [opts]
+ */
+function pgcFindNewBravaPublishPdfUrl(viewerPage, responseRecords, opts = {}) {
+  const prePublishSnapshot = opts.prePublishSnapshot || new Set();
+  const usedPublishedPdfUrls = opts.usedPublishedPdfUrls || new Set();
+  const exportStartedAt = opts.exportStartedAt || 0;
+
+  /** @type {{ url: string, source: string, norm: string } | null} */
+  let best = null;
+
+  const consider = (rawUrl, source, recordTs) => {
+    if (!rawUrl || !isPgcBravaPublishToPdfUrl(rawUrl)) return;
+    const norm = pgcNormalizePublishUrl(rawUrl);
+    if (prePublishSnapshot.has(norm)) return;
+    if (usedPublishedPdfUrls.has(norm)) return;
+    if (exportStartedAt > 0 && recordTs && recordTs < exportStartedAt - 50) return;
+    if (!best) best = { url: rawUrl, source, norm };
+  };
+
+  try {
+    for (const p of viewerPage.context().pages()) {
+      consider(p.url(), "tab", Date.now());
+    }
+  } catch (_) {}
+  try {
+    for (const f of viewerPage.frames()) {
+      consider(f.url() || "", "frame", Date.now());
+    }
+  } catch (_) {}
+  for (const r of responseRecords || []) {
+    const ts =
+      typeof r.capturedAt === "number" ? Number(r.capturedAt) : Date.now();
+    consider(String(r.url || ""), "network", ts);
+  }
+
+  return best;
+}
+
+function pgcSha256Buffer(buf) {
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+
+/**
+ * @param {{ usedPublishedPdfUrls?: Set<string>, downloadedHashes?: Map<string, { fileId: string, fileName: string, byteLength: number }> }} exportState
+ */
+function pgcValidateBravaExportResult(fileMeta, buffer, publishUrl, exportState) {
+  const normUrl = pgcNormalizePublishUrl(publishUrl);
+  const byteLength = buffer.length;
+  const hash = pgcSha256Buffer(buffer);
+
+  if (exportState?.usedPublishedPdfUrls?.has(normUrl)) {
+    return { ok: false, error: "stale_export_reused", hash, normUrl };
+  }
+
+  const prior = exportState?.downloadedHashes?.get(hash);
+  if (prior && String(prior.fileId) !== String(fileMeta.fileId || "")) {
+    if (prior.byteLength === byteLength && byteLength > 0) {
+      return {
+        ok: false,
+        error: "suspicious_duplicate_pdf_hash",
+        hash,
+        priorFileId: prior.fileId,
+        priorFileName: prior.fileName,
+      };
+    }
+  }
+
+  return { ok: true, hash, normUrl, byteLength };
+}
+
+function pgcRecordBravaExportSuccess(exportState, fileMeta, normUrl, hash, byteLength) {
+  if (!exportState) return;
+  exportState.usedPublishedPdfUrls.add(normUrl);
+  if (!exportState.downloadedHashes) {
+    exportState.downloadedHashes = new Map();
+  }
+  exportState.downloadedHashes.set(hash, {
+    fileId: String(fileMeta.fileId || ""),
+    fileName: String(fileMeta.name || ""),
+    byteLength,
+  });
+}
+
+/**
+ * @param {{ usedPublishedPdfUrls?: Set<string>, downloadedHashes?: Map<string, { fileId: string, fileName: string, byteLength: number }> }} exportState
+ */
+function pgcCreateBravaPerFileExportCtx(exportState) {
+  return {
+    exportState,
+    usedPublishedPdfUrls: exportState?.usedPublishedPdfUrls || new Set(),
+    prePublishSnapshot: new Set(),
+    exportStartedAt: 0,
+    expectedFileId: null,
+    expectedFileName: null,
+    detectedPublishUrl: null,
+    detectedAt: null,
+  };
+}
+
 /**
  * Validated published PDF from Brava publish-to-format only (not generic viewer GETs).
  * @param {{ url?: string, status?: number, contentType?: string, contentDisposition?: string, byteLength?: number, buffer?: Buffer }} candidate
@@ -6317,12 +7283,63 @@ function pgcBufferLooksLikeFileBinary(buf, contentType, contentDisposition) {
 }
 
 /**
- * Navigate to Files tab and log browser-truth context (URL, title, body sample, DOM hints).
+ * Navigate to Files tab; supports force reload when tree/grid must be rebuilt.
  * @param {import('playwright').Page} page
  * @param {string} projectID
+ * @param {{ forceReload?: boolean }} [opts]
  */
-async function openPgcFilesTab(page, projectID) {
-  const nav = await gotoPgcProjectTab(page, String(projectID), "filesTab", "");
+async function ensurePgcFilesTabOpen(page, projectID, opts = {}) {
+  const pid = String(projectID || "").trim();
+  const forceReload = opts.forceReload === true;
+  const current = page.url();
+
+  if (forceReload && pid) {
+    const url = buildPgcTabUrl(pid, "filesTab", "");
+    console.log("[PGC] Files tab force reload:", url);
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await waitForPgcFilesTabInitialized(page);
+    const visible = await pgcFilesTabVisibilitySnapshot(page);
+    console.log(
+      "[PGC] Files tab force reload complete:",
+      page.url(),
+      JSON.stringify(visible),
+    );
+    return { ok: true, url: page.url(), via: "force_reload", visible };
+  }
+
+  if (/tab=filesTab/i.test(current) && !pgcUrlIsSessionEnded(current)) {
+    const already = await pgcFilesTabVisibilitySnapshot(page);
+    if (already.folderTree || already.filesTabPanel) {
+      console.log("[PGC] Files tab already active:", current);
+      return { ok: true, url: current, via: "already_files_tab", visible: already };
+    }
+  }
+
+  const onProjectIndex =
+    pgcProjectDetailEntryUrlOk(current, pid) ||
+    (pid &&
+      (current.includes(`ProjectID=${pid}`) ||
+        current.includes(`ProjectID%3D${pid}`)));
+  if (onProjectIndex && !pgcUrlIsSessionEnded(current)) {
+    const tabLink = page
+      .locator('a[href*="filesTab"], #project-tabs a[href*="filesTab"]')
+      .first();
+    if (await tabLink.isVisible().catch(() => false)) {
+      await tabLink.click({ timeout: 12000 }).catch(() => {});
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForTimeout(600);
+      const afterUrl = page.url();
+      if (/tab=filesTab/i.test(afterUrl) && !pgcUrlIsSessionEnded(afterUrl)) {
+        console.log("[PGC] Files tab opened via project UI tab click:", afterUrl);
+        await waitForPgcFilesTabInitialized(page).catch(() => {});
+        const visible = await pgcFilesTabVisibilitySnapshot(page);
+        return { ok: true, url: afterUrl, via: "ui_tab_click", visible };
+      }
+    }
+  }
+
+  const nav = await gotoPgcProjectTab(page, pid, "filesTab", "");
+  await waitForPgcFilesTabInitialized(page).catch(() => {});
   const url = page.url();
   const title = (await page.title().catch(() => "")) || "";
   const lines = await page
@@ -6338,23 +7355,134 @@ async function openPgcFilesTab(page, projectID) {
   console.log("[PGC] Files tab context URL:", url);
   console.log("[PGC] Files tab context title:", title);
   console.log("[PGC] Files tab body lines (first ~40):", lines);
-  const visible = await page
-    .evaluate(() => ({
-      folderTree: !!document.querySelector("#folderTree"),
-      folderNodes: document.querySelectorAll("#folderTree li.ui-igtree-node")
-        .length,
-      gridRows: document.querySelectorAll(
-        ".ui-iggrid-table tbody tr, table tbody tr",
-      ).length,
-      filesTabInHref: /tab=filestab/i.test(String(location.href || "")),
-      filesTabLinkPresent: !!document.querySelector('a[href*="filesTab"]'),
-    }))
-    .catch(() => ({}));
+  const visible = await pgcFilesTabVisibilitySnapshot(page);
   console.log(
     "[PGC] Files tab visible / structure:",
     JSON.stringify(visible),
   );
   return { ...nav, visible };
+}
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function pgcFilesTabVisibilitySnapshot(page) {
+  return page
+    .evaluate(() => ({
+      folderTree: !!document.querySelector("#folderTree"),
+      grdFiles: !!document.querySelector("#grdFiles"),
+      filesTabPanel: !!document.querySelector("#filesTab"),
+      folderNodes: document.querySelectorAll("#folderTree li.ui-igtree-node")
+        .length,
+      gridRows: document.querySelectorAll(
+        ".ui-iggrid-table tbody tr, #grdFiles tr[data-id]",
+      ).length,
+      filesTabInHref: /tab=filestab/i.test(String(location.href || "")),
+      filesTabLinkPresent: !!document.querySelector('a[href*="filesTab"]'),
+    }))
+    .catch(() => ({
+      folderTree: false,
+      grdFiles: false,
+      filesTabPanel: false,
+      folderNodes: 0,
+      gridRows: 0,
+    }));
+}
+
+/**
+ * Wait for Files tab tree + grid containers after navigation/reload.
+ * @param {import('playwright').Page} page
+ */
+async function waitForPgcFilesTabInitialized(page) {
+  await page.waitForSelector("#folderTree", { timeout: 25000 }).catch(() => {});
+  await page.waitForSelector("#grdFiles", { timeout: 25000 }).catch(() => {});
+  await page
+    .waitForSelector("#folderTree li.ui-igtree-node", { timeout: 20000 })
+    .catch(() => {});
+  await page.waitForTimeout(450);
+  return { ok: true };
+}
+
+/**
+ * Navigate to Files tab and log browser-truth context (URL, title, body sample, DOM hints).
+ * @param {import('playwright').Page} page
+ * @param {string} projectID
+ * @param {{ forceReload?: boolean }} [opts]
+ */
+async function openPgcFilesTab(page, projectID, opts = {}) {
+  return ensurePgcFilesTabOpen(page, projectID, opts);
+}
+
+const PGC_FILES_TREE_NODE_SELECTORS = [
+  "#folderTree li.ui-igtree-node",
+  "#filesTab .ui-igtree-node",
+  "#divFolderTree li.ui-igtree-node",
+  "[id*='FolderTree'] li.ui-igtree-node",
+  "#filesTab .ui-igtree li",
+  ".ui-igtree-root .ui-igtree-node",
+];
+
+/**
+ * Navigate to Files tab and wait for a folder tree/grid container.
+ * @param {import('playwright').Page} page
+ * @param {string} projectID
+ */
+async function waitForPgcFilesTreeReady(page, projectID) {
+  await openPgcFilesTab(page, String(projectID));
+  /** @type {string[]} */
+  const containersFound = await page
+    .evaluate(() => {
+      const found = [];
+      for (const sel of [
+        "#folderTree",
+        "#filesTab",
+        "#divFolderTree",
+        "[id*='FolderTree']",
+        ".ui-igtree",
+        ".ui-iggrid",
+      ]) {
+        try {
+          if (document.querySelector(sel)) found.push(sel);
+        } catch (_) {}
+      }
+      return found;
+    })
+    .catch(() => []);
+
+  for (const nodeSel of PGC_FILES_TREE_NODE_SELECTORS) {
+    try {
+      await page.waitForSelector(nodeSel, { timeout: 20000 });
+      const count = await page.locator(nodeSel).count();
+      if (count > 0) {
+        return {
+          ok: true,
+          nodeSelector: nodeSel,
+          nodeCount: count,
+          containersFound,
+          url: page.url(),
+        };
+      }
+    } catch (_) {}
+  }
+
+  const tabState = await page
+    .evaluate(() => ({
+      url: String(location.href || ""),
+      filesTabActive: !!document.querySelector(
+        "#project-tabs a.ui-tabs-active[href*='filesTab'], #project-tabs li.ui-state-active a[href*='filesTab']",
+      ),
+      filesTabPanel: !!document.querySelector("#filesTab"),
+    }))
+    .catch(() => ({ url: page.url(), filesTabActive: false, filesTabPanel: false }));
+
+  return {
+    ok: false,
+    nodeSelector: null,
+    nodeCount: 0,
+    containersFound,
+    url: tabState.url || page.url(),
+    tabState,
+  };
 }
 
 /**
@@ -6382,9 +7510,17 @@ async function inspectPgcFolderTreeDom(page) {
           if (document.querySelector(sel)) containers.push(sel);
         } catch (_) {}
       }
-      const nodeList = Array.from(
-        document.querySelectorAll("#folderTree li.ui-igtree-node"),
-      );
+      const nodeList = [];
+      for (const sel of [
+        "#folderTree li.ui-igtree-node",
+        "#filesTab .ui-igtree-node",
+        "#divFolderTree li.ui-igtree-node",
+        "[id*='FolderTree'] li.ui-igtree-node",
+      ]) {
+        document.querySelectorAll(sel).forEach((el) => {
+          if (!nodeList.includes(el)) nodeList.push(el);
+        });
+      }
       const sampleNodes = nodeList.slice(0, 20).map((el, index) => {
         const a =
           el.querySelector && el.querySelector("a")
@@ -6684,11 +7820,636 @@ async function expandPgcParentFolder(page, parentFolderName) {
   }, targetLower);
 
   await page.waitForTimeout(700);
+  const parentExpandDiagnostic = await isPgcParentFolderExpanded(page, pnorm);
   return {
     parentFound: true,
-    parentExpanded: !!jsClick,
-    used: jsClick || "expand_failed_no_control",
+    parentExpanded: true,
+    used: jsClick || "expand_attempted",
+    parentExpandDiagnostic,
   };
+}
+
+/**
+ * Diagnostic only — must never block folder selection.
+ * @param {import('playwright').Page} page
+ * @param {string} parentFolderName
+ */
+async function isPgcParentFolderExpanded(page, parentFolderName) {
+  const targetLower = normalizeText(parentFolderName || "")
+    .trim()
+    .toLowerCase();
+  if (!targetLower) return { found: false, expanded: false };
+  return page
+    .evaluate((tLower) => {
+      function norm(s) {
+        return String(s || "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      }
+      const lis = Array.from(
+        document.querySelectorAll("#folderTree li.ui-igtree-node"),
+      );
+      for (const li of lis) {
+        const path = li.getAttribute("data-path") || "";
+        const depth = (path.match(/_L/g) || []).length;
+        if (depth !== 1) continue;
+        const a = li.querySelector("a");
+        const label = norm(a?.textContent || "");
+        if (!label.includes(tLower) && label !== tLower) continue;
+        const expanded =
+          li.classList.contains("ui-igtree-node-expanded") ||
+          li.classList.contains("ui-state-expanded") ||
+          li.getAttribute("aria-expanded") === "true";
+        return { found: true, expanded };
+      }
+      return { found: false, expanded: false };
+    }, targetLower)
+    .catch(() => ({ found: false, expanded: false }));
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} folderID
+ */
+async function pgcChildFolderNodeExists(page, folderID) {
+  const fid = String(folderID || "").trim();
+  if (!fid) return false;
+  const n = await page
+    .locator(`#folderTree [data-value="${fid}"]`)
+    .count()
+    .catch(() => 0);
+  return n > 0;
+}
+
+/**
+ * Expand parent only when the child folder node is not yet in the DOM.
+ * @param {import('playwright').Page} page
+ * @param {{ folderID: string, parentFolder?: string }} folderMeta
+ */
+async function ensurePgcChildFolderInDom(page, folderMeta) {
+  const fid = String(folderMeta.folderID || "").trim();
+  const childSel = `#folderTree [data-value="${fid}"]`;
+  /** @type {Record<string, unknown>} */
+  const diag = { folderID: fid, expandAttempts: [] };
+
+  if (await pgcChildFolderNodeExists(page, fid)) {
+    return { ok: true, childLocated: true, diagnostics: diag };
+  }
+
+  const parentName = normalizeText(folderMeta.parentFolder || "").trim();
+  if (!parentName) {
+    await page.waitForSelector(childSel, { timeout: 8000 }).catch(() => {});
+    if (await pgcChildFolderNodeExists(page, fid)) {
+      return { ok: true, childLocated: true, diagnostics: diag };
+    }
+    return { ok: false, error: "child node not found", diagnostics: diag };
+  }
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const pexp = await expandPgcParentFolder(page, parentName);
+    diag.expandAttempts.push(pexp);
+    await page.waitForSelector(childSel, { timeout: 14000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    if (await pgcChildFolderNodeExists(page, fid)) {
+      diag.parentExpandDiagnostic = pexp.parentExpandDiagnostic || null;
+      return { ok: true, childLocated: true, diagnostics: diag };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "child node not found",
+    diagnostics: diag,
+  };
+}
+
+/**
+ * @param {string} name
+ */
+function pgcFilenameBase(name) {
+  const n = normalizeText(String(name || "")).toLowerCase();
+  if (!n) return "";
+  return n.includes("/") || n.includes("\\") ? n.replace(/.*[/\\]/, "") : n;
+}
+
+/**
+ * Deselect prior igTree node via widget API (not CSS-only).
+ * @param {import('playwright').Page} page
+ * @param {string | null} previousFolderId
+ */
+async function pgcClearIgTreeSelection(page, previousFolderId) {
+  return page
+    .evaluate((prevId) => {
+      /** @type {string[]} */
+      const log = [];
+      const $ = window.jQuery;
+      const root = document.querySelector("#folderTree");
+      if (!$ || !root) return { ok: false, log: ["no_jquery_or_folderTree"] };
+
+      const $root = $(root);
+      const tree = $root.data("igTree") || $root.data("igtree");
+
+      root
+        .querySelectorAll(
+          "li.ui-igtree-selected, li.ui-state-active, li.ui-state-focus",
+        )
+        .forEach((li) => {
+          li.classList.remove(
+            "ui-igtree-selected",
+            "ui-state-active",
+            "ui-state-focus",
+          );
+        });
+
+      if (tree) {
+        for (const fn of ["clearSelection", "deselect", "deactivate"]) {
+          if (typeof tree[fn] === "function") {
+            try {
+              tree[fn]();
+              log.push(`igTree.${fn}()`);
+            } catch (e) {
+              log.push(`igTree.${fn}_error:${(e && e.message) || e}`);
+            }
+          }
+        }
+        if (prevId) {
+          const prevEl = root.querySelector(`[data-value="${prevId}"]`);
+          const prevLi = prevEl?.closest?.("li.ui-igtree-node");
+          if (prevLi && typeof tree.deselect === "function") {
+            try {
+              tree.deselect(prevLi);
+              log.push("igTree.deselect(prev)");
+            } catch (e) {
+              log.push(`igTree.deselect_prev_error:${(e && e.message) || e}`);
+            }
+          }
+        }
+      }
+
+      const pt = window.projectTree;
+      if (pt && typeof pt === "object") {
+        for (const name of [
+          "clearSelection",
+          "deselectFolder",
+          "deselectAll",
+          "clearFolderSelection",
+        ]) {
+          if (typeof pt[name] === "function") {
+            try {
+              pt[name]();
+              log.push(`projectTree.${name}()`);
+            } catch (e) {
+              log.push(`projectTree.${name}_error:${(e && e.message) || e}`);
+            }
+          }
+        }
+      }
+
+      try {
+        $root.trigger("igtreenodeselectionchanged");
+        log.push("igtreenodeselectionchanged");
+      } catch (_) {}
+
+      return { ok: true, log };
+    }, previousFolderId || null)
+    .catch(() => ({ ok: false, log: ["evaluate_failed"] }));
+}
+
+/**
+ * Expand parent, clear prior selection, select child via igTree + visible anchor click.
+ * @param {import('playwright').Page} page
+ * @param {{
+ *   folderID: string,
+ *   folderName?: string,
+ *   parentFolder?: string,
+ * }} folderMeta
+ * @param {string} projectID
+ * @param {string | null} previousFolderId
+ */
+async function pgcActivateChildFolderNative(
+  page,
+  folderMeta,
+  projectID,
+  previousFolderId,
+) {
+  const fid = String(folderMeta.folderID || "").trim();
+  const parentName = normalizeText(folderMeta.parentFolder || "").trim();
+  const pid = String(projectID || "").trim();
+
+  await pgcClearIgTreeSelection(page, previousFolderId);
+  await page.waitForTimeout(200);
+
+  if (parentName) {
+    await expandPgcParentFolder(page, parentName);
+    await page.waitForTimeout(450);
+  }
+
+  const native = await page
+    .evaluate(
+      ({ folderID, projectId, previousFolderId: prevId, parentName: pName }) => {
+        /** @type {string[]} */
+        const log = [];
+        function norm(s) {
+          return String(s || "")
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        const $ = window.jQuery;
+        const root = document.querySelector("#folderTree");
+        if (!$ || !root) return { ok: false, log: ["no_jquery_or_folderTree"] };
+
+        const $root = $(root);
+        const tree = $root.data("igTree") || $root.data("igtree");
+        const pt = window.projectTree;
+
+        if (tree) {
+          for (const fn of ["clearSelection", "deselect"]) {
+            if (typeof tree[fn] === "function") {
+              try {
+                tree[fn]();
+                log.push(`igTree.${fn}()`);
+              } catch (e) {
+                log.push(`igTree.${fn}_error:${(e && e.message) || e}`);
+              }
+            }
+          }
+        }
+
+        if (pName) {
+          const pLower = norm(pName).toLowerCase();
+          const parentLis = Array.from(root.querySelectorAll("li.ui-igtree-node"));
+          for (const li of parentLis) {
+            const path = li.getAttribute("data-path") || "";
+            const depth = (path.match(/_L/g) || []).length;
+            if (depth !== 1) continue;
+            const a = li.querySelector("a");
+            const label = norm(a?.textContent || "").toLowerCase();
+            if (!label.includes(pLower) && label !== pLower) continue;
+            if (tree && typeof tree.expand === "function") {
+              try {
+                tree.expand(li);
+                log.push("igTree.expand(parent)");
+              } catch (e) {
+                log.push(`igTree.expand_parent_error:${(e && e.message) || e}`);
+              }
+            }
+            if (tree && typeof tree.select === "function") {
+              try {
+                tree.select(li);
+                log.push("igTree.select(parent)");
+              } catch (e) {
+                log.push(`igTree.select_parent_error:${(e && e.message) || e}`);
+              }
+            }
+            break;
+          }
+        }
+
+        const $node = $root.find(`[data-value="${folderID}"]`).first();
+        if (!$node.length) {
+          return { ok: false, log: ["data-value_node_not_found"] };
+        }
+        const $li = $node.closest("li.ui-igtree-node");
+        const $anchor = ($node.is("a") ? $node : $node.find("a").first()).first();
+
+        if (pt && typeof pt === "object") {
+          const ptObj = /** @type {Record<string, unknown>} */ (pt);
+          for (const name of [
+            "selectFolder",
+            "selectFolderById",
+            "selectFolderByID",
+            "selectTreeNode",
+            "nodeClick",
+          ]) {
+            const fn = ptObj[name];
+            if (typeof fn === "function") {
+              try {
+                fn.call(pt, folderID);
+                log.push(`projectTree.${name}(${folderID})`);
+              } catch (e) {
+                log.push(`projectTree.${name}_error:${(e && e.message) || e}`);
+              }
+            }
+          }
+        }
+
+        if (tree && $li.length) {
+          if (typeof tree.expand === "function") {
+            try {
+              tree.expand($li[0]);
+              log.push("igTree.expand(child)");
+            } catch (e) {
+              log.push(`igTree.expand_child_error:${(e && e.message) || e}`);
+            }
+          }
+          if (typeof tree.select === "function") {
+            try {
+              tree.select($li[0]);
+              log.push("igTree.select(child)");
+            } catch (e) {
+              log.push(`igTree.select_child_error:${(e && e.message) || e}`);
+            }
+          }
+        }
+
+        const clickEl = $anchor.length ? $anchor[0] : $li.length ? $li[0] : null;
+        if (clickEl) {
+          clickEl.scrollIntoView({ block: "center", inline: "nearest" });
+          for (const type of ["mousedown", "mouseup", "click"]) {
+            clickEl.dispatchEvent(
+              new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+              }),
+            );
+          }
+          log.push("anchor_native_click_sequence");
+        }
+
+        try {
+          $root.trigger("igtreenodeselectionchanged");
+          log.push("igtreenodeselectionchanged");
+        } catch (_) {}
+
+        let selectedId = null;
+        const settings =
+          pt && typeof pt === "object"
+            ? /** @type {Record<string, unknown>} */ (pt).settings
+            : null;
+        if (settings && typeof settings === "object") {
+          const selFolder = /** @type {Record<string, unknown>} */ (settings)
+            .selectedFolder;
+          if (selFolder && typeof selFolder === "object") {
+            const ent =
+              /** @type {Record<string, unknown>} */ (selFolder).EntityID ??
+              /** @type {Record<string, unknown>} */ (selFolder).entityID;
+            if (ent != null) selectedId = String(ent);
+          }
+        }
+
+        return {
+          ok: true,
+          log,
+          selectedFolderId: selectedId,
+          selectedMatch: selectedId === String(folderID),
+          projectIdExpected: projectId || null,
+          previousFolderId: prevId,
+        };
+      },
+      {
+        folderID: fid,
+        projectId: pid,
+        previousFolderId: previousFolderId || null,
+        parentName,
+      },
+    )
+    .catch(() => ({ ok: false, log: ["evaluate_failed"] }));
+
+  const childSel = `#folderTree [data-value="${fid}"]`;
+  await page.waitForSelector(childSel, { timeout: 10000 }).catch(() => {});
+  const anchorLink = page.locator(`#folderTree [data-value="${fid}"] a`).first();
+  const nodeLoc = page.locator(childSel).first();
+  let playwrightClick = false;
+  if (await anchorLink.isVisible().catch(() => false)) {
+    await anchorLink.scrollIntoViewIfNeeded().catch(() => {});
+    await anchorLink.click({ timeout: 12000 }).catch(() => {});
+    playwrightClick = true;
+  } else if (await nodeLoc.isVisible().catch(() => false)) {
+    await nodeLoc.scrollIntoViewIfNeeded().catch(() => {});
+    await nodeLoc.click({ timeout: 12000 }).catch(() => {});
+    playwrightClick = true;
+  }
+
+  return { native, playwrightClick };
+}
+
+/**
+ * Trigger child folder selection; caller must start xhr wait before invoke.
+ * @param {import('playwright').Page} page
+ * @param {{ folderID: string }} folderMeta
+ * @param {string} projectID
+ * @param {{ clickStrategyUsed?: string | null }} diag
+ * @param {"projectTree"|"igTree"|"legacy"} mode
+ */
+async function triggerPgcChildFolderSelection(
+  page,
+  folderMeta,
+  projectID,
+  diag,
+  mode,
+) {
+  const fid = String(folderMeta.folderID || "").trim();
+  await page
+    .waitForSelector(`#folderTree [data-value="${fid}"]`, { timeout: 8000 })
+    .catch(() => {});
+
+  if (mode === "projectTree") {
+    const ptSel = await selectPgcFolderViaProjectTree(page, folderMeta, projectID);
+    diag.clickStrategyUsed = "projectTree";
+    return { selection: ptSel, mode };
+  }
+  if (mode === "igTree") {
+    const igSel = await selectPgcFolderViaIgTreeFallback(page, folderMeta);
+    diag.clickStrategyUsed = "igTree_fallback";
+    return { selection: igSel, mode };
+  }
+  const legacyOk = await legacyPgcDomClickChildFolder(page, fid, diag);
+  diag.clickStrategyUsed = legacyOk ? "legacy_dom" : "legacy_dom_failed";
+  return { selection: { ok: legacyOk }, mode };
+}
+
+/**
+ * Wait for portal File/GetFolderFiles after folder selection.
+ * @param {import('playwright').Page} page
+ * @param {string} folderID
+ * @param {string} projectID
+ * @param {{ timeout?: number }} [opts]
+ */
+async function waitForPgcGetFolderFilesResponse(page, folderID, projectID, opts = {}) {
+  const fid = String(folderID || "").trim();
+  const pid = String(projectID || "").trim();
+  const timeout = opts.timeout ?? 22000;
+  if (!fid) return { ok: false, error: "missing_folder_id" };
+
+  try {
+    const resp = await page.waitForResponse(
+      (r) => {
+        const url = r.url();
+        if (!/\/File\/GetFolderFiles/i.test(url)) return false;
+        if (r.status() !== 200) return false;
+        try {
+          const u = new URL(url);
+          const respFid =
+            u.searchParams.get("folderID") || u.searchParams.get("FolderID");
+          if (respFid && String(respFid).trim() !== fid) return false;
+          if (pid) {
+            const respPid =
+              u.searchParams.get("projectID") || u.searchParams.get("ProjectID");
+            if (respPid && String(respPid).trim() !== pid) return false;
+          }
+          return true;
+        } catch (_) {
+          return (
+            url.includes(`folderID=${fid}`) ||
+            url.includes(`folderID=${encodeURIComponent(fid)}`)
+          );
+        }
+      },
+      { timeout },
+    );
+    let itemCount = 0;
+    let totalRows = 0;
+    try {
+      const json = await resp.json();
+      const items = parseGenericItemsArray(json);
+      itemCount = items.length;
+      const o = json && typeof json === "object" ? json : {};
+      const tr =
+        /** @type {Record<string, unknown>} */ (o).TotalRowsCount ??
+        /** @type {Record<string, unknown>} */ (o).totalRowsCount;
+      if (tr != null && !Number.isNaN(Number(tr))) totalRows = Number(tr);
+    } catch (_) {}
+    return {
+      ok: true,
+      url: resp.url(),
+      itemCount,
+      totalRows,
+    };
+  } catch (_) {
+    return { ok: false, error: "get_folder_files_xhr_timeout" };
+  }
+}
+
+/**
+ * Select folder via portal projectFileViewer / projectTree (not raw igTree only).
+ * @param {import('playwright').Page} page
+ * @param {{ folderID: string }} folderMeta
+ * @param {string} projectID
+ */
+async function selectPgcFolderViaProjectTree(page, folderMeta, projectID) {
+  const fid = String(folderMeta.folderID || "").trim();
+  const pid = String(projectID || "").trim();
+  return page
+    .evaluate(
+      ({ folderID, projectId }) => {
+        /** @type {string[]} */
+        const log = [];
+        const $ = window.jQuery;
+        if (!$) return { ok: false, log: ["no_jquery"], selectedFolderId: null };
+
+        const pt = window.projectTree;
+        if (!pt || typeof pt !== "object") {
+          return { ok: false, log: ["no_projectTree"], selectedFolderId: null };
+        }
+
+        const root = document.querySelector("#folderTree");
+        if (!root) return { ok: false, log: ["no_folderTree"], selectedFolderId: null };
+
+        const $root = $(root);
+        const $node = $root.find(`[data-value="${folderID}"]`).first();
+        if (!$node.length) {
+          return { ok: false, log: ["data-value_node_not_found"], selectedFolderId: null };
+        }
+
+        const $li = $node.closest("li.ui-igtree-node");
+        const $anchor = ($node.is("a") ? $node : $node.find("a").first()).first();
+
+        /** @type {Record<string, unknown>} */
+        const ptObj = /** @type {Record<string, unknown>} */ (pt);
+        const tryCall = (name, ...args) => {
+          const fn = ptObj[name];
+          if (typeof fn !== "function") return;
+          try {
+            fn.apply(pt, args);
+            log.push(`projectTree.${name}()`);
+          } catch (e) {
+            log.push(`projectTree.${name}_error:${(e && e.message) || e}`);
+          }
+        };
+
+        tryCall("selectFolder", folderID);
+        tryCall("selectFolderById", folderID);
+        tryCall("selectFolderByID", folderID);
+        tryCall("selectTreeNode", folderID);
+        tryCall("nodeClick", folderID);
+
+        const settings = ptObj.settings;
+        if (settings && typeof settings === "object") {
+          const treeSel = String(
+            /** @type {Record<string, unknown>} */ (settings).projectTreeID || "#folderTree",
+          );
+          const $tree = $(treeSel);
+          if ($tree.length && $li.length) {
+            try {
+              if (typeof $tree.igTree === "function") {
+                $tree.igTree("select", $li[0]);
+                log.push("igTree_widget_select");
+              }
+            } catch (e) {
+              log.push(`igTree_widget_select_error:${(e && e.message) || e}`);
+            }
+            const ig = $tree.data("igTree") || $tree.data("igtree");
+            if (ig && typeof ig.select === "function") {
+              try {
+                ig.select($li[0]);
+                log.push("igTree_data_select");
+              } catch (e) {
+                log.push(`igTree_data_select_error:${(e && e.message) || e}`);
+              }
+            }
+          }
+        }
+
+        if ($anchor.length) {
+          $anchor[0].dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+          );
+          log.push("anchor_dispatch_click");
+        } else if ($li.length) {
+          $li[0].dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+          );
+          log.push("li_dispatch_click");
+        }
+
+        try {
+          $root.trigger("igtreenodeselectionchanged");
+          log.push("igtreenodeselectionchanged");
+        } catch (_) {}
+
+        const selFolder = settings && typeof settings === "object"
+          ? /** @type {Record<string, unknown>} */ (settings).selectedFolder
+          : null;
+        let selectedId = null;
+        if (selFolder && typeof selFolder === "object") {
+          const ent =
+            /** @type {Record<string, unknown>} */ (selFolder).EntityID ??
+            /** @type {Record<string, unknown>} */ (selFolder).entityID;
+          if (ent != null) selectedId = String(ent);
+        }
+        const selectedMatch =
+          selectedId != null && String(selectedId) === String(folderID);
+
+        return {
+          ok: selectedMatch || log.some((l) => /click|select/i.test(l)),
+          log,
+          selectedFolderId: selectedId,
+          selectedMatch,
+          projectIdExpected: projectId || null,
+        };
+      },
+      { folderID: fid, projectId: pid },
+    )
+    .catch(() => ({
+      ok: false,
+      log: ["evaluate_failed"],
+      selectedFolderId: null,
+      selectedMatch: false,
+    }));
 }
 
 /**
@@ -6798,6 +8559,7 @@ async function logPgcFilesGridTruth(page, folderMeta, label) {
  *   currentFingerprint?: string,
  *   truth?: Awaited<ReturnType<typeof evaluatePgcFilesGridTruth>>,
  *   rowTexts?: string[],
+ *   previousFolderFilenames?: string[],
  * }} [ctx]
  */
 async function assertPgcGridBelongsToFolder(page, folderMeta, ctx = {}) {
@@ -6846,6 +8608,27 @@ async function assertPgcGridBelongsToFolder(page, folderMeta, ctx = {}) {
     }
     if (filenameHintMatch) break;
   }
+
+  const prevNames = ctx.previousFolderFilenames || [];
+  const targetBases = new Set(bases);
+  for (const pn of prevNames) {
+    const prevBase = pgcFilenameBase(pn);
+    if (prevBase.length < 3 || targetBases.has(prevBase)) continue;
+    for (const rt of rowTexts) {
+      if (rt.toLowerCase().includes(prevBase)) {
+        return {
+          ok: false,
+          error: "stale_grid_previous_folder_filename_visible",
+          diagnostics: {
+            reason: "previous_folder_filename_visible",
+            prevBase,
+            rowTextsSample: rowTexts.slice(0, 12),
+          },
+        };
+      }
+    }
+  }
+
   pgcProgress.pgcLogDetail("pgc_grid_belong_filename_hints_debug", {
     folderID: folderMeta.folderID,
     parentFolder: folderMeta.parentFolder,
@@ -6985,15 +8768,44 @@ function gridMatchesPgcFolder(folderMeta, truth, rowTexts, opts = {}) {
     Math.abs(dr - exp) <= Math.max(1, Math.min(3, Math.floor(exp * 0.2)));
   const countPlausible = countExact || countClose;
 
-  const prev = opts.previousFingerprint;
-  const cur = opts.currentFingerprint;
-  const fpChanged =
-    typeof prev === "string" &&
-    prev.length > 0 &&
-    typeof cur === "string" &&
-    cur.length > 0 &&
-    prev !== cur;
-  const isFirstFolder = !prev || String(prev).length === 0;
+  const knownList = [
+    ...(folderMeta.knownFileNames || []),
+    ...(Array.isArray(folderMeta.files)
+      ? folderMeta.files
+          .map((x) => (x && typeof x === "object" ? x.name : x))
+          .filter(Boolean)
+      : []),
+  ].map((s) => normalizeText(String(s)));
+  const bases = knownList
+    .map((n) => pgcFilenameBase(n))
+    .filter((b) => b.length > 2);
+  let knownFilenameVisible = !!truth.knownFilenameVisible;
+  if (!knownFilenameVisible) {
+    for (const base of bases) {
+      for (const rt of rowTexts) {
+        if (rt.toLowerCase().includes(base)) {
+          knownFilenameVisible = true;
+          break;
+        }
+      }
+      if (knownFilenameVisible) break;
+    }
+  }
+
+  const prevNames = opts.previousFolderFilenames || [];
+  const targetBases = new Set(bases);
+  for (const pn of prevNames) {
+    const prevBase = pgcFilenameBase(pn);
+    if (prevBase.length < 3 || targetBases.has(prevBase)) continue;
+    for (const rt of rowTexts) {
+      if (rt.toLowerCase().includes(prevBase)) {
+        return {
+          ok: false,
+          error: "stale_grid_previous_folder_filename_visible",
+        };
+      }
+    }
+  }
 
   if (truth.templatePlaceholdersInGrid) {
     return { ok: false, error: "stale_grid_after_folder_switch" };
@@ -7008,23 +8820,46 @@ function gridMatchesPgcFolder(folderMeta, truth, rowTexts, opts = {}) {
     return { ok: false, error: "stale_grid_after_folder_switch" };
   }
 
-  if (isFirstFolder) {
-    return hasGridRows ? { ok: true } : { ok: false, error: "stale_grid_after_folder_switch" };
+  if (!knownFilenameVisible && !countPlausible) {
+    return {
+      ok: false,
+      error: "folder_grid_expected_filename_not_visible",
+    };
   }
 
-  if (fpChanged || countPlausible) {
+  const prev = opts.previousFingerprint;
+  const cur = opts.currentFingerprint;
+  const fpChanged =
+    typeof prev === "string" &&
+    prev.length > 0 &&
+    typeof cur === "string" &&
+    cur.length > 0 &&
+    prev !== cur;
+  const isFirstFolder = !prev || String(prev).length === 0;
+
+  if (isFirstFolder) {
+    return knownFilenameVisible || countPlausible
+      ? { ok: true }
+      : { ok: false, error: "folder_grid_expected_filename_not_visible" };
+  }
+
+  if (fpChanged && (knownFilenameVisible || countPlausible)) {
+    return { ok: true };
+  }
+  if (countPlausible && knownFilenameVisible) {
     return { ok: true };
   }
 
-  return { ok: false, error: "folder_grid_count_mismatch" };
+  return { ok: false, error: "stale_grid_after_folder_switch" };
 }
 
 /**
- * Close viewer tabs, dismiss UI noise, return to Files tab before the next folder.
+ * Close viewer tabs / modals between folders. Reload Files tab only when recovering.
  * @param {import('playwright').Page} mainPage
  * @param {string} projectID
+ * @param {{ reloadFilesTab?: boolean }} [opts]
  */
-async function resetPgcFolderDownloadState(mainPage, projectID) {
+async function resetPgcFolderDownloadState(mainPage, projectID, opts = {}) {
   await mainPage.keyboard.press("Escape").catch(() => {});
   await mainPage.waitForTimeout(120);
   try {
@@ -7043,8 +8878,10 @@ async function resetPgcFolderDownloadState(mainPage, projectID) {
   } catch (_) {}
   await mainPage.keyboard.press("Escape").catch(() => {});
   await mainPage.waitForTimeout(100);
-  if (projectID) {
-    await openPgcFilesTab(mainPage, String(projectID));
+  if (projectID && opts.reloadFilesTab === true) {
+    await ensurePgcFilesTabOpen(mainPage, String(projectID), {
+      forceReload: true,
+    });
     await mainPage.waitForTimeout(450);
   }
 }
@@ -7061,7 +8898,7 @@ async function resetPgcFolderDownloadState(mainPage, projectID) {
  *   files?: unknown[],
  * }} folderMeta
  * @param {unknown} _allFolderMeta reserved for future tree hints
- * @param {{ projectID: string, previousFingerprint?: string | null }} ctx
+ * @param {{ projectID: string, previousFingerprint?: string | null, previousFolderId?: string | null, previousFolderFilenames?: string[] }} ctx
  */
 async function activatePgcFolderAndVerifyGrid(
   page,
@@ -7071,13 +8908,40 @@ async function activatePgcFolderAndVerifyGrid(
 ) {
   const projectID = String(ctx.projectID || "");
   const prevFp = ctx.previousFingerprint;
+  const activationCtx = {
+    previousFolderId: ctx.previousFolderId || null,
+    previousFolderFilenames: ctx.previousFolderFilenames || [],
+    previousFingerprint: prevFp,
+  };
 
-  const attempt = async (tag) => {
-    const sel = await openPgcChildFolder(page, folderMeta);
+  const attempt = async (tag, forceReload) => {
+    if (forceReload) {
+      await ensurePgcFilesTabOpen(page, projectID, { forceReload: true });
+      await page.waitForTimeout(500);
+    }
+    const sel = await openPgcChildFolder(
+      page,
+      folderMeta,
+      projectID,
+      activationCtx,
+    );
     if (!sel.ok) {
+      const err =
+        (sel.diagnostics && sel.diagnostics.error) || "folder_activation_failed";
       return {
         ok: false,
-        error: "folder_activation_failed",
+        error: String(err),
+        diagnostics: sel.diagnostics,
+        tag,
+      };
+    }
+    const xhrOk =
+      sel.diagnostics?.getFolderFilesXhrFinal?.ok === true ||
+      sel.diagnostics?.getFolderFilesXhr?.ok === true;
+    if (!xhrOk) {
+      return {
+        ok: false,
+        error: "get_folder_files_xhr_timeout",
         diagnostics: sel.diagnostics,
         tag,
       };
@@ -7087,8 +8951,10 @@ async function activatePgcFolderAndVerifyGrid(
     if (!loaded.ok) {
       return {
         ok: false,
-        error: "folder_activation_failed",
-        diagnostics: { phase: "grid_load", loaded },
+        error: loaded.zeroOfZeroFiles
+          ? "false_success_empty_grid"
+          : "folder_grid_not_loaded",
+        diagnostics: { phase: "grid_load", loaded, selection: sel.diagnostics },
         tag,
       };
     }
@@ -7110,6 +8976,7 @@ async function activatePgcFolderAndVerifyGrid(
       currentFingerprint,
       truth,
       rowTexts,
+      previousFolderFilenames: activationCtx.previousFolderFilenames,
     });
     if (!belong.ok) {
       return {
@@ -7122,6 +8989,7 @@ async function activatePgcFolderAndVerifyGrid(
     const strict = gridMatchesPgcFolder(folderMeta, truth, rowTexts, {
       previousFingerprint: prevFp,
       currentFingerprint,
+      previousFolderFilenames: activationCtx.previousFolderFilenames,
     });
     if (!strict.ok) {
       return {
@@ -7136,14 +9004,16 @@ async function activatePgcFolderAndVerifyGrid(
       fingerprint: currentFingerprint,
       truth,
       tag,
+      activeFolderId: folderMeta.folderID,
+      activeParentFolderId: folderMeta.parentFolder || null,
     };
   };
 
-  let r = await attempt("primary");
+  let r = await attempt("primary", false);
   if (r.ok) return r;
 
   console.warn(
-    "[PGC] Folder activation retry after Files tab refresh |",
+    "[PGC] Folder activation retry after Files tab force reload |",
     folderMeta.folderID,
     folderMeta.parentFolder,
     "/",
@@ -7151,9 +9021,8 @@ async function activatePgcFolderAndVerifyGrid(
     "| first:",
     r.error,
   );
-  await openPgcFilesTab(page, projectID);
-  await page.waitForTimeout(600);
-  r = await attempt("retry");
+  await pgcCloseStaleBravaAndViewerTabs(page);
+  r = await attempt("force_reload", true);
   return r;
 }
 
@@ -7199,6 +9068,11 @@ function normalizePgcPerFileDownloadError(rawError, fallback) {
     [/export_complete_popup_not_found/i, "export_complete_popup_not_found"],
     [/export_complete_ok_not_clicked/i, "export_complete_ok_not_clicked"],
     [/publishtoformat_pdf_not_seen/i, "publishtoformat_pdf_not_seen"],
+    [/stale_export_reused/i, "stale_export_reused"],
+    [/suspicious_duplicate_pdf_hash/i, "suspicious_duplicate_pdf_hash"],
+    [/viewer_file_id_mismatch/i, "viewer_file_id_mismatch"],
+    [/viewer_file_identity_unverified/i, "viewer_file_identity_unverified"],
+    [/viewer_filename_not_seen/i, "viewer_filename_not_seen"],
     [
       /validation_failed|rejectReason|invalid.*pdf|rejected|not_brava_publish_pdf_url/i,
       "pdf_validation_failed",
@@ -7535,27 +9409,27 @@ async function recoverPgcFilesSessionAndResume(state) {
   await openPgcFilesTab(work, projectID);
   await work.waitForTimeout(550);
 
-  const mustSkipActivation = relaunched || !!skipFolderActivation;
-  if (mustSkipActivation) {
-    console.log(
-      "[PGC] Recovery OK | files tab open | skipping folder reactivation (resume current or next folder)",
-    );
+  if (!folderMeta?.folderID) {
+    console.log("[PGC] Recovery OK | files tab open | no folder to reactivate");
     return {
       ok: true,
       page: work,
       fingerprint: null,
       relaunched,
-      skipFolderActivation: true,
+      skipFolderActivation: false,
       task6Context,
       task6Browser,
     };
   }
 
+  console.log(
+    `[PGC] Recovery | reactivating folder ${folderMeta.folderID} | ${folderMeta.parentFolder} / ${folderMeta.folderName}`,
+  );
   const activation = await activatePgcFolderAndVerifyGrid(
     work,
     /** @type {any} */ (folderMeta),
     allFoldersOut,
-    { projectID, previousFingerprint: previousGridFingerprint || null },
+    { projectID, previousFingerprint: null },
   );
   if (!activation.ok) {
     console.log(
@@ -7567,12 +9441,16 @@ async function recoverPgcFilesSessionAndResume(state) {
       page: work,
       task6Context,
       task6Browser,
+      relaunched,
     };
   }
 
   console.log(
     `[PGC] Recovery folder restored | ${folderMeta.parentFolder} / ${folderMeta.folderName}`,
   );
+  if (typeof harvestOpts?.refreshScrapeLease === "function") {
+    harvestOpts.refreshScrapeLease();
+  }
   return {
     ok: true,
     page: work,
@@ -7700,10 +9578,11 @@ async function introspectPgcFilesTree(page) {
 }
 
 /**
+ * Legacy igTree/jQuery click — fallback only after projectTree path.
  * @param {import('playwright').Page} page
  * @param {{ folderID: string }} folderMeta
  */
-async function selectPgcFolderViaWidget(page, folderMeta) {
+async function selectPgcFolderViaIgTreeFallback(page, folderMeta) {
   const fid = String(folderMeta.folderID || "").trim();
   /** @type {string[]} */
   const attempts = [];
@@ -7860,98 +9739,161 @@ async function legacyPgcDomClickChildFolder(page, fid, diag) {
 }
 
 /**
- * Select Files-tab folder and wait until #grdFiles has real data (not template shell).
+ * Select Files-tab folder via native igTree transition; verify GetFolderFiles + grid.
  * @param {import('playwright').Page} page
- * @param {{ folderID: string, folderName?: string, parentFolder?: string, knownFileNames?: string[], files?: unknown[] }} folderMeta
+ * @param {{
+ *   folderID: string,
+ *   folderName?: string,
+ *   parentFolder?: string,
+ *   knownFileNames?: string[],
+ *   expectedFilesCount?: number|null,
+ *   files?: unknown[],
+ * }} folderMeta
+ * @param {string} [projectID]
+ * @param {{
+ *   previousFolderId?: string | null,
+ *   previousFolderFilenames?: string[],
+ *   previousFingerprint?: string | null,
+ * }} [activationCtx]
  */
-async function selectPgcFilesFolder(page, folderMeta) {
+async function selectPgcFilesFolder(
+  page,
+  folderMeta,
+  projectID,
+  activationCtx = {},
+) {
   /** @type {Record<string, unknown>} */
   const diag = {
     folderID: folderMeta.folderID,
     folderName: folderMeta.folderName || "",
     parentFolder: folderMeta.parentFolder || "",
-    parentFound: false,
-    parentExpanded: false,
+    projectID: projectID || "",
+    previousFolderId: activationCtx.previousFolderId || null,
+    previousFingerprint: activationCtx.previousFingerprint || null,
     childNodeFound: false,
-    clickStrategyUsed: null,
+    clickStrategyUsed: "native_igtree",
     gridTruth: null,
     treeIntrospection: null,
-    widgetSelection: null,
+    nativeSelection: null,
+    getFolderFilesXhr: null,
+    getFolderFilesXhrFinal: null,
     error: null,
   };
 
   const fid = String(folderMeta.folderID || "").trim();
+  const pid = String(projectID || "").trim();
+  const previousFolderId = activationCtx.previousFolderId || null;
   if (!fid) {
     diag.error = "missing folderID";
     return { ok: false, diagnostics: diag };
   }
 
-  const pexp = await expandPgcParentFolder(page, folderMeta.parentFolder || "");
-  diag.parentFound = !!pexp.parentFound;
-  diag.parentExpanded = !!pexp.parentExpanded;
+  await pgcCloseStaleBravaAndViewerTabs(page);
 
-  await page
-    .waitForSelector(`#folderTree [data-value="${fid}"]`, { timeout: 12000 })
-    .catch(() => {});
+  const runFolderSwitchPass = async (tag, xhrTimeout) => {
+    await pgcClearIgTreeSelection(page, previousFolderId);
+    await page.waitForTimeout(180);
 
-  let nodeInfo = await findPgcFolderTreeNode(page, folderMeta);
-  if (!nodeInfo.found) {
-    await page.waitForTimeout(800);
-    nodeInfo = await findPgcFolderTreeNode(page, folderMeta);
-  }
-  diag.childNodeFound = !!nodeInfo.found;
-  if (!nodeInfo.found) {
-    diag.error = "child node not found";
-    await logPgcFilesGridTruth(page, folderMeta, "fail-no-tree-node");
-    return { ok: false, diagnostics: diag };
-  }
+    const childReady = await ensurePgcChildFolderInDom(page, folderMeta);
+    diag[`childDomReady_${tag}`] = childReady;
+    if (!childReady.ok) {
+      return {
+        ok: false,
+        childReady,
+        xhr: { ok: false, error: childReady.error || "child node not found" },
+        native: null,
+      };
+    }
+
+    diag.childNodeFound = true;
+    console.log(
+      `[PGC] Folder child located | ${fid} | pass=${tag} | prevFolder=${previousFolderId || "none"}`,
+    );
+
+    const xhrPromise = waitForPgcGetFolderFilesResponse(page, fid, pid, {
+      timeout: xhrTimeout,
+    });
+    const native = await pgcActivateChildFolderNative(
+      page,
+      folderMeta,
+      pid,
+      previousFolderId,
+    );
+    diag[`nativeSelection_${tag}`] = native;
+
+    await page.waitForTimeout(350);
+    await page
+      .waitForFunction(
+        () => {
+          const spin = document.querySelector(
+            ".ui-igloading:visible, .k-loading-mask:visible",
+          );
+          return !spin;
+        },
+        { timeout: 8000 },
+      )
+      .catch(() => {});
+
+    const xhr = await xhrPromise;
+    if (xhr.ok) {
+      console.log(
+        `[PGC] GetFolderFiles matched | folderID=${fid} projectID=${pid || "(none)"} | pass=${tag}`,
+      );
+    }
+    return { ok: true, childReady, xhr, native };
+  };
 
   const intro = await introspectPgcFilesTree(page);
   diag.treeIntrospection = intro;
   pgcProgress.pgcLogDetail("files_tree_introspect", { folderMeta, intro });
-  console.log("[PGC] Files tree introspect → pgc-debug-detail.log");
 
-  const wSel = await selectPgcFolderViaWidget(page, folderMeta);
-  diag.widgetSelection = wSel;
-  await page.waitForTimeout(500);
-  await page
-    .waitForFunction(
-      () => {
-        const spin = document.querySelector(
-          ".ui-igloading:visible, .k-loading-mask:visible",
-        );
-        return !spin;
-      },
-      { timeout: 8000 },
-    )
-    .catch(() => {});
+  let pass = await runFolderSwitchPass("primary", 5000);
+  diag.nativeSelection = pass.native;
+  let xhr = pass.xhr || { ok: false };
+  diag.getFolderFilesXhr = xhr;
+
+  if (!pass.ok || !xhr.ok) {
+    console.warn(
+      `[PGC] GetFolderFiles not seen in primary pass — force reloading Files tab | folderID=${fid}`,
+    );
+    await ensurePgcFilesTabOpen(page, pid, { forceReload: true });
+    await page.waitForTimeout(500);
+    pass = await runFolderSwitchPass("force_reload", 8000);
+    diag.nativeSelectionForceReload = pass.native;
+    xhr = pass.xhr || { ok: false };
+    diag.getFolderFilesXhrForceReload = xhr;
+  }
+
+  diag.getFolderFilesXhrFinal = xhr;
+
+  if (!pass.ok) {
+    diag.error =
+      pass.childReady?.error || xhr.error || "child node not found";
+    await logPgcFilesGridTruth(page, folderMeta, "fail-no-tree-node");
+    return { ok: false, diagnostics: diag };
+  }
+
+  const expectNonEmpty =
+    folderMeta.expectedFilesCount != null &&
+    !Number.isNaN(Number(folderMeta.expectedFilesCount)) &&
+    Number(folderMeta.expectedFilesCount) > 0;
 
   let wait = await waitForPgcFilesGridData(page, folderMeta, {
-    timeout: 10000,
+    timeout: xhr.ok ? 12000 : 6000,
   });
-  if (!wait.ok) {
-    const legacyOk = await legacyPgcDomClickChildFolder(page, fid, diag);
-    if (legacyOk) {
-      await page.waitForTimeout(500);
-      await page
-        .waitForFunction(
-          () => {
-            const spin = document.querySelector(
-              ".ui-igloading:visible, .k-loading-mask:visible",
-            );
-            return !spin;
-          },
-          { timeout: 8000 },
-        )
-        .catch(() => {});
-      wait = await waitForPgcFilesGridData(page, folderMeta, {
-        timeout: 16000,
-      });
-    }
-  }
 
   const truth = await logPgcFilesGridTruth(page, folderMeta, "post-select");
   diag.gridTruth = truth;
+
+  if (expectNonEmpty && !xhr.ok) {
+    diag.error = xhr.error || "get_folder_files_xhr_timeout";
+    console.log(
+      "[PGC] Files folder selection FAILED:",
+      diag.error,
+      JSON.stringify({ xhr, truth }, null, 2),
+    );
+    return { ok: false, diagnostics: diag };
+  }
 
   if (!wait.ok) {
     diag.error =
@@ -7981,6 +9923,8 @@ async function selectPgcFilesFolder(page, folderMeta) {
     truth.viewFileLinkCount,
     "| count:",
     truth.countText,
+    "| xhr:",
+    xhr.ok ? "ok" : "unverified",
   );
   return { ok: true, diagnostics: diag };
 }
@@ -8033,23 +9977,30 @@ async function verifyPgcFolderGridLoaded(page, folderMeta) {
  * Click child folder in tree with fallbacks; optional grid verification.
  * @param {import('playwright').Page} page
  * @param {{ folderID: string, folderName?: string, parentFolder?: string, knownFileNames?: string[] }} folderMeta
+ * @param {string} [projectID]
+ * @param {{
+ *   previousFolderId?: string | null,
+ *   previousFolderFilenames?: string[],
+ *   previousFingerprint?: string | null,
+ * }} [activationCtx]
  * @returns {Promise<{ ok: boolean, diagnostics: Record<string, unknown> }>}
  */
-async function openPgcChildFolder(page, folderMeta) {
-  return selectPgcFilesFolder(page, folderMeta);
+async function openPgcChildFolder(page, folderMeta, projectID, activationCtx = {}) {
+  return selectPgcFilesFolder(page, folderMeta, projectID, activationCtx);
 }
 
 /**
  * Re-open folder if grid no longer shows files.
  * @param {import('playwright').Page} page
  * @param {{ folderID: string, folderName?: string, parentFolder?: string, knownFileNames?: string[] }} folderMeta
+ * @param {string} [projectID]
  */
-async function ensurePgcFolderGridReady(page, folderMeta) {
+async function ensurePgcFolderGridReady(page, folderMeta, projectID) {
   const w = await waitForPgcFilesGridData(page, folderMeta, {
     timeout: 4000,
   });
   if (w.ok) return { ok: true, diagnostics: null, reverified: true };
-  return selectPgcFilesFolder(page, folderMeta);
+  return selectPgcFilesFolder(page, folderMeta, projectID);
 }
 
 const PGC_FILE_GRID_TBODY_SEL =
@@ -8403,11 +10354,60 @@ async function handlePgcTaskAssignmentModal(page, _context) {
 }
 
 /**
+ * Find an already-open ActiveXViewer for the expected file (popup reuse).
+ * @param {import('playwright').BrowserContext} context
+ * @param {import('playwright').Page} workPage
+ * @param {{ fileId?: string|null, name?: string|null }} fileMeta
+ */
+function pgcFindViewerPageForFile(context, workPage, fileMeta) {
+  const wantId = fileMeta.fileId != null ? String(fileMeta.fileId).trim() : "";
+  /** @type {{ page: import('playwright').Page, url: string }[]} */
+  const generic = [];
+  try {
+    for (const p of context.pages()) {
+      let u = "";
+      try {
+        u = p.url();
+      } catch (_) {
+        continue;
+      }
+      if (!/ActiveXViewer\.aspx/i.test(u)) continue;
+      const id = pgcExtractFileIdFromViewerUrl(u);
+      if (wantId && id && id === wantId) {
+        return { viewerPage: p, viewerUrl: u, source: "existing_tab" };
+      }
+      generic.push({ page: p, url: u });
+    }
+  } catch (_) {}
+  if (wantId && generic.length === 1) {
+    const id = pgcExtractFileIdFromViewerUrl(generic[0].url);
+    if (id && id === wantId) {
+      return {
+        viewerPage: generic[0].page,
+        viewerUrl: generic[0].url,
+        source: "existing_tab_single",
+      };
+    }
+  }
+  try {
+    if (/ActiveXViewer\.aspx/i.test(workPage.url())) {
+      const u = workPage.url();
+      const id = pgcExtractFileIdFromViewerUrl(u);
+      if (!wantId || (id && id === wantId)) {
+        return { viewerPage: workPage, viewerUrl: u, source: "same_tab" };
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+/**
  * @param {import('playwright').Page} page
  * @param {import('playwright').Locator} rowLocator
  * @param {{ name?: string|null, fileId?: string|null }} fileMeta
+ * @param {{ isRetry?: boolean }} [opts]
  */
-async function openPgcViewerForFile(page, rowLocator, fileMeta) {
+async function openPgcViewerForFile(page, rowLocator, fileMeta, opts = {}) {
   const wantName = normalizeText(String(fileMeta.name || ""));
   const preClick = page.url();
 
@@ -8447,6 +10447,30 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta) {
   };
   ctx.on("page", onPage);
   try {
+    if (!opts.isRetry) {
+      const existing = pgcFindViewerPageForFile(ctx, page, fileMeta);
+      if (existing) {
+        pgcProgress.pgcLogDetail("viewer_reused_existing_tab", {
+          fileId: fileMeta.fileId,
+          source: existing.source,
+          viewerUrl: existing.viewerUrl,
+        });
+        return {
+          error: null,
+          preClickUrl: preClick,
+          viewerUrl: existing.viewerUrl,
+          viewerPage: existing.viewerPage,
+          modalHandled: false,
+          clickedSelectorSummary: "existing_viewer_tab",
+          rowDiag,
+          fileIdFromUrl: pgcExtractFileIdFromViewerUrl(existing.viewerUrl),
+          sameTab: existing.viewerPage === page,
+        };
+      }
+    } else {
+      await pgcCloseStaleBravaAndViewerTabs(page);
+    }
+
     await clickTarget.scrollIntoViewIfNeeded().catch(() => {});
     await clickTarget.click({ timeout: 12000 }).catch(() => {});
 
@@ -8494,6 +10518,14 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta) {
     if (!viewerPage && /ActiveXViewer\.aspx/i.test(page.url())) {
       viewerPage = page;
       viewerUrl = page.url();
+    }
+
+    if (!viewerPage) {
+      const lateExisting = pgcFindViewerPageForFile(ctx, page, fileMeta);
+      if (lateExisting) {
+        viewerPage = lateExisting.viewerPage;
+        viewerUrl = lateExisting.viewerUrl;
+      }
     }
 
     if (!viewerPage) {
@@ -8627,6 +10659,7 @@ function pgcPushViewerResponseRecord(records, res) {
       contentLength: cl,
       resourceType: req.resourceType(),
       classification,
+      capturedAt: Date.now(),
     });
   } catch (_) {}
 }
@@ -9810,21 +11843,28 @@ function pgcFindBravaPublishPdfUrl(viewerPage, responseRecords) {
  * @param {unknown} [networkStatus]
  */
 function pgcLogBravaPublishPdfUrlFound(url, source, fileMeta, networkStatus) {
+  const fileId = fileMeta.fileId != null ? String(fileMeta.fileId) : "?";
+  const fileName = fileMeta.name || "?";
   const label =
     source === "network" ? "brava_pdf_url_network" : `brava_pdf_url_${source}`;
   pgcProgress.pgcLogDetail(label, {
     url,
     status: networkStatus,
-    file: fileMeta.name || fileMeta.fileId,
+    fileId,
+    file: fileName,
   });
   pgcProgress.pgcLogFileStep("pdf_url_detected", {
     meta: {
       source,
       status: networkStatus,
+      fileId,
       urlSnippet: url.slice(0, 200),
     },
-    terminalLine: `[PGC] Step | pdf_url_detected | ${fileMeta.name || fileMeta.fileId} | ${source}`,
+    terminalLine: `[PGC] Step | pdf_url_detected | fileId=${fileId} | ${fileName} | ${source}`,
   });
+  console.log(
+    `[PGC] Brava | pdf_url_detected | fileId=${fileId} | ${fileName} | ${source} | ${String(url).slice(0, 160)}`,
+  );
 }
 
 /**
@@ -9966,6 +12006,14 @@ async function waitForPgcPostPublishSuccess(
   opts = {},
 ) {
   const timeoutMs = opts.timeoutMs ?? 90000;
+  const exportCtx = opts.exportCtx || null;
+  const findOpts = exportCtx
+    ? {
+        prePublishSnapshot: exportCtx.prePublishSnapshot,
+        usedPublishedPdfUrls: exportCtx.usedPublishedPdfUrls,
+        exportStartedAt: exportCtx.exportStartedAt,
+      }
+    : {};
   const start = Date.now();
   /** @type {{ pdfUrlLogged: boolean }} */
   const urlState = { pdfUrlLogged: false };
@@ -10002,6 +12050,13 @@ async function waitForPgcPostPublishSuccess(
   };
 
   const scanBravaPdfUrl = () => {
+    if (exportCtx) {
+      return pgcFindNewBravaPublishPdfUrl(
+        viewerPage,
+        responseRecords,
+        findOpts,
+      );
+    }
     try {
       for (const p of viewerPage.context().pages()) {
         const u = p.url();
@@ -10025,7 +12080,13 @@ async function waitForPgcPostPublishSuccess(
     let found = scanBravaPdfUrl();
     if (found) {
       const u = resolveAndLogUrl(found.url, found.source);
-      if (u) return { ok: true, url: u };
+      if (u) {
+        if (exportCtx) {
+          exportCtx.detectedPublishUrl = u;
+          exportCtx.detectedAt = Date.now();
+        }
+        return { ok: true, url: u };
+      }
     }
 
     await tryPgcPdfPublishOptionsDialogOnce(
@@ -10037,14 +12098,26 @@ async function waitForPgcPostPublishSuccess(
     found = scanBravaPdfUrl();
     if (found) {
       const u = resolveAndLogUrl(found.url, found.source);
-      if (u) return { ok: true, url: u };
+      if (u) {
+        if (exportCtx) {
+          exportCtx.detectedPublishUrl = u;
+          exportCtx.detectedAt = Date.now();
+        }
+        return { ok: true, url: u };
+      }
     }
 
     await tryPgcExportCompletePopupOnce(frame, viewerPage, fileMeta, uiState);
     found = scanBravaPdfUrl();
     if (found) {
       const u = resolveAndLogUrl(found.url, found.source);
-      if (u) return { ok: true, url: u };
+      if (u) {
+        if (exportCtx) {
+          exportCtx.detectedPublishUrl = u;
+          exportCtx.detectedAt = Date.now();
+        }
+        return { ok: true, url: u };
+      }
     }
 
     await viewerPage.waitForTimeout(360);
@@ -10053,7 +12126,13 @@ async function waitForPgcPostPublishSuccess(
   const lastFound = scanBravaPdfUrl();
   if (lastFound) {
     const u = resolveAndLogUrl(lastFound.url, lastFound.source);
-    if (u) return { ok: true, url: u };
+    if (u) {
+      if (exportCtx) {
+        exportCtx.detectedPublishUrl = u;
+        exportCtx.detectedAt = Date.now();
+      }
+      return { ok: true, url: u };
+    }
   }
 
   if (uiState.pdfOptionsPublishMissing) {
@@ -10086,47 +12165,56 @@ async function waitForPgcBravaPublishPdfResult(
   opts = {},
 ) {
   const timeoutMs = opts.timeoutMs ?? 50000;
+  const exportCtx = opts.exportCtx || null;
+  const findOpts = exportCtx
+    ? {
+        prePublishSnapshot: exportCtx.prePublishSnapshot,
+        usedPublishedPdfUrls: exportCtx.usedPublishedPdfUrls,
+        exportStartedAt: exportCtx.exportStartedAt,
+      }
+    : null;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    try {
-      for (const p of viewerPage.context().pages()) {
-        const u = p.url();
+    if (findOpts) {
+      const found = pgcFindNewBravaPublishPdfUrl(
+        viewerPage,
+        responseRecords,
+        findOpts,
+      );
+      if (found) {
+        pgcLogBravaPublishPdfUrlFound(
+          found.url,
+          found.source,
+          fileMeta,
+          undefined,
+        );
+        return { url: found.url, error: null };
+      }
+    } else {
+      try {
+        for (const p of viewerPage.context().pages()) {
+          const u = p.url();
+          if (isPgcBravaPublishToPdfUrl(u)) {
+            pgcLogBravaPublishPdfUrlFound(u, "tab", fileMeta, undefined);
+            return { url: u, error: null };
+          }
+        }
+      } catch (_) {}
+      try {
+        for (const f of viewerPage.frames()) {
+          const u = f.url() || "";
+          if (isPgcBravaPublishToPdfUrl(u)) {
+            pgcLogBravaPublishPdfUrlFound(u, "frame", fileMeta, undefined);
+            return { url: u, error: null };
+          }
+        }
+      } catch (_) {}
+      for (const r of responseRecords) {
+        const u = String(r.url || "");
         if (isPgcBravaPublishToPdfUrl(u)) {
-          pgcProgress.pgcLogDetail("brava_pdf_url_tab", { url: u, file: fileMeta.name || fileMeta.fileId });
-          pgcProgress.pgcLogFileStep("pdf_url_detected", {
-            meta: { source: "tab", urlSnippet: u.slice(0, 200) },
-            terminalLine: `[PGC] Step | pdf_url_detected | ${fileMeta.name || fileMeta.fileId} | tab`,
-          });
+          pgcLogBravaPublishPdfUrlFound(u, "network", fileMeta, r.status);
           return { url: u, error: null };
         }
-      }
-    } catch (_) {}
-    try {
-      for (const f of viewerPage.frames()) {
-        const u = f.url() || "";
-        if (isPgcBravaPublishToPdfUrl(u)) {
-          pgcProgress.pgcLogDetail("brava_pdf_url_frame", { url: u, file: fileMeta.name || fileMeta.fileId });
-          pgcProgress.pgcLogFileStep("pdf_url_detected", {
-            meta: { source: "frame", urlSnippet: u.slice(0, 200) },
-            terminalLine: `[PGC] Step | pdf_url_detected | ${fileMeta.name || fileMeta.fileId} | frame`,
-          });
-          return { url: u, error: null };
-        }
-      }
-    } catch (_) {}
-    for (const r of responseRecords) {
-      const u = String(r.url || "");
-      if (isPgcBravaPublishToPdfUrl(u)) {
-        pgcProgress.pgcLogDetail("brava_pdf_url_network", {
-          url: u,
-          status: r.status,
-          file: fileMeta.name || fileMeta.fileId,
-        });
-        pgcProgress.pgcLogFileStep("pdf_url_detected", {
-          meta: { source: "network", status: r.status, urlSnippet: u.slice(0, 200) },
-          terminalLine: `[PGC] Step | pdf_url_detected | ${fileMeta.name || fileMeta.fileId} | network`,
-        });
-        return { url: u, error: null };
       }
     }
     await viewerPage.waitForTimeout(380);
@@ -10155,6 +12243,23 @@ async function runPgcBravaPublishUiSequence(
   responseRecords = [],
   opts = {},
 ) {
+  const exportCtx = opts.exportCtx || null;
+  if (exportCtx) {
+    exportCtx.prePublishSnapshot = pgcCollectBravaPublishUrlsFromViewer(
+      viewerPage,
+      responseRecords,
+    );
+    exportCtx.exportStartedAt = Date.now();
+    exportCtx.expectedFileId =
+      fileMeta.fileId != null ? String(fileMeta.fileId) : null;
+    exportCtx.expectedFileName = fileMeta.name || null;
+    pgcProgress.pgcLogDetail("brava_export_snapshot", {
+      fileId: exportCtx.expectedFileId,
+      fileName: exportCtx.expectedFileName,
+      snapshotSize: exportCtx.prePublishSnapshot.size,
+    });
+  }
+
   const open = await openPgcBravaPublishMenu(bravaFrame, viewerPage, fileMeta);
   if (!open.ok) return open;
   const sub = await clickPgcBravaPublishToPdf(bravaFrame, viewerPage, fileMeta);
@@ -10164,7 +12269,10 @@ async function runPgcBravaPublishUiSequence(
     viewerPage,
     fileMeta,
     responseRecords,
-    { timeoutMs: opts.postPublishTimeoutMs ?? 90000 },
+    {
+      timeoutMs: opts.postPublishTimeoutMs ?? 90000,
+      exportCtx,
+    },
   );
   if (!wait.ok) return { ok: false, error: wait.error };
   return { ok: true, pdfUrl: wait.url };
@@ -10327,14 +12435,67 @@ async function capturePgcBravaPublishResult(
   opts = {},
 ) {
   const allowTrigger = opts.allowTrigger !== false;
+  const exportCtx = opts.exportCtx || null;
+  const exportState = exportCtx?.exportState || null;
+
+  const validateFetched = (got, publishUrl) => {
+    if (!got || !got.buffer || got.error) return got;
+    const url = publishUrl || got.url || "";
+    if (!isPgcBravaPublishToPdfUrl(url)) {
+      return { ...got, captureKind: "brava_publish" };
+    }
+    const val = pgcValidateBravaExportResult(
+      fileMeta,
+      got.buffer,
+      url,
+      exportState,
+    );
+    if (!val.ok) {
+      return {
+        buffer: null,
+        captureKind: null,
+        publishFlowError: val.error,
+        validation: val,
+        url,
+      };
+    }
+    if (exportCtx) {
+      exportCtx.detectedPublishUrl = url;
+      exportCtx.detectedAt = Date.now();
+    }
+    return {
+      ...got,
+      url,
+      captureKind: "brava_publish",
+      sha256: val.hash,
+      publishUrlNorm: val.normUrl,
+    };
+  };
 
   const collectPublishUrls = () => {
     /** @type {string[]} */
     const out = [];
     const seen = new Set();
+    const findOpts = exportCtx
+      ? {
+          prePublishSnapshot: exportCtx.prePublishSnapshot || new Set(),
+          usedPublishedPdfUrls: exportCtx.usedPublishedPdfUrls || new Set(),
+          exportStartedAt: exportCtx.exportStartedAt || 0,
+        }
+      : null;
+    if (findOpts && exportCtx?.exportStartedAt) {
+      const found = pgcFindNewBravaPublishPdfUrl(
+        viewerPage,
+        responseRecords,
+        findOpts,
+      );
+      if (found) return [found.url];
+    }
     for (const r of responseRecords) {
       const u = String(r.url || "");
       if (!isPgcBravaPublishToPdfUrl(u)) continue;
+      const norm = pgcNormalizePublishUrl(u);
+      if (exportState?.usedPublishedPdfUrls?.has(norm)) continue;
       if (seen.has(u)) continue;
       seen.add(u);
       out.push(u);
@@ -10345,23 +12506,39 @@ async function capturePgcBravaPublishResult(
   const tryAll = async () => {
     for (const u of collectPublishUrls()) {
       const got = await fetchPgcBravaPublishedPdf(ctx, u, fileMeta, viewerPage);
-      if (got.buffer && !got.error) return got;
+      const validated = validateFetched(got, u);
+      if (validated && validated.buffer && !validated.publishFlowError) {
+        return validated;
+      }
+      if (validated?.publishFlowError === "stale_export_reused") {
+        return validated;
+      }
     }
     return null;
   };
 
-  let got = await tryAll();
-  if (got) return { ...got, captureKind: "brava_publish" };
+  if (!exportCtx) {
+    let got = await tryAll();
+    if (got) {
+      if (got.publishFlowError) return got;
+      return got;
+    }
+  }
 
   if (!allowTrigger) return { buffer: null, captureKind: null };
+
+  if (!exportCtx) {
+    exportCtx = pgcCreateBravaPerFileExportCtx(exportState);
+  }
 
   const bravaFrame = await findPgcBravaContentFrame(viewerPage);
   pgcProgress.pgcLogDetail("brava_trigger_full_ui_sequence", {
     frameUrlSnippet: bravaFrame ? bravaFrame.url().slice(0, 400) : null,
     fileMeta,
+    fileId: fileMeta.fileId,
   });
   console.log(
-    `[PGC] Brava | triggering Publish→PDF UI | ${fileMeta.name || fileMeta.fileId}`,
+    `[PGC] Brava | triggering Publish→PDF UI | fileId=${fileMeta.fileId} | ${fileMeta.name || "?"}`,
   );
 
   const ui = await runPgcBravaPublishUiSequence(
@@ -10369,6 +12546,7 @@ async function capturePgcBravaPublishResult(
     viewerPage,
     fileMeta,
     responseRecords,
+    { exportCtx },
   );
   if (!ui.ok) {
     return {
@@ -10381,9 +12559,20 @@ async function capturePgcBravaPublishResult(
   await viewerPage.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
   await viewerPage.waitForTimeout(400);
 
+  const findOpts = {
+    prePublishSnapshot: exportCtx.prePublishSnapshot,
+    usedPublishedPdfUrls: exportCtx.usedPublishedPdfUrls,
+    exportStartedAt: exportCtx.exportStartedAt,
+  };
+  const newFound = pgcFindNewBravaPublishPdfUrl(
+    viewerPage,
+    responseRecords,
+    findOpts,
+  );
   const primaryUrl =
     ui.pdfUrl ||
-    pgcFindBravaPublishPdfUrl(viewerPage, responseRecords);
+    newFound?.url ||
+    null;
   /** @type {string | null} */
   let lastFetchErr = null;
   if (!primaryUrl) {
@@ -10392,7 +12581,7 @@ async function capturePgcBravaPublishResult(
       bravaFrame,
       fileMeta,
       responseRecords,
-      { timeoutMs: 35000 },
+      { timeoutMs: 35000, exportCtx },
     );
     if (!waitPdf.url) {
       return {
@@ -10401,27 +12590,38 @@ async function capturePgcBravaPublishResult(
         publishFlowError: waitPdf.error || "publishtoformat_pdf_not_seen",
       };
     }
-    got = await fetchPgcBravaPublishedPdf(
-      ctx,
+    const got = validateFetched(
+      await fetchPgcBravaPublishedPdf(
+        ctx,
+        waitPdf.url,
+        fileMeta,
+        viewerPage,
+      ),
       waitPdf.url,
-      fileMeta,
-      viewerPage,
     );
+    if (got?.publishFlowError) return got;
+    if (got && got.buffer && !got.error) return got;
+    lastFetchErr = got?.error || got?.publishFlowError || null;
   } else {
-    got = await fetchPgcBravaPublishedPdf(
-      ctx,
+    const got = validateFetched(
+      await fetchPgcBravaPublishedPdf(
+        ctx,
+        primaryUrl,
+        fileMeta,
+        viewerPage,
+      ),
       primaryUrl,
-      fileMeta,
-      viewerPage,
     );
-  }
-  if (got && got.error) lastFetchErr = String(got.error);
-  if (got && got.buffer && !got.error) {
-    return { ...got, captureKind: "brava_publish" };
+    if (got?.publishFlowError) return got;
+    if (got && got.buffer && !got.error) return got;
+    if (got && got.error) lastFetchErr = String(got.error);
   }
 
-  got = await tryAll();
-  if (got) return { ...got, captureKind: "brava_publish" };
+  const retryGot = await tryAll();
+  if (retryGot) {
+    if (retryGot.publishFlowError) return retryGot;
+    return retryGot;
+  }
 
   return {
     buffer: null,
@@ -10631,7 +12831,7 @@ async function capturePgcViewerDocument(viewerPage, fileMeta, opts = {}) {
     fileMeta,
     responseRecords,
     ctx,
-    { allowTrigger: true },
+    { allowTrigger: true, exportCtx: opts.exportCtx },
   );
   if (publishFirst && publishFirst.buffer && !publishFirst.error) {
     return {
@@ -10667,7 +12867,7 @@ async function capturePgcViewerDocument(viewerPage, fileMeta, opts = {}) {
     fileMeta,
     responseRecords,
     ctx,
-    { allowTrigger: false },
+    { allowTrigger: false, exportCtx: opts.exportCtx },
   );
   if (publishAfterDom && publishAfterDom.buffer && !publishAfterDom.error) {
     return {
@@ -10800,186 +13000,290 @@ async function runPgcFileDownloadViaViewerFlow(
   opts = {},
 ) {
   const debug = !!opts.debug;
-  /** @type {Record<string, unknown>} */
-  const out = {
-    resolvedActionType: "viewer_flow",
-    resolvedActionUrl: null,
-    clickedSelectorSummary: null,
-    httpStatus: null,
-    contentType: null,
-    byteLength: 0,
-    downloaded: false,
-    uploaded: false,
-    error: null,
-    localPath: null,
-    finalFetchUrl: null,
-    viewerUrl: null,
-    modalHandled: false,
-    preClickUrl: null,
-  };
+  const exportState = opts.exportState || null;
 
-  const openRes = await openPgcViewerForFile(page, rowLocator, fileMeta);
-  out.preClickUrl = openRes.preClickUrl;
-  out.viewerUrl = openRes.viewerUrl || null;
-  out.resolvedActionUrl = openRes.viewerUrl || null;
-  out.modalHandled = !!openRes.modalHandled;
-  out.clickedSelectorSummary = openRes.clickedSelectorSummary;
+  const runOnce = async (isRetry) => {
+    /** @type {Record<string, unknown>} */
+    const out = {
+      resolvedActionType: "viewer_flow",
+      resolvedActionUrl: null,
+      clickedSelectorSummary: null,
+      httpStatus: null,
+      contentType: null,
+      byteLength: 0,
+      downloaded: false,
+      uploaded: false,
+      error: null,
+      localPath: null,
+      finalFetchUrl: null,
+      viewerUrl: null,
+      modalHandled: false,
+      preClickUrl: null,
+      sha256: null,
+      publishUrlNorm: null,
+      bravaExportRetry: isRetry,
+      expectedFileId: fileMeta.fileId != null ? String(fileMeta.fileId) : null,
+      expectedFileName: fileMeta.name || null,
+    };
 
-  const viewerPage = openRes.viewerPage;
+    await pgcCloseStaleBravaAndViewerTabs(page);
 
-  if (openRes.error) {
-    out.error = openRes.error;
-    if (viewerPage && viewerPage !== page) {
-      await viewerPage.close().catch(() => {});
-    }
-    return out;
-  }
+    const exportCtx = pgcCreateBravaPerFileExportCtx(exportState);
+    exportCtx.expectedFileId = out.expectedFileId;
+    exportCtx.expectedFileName = out.expectedFileName;
 
-  /** @type {Array<Record<string, unknown>>} */
-  const responseRecords = [];
-  const viewerRespHandler = (res) => {
-    pgcPushViewerResponseRecord(responseRecords, res);
-  };
-  viewerPage.on("response", viewerRespHandler);
-  /** @type {Awaited<ReturnType<typeof capturePgcViewerDocument>> | null} */
-  let cap = null;
-  try {
-    cap = await capturePgcViewerDocument(viewerPage, fileMeta, {
-      responseRecords,
+    pgcProgress.pgcLogDetail("brava_file_export_begin", {
+      fileId: out.expectedFileId,
+      fileName: out.expectedFileName,
+      retry: isRetry,
     });
-  } finally {
-    viewerPage.off("response", viewerRespHandler);
-  }
 
-  if (!cap || !cap.buffer || cap.error || cap.publishFlowError) {
-    out.error =
-      (cap && (cap.publishFlowError || cap.error)) ||
-      "viewer_opened_but_document_not_captured";
-    logPgcFileResponseRejected(
-      fileMeta,
-      {
-        url: (cap && cap.triedUrl) || "",
-        status: 0,
-        contentType: (cap && cap.contentType) || "",
-        byteLength: 0,
-      },
-      out.error,
-    );
-    if (viewerPage && viewerPage !== page) {
-      await viewerPage.close().catch(() => {});
+    const openRes = await openPgcViewerForFile(page, rowLocator, fileMeta, {
+      isRetry,
+    });
+    out.preClickUrl = openRes.preClickUrl;
+    out.viewerUrl = openRes.viewerUrl || null;
+    out.resolvedActionUrl = openRes.viewerUrl || null;
+    out.modalHandled = !!openRes.modalHandled;
+    out.clickedSelectorSummary = openRes.clickedSelectorSummary;
+
+    const viewerPage = openRes.viewerPage;
+
+    if (openRes.error) {
+      out.error = openRes.error;
+      if (viewerPage && viewerPage !== page) {
+        await viewerPage.close().catch(() => {});
+      }
+      return out;
     }
-    return out;
-  }
 
-  const val =
-    cap.captureKind === "brava_publish"
-      ? isValidPgcPublishedPdf(
+    const identity = await verifyPgcViewerMatchesFile(viewerPage, fileMeta);
+    if (!identity.ok) {
+      out.error = identity.error || "viewer_file_identity_unverified";
+      pgcProgress.pgcLogDetail("viewer_identity_rejected", {
+        fileId: out.expectedFileId,
+        fileName: out.expectedFileName,
+        diagnostics: identity.diagnostics,
+      });
+      if (viewerPage && viewerPage !== page) {
+        await viewerPage.close().catch(() => {});
+      }
+      return out;
+    }
+
+    /** @type {Array<Record<string, unknown>>} */
+    const responseRecords = [];
+    const viewerRespHandler = (res) => {
+      pgcPushViewerResponseRecord(responseRecords, res);
+    };
+    viewerPage.on("response", viewerRespHandler);
+    /** @type {Awaited<ReturnType<typeof capturePgcViewerDocument>> | null} */
+    let cap = null;
+    try {
+      cap = await capturePgcViewerDocument(viewerPage, fileMeta, {
+        responseRecords,
+        exportCtx,
+      });
+    } finally {
+      viewerPage.off("response", viewerRespHandler);
+    }
+
+    if (!cap || !cap.buffer || cap.error || cap.publishFlowError) {
+      out.error =
+        (cap && (cap.publishFlowError || cap.error)) ||
+        "viewer_opened_but_document_not_captured";
+      logPgcFileResponseRejected(
+        fileMeta,
+        {
+          url: (cap && cap.triedUrl) || "",
+          status: 0,
+          contentType: (cap && cap.contentType) || "",
+          byteLength: 0,
+        },
+        out.error,
+      );
+      if (viewerPage && viewerPage !== page) {
+        await viewerPage.close().catch(() => {});
+      }
+      return out;
+    }
+
+    const publishUrl = cap.url || exportCtx.detectedPublishUrl || null;
+    out.finalFetchUrl = publishUrl || openRes.viewerUrl;
+    out.publishUrlNorm = cap.publishUrlNorm || null;
+    out.sha256 = cap.sha256 || pgcSha256Buffer(cap.buffer);
+
+    if (cap.captureKind === "brava_publish" && publishUrl) {
+      const bravaVal = pgcValidateBravaExportResult(
+        fileMeta,
+        cap.buffer,
+        publishUrl,
+        exportState,
+      );
+      if (!bravaVal.ok) {
+        out.error = bravaVal.error || "stale_export_reused";
+        out.sha256 = bravaVal.hash || out.sha256;
+        logPgcFileResponseRejected(
+          fileMeta,
           {
-            url: cap.url || "",
+            url: publishUrl,
             status: 200,
-            contentType: cap.contentType || "",
-            contentDisposition: cap.contentDisposition || "",
+            contentType: cap.contentType,
             byteLength: cap.buffer.length,
             buffer: cap.buffer,
           },
-          fileMeta,
-        )
-      : isValidPgcDownloadedFile(
-          {
-            url: cap.url || "",
-            status: 200,
-            contentType: cap.contentType || "",
-            contentDisposition: cap.contentDisposition || "",
-            byteLength: cap.buffer.length,
-            buffer: cap.buffer,
-          },
-          fileMeta,
+          out.error,
         );
-  if (!val.ok) {
-    logPgcFileResponseRejected(
-      fileMeta,
-      {
-        url: cap.url,
-        status: 200,
-        contentType: cap.contentType,
-        byteLength: cap.buffer.length,
-        buffer: cap.buffer,
-      },
-      val.rejectReason || "validation_failed",
-    );
-    out.error = normalizePgcPerFileDownloadError(
-      val.rejectReason,
-      "pdf_validation_failed",
-    );
-    if (viewerPage && viewerPage !== page) {
-      await viewerPage.close().catch(() => {});
+        if (viewerPage && viewerPage !== page) {
+          await viewerPage.close().catch(() => {});
+        }
+        return out;
+      }
+      pgcRecordBravaExportSuccess(
+        exportState,
+        fileMeta,
+        bravaVal.normUrl,
+        bravaVal.hash,
+        bravaVal.byteLength,
+      );
+      out.sha256 = bravaVal.hash;
+      out.publishUrlNorm = bravaVal.normUrl;
     }
-    return out;
-  }
 
-  if (cap.buffer.length > TASK6_MAX_FILE_BYTES) {
-    out.error = `body too large (${cap.buffer.length})`;
-    if (viewerPage && viewerPage !== page) {
-      await viewerPage.close().catch(() => {});
+    const val =
+      cap.captureKind === "brava_publish"
+        ? isValidPgcPublishedPdf(
+            {
+              url: cap.url || "",
+              status: 200,
+              contentType: cap.contentType || "",
+              contentDisposition: cap.contentDisposition || "",
+              byteLength: cap.buffer.length,
+              buffer: cap.buffer,
+            },
+            fileMeta,
+          )
+        : isValidPgcDownloadedFile(
+            {
+              url: cap.url || "",
+              status: 200,
+              contentType: cap.contentType || "",
+              contentDisposition: cap.contentDisposition || "",
+              byteLength: cap.buffer.length,
+              buffer: cap.buffer,
+            },
+            fileMeta,
+          );
+    if (!val.ok) {
+      logPgcFileResponseRejected(
+        fileMeta,
+        {
+          url: cap.url,
+          status: 200,
+          contentType: cap.contentType,
+          byteLength: cap.buffer.length,
+          buffer: cap.buffer,
+        },
+        val.rejectReason || "validation_failed",
+      );
+      out.error = normalizePgcPerFileDownloadError(
+        val.rejectReason,
+        "pdf_validation_failed",
+      );
+      if (viewerPage && viewerPage !== page) {
+        await viewerPage.close().catch(() => {});
+      }
+      return out;
     }
-    return out;
-  }
 
-  await fs.promises.mkdir(destRoot, { recursive: true });
-  let baseNm = sanitizeLocalFileName(
-    fileMeta.name || `file-${fileMeta.fileId || "x"}`,
-  );
-  let ext = path.extname(baseNm);
-  const stem = ext ? baseNm.slice(0, -ext.length) : baseNm;
-  if (!ext) ext = guessExtensionFromMime(cap.contentType || "");
-  let outPath = path.join(
-    destRoot,
-    baseNm.endsWith(ext) ? baseNm : stem + ext,
-  );
-  let n = 0;
-  while (fs.existsSync(outPath)) {
-    n += 1;
-    outPath = path.join(
+    if (cap.buffer.length > TASK6_MAX_FILE_BYTES) {
+      out.error = `body too large (${cap.buffer.length})`;
+      if (viewerPage && viewerPage !== page) {
+        await viewerPage.close().catch(() => {});
+      }
+      return out;
+    }
+
+    await fs.promises.mkdir(destRoot, { recursive: true });
+    let baseNm = sanitizeLocalFileName(
+      fileMeta.name || `file-${fileMeta.fileId || "x"}`,
+    );
+    let ext = path.extname(baseNm);
+    const stem = ext ? baseNm.slice(0, -ext.length) : baseNm;
+    if (!ext) ext = guessExtensionFromMime(cap.contentType || "");
+    let outPath = path.join(
       destRoot,
-      `${stem}_${fileMeta.fileId || "x"}_${n}${ext}`,
+      baseNm.endsWith(ext) ? baseNm : stem + ext,
     );
-  }
-  await fs.promises.writeFile(outPath, cap.buffer);
-  out.downloaded = true;
-  out.byteLength = cap.buffer.length;
-  out.contentType = cap.contentType || null;
-  out.httpStatus = 200;
-  out.localPath = outPath;
-  out.finalFetchUrl = cap.url || openRes.viewerUrl;
-  out.resolvedActionType =
-    cap.captureKind === "brava_publish" ? "brava_publish_pdf" : "viewer_flow";
+    let n = 0;
+    while (fs.existsSync(outPath)) {
+      n += 1;
+      outPath = path.join(
+        destRoot,
+        `${stem}_${fileMeta.fileId || "x"}_${n}${ext}`,
+      );
+    }
+    await fs.promises.writeFile(outPath, cap.buffer);
+    out.downloaded = true;
+    out.byteLength = cap.buffer.length;
+    out.contentType = cap.contentType || null;
+    out.httpStatus = 200;
+    out.localPath = outPath;
+    out.resolvedActionType =
+      cap.captureKind === "brava_publish" ? "brava_publish_pdf" : "viewer_flow";
 
-  console.log(
-    "[PGC] Saved local file:",
-    out.localPath,
-    "| resolvedActionType:",
-    out.resolvedActionType,
-    "| bytes:",
-    out.byteLength,
-    "| finalFetchUrl:",
-    String(out.finalFetchUrl || "").slice(0, 220),
-    "| upload: runPgcProductionPipeline(uploadLocal) when configured",
-  );
-
-  if (viewerPage && viewerPage !== page) {
-    await viewerPage.close().catch(() => {});
-  }
-  if (debug) {
     console.log(
-      "[PGC] viewer_flow OK:",
-      fileMeta.name,
+      "[PGC] Saved local file:",
+      out.localPath,
+      "| fileId:",
+      out.expectedFileId,
+      "| resolvedActionType:",
+      out.resolvedActionType,
       "| bytes:",
       out.byteLength,
-      "|",
-      out.resolvedActionType,
+      "| sha256:",
+      out.sha256,
+      "| publishUrl:",
+      String(out.finalFetchUrl || "").slice(0, 220),
     );
+
+    if (viewerPage && viewerPage !== page) {
+      await viewerPage.close().catch(() => {});
+    }
+    if (debug) {
+      console.log(
+        "[PGC] viewer_flow OK:",
+        fileMeta.name,
+        "| fileId:",
+        fileMeta.fileId,
+        "| bytes:",
+        out.byteLength,
+        "|",
+        out.resolvedActionType,
+      );
+    }
+    return out;
+  };
+
+  let result = await runOnce(false);
+  const retryable =
+    result.error === "stale_export_reused" ||
+    result.error === "suspicious_duplicate_pdf_hash" ||
+    result.error === "viewer_file_id_mismatch" ||
+    result.error === "viewer_file_identity_unverified" ||
+    result.error === "viewer_tab_missing";
+  if (retryable && !opts.bravaExportRetry) {
+    console.log(
+      `[PGC] Brava | stale export retry | fileId=${fileMeta.fileId} | ${fileMeta.name || "?"} | reason=${result.error}`,
+    );
+    await pgcCloseStaleBravaAndViewerTabs(page);
+    result = await runOnce(true);
+    result.bravaRetryAttempted = true;
+    if (!result.downloaded) {
+      result.error = result.error || "stale_export_reused";
+    }
   }
-  return out;
+  return result;
 }
 
 /**
@@ -11511,35 +13815,51 @@ async function downloadPgcFileBinary(page, fileMeta, resolved, destRoot) {
 /**
  * @param {import('playwright').Page} page
  * @param {string} projectID
+ * @returns {Promise<{ ok: boolean, folders: object[], nodeSelector?: string | null, error?: string, diagnostics?: object }>}
  */
 async function getProjectFoldersFromFilesTab(page, projectID) {
-  const filesTabUrl = `${PGC_WEBUI}/Project/Index?tab=filesTab&ProjectID=${encodeURIComponent(
-    String(projectID),
-  )}`;
-  await page.goto(filesTabUrl, {
-    waitUntil: "domcontentloaded",
-    timeout: 30000,
-  });
-  try {
-    await page.waitForSelector("#folderTree li.ui-igtree-node", {
-      timeout: 15000,
-    });
-  } catch (err) {
-    console.warn(
-      `[PGC] Task 6 — #folderTree not found for project ${projectID}, skipping files`,
+  const startUrl = page.url();
+  if (pgcUrlIsSessionEnded(startUrl)) {
+    await logPgcProjectDoxSessionCookieDiagnostics(
+      page.context(),
+      "files_tab_session_ended",
     );
-    return [];
+    return {
+      ok: false,
+      folders: [],
+      error: "session_ended",
+      diagnostics: { url: startUrl, phase: "pre_files_tree" },
+    };
   }
+  const treeReady = await waitForPgcFilesTreeReady(page, projectID);
+  if (!treeReady.ok || !treeReady.nodeSelector) {
+    const diagnostics = {
+      url: treeReady.url || page.url(),
+      tabState: treeReady.tabState || null,
+      containersFound: treeReady.containersFound || [],
+      nodeCount: treeReady.nodeCount || 0,
+    };
+    console.warn(
+      `[PGC] Task 6 — files tree not ready for project ${projectID} | url=${diagnostics.url} | containers=${JSON.stringify(diagnostics.containersFound)}`,
+    );
+    await logPgcFilesTreeSnapshot(page, "folder_tree_missing");
+    return {
+      ok: false,
+      folders: [],
+      error: "files_tree_not_found",
+      diagnostics,
+    };
+  }
+
+  const nodeSelector = treeReady.nodeSelector;
   await page.waitForTimeout(1000);
 
   /** Optional "(N)" suffix on tree node labels — debug / cross-check only. */
   const domFolderHints = await page
-    .evaluate(() => {
+    .evaluate((sel) => {
       /** @type {Record<string, number>} */
       const hints = {};
-      for (const li of document.querySelectorAll(
-        "#folderTree li.ui-igtree-node",
-      )) {
+      for (const li of document.querySelectorAll(sel)) {
         const v = li.getAttribute("data-value");
         if (!v) continue;
         const a = li.querySelector("a");
@@ -11551,24 +13871,22 @@ async function getProjectFoldersFromFilesTab(page, projectID) {
         if (m) hints[String(v)] = parseInt(m[1], 10);
       }
       return hints;
-    })
+    }, nodeSelector)
     .catch(() => (/** @type {Record<string, number>} */ ({})));
 
-  const parentFolders = await page.$$eval(
-    "#folderTree li.ui-igtree-node",
-    (nodes) =>
-      nodes
-        .map((node) => ({
-          name: node.querySelector("a")?.textContent.trim() || "",
-          folderID: node.getAttribute("data-value"),
-          path: node.getAttribute("data-path"),
-        }))
-        .filter(
-          (f) =>
-            f.folderID &&
-            f.path &&
-            (f.path.match(/_L/g) || []).length === 1,
-        ),
+  const parentFolders = await page.$$eval(nodeSelector, (nodes) =>
+    nodes
+      .map((node) => ({
+        name: node.querySelector("a")?.textContent.trim() || "",
+        folderID: node.getAttribute("data-value"),
+        path: node.getAttribute("data-path"),
+      }))
+      .filter(
+        (f) =>
+          f.folderID &&
+          f.path &&
+          (f.path.match(/_L/g) || []).length === 1,
+      ),
   );
 
   /** @type {{ folderID: string, folderName: string, parentName: string }[]} */
@@ -11627,9 +13945,19 @@ async function getProjectFoldersFromFilesTab(page, projectID) {
     folderTreeDebug,
   });
   console.log(
-    `[PGC] Task 6 folder tree | parents:${parentFolders.length} children:${allChildFolders.length} → pgc-debug-detail.log`,
+    `[PGC] Task 6 folder tree | parents:${parentFolders.length} children:${allChildFolders.length} selector:${nodeSelector} → pgc-debug-detail.log`,
   );
-  return allChildFolders;
+  return {
+    ok: true,
+    folders: allChildFolders,
+    nodeSelector,
+    diagnostics: {
+      url: page.url(),
+      nodeSelector,
+      parentFolderCount: parentFolders.length,
+      childFolderCount: allChildFolders.length,
+    },
+  };
 }
 
 /**
@@ -11665,6 +13993,41 @@ async function getFolderFiles(page, folder) {
     files,
     parseOk: result.json != null,
   };
+}
+
+function pgcHarvestIsCancelled(harvestOpts) {
+  return (
+    typeof harvestOpts?.isCancelRequested === "function" &&
+    harvestOpts.isCancelRequested()
+  );
+}
+
+async function pgcHarvestNotifyFileAttemptStart(harvestOpts, row, file) {
+  if (typeof harvestOpts?.onFileAttemptStart !== "function") return;
+  try {
+    await harvestOpts.onFileAttemptStart({
+      portalFileId: file.fileId,
+      fileVersion: file.version,
+      fileName: file.name,
+      folderName: row.folder?.folderName,
+      parentFolder: row.folder?.parentFolder || null,
+    });
+  } catch (_) {}
+}
+
+async function pgcHarvestNotifyFileFailed(harvestOpts, row, file, failureCode) {
+  if (typeof harvestOpts?.onFileFailed !== "function") return;
+  try {
+    await harvestOpts.onFileFailed({
+      portalFileId: file.fileId,
+      fileVersion: file.version,
+      fileName: file.name,
+      folderName: row.folder?.folderName,
+      parentFolder: row.folder?.parentFolder || null,
+      failureCode,
+      failureMessage: failureCode,
+    });
+  } catch (_) {}
 }
 
 /**
@@ -11705,6 +14068,10 @@ async function harvestProjectFilesAndSampleDownloads(
     folders: /** @type {object[]} */ ([]),
     sampleFiles: /** @type {object[]} */ ([]),
     downloadedFiles: /** @type {object[]} */ ([]),
+    filesExtractionOk: false,
+    filesExtractionFailed: false,
+    filesExtractionError: null,
+    filesExtractionDiagnostics: null,
     _meta: {
       fileApiFailures: 0,
       largeFilesSkipped: 0,
@@ -11712,6 +14079,7 @@ async function harvestProjectFilesAndSampleDownloads(
       downloadsOk: 0,
       uploadsOk: 0,
       failures: 0,
+      activationFailedFolders: /** @type {{ folderID: string, parentFolder?: string, folderName?: string, error: string }[]} */ ([]),
     },
   };
 
@@ -11723,7 +14091,25 @@ async function harvestProjectFilesAndSampleDownloads(
   let totalFailedAll = 0;
 
   try {
-    const folders = await getProjectFoldersFromFilesTab(page, projectID);
+    const extractResult = await getProjectFoldersFromFilesTab(page, projectID);
+    if (!extractResult.ok) {
+      out.filesExtractionFailed = true;
+      out.filesExtractionError = extractResult.error || "files_tree_not_found";
+      out.filesExtractionDiagnostics = extractResult.diagnostics || null;
+      console.warn(
+        `[PGC] Task 6 — files extraction failed for project ${projectID}: ${out.filesExtractionError}`,
+      );
+      await logPgcFilesTreeSnapshot(page, "harvest_tree_missing");
+      pgcProgress.pgcLogDetail("task6_harvest_tree_missing", {
+        projectID,
+        error: out.filesExtractionError,
+        diagnostics: out.filesExtractionDiagnostics,
+      });
+      return out;
+    }
+
+    const folders = extractResult.folders || [];
+    out.filesExtractionOk = true;
     out.foldersCount = folders.length;
     /** @type {any[]} */
     const allFiles = [];
@@ -11732,6 +14118,7 @@ async function harvestProjectFilesAndSampleDownloads(
       console.log("[PGC] Task 6 — no folders for project", projectID);
       pgcProgress.pgcLogDetail("task6_harvest_payload_empty", out);
       console.log("[PGC] Task 6 — full harvest payload → pgc-debug-detail.log");
+      out.filesExtractionOk = true;
       return out;
     }
 
@@ -11822,6 +14209,13 @@ async function harvestProjectFilesAndSampleDownloads(
 
     let debugFileOrdinal = 0;
     let previousGridFingerprint = "";
+    /** Persisted only after successful folder verification. */
+    const pgcFolderSessionState = {
+      activeFolderId: null,
+      activeParentFolderId: null,
+      activeGridFingerprint: "",
+      previousFolderKnownNames: /** @type {string[]} */ ([]),
+    };
 
     globalFailedFiles = [];
     totalFoldersNonEmptyProcessed = 0;
@@ -11881,8 +14275,22 @@ async function harvestProjectFilesAndSampleDownloads(
       byFolder,
     );
 
+    const devControls = harvestOpts.devHarvestControls || null;
+    let folderIdsToProcess = orderedFolderIds;
+    if (devControls?.startFolderIndex > 0) {
+      folderIdsToProcess = folderIdsToProcess.slice(devControls.startFolderIndex);
+    }
+    if (devControls?.maxFolders > 0) {
+      folderIdsToProcess = folderIdsToProcess.slice(0, devControls.maxFolders);
+    }
+    if (devControls) {
+      console.log(
+        `[PGC] Dev harvest controls | folders=${folderIdsToProcess.length} maxFilesPerFolder=${devControls.maxFilesPerFolder ?? "all"} explicitFileIds=${devControls.explicitFileIds?.length ?? 0}`,
+      );
+    }
+
     pgcProgress.pgcSetRunHarvestTotals({
-      foldersTotal: orderedFolderIds.length,
+      foldersTotal: folderIdsToProcess.length,
       filesTotal: allFileRows.length,
     });
 
@@ -11896,10 +14304,28 @@ async function harvestProjectFilesAndSampleDownloads(
     let task6Context = page.context();
     let task6Browser = task6Context.browser();
 
-    for (let fidx = 0; fidx < orderedFolderIds.length; fidx++) {
-      const folderID = orderedFolderIds[fidx];
+    /** Run-wide Brava export dedupe: distinct publish URLs and PDF hashes per harvest. */
+    const bravaExportRunState = {
+      usedPublishedPdfUrls: new Set(),
+      downloadedHashes: new Map(),
+    };
+
+    for (let fidx = 0; fidx < folderIdsToProcess.length; fidx++) {
+      const folderID = folderIdsToProcess[fidx];
       const rowsInFolder = byFolder.get(folderID);
       if (!rowsInFolder || !rowsInFolder.length) continue;
+
+      if (typeof harvestOpts.isCancelRequested === "function") {
+        if (harvestOpts.isCancelRequested()) {
+          console.log("[PGC] Task 6 | harvest cancelled — preserving checkpoints");
+          break;
+        }
+      }
+      if (typeof harvestOpts.refreshScrapeLease === "function") {
+        harvestOpts.refreshScrapeLease();
+      }
+
+      await resetPgcFolderDownloadState(workPage, projectID);
 
       const folderMeta = {
         folderID,
@@ -11957,7 +14383,7 @@ async function harvestProjectFilesAndSampleDownloads(
           previousGridFingerprint,
           allFoldersOut: out.folders,
           harvestOpts,
-          skipFolderActivation: true,
+          skipFolderActivation: false,
         });
         return applyRecoverResult(hrec);
       };
@@ -11966,10 +14392,9 @@ async function harvestProjectFilesAndSampleDownloads(
         console.log(
           "[PGC] Task 6 | skipping folder (no live page after recovery)",
         );
-        let skAttempted = 0;
-        let skFailed = 0;
         for (const row of rowsInFolder) {
           const f = row.file;
+          if (f.downloadStatus === "ok" || f.checkpointRestored) continue;
           const fileSizeKB =
             typeof f.fileSizeKB === "number" && !Number.isNaN(f.fileSizeKB)
               ? f.fileSizeKB
@@ -11979,45 +14404,17 @@ async function harvestProjectFilesAndSampleDownloads(
             f.downloadStatus = "skipped_oversize";
             continue;
           }
-          out._meta.downloadAttempts += 1;
-          out._meta.failures += 1;
-          totalFilesAttemptedAll += 1;
-          totalFailedAll += 1;
-          skAttempted += 1;
-          skFailed += 1;
-          f.downloadStatus = "failed";
+          f.downloadStatus = "activation_skipped";
           f.downloadError = "task6_page_unavailable";
-          f._pgcDownloadResult = {
-            resolvedActionType: "none",
-            resolvedActionUrl: null,
-            clickedSelectorSummary: null,
-            httpStatus: null,
-            contentType: null,
-            byteLength: 0,
-            downloaded: false,
-            uploaded: false,
-            error: "task6_page_unavailable",
-          };
-          out.sampleFiles.push({
-            fileID: f.fileId,
-            fileName: f.name,
-            folderName: row.folder.folderName,
-            downloaded: false,
-          });
-          globalFailedFiles.push({
-            folderID,
-            fileName: f.name,
-            reason: "task6_page_unavailable",
-          });
-          pgcProgress.pgcLogFileFailure(f.name, "task6_page_unavailable");
         }
         pgcProgress.pgcLogFolderSummary({
           parentFolder: folderMeta.parentFolder,
           folderName: folderMeta.folderName,
           expected: folderMeta.expectedFilesCount,
-          attempted: skAttempted,
+          attempted: 0,
           ok: 0,
-          failed: skFailed,
+          failed: 0,
+          activationSkipped: rowsInFolder.length,
         });
         continue;
       }
@@ -12039,16 +14436,15 @@ async function harvestProjectFilesAndSampleDownloads(
           previousGridFingerprint,
           allFoldersOut: out.folders,
           harvestOpts,
-          skipFolderActivation: true,
+          skipFolderActivation: false,
         });
         if (!applyRecoverResult(r2)) {
           console.log(
             "[PGC] Task 6 | skipping folder (reset failed, recovery failed)",
           );
-          let rsAttempted = 0;
-          let rsFailed = 0;
           for (const row of rowsInFolder) {
             const f = row.file;
+            if (f.downloadStatus === "ok" || f.checkpointRestored) continue;
             const fileSizeKB =
               typeof f.fileSizeKB === "number" && !Number.isNaN(f.fileSizeKB)
                 ? f.fileSizeKB
@@ -12058,45 +14454,17 @@ async function harvestProjectFilesAndSampleDownloads(
               f.downloadStatus = "skipped_oversize";
               continue;
             }
-            out._meta.downloadAttempts += 1;
-            out._meta.failures += 1;
-            totalFilesAttemptedAll += 1;
-            totalFailedAll += 1;
-            rsAttempted += 1;
-            rsFailed += 1;
-            f.downloadStatus = "failed";
+            f.downloadStatus = "activation_skipped";
             f.downloadError = "task6_reset_recovery_failed";
-            f._pgcDownloadResult = {
-              resolvedActionType: "none",
-              resolvedActionUrl: null,
-              clickedSelectorSummary: null,
-              httpStatus: null,
-              contentType: null,
-              byteLength: 0,
-              downloaded: false,
-              uploaded: false,
-              error: "task6_reset_recovery_failed",
-            };
-            out.sampleFiles.push({
-              fileID: f.fileId,
-              fileName: f.name,
-              folderName: row.folder.folderName,
-              downloaded: false,
-            });
-            globalFailedFiles.push({
-              folderID,
-              fileName: f.name,
-              reason: "task6_reset_recovery_failed",
-            });
-            pgcProgress.pgcLogFileFailure(f.name, "task6_reset_recovery_failed");
           }
           pgcProgress.pgcLogFolderSummary({
             parentFolder: folderMeta.parentFolder,
             folderName: folderMeta.folderName,
             expected: folderMeta.expectedFilesCount,
-            attempted: rsAttempted,
+            attempted: 0,
             ok: 0,
-            failed: rsFailed,
+            failed: 0,
+            activationSkipped: rowsInFolder.length,
           });
           continue;
         }
@@ -12105,7 +14473,7 @@ async function harvestProjectFilesAndSampleDownloads(
 
       pgcProgress.pgcLogFolderStart({
         folderIndex: fidx + 1,
-        foldersTotal: orderedFolderIds.length,
+        foldersTotal: folderIdsToProcess.length,
         folderID,
         folderName: folderMeta.folderName,
         parentFolder: folderMeta.parentFolder,
@@ -12124,7 +14492,11 @@ async function harvestProjectFilesAndSampleDownloads(
         out.folders,
         {
           projectID,
-          previousFingerprint: previousGridFingerprint || null,
+          previousFingerprint:
+            pgcFolderSessionState.activeGridFingerprint || null,
+          previousFolderId: pgcFolderSessionState.activeFolderId,
+          previousFolderFilenames:
+            pgcFolderSessionState.previousFolderKnownNames,
         },
       );
 
@@ -12132,6 +14504,19 @@ async function harvestProjectFilesAndSampleDownloads(
         const actErr =
           activation.error || "folder_activation_failed";
         const actDiag = activation.diagnostics;
+        const folderOut = out.folders.find(
+          (fo) => String(fo.folderID || "") === String(folderID),
+        );
+        if (folderOut) {
+          folderOut.folderActivationStatus = "activation_failed";
+          folderOut.folderActivationError = actErr;
+        }
+        out._meta.activationFailedFolders.push({
+          folderID,
+          parentFolder: folderMeta.parentFolder,
+          folderName: folderMeta.folderName,
+          error: actErr,
+        });
         for (const row of rowsInFolder) {
           const f = row.file;
           const fileSizeKB =
@@ -12143,14 +14528,7 @@ async function harvestProjectFilesAndSampleDownloads(
             f.downloadStatus = "skipped_oversize";
             continue;
           }
-          out._meta.downloadAttempts += 1;
-          out._meta.failures += 1;
-          totalFilesAttemptedAll += 1;
-          totalFailedAll += 1;
-          folderAttempted += 1;
-          folderFailed += 1;
-          folderFailedNames.push(f.name);
-          f.downloadStatus = "failed";
+          f.downloadStatus = "activation_skipped";
           f.downloadError = actErr;
           f._pgcFolderActivation = actDiag;
           f._pgcDownloadResult = {
@@ -12163,45 +14541,66 @@ async function harvestProjectFilesAndSampleDownloads(
             downloaded: false,
             uploaded: false,
             error: actErr,
+            activationSkipped: true,
           };
-          out.sampleFiles.push({
-            fileID: f.fileId,
-            fileName: f.name,
-            folderName: row.folder.folderName,
-            downloaded: false,
-          });
-          globalFailedFiles.push({
-            folderID,
-            fileName: f.name,
-            reason: actErr,
-          });
-          pgcProgress.pgcLogFileFailure(f.name, actErr);
         }
         pgcProgress.pgcLogFolderSummary({
           parentFolder: folderMeta.parentFolder,
           folderName: folderMeta.folderName,
           expected: folderMeta.expectedFilesCount,
-          attempted: folderAttempted,
-          ok: folderOk,
-          failed: folderFailed,
+          attempted: 0,
+          ok: 0,
+          failed: 0,
+          activationFailed: rowsInFolder.length,
         });
-        if (folderFailedNames.length) {
-          pgcProgress.pgcLogDetail("folder_failed_names_sample", {
-            folderID,
-            names: folderFailedNames.slice(0, 24),
-          });
-        }
+        pgcProgress.pgcLogDetail("folder_activation_failed", {
+          folderID,
+          parentFolder: folderMeta.parentFolder,
+          folderName: folderMeta.folderName,
+          error: actErr,
+          diagnostics: actDiag,
+          filesSkipped: rowsInFolder.length,
+        });
+        console.warn(
+          `[PGC] Folder activation failed | ${folderMeta.parentFolder} / ${folderMeta.folderName} | ${actErr} | ${rowsInFolder.length} files activation_skipped (not download failures)`,
+        );
         continue;
       }
 
       previousGridFingerprint =
         activation.fingerprint || (await getPgcGridFingerprint(workPage));
+      pgcFolderSessionState.previousFolderKnownNames =
+        folderMeta.knownFileNames || [];
+      pgcFolderSessionState.activeFolderId = folderID;
+      pgcFolderSessionState.activeParentFolderId =
+        folderMeta.parentFolder || null;
+      pgcFolderSessionState.activeGridFingerprint = previousGridFingerprint;
+      pgcTask6PatchCheckpoint(out, {
+        activeFolderId: pgcFolderSessionState.activeFolderId,
+        activeParentFolderId: pgcFolderSessionState.activeParentFolderId,
+        activeGridFingerprint: pgcFolderSessionState.activeGridFingerprint,
+      });
       totalFoldersNonEmptyProcessed += 1;
       pgcProgress.pgcLogFolderGridVerified();
 
       let fileOrdinal = 0;
-      let abandonRestOfFolder = false;
-      files_loop: for (const row of rowsInFolder) {
+      let consecutiveViewerOpenFailures = 0;
+
+      let filesToProcess = rowsInFolder;
+      if (devControls?.explicitFileIds?.length) {
+        const idSet = new Set(devControls.explicitFileIds.map(String));
+        filesToProcess = rowsInFolder.filter((r) =>
+          idSet.has(String(r.file?.fileId)),
+        );
+      }
+      if (devControls?.startFileIndex > 0) {
+        filesToProcess = filesToProcess.slice(devControls.startFileIndex);
+      }
+      if (devControls?.maxFilesPerFolder > 0) {
+        filesToProcess = filesToProcess.slice(0, devControls.maxFilesPerFolder);
+      }
+
+      files_loop: for (const row of filesToProcess) {
         const f = row.file;
         const fileSizeKB =
           typeof f.fileSizeKB === "number" && !Number.isNaN(f.fileSizeKB)
@@ -12212,6 +14611,36 @@ async function harvestProjectFilesAndSampleDownloads(
           f.downloadStatus = "skipped_oversize";
           continue;
         }
+
+        const cpKey = `${String(f.fileId)}|${f.version != null ? String(f.version).trim() : ""}`;
+        const priorCp = harvestOpts.uploadedCheckpointMap?.get(cpKey);
+        if (priorCp?.publicUrl) {
+          f.downloadStatus = "ok";
+          f.publicUrl = priorCp.publicUrl;
+          f.sha256 = priorCp.sha256 || null;
+          f.checkpointRestored = true;
+          folderOk += 1;
+          totalOkAll += 1;
+          out._meta.downloadsOk += 1;
+          pgcProgress.pgcLogDetail("file_checkpoint_skip", {
+            fileId: f.fileId,
+            fileName: f.name,
+            publicUrl: priorCp.publicUrl,
+          });
+          continue;
+        }
+
+        if (typeof harvestOpts.isCancelRequested === "function") {
+          if (harvestOpts.isCancelRequested()) {
+            console.log("[PGC] Task 6 | cancel during folder — leaving file unprocessed");
+            break files_loop;
+          }
+        }
+        if (typeof harvestOpts.refreshScrapeLease === "function") {
+          harvestOpts.refreshScrapeLease();
+        }
+
+        await pgcHarvestNotifyFileAttemptStart(harvestOpts, row, f);
 
         fileOrdinal += 1;
         pgcProgress.pgcLogFileStart({
@@ -12236,6 +14665,7 @@ async function harvestProjectFilesAndSampleDownloads(
             const gridReady = await ensurePgcFolderGridReady(
               workPage,
               folderMeta,
+              projectID,
             );
             if (!gridReady.ok) {
               out._meta.downloadAttempts += 1;
@@ -12398,7 +14828,7 @@ async function harvestProjectFilesAndSampleDownloads(
               rowLookup.rowLocator,
               { name: f.name, fileId: f.fileId },
               destRoot,
-              { debug },
+              { debug, exportState: bravaExportRunState },
             );
 
             if (debug) {
@@ -12424,6 +14854,7 @@ async function harvestProjectFilesAndSampleDownloads(
             };
 
             if (bin.downloaded && bin.localPath) {
+              consecutiveViewerOpenFailures = 0;
               out._meta.downloadsOk += 1;
               out.sampledDownloadsCount += 1;
               totalOkAll += 1;
@@ -12432,8 +14863,58 @@ async function harvestProjectFilesAndSampleDownloads(
               f.downloadError = null;
               f.localPath = bin.localPath;
               f.contentType = bin.contentType || null;
+              f.sha256 = bin.sha256 || null;
               f.downloadUrl =
                 bin.finalFetchUrl || bin.resolvedActionUrl || null;
+
+              if (typeof harvestOpts.checkpointFile === "function") {
+                const safeName = sanitizeLocalFileName(f.name || `file-${f.fileId}`);
+                const parentPart = sanitizeLocalFileName(
+                  row.folder.parentFolder || "parent",
+                );
+                const folderPart = sanitizeLocalFileName(
+                  row.folder.folderName || "folder",
+                );
+                const storagePrefix =
+                  harvestOpts.storagePrefix || "pgc/files";
+                const storagePath = `${storagePrefix}/${parentPart}/${folderPart}/${f.fileId}_${safeName}`;
+                try {
+                  const ck = await harvestOpts.checkpointFile({
+                    portalFileId: f.fileId,
+                    fileVersion: f.version,
+                    fileName: f.name,
+                    folderName: row.folder.folderName,
+                    parentFolder: row.folder.parentFolder || null,
+                    localPath: bin.localPath,
+                    storagePath,
+                    sourceUrl: bin.finalFetchUrl || bin.resolvedActionUrl,
+                    mimeType: bin.contentType,
+                    sizeBytes: bin.byteLength,
+                    metadata: { sha256: bin.sha256 },
+                  });
+                  if (ck?.publicUrl) {
+                    f.publicUrl = ck.publicUrl;
+                    f.uploaded = true;
+                    out._meta.uploadsOk = (out._meta.uploadsOk || 0) + 1;
+                    if (harvestOpts.uploadedCheckpointMap) {
+                      harvestOpts.uploadedCheckpointMap.set(cpKey, {
+                        publicUrl: ck.publicUrl,
+                        sha256: bin.sha256,
+                        sizeBytes: bin.byteLength,
+                        storagePath,
+                      });
+                    }
+                    console.log(
+                      `[PGC] Checkpoint | fileId=${f.fileId} | ${f.name} | uploaded`,
+                    );
+                  }
+                } catch (ckErr) {
+                  console.warn(
+                    `[PGC] Checkpoint failed | fileId=${f.fileId} | ${(ckErr && ckErr.message) || ckErr}`,
+                  );
+                }
+              }
+
               out.downloadedFiles.push({
                 fileID: f.fileId,
                 fileName: f.name,
@@ -12442,8 +14923,10 @@ async function harvestProjectFilesAndSampleDownloads(
                 parentFolder: row.folder.parentFolder || null,
                 localPath: bin.localPath,
                 contentType: bin.contentType || null,
+                publicUrl: f.publicUrl || null,
                 downloadUrl:
                   bin.finalFetchUrl || bin.resolvedActionUrl || null,
+                sha256: bin.sha256 || null,
                 _pgcDownloadResult: { ...f._pgcDownloadResult },
               });
               out.sampleFiles.push({
@@ -12467,6 +14950,43 @@ async function harvestProjectFilesAndSampleDownloads(
               }
               downloadCompletedThisFile = true;
             } else {
+              if (pgcHarvestIsCancelled(harvestOpts)) {
+                console.log("[PGC] Cancel after download failure — leaving remaining files unprocessed");
+                break files_loop;
+              }
+              if (
+                normErr === "viewer_tab_missing" ||
+                bin.error === "viewer_tab_missing"
+              ) {
+                consecutiveViewerOpenFailures += 1;
+                if (consecutiveViewerOpenFailures >= 2 && !recoveryUsedForFile) {
+                  console.log(
+                    `[PGC] Repeated viewer_tab_missing — recovering before next file | file=${f.name}`,
+                  );
+                  recoveryUsedForFile = true;
+                  pgcTask6PatchCheckpoint(out, {
+                    recoveryAttempts:
+                      (out._meta.task6Checkpoint.recoveryAttempts || 0) + 1,
+                  });
+                  const rec = await recoverPgcFilesSessionAndResume({
+                    task6Context,
+                    task6Browser,
+                    projectID,
+                    project,
+                    folderMeta,
+                    previousGridFingerprint,
+                    allFoldersOut: out.folders,
+                    harvestOpts,
+                    skipFolderActivation: false,
+                  });
+                  if (rec.ok) {
+                    applyRecoverResult(rec);
+                    if (rec.fingerprint) previousGridFingerprint = rec.fingerprint;
+                    consecutiveViewerOpenFailures = 0;
+                    continue file_attempt;
+                  }
+                }
+              }
               out._meta.failures += 1;
               totalFailedAll += 1;
               folderFailed += 1;
@@ -12490,6 +15010,12 @@ async function harvestProjectFilesAndSampleDownloads(
                 f.name,
                 String(f.downloadError || "download failed"),
               );
+              await pgcHarvestNotifyFileFailed(
+                harvestOpts,
+                row,
+                f,
+                String(f.downloadError || "download failed"),
+              );
               if (debug) {
                 pgcProgress.pgcLogDetail("file_download_fail_debug", {
                   file: f.name,
@@ -12508,6 +15034,10 @@ async function harvestProjectFilesAndSampleDownloads(
             );
             break file_attempt;
           } catch (loopErr) {
+            if (pgcHarvestIsCancelled(harvestOpts)) {
+              console.log("[PGC] Cancel during recoverable error — leaving file unprocessed");
+              break files_loop;
+            }
             const recoverable =
               pgcIsPlaywrightTargetClosedError(loopErr) ||
               !!(/** @type {any} */ (loopErr).pgcRecoverable);
@@ -12556,6 +15086,10 @@ async function harvestProjectFilesAndSampleDownloads(
             }
 
             if (recoveryUsedForFile) {
+              if (pgcHarvestIsCancelled(harvestOpts)) {
+                console.log("[PGC] Cancel after recovery exhaustion — leaving file unprocessed");
+                break files_loop;
+              }
               console.log("[PGC] Recovery failed | browser closed");
               console.log("[PGC] Current file marked failed");
               console.log(
@@ -12596,7 +15130,12 @@ async function harvestProjectFilesAndSampleDownloads(
                 reason: "playwright_target_closed",
               });
               pgcProgress.pgcLogFileFailure(f.name, "playwright_target_closed");
-              abandonRestOfFolder = true;
+              await pgcHarvestNotifyFileFailed(
+                harvestOpts,
+                row,
+                f,
+                "playwright_target_closed",
+              );
               break files_loop;
             }
 
@@ -12614,56 +15153,14 @@ async function harvestProjectFilesAndSampleDownloads(
               previousGridFingerprint,
               allFoldersOut: out.folders,
               harvestOpts,
+              skipFolderActivation: false,
             });
 
-            if (rec.ok && rec.skipFolderActivation) {
-              applyRecoverResult(rec);
-              if (!downloadCompletedThisFile) {
-                const failCode = "browser_relaunch_skip_folder";
-                out._meta.failures += 1;
-                if (!countedDownloadAttemptForFile) {
-                  out._meta.downloadAttempts += 1;
-                  totalFilesAttemptedAll += 1;
-                  folderAttempted += 1;
-                  countedDownloadAttemptForFile = true;
-                }
-                totalFailedAll += 1;
-                folderFailed += 1;
-                folderFailedNames.push(f.name);
-                f.downloadStatus = "failed";
-                f.downloadError = failCode;
-                f._pgcDownloadResult = {
-                  resolvedActionType: "none",
-                  resolvedActionUrl: null,
-                  clickedSelectorSummary: null,
-                  httpStatus: null,
-                  contentType: null,
-                  byteLength: 0,
-                  downloaded: false,
-                  uploaded: false,
-                  error: failCode,
-                };
-                out.sampleFiles.push({
-                  fileID: f.fileId,
-                  fileName: f.name,
-                  folderName: row.folder.folderName,
-                  downloaded: false,
-                });
-                globalFailedFiles.push({
-                  folderID,
-                  fileName: f.name,
-                  reason: failCode,
-                });
-                pgcProgress.pgcLogFileFailure(f.name, failCode);
-              }
-              console.log(
-                "[PGC] Continuing to next folder after browser relaunch recovery",
-              );
-              abandonRestOfFolder = true;
-              break files_loop;
-            }
-
             if (!rec.ok) {
+              if (pgcHarvestIsCancelled(harvestOpts)) {
+                console.log("[PGC] Cancel during failed recovery — leaving file unprocessed");
+                break files_loop;
+              }
               const failCode = rec.code || "playwright_target_closed";
               console.log(`[PGC] Recovery failed | ${failCode}`);
               console.log("[PGC] Current file marked failed");
@@ -12705,12 +15202,12 @@ async function harvestProjectFilesAndSampleDownloads(
                 reason: failCode,
               });
               pgcProgress.pgcLogFileFailure(f.name, failCode);
+              await pgcHarvestNotifyFileFailed(harvestOpts, row, f, failCode);
               if (rec.page) {
                 workPage = rec.page;
                 task6Context = rec.task6Context || workPage.context();
                 task6Browser = rec.task6Browser || task6Context.browser();
               }
-              abandonRestOfFolder = true;
               break files_loop;
             }
 
@@ -12720,62 +15217,6 @@ async function harvestProjectFilesAndSampleDownloads(
             console.log(`[PGC] Recovery resume | retry file: ${f.name}`);
             continue file_attempt;
           }
-        }
-      }
-
-      if (abandonRestOfFolder) {
-        for (const rowRem of rowsInFolder) {
-          const fr = rowRem.file;
-          if (
-            fr.downloadStatus === "ok" ||
-            fr.downloadStatus === "failed" ||
-            fr.downloadStatus === "skipped_oversize"
-          )
-            continue;
-          const fileSizeKBRem =
-            typeof fr.fileSizeKB === "number" && !Number.isNaN(fr.fileSizeKB)
-              ? fr.fileSizeKB
-              : null;
-          if (fileSizeKBRem != null && fileSizeKBRem > TASK6_MAX_FILE_KB) {
-            out._meta.largeFilesSkipped += 1;
-            fr.downloadStatus = "skipped_oversize";
-            continue;
-          }
-          out._meta.downloadAttempts += 1;
-          out._meta.failures += 1;
-          totalFilesAttemptedAll += 1;
-          totalFailedAll += 1;
-          folderAttempted += 1;
-          folderFailed += 1;
-          folderFailedNames.push(fr.name);
-          fr.downloadStatus = "failed";
-          fr.downloadError = "folder_aborted_after_recovery";
-          fr._pgcDownloadResult = {
-            resolvedActionType: "none",
-            resolvedActionUrl: null,
-            clickedSelectorSummary: null,
-            httpStatus: null,
-            contentType: null,
-            byteLength: 0,
-            downloaded: false,
-            uploaded: false,
-            error: "folder_aborted_after_recovery",
-          };
-          out.sampleFiles.push({
-            fileID: fr.fileId,
-            fileName: fr.name,
-            folderName: rowRem.folder.folderName,
-            downloaded: false,
-          });
-          globalFailedFiles.push({
-            folderID,
-            fileName: fr.name,
-            reason: "folder_aborted_after_recovery",
-          });
-          pgcProgress.pgcLogFileFailure(
-            fr.name,
-            "folder_aborted_after_recovery",
-          );
         }
       }
 
@@ -12806,7 +15247,19 @@ async function harvestProjectFilesAndSampleDownloads(
       downloadsOk: totalOkAll,
       failures: totalFailedAll,
       failedFiles: globalFailedFiles.slice(0, 500),
+      activationFailedFolders: (out._meta.activationFailedFolders || []).length,
     };
+    const activationFailedCount = (out._meta.activationFailedFolders || []).length;
+    out.filesHarvestAuthoritative =
+      out.filesExtractionOk &&
+      (totalOkAll > 0 ||
+        (totalFoldersNonEmptyProcessed > 0 && activationFailedCount === 0));
+    out.filesHarvestPartial = totalOkAll > 0 && activationFailedCount > 0;
+    if (!out.filesHarvestAuthoritative) {
+      console.warn(
+        `[PGC] Task 6 — files harvest not authoritative (ok:${totalOkAll} activationFailedFolders:${activationFailedCount}); prior portal_data.files will be preserved`,
+      );
+    }
     pgcLogTask6FailureBucketSummary(globalFailedFiles);
     pgcProgress.pgcLogDetail("task6_harvest_counters", {
       nonEmptyFoldersProcessed: totalFoldersNonEmptyProcessed,
@@ -13154,6 +15607,356 @@ function summarizeReviewCategories(latest) {
 /** Marker so change-events target the same <select> across evaluate calls. */
 const PGC_REVIEW_WORKFLOW_SELECT_ATTR = "data-pgc-review-workflow-select";
 
+/** @param {Record<string, string>[]} rows */
+function pgcReviewGridFingerprint(rows) {
+  const ids = (rows || [])
+    .map((r) => String(r.correctionId || "").trim())
+    .filter(Boolean)
+    .sort();
+  const refs = (rows || [])
+    .map((r) => String(r.refNumber || "").trim())
+    .filter(Boolean)
+    .sort();
+  return `${ids.join(",")}|refs:${refs.join(",")}`;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {{ optionIndex: number, value?: string, groupingId?: string, label?: string }} opt
+ * @param {string} attr
+ */
+async function selectPgcReviewWorkflowOption(page, opt, attr) {
+  return page.evaluate(
+    ({ optionIndex, value, groupingId, attr: marker }) => {
+      const sel = document.querySelector(`select[${marker}]`);
+      if (!(sel instanceof HTMLSelectElement)) {
+        return { ok: false, reason: "no_select" };
+      }
+      let picked = -1;
+      const gid = String(groupingId || "").trim();
+      const val = String(value || "").trim();
+      if (gid) {
+        for (let i = 0; i < sel.options.length; i++) {
+          const o = sel.options[i];
+          if (String(o.getAttribute("groupingid") || "").trim() === gid) {
+            picked = i;
+            break;
+          }
+        }
+      }
+      if (picked < 0 && val) {
+        for (let i = 0; i < sel.options.length; i++) {
+          if (String(sel.options[i].value || "").trim() === val) {
+            picked = i;
+            break;
+          }
+        }
+      }
+      if (picked < 0) picked = optionIndex;
+      sel.selectedIndex = picked;
+      if (window.$ || window.jQuery) {
+        (window.$ || window.jQuery)(sel).trigger("change");
+      } else {
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      const chosen = sel.options[sel.selectedIndex];
+      return {
+        ok: true,
+        selectedIndex: sel.selectedIndex,
+        selectedValue: chosen ? String(chosen.value || "") : "",
+        selectedGroupingId: chosen
+          ? String(chosen.getAttribute("groupingid") || "")
+          : "",
+        selectedLabel: chosen
+          ? String(chosen.textContent || "")
+              .replace(/\u00a0/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+          : "",
+      };
+    },
+    {
+      optionIndex: opt.optionIndex,
+      value: opt.value || "",
+      groupingId: opt.groupingId || "",
+      attr,
+    },
+  );
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} wfName
+ * @param {string | null} prevFingerprint
+ * @param {{ optionIndex: number, value?: string, groupingId?: string, label?: string }} opt
+ * @param {string} attr
+ * @returns {Promise<{ ok: boolean, fingerprint: string, rows: Record<string,string>[], skippedStale?: boolean, selectMeta?: object }>}
+ */
+async function waitForPgcReviewWorkflowGridRefresh(
+  page,
+  wfName,
+  prevFingerprint,
+  opt,
+  attr,
+) {
+  const CORRECTIONS_XHR = "GetProjectCorrectionsByCycleInstance";
+  const readScopedRows = async () => readPgcCorrectionsTabRows(page);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const xhrAfterSelect = page
+      .waitForResponse(
+        (resp) =>
+          resp.url().includes(CORRECTIONS_XHR) && resp.status() === 200,
+        { timeout: 18000 },
+      )
+      .catch(() => null);
+
+    const selectMeta = await selectPgcReviewWorkflowOption(page, opt, attr);
+    if (!selectMeta?.ok) {
+      console.warn("[PGC] Review | workflow select failed |", wfName, selectMeta);
+      return { ok: false, fingerprint: "", rows: [], selectMeta };
+    }
+
+    await xhrAfterSelect;
+    await page.waitForTimeout(attempt === 0 ? 1200 : 800);
+    await page
+      .waitForSelector(
+        "#correctionsTab tr.firstRow[correctionid], #correctionsTab tr.firstRow[correctionId], #correctionsTab tr[correctionid].firstRow, #correctionsTab tr[correctionId].firstRow",
+        { timeout: 12000 },
+      )
+      .catch(() => {});
+
+    const rows = await readScopedRows();
+    const fingerprint = pgcReviewGridFingerprint(rows);
+    const gridChanged =
+      prevFingerprint == null || prevFingerprint === "" || fingerprint !== prevFingerprint;
+
+    if (gridChanged) {
+      console.log(
+        "[PGC] Review | grid refreshed |",
+        wfName,
+        "| rows:",
+        rows.length,
+        "| fp:",
+        fingerprint.slice(0, 80),
+      );
+      return { ok: true, fingerprint, rows, selectMeta };
+    }
+
+    console.warn(
+      "[PGC] Review | stale grid (fingerprint unchanged) |",
+      wfName,
+      "| attempt",
+      attempt + 1,
+      "| fp:",
+      fingerprint.slice(0, 80),
+    );
+    if (attempt < 2) {
+      await page.waitForTimeout(600);
+    }
+  }
+
+  const finalRows = await readScopedRows();
+  const finalFp = pgcReviewGridFingerprint(finalRows);
+  console.warn(
+    "[PGC] Review | skipping workflow bucket (stale grid after retries) |",
+    wfName,
+  );
+  return {
+    ok: false,
+    fingerprint: finalFp,
+    rows: [],
+    skippedStale: true,
+    selectMeta: await selectPgcReviewWorkflowOption(page, opt, attr).catch(
+      () => null,
+    ),
+  };
+}
+
+/**
+ * Read correction rows scoped strictly to #correctionsTab.
+ * @param {import('playwright').Page} page
+ * @returns {Promise<Record<string,string>[]>}
+ */
+async function readPgcCorrectionsTabRows(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector("#correctionsTab");
+    if (!root) return [];
+
+    function norm(s) {
+      if (s == null) return "";
+      return String(s).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    }
+    function visible(el) {
+      if (!el || !(el instanceof Element)) return false;
+      const st = window.getComputedStyle(el);
+      if (!st || st.display === "none" || st.visibility === "hidden") return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    }
+    function correctionIdOf(tr) {
+      return String(
+        tr.getAttribute("correctionid") || tr.getAttribute("correctionId") || "",
+      ).trim();
+    }
+    function cellText(td) {
+      if (!td) return "";
+      const inner = td.querySelector(".correction-data");
+      if (inner) return norm(inner.textContent);
+      return norm(td.textContent);
+    }
+    function stripRefPrefix(s) {
+      let t = norm(s);
+      t = t.replace(/^ref\.?\s*#\s*/i, "").trim();
+      return t;
+    }
+    function gatherGroupRows(firstTr) {
+      const out = [];
+      let cur = firstTr;
+      while (cur && cur.tagName === "TR") {
+        out.push(cur);
+        const next = cur.nextElementSibling;
+        if (!next || (next instanceof HTMLElement && next.classList.contains("firstRow")))
+          break;
+        cur = next;
+      }
+      return out;
+    }
+    function pickChangemarkFromGroup(groupTrs) {
+      for (const tr of groupTrs) {
+        for (const td of tr.querySelectorAll("td")) {
+          const t = norm(td.textContent || "");
+          if (/changemark/i.test(t)) return t;
+        }
+      }
+      return "";
+    }
+    function pickBestFileLink(groupTrs) {
+      /** @type {HTMLAnchorElement[]} */
+      const links = [];
+      for (const tr of groupTrs) {
+        tr.querySelectorAll("a[href]").forEach((a) => {
+          if (a instanceof HTMLAnchorElement) links.push(a);
+        });
+      }
+      for (const a of links) {
+        const href = (a.getAttribute("href") || "").trim();
+        if (!href || href === "#") continue;
+        const txt = norm(a.textContent || "");
+        if (/\.pdf(\?|$|[#])/i.test(href) || /\.pdf/i.test(txt)) {
+          return {
+            name: txt || href.split("/").pop().split("?")[0] || "",
+            url: href,
+          };
+        }
+      }
+      for (const a of links) {
+        const href = (a.getAttribute("href") || "").trim();
+        if (/^https?:\/\//i.test(href)) {
+          return {
+            name: norm(a.textContent || "") || href.split("/").pop().split("?")[0] || "",
+            url: href,
+          };
+        }
+      }
+      return { name: "", url: "" };
+    }
+
+    const firstRowCandidates = Array.from(
+      root.querySelectorAll("tr.firstRow, tr[class*='firstRow']"),
+    ).filter((tr) => visible(tr) && correctionIdOf(tr));
+
+    /** @type {Set<string>} */
+    const seenCid = new Set();
+    /** @type {Record<string, string>[]} */
+    const out = [];
+
+    for (const tr of firstRowCandidates) {
+      const cid = correctionIdOf(tr);
+      if (!cid || seenCid.has(cid)) continue;
+      seenCid.add(cid);
+
+      const groupTrs = gatherGroupRows(tr);
+      const row1 = groupTrs.find((r) => r.classList.contains("firstRow")) || tr;
+
+      const refTd = row1.querySelector("td.refColumn");
+      const deptTd = row1.querySelector("td.department");
+      const dtTd = row1.querySelector("td.datetime");
+      const cycleTd = row1.querySelector("td.cycle");
+      const responseTd = row1.querySelector("td.commentResponse");
+
+      let reviewer = "";
+      const tds = Array.from(row1.querySelectorAll("td"));
+      const deptIdx = tds.findIndex((td) => td.classList.contains("department"));
+      if (deptIdx >= 0) {
+        for (let i = deptIdx + 1; i < tds.length; i++) {
+          const td = tds[i];
+          if (
+            td.classList.contains("datetime") ||
+            td.classList.contains("cycle") ||
+            td.classList.contains("commentResponse")
+          )
+            break;
+          reviewer = cellText(td);
+          break;
+        }
+      }
+      if (!reviewer && tds.length >= 3) {
+        const cand = tds[2];
+        if (
+          cand &&
+          !cand.classList.contains("datetime") &&
+          !cand.classList.contains("cycle") &&
+          !cand.classList.contains("commentResponse")
+        ) {
+          reviewer = cellText(cand);
+        }
+      }
+
+      let status = "";
+      let commentText = "";
+      let correctionType = "";
+      for (const r of groupTrs) {
+        const st = r.querySelector("td.status");
+        if (st) status = cellText(st);
+        const ct = r.querySelector("td.commentText, td.markupCommentText");
+        if (ct && !commentText) {
+          const inner = ct.querySelector(".correction-data");
+          commentText = inner ? norm(inner.textContent) : norm(ct.textContent);
+        }
+        const ty = r.querySelector("td.correctionType");
+        if (ty) correctionType = cellText(ty);
+      }
+
+      const changemarkNumber = pickChangemarkFromGroup(groupTrs);
+      const { name: fileName, url: fileUrl } = pickBestFileLink(groupTrs);
+
+      const refRaw = cellText(refTd);
+      const row = {
+        correctionId: cid,
+        refNumber: stripRefPrefix(refRaw),
+        changemarkNumber,
+        department: cellText(deptTd),
+        reviewer,
+        datetime: cellText(dtTd),
+        cycle: cellText(cycleTd),
+        status,
+        correctionType,
+        commentText,
+        responseText: cellText(responseTd),
+        fileName,
+        fileUrl,
+        viewUrl: fileUrl,
+      };
+
+      if (Object.values(row).some((v) => String(v || "").trim().length > 0))
+        out.push(row);
+    }
+
+    return out;
+  });
+}
+
 async function scrapePgcReviewWorkflowsFromDom(page, projectID) {
   const pid = String(projectID);
 
@@ -13461,233 +16264,34 @@ async function scrapePgcReviewWorkflowsFromDom(page, projectID) {
     return [];
   }
 
-  /**
-   * PGC corrections grid: each correction is 4+ <tr> sharing the same correctionid; row1 has class firstRow.
-   * @returns {Promise<Record<string,string>[]>}
-   */
-  const readVisibleRows = async () =>
-    page.evaluate(() => {
-      function norm(s) {
-        if (s == null) return "";
-        return String(s).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-      }
-      function visible(el) {
-        if (!el || !(el instanceof Element)) return false;
-        const st = window.getComputedStyle(el);
-        if (!st || st.display === "none" || st.visibility === "hidden") return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-      }
-      function correctionIdOf(tr) {
-        return String(
-          tr.getAttribute("correctionid") || tr.getAttribute("correctionId") || "",
-        ).trim();
-      }
-      function cellText(td) {
-        if (!td) return "";
-        const inner = td.querySelector(".correction-data");
-        if (inner) return norm(inner.textContent);
-        return norm(td.textContent);
-      }
-      function stripRefPrefix(s) {
-        let t = norm(s);
-        t = t.replace(/^ref\.?\s*#\s*/i, "").trim();
-        return t;
-      }
-      function gatherGroupRows(firstTr) {
-        const out = [];
-        let cur = firstTr;
-        while (cur && cur.tagName === "TR") {
-          out.push(cur); // collect ALL sibling rows, not just visible ones
-          const next = cur.nextElementSibling;
-          if (!next || (next instanceof HTMLElement && next.classList.contains("firstRow")))
-            break;
-          cur = next;
-        }
-        return out;
-      }
-      function pickChangemarkFromGroup(groupTrs) {
-        for (const tr of groupTrs) {
-          for (const td of tr.querySelectorAll("td")) {
-            const t = norm(td.textContent || "");
-            if (/changemark/i.test(t)) return t;
-          }
-        }
-        return "";
-      }
-      function pickBestFileLink(groupTrs) {
-        /** @type {HTMLAnchorElement[]} */
-        const links = [];
-        for (const tr of groupTrs) {
-          tr.querySelectorAll("a[href]").forEach((a) => {
-            if (a instanceof HTMLAnchorElement) links.push(a);
-          });
-        }
-        for (const a of links) {
-          const href = (a.getAttribute("href") || "").trim();
-          if (!href || href === "#") continue;
-          const txt = norm(a.textContent || "");
-          if (/\.pdf(\?|$|[#])/i.test(href) || /\.pdf/i.test(txt)) {
-            return {
-              name: txt || href.split("/").pop().split("?")[0] || "",
-              url: href,
-            };
-          }
-        }
-        for (const a of links) {
-          const href = (a.getAttribute("href") || "").trim();
-          if (/^https?:\/\//i.test(href)) {
-            return {
-              name: norm(a.textContent || "") || href.split("/").pop().split("?")[0] || "",
-              url: href,
-            };
-          }
-        }
-        return { name: "", url: "" };
-      }
+  /** Scoped to #correctionsTab via readPgcCorrectionsTabRows. */
+  const readVisibleRows = readPgcCorrectionsTabRows;
 
-      const firstRowCandidates = Array.from(
-        document.querySelectorAll("tr.firstRow, tr[class*='firstRow']"),
-      ).filter((tr) => visible(tr) && correctionIdOf(tr));
-
-      /** @type {Set<string>} */
-      const seenCid = new Set();
-      /** @type {Record<string, string>[]} */
-      const out = [];
-
-      for (const tr of firstRowCandidates) {
-        const cid = correctionIdOf(tr);
-        if (!cid || seenCid.has(cid)) continue;
-        seenCid.add(cid);
-
-        const groupTrs = gatherGroupRows(tr);
-        const row1 = groupTrs.find((r) => r.classList.contains("firstRow")) || tr;
-
-        const refTd = row1.querySelector("td.refColumn");
-        const deptTd = row1.querySelector("td.department");
-        const dtTd = row1.querySelector("td.datetime");
-        const cycleTd = row1.querySelector("td.cycle");
-        const responseTd = row1.querySelector("td.commentResponse");
-
-        let reviewer = "";
-        const tds = Array.from(row1.querySelectorAll("td"));
-        const deptIdx = tds.findIndex((td) => td.classList.contains("department"));
-        if (deptIdx >= 0) {
-          for (let i = deptIdx + 1; i < tds.length; i++) {
-            const td = tds[i];
-            if (
-              td.classList.contains("datetime") ||
-              td.classList.contains("cycle") ||
-              td.classList.contains("commentResponse")
-            )
-              break;
-            reviewer = cellText(td);
-            break;
-          }
-        }
-        if (!reviewer && tds.length >= 3) {
-          const cand = tds[2];
-          if (
-            cand &&
-            !cand.classList.contains("datetime") &&
-            !cand.classList.contains("cycle") &&
-            !cand.classList.contains("commentResponse")
-          ) {
-            reviewer = cellText(cand);
-          }
-        }
-
-        let status = "";
-        let commentText = "";
-        let correctionType = "";
-        for (const r of groupTrs) {
-          const st = r.querySelector("td.status");
-          if (st) status = cellText(st);
-          const ct = r.querySelector("td.commentText, td.markupCommentText");
-          if (ct && !commentText) {
-            const inner = ct.querySelector(".correction-data");
-            commentText = inner ? norm(inner.textContent) : norm(ct.textContent);
-          }
-          const ty = r.querySelector("td.correctionType");
-          if (ty) correctionType = cellText(ty);
-        }
-
-        const changemarkNumber = pickChangemarkFromGroup(groupTrs);
-        const { name: fileName, url: fileUrl } = pickBestFileLink(groupTrs);
-
-        const refRaw = cellText(refTd);
-        const row = {
-          refNumber: stripRefPrefix(refRaw),
-          changemarkNumber,
-          department: cellText(deptTd),
-          reviewer,
-          datetime: cellText(dtTd),
-          cycle: cellText(cycleTd),
-          status,
-          correctionType,
-          commentText,
-          responseText: cellText(responseTd),
-          fileName,
-          fileUrl,
-          viewUrl: fileUrl,
-        };
-
-        if (Object.values(row).some((v) => String(v || "").trim().length > 0)) out.push(row);
-      }
-
-      return out;
-    });
-
-  /** @type {{ workflowName: string, rows: Record<string,string>[] }[]} */
+  /** @type {{ workflowName: string, workflowValue?: string, workflowGroupingId?: string, rows: Record<string,string>[], skippedStale?: boolean }[]} */
   const workflowBuckets = [];
-  /** TEMP: first-workflow correctionsTab HTML sample for DOM structure debugging. */
   let correctionsDomDebugDumped = false;
+  /** @type {string | null} */
+  let lastGridFingerprint = null;
+
   for (const opt of options) {
     const wfName = opt.label || opt.value;
-    console.log("[PGC] Review | workflow found |", wfName);
-    await page
-      .evaluate(
-        ({ optionIndex, attr }) => {
-          const sel = document.querySelector(`select[${attr}]`);
-          if (!(sel instanceof HTMLSelectElement)) return;
-          // Select by index so the correct groupingid is on selectedIndex
-          sel.selectedIndex = optionIndex;
-          if (window.$ || window.jQuery) {
-            (window.$ || window.jQuery)(sel).trigger("change");
-          } else {
-            sel.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        },
-        { optionIndex: opt.optionIndex, attr: PGC_REVIEW_WORKFLOW_SELECT_ATTR },
-      )
-      .catch(() => {});
-    let surfaceOk = false;
-    try {
-      // Wait for the network request that fires after workflow change to complete
-      await Promise.race([
-        page.waitForResponse(
-          (resp) =>
-            resp.url().includes("GetProjectCorrectionsByCycleInstance") &&
-            resp.status() === 200,
-          { timeout: 15000 },
-        ),
-        page.waitForTimeout(15000),
-      ]);
-      // Give client-side filtering time to apply after XHR completes
-      await page.waitForTimeout(1500);
-      surfaceOk = true;
-      console.log("[PGC] Review | XHR complete + grid filtered |", wfName);
-    } catch (_) {
-      surfaceOk = false;
-      console.warn("[PGC] Review | XHR wait timed out |", wfName);
-      await page.waitForTimeout(1500);
-    }
-    await page
-      .waitForSelector(
-        "#correctionsTab tr.firstRow[correctionid], #correctionsTab tr.firstRow[correctionId], #correctionsTab tr[correctionid].firstRow, #correctionsTab tr[correctionId].firstRow",
-        { timeout: 22000 },
-      )
-      .catch(() => {});
+    console.log(
+      "[PGC] Review | workflow found |",
+      wfName,
+      "| value:",
+      opt.value || "(none)",
+      "| groupingId:",
+      opt.groupingId || "(none)",
+    );
+
+    const refresh = await waitForPgcReviewWorkflowGridRefresh(
+      page,
+      wfName,
+      lastGridFingerprint,
+      opt,
+      PGC_REVIEW_WORKFLOW_SELECT_ATTR,
+    );
+
     if (!correctionsDomDebugDumped) {
       correctionsDomDebugDumped = true;
       const domDump = await page.evaluate(() => {
@@ -13696,8 +16300,34 @@ async function scrapePgcReviewWorkflowsFromDom(page, projectID) {
       });
       console.log("[PGC DEBUG] corrections DOM after workflow select:", domDump);
     }
+
+    if (refresh.skippedStale) {
+      workflowBuckets.push({
+        workflowName: wfName,
+        workflowValue: opt.value || refresh.selectMeta?.selectedValue || "",
+        workflowGroupingId:
+          opt.groupingId || refresh.selectMeta?.selectedGroupingId || "",
+        rows: [],
+        skippedStale: true,
+      });
+      continue;
+    }
+
+    if (!refresh.ok && !refresh.rows.length) {
+      workflowBuckets.push({
+        workflowName: wfName,
+        workflowValue: opt.value || "",
+        workflowGroupingId: opt.groupingId || "",
+        rows: [],
+        skippedStale: true,
+      });
+      continue;
+    }
+
+    lastGridFingerprint = refresh.fingerprint;
+
     /** @type {Record<string,string>[]} */
-    const rows = [];
+    const rows = [...refresh.rows];
     const seen = new Set();
     const pushRows = (batch) => {
       for (const r of batch) {
@@ -13707,17 +16337,19 @@ async function scrapePgcReviewWorkflowsFromDom(page, projectID) {
         rows.push(r);
       }
     };
-    pushRows(await readVisibleRows());
+
     for (let pageIdx = 0; pageIdx < 20; pageIdx += 1) {
       const clickedNext = await page
         .evaluate(() => {
+          const root = document.querySelector("#correctionsTab");
           const candidates = [
             ".ui-iggrid-nextbutton:not(.ui-state-disabled)",
             "a[title='Next Page']:not(.ui-state-disabled)",
             "a[aria-label='Next']:not(.disabled)",
           ];
           for (const sel of candidates) {
-            const btn = document.querySelector(sel);
+            const btn =
+              (root && root.querySelector(sel)) || document.querySelector(sel);
             if (btn instanceof HTMLElement) {
               btn.click();
               return true;
@@ -13728,11 +16360,14 @@ async function scrapePgcReviewWorkflowsFromDom(page, projectID) {
         .catch(() => false);
       if (!clickedNext) break;
       await page.waitForTimeout(900);
-      pushRows(await readVisibleRows());
+      pushRows(await readVisibleRows(page));
     }
     console.log("[PGC] Review | rows scraped |", wfName, "|", rows.length);
     workflowBuckets.push({
       workflowName: wfName,
+      workflowValue: refresh.selectMeta?.selectedValue || opt.value || "",
+      workflowGroupingId:
+        refresh.selectMeta?.selectedGroupingId || opt.groupingId || "",
       rows,
     });
   }
@@ -13839,6 +16474,7 @@ async function processProjectReviewsAndMarkups(
     (n, b) => n + (Array.isArray(b.rows) ? b.rows.length : 0),
     0,
   );
+  const domUniqueCommentCount = countUniquePgcDomReviewComments(out.workflowBuckets);
 
   if (json == null || typeof json !== "object") {
     out.latestCycleCorrections = [];
@@ -13848,6 +16484,7 @@ async function processProjectReviewsAndMarkups(
       domRowCount === 0
         ? "no review data: corrections API unavailable and DOM workflows empty"
         : null;
+    out.commentCount = domUniqueCommentCount;
     console.log(
       `[PGC] Review | summary | workflows:${domWorkflowCount} rows:${domRowCount} api:unavailable`,
     );
@@ -13925,7 +16562,7 @@ async function processProjectReviewsAndMarkups(
 
     const cats = summarizeReviewCategories(latestOnly);
     out.changemarkCount = cats.changemarkCount;
-    out.commentCount = cats.commentCount;
+    out.commentCount = Math.max(cats.commentCount || 0, domUniqueCommentCount);
     out.statusCounts = cats.statusCounts;
     out.unresolvedCount = cats.unresolvedCount;
     out.resolvedCount = cats.resolvedCount;
@@ -13995,6 +16632,7 @@ async function processProjectReviewsAndMarkups(
       out.error = null;
       out.skipped = false;
       out.latestCycleCorrections = out.latestCycleCorrections || [];
+      out.commentCount = Math.max(out.commentCount || 0, domUniqueCommentCount);
       console.warn("[PGC] Review | corrections enrichment failed (DOM rows kept):", msg);
     } else {
       out.skipped = true;
@@ -14728,7 +17366,7 @@ async function captureReportActionUrlFromRow(page, projectID, reportName) {
  * @param {import('playwright').Page} page
  * @param {object} project Task 3 row
  * @param {string | null | undefined} wflowInstanceID
- * @param {{ dashboardUrl?: string | null }} [opts] — required for reports-only: open project from My Projects first so #grdReports loads
+ * @param {{ dashboardUrl?: string | null, onScrapeProgress?: (event: Record<string, unknown>) => void }} [opts] — required for reports-only: open project from My Projects first so #grdReports loads
  */
 async function processPgcSsrReportsForProject(
   page,
@@ -14739,6 +17377,7 @@ async function processPgcSsrReportsForProject(
   const projectID = String(project.projectID);
   const safePid = projectID.replace(/\D/g, "") || "unknown";
   const dashboardUrl = opts.dashboardUrl != null ? String(opts.dashboardUrl).trim() : "";
+  const onProgress = opts.onScrapeProgress;
 
   let activePage = page;
   /** @type {import('playwright').Page | null} */
@@ -14764,6 +17403,11 @@ async function processPgcSsrReportsForProject(
 
     let gridRows = [];
     try {
+      pgcEmitScrapeProgress(onProgress, {
+        event_type: "section_started",
+        user_message: "Opening Reports section.",
+        technical_message: `[PGC] Reports | start | project ${projectID}`,
+      });
       console.log(`[PGC] Reports | start | project ${projectID}`);
       gridRows = await scrapePgcReportsTabRows(activePage, projectID);
       const wanted = new Set(PGC_TARGET_REPORT_NAMES.map(normalizeReportName));
@@ -14783,6 +17427,16 @@ async function processPgcSsrReportsForProject(
             console.log(
               `[PGC] Reports | viewer url captured | ${r.reportName}`,
             );
+            const capLabel =
+              String(r.reportName || "").trim().length > 80
+                ? `${String(r.reportName).trim().slice(0, 77)}…`
+                : String(r.reportName || "").trim();
+            pgcEmitScrapeProgress(onProgress, {
+              event_type: "report_viewer_captured",
+              reportName: r.reportName,
+              user_message: `Captured viewer URL for ${capLabel}.`,
+              technical_message: `[PGC] Reports | viewer url captured | ${r.reportName}`,
+            });
           }
         }
       }
@@ -14836,7 +17490,32 @@ async function processPgcSsrReportsForProject(
     /** @type {any[]} */
     const reports = [];
 
-    for (const spec of specList) {
+    const reportTotal = specList.length;
+    pgcEmitScrapeProgress(onProgress, {
+      event_type: "reports_discovered",
+      user_message: `Found ${gridRows.length} report${gridRows.length === 1 ? "" : "s"} in the portal.`,
+      progress_current: 0,
+      progress_total: reportTotal,
+      technical_message: `[PGC] Reports | found ${gridRows.length} grid row(s) | exporting ${reportTotal} target report(s)`,
+    });
+
+    for (let reportIdx = 0; reportIdx < specList.length; reportIdx++) {
+      const spec = specList[reportIdx];
+      const reportNum = reportIdx + 1;
+      const shortLabel =
+        String(spec.reportName || "").trim().length > 80
+          ? `${String(spec.reportName).trim().slice(0, 77)}…`
+          : String(spec.reportName || "").trim();
+
+      pgcEmitScrapeProgress(onProgress, {
+        event_type: "report_processing",
+        reportName: spec.reportName,
+        user_message: `Processing report ${reportNum} of ${reportTotal}: ${shortLabel}.`,
+        progress_current: reportIdx,
+        progress_total: reportTotal,
+        technical_message: `[PGC] Reports | processing | ${spec.reportName}`,
+      });
+
       const hit = gridRows.find((r) =>
         pgcReportNamesLooselyMatch(r.reportName, spec.reportName),
       );
@@ -14889,8 +17568,25 @@ async function processPgcSsrReportsForProject(
           );
         }
         reports.push(entry);
+        pgcEmitScrapeProgress(onProgress, {
+          event_type: "report_failed",
+          reportName: spec.reportName,
+          user_message: `Report skipped: ${shortLabel}.`,
+          progress_current: reportNum,
+          progress_total: reportTotal,
+          technical_message: `[PGC] Reports | export skipped | ${spec.reportName}`,
+        });
         continue;
       }
+
+      pgcEmitScrapeProgress(onProgress, {
+        event_type: "report_export_started",
+        reportName: spec.reportName,
+        user_message: `Exporting report ${reportNum} of ${reportTotal}: ${shortLabel}.`,
+        progress_current: reportIdx,
+        progress_total: reportTotal,
+        technical_message: `[PGC] Reports | exporting | ${spec.reportName}`,
+      });
 
       pgcProgress.pgcLogDetail("task8_report_navigate", {
         reportName: spec.reportName,
@@ -14952,6 +17648,14 @@ async function processPgcSsrReportsForProject(
               } catch (_) {}
             }
             reports.push(entry);
+            pgcEmitScrapeProgress(onProgress, {
+              event_type: "report_failed",
+              reportName: spec.reportName,
+              user_message: `Report failed: ${shortLabel}.`,
+              progress_current: reportNum,
+              progress_total: reportTotal,
+              technical_message: `[PGC] Reports | excel fail | ${spec.reportName}`,
+            });
             continue;
           }
 
@@ -14976,6 +17680,19 @@ async function processPgcSsrReportsForProject(
           }
           if (entry.excelDownloaded || entry.pdfDownloaded) entry.viewerReady = true;
           reports.push(entry);
+          const httpOk = !!(entry.excelDownloaded || entry.pdfDownloaded);
+          pgcEmitScrapeProgress(onProgress, {
+            event_type: httpOk ? "report_completed" : "report_failed",
+            reportName: spec.reportName,
+            user_message: httpOk
+              ? `Report complete: ${shortLabel}.`
+              : `Report failed: ${shortLabel}.`,
+            progress_current: reportNum,
+            progress_total: reportTotal,
+            technical_message: httpOk
+              ? `[PGC] Reports | complete | ${spec.reportName}`
+              : `[PGC] Reports | failed | ${spec.reportName}`,
+          });
           continue;
         }
 
@@ -15044,6 +17761,19 @@ async function processPgcSsrReportsForProject(
       }
 
       if (entry.excelDownloaded || entry.pdfDownloaded) entry.viewerReady = true;
+      const reportOk = !!(entry.excelDownloaded || entry.pdfDownloaded);
+      pgcEmitScrapeProgress(onProgress, {
+        event_type: reportOk ? "report_completed" : "report_failed",
+        reportName: spec.reportName,
+        user_message: reportOk
+          ? `Report complete: ${shortLabel}.`
+          : `Report failed: ${shortLabel}.`,
+        progress_current: reportNum,
+        progress_total: reportTotal,
+        technical_message: reportOk
+          ? `[PGC] Reports | complete | ${spec.reportName}`
+          : `[PGC] Reports | failed | ${spec.reportName}`,
+      });
       reports.push(entry);
     }
 
@@ -15082,6 +17812,13 @@ async function processPgcSsrReportsForProject(
     console.log(
       `[PGC] Reports | summary | ${projectID} | found:${foundCount} exported:${exportedCount}`,
     );
+    pgcEmitScrapeProgress(onProgress, {
+      event_type: "section_completed",
+      user_message: `Reports section complete (${exportedCount} of ${foundCount} exported).`,
+      progress_current: reportTotal,
+      progress_total: reportTotal,
+      technical_message: `[PGC] Reports | summary | ${projectID} | found:${foundCount} exported:${exportedCount}`,
+    });
     pgcProgress.pgcLogDetail("task8_report_export_payload", {
       ...payload,
       reports: (payload.reports || []).map((r) => {
@@ -15604,15 +18341,94 @@ async function runPgcProductionPipeline(
     },
   };
   if (!skipFiles) {
-    filesOut = await harvestProjectFilesAndSampleDownloads(page, proj, {
-      dashboardUrl,
-      recoveryCredentials: opts.recoveryCredentials || null,
-      relaunchBrowserAndRecover: opts.relaunchBrowserAndRecover || null,
-    });
+    /** @type {import('playwright').Page} */
+    let harvestPage = page;
+    const preVerify = await verifyPgcProjectDoxSessionReady(
+      page,
+      String(proj.projectID),
+      proj.projectNumber,
+      { requireFilesTab: false },
+    );
+    if (skipDetail || !preVerify.ok) {
+      const sessionOpen = await ensurePgcProjectDoxSessionOpen(
+        page,
+        proj,
+        dashboardUrl,
+        { recoveryCredentials: opts.recoveryCredentials || null },
+      );
+      if (!sessionOpen.ok) {
+        console.error(
+          `[PGC] ProjectDox session handoff failed before Task 6 | ${sessionOpen.error || "unknown"}`,
+        );
+        filesOut = {
+          projectID: String(proj.projectID),
+          foldersCount: 0,
+          filesCount: 0,
+          sampledDownloadsCount: 0,
+          folders: [],
+          sampleFiles: [],
+          downloadedFiles: [],
+          filesExtractionOk: false,
+          filesExtractionFailed: true,
+          filesExtractionError:
+            sessionOpen.error || "project_dox_session_not_established",
+          filesExtractionDiagnostics: sessionOpen.diagnostics || null,
+          sessionHandoffFailed: true,
+          filesHarvestAuthoritative: false,
+          _meta: {
+            fileApiFailures: 0,
+            largeFilesSkipped: 0,
+            downloadAttempts: 0,
+            downloadsOk: 0,
+            uploadsOk: 0,
+            failures: 0,
+            activationFailedFolders: [],
+            sessionHandoffError: sessionOpen.error || null,
+          },
+        };
+      } else {
+        harvestPage = sessionOpen.page;
+        filesOut = await harvestProjectFilesAndSampleDownloads(
+          harvestPage,
+          proj,
+          {
+            dashboardUrl,
+            recoveryCredentials: opts.recoveryCredentials || null,
+            relaunchBrowserAndRecover: opts.relaunchBrowserAndRecover || null,
+            sessionAlreadyOpen: true,
+            fileProgress: opts.fileProgress || null,
+            uploadedCheckpointMap: opts.uploadedCheckpointMap || null,
+            devHarvestControls: opts.devHarvestControls || null,
+            refreshScrapeLease: opts.refreshScrapeLease || null,
+            isCancelRequested: opts.isCancelRequested || null,
+            checkpointFile: opts.checkpointFile || null,
+            storagePrefix: opts.storagePrefix || null,
+            onFileAttemptStart: opts.onFileAttemptStart || null,
+            onFileFailed: opts.onFileFailed || null,
+          },
+        );
+      }
+    } else {
+      filesOut = await harvestProjectFilesAndSampleDownloads(page, proj, {
+        dashboardUrl,
+        recoveryCredentials: opts.recoveryCredentials || null,
+        relaunchBrowserAndRecover: opts.relaunchBrowserAndRecover || null,
+        sessionAlreadyOpen: true,
+        fileProgress: opts.fileProgress || null,
+        uploadedCheckpointMap: opts.uploadedCheckpointMap || null,
+        devHarvestControls: opts.devHarvestControls || null,
+        refreshScrapeLease: opts.refreshScrapeLease || null,
+        isCancelRequested: opts.isCancelRequested || null,
+        checkpointFile: opts.checkpointFile || null,
+        storagePrefix: opts.storagePrefix || null,
+        onFileAttemptStart: opts.onFileAttemptStart || null,
+        onFileFailed: opts.onFileFailed || null,
+      });
+    }
   }
   if (!skipFiles && uploadLocal && filesOut.downloadedFiles?.length) {
     for (const d of filesOut.downloadedFiles) {
-      if (!d.localPath) continue;
+      if (!d.localPath || d.publicUrl) continue;
       try {
         const safeName = sanitizeLocalFileName(d.fileName || d.fileID);
         const parentPart = sanitizeLocalFileName(d.parentFolder || "parent");
@@ -15633,32 +18449,8 @@ async function runPgcProductionPipeline(
       }
     }
   }
-  if (
-    !skipFiles &&
-    filesOut.folders?.length &&
-    filesOut.downloadedFiles?.length
-  ) {
-    for (const folder of filesOut.folders) {
-      for (const f of folder.files || []) {
-        const hit = filesOut.downloadedFiles.find((df) => df.fileID === f.fileId);
-        if (hit?.publicUrl) {
-          f.viewUrl = hit.publicUrl;
-          f.publicUrl = hit.publicUrl;
-        }
-        if (hit?.downloadUrl) {
-          f.downloadUrl = hit.downloadUrl;
-        }
-      }
-    }
-  }
   if (!skipFiles && filesOut.folders?.length) {
-    for (const folder of filesOut.folders) {
-      for (const f of folder.files || []) {
-        if (String(f.viewUrl || "").trim()) continue;
-        const portalView = buildPgcActiveXViewerFileUrl(f.fileId);
-        if (portalView) f.viewUrl = portalView;
-      }
-    }
+    finalizePgcFolderFileUrls(filesOut);
   }
 
   /** @type {{ skipped?: boolean, projectID?: string, wflowInstanceID?: string | null, reports?: any[] }} */
@@ -15676,12 +18468,23 @@ async function runPgcProductionPipeline(
     );
     reportsPayload = await processPgcSsrReportsForProject(page, proj, wfid, {
       dashboardUrl: dashboardUrlForReports,
+      onScrapeProgress: opts.onScrapeProgress,
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {
         const slug = r.fileSlug || "report";
+        const uploadLabel =
+          String(r.reportName || slug).trim().length > 80
+            ? `${String(r.reportName || slug).trim().slice(0, 77)}…`
+            : String(r.reportName || slug).trim();
         try {
           if (r.excelPath && fs.existsSync(r.excelPath)) {
+            pgcEmitScrapeProgress(opts.onScrapeProgress, {
+              event_type: "upload_progress",
+              stage: "reports",
+              user_message: `Uploading report: ${uploadLabel}.`,
+              technical_message: `[PGC] Reports | uploading excel | ${r.reportName || slug}`,
+            });
             const u = await uploadLocal(
               r.excelPath,
               `${storagePrefix}/reports/${slug}.xlsx`,
@@ -15689,6 +18492,12 @@ async function runPgcProductionPipeline(
             if (u) r.excelPublicUrl = u;
           }
           if (r.pdfPath && fs.existsSync(r.pdfPath)) {
+            pgcEmitScrapeProgress(opts.onScrapeProgress, {
+              event_type: "upload_progress",
+              stage: "reports",
+              user_message: `Uploading report: ${uploadLabel}.`,
+              technical_message: `[PGC] Reports | uploading pdf | ${r.reportName || slug}`,
+            });
             const u = await uploadLocal(
               r.pdfPath,
               `${storagePrefix}/reports/${slug}.pdf`,
@@ -16192,6 +19001,11 @@ module.exports = {
   collectAllProjects,
   readProjectRows,
   resolvePgcWebUiBases,
+  ensurePgcProjectDoxSessionOpen,
+  pgcPermitKeysMatch,
+  pgcIsFilesOnlyScrapeMode,
+  resolvePgcExplicitTargetOnDashboard,
+  verifyPgcProjectDoxSessionReady,
   runPgcProductionPipeline,
   scrapeSingleProjectDetails,
   /** Shared SSRS helpers for Montgomery (and other ProjectDox tenants) — PGC behavior unchanged. */

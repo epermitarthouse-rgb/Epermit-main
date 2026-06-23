@@ -1152,6 +1152,59 @@ export type Database = {
           },
         ]
       }
+      project_pipeline_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_stage: string | null
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          portal_data_hash: string | null
+          project_id: string
+          stages: Json
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_stage?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          portal_data_hash?: string | null
+          project_id: string
+          stages?: Json
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_stage?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          portal_data_hash?: string | null
+          project_id?: string
+          stages?: Json
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_pipeline_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           address: string | null

@@ -15,6 +15,11 @@ import {
   mapMontgomeryStructuredRowsToPgcDeterministic,
   type MontgomeryPortalStructuredExcelRow,
 } from "../_shared/mapMontgomeryStructuredRowsToDeterministic.ts";
+import {
+  mapPgcWorkflowBucketsToStructuredRows,
+  PGC_REVIEW_COMMENTS_REPORT_NAME,
+  type PgcWorkflowBucket,
+} from "../_shared/mapPgcDomReviewToStructuredRows.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +33,17 @@ interface ParsedCommentItem {
   code_reference: string | null;
 }
 
-type ParsedCommentIngestSource = "raw_ref" | "fallback_llm";
+type ParsedCommentIngestSource = "raw_ref" | "raw_ref_staging" | "fallback_llm";
+
+type ParsedCommentRow = {
+  id: string;
+  project_id?: string;
+  original_text?: string | null;
+  comment_number?: string | null;
+  page_number?: number | null;
+  status?: string | null;
+  ingest_source?: string | null;
+};
 
 interface PortalPdf {
   fileName?: string;
@@ -85,6 +100,17 @@ function shouldAttemptDeterministicStackedParse(pdf: PortalPdf): boolean {
     !name.includes("review details") &&
     !name.includes("routing slip")
   );
+}
+
+function isReviewCommentsReportPdf(p: PortalPdf): boolean {
+  return shouldAttemptDeterministicStackedParse(p);
+}
+
+function pdfHasParseableReviewCommentsContent(p: PortalPdf): boolean {
+  const hasText = typeof p.text === "string" && p.text.trim().length > 0;
+  const hasStructuredRows =
+    Array.isArray(p.structuredRows) && p.structuredRows.length > 0;
+  return hasText || hasStructuredRows;
 }
 
 /**
@@ -224,31 +250,167 @@ function diffRefs(fromRefs: string[], toRefs: string[]): string[] {
   return fromRefs.filter((r) => !keep.has(r));
 }
 
+function portalCommentKey(row: {
+  comment_number?: string | null;
+  original_text?: string | null;
+}): string {
+  const num = String(row.comment_number ?? "").trim();
+  if (num) return `ref:${num}`;
+  const refs = extractOrderedRefsFromText(String(row.original_text ?? ""));
+  if (refs.length > 0) return `ref:${refs[0]}`;
+  return `text:${normalizeText(String(row.original_text ?? ""))}`;
+}
+
+async function finalizePortalCommentRefresh(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+): Promise<{
+  previous_portal_count: number;
+  new_staging_count: number;
+  deleted_count: number;
+  updated_count: number;
+  inserted_count: number;
+  final_portal_count: number;
+}> {
+  const portalSources = ["raw_ref", "fallback_llm"];
+
+  const { data: oldRows, error: oldErr } = await supabase
+    .from("parsed_comments")
+    .select("*")
+    .eq("project_id", projectId)
+    .in("ingest_source", portalSources);
+  if (oldErr) {
+    throw new Error(`Failed to read existing portal comments: ${oldErr.message}`);
+  }
+
+  const { data: stagingRows, error: stagingErr } = await supabase
+    .from("parsed_comments")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("ingest_source", "raw_ref_staging");
+  if (stagingErr) {
+    throw new Error(`Failed to read staging comments: ${stagingErr.message}`);
+  }
+
+  const old = (oldRows ?? []) as ParsedCommentRow[];
+  const staging = (stagingRows ?? []) as ParsedCommentRow[];
+
+  const oldByKey = new Map<string, ParsedCommentRow>();
+  for (const row of old) {
+    oldByKey.set(portalCommentKey(row), row);
+  }
+
+  const matchedOldIds = new Set<string>();
+  let updated_count = 0;
+  let inserted_count = 0;
+
+  for (const stagingRow of staging) {
+    const key = portalCommentKey(stagingRow);
+    const existing = oldByKey.get(key);
+    if (existing) {
+      matchedOldIds.add(existing.id);
+      const { error: updErr } = await supabase
+        .from("parsed_comments")
+        .update({
+          original_text: stagingRow.original_text,
+          page_number: stagingRow.page_number,
+          status: stagingRow.status,
+          comment_number: stagingRow.comment_number ?? existing.comment_number,
+        })
+        .eq("id", existing.id);
+      if (updErr) {
+        throw new Error(`Failed to update matched comment: ${updErr.message}`);
+      }
+      await supabase.from("parsed_comments").delete().eq("id", stagingRow.id);
+      updated_count++;
+    } else {
+      const { error: promErr } = await supabase
+        .from("parsed_comments")
+        .update({ ingest_source: "raw_ref" })
+        .eq("id", stagingRow.id);
+      if (promErr) {
+        throw new Error(`Failed to promote staging comment: ${promErr.message}`);
+      }
+      inserted_count++;
+    }
+  }
+
+  const toDeleteIds = old.filter((r) => !matchedOldIds.has(r.id)).map((r) => r.id);
+  let deleted_count = 0;
+  if (toDeleteIds.length > 0) {
+    const { error: delErr } = await supabase
+      .from("parsed_comments")
+      .delete()
+      .in("id", toDeleteIds);
+    if (delErr) {
+      throw new Error(`Failed to remove stale portal comments: ${delErr.message}`);
+    }
+    deleted_count = toDeleteIds.length;
+  }
+
+  await supabase
+    .from("parsed_comments")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("ingest_source", "raw_ref_staging");
+
+  return {
+    previous_portal_count: old.length,
+    new_staging_count: staging.length,
+    deleted_count,
+    updated_count,
+    inserted_count,
+    final_portal_count: updated_count + inserted_count,
+  };
+}
+
 async function fetchStoredCountsBySource(
   supabase: ReturnType<typeof createClient>,
   projectId: string,
-): Promise<{ raw_ref: number; fallback_llm: number; total: number }> {
+): Promise<{ raw_ref: number; raw_ref_staging: number; fallback_llm: number; total: number }> {
   const { data, error } = await supabase
     .from("parsed_comments")
     .select("id, ingest_source")
     .eq("project_id", projectId);
   if (error) {
     console.warn("[comment-parser] failed to read stored counts by source:", error.message);
-    return { raw_ref: 0, fallback_llm: 0, total: 0 };
+    return { raw_ref: 0, raw_ref_staging: 0, fallback_llm: 0, total: 0 };
   }
   const rows = (data ?? []) as Array<{ ingest_source?: string | null }>;
   const raw_ref = rows.filter((r) => r.ingest_source === "raw_ref").length;
+  const raw_ref_staging = rows.filter((r) => r.ingest_source === "raw_ref_staging").length;
   const fallback_llm = rows.filter((r) => r.ingest_source === "fallback_llm").length;
-  return { raw_ref, fallback_llm, total: rows.length };
+  return { raw_ref, raw_ref_staging, fallback_llm, total: rows.length };
 }
 
 interface PortalData {
   portalSubtype?: string;
   tabs?: {
     reports?: { pdfs?: PortalPdf[] };
+    review?: {
+      workflowBuckets?: PgcWorkflowBucket[];
+    };
   };
   meta?: {
     comment_parse_cursor?: { pdfIndex: number };
+  };
+}
+
+function buildPgcDomWorkflowBucketsFallbackPdf(portalData: PortalData): PortalPdf | null {
+  const buckets = portalData.tabs?.review?.workflowBuckets;
+  if (!Array.isArray(buckets) || buckets.length === 0) return null;
+  const mapped = mapPgcWorkflowBucketsToStructuredRows(buckets);
+  if (mapped.length === 0) return null;
+  console.log(
+    "[comment-parser] PGC DOM workflowBuckets fallback structuredRows:",
+    mapped.length,
+  );
+  return {
+    fileName: PGC_REVIEW_COMMENTS_REPORT_NAME,
+    text: "",
+    structuredRows: mapped,
+    structuredRowsSource: "pgc-dom",
+    info: { source: "pgc-export" },
   };
 }
 
@@ -797,17 +959,25 @@ serve(async (req) => {
 
     let portalData = (project.portal_data as PortalData | null) ?? {};
 
-    if (fullRefresh) {
-      const { error: delErr } = await supabase
+    const savedCursorEarly = portalData.meta?.comment_parse_cursor;
+    const startPdfIndexEarly = cursorBody?.pdfIndex ?? savedCursorEarly?.pdfIndex ?? 0;
+    const safeStartEarly = Math.max(0, Math.min(startPdfIndexEarly, 9999));
+    const portalIngestSource: ParsedCommentIngestSource = fullRefresh
+      ? "raw_ref_staging"
+      : "raw_ref";
+
+    if (fullRefresh && safeStartEarly === 0) {
+      const { error: stagingDelErr } = await supabase
         .from("parsed_comments")
         .delete()
-        .eq("project_id", projectId);
-      if (delErr) {
-        console.error("[comment-parser] full_refresh delete parsed_comments failed:", delErr.message);
+        .eq("project_id", projectId)
+        .eq("ingest_source", "raw_ref_staging");
+      if (stagingDelErr) {
+        console.error("[comment-parser] full_refresh clear staging failed:", stagingDelErr.message);
         return new Response(
           JSON.stringify({
             code: 500,
-            message: `Failed to clear existing parsed_comments before full refresh: ${delErr.message}`,
+            message: `Failed to clear staging comments before portal refresh: ${stagingDelErr.message}`,
             parsed_count: 0,
             inserted_raw_ref_count: 0,
             inserted_fallback_count: 0,
@@ -825,19 +995,33 @@ serve(async (req) => {
         .eq("id", projectId);
       if (metaErr) console.warn("[comment-parser] full_refresh clear cursor:", metaErr.message);
       portalData = clearedPortal;
+      console.log("[DEBUG] comment-parser: full_refresh — staging cleared, portal comments preserved until finalize");
     }
 
     const pdfs = portalData.tabs?.reports?.pdfs ?? [];
-    const pdfsWithTextRaw = pdfs.filter((p): p is PortalPdf & { text: string } => !!p.text && p.text.trim().length > 0);
-    // Only the single "Plan Review - Review Comments" report (exclude Review Details, Routing Slip)
-    const pdfsWithText = pdfsWithTextRaw.filter((p) => {
-      const name = (p.fileName ?? "").toLowerCase();
-      return name.includes("review comments") && !name.includes("review details") && !name.includes("routing slip");
-    });
-    const pdfsToProcess = pdfsWithText;
+    let pdfsToProcess = pdfs.filter(
+      (p): p is PortalPdf =>
+        isReviewCommentsReportPdf(p) &&
+        Array.isArray(p.structuredRows) &&
+        p.structuredRows.length > 0,
+    );
 
     if (pdfsToProcess.length === 0) {
-      console.log("[DEBUG] comment-parser: no PDFs with 'Review Comments' in fileName, skipping");
+      const domFallbackPdf = buildPgcDomWorkflowBucketsFallbackPdf(portalData);
+      if (domFallbackPdf) {
+        pdfsToProcess = [domFallbackPdf];
+      }
+    }
+
+    if (pdfsToProcess.length === 0) {
+      pdfsToProcess = pdfs.filter(
+        (p): p is PortalPdf =>
+          isReviewCommentsReportPdf(p) && pdfHasParseableReviewCommentsContent(p),
+      );
+    }
+
+    if (pdfsToProcess.length === 0) {
+      console.log("[DEBUG] comment-parser: no Review Comments PDFs with text or structuredRows, skipping");
       return new Response(
         JSON.stringify({
           parsed_count: 0,
@@ -847,7 +1031,7 @@ serve(async (req) => {
           done: true,
           total_pdfs: 0,
           reason: "no_matching_pdf",
-          message: "No PDFs with 'Review Comments' in fileName",
+          message: "No Review Comments reports with text or structuredRows in portal_data.tabs.reports.pdfs",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -870,8 +1054,8 @@ serve(async (req) => {
           next_cursor: { pdfIndex: 0 },
           done: true,
           total_pdfs: 0,
-          reason: "no_pdf_text",
-          message: "No PDFs with text in portal_data.tabs.reports.pdfs",
+          reason: "no_pdf_content",
+          message: "No Review Comments reports with text or structuredRows in portal_data.tabs.reports.pdfs",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -879,7 +1063,16 @@ serve(async (req) => {
 
     const firstPdf = pdfsToProcess[0];
     const firstText = (firstPdf.text ?? "").trim();
-    if (isNoCommentsPlaceholderText(firstText)) {
+    const firstHasStructuredRows =
+      Array.isArray(firstPdf.structuredRows) && firstPdf.structuredRows.length > 0;
+    if (isNoCommentsPlaceholderText(firstText) && !firstHasStructuredRows) {
+      if (fullRefresh) {
+        await supabase
+          .from("parsed_comments")
+          .delete()
+          .eq("project_id", projectId)
+          .in("ingest_source", ["raw_ref", "fallback_llm", "raw_ref_staging"]);
+      }
       const mergedPortalData = {
         ...portalData,
         meta: { ...portalData.meta, comment_parse_cursor: null },
@@ -963,7 +1156,6 @@ serve(async (req) => {
         const isMontgomeryExport = String(pdf.info?.source ?? "") === "montgomery-export";
 
         const hasStructuredArray =
-          isMontgomeryExport &&
           Array.isArray(pdf.structuredRows) &&
           pdf.structuredRows.length > 0;
         const mappedFromStructured = hasStructuredArray
@@ -971,12 +1163,39 @@ serve(async (req) => {
           : [];
         const useStructuredRowsPath = mappedFromStructured.length > 0;
 
+        const structuredInputRefs = hasStructuredArray
+          ? pdf.structuredRows!
+              .map((r) => String(r?.ref ?? "").trim())
+              .filter((ref) => ref.length > 0)
+          : [];
+        const structuredMappedRefs = mappedFromStructured.map((r) =>
+          String(r.ref ?? "").trim(),
+        ).filter(Boolean);
+        const structuredSkippedRefs = structuredInputRefs.filter(
+          (ref) => !structuredMappedRefs.includes(ref),
+        );
+
+        console.log(
+          "[comment-parser] parse path selection " +
+            JSON.stringify({
+              fileName: pdf.fileName ?? "",
+              info_source: pdf.info?.source ?? null,
+              structured_rows_available: hasStructuredArray,
+              structured_input_row_count: hasStructuredArray
+                ? pdf.structuredRows!.length
+                : 0,
+              structured_mapped_row_count: mappedFromStructured.length,
+              selected_path: useStructuredRowsPath ? "structured_rows" : "text_fallback",
+              structured_rows_source: pdf.structuredRowsSource ?? null,
+              structured_skipped_refs: structuredSkippedRefs,
+            }),
+        );
+
         if (hasStructuredArray) {
           const sr = pdf.structuredRows!;
           console.log(
-            "[comment-parser] montgomery structured rows " +
+            "[comment-parser] structured rows from Excel " +
               JSON.stringify({
-                path: "montgomery_structured_rows",
                 structured_rows_count: sr.length,
                 mapped_row_count: mappedFromStructured.length,
                 first_3_refs: sr.slice(0, 3).map((r) => String(r?.ref ?? "").trim()),
@@ -1058,13 +1277,15 @@ serve(async (req) => {
             );
           } else if (usedMontgomeryStructuredRows) {
             console.log(
-              "[comment-parser] montgomery structured rows refs before insert " +
+              "[comment-parser] structured rows refs before insert " +
                 JSON.stringify(stackedRows.map((r) => String(r.ref ?? "").trim())),
             );
           }
           console.log(
-            "[DEBUG] comment-parser: PGC ePlan deterministic stacked rows:",
+            "[DEBUG] comment-parser: deterministic stacked rows:",
             stackedRows.length,
+            "parse_path:",
+            useStructuredRowsPath ? "structured_rows" : "text_fallback",
           );
           parsedSourceRefCount += stackedRows.length;
           deterministicParsedRowCount += stackedRows.length;
@@ -1106,7 +1327,8 @@ serve(async (req) => {
               code_reference: null,
               page_number: pageNumber,
               status: normalizePortalStatus(row.status),
-              ingest_source: "raw_ref" as ParsedCommentIngestSource,
+              comment_number: row.ref ? String(row.ref).trim() : null,
+              ingest_source: portalIngestSource,
             }).select("id").single();
 
             if (insertError) {
@@ -1145,7 +1367,7 @@ serve(async (req) => {
                 insert_failures: roundInsertFailures,
               },
               F_drop_analysis: usedMontgomeryStructuredRows
-                ? "montgomery_structured_rows (portal_data Excel structuredRows)"
+                ? "excel_structured_rows (portal_data structuredRows)"
                 : usedMontgomeryDeterministicGrid
                   ? "montgomery_deterministic_grid (Montgomery-export grid parser)"
                   : "pgc_eplan_deterministic (no LLM split/filter/classify)",
@@ -1163,6 +1385,18 @@ serve(async (req) => {
             pdfIndex + 1,
             "deterministic inserted:",
             commentCountThisPdf,
+            "inserted_raw_ref:",
+            insertedRawRefCount,
+            "parse_path:",
+            useStructuredRowsPath ? "structured_rows" : "text_fallback",
+            "structured_input:",
+            hasStructuredArray ? pdf.structuredRows!.length : 0,
+            "parsed_output:",
+            stackedRows.length,
+            "skipped_duplicate:",
+            roundSkippedDuplicate,
+            "skipped_empty:",
+            roundSkippedEmpty,
             "running totals parsed:",
             parsedCount,
           );
@@ -1303,7 +1537,7 @@ serve(async (req) => {
           code_reference: c.code_reference ?? null,
           page_number: pageNumber,
           status: "Pending",
-          ingest_source: "fallback_llm" as ParsedCommentIngestSource,
+          ingest_source: fullRefresh ? "raw_ref_staging" : ("fallback_llm" as ParsedCommentIngestSource),
         }).select("id").single();
 
         if (insertError) {
@@ -1454,6 +1688,50 @@ serve(async (req) => {
       reconciliationWarnings.push(`missing_refs: ${missingRefs.join(", ")}`);
     }
     const storedCounts = await fetchStoredCountsBySource(supabase, projectId);
+
+    let portalRefresh: Record<string, number> | undefined;
+    let portalRefreshFailed = false;
+    let portalRefreshError: string | undefined;
+
+    if (fullRefresh && done) {
+      const stagingTotal = storedCounts.raw_ref_staging;
+      const hadSourceComments =
+        extractedSourceRefCount > 0 ||
+        insertedRawRefCount > 0 ||
+        insertedFallbackCount > 0 ||
+        deterministicParsedRowCount > 0;
+
+      if (hadSourceComments && stagingTotal === 0) {
+        portalRefreshFailed = true;
+        portalRefreshError =
+          "Portal refresh failed: source contained comments but parser produced no staging rows. Previous portal comments preserved.";
+        await supabase
+          .from("parsed_comments")
+          .delete()
+          .eq("project_id", projectId)
+          .eq("ingest_source", "raw_ref_staging");
+      } else if (stagingTotal > 0) {
+        try {
+          portalRefresh = await finalizePortalCommentRefresh(supabase, projectId);
+          console.log("[comment-parser] portal refresh finalized", portalRefresh);
+        } catch (finalizeErr) {
+          portalRefreshFailed = true;
+          portalRefreshError = finalizeErr instanceof Error
+            ? finalizeErr.message
+            : "Portal refresh finalize failed";
+          await supabase
+            .from("parsed_comments")
+            .delete()
+            .eq("project_id", projectId)
+            .eq("ingest_source", "raw_ref_staging");
+        }
+      }
+    }
+
+    const countsAfterRefresh = portalRefresh
+      ? await fetchStoredCountsBySource(supabase, projectId)
+      : storedCounts;
+
     const reconciliation = {
       extracted_ref_count: extractedSourceRefCount,
       parsed_source_ref_count: parsedSourceRefCount,
@@ -1462,9 +1740,15 @@ serve(async (req) => {
       fallback_parsed_row_count: fallbackParsedRowCount,
       inserted_raw_ref_count: insertedRawRefCount,
       inserted_fallback_count: insertedFallbackCount,
-      stored_raw_ref_count: storedCounts.raw_ref,
-      stored_fallback_count: storedCounts.fallback_llm,
-      total_stored_count: storedCounts.total,
+      stored_raw_ref_count: countsAfterRefresh.raw_ref,
+      stored_raw_ref_staging_count: countsAfterRefresh.raw_ref_staging,
+      stored_fallback_count: countsAfterRefresh.fallback_llm,
+      total_stored_count: countsAfterRefresh.total,
+      ...(portalRefresh
+        ? {
+          portal_refresh: portalRefresh,
+        }
+        : {}),
       extracted_refs: uniqueExtractedRefs,
       parsed_refs: uniqueParsedRefs,
       normalized_refs: uniqueNormalizedRefs,
@@ -1492,13 +1776,33 @@ serve(async (req) => {
       fallback_parsed_row_count: fallbackParsedRowCount,
       inserted_raw_ref_count: insertedRawRefCount,
       inserted_fallback_count: insertedFallbackCount,
-      stored_raw_ref_count: storedCounts.raw_ref,
-      stored_fallback_count: storedCounts.fallback_llm,
-      stored_total_count: storedCounts.total,
+      stored_raw_ref_count: countsAfterRefresh.raw_ref,
+      stored_fallback_count: countsAfterRefresh.fallback_llm,
+      stored_total_count: countsAfterRefresh.total,
       disappeared_after_parse: disappearedAfterParse,
       disappeared_after_normalize: disappearedAfterNormalize,
       disappeared_after_store: disappearedAfterStore,
     });
+
+    if (portalRefreshFailed) {
+      return new Response(
+        JSON.stringify({
+          code: 500,
+          message: portalRefreshError,
+          parsed_count: parsedCount,
+          inserted_raw_ref_count: insertedRawRefCount,
+          inserted_fallback_count: insertedFallbackCount,
+          skipped_count: skippedTotal,
+          insert_error_count: insertErrorCount,
+          next_cursor: nextCursor,
+          done: true,
+          total_pdfs: totalPdfs,
+          portal_refresh_failed: true,
+          reconciliation,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -1518,6 +1822,7 @@ serve(async (req) => {
         done,
         total_pdfs: totalPdfs,
         reconciliation,
+        ...(portalRefresh ? { portal_refresh: portalRefresh } : {}),
         ...(doneReason ? { reason: doneReason, message: doneMessage } : {}),
         ...(capturePipelineEvidence && pipelineEvidence
           ? { pipeline_evidence: pipelineEvidence }

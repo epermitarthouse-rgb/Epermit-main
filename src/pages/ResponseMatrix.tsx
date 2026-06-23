@@ -52,6 +52,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ExportPackageDialog } from "@/components/response-matrix/ExportPackageDialog";
 import { ResponseMatrixExportMenu } from "@/components/response-matrix/ResponseMatrixExportMenu";
+import { SuggestedResponsePanel } from "@/components/response-matrix/SuggestedResponsePanel";
+import { useProjectTeam } from "@/hooks/useProjectTeam";
+import { effectiveResponseStatus, responseStatusBadgeClass } from "@/lib/responseApproval";
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
@@ -340,13 +343,17 @@ function DetailSection({
 function CommentDetailPanel({
   row,
   isAutoDrafting,
-  onUpdateResponse,
+  userId,
+  canApprove,
+  onRowUpdated,
   onUpdateAssigned,
   onUpdateSheetRef,
 }: {
   row: ParsedCommentRow;
   isAutoDrafting: boolean;
-  onUpdateResponse: (value: string) => void;
+  userId: string | undefined;
+  canApprove: boolean;
+  onRowUpdated: (id: string, patch: Partial<ParsedCommentRow>) => void;
   onUpdateAssigned: (value: string) => void;
   onUpdateSheetRef: (value: string) => void;
 }) {
@@ -354,8 +361,6 @@ function CommentDetailPanel({
   const previous = ctx.previous_comment_text;
   const existing = ctx.existing_response_text;
   const evidence = Array.isArray(row.grounded_evidence) ? row.grounded_evidence : [];
-  const [editingResponse, setEditingResponse] = useState(false);
-  const responseText = row.response_text ?? "";
 
   return (
     <div className="px-4 py-5 sm:px-6 bg-cream-sunken/40 dark:bg-obsidian/50 border-t border-cream-sunken dark:border-border/50 space-y-4">
@@ -404,31 +409,13 @@ function CommentDetailPanel({
             )}
           </div>
 
-          <DetailSection title="Suggested response" variant="action">
-            {editingResponse || !responseText ? (
-              <Textarea
-                value={responseText}
-                onChange={(e) => onUpdateResponse(e.target.value)}
-                placeholder={isAutoDrafting ? "Drafting..." : "Official response..."}
-                disabled={isAutoDrafting}
-                className="min-h-[100px] resize-y border-cream-sunken bg-cream text-ink-primary-light dark:bg-obsidian dark:text-ink-primary-dark"
-              />
-            ) : (
-              <p>{responseText}</p>
-            )}
-            <div className="flex items-center gap-2 pt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => setEditingResponse((v) => !v)}
-              >
-                {editingResponse ? "Done editing" : "Edit response"}
-              </Button>
-              <span className="text-xs text-ink-tertiary-light tabular-nums">{responseText.length} chars</span>
-            </div>
-          </DetailSection>
+          <SuggestedResponsePanel
+            row={row}
+            isAutoDrafting={isAutoDrafting}
+            userId={userId}
+            canApprove={canApprove}
+            onRowUpdated={onRowUpdated}
+          />
 
           {row.required_action?.trim() ? (
             <DetailSection title="Required plan revision">{row.required_action}</DetailSection>
@@ -522,6 +509,13 @@ export interface ParsedCommentRow {
   missing_info_or_risk?: string | null;
   grounded_confidence?: string | null;
   grounded_generated_at?: string | null;
+  response_status?: string | null;
+  ai_generated_response_text?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  last_edited_at?: string | null;
+  last_edited_by?: string | null;
+  change_request_note?: string | null;
 }
 
 function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand: () => void }) {
@@ -570,6 +564,7 @@ function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand
 function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
   const text = row.response_text?.trim() ?? "";
   const hasGrounded = Boolean(row.grounded_generated_at || row.grounded_confidence);
+  const approvalStatus = effectiveResponseStatus(row);
   return (
     <div className="max-w-[200px] space-y-1.5">
       {text ? (
@@ -580,6 +575,14 @@ function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
         <p className="text-sm text-ink-tertiary-light italic">No response yet</p>
       )}
       <div className="flex flex-wrap gap-1">
+        {approvalStatus && (
+          <Badge
+            variant="outline"
+            className={cn("text-[10px] font-medium", responseStatusBadgeClass(approvalStatus))}
+          >
+            {approvalStatus}
+          </Badge>
+        )}
         {hasGrounded && <ConfidenceBadge value={row.grounded_confidence} />}
         {row.required_action?.trim() && (
           <Badge variant="outline" className="text-[10px] border-teal/30 text-teal">
@@ -627,8 +630,13 @@ export default function ResponseMatrix() {
   const [qualityChecking, setQualityChecking] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [routing, setRouting] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [pipelineResuming, setPipelineResuming] = useState(false);
   const [planMarkupOpen, setPlanMarkupOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const { hasPendingMarkups, pendingCount, refetch: refetchApproval, qualityCheckBlocked } = useApprovalGate(projectId ?? undefined);
+  const { isOwner, isAdmin } = useProjectTeam(projectId);
+  const canApproveResponses = isOwner || isAdmin;
   const { drafts: allDrafts } = useResponsePackageDrafts(projectId);
   const [qualityCheckResult, setQualityCheckResult] = useState<{
     project_id: string;
@@ -647,7 +655,7 @@ export default function ResponseMatrix() {
     const { data, error } = await supabase
       .from("parsed_comments")
       .select(
-        "id, project_id, original_text, discipline, code_reference, status, page_number, response_text, assigned_to, sheet_reference, created_at, reviewer_name, comment_number, previous_comment_text, existing_response_text, code_references, ingest_source, source_document_id, grounded_evidence, required_action, missing_info_or_risk, grounded_confidence, grounded_generated_at",
+        "id, project_id, original_text, discipline, code_reference, status, page_number, response_text, assigned_to, sheet_reference, created_at, reviewer_name, comment_number, previous_comment_text, existing_response_text, code_references, ingest_source, source_document_id, grounded_evidence, required_action, missing_info_or_risk, grounded_confidence, grounded_generated_at, response_status, ai_generated_response_text, approved_at, approved_by, last_edited_at, last_edited_by, change_request_note",
       )
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
@@ -709,6 +717,16 @@ export default function ResponseMatrix() {
     );
   };
 
+  const patchRow = useCallback(
+    (id: string, patch: Partial<ParsedCommentRow>) => {
+      if (!projectId) return;
+      queryClient.setQueryData<ParsedCommentRow[]>(["parsed_comments", projectId], (prev) =>
+        (prev ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
+      );
+    },
+    [projectId, queryClient],
+  );
+
   const runAutoDraft = useCallback(async (row: ParsedCommentRow) => {
     setDraftingId(row.id);
     try {
@@ -725,11 +743,30 @@ export default function ResponseMatrix() {
       }
       const { error: updateError } = await supabase
         .from("parsed_comments")
-        .update({ response_text: text })
+        .update({
+          response_text: text,
+          response_status: "AI Generated",
+          ai_generated_response_text: text,
+          approved_at: null,
+          approved_by: null,
+          change_request_note: null,
+        })
         .eq("id", row.id);
       if (updateError) throw updateError;
       queryClient.setQueryData<ParsedCommentRow[]>(["parsed_comments", row.project_id], (prev) =>
-        (prev ?? []).map((r) => (r.id === row.id ? { ...r, response_text: text } : r))
+        (prev ?? []).map((r) =>
+          r.id === row.id
+            ? {
+                ...r,
+                response_text: text,
+                response_status: "AI Generated",
+                ai_generated_response_text: text,
+                approved_at: null,
+                approved_by: null,
+                change_request_note: null,
+              }
+            : r,
+        ),
       );
       const snippet = text.length > 60 ? `${text.slice(0, 60).trim()}…` : text;
       toast.success(`Response drafted. ${snippet ? `"${snippet}"` : ""}`);
@@ -801,10 +838,28 @@ export default function ResponseMatrix() {
                 missing_info_or_risk: result?.missing_info_or_risk ?? null,
                 grounded_confidence: result?.confidence ?? null,
                 grounded_generated_at: new Date().toISOString(),
+                response_status: text ? "AI Generated" : r.response_status ?? null,
+                ai_generated_response_text: text || null,
+                approved_at: null,
+                approved_by: null,
+                change_request_note: null,
               }
             : r,
         ),
       );
+
+      if (text) {
+        await supabase
+          .from("parsed_comments")
+          .update({
+            response_status: "AI Generated",
+            ai_generated_response_text: text,
+            approved_at: null,
+            approved_by: null,
+            change_request_note: null,
+          })
+          .eq("id", row.id);
+      }
 
       setExpandedRowIds((prev) => new Set(prev).add(row.id));
       toast.success(
@@ -974,6 +1029,34 @@ export default function ResponseMatrix() {
   }, [projectId]);
 
 
+  const runEnrichment = useCallback(async () => {
+    if (!projectId) {
+      toast.error("Select a project first");
+      return;
+    }
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+        body: { project_id: projectId, run_enrichment_only: true, force_retry: true },
+      });
+      if (error) throw error;
+      const payload = data as { enrichment?: { enriched_count?: number; error?: string }; next_action?: string };
+      if (payload?.enrichment?.error) {
+        toast.error(payload.enrichment.error);
+        return;
+      }
+      const enrichedCount = payload?.enrichment?.enriched_count ?? 0;
+      toast.success(`Enriched ${enrichedCount} comments`);
+      queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check", projectId] });
+    } catch (e) {
+      console.warn("Run enrichment failed:", e);
+      toast.error("Run enrichment failed");
+    } finally {
+      setEnriching(false);
+    }
+  }, [projectId, queryClient]);
+
   const runRouteComments = useCallback(async () => {
     if (!projectId) {
       toast.error("Select a project first");
@@ -981,18 +1064,19 @@ export default function ResponseMatrix() {
     }
     setRouting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("auto-router-agent", {
-        body: { project_id: projectId },
+      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+        body: { project_id: projectId, run_routing_only: true, force_retry: true },
       });
       if (error) throw error;
-      const payload = data as { routed_count?: number; error?: string };
-      if (payload?.error) {
-        toast.error(payload.error);
+      const payload = data as { auto_routing?: { routed_count?: number; error?: string } };
+      if (payload?.auto_routing?.error) {
+        toast.error(payload.auto_routing.error);
         return;
       }
-      const routedCount = payload?.routed_count ?? 0;
+      const routedCount = payload?.auto_routing?.routed_count ?? 0;
       toast.success(`Routed ${routedCount} comments`);
       queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["parsed_comments_assigned_check", projectId] });
     } catch (e) {
       console.warn("Route comments failed:", e);
       toast.error("Route comments failed");
@@ -1001,12 +1085,57 @@ export default function ResponseMatrix() {
     }
   }, [projectId, queryClient]);
 
+  const runResumePipeline = useCallback(async () => {
+    if (!projectId) {
+      toast.error("Select a project first");
+      return;
+    }
+    setPipelineResuming(true);
+    try {
+      const { data: projectRow } = await supabase
+        .from("projects")
+        .select("portal_data_hash")
+        .eq("id", projectId)
+        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+        body: {
+          project_id: projectId,
+          resume_pipeline: true,
+          force_retry: true,
+          ...(projectRow?.portal_data_hash ? { portal_data_hash: projectRow.portal_data_hash } : {}),
+        },
+      });
+      if (error) throw error;
+      const payload = data as { next_action?: string; stages?: Record<string, { status?: string; error?: string }> };
+      if (payload?.next_action === "complete") {
+        toast.success("Pipeline resumed and completed");
+      } else if (payload?.next_action?.startsWith("retry_")) {
+        const failedStage = Object.entries(payload.stages ?? {}).find(([, v]) => v.status === "failed");
+        toast.error(failedStage?.[1]?.error ?? `Pipeline stopped at ${payload.next_action}`);
+      } else {
+        toast.info("Pipeline resume in progress — check Agent Workflow for status");
+      }
+      queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project_pipeline_run", projectId] });
+    } catch (e) {
+      console.warn("Resume pipeline failed:", e);
+      toast.error("Resume pipeline failed");
+    } finally {
+      setPipelineResuming(false);
+    }
+  }, [projectId, queryClient]);
+
   const applySuggestion = useCallback(
     (commentId: string, suggested_improvement: string) => {
       updateRow(commentId, "response_text", suggested_improvement);
-      toast.success("Suggestion applied to draft. Click Save Changes to persist.");
+      patchRow(commentId, {
+        response_status: "Draft",
+        approved_at: null,
+        approved_by: null,
+      });
+      toast.success("Suggestion applied as draft. Save from the response panel to persist.");
     },
-    [updateRow]
+    [patchRow, updateRow],
   );
 
   const saveChanges = useCallback(async () => {
@@ -1020,7 +1149,6 @@ export default function ResponseMatrix() {
         const { error } = await supabase
           .from("parsed_comments")
           .update({
-            response_text: row.response_text || null,
             assigned_to: row.assigned_to || null,
             sheet_reference: row.sheet_reference || null,
             status: row.status,
@@ -1029,16 +1157,22 @@ export default function ResponseMatrix() {
         if (error) throw error;
       }
       toast.success("Changes saved");
-      fetchComments();
+      queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
     } catch (err: unknown) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
-  }, [user, rows, fetchComments]);
+  }, [user, rows, projectId, queryClient]);
 
   const matrixSourceLabel = commentMatrixSourceLabel(withoutMetadata);
+  const pipelineBusy = enriching || routing || pipelineResuming;
+
+  const runActionsMenuItem = useCallback((action: () => void) => {
+    setActionsMenuOpen(false);
+    action();
+  }, []);
 
   if (authLoading) {
     return (
@@ -1077,14 +1211,16 @@ export default function ResponseMatrix() {
               <div className="h-0.5 w-16 mt-2 bg-gradient-to-r from-gold/70 to-transparent rounded-full" />
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {projectId && (
               <span className="inline-flex items-center justify-center rounded-full border border-gold/35 bg-gold/12 text-gold-deep text-xs font-medium h-6 min-w-[24px] px-2 shrink-0">
                 {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
               </span>
             )}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <DropdownMenu>
+            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 justify-end">
+              <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
+              <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
+              <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outlineGold"
@@ -1097,9 +1233,9 @@ export default function ResponseMatrix() {
                     <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
+                <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    onClick={runValidateCompleteness}
+                    onClick={() => runActionsMenuItem(runValidateCompleteness)}
                     disabled={!projectId || validating}
                     data-testid="menu-validate-completeness"
                   >
@@ -1107,7 +1243,7 @@ export default function ResponseMatrix() {
                     Validate Completeness
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={runQualityCheck}
+                    onClick={() => runActionsMenuItem(runQualityCheck)}
                     disabled={!projectId || qualityChecking || qualityCheckBlocked}
                     data-testid="menu-quality-check"
                   >
@@ -1118,7 +1254,7 @@ export default function ResponseMatrix() {
                     )}
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => setPlanMarkupOpen(true)}
+                    onClick={() => runActionsMenuItem(() => setPlanMarkupOpen(true))}
                     disabled={!projectId}
                     data-testid="menu-plan-markup"
                   >
@@ -1131,31 +1267,43 @@ export default function ResponseMatrix() {
                     )}
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => setExportDialogOpen(true)}
+                    onClick={() => runActionsMenuItem(runEnrichment)}
+                    disabled={!projectId || pipelineBusy}
+                    data-testid="menu-run-enrichment"
+                  >
+                    {enriching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                    Run Enrichment
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => runActionsMenuItem(runRouteComments)}
+                    disabled={!projectId || pipelineBusy}
+                    data-testid="menu-route-comments"
+                  >
+                    {routing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
+                    Run Auto Routing
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => runActionsMenuItem(runResumePipeline)}
+                    disabled={!projectId || pipelineBusy}
+                    data-testid="menu-resume-pipeline"
+                  >
+                    {pipelineResuming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                    Resume Pipeline
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => runActionsMenuItem(() => setExportDialogOpen(true))}
                     disabled={!projectId}
                     data-testid="menu-export-response-package"
                   >
                     <FileDown className="h-4 w-4 mr-2" />
                     Export Response Package
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={runRouteComments}
-                    disabled={!projectId || routing}
-                    data-testid="menu-route-comments"
-                  >
-                    {routing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
-                    Route Comments
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
-              <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
-              <div className="ml-auto">
-                <Button variant="gold" onClick={saveChanges} disabled={saving || rows.length === 0} className="shrink-0">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save Changes
-                </Button>
-              </div>
+              <Button variant="gold" onClick={saveChanges} disabled={saving || rows.length === 0} className="shrink-0">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Changes
+              </Button>
             </div>
           </div>
         </header>
@@ -1572,7 +1720,9 @@ export default function ResponseMatrix() {
                             <CommentDetailPanel
                               row={row}
                               isAutoDrafting={isAutoDrafting}
-                              onUpdateResponse={(v) => updateRow(row.id, "response_text", v)}
+                              userId={user?.id}
+                              canApprove={canApproveResponses}
+                              onRowUpdated={patchRow}
                               onUpdateAssigned={(v) => updateRow(row.id, "assigned_to", v)}
                               onUpdateSheetRef={(v) => updateRow(row.id, "sheet_reference", v)}
                             />

@@ -1,0 +1,319 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import {
+  isScrapeHeartbeatEvent,
+  isScrapeJobTerminal,
+  type ScrapeEvent,
+  type ScrapeJob,
+} from "@/lib/scrapeJobTypes";
+
+const POLL_INTERVAL_MS = 8000;
+const STALE_ACTIVITY_MS = 2 * 60 * 1000;
+const MAX_POLL_BACKOFF_MS = 30000;
+
+function eventDedupeKey(event: ScrapeEvent): string {
+  const meta = event.metadata as Record<string, unknown> | undefined;
+  const fromMeta = meta?.dedupeKey;
+  if (typeof fromMeta === "string" && fromMeta.trim()) return fromMeta.trim();
+  return `${event.stage || ""}|${event.user_message}`;
+}
+
+function dedupeFeedEvents(events: ScrapeEvent[]): ScrapeEvent[] {
+  const seen = new Set<string>();
+  const out: ScrapeEvent[] = [];
+  for (const event of events) {
+    const key = eventDedupeKey(event);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(event);
+  }
+  return out;
+}
+
+function mergeEvents(prev: ScrapeEvent[], incoming: ScrapeEvent[]): ScrapeEvent[] {
+  const byId = new Map<string, ScrapeEvent>();
+  for (const event of [...prev, ...incoming]) {
+    byId.set(event.id, event);
+  }
+  return [...byId.values()].sort((a, b) => a.sequence - b.sequence);
+}
+
+export interface UseScrapeJobResult {
+  job: ScrapeJob | null;
+  events: ScrapeEvent[];
+  meaningfulEvents: ScrapeEvent[];
+  currentMessage: string;
+  currentStage: string | null;
+  progress: { current: number; total: number } | null;
+  elapsedTime: number;
+  lastActivityAt: string | null;
+  isStale: boolean;
+  isTerminal: boolean;
+  isCancellable: boolean;
+  reconnecting: boolean;
+  error: string | null;
+  loading: boolean;
+  refetch: () => Promise<void>;
+}
+
+export function useScrapeJob(
+  jobId: string | null | undefined,
+  startedAtMs?: number | null,
+): UseScrapeJobResult {
+  const [job, setJob] = useState<ScrapeJob | null>(null);
+  const [events, setEvents] = useState<ScrapeEvent[]>([]);
+  const [loading, setLoading] = useState(Boolean(jobId));
+  const [reconnecting, setReconnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const lastSequenceRef = useRef(0);
+  const pollBackoffRef = useRef(POLL_INTERVAL_MS);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consecutiveFailuresRef = useRef(0);
+
+  const fetchJob = useCallback(async () => {
+    if (!jobId) return null;
+    const { data, error: jobError } = await supabase
+      .from("scrape_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (jobError) throw jobError;
+    return (data as ScrapeJob) || null;
+  }, [jobId]);
+
+  const fetchEventsSince = useCallback(
+    async (afterSequence: number) => {
+      if (!jobId) return [] as ScrapeEvent[];
+      let query = supabase
+        .from("scrape_events")
+        .select("*")
+        .eq("job_id", jobId)
+        .order("sequence", { ascending: true });
+      if (afterSequence > 0) {
+        query = query.gt("sequence", afterSequence);
+      }
+      const { data, error: eventsError } = await query;
+      if (eventsError) throw eventsError;
+      return (data as ScrapeEvent[]) || [];
+    },
+    [jobId],
+  );
+
+  const refetch = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      const [jobRow, eventRows] = await Promise.all([
+        fetchJob(),
+        fetchEventsSince(0),
+      ]);
+      if (jobRow) setJob(jobRow);
+      if (eventRows.length > 0) {
+        setEvents((prev) => mergeEvents(prev, eventRows));
+        lastSequenceRef.current = Math.max(
+          lastSequenceRef.current,
+          ...eventRows.map((e) => e.sequence),
+        );
+      }
+      setError(null);
+      setReconnecting(false);
+      consecutiveFailuresRef.current = 0;
+      pollBackoffRef.current = POLL_INTERVAL_MS;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load scrape progress");
+      setReconnecting(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchEventsSince, fetchJob, jobId]);
+
+  useEffect(() => {
+    if (!jobId) {
+      setJob(null);
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+    lastSequenceRef.current = 0;
+    setEvents([]);
+    setLoading(true);
+    void refetch();
+  }, [jobId, refetch]);
+
+  useEffect(() => {
+    if (!jobId) return;
+
+    const jobChannel = supabase
+      .channel(`scrape-job-${jobId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "scrape_jobs",
+          filter: `id=eq.${jobId}`,
+        },
+        (payload) => {
+          setJob(payload.new as ScrapeJob);
+          setReconnecting(false);
+          consecutiveFailuresRef.current = 0;
+        },
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setReconnecting(true);
+        }
+      });
+
+    const eventsChannel = supabase
+      .channel(`scrape-events-${jobId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "scrape_events",
+          filter: `job_id=eq.${jobId}`,
+        },
+        (payload) => {
+          const row = payload.new as ScrapeEvent;
+          setEvents((prev) => mergeEvents(prev, [row]));
+          lastSequenceRef.current = Math.max(lastSequenceRef.current, row.sequence);
+          setReconnecting(false);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(jobChannel);
+      void supabase.removeChannel(eventsChannel);
+    };
+  }, [jobId]);
+
+  useEffect(() => {
+    if (!jobId || isScrapeJobTerminal(job?.status)) return;
+
+    const schedulePoll = () => {
+      pollTimerRef.current = setTimeout(async () => {
+        try {
+          const [jobRow, newEvents] = await Promise.all([
+            fetchJob(),
+            fetchEventsSince(lastSequenceRef.current),
+          ]);
+          if (jobRow) setJob(jobRow);
+          if (newEvents.length > 0) {
+            setEvents((prev) => mergeEvents(prev, newEvents));
+            lastSequenceRef.current = Math.max(
+              lastSequenceRef.current,
+              ...newEvents.map((e) => e.sequence),
+            );
+          }
+          consecutiveFailuresRef.current = 0;
+          pollBackoffRef.current = POLL_INTERVAL_MS;
+          setReconnecting(false);
+        } catch {
+          consecutiveFailuresRef.current += 1;
+          setReconnecting(true);
+          pollBackoffRef.current = Math.min(
+            MAX_POLL_BACKOFF_MS,
+            POLL_INTERVAL_MS * 2 ** Math.min(consecutiveFailuresRef.current, 3),
+          );
+        }
+        if (!isScrapeJobTerminal(job?.status)) {
+          schedulePoll();
+        }
+      }, pollBackoffRef.current);
+    };
+
+    schedulePoll();
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [fetchEventsSince, fetchJob, job?.status, jobId]);
+
+  useEffect(() => {
+    const startMs =
+      startedAtMs || (job?.started_at ? Date.parse(job.started_at) : Date.now());
+    const terminal = isScrapeJobTerminal(job?.status);
+    const endMs = terminal
+      ? job?.completed_at
+        ? Date.parse(job.completed_at)
+        : job?.cancelled_at
+          ? Date.parse(job.cancelled_at)
+          : null
+      : null;
+
+    const computeElapsed = () => {
+      const end = endMs ?? Date.now();
+      return Math.max(0, Math.floor((end - startMs) / 1000));
+    };
+
+    setElapsedTime(computeElapsed());
+    if (endMs != null) return;
+
+    const id = setInterval(() => setElapsedTime(computeElapsed()), 1000);
+    return () => clearInterval(id);
+  }, [job?.completed_at, job?.started_at, job?.status, startedAtMs]);
+
+  const meaningfulEvents = useMemo(
+    () => dedupeFeedEvents(events.filter((e) => !isScrapeHeartbeatEvent(e.event_type))),
+    [events],
+  );
+
+  const latestMeaningfulEvent = useMemo(() => {
+    if (meaningfulEvents.length === 0) return null;
+    return meaningfulEvents[meaningfulEvents.length - 1];
+  }, [meaningfulEvents]);
+
+  const lastActivityAt = useMemo(() => {
+    return (
+      job?.last_activity_at ??
+      latestMeaningfulEvent?.created_at ??
+      job?.started_at ??
+      null
+    );
+  }, [job?.last_activity_at, job?.started_at, latestMeaningfulEvent?.created_at]);
+
+  const isStale = useMemo(() => {
+    if (!job || isScrapeJobTerminal(job.status)) return false;
+    if (!lastActivityAt) return false;
+    return Date.now() - Date.parse(lastActivityAt) > STALE_ACTIVITY_MS;
+  }, [job, lastActivityAt]);
+
+  const isTerminal = isScrapeJobTerminal(job?.status);
+  const isCancellable = Boolean(job && !isTerminal && job.status !== "waiting_user");
+
+  const progress =
+    job?.progress_current != null &&
+    job?.progress_total != null &&
+    job.progress_total > 0
+      ? { current: job.progress_current, total: job.progress_total }
+      : null;
+
+  const baseMessage =
+    latestMeaningfulEvent?.user_message ||
+    job?.current_user_message ||
+    job?.error_user_message ||
+    (loading ? "Loading scrape progress…" : "Waiting for updates…");
+
+  const currentMessage =
+    isStale && !isTerminal ? "Still working…" : baseMessage;
+
+  return {
+    job,
+    events,
+    meaningfulEvents,
+    currentMessage,
+    currentStage: job?.current_stage ?? null,
+    progress,
+    elapsedTime,
+    lastActivityAt,
+    isStale,
+    isTerminal,
+    isCancellable,
+    reconnecting,
+    error,
+    loading,
+    refetch,
+  };
+}

@@ -5,6 +5,10 @@ const {
   extractReviewCommentsStructuredRowsFromExcelBuffer,
   extractReviewCommentsStructuredRowsFromExcelFile,
 } = require("../lib/reviewCommentsExcelStructuredRows.js");
+const {
+  mapPgcWorkflowBucketRowForPortal,
+  applyPgcDomReviewCommentsBridge,
+} = require("../lib/pgcDomReviewStructuredRows.js");
 const AdmZip = require("adm-zip");
 const path = require("path");
 const fs = require("fs");
@@ -73,6 +77,18 @@ const {
   cleanupSession,
   rearmSessionIdleTimeout,
 } = require("./session/in-memory-store.js");
+const scrapeEvents = require("../lib/scrape-events.js");
+const { SCRAPE_STAGES } = require("../lib/scrape-stages.js");
+const scrapeFileResults = require("../lib/scrape-file-results.js");
+const scrapeLease = require("../lib/scrape-lease.js");
+const { mirrorSessionProgress } = require("../lib/session-progress.js");
+
+function publishScrapeOrchestration(session, opts = {}) {
+  if (typeof session.publishScrapeProgress !== "function") return;
+  void session.publishScrapeProgress(opts).catch(() => {});
+}
+
+const MONTGOMERY_RETRIEVE_TIMEOUT_MS = 120000;
 
 const { scraperRunsHeadless } = require("../shared/browser.js");
 const {
@@ -729,6 +745,9 @@ Provide a comprehensive analysis with specific code citations. Return ONLY valid
 app.post("/api/login", async (req, res) => {
   let { username, password, portalUrl } = req.body || {};
   const credentialIdRaw = req.body?.credentialId || req.body?.credential_id;
+  let loginTargetPermit = String(
+    req.body?.permitNumber || req.body?.permit_number || "",
+  ).trim();
 
   if (credentialIdRaw && String(credentialIdRaw).trim()) {
     const authHeader = req.headers.authorization;
@@ -750,7 +769,7 @@ app.post("/api/login", async (req, res) => {
 
     const { data: cred, error: credErr } = await supabase
       .from("portal_credentials")
-      .select("user_id, portal_username, portal_password, login_url")
+      .select("user_id, portal_username, portal_password, login_url, permit_number")
       .eq("id", String(credentialIdRaw).trim())
       .maybeSingle();
 
@@ -775,6 +794,14 @@ app.post("/api/login", async (req, res) => {
     const credLogin = cred.login_url && String(cred.login_url).trim();
     if ((!portalUrl || !String(portalUrl).trim()) && credLogin) {
       portalUrl = credLogin;
+    }
+    const credPermit = cred.permit_number && String(cred.permit_number).trim();
+    if (
+      !loginTargetPermit &&
+      credPermit &&
+      credPermit.toUpperCase() !== "LEGACY"
+    ) {
+      loginTargetPermit = credPermit;
     }
   }
 
@@ -892,10 +919,58 @@ app.post("/api/login", async (req, res) => {
       await pgcEplan.waitForProjectGrid(page);
 
       const pagerGuess = await pgcEplan.detectPaginationMode(page);
-      const collection = await pgcEplan.collectAllProjects(page, {
+      const loginScrapeMode = String(req.body?.scrapeMode || "").trim();
+      const collectOpts = {
         initialMode: pagerGuess.mode,
         viewAllVisible: pagerGuess.viewAllVisible,
-      });
+        scrapeMode: loginScrapeMode || undefined,
+      };
+      if (pgcEplan.pgcIsFilesOnlyScrapeMode(loginScrapeMode)) {
+        collectOpts.targetedCollectionOnly = true;
+        console.log(
+          `[PGC] Login Files Only mode (${loginScrapeMode}) — targeted dashboard search only`,
+        );
+      }
+      if (loginTargetPermit) {
+        collectOpts.targetPermit = loginTargetPermit;
+        console.log(
+          `[PGC] Login explicitTargetPermit=${loginTargetPermit} (skipping full dashboard enumeration when found)`,
+        );
+      }
+      const loginTargetProjectId = String(
+        req.body?.projectId || req.body?.project_id || "",
+      ).trim();
+      if (loginTargetProjectId) {
+        collectOpts.targetProjectId = loginTargetProjectId;
+        console.log(
+          `[PGC] Login explicitTargetProjectId=${loginTargetProjectId} (match by ID during discovery)`,
+        );
+      }
+      let collection;
+      if (
+        collectOpts.targetedCollectionOnly &&
+        !loginTargetPermit &&
+        !loginTargetProjectId
+      ) {
+        console.log(
+          "[PGC] Login Files Only without permit/projectId — deferring dashboard target search to scrape phase",
+        );
+        collection = {
+          projects: [],
+          paginationMode: pagerGuess.mode,
+          pagesVisited: 0,
+          viewAllClicked: false,
+          rawRowsScanned: 0,
+          validRowsWithProjectId: 0,
+          uniqueProjectCount: 0,
+          skippedNoProjectId: 0,
+          duplicateRowsSkipped: 0,
+          linkPatternSummary: "{}",
+          targetFound: false,
+        };
+      } else {
+        collection = await pgcEplan.collectAllProjects(page, collectOpts);
+      }
 
       const projects = collection.projects.map((p) => ({
         id: p.projectID,
@@ -1630,6 +1705,29 @@ app.post("/api/scrape", async (req, res) => {
     SESSION_IDLE_TIMEOUT_MS,
   );
 
+  let scrapeJobId = null;
+  if (projectId && String(projectId).trim()) {
+    const begun = await scrapeEvents.beginScrapeJob(
+      supabase,
+      session,
+      req.body,
+      sessionId,
+    );
+    scrapeJobId = begun.jobId || null;
+  }
+
+  async function finalizeSessionScrapeJob(statusHint) {
+    if (typeof session.finalizeScrapeJob !== "function") return;
+    try {
+      const status =
+        statusHint ||
+        (session._cancelRequested ? "cancelled" : session.status);
+      await session.finalizeScrapeJob(status);
+    } catch (err) {
+      console.warn("[scrape-events] finalizeSessionScrapeJob:", err.message);
+    }
+  }
+
   if (session.portalType === "accela") {
     const portalUrlStrEarly = String(session.portalUrl || "");
     console.log(
@@ -1787,11 +1885,30 @@ app.post("/api/scrape", async (req, res) => {
     session.status = "scraping";
     session.total = 1;
     session.progress = 0;
-    session.message = `Scraping Accela permit: ${permitNumber}`;
+    publishScrapeOrchestration(session, {
+      stage: SCRAPE_STAGES.OPENING_PROJECT,
+      event_type: "scrape_started",
+      user_message: `Opening Accela record for permit ${String(permitNumber).trim()}.`,
+      progress_current: 0,
+      progress_total: 1,
+      dedupeKey: "accela_open",
+      forceFeed: true,
+    });
+    mirrorSessionProgress(
+      session,
+      `Scraping Accela permit: ${permitNumber}`,
+      {
+        event_type: "permit_found",
+        stage: SCRAPE_STAGES.OPENING_PROJECT,
+        user_message: `Opening Accela record for permit ${String(permitNumber).trim()}.`,
+        skipFeed: true,
+      },
+    );
     res.json({
       message: "Accela scraping started",
       total: 1,
       portalType: "accela",
+      jobId: scrapeJobId,
     });
     session.arlingtonPlanReviewRetryOversizedDownloads =
       accelaIsArlington &&
@@ -1826,9 +1943,10 @@ app.post("/api/scrape", async (req, res) => {
       fairfaxScrapeTabsArg,
       arlingtonScrapeTabsArg,
     )
-      .then(() => {
+      .then(async () => {
         if (session._cancelRequested) {
           console.log("   🛑 Accela scrape was cancelled — not marking as done");
+          await finalizeSessionScrapeJob("cancelled");
           return;
         }
         if (session.arlingtonPartialSuccessPlanReviewFailed === true) {
@@ -1838,6 +1956,7 @@ app.post("/api/scrape", async (req, res) => {
           console.log(
             `   ⚠️ Accela sync ended — session status set to partial_success_plan_review_failed`,
           );
+          await finalizeSessionScrapeJob("partial_success_plan_review_failed");
           return;
         }
         const prPending =
@@ -1853,6 +1972,7 @@ app.post("/api/scrape", async (req, res) => {
           console.log(
             `   ⚠️ Accela sync ended — session status set to partial_success_attachments_pending`,
           );
+          await finalizeSessionScrapeJob("partial_success_attachments_pending");
           return;
         }
         if (prPending) {
@@ -1862,16 +1982,27 @@ app.post("/api/scrape", async (req, res) => {
           console.log(
             `   ⚠️ Accela sync ended — session status set to partial_success_plan_review_pending`,
           );
+          await finalizeSessionScrapeJob("partial_success_plan_review_pending");
           return;
         }
         session.status = "done";
         session.progress = 1;
-        session.message = `Accela scrape complete for ${permitNumber}`;
+        mirrorSessionProgress(
+          session,
+          `Accela scrape complete for ${permitNumber}`,
+          {
+            event_type: "scrape_completed",
+            stage: "completed",
+            status: "completed",
+            user_message: `Scrape completed for permit ${String(permitNumber).trim()}.`,
+          },
+        );
         console.log(
           `   ✅ Accela sync complete — session status set to "done"`,
         );
+        await finalizeSessionScrapeJob("done");
       })
-      .catch((err) => {
+      .catch(async (err) => {
         const timedOutMsg = `${err && err.message ? err.message : err}`;
         const hadPrProgress =
           session.arlingtonPlanReviewCheckpointSaved === true ||
@@ -1889,6 +2020,7 @@ app.post("/api/scrape", async (req, res) => {
           console.warn(
             `   ⚠️ Accela scrape hit global timeout after Attachments progress — partial_success_attachments_pending`,
           );
+          await finalizeSessionScrapeJob("partial_success_attachments_pending");
           return;
         }
         if (hadPrProgress && /Accela scraping timed out/i.test(timedOutMsg)) {
@@ -1898,11 +2030,20 @@ app.post("/api/scrape", async (req, res) => {
           console.warn(
             `   ⚠️ Accela scrape hit global timeout after Plan Review progress — partial_success_plan_review_pending`,
           );
+          await finalizeSessionScrapeJob("partial_success_plan_review_pending");
           return;
         }
         session.status = "error";
-        session.message = `Error: ${timedOutMsg}`;
+        mirrorSessionProgress(session, `Error: ${timedOutMsg}`, {
+          event_type: "scrape_failed",
+          stage: "failed",
+          status: "failed",
+          user_message:
+            scrapeEvents.mapTechnicalErrorToUserMessage(timedOutMsg) ||
+            "The scrape could not be completed.",
+        });
         console.error("❌ Accela scrape error:", timedOutMsg);
+        await finalizeSessionScrapeJob("error");
       })
       .finally(() => {
         session._scrapeActive = false;
@@ -1925,14 +2066,40 @@ app.post("/api/scrape", async (req, res) => {
     console.log("[PGC] Env credential fallback: disabled (server)");
     let targets;
     if (permitNumber != null && String(permitNumber).trim() !== "") {
+      const permitNorm = String(permitNumber).trim();
       targets = session.projects.filter(
         (p) =>
-          String(p.projectNum || "").trim() === String(permitNumber).trim(),
+          String(p.projectNum || "").trim() === permitNorm ||
+          pgcEplan.pgcPermitKeysMatch(p.projectNum, permitNorm),
       );
       if (targets.length === 0) {
-        return res.status(404).json({
-          error: "No project found matching permit number: " + permitNumber,
-        });
+        const pgcOptsEarly = pgcPipelineOptsFromScrapeMode(scrapeMode || "all");
+        const pgcFilesOnlyEarly =
+          pgcOptsEarly.skipDetail &&
+          !pgcOptsEarly.skipFiles &&
+          pgcOptsEarly.skipReports &&
+          pgcOptsEarly.skipWorkflow &&
+          pgcOptsEarly.skipReview;
+        if (pgcFilesOnlyEarly) {
+          targets = [
+            {
+              id: permitNorm,
+              projectId: "",
+              projectNum: permitNorm,
+              name: permitNorm,
+              description: "",
+              location: "",
+              status: "",
+            },
+          ];
+          console.log(
+            `[PGC] Files Only scrape — no login session row for ${permitNorm}; will resolve on dashboard at scrape phase`,
+          );
+        } else {
+          return res.status(404).json({
+            error: "No project found matching permit number: " + permitNumber,
+          });
+        }
       }
     } else {
       const ids = Array.isArray(projectIds) ? projectIds : [];
@@ -1947,12 +2114,23 @@ app.post("/api/scrape", async (req, res) => {
     session.total = targets.length;
     session.progress = 0;
     session.data = {};
+    publishScrapeOrchestration(session, {
+      stage: SCRAPE_STAGES.OPENING_PROJECT,
+      event_type: "scrape_started",
+      user_message: `Opening ${targets.length} PGC project(s).`,
+      progress_current: 0,
+      progress_total: targets.length,
+      dedupeKey: "pgc_open",
+      forceFeed: true,
+    });
     res.json({
       message: "PGC ePlan scraping started",
       total: session.total,
       portalType: "projectdox",
       portalSubtype: "pgc-eplan",
+      jobId: scrapeJobId,
     });
+    scrapeLease.acquireScrapeLease(session, sessionId, rearmSessionIdleTimeout);
     scrapePgcAll(
       session,
       targets,
@@ -1960,10 +2138,44 @@ app.post("/api/scrape", async (req, res) => {
       projectId,
       userId,
       scrapeMode || "all",
-    ).catch((err) => {
+      {
+        devHarvestControls: parsePgcDevHarvestControls(req.body?.devHarvestControls),
+      },
+    )
+      .then((result) => {
+        if (result?.cancelled) {
+          session.status = "cancelled";
+          return finalizeSessionScrapeJob("cancelled");
+        }
+        return finalizeSessionScrapeJob(
+          result?.withWarnings ? "partial_success" : "done",
+        );
+      })
+      .catch(async (err) => {
       session.status = "error";
-      session.message = `Error: ${err.message}`;
+      mirrorSessionProgress(session, `Error: ${err.message}`, {
+        event_type: "scrape_failed",
+        stage: "failed",
+        status: "failed",
+        user_message:
+          scrapeEvents.mapTechnicalErrorToUserMessage(err.message) ||
+          "The scrape could not be completed.",
+      });
       console.error("❌ PGC scrape error:", err);
+      await finalizeSessionScrapeJob("error");
+      })
+      .finally(() => {
+        const releaseReason = session._cancelRequested
+          ? "cancelled"
+          : session.status === "error"
+            ? "failed"
+            : "completed";
+        scrapeLease.releaseScrapeLease(
+          session,
+          sessionId,
+          rearmSessionIdleTimeout,
+          releaseReason,
+        );
       });
     return;
   }
@@ -2002,11 +2214,21 @@ app.post("/api/scrape", async (req, res) => {
     session.total = targets.length;
     session.progress = 0;
     session.data = {};
+    publishScrapeOrchestration(session, {
+      stage: SCRAPE_STAGES.OPENING_PROJECT,
+      event_type: "scrape_started",
+      user_message: `Opening ${targets.length} Montgomery project(s).`,
+      progress_current: 0,
+      progress_total: targets.length,
+      dedupeKey: "montgomery_open",
+      forceFeed: true,
+    });
     res.json({
       message: "Montgomery ProjectDox scraping started",
       total: session.total,
       portalType: "projectdox",
       portalSubtype: "montgomery-projectdox",
+      jobId: scrapeJobId,
     });
     scrapeMontgomeryAll(
       session,
@@ -2015,10 +2237,20 @@ app.post("/api/scrape", async (req, res) => {
       projectId,
       userId,
       scrapeMode || "montgomery_quick",
-    ).catch((err) => {
+    )
+      .then(() => finalizeSessionScrapeJob("done"))
+      .catch(async (err) => {
       session.status = "error";
-      session.message = `Error: ${err.message}`;
+      mirrorSessionProgress(session, `Error: ${err.message}`, {
+        event_type: "scrape_failed",
+        stage: "failed",
+        status: "failed",
+        user_message:
+          scrapeEvents.mapTechnicalErrorToUserMessage(err.message) ||
+          "The scrape could not be completed.",
+      });
       console.error("❌ Montgomery scrape error:", err);
+      await finalizeSessionScrapeJob("error");
     });
     return;
   }
@@ -2057,11 +2289,21 @@ app.post("/api/scrape", async (req, res) => {
     session.total = targetsHoward.length;
     session.progress = 0;
     session.data = {};
+    publishScrapeOrchestration(session, {
+      stage: SCRAPE_STAGES.OPENING_PROJECT,
+      event_type: "scrape_started",
+      user_message: `Opening ${targetsHoward.length} Howard project(s).`,
+      progress_current: 0,
+      progress_total: targetsHoward.length,
+      dedupeKey: "howard_open",
+      forceFeed: true,
+    });
     res.json({
       message: "Howard ProjectDox scraping started",
       total: session.total,
       portalType: "projectdox",
       portalSubtype: "howard-projectdox",
+      jobId: scrapeJobId,
     });
     const howardScrapeMode = scrapeMode || "howard_quick";
     console.log(
@@ -2074,10 +2316,20 @@ app.post("/api/scrape", async (req, res) => {
       projectId,
       userId,
       howardScrapeMode,
-    ).catch((err) => {
+    )
+      .then(() => finalizeSessionScrapeJob("done"))
+      .catch(async (err) => {
       session.status = "error";
-      session.message = `Error: ${err.message}`;
+      mirrorSessionProgress(session, `Error: ${err.message}`, {
+        event_type: "scrape_failed",
+        stage: "failed",
+        status: "failed",
+        user_message:
+          scrapeEvents.mapTechnicalErrorToUserMessage(err.message) ||
+          "The scrape could not be completed.",
+      });
       console.error("❌ Howard scrape error:", err);
+      await finalizeSessionScrapeJob("error");
     });
     return;
   }
@@ -2159,10 +2411,20 @@ app.post("/api/scrape", async (req, res) => {
   session.total = targets.length * tabCount;
   session.progress = 0;
   session.data = {};
+  publishScrapeOrchestration(session, {
+    stage: SCRAPE_STAGES.OPENING_PROJECT,
+    event_type: "scrape_started",
+    user_message: `Opening ${targets.length} project(s) across ${tabCount} section(s).`,
+    progress_current: 0,
+    progress_total: session.total,
+    dedupeKey: "projectdox_open",
+    forceFeed: true,
+  });
   res.json({
     message: "Scraping started",
     total: session.total,
     scrapeMode: scrapeMode || "all",
+    jobId: scrapeJobId,
   });
   scrapeAll(
     session,
@@ -2175,10 +2437,20 @@ app.post("/api/scrape", async (req, res) => {
     effectiveTargetFolder,
     effectiveTargetFolders,
     filesSyncTargetHint,
-  ).catch((err) => {
+  )
+    .then(() => finalizeSessionScrapeJob("done"))
+    .catch(async (err) => {
     session.status = "error";
-    session.message = `Error: ${err.message}`;
+    mirrorSessionProgress(session, `Error: ${err.message}`, {
+      event_type: "scrape_failed",
+      stage: "failed",
+      status: "failed",
+      user_message:
+        scrapeEvents.mapTechnicalErrorToUserMessage(err.message) ||
+        "The scrape could not be completed.",
+    });
     console.error("❌", err);
+    await finalizeSessionScrapeJob("error");
   });
 });
 
@@ -2492,7 +2764,9 @@ async function syncPortalDataToSupabase(
   supabaseProjectId,
   userId,
   targetFolder = null,
+  syncOptions = {},
 ) {
+  const preserveFilesTabFromDb = syncOptions.preserveFilesTabFromDb === true;
   let syncOk = true;
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
@@ -2589,6 +2863,12 @@ async function syncPortalDataToSupabase(
           }
 
           const merged = { ...existingTabs, ...newTabs };
+          if (preserveFilesTabFromDb && existingTabs.files) {
+            merged.files = existingTabs.files;
+            console.log(
+              `    🔒 Preserving tabs.files from database (file reconcile already applied)`,
+            );
+          }
           if (
             (currentData.portalSubtype === "montgomery-projectdox" ||
               currentData.portalSubtype === "howard-projectdox") &&
@@ -2846,6 +3126,87 @@ function isPgcReviewCommentsReportName(reportName) {
     !n.includes("review details") &&
     !n.includes("routing slip")
   );
+}
+
+/**
+ * Shared SSRS Review Comments Excel → portal_data `structuredRows` (local file, then URL fallback).
+ * Does not download, upload, or delete files — callers own I/O.
+ * @param {object} opts
+ * @param {object} opts.pdfEntry
+ * @param {string} [opts.reportName]
+ * @param {string} [opts.localExcelPath]
+ * @param {string} [opts.excelUrl]
+ * @param {string} [opts.logTag]
+ */
+async function attachReviewCommentsStructuredRowsToPdfEntry({
+  pdfEntry,
+  reportName,
+  localExcelPath,
+  excelUrl,
+  logTag = "ReviewComments",
+}) {
+  const fileName = String(reportName || pdfEntry?.fileName || "");
+  if (!pdfEntry || !isPgcReviewCommentsReportName(fileName)) {
+    return { rowCount: 0, skipped: true, reason: "not_review_comments_report" };
+  }
+
+  const localPath = String(localExcelPath || "").trim();
+  const url = String(excelUrl || "").trim();
+  const localExcelExists = !!(localPath && fs.existsSync(localPath));
+
+  if (!localExcelExists && !/^https:\/\//i.test(url)) {
+    console.log(
+      `[${logTag}][reports][excel-structured] skipped report=${JSON.stringify(fileName)} reason=no_excel_source`,
+    );
+    return { rowCount: 0, skipped: true, reason: "no_excel_source" };
+  }
+
+  /** @type {Array<{ ref: string; cycle: string; reviewed_by: string; type: string; filename: string; discussion: string; status: string }>} */
+  let structuredRowsResult = [];
+  let extractionSource = null;
+  try {
+    if (localExcelExists) {
+      extractionSource = "local_file";
+      structuredRowsResult =
+        await extractReviewCommentsStructuredRowsFromExcelFile(localPath);
+    }
+    if (
+      (!structuredRowsResult || structuredRowsResult.length === 0) &&
+      /^https:\/\//i.test(url)
+    ) {
+      extractionSource = extractionSource || "url_fallback";
+      const xBuf = await fetchUrlToBuffer(url);
+      structuredRowsResult =
+        await extractReviewCommentsStructuredRowsFromExcelBuffer(xBuf);
+    }
+  } catch (e) {
+    console.warn(
+      `[${logTag}][reports][excel-structured] parse failed report=${JSON.stringify(fileName)}`,
+      (e && e.message) || e,
+    );
+    return { rowCount: 0, error: (e && e.message) || String(e) };
+  }
+
+  const rowCount = Array.isArray(structuredRowsResult)
+    ? structuredRowsResult.length
+    : 0;
+  const refs = (structuredRowsResult ?? [])
+    .map((r) => String(r?.ref ?? "").trim())
+    .filter(Boolean);
+
+  if (rowCount > 0) {
+    pdfEntry.structuredRows = structuredRowsResult;
+    pdfEntry.structuredRowsSource = "excel";
+    console.log(
+      `[${logTag}][reports][excel-structured] attached report=${JSON.stringify(fileName)} source=${extractionSource} rowCount=${rowCount} refs_first_5=${JSON.stringify(refs.slice(0, 5))}`,
+    );
+  } else {
+    console.log(
+      `[${logTag}][reports][excel-structured] no rows report=${JSON.stringify(fileName)} source=${extractionSource || "none"} localExcel=${localExcelExists} excelUrl=${url ? "yes" : "no"}`,
+    );
+  }
+
+  return { rowCount, refs, extractionSource };
 }
 
 function capPgcReportText(text) {
@@ -3246,22 +3607,13 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
     filesCount: fol.filesCount ?? (fol.files?.length ?? 0),
     name: fol.folderName || `Folder ${fol.folderID}`,
     fileCount: fol.filesCount || (fol.files?.length ?? 0),
-    files: (fol.files || []).map((f) => ({
-      name: f.name || "file",
-      fileId: f.fileId,
-      folderName: f.folderName,
-      parentFolder: fol.parentFolder || null,
-      status: f.status || "",
-      reviewedBy: f.reviewedBy || "",
-      uploadedDate: f.uploadedDate || "",
-      commentCount: f.commentCount ?? 0,
-      viewUrl: f.viewUrl,
-      publicUrl: f.publicUrl || f.viewUrl || null,
-      downloadUrl: f.downloadUrl || null,
-      fileSizeKB: f.fileSizeKB ?? null,
-      version: f.version ?? null,
-      hasMarkups: f.hasMarkups ?? false,
-    })),
+    ...(fol.folderActivationStatus && {
+      folderActivationStatus: fol.folderActivationStatus,
+    }),
+    ...(fol.folderActivationError && {
+      folderActivationError: fol.folderActivationError,
+    }),
+    files: (fol.files || []).map((f) => mapPgcPortalFileEntry(f, fol)),
   }));
 
   const reviewTab = {
@@ -3279,19 +3631,11 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
     },
     workflowBuckets: (reviewOut?.workflowBuckets || []).map((wf) => ({
       workflowName: wf.workflowName || "",
+      workflowValue: wf.workflowValue || "",
+      workflowGroupingId: wf.workflowGroupingId || "",
+      skippedStale: wf.skippedStale === true,
       rows: Array.isArray(wf.rows)
-        ? wf.rows.map((r) => ({
-            workflowName: r.workflowName || "",
-            refNumber: r.refNumber || "",
-            changemarkNumber: r.changemarkNumber || "",
-            department: r.department || "",
-            reviewer: r.reviewer || "",
-            datetime: r.datetime || "",
-            cycle: r.cycle || "",
-            status: r.status || "",
-            fileName: r.fileName || "",
-            commentText: r.commentText || "",
-          }))
+        ? wf.rows.map((r) => mapPgcWorkflowBucketRowForPortal(r, wf.workflowName))
         : [],
     })),
     latestCycleCorrections: (reviewOut?.latestCycleCorrections || []).map((c) => ({
@@ -3374,7 +3718,32 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
         pdfEntry.screenshot,
       );
     }
+    if (isPgcReviewCommentsReportName(r.reportName)) {
+      const excelUrl = String(r.excelPublicUrl || r.excelHttpUrl || "").trim();
+      const hasLocalExcel = !!(r.excelPath && fs.existsSync(r.excelPath));
+      if (hasLocalExcel || excelUrl) {
+        console.log(
+          `[PGC][reports][excel-structured] Review Comments Excel found report=${JSON.stringify(r.reportName)} localExcel=${hasLocalExcel} excelUrl=${excelUrl ? "yes" : "no"}`,
+        );
+      }
+      await attachReviewCommentsStructuredRowsToPdfEntry({
+        pdfEntry,
+        reportName: r.reportName,
+        localExcelPath: r.excelPath,
+        excelUrl,
+        logTag: "PGC",
+      });
+    }
     reportsPdfs.push(pdfEntry);
+  }
+
+  const domBridge = applyPgcDomReviewCommentsBridge(
+    reviewTab.workflowBuckets,
+    reportsPdfs,
+  );
+  if (domBridge.applied) {
+    reportsPdfs.length = 0;
+    reportsPdfs.push(...domBridge.reportsPdfs);
   }
 
   const omit = pipelineResult._pgcOmitTabs || {};
@@ -3402,7 +3771,20 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
     tabs.tasks = { keyValues: tasksKeyValues, tables: tasksTables };
   }
   if (!skipTab("files")) {
-    tabs.files = { folders, keyValues: [], tables: [] };
+    if (
+      filesOut?.filesExtractionFailed ||
+      filesOut?.sessionHandoffFailed
+    ) {
+      console.warn(
+        `[PGC] mapPgcPipelineToPortalData: omitting tabs.files (${filesOut?.sessionHandoffFailed ? "session handoff failed" : "extraction failed"}: ${filesOut.filesExtractionError || "unknown"})`,
+      );
+    } else if (filesOut?.filesHarvestAuthoritative === false) {
+      console.warn(
+        `[PGC] mapPgcPipelineToPortalData: omitting tabs.files (harvest not authoritative; activationFailed=${filesOut._meta?.activationFailedFolders?.length ?? 0} downloadsOk=${filesOut._meta?.downloadsOk ?? 0})`,
+      );
+    } else {
+      tabs.files = { folders, keyValues: [], tables: [] };
+    }
   }
   if (!skipTab("review")) {
     tabs.review = reviewTab;
@@ -3415,6 +3797,15 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
       pdfs: reportsPdfs,
       reportEntries,
     };
+  } else if (domBridge.applied && domBridge.reviewPdf) {
+    tabs.reports = {
+      tables: [],
+      pdfs: [domBridge.reviewPdf],
+      reportEntries: [],
+    };
+    console.log(
+      `[PGC] mapPgcPipelineToPortalData: reports tab synthesized for DOM bridge (${domBridge.mappedCount} structuredRows) despite skipReports`,
+    );
   }
 
   return {
@@ -3433,6 +3824,109 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
 /**
  * Map Montgomery pipeline result → portal_data (same broad contract as PGC / ProjectDox).
  */
+function isSupabaseStoragePublicUrl(url) {
+  return /supabase\.co\/storage\//i.test(String(url || "").trim());
+}
+
+function isPgcEphemeralPortalFileUrl(url) {
+  const s = String(url || "").trim();
+  if (!s || isSupabaseStoragePublicUrl(s)) return false;
+  if (/^blob:|^data:/i.test(s)) return false;
+  if (
+    /princegeorgescountymd\.gov|eplans\.princegeorges/i.test(s) &&
+    /(ActiveXViewer|FileViewer|BravaServer|viewfile|sessionended|\/login\b)/i.test(
+      s,
+    )
+  ) {
+    return true;
+  }
+  if (/ProjectDox/i.test(s) && !isSupabaseStoragePublicUrl(s)) return true;
+  return false;
+}
+
+function resolvePgcPortalFileOpenUrl(f) {
+  const failed =
+    String(f.downloadStatus || "").toLowerCase() === "failed" ||
+    String(f.downloadStatus || "")
+      .toLowerCase()
+      .startsWith("failed_");
+  if (failed) return null;
+
+  for (const raw of [f.publicUrl, f.viewUrl, f.downloadUrl]) {
+    const u = String(raw || "").trim();
+    if (u && isSupabaseStoragePublicUrl(u)) return u;
+  }
+  for (const raw of [f.publicUrl, f.viewUrl, f.downloadUrl]) {
+    const u = String(raw || "").trim();
+    if (u && !isPgcEphemeralPortalFileUrl(u)) return u;
+  }
+  return null;
+}
+
+function mapPgcPortalFileEntry(f, fol) {
+  const openUrl = resolvePgcPortalFileOpenUrl(f);
+  const activationSkipped =
+    String(f.downloadStatus || "").toLowerCase() === "activation_skipped";
+  const failed =
+    !activationSkipped &&
+    (String(f.downloadStatus || "").toLowerCase() === "failed" ||
+      String(f.downloadStatus || "")
+        .toLowerCase()
+        .startsWith("failed_"));
+  const downloadStatus =
+    f.downloadStatus || (openUrl ? "ok" : undefined);
+
+  return {
+    name: f.name || "file",
+    fileId: f.fileId,
+    folderName: f.folderName,
+    parentFolder: fol.parentFolder || null,
+    status: f.status || "",
+    reviewedBy: f.reviewedBy || "",
+    uploadedDate: f.uploadedDate || "",
+    commentCount: f.commentCount ?? 0,
+    publicUrl: openUrl || null,
+    viewUrl: openUrl || null,
+    downloadUrl: openUrl || null,
+    fileSizeKB: f.fileSizeKB ?? null,
+    version: f.version ?? null,
+    hasMarkups: f.hasMarkups ?? false,
+    ...(downloadStatus && { downloadStatus }),
+    ...(failed &&
+      f.downloadError && {
+        downloadError: scrapeFileResults.sanitizeFailureMessage(f.downloadError),
+      }),
+    ...(fol.folderActivationStatus && {
+      folderActivationStatus: fol.folderActivationStatus,
+    }),
+  };
+}
+
+function mapMontgomeryPortalFileEntry(f, fol) {
+  const downloadStatus =
+    f.downloadStatus || (f.publicUrl || f.viewUrl ? "success" : undefined);
+  return {
+    name: f.name || "file",
+    fileId: f.fileId,
+    folderName: f.folderName,
+    parentFolder: fol.parentFolder || null,
+    status: f.status || "",
+    reviewedBy: f.reviewedBy || "",
+    uploadedDate: f.uploadedDate || "",
+    commentCount: f.commentCount ?? 0,
+    viewUrl: f.viewUrl,
+    publicUrl: f.publicUrl || f.viewUrl || null,
+    downloadUrl: f.downloadUrl || null,
+    fileSizeKB: f.fileSizeKB ?? null,
+    version: f.version ?? null,
+    hasMarkups: f.hasMarkups ?? false,
+    ...(downloadStatus && { downloadStatus }),
+    ...(f.downloadError && {
+      downloadError: scrapeFileResults.sanitizeFailureMessage(f.downloadError),
+    }),
+  };
+}
+
 async function mapMontgomeryPipelineToPortalData(projectRow, pipelineResult) {
   const detail = pipelineResult.detailResult?.out;
   const info = detail?.info;
@@ -3549,22 +4043,7 @@ async function mapMontgomeryPipelineToPortalData(projectRow, pipelineResult) {
     filesCount: fol.filesCount ?? (fol.files?.length ?? 0),
     name: fol.folderName || `Folder ${fol.folderID}`,
     fileCount: fol.filesCount || (fol.files?.length ?? 0),
-    files: (fol.files || []).map((f) => ({
-      name: f.name || "file",
-      fileId: f.fileId,
-      folderName: f.folderName,
-      parentFolder: fol.parentFolder || null,
-      status: f.status || "",
-      reviewedBy: f.reviewedBy || "",
-      uploadedDate: f.uploadedDate || "",
-      commentCount: f.commentCount ?? 0,
-      viewUrl: f.viewUrl,
-      publicUrl: f.publicUrl || f.viewUrl || null,
-      downloadUrl: f.downloadUrl || null,
-      fileSizeKB: f.fileSizeKB ?? null,
-      version: f.version ?? null,
-      hasMarkups: f.hasMarkups ?? false,
-    })),
+    files: (fol.files || []).map((f) => mapMontgomeryPortalFileEntry(f, fol)),
   }));
 
   const reviewTab = {
@@ -3758,40 +4237,14 @@ async function mapMontgomeryPipelineToPortalData(projectRow, pipelineResult) {
       `[Montgomery][debug][reports] pdfTextExtract i=${i} name=${JSON.stringify(r.reportName)} textLen=${textLen} parseError=${parseError || "(none)"} pdfEntry.error=${pdfEntry.error || "(none)"} hadLocalPdf=${!!(r.pdfPath && fs.existsSync(r.pdfPath))} hadLocalExcel=${!!(r.excelPath && fs.existsSync(r.excelPath))}`,
     );
 
-    /**
-     * Montgomery: Plan Review – Review Comments — parse SSRS Excel to fixed-column rows whenever Excel is present.
-     * Does **not** change `pdfEntry.text` (PDF extract remains as-is).
-     */
     if (isPgcReviewCommentsReportName(r.reportName)) {
-      /** @type {Array<{ ref: string; cycle: string; reviewed_by: string; type: string; filename: string; discussion: string; status: string }>} */
-      let structuredRowsResult = [];
-      const localExcelExists = !!(r.excelPath && fs.existsSync(r.excelPath));
-      const excelUrl = String(r.excelPublicUrl || r.excelHttpUrl || "").trim();
-      try {
-        if (localExcelExists && r.excelPath) {
-          structuredRowsResult = await extractReviewCommentsStructuredRowsFromExcelFile(r.excelPath);
-        }
-        if ((!structuredRowsResult || structuredRowsResult.length === 0) && /^https:\/\//i.test(excelUrl)) {
-          const xBuf = await fetchUrlToBuffer(excelUrl);
-          structuredRowsResult = await extractReviewCommentsStructuredRowsFromExcelBuffer(xBuf);
-        }
-      } catch (e) {
-        console.warn(
-          `[Montgomery][reports][excel-structured] parse failed report=${JSON.stringify(r.reportName ?? "")}`,
-          (e && e.message) || e,
-        );
-      }
-      const prev = structuredRowsResult?.slice(0, 3) ?? [];
-      console.log(
-        `[Montgomery][reports][excel-structured] report=${JSON.stringify(
-          r.reportName ?? "",
-        )} localExcel=${localExcelExists} excelUrl=${excelUrl ? "yes" : "no"} rowCount=${structuredRowsResult?.length ?? 0} preview=` +
-          JSON.stringify(prev),
-      );
-      if (Array.isArray(structuredRowsResult) && structuredRowsResult.length > 0) {
-        pdfEntry.structuredRows = structuredRowsResult;
-        pdfEntry.structuredRowsSource = "excel";
-      }
+      await attachReviewCommentsStructuredRowsToPdfEntry({
+        pdfEntry,
+        reportName: r.reportName,
+        localExcelPath: r.excelPath,
+        excelUrl: r.excelPublicUrl || r.excelHttpUrl,
+        logTag: "Montgomery",
+      });
     }
 
     reportsPdfs.push(pdfEntry);
@@ -4061,7 +4514,13 @@ async function scrapeHowardAll(
         return;
       }
       const project = projects[i];
-      session.message = `${project.projectNum} → Howard harvest`;
+      mirrorSessionProgress(session, `${project.projectNum} → Howard harvest`, {
+        event_type: "section_started",
+        stage: "howard_harvest",
+        user_message: `Opening project ${project.projectNum} in Howard County portal.`,
+        progress_current: session.progress,
+        progress_total: session.total,
+      });
       console.log(
         `\n🟢 [Howard] [${i + 1}/${projects.length}] ${project.projectNum} (ID ${project.projectId})`,
       );
@@ -4115,7 +4574,11 @@ async function scrapeHowardAll(
       session.progress++;
     }
 
-    session.message = `Howard scraping complete! Syncing...`;
+    mirrorSessionProgress(session, "Howard scraping complete! Syncing...", {
+      event_type: "save_started",
+      stage: "save",
+      user_message: "Saving Howard County results to your project.",
+    });
     console.log(`\n✅ [Howard] Done! Syncing to Supabase...`);
     const howardSyncOk = await syncPortalDataToSupabase(
       session,
@@ -4139,7 +4602,18 @@ async function scrapeHowardAll(
       return;
     }
     session.status = "done";
-    session.message = `Howard complete: ${projects.length} project(s) synced.`;
+    mirrorSessionProgress(
+      session,
+      `Howard complete: ${projects.length} project(s) synced.`,
+      {
+        event_type: "scrape_completed",
+        stage: "completed",
+        status: "completed",
+        user_message: `Scrape completed. ${projects.length} Howard County project(s) saved.`,
+        progress_current: session.total,
+        progress_total: session.total,
+      },
+    );
     console.log(`    ✅ Howard Supabase sync complete — session status set to "done"`);
   } finally {
     session._scrapeActive = false;
@@ -4289,7 +4763,13 @@ async function scrapeMontgomeryAll(
       return;
     }
     const project = projects[i];
-    session.message = `${project.projectNum} → Montgomery harvest`;
+    mirrorSessionProgress(session, `${project.projectNum} → Montgomery harvest`, {
+      event_type: "section_started",
+      stage: "montgomery_harvest",
+      user_message: `Opening project ${project.projectNum} in Montgomery County portal.`,
+      progress_current: session.progress,
+      progress_total: session.total,
+    });
     console.log(
       `\n🟢 [Montgomery] [${i + 1}/${projects.length}] ${project.projectNum} (ID ${project.projectId})`,
     );
@@ -4352,20 +4832,30 @@ async function scrapeMontgomeryAll(
     session.progress++;
   }
 
-  session.message = `Montgomery scraping complete! Syncing...`;
+  mirrorSessionProgress(session, "Montgomery scraping complete! Syncing...", {
+    event_type: "save_started",
+    stage: "save",
+    user_message: "Saving Montgomery County results to your project.",
+  });
   console.log(`\n✅ [Montgomery] Done! Syncing to Supabase...`);
+
+  if (session._cancelRequested) {
+    console.log("   🛑 Montgomery scrape cancelled — not marking as done");
+    return;
+  }
+
+  const hasFileProgressJob =
+    Boolean(session._scrapeJobId) && Boolean(supabaseProjectId);
+
   const montgomerySyncOk = await syncPortalDataToSupabase(
     session,
     projects,
     supabaseProjectId,
     userId,
     null,
+    { preserveFilesTabFromDb: hasFileProgressJob },
   );
 
-  if (session._cancelRequested) {
-    console.log("   🛑 Montgomery scrape cancelled — not marking as done");
-    return;
-  }
   if (!montgomerySyncOk) {
     session.status = "error";
     session.message =
@@ -4375,8 +4865,37 @@ async function scrapeMontgomeryAll(
     );
     return;
   }
+
+  if (hasFileProgressJob) {
+    const reconcileResult = await scrapeFileResults.reconcileRunFilesToPortalData(
+      supabase,
+      {
+        projectId: supabaseProjectId,
+        scrapeJobId: session._scrapeJobId,
+        hashPortalData,
+        requireSuccessfulJob: false,
+      },
+    );
+    if (!reconcileResult.ok) {
+      console.warn(
+        `    ⚠️ Montgomery file reconcile skipped: ${reconcileResult.reason || "unknown"}`,
+      );
+    }
+  }
+
   session.status = "done";
-  session.message = `Montgomery complete: ${projects.length} project(s) synced.`;
+  mirrorSessionProgress(
+    session,
+    `Montgomery complete: ${projects.length} project(s) synced.`,
+    {
+      event_type: "scrape_completed",
+      stage: "completed",
+      status: "completed",
+      user_message: `Scrape completed. ${projects.length} Montgomery County project(s) saved.`,
+      progress_current: session.total,
+      progress_total: session.total,
+    },
+  );
   console.log(`    ✅ Montgomery Supabase sync complete — session status set to "done"`);
   } finally {
     session._scrapeActive = false;
@@ -4550,6 +5069,38 @@ function pgcPipelineOptsFromScrapeMode(scrapeMode) {
   return { ...none };
 }
 
+/**
+ * Dev-only harvest limits (explicit request body; ignored in production unless set).
+ * @param {unknown} raw
+ */
+function parsePgcDevHarvestControls(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out = {};
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+  };
+  const mf = num(raw.maxFolders);
+  if (mf != null && mf > 0) out.maxFolders = mf;
+  const mfpf = num(raw.maxFilesPerFolder);
+  if (mfpf != null && mfpf > 0) out.maxFilesPerFolder = mfpf;
+  const sfi = num(raw.startFolderIndex);
+  if (sfi != null && sfi > 0) out.startFolderIndex = sfi;
+  const sfif = num(raw.startFileIndex);
+  if (sfif != null && sfif > 0) out.startFileIndex = sfif;
+  if (Array.isArray(raw.explicitFileIds) && raw.explicitFileIds.length > 0) {
+    out.explicitFileIds = [
+      ...new Set(
+        raw.explicitFileIds.map((x) => String(x).trim()).filter(Boolean),
+      ),
+    ];
+  }
+  if (process.env.NODE_ENV === "production" && Object.keys(out).length === 0) {
+    return null;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 async function scrapePgcAll(
   session,
   projects,
@@ -4557,11 +5108,41 @@ async function scrapePgcAll(
   supabaseProjectId,
   userId,
   scrapeMode,
+  extraOpts = {},
 ) {
   const pgcOpts = pgcPipelineOptsFromScrapeMode(scrapeMode);
+  const pgcFilesOnly =
+    pgcOpts.skipDetail &&
+    !pgcOpts.skipFiles &&
+    pgcOpts.skipReports &&
+    pgcOpts.skipWorkflow &&
+    pgcOpts.skipReview;
 
   session._scrapeCumulativeBytes = 0;
   session._downloadedHashes = new Map();
+
+  const fileProgress = scrapeFileResults.createFileProgressContext(
+    session,
+    supabase,
+  );
+  let uploadedCheckpointMap = new Map();
+  if (fileProgress?.scrapeJobId) {
+    const priorRows = await scrapeFileResults.listRunFiles(
+      supabase,
+      fileProgress.scrapeJobId,
+    );
+    uploadedCheckpointMap =
+      scrapeFileResults.buildUploadedCheckpointMap(priorRows);
+    if (uploadedCheckpointMap.size > 0) {
+      console.log(
+        `[PGC] Resuming harvest with ${uploadedCheckpointMap.size} checkpointed file(s)`,
+      );
+    }
+  }
+
+  const devHarvestControls =
+    extraOpts.devHarvestControls ||
+    parsePgcDevHarvestControls(extraOpts.devHarvestControlsRaw);
 
   let bases = session.pgcWebUiBases;
   if (!bases || !bases.length) {
@@ -4570,6 +5151,22 @@ async function scrapePgcAll(
   }
 
   const dash = session.dashboardUrl || pgcEplan.PGC_DASHBOARD_URL;
+
+  if (pgcFilesOnly && projects.length === 1 && session.page) {
+    const resolved = await pgcEplan.resolvePgcExplicitTargetOnDashboard(
+      session.page,
+      dash,
+      projects[0],
+    );
+    if (resolved.ok) {
+      projects[0] = resolved.target;
+    } else {
+      session._pgcExplicitTargetResolveFailed = true;
+      console.warn(
+        `[PGC] Files Only explicit target not resolved on dashboard before harvest | permit=${projects[0].projectNum} projectId=${projects[0].projectId}`,
+      );
+    }
+  }
 
   const permitSanitize = (s) => {
     const t = String(s || "")
@@ -4582,16 +5179,27 @@ async function scrapePgcAll(
   for (let i = 0; i < projects.length; i++) {
     if (session._cancelRequested) {
       console.log("   🛑 PGC scrape cancelled");
-      return;
+      session.status = "cancelled";
+      return { cancelled: true, withWarnings: !!session._pgcScrapeWarnings };
     }
     const project = projects[i];
-    session.message = `${project.projectNum} → PGC harvest`;
+    mirrorSessionProgress(session, `${project.projectNum} → PGC harvest`, {
+      event_type: "section_started",
+      stage: "pgc_harvest",
+      user_message: `Opening project ${project.projectNum} in PGC ePlan.`,
+      progress_current: session.progress,
+      progress_total: session.total,
+    });
     console.log(
       `\n🟣 [PGC] [${i + 1}/${projects.length}] ${project.projectNum} (ID ${project.projectId})`,
     );
     let page;
+    const ownsPage = !pgcFilesOnly;
     try {
-      page = await session.context.newPage();
+      page = pgcFilesOnly ? session.page : await session.context.newPage();
+      if (!page) {
+        throw new Error("pgc_browser_page_unavailable");
+      }
       const storagePrefix = `drawings/${supabaseProjectId || "pending"}/pgc/${permitSanitize(project.projectNum)}`;
       const uploadLocal = (localPath, key) =>
         pgcUploadLocalToSupabase(session, localPath, key);
@@ -4627,6 +5235,11 @@ async function scrapePgcAll(
         );
         await pgcEplan.waitForProjectGrid(relPage).catch(() => {});
         session.pgcWebUiBases = await pgcEplan.resolvePgcWebUiBases(relPage);
+        scrapeLease.refreshScrapeLease(
+          session,
+          _sessionId,
+          rearmSessionIdleTimeout,
+        );
         console.log(`[PGC] Browser relaunched (${reason || "task6"})`);
         return relPage;
       };
@@ -4649,6 +5262,30 @@ async function scrapePgcAll(
           skipReview: pgcOpts.skipReview,
           uploadLocal,
           storagePrefix,
+          onScrapeProgress: (event) => {
+            if (event.progress_current != null) {
+              session.progress = Number(event.progress_current);
+            }
+            if (event.progress_total != null) {
+              session.total = Number(event.progress_total);
+            }
+            mirrorSessionProgress(
+              session,
+              String(event.technical_message || event.user_message || "PGC scrape in progress."),
+              {
+                event_type: String(event.event_type || "section_progress"),
+                stage: String(event.stage || "reports"),
+                user_message: String(event.user_message || "Working…"),
+                status: String(event.status || "running"),
+                progress_current: event.progress_current ?? session.progress,
+                progress_total: event.progress_total ?? session.total,
+                metadata:
+                  event.metadata && typeof event.metadata === "object"
+                    ? event.metadata
+                    : undefined,
+              },
+            );
+          },
           recoveryCredentials:
             session.username &&
             session.password != null &&
@@ -4661,8 +5298,115 @@ async function scrapePgcAll(
                 }
               : null,
           relaunchBrowserAndRecover,
+          fileProgress,
+          uploadedCheckpointMap,
+          devHarvestControls,
+          refreshScrapeLease: () =>
+            scrapeLease.refreshScrapeLease(
+              session,
+              _sessionId,
+              rearmSessionIdleTimeout,
+            ),
+          isCancelRequested: () => !!session._cancelRequested,
+          onFileAttemptStart: async (fields) => {
+            if (!fileProgress) return;
+            const base = {
+              portalFileId: fields.portalFileId,
+              fileVersion: fields.fileVersion,
+              fileName: fields.fileName,
+              folderName: fields.folderName,
+              parentFolder: fields.parentFolder,
+            };
+            await scrapeFileResults.upsertFileDiscovered(fileProgress, base);
+            await scrapeFileResults.markFileDownloading(fileProgress, base);
+          },
+          onFileFailed: async (fields) => {
+            if (!fileProgress) return;
+            await scrapeFileResults.markFileFailed(fileProgress, {
+              portalFileId: fields.portalFileId,
+              fileVersion: fields.fileVersion,
+              fileName: fields.fileName,
+              folderName: fields.folderName,
+              parentFolder: fields.parentFolder,
+              failureCode: fields.failureCode,
+              failureMessage: fields.failureMessage,
+            });
+          },
+          checkpointFile: async (fields) => {
+            if (!fileProgress) return { ok: false };
+            const storageKey = fields.storagePath;
+            let publicUrl = fields.publicUrl || null;
+            if (!publicUrl && fields.localPath && storageKey) {
+              publicUrl = await uploadLocal(fields.localPath, storageKey);
+            }
+            if (!publicUrl) return { ok: false };
+            await scrapeFileResults.markFileUploaded(fileProgress, {
+              portalFileId: fields.portalFileId,
+              fileVersion: fields.fileVersion,
+              fileName: fields.fileName,
+              folderName: fields.folderName,
+              parentFolder: fields.parentFolder,
+              storagePath: storageKey,
+              publicUrl,
+              sourceUrl: fields.sourceUrl,
+              mimeType: fields.mimeType,
+              sizeBytes: fields.sizeBytes,
+              metadata: fields.metadata,
+              progressCurrent: fields.progressCurrent,
+              progressTotal: fields.progressTotal,
+            });
+            fileProgress.bumpProgressCurrent();
+            return { ok: true, publicUrl };
+          },
         },
       );
+
+      if (pipelineResult.filesOut?.filesExtractionFailed) {
+        pipelineResult._pgcOmitTabs = {
+          ...(pipelineResult._pgcOmitTabs || {}),
+          files: true,
+        };
+        session._pgcScrapeWarnings = true;
+        const handoff = !!pipelineResult.filesOut.sessionHandoffFailed;
+        mirrorSessionProgress(
+          session,
+          handoff
+            ? `ProjectDox session could not be opened for ${project.projectNum}; previous files were preserved.`
+            : `Files tab could not be refreshed for ${project.projectNum}; previous files were preserved.`,
+          {
+            event_type: "warning",
+            stage: "files",
+            status: "completed_with_warnings",
+            user_message: handoff
+              ? `Could not open ${project.projectNum} in ProjectDox (session ended). Previously downloaded files were preserved.`
+              : `Files tab could not be refreshed for ${project.projectNum}. Previous files were preserved.`,
+            technical_message:
+              pipelineResult.filesOut.filesExtractionError ||
+              (handoff
+                ? "project_dox_session_handoff_failed"
+                : "files_tree_not_found"),
+          },
+        );
+      } else if (pipelineResult.filesOut?.filesHarvestAuthoritative === false) {
+        pipelineResult._pgcOmitTabs = {
+          ...(pipelineResult._pgcOmitTabs || {}),
+          files: true,
+        };
+        session._pgcScrapeWarnings = true;
+        const actN =
+          pipelineResult.filesOut._meta?.activationFailedFolders?.length ?? 0;
+        mirrorSessionProgress(
+          session,
+          `File downloads could not activate all folders for ${project.projectNum}; previous files were preserved.`,
+          {
+            event_type: "warning",
+            stage: "files",
+            status: "completed_with_warnings",
+            user_message: `Some file folders could not be opened in the portal for ${project.projectNum}. Previously downloaded files were preserved.`,
+            technical_message: `files_harvest_not_authoritative activation_failed_folders=${actN}`,
+          },
+        );
+      }
 
       session.data[project.id] = await mapPgcPipelineToPortalData(
         project,
@@ -4671,26 +5415,34 @@ async function scrapePgcAll(
       cleanupPgcSuccessLocalArtifacts(pipelineResult);
     } catch (err) {
       console.error(`   ❌ [PGC] ${project.projectNum}:`, err.message);
-      session.data[project.id] = {
-        name: project.name,
-        projectNum: project.projectNum,
-        description: project.description || "",
-        location: project.location || "",
-        dashboardStatus: project.status || "",
-        portalType: "projectdox",
-        portalSubtype: "pgc-eplan",
-        jurisdiction: "Prince George's County, MD",
-        tabs: {
-          info: { error: err.message, keyValues: [], tables: [] },
+      session._pgcScrapeWarnings = true;
+      session.data[project.id] = await mapPgcPipelineToPortalData(project, {
+        _pgcOmitTabs: {
+          files: true,
+          info: true,
+          status: true,
+          tasks: true,
+          review: true,
+          reports: true,
         },
-      };
+        filesOut: {
+          filesExtractionFailed: true,
+          sessionHandoffFailed: true,
+          filesExtractionError: err.message,
+          filesHarvestAuthoritative: false,
+        },
+      });
     } finally {
-      if (page) await page.close().catch(() => {});
+      if (ownsPage && page) await page.close().catch(() => {});
     }
     session.progress++;
   }
 
-  session.message = `PGC scraping complete! Syncing...`;
+  mirrorSessionProgress(session, "PGC scraping complete! Syncing...", {
+    event_type: "save_started",
+    stage: "save",
+    user_message: "Saving PGC results to your project.",
+  });
   console.log(`\n✅ [PGC] Done! Syncing to Supabase...`);
   const pgcSyncOk = await syncPortalDataToSupabase(
     session,
@@ -4702,18 +5454,37 @@ async function scrapePgcAll(
 
   if (session._cancelRequested) {
     console.log("   🛑 PGC scrape cancelled — not marking as done");
-    return;
+    return { withWarnings: !!session._pgcScrapeWarnings, cancelled: true };
   }
   if (!pgcSyncOk) {
     session.status = "error";
     session.message =
       "PGC scrape finished but Supabase sync failed (check server logs).";
     console.error(`    ❌ PGC Supabase sync failed — session status set to "error"`);
-    return;
+    return { withWarnings: false, syncOk: false };
   }
-  session.status = "done";
-  session.message = `PGC complete: ${projects.length} project(s) synced.`;
-  console.log(`    ✅ PGC Supabase sync complete — session status set to "done"`);
+  const withWarnings = !!session._pgcScrapeWarnings;
+  session.status = withWarnings ? "partial_success" : "done";
+  mirrorSessionProgress(
+    session,
+    withWarnings
+      ? `PGC complete with warnings: ${projects.length} project(s) synced.`
+      : `PGC complete: ${projects.length} project(s) synced.`,
+    {
+      event_type: withWarnings ? "warning" : "scrape_completed",
+      stage: "completed",
+      status: withWarnings ? "completed_with_warnings" : "completed",
+      user_message: withWarnings
+        ? `Scrape completed with warnings. ${projects.length} PGC project(s) saved.`
+        : `Scrape completed. ${projects.length} PGC project(s) saved.`,
+      progress_current: session.total,
+      progress_total: session.total,
+    },
+  );
+  console.log(
+    `    ✅ PGC Supabase sync complete — session status set to "${session.status}"`,
+  );
+  return { withWarnings, syncOk: true };
 }
 
 async function scrapeAll(
@@ -4777,9 +5548,21 @@ async function scrapeAll(
           targetLabel = "Targeting: Supporting Documents";
         }
       }
-      session.message = targetLabel
-        ? `${project.projectNum} → ${targetLabel}`
-        : `${project.projectNum} → ${tab.label}`;
+      mirrorSessionProgress(
+        session,
+        targetLabel
+          ? `${project.projectNum} → ${targetLabel}`
+          : `${project.projectNum} → ${tab.label}`,
+        {
+          event_type: "section_started",
+          stage: tab.key,
+          user_message: targetLabel
+            ? `Opening ${tab.label} (${targetLabel.replace(/^Targeting:\s*/i, "")}).`
+            : `Opening ${tab.label}.`,
+          progress_current: session.progress,
+          progress_total: session.total,
+        },
+      );
       console.log(`   📑 ${tab.label}...${targetLabel ? ` (${targetLabel})` : ""}`);
 
       let context = session.context;
@@ -5084,7 +5867,11 @@ async function scrapeAll(
     }
   }
 
-  session.message = `Scraping complete! Syncing to database...`;
+  mirrorSessionProgress(session, "Scraping complete! Syncing to database...", {
+    event_type: "save_started",
+    stage: "save",
+    user_message: "Saving results to your project.",
+  });
   console.log(`\n✅ Done! Syncing to Supabase...`);
 
   const genericSyncOk = await syncPortalDataToSupabase(
@@ -5101,15 +5888,34 @@ async function scrapeAll(
   }
   if (!genericSyncOk) {
     session.status = "error";
-    session.message =
-      "Scraping finished but Supabase sync failed (check server logs).";
+    mirrorSessionProgress(
+      session,
+      "Scraping finished but Supabase sync failed (check server logs).",
+      {
+        event_type: "scrape_failed",
+        stage: "save",
+        status: "failed",
+        user_message: "Results could not be saved. Please try again.",
+      },
+    );
     console.error(
       `    ❌ Supabase sync failed — session status set to "error"`,
     );
     return;
   }
   session.status = "done";
-  session.message = `Scraping complete! ${projects.length} projects extracted and synced.`;
+  mirrorSessionProgress(
+    session,
+    `Scraping complete! ${projects.length} projects extracted and synced.`,
+    {
+      event_type: "scrape_completed",
+      stage: "completed",
+      status: "completed",
+      user_message: `Scrape completed. ${projects.length} project(s) saved.`,
+      progress_current: session.total,
+      progress_total: session.total,
+    },
+  );
   console.log(`    ✅ Supabase sync complete — session status set to "done"`);
   } finally {
     session._scrapeActive = false;
@@ -6179,6 +6985,66 @@ function montgomeryFilesShouldReacquireWorkPage(workPage, { reason, errMessage }
   return false;
 }
 
+function montgomeryFileProgressBase(fileProgress, file, folderDisplayName) {
+  return {
+    portalFileId: String(file.id),
+    fileVersion: file.version,
+    fileName: file.name,
+    folderName: folderDisplayName,
+    progressTotal: fileProgress.getProgressTotal(),
+    progressCurrent: fileProgress.getProgressCurrent(),
+  };
+}
+
+async function persistMontgomeryFileDownloadOutcome(
+  fileProgress,
+  file,
+  folderDisplayName,
+  safeName,
+  supabaseProjectId,
+  dlResult,
+  downloadError,
+) {
+  if (!fileProgress || !file?.id) return;
+  const base = montgomeryFileProgressBase(fileProgress, file, folderDisplayName);
+  const storagePath =
+    supabaseProjectId && safeName
+      ? `drawings/${supabaseProjectId}/${safeName}`
+      : null;
+
+  if (dlResult?.success) {
+    if (dlResult.skippedDuplicate) {
+      await scrapeFileResults.markFileSkipped(fileProgress, {
+        ...base,
+        publicUrl: dlResult.publicUrl || dlResult.viewUrl || null,
+        sourceUrl: dlResult.downloadUrl || null,
+        failureCode: "duplicate",
+      });
+      return;
+    }
+    const sizeBytes =
+      dlResult.fileSizeKB != null
+        ? Math.round(Number(dlResult.fileSizeKB) * 1024)
+        : null;
+    await scrapeFileResults.markFileUploaded(fileProgress, {
+      ...base,
+      storagePath,
+      publicUrl: dlResult.publicUrl || dlResult.viewUrl || null,
+      sourceUrl: dlResult.downloadUrl || null,
+      mimeType: /\.pdf$/i.test(file.name || "") ? "application/pdf" : null,
+      sizeBytes,
+    });
+    fileProgress.bumpProgressCurrent();
+    return;
+  }
+
+  await scrapeFileResults.markFileFailed(fileProgress, {
+    ...base,
+    failureCode: dlResult?.reason || downloadError || "download_failed",
+    failureMessage: dlResult?.reason || downloadError || "download_failed",
+  });
+}
+
 async function extractMontgomeryFilesTabLightweight(
   page,
   context,
@@ -6188,6 +7054,9 @@ async function extractMontgomeryFilesTabLightweight(
   supabaseProjectId = null,
 ) {
   cleanupDownloadsDir();
+
+  const fileProgress = scrapeFileResults.createFileProgressContext(session, supabase);
+  session._montgomeryFileProgressEstimate = 0;
 
   const projectID = String(project?.projectID || project?.projectId || "");
   const filesTabUrl = montgomeryProjectDox.buildMontgomeryProjectTabUrl(
@@ -6308,6 +7177,12 @@ async function extractMontgomeryFilesTabLightweight(
         `[Montgomery Files] harvested rows | ${folder.displayName} | realRows=${filesFound.length}`,
       );
 
+      session._montgomeryFileProgressEstimate =
+        Number(session._montgomeryFileProgressEstimate || 0) + filesFound.length;
+      if (fileProgress) {
+        fileProgress.setProgressTotal(session._montgomeryFileProgressEstimate);
+      }
+
       const folderFiles = [];
       let needMontgomeryFolderReselect = false;
       for (const file of filesFound) {
@@ -6345,6 +7220,14 @@ async function extractMontgomeryFilesTabLightweight(
         );
         const prior = dedupeKey ? uniqueFiles.get(dedupeKey) : null;
         if (prior) {
+          if (fileProgress && file.id) {
+            await scrapeFileResults.markFileSkipped(fileProgress, {
+              ...montgomeryFileProgressBase(fileProgress, file, folder.displayName),
+              publicUrl: prior.publicUrl || prior.viewUrl || null,
+              sourceUrl: prior.downloadUrl || null,
+              failureCode: "duplicate",
+            });
+          }
           folderFiles.push({
             name: file.name,
             fileId: file.id || undefined,
@@ -6372,6 +7255,14 @@ async function extractMontgomeryFilesTabLightweight(
         let downloadError = null;
 
         if (file.id) {
+          if (fileProgress) {
+            await scrapeFileResults.upsertFileDiscovered(fileProgress, {
+              ...montgomeryFileProgressBase(fileProgress, file, folder.displayName),
+            });
+            await scrapeFileResults.markFileDownloading(fileProgress, {
+              ...montgomeryFileProgressBase(fileProgress, file, folder.displayName),
+            });
+          }
           result._meta.downloadAttempts += 1;
           const safeName = `${file.id}_${file.name.replace(/[/\\?%*:|"<>]/g, "-")}`;
           let dlResult = null;
@@ -6443,6 +7334,15 @@ async function extractMontgomeryFilesTabLightweight(
             console.log(`[Montgomery][files-final] resolved file source = none`);
             console.log(`[Montgomery][files-final] upload fail "${file.name}"`);
           }
+          await persistMontgomeryFileDownloadOutcome(
+            fileProgress,
+            file,
+            folder.displayName,
+            safeName,
+            supabaseProjectId,
+            dlResult,
+            downloadError,
+          );
           const failReason =
             dlResult && dlResult.success === false ? dlResult.reason : null;
           if (
@@ -7800,6 +8700,21 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
             }
           }
         }
+
+        if (excelValid) {
+          await attachReviewCommentsStructuredRowsToPdfEntry({
+            pdfEntry: reportEntry,
+            reportName: reportEntry.fileName,
+            localExcelPath: excelPath,
+            logTag: "Washington",
+          });
+        } else if (isPgcReviewCommentsReportName(reportEntry.fileName)) {
+          console.log(
+            `         [Washington][reports][excel-structured] skipped structured extract — invalid excel artifact for ${JSON.stringify(
+              reportEntry.fileName,
+            )}`,
+          );
+        }
       } catch (err) {
         console.warn(
           `         [Washington][reports] Excel download/upload error for "${reportEntry.fileName}": ${err?.message || err}`,
@@ -8094,6 +9009,70 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
   }
 
   return pdfData;
+}
+
+async function closeStaleMontgomeryViewerPopups(context, mainPage) {
+  if (!context || !mainPage) return;
+  let pages = [];
+  try {
+    pages = context.pages();
+  } catch (_) {
+    return;
+  }
+  for (const p of pages) {
+    if (!p || p === mainPage) continue;
+    let closed = false;
+    try {
+      if (typeof p.isClosed === "function" && p.isClosed()) continue;
+      const url = p.url();
+      if (
+        /FileViewer|WebViewer|viewfile|File\/FileViewer/i.test(url) ||
+        /WebViewer\/ui\/index\.html/i.test(url)
+      ) {
+        await p.close().catch(() => {});
+        closed = true;
+      }
+    } catch (_) {
+      if (!closed) await p.close().catch(() => {});
+    }
+  }
+}
+
+async function findMontgomeryViewerPopupForFileId(context, mainPage, requestedFileId) {
+  const targetId = String(requestedFileId || "").trim();
+  if (!targetId || !context) return null;
+  let pages = [];
+  try {
+    pages = context.pages();
+  } catch (_) {
+    return null;
+  }
+  for (const p of pages) {
+    if (!p || p === mainPage) continue;
+    try {
+      if (typeof p.isClosed === "function" && p.isClosed()) continue;
+      const frame = p.frames().find(
+        (f) => f.url().includes("WebViewer") && f.url().includes("index.html"),
+      );
+      if (!frame) continue;
+      const fileConfig = await frame
+        .evaluate(() => {
+          try {
+            const hash = window.location.hash;
+            const customMatch = hash.match(/[?&#]custom=([^&#]+)/);
+            if (!customMatch) return null;
+            return JSON.parse(decodeURIComponent(customMatch[1]));
+          } catch (_) {
+            return null;
+          }
+        })
+        .catch(() => null);
+      if (fileConfig?.fileID != null && String(fileConfig.fileID) === targetId) {
+        return p;
+      }
+    } catch (_) {}
+  }
+  return null;
 }
 
 async function downloadMontgomeryProjectDoxFile(
@@ -8482,10 +9461,21 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       })
       .catch(() => null);
 
-    console.log(`${logPrefix} fileConfig from iframe hash: ${JSON.stringify(fileConfig)}`);
+    console.log(
+      `${logPrefix} fileConfig fileID=${fileConfig?.fileID ?? "none"} fileName=${String(fileConfig?.fileName || metadata?.fileName || "").slice(0, 120)}`,
+    );
 
     if (!fileConfig?.fileID) {
       throw new Error("viewer_missing_file_config");
+    }
+
+    const requestedFileId =
+      metadata?.fileId != null ? String(metadata.fileId).trim() : "";
+    if (
+      requestedFileId &&
+      String(fileConfig.fileID).trim() !== requestedFileId
+    ) {
+      throw new Error("stale_popup_file_id_mismatch");
     }
 
     const ctx = targetPopup.context();
@@ -8497,12 +9487,15 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     }
 
     const sessionIdVal = sessionCookie.value;
-    console.log(`${logPrefix} SessionID cookie present (${sessionIdVal.length} chars)`);
+    console.log(`${logPrefix} portal session cookie present for RetrieveFile`);
 
     const retrieveUrl = `${webApiOrigin}/File/RetrieveFile?convertToPDF=true&inline=true&blackCADBackground=false&fileID=${fileConfig.fileID}`;
-    console.log(`${logPrefix} resolved actual file URL (RetrieveFile): ${retrieveUrl.substring(0, 220)}`);
+    console.log(
+      `${logPrefix} RetrieveFile start fileID=${fileConfig.fileID} timeoutMs=${MONTGOMERY_RETRIEVE_TIMEOUT_MS}`,
+    );
 
     const response = await ctx.request.get(retrieveUrl, {
+      timeout: MONTGOMERY_RETRIEVE_TIMEOUT_MS,
       headers: {
         sessionid: sessionIdVal,
         Referer: `${webUiOrigin}/`,
@@ -8512,13 +9505,24 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     });
 
     const respCt = response.headers()["content-type"] || "";
-    console.log(`${logPrefix} RetrieveFile response: HTTP ${response.status()} ${respCt}`);
+    console.log(
+      `${logPrefix} RetrieveFile response fileID=${fileConfig.fileID} HTTP ${response.status()} ${respCt}`,
+    );
 
     if (response.ok()) {
-      const buffer = await response.body();
+      let buffer;
+      try {
+        buffer = await response.body();
+      } catch (bodyErr) {
+        const bmsg = String(bodyErr?.message || bodyErr || "");
+        console.log(
+          `${logPrefix} RetrieveFile body read failed fileID=${fileConfig.fileID} reason=${/timeout|timed out/i.test(bmsg) ? "timeout" : "body_error"} timeoutMs=${MONTGOMERY_RETRIEVE_TIMEOUT_MS}`,
+        );
+        throw bodyErr;
+      }
       if (buffer && buffer.length >= MIN_FILE_SIZE && hasValidPdfHeader(buffer)) {
         console.log(
-          `${logPrefix} final downloaded file: PDF ${buffer.length} bytes | md5-ready | source=RetrieveFile`,
+          `${logPrefix} RetrieveFile ok fileID=${fileConfig.fileID} bytes=${buffer.length}`,
         );
         return {
           viewerIndex: 0,
@@ -8539,7 +9543,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           buffer[3] === 0x46
         ) {
           console.log(
-            `${logPrefix} final downloaded file: PDF ${buffer.length} bytes | source=RetrieveFile`,
+            `${logPrefix} RetrieveFile ok fileID=${fileConfig.fileID} bytes=${buffer.length}`,
           );
           return {
             viewerIndex: 0,
@@ -8554,9 +9558,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         }
       }
       console.log(
-        `${logPrefix} unexpected body head: ${JSON.stringify(
-          buffer ? Array.from(buffer.slice(0, 20)) : [],
-        )}`,
+        `${logPrefix} RetrieveFile rejected fileID=${fileConfig.fileID} bytes=${buffer?.length ?? 0}`,
       );
     }
 
@@ -8734,9 +9736,8 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     }
 
     if (montgomeryWebApiNonDrawingsDirect) {
-      const MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS = 120000;
       console.log(
-        `[Montgomery][non-drawings] direct retrieve start | fileId=${fileId} | timeoutMs=${MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS} | fileName="${fileName}"`,
+        `[Montgomery][non-drawings] direct retrieve start | fileId=${fileId} | timeoutMs=${MONTGOMERY_RETRIEVE_TIMEOUT_MS} | fileName="${fileName}"`,
       );
       const webApiBase = "https://montgomeryco-md-us-projectdoxwebapi.avolvecloud.com";
       const retrieveUrl =
@@ -8749,13 +9750,13 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         const sessionCookie = allCookies.find((c) => c.name === "SessionID");
         if (!sessionCookie) {
           console.log(
-            `[Montgomery][non-drawings] direct retrieve fail | status=0 | contentType=missing_SessionID`,
+            `[Montgomery][non-drawings] direct retrieve fail | status=0 | contentType=missing_session`,
           );
           nonDrawingsResult = { success: false, reason: "no_session_id" };
         } else {
           const sessionIdVal = sessionCookie.value;
           const response = await context.request.get(retrieveUrl, {
-            timeout: MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS,
+            timeout: MONTGOMERY_RETRIEVE_TIMEOUT_MS,
             headers: {
               sessionid: sessionIdVal,
               Referer: "https://montgomeryco-md-us-projectdoxwebui.avolvecloud.com/",
@@ -8778,7 +9779,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
               const bmsg = String(bodyErr?.message || bodyErr || "");
               if (/timeout|timed out|\d+ms exceeded/i.test(bmsg)) {
                 console.log(
-                  `[Montgomery][non-drawings] direct retrieve fail | reason=montgomery_webapi_timeout | fileId=${fileId} | fileName="${fileName}" | timeoutMs=${MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS}`,
+                  `[Montgomery][non-drawings] direct retrieve fail | reason=montgomery_webapi_timeout | fileId=${fileId} | fileName="${fileName}" | timeoutMs=${MONTGOMERY_RETRIEVE_TIMEOUT_MS}`,
                 );
                 nonDrawingsResult = { success: false, reason: "montgomery_webapi_timeout" };
               } else {
@@ -8849,7 +9850,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         const emsg = String(err?.message || err || "");
         if (/timeout|timed out|\d+ms exceeded/i.test(emsg)) {
           console.log(
-            `[Montgomery][non-drawings] direct retrieve fail | reason=montgomery_webapi_timeout | fileId=${fileId} | fileName="${fileName}" | timeoutMs=${MONTGOMERY_NON_DRAWINGS_RETRIEVE_TIMEOUT_MS}`,
+            `[Montgomery][non-drawings] direct retrieve fail | reason=montgomery_webapi_timeout | fileId=${fileId} | fileName="${fileName}" | timeoutMs=${MONTGOMERY_RETRIEVE_TIMEOUT_MS}`,
           );
           nonDrawingsResult = { success: false, reason: "montgomery_webapi_timeout" };
         } else {
@@ -8999,6 +10000,10 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
 
     logMontgomeryPageLife("before viewFile");
 
+    if (isMontgomeryAdapter) {
+      await closeStaleMontgomeryViewerPopups(context, page);
+    }
+
     await page.evaluate(() => { window.name = ""; });
 
     const viewFileDom = await page.evaluate((fid) => {
@@ -9111,6 +10116,20 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     }
     popup = await popupPromise;
 
+    if (isMontgomeryAdapter) {
+      const matchedPopup = await findMontgomeryViewerPopupForFileId(
+        context,
+        page,
+        fileId,
+      );
+      if (matchedPopup) {
+        if (popup && popup !== matchedPopup) {
+          await popup.close().catch(() => {});
+        }
+        popup = matchedPopup;
+      }
+    }
+
 
 
     if (popup) {
@@ -9131,14 +10150,8 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
 
       if (popup) {
       if (preferViewerRuntime) {
-        try {
-          console.log(
-            isMontgomeryAdapter
-              ? "[Montgomery Files] viewer runtime detected"
-              : "[ProjectDox Files] Avolve WebViewer runtime (drawings)",
-          );
-          logMontgomeryFinal("viewer runtime detected");
-          const runtimeFile = await extractAvolveWebViewerFileFromPopup(popup, {
+        const runViewerRuntimeExtraction = async (targetPopup) => {
+          const runtimeFile = await extractAvolveWebViewerFileFromPopup(targetPopup, {
             fileId,
             fileName,
           });
@@ -9146,7 +10159,6 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           logMontgomeryFinal(
             `document detected | viewerIndex=${runtimeFile.viewerIndex ?? -1} | ${runtimeFile.filename || fileName} | type=${runtimeFile.fileType || "unknown"} | pages=${runtimeFile.pages || 0}`,
           );
-          logMontgomeryFinal("getDocumentCompletePromise resolved");
           logMontgomeryFinal(`getFileData success | bytes=${runtimeBuffer.length}`);
           if (runtimeBuffer.length <= 0) {
             throw new Error("empty_runtime_buffer");
@@ -9163,7 +10175,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           const cumulative = (session?._scrapeCumulativeBytes || 0) + runtimeBuffer.length;
           if (cumulative > MAX_SCRAPE_CUMULATIVE_SIZE) {
             console.log(
-              `[Montgomery Files] cumulative cap hit after ${typeof result !== "undefined" ? result._meta.downloadsOk : "unknown"} files, total bytes: ${cumulative}`,
+              `[Montgomery Files] cumulative cap hit fileId=${fileId} totalBytes=${cumulative}`,
             );
             return { success: false, reason: "cumulative_cap" };
           }
@@ -9171,20 +10183,13 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           if (session) session._scrapeCumulativeBytes = cumulative;
           const contentHash = computeHash(runtimeBuffer);
           const sizeMB = (runtimeBuffer.length / 1024 / 1024).toFixed(2);
-          console.log(
-            `[Montgomery Files] document detected | viewerIndex=${runtimeFile.viewerIndex ?? -1} | ${runtimeFile.filename || fileName} | type=${runtimeFile.fileType || "unknown"} | pages=${runtimeFile.pages || 0}`,
-          );
-          console.log("[Montgomery Files] getDocumentCompletePromise resolved");
-          console.log(
-            `[Montgomery Files] getFileData success | bytes=${runtimeBuffer.length}`,
-          );
           const runtimeDownloadUrl =
             /^https?:\/\//i.test(runtimeFile.downloadLink || "") &&
             !isViewerShellUrl(runtimeFile.downloadLink)
               ? runtimeFile.downloadLink
               : null;
           logMontgomeryFinal(
-            `resolved file source = ${runtimeDownloadUrl || "runtime:getFileData"}`,
+            `resolved file source = ${runtimeDownloadUrl ? "RetrieveFile" : "runtime:getFileData"}`,
           );
           const uploadResult = await tryUploadAndClean(
             downloadPath,
@@ -9199,22 +10204,49 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
             },
           );
           console.log(
-            `[Montgomery Files] tryUploadAndClean result | fileId=${fileId} | success=${uploadResult?.success} | publicUrl=${uploadResult?.publicUrl || null} | reason=${uploadResult?.reason || null}`,
+            `[Montgomery Files] upload fileId=${fileId} fileName="${fileName}" success=${!!uploadResult?.publicUrl} bytes=${runtimeBuffer.length}`,
           );
-          console.log(
-            `[Montgomery Files] upload ${uploadResult?.publicUrl ? "success" : "fail"} | ${runtimeFile.filename || fileName}`,
-          );
+          await targetPopup.close().catch(() => {});
           return uploadResult;
-        } catch (err) {
+        };
+
+        try {
           console.log(
-            `[Montgomery Files] runtime extraction failed | ${err?.message || err}`,
+            isMontgomeryAdapter
+              ? "[Montgomery Files] viewer runtime detected"
+              : "[ProjectDox Files] Avolve WebViewer runtime (drawings)",
           );
-          if (err && err.message === "viewer_missing_file_config") {
+          logMontgomeryFinal("viewer runtime detected");
+          return await runViewerRuntimeExtraction(popup);
+        } catch (err) {
+          const errMsg = err?.message || String(err);
+          console.log(
+            `[Montgomery Files] runtime extraction failed fileId=${fileId} reason=${errMsg}`,
+          );
+          if (errMsg === "stale_popup_file_id_mismatch") {
+            await popup.close().catch(() => {});
+            const retryPopup = await findMontgomeryViewerPopupForFileId(
+              context,
+              page,
+              fileId,
+            );
+            if (retryPopup) {
+              try {
+                return await runViewerRuntimeExtraction(retryPopup);
+              } catch (retryErr) {
+                console.log(
+                  `[Montgomery Files] runtime retry failed fileId=${fileId} reason=${retryErr?.message || retryErr}`,
+                );
+              }
+            }
+            return { success: false, reason: "stale_popup_file_id_mismatch" };
+          }
+          if (errMsg === "viewer_missing_file_config") {
             logMontgomeryFinal("rejected candidate reason = viewer_missing_file_config");
             return { success: false, reason: "viewer_missing_file_config" };
           }
           logMontgomeryFinal(
-            `rejected candidate reason = runtime_extraction_failed:${err?.message || err}`,
+            `rejected candidate reason = runtime_extraction_failed:${errMsg}`,
           );
         }
       } else {

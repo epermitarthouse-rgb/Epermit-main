@@ -54,24 +54,20 @@ function ActiveProjectBadge() {
 
 function ScrapeHeaderIndicator() {
   const scrape = useScrapeOptional();
-  if (!scrape || !scrape.scrapeOverlay || scrape.scrapeOverlay.phase !== "scraping") return null;
+  if (!scrape || !scrape.isScraping) return null;
 
-  const { scrapeOverlay, setScrapeMinimized } = scrape;
-  const pct = scrapeOverlay.total > 0
-    ? Math.round((scrapeOverlay.progress / scrapeOverlay.total) * 100)
-    : 0;
+  const { setScrapeMinimized, scrapeLiveMessage } = scrape;
+  const label = scrapeLiveMessage?.trim() || "Scraping portal…";
 
   return (
     <button
-      className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-warning/35 bg-warning/10 text-xs font-medium text-warning dark:border-primary/35 dark:bg-primary/12 dark:text-primary hover:bg-warning/18 dark:hover:bg-primary/18 transition-colors cursor-pointer"
+      className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-warning/35 bg-warning/10 text-xs font-medium text-warning dark:border-primary/35 dark:bg-primary/12 dark:text-primary hover:bg-warning/18 dark:hover:bg-primary/18 transition-colors cursor-pointer max-w-[220px]"
       onClick={() => setScrapeMinimized(false)}
       data-testid="header-scrape-indicator"
     >
       <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-        <span className="hidden sm:inline text-xs font-medium">
-        Scraping: {scrapeOverlay.progress}/{scrapeOverlay.total}
-      </span>
-      <span className="sm:hidden">{pct}%</span>
+      <span className="hidden sm:inline text-xs font-medium truncate">{label}</span>
+      <span className="sm:hidden truncate">Scraping</span>
       <Eye className="h-3 w-3 shrink-0 opacity-60" />
     </button>
   );

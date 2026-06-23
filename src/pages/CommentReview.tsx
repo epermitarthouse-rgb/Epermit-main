@@ -405,6 +405,12 @@ export default function CommentReview() {
     const maxRounds = 60;
     let cursor: { pdfIndex: number } | undefined;
     let round = 0;
+    const { data: projectRow } = await supabase
+      .from("projects")
+      .select("portal_data_hash")
+      .eq("id", projectId)
+      .maybeSingle();
+    const portalDataHash = (projectRow?.portal_data_hash as string | undefined) ?? undefined;
     try {
       while (round < maxRounds) {
         const capturePipelineEvidence =
@@ -415,6 +421,7 @@ export default function CommentReview() {
             project_id: projectId,
             /** First round only: replace rows + clear cursor so re-parse is complete (continuation uses cursor). */
             ...(!cursor ? { full_refresh: true } : {}),
+            ...(portalDataHash ? { portal_data_hash: portalDataHash } : {}),
             ...(cursor && { cursor }),
             ...(capturePipelineEvidence
               ? { capture_pipeline_evidence: true }

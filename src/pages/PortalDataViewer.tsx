@@ -33,6 +33,11 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useScrape } from "@/contexts/ScrapeContext";
+import {
+  isLiveScrapeJobActive,
+  useScrapeFileResults,
+} from "@/hooks/useScrapeFileResults";
+import type { ScrapeFileResult } from "@/lib/scrapeFileResultTypes";
 import { supabase } from "@/lib/supabase";
 import {
   normalizePgcFlattenedReviewCommentsText,
@@ -76,6 +81,7 @@ import {
   buildEmptyArlingtonAccelaPortalShell,
   resolvePortalView,
 } from "@/lib/portalView";
+import { resolvePgcPortalFileOpenUrl } from "@/lib/pgcPortalFileUrl";
 import { cn } from "@/lib/utils";
 
 /** Commun-ET tab pills — presentation only; tab `value` and visibility unchanged. */
@@ -197,7 +203,9 @@ interface FileEntry {
   uploadedDate: string;
   commentCount: number;
   comments?: FileComment[];
+  publicUrl?: string;
   viewUrl?: string;
+  downloadUrl?: string;
   downloadStatus?: string;
   downloadError?: string;
 }
@@ -932,6 +940,25 @@ export default function PortalDataViewer() {
     jurisdiction: string | null;
   } | null>(null);
   const scrape = useScrape();
+  const liveScrapeJobActive = isLiveScrapeJobActive(
+    scrape.activeJobId,
+    scrape.scrapeJobStatus,
+  );
+  const liveFileResults = useScrapeFileResults(
+    scrape.activeJobId,
+    resolvedProjectId,
+    !liveScrapeJobActive,
+  );
+  const liveFoldersGrouped = useMemo(() => {
+    const map = new Map<string, ScrapeFileResult[]>();
+    for (const row of liveFileResults.rows) {
+      const folder = row.folder_name || "Files";
+      const list = map.get(folder) ?? [];
+      list.push(row);
+      map.set(folder, list);
+    }
+    return [...map.entries()].map(([name, files]) => ({ name, files }));
+  }, [liveFileResults.rows]);
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
@@ -3064,15 +3091,20 @@ export default function PortalDataViewer() {
           <TabsTrigger value="reports" className={PORTAL_TAB_TRIGGER}>
             Reports
           </TabsTrigger>
-          {filesTab && (
+          {filesTab || liveFileResults.active ? (
             <TabsTrigger
               value="files"
               className={PORTAL_TAB_TRIGGER}
               data-testid="tab-files"
             >
               Files
+              {liveFileResults.active ? (
+                <Badge className="ml-2 border border-teal/30 bg-teal/10 text-[10px] text-teal">
+                  Live
+                </Badge>
+              ) : null}
             </TabsTrigger>
-          )}
+          ) : null}
         </TabsList>
 
         <TabsContent value="info" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
@@ -4457,7 +4489,7 @@ export default function PortalDataViewer() {
           </Section>
         </TabsContent>
 
-        {filesTab && (
+        {(filesTab || liveFileResults.active) && (
           <TabsContent
             value="files"
             className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none"
@@ -4466,17 +4498,112 @@ export default function PortalDataViewer() {
             <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
               <CardContent className="p-0">
                 <TabErrorBoundary tabName="Files">
+                  {liveFileResults.active ? (
+                    <div
+                      className="border-b border-cream-sunken bg-teal/5 px-5 py-4 space-y-3"
+                      data-testid="live-scrape-files-banner"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="border border-teal/30 bg-teal/10 text-teal">
+                          Current scrape
+                        </Badge>
+                        {liveFileResults.reconnecting ? (
+                          <span className="text-xs text-ink-tertiary-light">
+                            Reconnecting…
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-ink-primary-light">
+                        Uploaded {liveFileResults.stats.uploaded} of{" "}
+                        {liveFileResults.stats.total}
+                        {liveFileResults.stats.failed > 0
+                          ? ` · ${liveFileResults.stats.failed} failed`
+                          : ""}
+                        {liveFileResults.stats.inProgress > 0
+                          ? ` · ${liveFileResults.stats.inProgress} in progress`
+                          : ""}
+                      </p>
+                      {liveFoldersGrouped.length > 0 ? (
+                        <div className="space-y-3">
+                          {liveFoldersGrouped.map((folder) => (
+                            <div key={`live-${folder.name}`} className="rounded-lg border border-cream-sunken bg-cream overflow-hidden">
+                              <div className="px-4 py-2 text-xs font-mono uppercase tracking-wide text-ink-tertiary-light border-b border-cream-sunken">
+                                {folder.name}
+                              </div>
+                              <ul className="divide-y divide-cream-sunken">
+                                {folder.files.map((file) => (
+                                  <li
+                                    key={`${file.portal_file_id}-${file.file_version}`}
+                                    className="flex items-center justify-between gap-3 px-4 py-2 text-sm"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <FileText className="h-4 w-4 shrink-0 text-gold/90" />
+                                      {file.status === "uploaded" && file.public_url ? (
+                                        <a
+                                          href={file.public_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="truncate text-gold hover:underline"
+                                        >
+                                          {file.file_name}
+                                        </a>
+                                      ) : (
+                                        <span className="truncate text-ink-primary-light">
+                                          {file.file_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <Badge
+                                      variant="outline"
+                                      className={
+                                        file.status === "failed"
+                                          ? "border-destructive/40 text-destructive"
+                                          : file.status === "uploaded"
+                                            ? "border-teal/40 text-teal"
+                                            : "border-cream-sunken text-ink-secondary-light"
+                                      }
+                                    >
+                                      {file.status === "discovered"
+                                        ? "Queued"
+                                        : file.status === "downloading"
+                                          ? "Downloading"
+                                          : file.status === "retrying"
+                                            ? "Retrying"
+                                            : file.status === "uploaded"
+                                              ? "Uploaded"
+                                              : file.status === "failed"
+                                                ? "Failed"
+                                                : "Skipped"}
+                                    </Badge>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      ) : liveFileResults.loading ? (
+                        <p className="text-xs text-ink-tertiary-light">
+                          Loading live file progress…
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {filesTab?.error ? (
                     <div className="p-4 text-destructive flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
                       {filesTab?.error}
                     </div>
-                  ) : foldersForRender.length === 0 ? (
+                  ) : foldersForRender.length === 0 && !liveFileResults.active ? (
                     <p className="p-4 text-muted-foreground">
                       No files data available.
                     </p>
-                  ) : (
+                  ) : foldersForRender.length > 0 ? (
                     <div className="divide-y divide-cream-sunken">
+                      {liveFileResults.active ? (
+                        <div className="px-5 py-3 text-xs font-mono uppercase tracking-wide text-ink-tertiary-light border-b border-cream-sunken bg-cream">
+                          Saved files (last completed scrape)
+                        </div>
+                      ) : null}
                       {foldersForRender.map((folder, fi) => {
                         const folderKey = `${folder.name}-${fi}`;
                         const isOpen = expandedFolders.has(folderKey);
@@ -4563,6 +4690,14 @@ export default function PortalDataViewer() {
                                   <TableBody>
                                     {(folder.files ?? []).map((file, fIdx) => {
                                       const fileKey = `${folderKey}--${file.name}-${fIdx}`;
+                                      const fileOpenUrl = isPgcEplan
+                                        ? resolvePgcPortalFileOpenUrl(file)
+                                        : String(
+                                            file.publicUrl ||
+                                              file.viewUrl ||
+                                              file.downloadUrl ||
+                                              "",
+                                          ).trim() || null;
                                       const hasComments =
                                         Array.isArray(file.comments) &&
                                         file.comments.length > 0;
@@ -4589,9 +4724,9 @@ export default function PortalDataViewer() {
                                             <TableCell className="!text-ink-primary-light text-sm">
                                               <div className="flex items-center gap-2">
                                                 <FileText className="h-4 w-4 shrink-0 text-gold/90" />
-                                                {file.viewUrl ? (
+                                                {fileOpenUrl ? (
                                                   <a
-                                                    href={file.viewUrl}
+                                                    href={fileOpenUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="truncate max-w-[300px] text-gold hover:text-gold-deep hover:underline transition-colors"
@@ -4607,8 +4742,11 @@ export default function PortalDataViewer() {
                                                     {file.name}
                                                   </span>
                                                 )}
-                                                {file.downloadStatus ===
-                                                  "failed" && (
+                                                {(file.downloadStatus ===
+                                                  "failed" ||
+                                                  file.downloadStatus?.startsWith(
+                                                    "failed_",
+                                                  )) && (
                                                   <Badge
                                                     className="bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0 shrink-0"
                                                     title={
@@ -4711,7 +4849,7 @@ export default function PortalDataViewer() {
                         );
                       })}
                     </div>
-                  )}
+                  ) : null}
                 </TabErrorBoundary>
               </CardContent>
             </Card>

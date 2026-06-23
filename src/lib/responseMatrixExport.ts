@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 import { parseStoredCodeReferences } from "@/lib/groundedCommentContext";
+import { exportResponseApprovalLabel, formatResponseForExport } from "@/lib/responseApproval";
 
 export interface ResponseMatrixExportEvidence {
   file_name?: string;
@@ -34,6 +35,11 @@ export interface ResponseMatrixExportComment {
   missing_info_or_risk?: string | null;
   grounded_confidence?: string | null;
   grounded_generated_at?: string | null;
+  response_status?: string | null;
+  ai_generated_response_text?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  change_request_note?: string | null;
 }
 
 export interface ResponseMatrixProjectMeta {
@@ -55,6 +61,8 @@ export const RESPONSE_MATRIX_EXPORT_HEADERS = [
   "Existing Response Text",
   "Code Reference",
   "Suggested Response",
+  "Response Approval Status",
+  "Change Request Note",
   "Required Action",
   "Missing Info / Risk",
   "Confidence",
@@ -216,7 +224,9 @@ export function flattenExportRow(
       "Previous Reviewer Comment": safeText(row.previous_comment_text),
       "Existing Response Text": safeText(row.existing_response_text),
       "Code Reference": formatCodeReferences(row),
-      "Suggested Response": safeText(row.response_text),
+      "Suggested Response": formatResponseForExport(row),
+      "Response Approval Status": exportResponseApprovalLabel(row),
+      "Change Request Note": safeText(row.change_request_note),
       "Required Action": safeText(row.required_action),
       "Missing Info / Risk": safeText(row.missing_info_or_risk),
       Confidence: formatConfidence(row.grounded_confidence),

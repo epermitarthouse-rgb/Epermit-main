@@ -22,12 +22,23 @@ const SMALL_LINE_HEIGHT = SMALL_FONT + 2;
 interface CommentRow {
   discipline: string | null;
   status: string | null;
+  response_status: string | null;
+  change_request_note: string | null;
   original_text: string;
   code_reference: string | null;
   response_text: string;
   sheet_reference: string | null;
   assigned_to: string | null;
   created_at: string;
+}
+
+function formatResponseTextForExport(row: CommentRow): string {
+  const text = String(row.response_text ?? "").trim();
+  if (!text) return "";
+  const approval = (row.response_status ?? "").trim();
+  if (approval === "Approved") return text;
+  const label = approval || "Unapproved";
+  return `${text} [Response approval: ${label}]`;
 }
 
 interface CompanyBranding {
@@ -166,7 +177,7 @@ function drawResponseTable(
     const discLines = wrapText(row.discipline ?? "", 8);
     const cityLines = wrapText(row.original_text ?? "", 24);
     const codeLines = wrapText(row.code_reference ?? "", 8);
-    const respLines = wrapText(row.response_text ?? "", 26);
+    const respLines = wrapText(formatResponseTextForExport(row), 26);
     const sheetLines = wrapText(row.sheet_reference ?? "", 6);
     const statusLines = wrapText(row.status ?? "", 6);
     const lineCount = Math.max(
@@ -679,7 +690,7 @@ serve(async (req) => {
     const [commentsResult, brandingResult, architectResult, profileResult] = await Promise.all([
       supabase
         .from("parsed_comments")
-        .select("discipline, status, original_text, code_reference, response_text, sheet_reference, assigned_to, created_at")
+        .select("discipline, status, response_status, change_request_note, original_text, code_reference, response_text, sheet_reference, assigned_to, created_at")
         .eq("project_id", projectId)
         .order("discipline", { ascending: true })
         .order("created_at", { ascending: true }),

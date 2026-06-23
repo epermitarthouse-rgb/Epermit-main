@@ -6,6 +6,7 @@ const {
   resolveAccelaTenantProfile,
   ArlingtonAccelaProfile,
 } = require("./accela-tenant-profiles");
+const { mirrorSessionProgress } = require("./lib/session-progress");
 
 function getAccelaDebugDir() {
   const dir = path.join(__dirname, "debug");
@@ -23837,7 +23838,7 @@ async function runArlingtonAttachmentsResumableLifecycle(
       downloadCtx.attachmentsDownloadsAttemptedThisRun =
         (Number(downloadCtx.attachmentsDownloadsAttemptedThisRun) || 0) + 1;
       if (session) {
-        session.message = `Attachments → downloading: ${attName}`;
+        mirrorSessionProgress(session, `Attachments → downloading: ${attName}`);
       }
       console.log(
         `${logP} downloading file page=${pageNum} name=${attName.slice(0, 120)}`,
@@ -24244,7 +24245,7 @@ async function extractAttachments(
         row._baltimorePageIndex = pageIdx;
         attachments.push(row);
         if (session) {
-          session.message = `Attachments → page ${pageIdx + 1}: ${row.name}`;
+          mirrorSessionProgress(session, `Attachments → page ${pageIdx + 1}: ${row.name}`);
         }
         try {
           await downloadBaltimoreAttachmentForRow(page, row, fr, downloadDeps);
@@ -24301,7 +24302,7 @@ async function extractAttachments(
   for (let ai = 0; ai < attachments.length; ai++) {
     const att = attachments[ai];
     if (session)
-      session.message = `Attachments → downloading ${ai + 1}/${attachments.length}: ${att.name}`;
+      mirrorSessionProgress(session, `Attachments → downloading ${ai + 1}/${attachments.length}: ${att.name}`);
     console.log(
       `       📥 [${ai + 1}/${attachments.length}] Downloading: ${att.name}`,
     );
@@ -25095,11 +25096,11 @@ async function scrapeAccelaRecord(
 
   try {
     session.arlingtonPartialSuccessPlanReviewFailed = false;
-    session.message = `${permitNumber} → Searching...`;
+    mirrorSessionProgress(session, `${permitNumber} → Searching...`);
     await searchPermit(page, portalUrl, permitNumber);
     checkTimeout();
 
-    session.message = `${permitNumber} → Record Header`;
+    mirrorSessionProgress(session, `${permitNumber} → Record Header`);
     const header = await extractRecordHeader(page);
     const visiblePermit = (header.record_number || "").trim();
     console.log(`[Scrape] visible permit loaded: ${visiblePermit || "(empty)"}`);
@@ -25151,7 +25152,7 @@ async function scrapeAccelaRecord(
       (page._isArlington && wantsArlingtonInfo);
     if (wantsRecordDetailsTab) {
       try {
-        session.message = `${permitNumber} → Record Details`;
+        mirrorSessionProgress(session, `${permitNumber} → Record Details`);
         details = await extractRecordDetails(page);
       } catch (err) {
         console.log(`  [scrape] Record Details section error: ${err.message}`);
@@ -25173,7 +25174,7 @@ async function scrapeAccelaRecord(
     let processingStatus = { departments: [], screenshot: null };
     if (!isMinimalTabsPortal(page) && (!page._isArlington || arlingtonExtras)) {
       try {
-    session.message = `${permitNumber} → Processing Status`;
+    mirrorSessionProgress(session, `${permitNumber} → Processing Status`);
         processingStatus = await extractProcessingStatus(page);
       } catch (err) {
         console.log(`  [scrape] Processing Status section error: ${err.message}`);
@@ -25206,7 +25207,7 @@ async function scrapeAccelaRecord(
         );
       } else if (!page._isArlington) {
         try {
-    session.message = `${permitNumber} → Plan Review`;
+    mirrorSessionProgress(session, `${permitNumber} → Plan Review`);
           planReview = await extractPlanReview(page);
         } catch (err) {
           console.log(`  [scrape] Plan Review section error: ${err.message}`);
@@ -25220,7 +25221,7 @@ async function scrapeAccelaRecord(
     let relatedRecords = { records: [], screenshot: null };
     if (!isMinimalTabsPortal(page) && (!page._isArlington || arlingtonExtras)) {
       try {
-    session.message = `${permitNumber} → Related Records`;
+    mirrorSessionProgress(session, `${permitNumber} → Related Records`);
         relatedRecords = await extractRelatedRecords(page);
       } catch (err) {
         console.log(`  [scrape] Related Records section error: ${err.message}`);
@@ -25246,7 +25247,7 @@ async function scrapeAccelaRecord(
       (page._isArlington && wantsArlingtonAttachments);
     if (wantsAttachmentsTab) {
       try {
-        session.message = `${permitNumber} → Attachments`;
+        mirrorSessionProgress(session, `${permitNumber} → Attachments`);
         /** @type {Record<string, unknown> | null} */
         let arlingtonPriorPortalForAtt = null;
         if (page._isArlington && supabase && userId) {
@@ -25339,7 +25340,7 @@ async function scrapeAccelaRecord(
       session.arlingtonAutoContinueAttachments === true
     ) {
       try {
-        session.message = `${permitNumber} → Continuing Attachments downloads automatically...`;
+        mirrorSessionProgress(session, `${permitNumber} → Continuing Attachments downloads automatically...`);
         const autoAttSummary = await runArlingtonAttachmentsAutoContinueLoop({
           session,
           projectId: supabaseProjectId,
@@ -25368,9 +25369,9 @@ async function scrapeAccelaRecord(
         const pendingLeft = Number(autoAttSummary.pending) || 0;
         const cyc = Number(autoAttSummary.cycles) || 0;
         if (pendingLeft > 0) {
-          session.message = `${permitNumber} → Attachments partially complete (${pendingLeft} pending after ${cyc} auto-continue cycle(s))`;
+          mirrorSessionProgress(session, `${permitNumber} → Attachments partially complete (${pendingLeft} pending after ${cyc} auto-continue cycle(s))`);
         } else {
-          session.message = `${permitNumber} → Attachments downloads complete (${cyc} auto-continue cycle(s))`;
+          mirrorSessionProgress(session, `${permitNumber} → Attachments downloads complete (${cyc} auto-continue cycle(s))`);
         }
       } catch (autoAttErr) {
         const autoAttMsg =
@@ -25436,7 +25437,7 @@ async function scrapeAccelaRecord(
       wantsArlingtonPlanReview
     ) {
       try {
-        session.message = `${permitNumber} → Plan Review`;
+        mirrorSessionProgress(session, `${permitNumber} → Plan Review`);
         const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
         if (!fs.existsSync(DOWNLOADS_ROOT)) {
           fs.mkdirSync(DOWNLOADS_ROOT, { recursive: true });
@@ -25538,7 +25539,7 @@ async function scrapeAccelaRecord(
           session.arlingtonPlanReviewScope,
         );
         try {
-          session.message = `${permitNumber} → Continuing Plan Review downloads automatically...`;
+          mirrorSessionProgress(session, `${permitNumber} → Continuing Plan Review downloads automatically...`);
           const autoSummary = await runArlingtonPlanReviewAutoContinueLoop({
             session,
             projectId: supabaseProjectId,
@@ -25566,9 +25567,9 @@ async function scrapeAccelaRecord(
           const pendingLeft = Number(autoSummary.pending) || 0;
           const cyc = Number(autoSummary.cycles) || 0;
           if (pendingLeft > 0) {
-            session.message = `${permitNumber} → Plan Review partially complete (${pendingLeft} pending after ${cyc} auto-continue cycle(s))`;
+            mirrorSessionProgress(session, `${permitNumber} → Plan Review partially complete (${pendingLeft} pending after ${cyc} auto-continue cycle(s))`);
           } else {
-            session.message = `${permitNumber} → Plan Review downloads complete (${cyc} auto-continue cycle(s))`;
+            mirrorSessionProgress(session, `${permitNumber} → Plan Review downloads complete (${cyc} auto-continue cycle(s))`);
           }
         } catch (autoErr) {
           const autoMsg =
@@ -25590,7 +25591,7 @@ async function scrapeAccelaRecord(
     };
     if (!isMinimalTabsPortal(page) && (!page._isArlington || arlingtonExtras)) {
       try {
-    session.message = `${permitNumber} → Inspections`;
+    mirrorSessionProgress(session, `${permitNumber} → Inspections`);
         inspections = await extractInspections(page);
       } catch (err) {
         console.log(`  [scrape] Inspections section error: ${err.message}`);
@@ -25611,7 +25612,7 @@ async function scrapeAccelaRecord(
     let payments = { payments: [], screenshot: null };
     if (!isMinimalTabsPortal(page) && !page._isArlington) {
       try {
-    session.message = `${permitNumber} → Payments`;
+    mirrorSessionProgress(session, `${permitNumber} → Payments`);
         payments = await extractPayments(page);
       } catch (err) {
         console.log(`  [scrape] Payments section error: ${err.message}`);
@@ -26205,7 +26206,7 @@ async function scrapeAccelaRecord(
     console.log(`  📊 Extraction summary: info.fields=${Object.keys(details.fields).length} | status.departments=${processingStatus.departments.length} | relatedRecords=${relatedRecords.records.length} | attachments=${attachments.attachments.length} | inspections=${inspections.inspections.length + inspections.upcoming.length + inspections.completed.length} | payments=${payments.payments.length}`);
 
     if (supabase && userId) {
-      session.message = `${permitNumber} → Syncing to database...`;
+      mirrorSessionProgress(session, `${permitNumber} → Syncing to database...`);
       console.log(`\n  💾 Syncing ${permitNumber} to Supabase...`);
       console.log(
         `  📌 supabaseProjectId=${supabaseProjectId || "(none)"}, userId=${userId}, portalType=${portalPayloadForDb.portalType}`,
@@ -27115,7 +27116,7 @@ async function runArlingtonPlanReviewAutoContinueLoop(opts) {
     }
 
     if (cycle > 0) {
-      session.message = `${permit} → Continuing pending Plan Review downloads automatically...`;
+      mirrorSessionProgress(session, `${permit} → Continuing pending Plan Review downloads automatically...`);
       await sleep(delayMs);
     }
 
@@ -27549,7 +27550,7 @@ async function continueArlingtonPlanReviewDownloads(
   await runPlanReviewPersistCheckpoint("continueHydrate", {}).catch(() => {});
 
   if (!isArlingtonCapDetailPage(page)) {
-    session.message = `${permit} → Searching...`;
+    mirrorSessionProgress(session, `${permit} → Searching...`);
     await searchPermit(page, portalUrlStr, permit);
   }
 
@@ -27900,7 +27901,7 @@ async function continueArlingtonAttachmentsDownloads(
   }
 
   if (!isArlingtonCapDetailPage(page)) {
-    session.message = `${permit} → Searching...`;
+    mirrorSessionProgress(session, `${permit} → Searching...`);
     await searchPermit(page, portalUrlStr, permit);
   }
 
@@ -28041,7 +28042,7 @@ async function runArlingtonAttachmentsAutoContinueLoop(opts) {
     }
 
     if (cycle > 0) {
-      session.message = `${permit} → Continuing pending Attachments downloads automatically...`;
+      mirrorSessionProgress(session, `${permit} → Continuing pending Attachments downloads automatically...`);
       await sleep(delayMs);
     }
 
