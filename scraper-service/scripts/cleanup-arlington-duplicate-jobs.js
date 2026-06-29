@@ -38,10 +38,17 @@ function identityKey(row) {
   ].join("|");
 }
 
-function scoreJob(row) {
-  const checkpoint = Number(row.checkpoint_version) || 0;
-  const created = row.created_at ? Date.parse(row.created_at) : 0;
-  return checkpoint * 1_000_000_000_000 + created;
+function compareCanonicalJobs(a, b) {
+  const checkpointA = Number(a.checkpoint_version) || 0;
+  const checkpointB = Number(b.checkpoint_version) || 0;
+  if (checkpointB !== checkpointA) return checkpointB - checkpointA;
+  const createdA = a.created_at ? Date.parse(a.created_at) : 0;
+  const createdB = b.created_at ? Date.parse(b.created_at) : 0;
+  return createdA - createdB;
+}
+
+function pickCanonical(jobs) {
+  return [...jobs].sort(compareCanonicalJobs)[0];
 }
 
 async function cancelDuplicate(supabase, duplicate, canonicalId, dryRun) {
@@ -78,11 +85,6 @@ async function cancelDuplicate(supabase, duplicate, canonicalId, dryRun) {
   return { id: duplicate.id, cancelled: true };
 }
 
-async function pickCanonical(jobs) {
-  const sorted = [...jobs].sort((a, b) => scoreJob(b) - scoreJob(a));
-  return sorted[0];
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const url = process.env.SUPABASE_URL;
@@ -103,7 +105,7 @@ async function main() {
       console.error("Could not load both specified jobs");
       process.exit(1);
     }
-    const canonical = await pickCanonical(data);
+    const canonical = pickCanonical(data);
     const duplicates = data.filter((j) => j.id !== canonical.id);
     for (const dup of duplicates) {
       await cancelDuplicate(supabase, dup, canonical.id, args.dryRun);
@@ -136,7 +138,7 @@ async function main() {
   const results = [];
   for (const [key, jobs] of groups) {
     if (jobs.length < 2) continue;
-    const canonical = await pickCanonical(jobs);
+    const canonical = pickCanonical(jobs);
     const duplicates = jobs.filter((j) => j.id !== canonical.id);
     for (const dup of duplicates) {
       await cancelDuplicate(supabase, dup, canonical.id, args.dryRun);
