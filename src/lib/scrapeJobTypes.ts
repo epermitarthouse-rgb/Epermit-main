@@ -1,7 +1,9 @@
 export const SCRAPE_JOB_TERMINAL_STATUSES = [
   "completed",
   "completed_with_warnings",
+  "partial_external_blocker",
   "failed",
+  "failed_unrecoverable",
   "cancelled",
 ] as const;
 
@@ -11,7 +13,9 @@ export type ScrapeJobStatus =
   | "waiting_user"
   | "completed"
   | "completed_with_warnings"
+  | "partial_external_blocker"
   | "failed"
+  | "failed_unrecoverable"
   | "cancelled";
 
 export interface ScrapeJob {
@@ -75,6 +79,8 @@ export function scrapeJobStatusLabel(status: ScrapeJobStatus | string): string {
       return "Completed";
     case "completed_with_warnings":
       return "Completed with Warnings";
+    case "partial_external_blocker":
+      return "Stopped (External Blocker)";
     case "failed":
       return "Failed";
     case "cancelled":
@@ -90,6 +96,8 @@ export function scrapeJobStatusBadgeClass(status: string): string {
       return "bg-emerald-500/15 text-emerald-300 border-emerald-500/35";
     case "completed_with_warnings":
       return "bg-amber-500/15 text-amber-200 border-amber-500/35";
+    case "partial_external_blocker":
+      return "bg-orange-500/15 text-orange-200 border-orange-500/35";
     case "failed":
       return "bg-red-500/15 text-red-200 border-red-500/35";
     case "cancelled":
@@ -107,7 +115,13 @@ export function scrapeJobStatusBadgeClass(status: string): string {
 export function scrapeOutcomeFromJobStatus(
   status: string | null | undefined,
 ): "done" | "cancelled" | "error" | null {
-  if (status === "completed" || status === "completed_with_warnings") return "done";
+  if (
+    status === "completed" ||
+    status === "completed_with_warnings" ||
+    status === "partial_external_blocker"
+  ) {
+    return "done";
+  }
   if (status === "cancelled") return "cancelled";
   if (status === "failed") return "error";
   return null;

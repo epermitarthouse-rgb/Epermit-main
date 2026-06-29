@@ -343,7 +343,8 @@ export function AgentWorkflowStatus() {
       }
     } else if (
       scrape.scrapeJobStatus === "completed" ||
-      scrape.scrapeJobStatus === "completed_with_warnings"
+      scrape.scrapeJobStatus === "completed_with_warnings" ||
+      scrape.scrapeJobStatus === "partial_external_blocker"
     ) {
       setPortalStatus("done");
       setPortalStatusText("Done");

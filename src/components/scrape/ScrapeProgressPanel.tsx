@@ -149,7 +149,7 @@ export function ScrapeProgressPanel({
           <div
             className="h-4 w-4 shrink-0 rounded-full border-2 border-teal border-t-transparent animate-spin"
           />
-        ) : status === "completed" || status === "completed_with_warnings" ? (
+        ) : status === "completed" || status === "completed_with_warnings" || status === "partial_external_blocker" ? (
           <CheckCircle2 className="h-4 w-4 text-teal shrink-0" />
         ) : (
           <XCircle className="h-4 w-4 text-red-400 shrink-0" />
@@ -171,7 +171,7 @@ export function ScrapeProgressPanel({
           <div className="flex items-center gap-2 flex-wrap">
             {!isTerminal ? (
               <div className="h-4 w-4 shrink-0 rounded-full border-2 border-teal border-t-transparent animate-spin" />
-            ) : status === "completed" || status === "completed_with_warnings" ? (
+            ) : status === "completed" || status === "completed_with_warnings" || status === "partial_external_blocker" ? (
               <CheckCircle2 className="h-4 w-4 text-teal shrink-0" />
             ) : (
               <XCircle className="h-4 w-4 text-red-400 shrink-0" />

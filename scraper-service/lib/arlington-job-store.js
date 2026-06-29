@@ -16,6 +16,7 @@ const {
 const TERMINAL_STATUSES = new Set([
   "completed",
   "completed_with_warnings",
+  "partial_external_blocker",
   "failed",
   "failed_unrecoverable",
   "cancelled",
@@ -181,10 +182,10 @@ function scheduleRateLimitRelease(patch, attemptCount) {
 function terminalStatusFromVerification(verification) {
   if (!verification) return "completed_with_warnings";
   if (verification.finalStatus === "partial_rate_limited") return "rate_limited";
-  if (verification.finalStatus === "partial_project_info") {
-    return "completed_with_warnings";
-  }
   if (verification.finalStatus === "partial_external_blocker") {
+    return "partial_external_blocker";
+  }
+  if (verification.finalStatus === "partial_project_info") {
     return "completed_with_warnings";
   }
   return "completed_with_warnings";
@@ -251,7 +252,10 @@ async function finalizeJobFromVerification(supabase, job, verification) {
       checkpoint_version: verification.checkpointVersion,
       completed_at: new Date().toISOString(),
       next_attempt_at: null,
-      current_stage: "completed_with_warnings",
+      current_stage:
+        terminalStatusFromVerification(verification) === "partial_external_blocker"
+          ? "partial_external_blocker"
+          : "completed_with_warnings",
       current_user_message: `Arlington scrape stopped: ${verification.finalStatus}.`,
       metadata: {
         arlington: {

@@ -15,7 +15,14 @@ const {
 const orchestration = require("../lib/arlington-orchestration.js");
 
 const ACTIVE = ["queued", "running", "resuming", "rate_limited", "partial", "waiting_user"];
-const TERMINAL = ["completed", "completed_with_warnings", "failed", "cancelled"];
+const TERMINAL = [
+  "completed",
+  "completed_with_warnings",
+  "partial_external_blocker",
+  "failed",
+  "failed_unrecoverable",
+  "cancelled",
+];
 
 function createEnqueueStore() {
   const rows = new Map();
@@ -418,6 +425,27 @@ describe("no-progress guard", () => {
 });
 
 describe("cancelled duplicate claim exclusion (contract)", () => {
+  it("migration resolves duplicates before creating unique index", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const sql = fs.readFileSync(
+      path.join(__dirname, "..", "..", "supabase/migrations/20260630200000_arlington_enqueue_dedup.sql"),
+      "utf8",
+    );
+    const idxPos = sql.indexOf("CREATE UNIQUE INDEX idx_scrape_jobs_arlington_active_identity");
+    const dupPos = sql.indexOf("duplicate_active_job");
+    const dropIdxPos = sql.indexOf("DROP INDEX IF EXISTS public.idx_scrape_jobs_arlington_active_identity");
+    assert.ok(dupPos > 0, "duplicate cleanup must be present");
+    assert.ok(dropIdxPos > 0 && dropIdxPos < idxPos, "must drop index before recreate");
+    assert.ok(dupPos < idxPos, "duplicate cleanup must precede unique index");
+    assert.match(sql, /partial_external_blocker/);
+    assert.doesNotMatch(
+      sql.slice(idxPos, idxPos + 400),
+      /partial_external_blocker/,
+      "partial_external_blocker must not be in active unique-index predicate",
+    );
+  });
+
   it("migration claim RPC skips duplicate_active_job terminal reason", () => {
     const fs = require("fs");
     const path = require("path");
@@ -432,6 +460,10 @@ describe("cancelled duplicate claim exclusion (contract)", () => {
 
   it("cancelled jobs are not active statuses", () => {
     assert.ok(!ACTIVE.includes("cancelled"));
+    assert.ok(!ACTIVE.includes("completed_with_warnings"));
+    assert.ok(!ACTIVE.includes("partial_external_blocker"));
     assert.ok(TERMINAL.includes("cancelled"));
+    assert.ok(TERMINAL.includes("completed_with_warnings"));
+    assert.ok(TERMINAL.includes("partial_external_blocker"));
   });
 });

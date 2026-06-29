@@ -3,7 +3,9 @@
 const TERMINAL_JOB_STATUSES = new Set([
   "completed",
   "completed_with_warnings",
+  "partial_external_blocker",
   "failed",
+  "failed_unrecoverable",
   "cancelled",
 ]);
 

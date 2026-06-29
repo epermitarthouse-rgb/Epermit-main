@@ -1,12 +1,15 @@
--- Arlington idempotent enqueue + duplicate active-job protection + terminal partial statuses.
+-- Arlington idempotent enqueue + duplicate active-job protection.
+-- Order: columns → backfill → resolve duplicate actives → unique index → RPCs.
+-- Does not delete rows, portal_data, or storage files.
 
+-- 1. Identity / cancellation columns
 ALTER TABLE public.scrape_jobs
   ADD COLUMN IF NOT EXISTS normalized_permit_number TEXT,
   ADD COLUMN IF NOT EXISTS normalized_scope_key TEXT,
   ADD COLUMN IF NOT EXISTS cancellation_reason TEXT,
   ADD COLUMN IF NOT EXISTS canonical_job_id UUID REFERENCES public.scrape_jobs(id) ON DELETE SET NULL;
 
--- Backfill identity columns for existing Arlington rows.
+-- 2. Backfill normalized Arlington permit + scope identity
 UPDATE public.scrape_jobs
 SET
   normalized_permit_number = upper(trim(permit_number)),
@@ -31,6 +34,7 @@ SET
 WHERE jurisdiction ILIKE '%arlington%'
   AND permit_number IS NOT NULL;
 
+-- Terminal + active status constraint (partial_external_blocker is terminal, not active)
 ALTER TABLE public.scrape_jobs
   DROP CONSTRAINT IF EXISTS scrape_jobs_status_check;
 
@@ -45,20 +49,103 @@ ALTER TABLE public.scrape_jobs
       'waiting_user',
       'completed',
       'completed_with_warnings',
+      'partial_external_blocker',
       'failed',
       'failed_unrecoverable',
       'cancelled'
     )
   );
 
--- One active Arlington job per project + permit + scope identity.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_scrape_jobs_arlington_active_identity
+-- 3–7. Cancel redundant active Arlington jobs per identity before unique index
+WITH active_arlington AS (
+  SELECT
+    id,
+    project_id,
+    normalized_permit_number,
+    normalized_scope_key,
+    checkpoint_version,
+    created_at,
+    metadata
+  FROM public.scrape_jobs
+  WHERE jurisdiction ILIKE '%arlington%'
+    AND completed_at IS NULL
+    AND status IN ('queued', 'running', 'resuming', 'rate_limited', 'partial', 'waiting_user')
+    AND normalized_permit_number IS NOT NULL
+    AND length(trim(normalized_permit_number)) > 0
+    AND normalized_scope_key IS NOT NULL
+    AND length(trim(normalized_scope_key)) > 0
+),
+dup_groups AS (
+  SELECT
+    project_id,
+    normalized_permit_number,
+    normalized_scope_key
+  FROM active_arlington
+  GROUP BY project_id, normalized_permit_number, normalized_scope_key
+  HAVING COUNT(*) > 1
+),
+ranked AS (
+  SELECT
+    a.id,
+    a.metadata,
+    a.project_id,
+    a.normalized_permit_number,
+    a.normalized_scope_key,
+    ROW_NUMBER() OVER (
+      PARTITION BY a.project_id, a.normalized_permit_number, a.normalized_scope_key
+      ORDER BY COALESCE(a.checkpoint_version, 0) DESC, a.created_at ASC
+    ) AS rn,
+    FIRST_VALUE(a.id) OVER (
+      PARTITION BY a.project_id, a.normalized_permit_number, a.normalized_scope_key
+      ORDER BY COALESCE(a.checkpoint_version, 0) DESC, a.created_at ASC
+    ) AS canonical_id
+  FROM active_arlington a
+  INNER JOIN dup_groups d
+    ON a.project_id = d.project_id
+   AND a.normalized_permit_number = d.normalized_permit_number
+   AND a.normalized_scope_key = d.normalized_scope_key
+),
+duplicates AS (
+  SELECT id, canonical_id, metadata
+  FROM ranked
+  WHERE rn > 1
+)
+UPDATE public.scrape_jobs sj
+SET
+  status = 'cancelled',
+  cancellation_reason = 'duplicate_active_job',
+  canonical_job_id = d.canonical_id,
+  lease_worker_id = NULL,
+  lease_expires_at = NULL,
+  lease_heartbeat_at = NULL,
+  next_attempt_at = NULL,
+  completed_at = COALESCE(sj.completed_at, now()),
+  phase = 'complete',
+  current_stage = 'cancelled',
+  current_user_message = 'Cancelled: duplicate active Arlington scrape job.',
+  metadata = jsonb_set(
+    COALESCE(d.metadata, '{}'::jsonb),
+    '{arlington}',
+    COALESCE(d.metadata->'arlington', '{}'::jsonb) || jsonb_build_object(
+      'terminalReason', 'duplicate_active_job',
+      'canonicalJobId', d.canonical_id::text
+    ),
+    true
+  ),
+  updated_at = now()
+FROM duplicates d
+WHERE sj.id = d.id;
+
+-- 8. Partial unique index (safe after duplicate cleanup)
+DROP INDEX IF EXISTS public.idx_scrape_jobs_arlington_active_identity;
+
+CREATE UNIQUE INDEX idx_scrape_jobs_arlington_active_identity
   ON public.scrape_jobs (project_id, normalized_permit_number, normalized_scope_key)
   WHERE jurisdiction ILIKE '%arlington%'
     AND completed_at IS NULL
     AND status IN ('queued', 'running', 'resuming', 'rate_limited', 'partial', 'waiting_user');
 
--- Atomic idempotent enqueue.
+-- 9a. Atomic idempotent enqueue
 CREATE OR REPLACE FUNCTION public.enqueue_or_get_arlington_scrape_job(
   p_project_id UUID,
   p_user_id UUID,
@@ -100,7 +187,7 @@ BEGIN
     AND normalized_scope_key = p_normalized_scope_key
     AND completed_at IS NULL
     AND status IN ('queued', 'running', 'resuming', 'rate_limited', 'partial', 'waiting_user')
-  ORDER BY checkpoint_version DESC, created_at ASC
+  ORDER BY checkpoint_version DESC NULLS LAST, created_at ASC
   LIMIT 1
   FOR UPDATE;
 
@@ -174,7 +261,7 @@ BEGIN
         AND normalized_scope_key = p_normalized_scope_key
         AND completed_at IS NULL
         AND status IN ('queued', 'running', 'resuming', 'rate_limited', 'partial', 'waiting_user')
-      ORDER BY checkpoint_version DESC, created_at ASC
+      ORDER BY checkpoint_version DESC NULLS LAST, created_at ASC
       LIMIT 1;
 
       IF NOT FOUND THEN
@@ -189,7 +276,7 @@ BEGIN
 END;
 $$;
 
--- Do not claim cancelled or terminal-complete jobs.
+-- 9b. Claim RPC — never reclaim terminal or cancelled jobs
 CREATE OR REPLACE FUNCTION public.claim_arlington_scrape_job(
   p_worker_id TEXT,
   p_lease_ttl_seconds INTEGER DEFAULT 180
@@ -214,7 +301,14 @@ BEGIN
   WHERE jurisdiction ILIKE '%arlington%'
     AND completed_at IS NULL
     AND status IN ('queued', 'running', 'resuming', 'rate_limited', 'partial')
-    AND status <> 'cancelled'
+    AND status NOT IN (
+      'completed',
+      'completed_with_warnings',
+      'partial_external_blocker',
+      'failed',
+      'failed_unrecoverable',
+      'cancelled'
+    )
     AND (next_attempt_at IS NULL OR next_attempt_at <= now())
     AND (lease_expires_at IS NULL OR lease_expires_at < now())
     AND (phase IS NULL OR phase IS DISTINCT FROM 'complete')
