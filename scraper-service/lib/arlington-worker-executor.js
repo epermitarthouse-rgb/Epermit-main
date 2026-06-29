@@ -27,6 +27,8 @@ async function runVerificationAndFinalize(supabase, job, workerId, ctx) {
     userId,
     permitNumber,
     requestedTabs: requestedScope.tabs,
+    requestedScope,
+    job,
   });
   if (await pollArlingtonJobCancelled(supabase, job.id)) {
     return { verification, finalized: null, cancelled: true };
@@ -184,6 +186,8 @@ async function executeArlingtonWorkerCycle(ctx) {
       userId,
       permitNumber,
       requestedTabs: requestedScope.tabs,
+      requestedScope,
+      job,
     });
     if (await isCancelRequested()) {
       return { ok: true, outcome: "cancelled", phaseResult };

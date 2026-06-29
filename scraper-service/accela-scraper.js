@@ -28516,6 +28516,13 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
     return true;
   };
 
+  if (phase === "verify") {
+    result.verify = true;
+    result.verifyPersistedOnly = true;
+    result.nextPhase = "complete";
+    return result;
+  }
+
   if (await stopIfCancelled()) return result;
 
   if (!isArlingtonCapDetailPage(page)) {
@@ -28866,13 +28873,6 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
         planReviewPending: retryablePending,
       });
     }
-    return result;
-  }
-
-  if (phase === "verify") {
-    result.verify = true;
-    result.nextPhase = "complete";
-    result.done = true;
     return result;
   }
 

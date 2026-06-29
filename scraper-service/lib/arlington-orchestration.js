@@ -473,140 +473,31 @@ async function findActiveArlingtonJobForProject(supabase, projectId) {
   return data?.[0] || null;
 }
 
-/**
- * Database-backed completion verification for Arlington Scrape All.
- * @param {object} opts
- */
 async function verifyArlingtonJobCompletion(supabase, opts) {
   const {
     projectId,
     userId,
     permitNumber,
     requestedTabs = ["info", "attachments", "plan_review"],
+    requestedScope,
+    job,
   } = opts;
 
   const row = await readProjectPortalRow(supabase, projectId, userId, permitNumber);
   const portalData = row?.portal_data || {};
-  const states = readArlingtonSectionStates(portalData);
-  const tabs = portalData.tabs || {};
+  const {
+    evaluateArlingtonJobCompletion,
+    mapEvaluationToLegacyVerification,
+  } = require("./arlington-completion-evaluator.js");
 
-  const wantsAttachments = requestedTabs.includes("attachments");
-  const wantsPlanReview = requestedTabs.includes("plan_review");
-  const wantsInfo = requestedTabs.includes("info");
+  const scope =
+    requestedScope ||
+    (job?.requested_scope && typeof job.requested_scope === "object"
+      ? job.requested_scope
+      : { tabs: requestedTabs });
 
-  const attachmentRows = tabs.attachments?.tables?.[0]?.rows || [];
-  const attachmentsState =
-    states.attachments ||
-    tabs.attachments?.sectionState ||
-    (wantsAttachments ? "not_started" : "complete");
-  const attachmentsPending = arlingtonAttachmentPendingCount(attachmentRows);
-  const attachmentsDownloaded = arlingtonAttachmentDownloadedCount(attachmentRows);
-
-  const piState =
-    states.projectInformation ||
-    tabs.planReview?.tabs?.projectInformation?.sectionState ||
-    (wantsPlanReview || wantsInfo ? "not_started" : "complete");
-  const piFields = tabs.planReview?.tabs?.projectInformation?.fields || [];
-
-  const prAnalysis = analyzePlanReviewPendingDocuments(tabs.planReview);
-  const prPending = prAnalysis.retryable;
-  const planReviewState =
-    states.planReview ||
-    tabs.planReview?.sectionState ||
-    (wantsPlanReview ? "not_started" : "complete");
-
-  const blockers = [];
-  if (wantsAttachments) {
-    if (attachmentsState === "not_started") blockers.push("attachments_not_started");
-    if (attachmentsState === "rate_limited") blockers.push("attachments_rate_limited");
-    if (attachmentsState === "failed") blockers.push("attachments_failed");
-    if (
-      attachmentsState === "loading_metadata" ||
-      attachmentsState === "downloading" ||
-      attachmentsState === "partial"
-    ) {
-      blockers.push("attachments_in_progress");
-    }
-    if (attachmentsPending > 0 && attachmentsState !== "rate_limited") {
-      blockers.push("attachments_pending");
-    }
-  }
-  if (wantsPlanReview || wantsInfo) {
-    if (piState === "weak_extraction") blockers.push("project_info_weak");
-    if (piState === "failed") blockers.push("project_info_failed");
-    if (piState === "loading") blockers.push("project_info_loading");
-  }
-  if (wantsPlanReview) {
-    if (
-      planReviewState === "loading_metadata" ||
-      planReviewState === "downloading" ||
-      planReviewState === "partial"
-    ) {
-      blockers.push("plan_review_in_progress");
-    }
-    if (planReviewState === "failed") blockers.push("plan_review_failed");
-    if (prPending.total > 0) blockers.push("plan_review_pending");
-    if (
-      prAnalysis.metadataOnly.total > 0 &&
-      prPending.total === 0 &&
-      wantsPlanReview
-    ) {
-      blockers.push("plan_review_metadata_only");
-    }
-  }
-
-  const hasRetryableWork = blockers.some((b) =>
-    [
-      "attachments_not_started",
-      "attachments_in_progress",
-      "attachments_pending",
-      "attachments_rate_limited",
-      "attachments_failed",
-      "project_info_loading",
-      "project_info_failed",
-      "plan_review_in_progress",
-      "plan_review_failed",
-      "plan_review_pending",
-    ].includes(b),
-  );
-
-  let finalStatus = "complete";
-  if (blockers.includes("attachments_rate_limited")) {
-    finalStatus = "partial_rate_limited";
-  } else if (blockers.includes("project_info_weak")) {
-    finalStatus = "partial_project_info";
-  } else if (blockers.includes("plan_review_metadata_only") && !hasRetryableWork) {
-    finalStatus = "partial_external_blocker";
-  } else if (blockers.length > 0) {
-    finalStatus = "partial_external_blocker";
-  }
-
-  const terminalPartial =
-    !hasRetryableWork &&
-    (finalStatus === "partial_external_blocker" ||
-      finalStatus === "partial_project_info");
-
-  return {
-    complete: blockers.length === 0,
-    finalStatus,
-    blockers,
-    hasRetryableWork,
-    terminalPartial,
-    checkpointVersion: readCheckpointVersion(portalData),
-    counts: {
-      attachmentsDownloaded,
-      attachmentsPending,
-      planReviewPending: prPending.total,
-      planReviewMetadataOnly: prAnalysis.metadataOnly.total,
-      planReviewMetadataOnlyNames: prAnalysis.metadataOnly.names,
-      projectInfoFields: Array.isArray(piFields) ? piFields.length : 0,
-    },
-    states: {
-      attachments: attachmentsState,
-      projectInformation: piState,
-      planReview: planReviewState,
-    },
-  };
+  const evaluation = evaluateArlingtonJobCompletion(job || { requested_scope: scope }, portalData, scope);
+  return mapEvaluationToLegacyVerification(evaluation);
 }
 
 function mapVerificationToSessionStatus(verification) {

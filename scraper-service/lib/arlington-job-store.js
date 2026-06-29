@@ -8,6 +8,10 @@ const {
   computeArlingtonProgressFingerprint,
 } = require("./arlington-orchestration.js");
 const {
+  computeVerifyFingerprint,
+  logVerifyDiagnostics,
+} = require("./arlington-completion-evaluator.js");
+const {
   normalizeArlingtonPermitNumber,
   normalizeArlingtonRequestedScope,
   buildArlingtonScopeKey,
@@ -295,37 +299,119 @@ function terminalStatusFromVerification(verification) {
   return "completed_with_warnings";
 }
 
+const VERIFY_LOOP_TERMINAL_THRESHOLD = 3;
+const VERIFY_RETRY_DELAY_MS = 60 * 1000;
+
+async function persistVerifyAttemptMetadata(supabase, job, verification, fingerprint) {
+  const priorMeta =
+    job?.metadata?.arlington && typeof job.metadata.arlington === "object"
+      ? job.metadata.arlington
+      : {};
+  const sameFingerprint =
+    `${priorMeta.lastVerifyFingerprint || ""}` === `${fingerprint || ""}`;
+  const verifyAttemptCount = sameFingerprint
+    ? Number(priorMeta.verifyAttemptCount || 0) + 1
+    : 1;
+
+  const nextMeta = {
+    ...(job.metadata || {}),
+    arlington: {
+      ...priorMeta,
+      verifyAttemptCount,
+      lastVerifyFingerprint: fingerprint,
+      lastVerifyAt: new Date().toISOString(),
+      lastVerifyReason: verification.complete
+        ? "complete"
+        : verification.blockers?.join(",") || verification.finalStatus,
+      sectionOutcomes: verification.sectionOutcomes || {},
+    },
+  };
+
+  await supabase
+    .from("scrape_jobs")
+    .update({ metadata: nextMeta, updated_at: new Date().toISOString() })
+    .eq("id", job.id)
+    .neq("status", "cancelled")
+    .is("completed_at", null);
+
+  return { verifyAttemptCount, sameFingerprint };
+}
+
+function buildTerminalReleasePatch(verification, terminalReason, status) {
+  return {
+    status,
+    phase: "complete",
+    attachments_state: verification.states.attachments,
+    project_info_state: verification.states.projectInformation,
+    plan_review_state: verification.states.planReview,
+    checkpoint_version: verification.checkpointVersion,
+    completed_at: new Date().toISOString(),
+    next_attempt_at: null,
+    run_intent: "dormant",
+    dispatch_priority: 0,
+    current_stage: status,
+    current_user_message:
+      status === "completed"
+        ? "Arlington scrape completed."
+        : `Arlington scrape stopped: ${verification.finalStatus}.`,
+    metadata: {
+      arlington: {
+        terminalReason,
+        sectionOutcomes: verification.sectionOutcomes || {},
+        metadataOnlyCount: verification.counts?.planReviewMetadataOnly || 0,
+        metadataOnlyDocumentNames:
+          verification.counts?.planReviewMetadataOnlyNames || [],
+        lastProgressAt: new Date().toISOString(),
+      },
+    },
+  };
+}
+
 async function finalizeJobFromVerification(supabase, job, verification) {
   if (!verification) return null;
+
+  const fromVerifyPhase = `${job?.phase || ""}`.trim() === "verify";
+  const fingerprint = computeVerifyFingerprint(verification.evaluation);
+  const verifyMeta = await persistVerifyAttemptMetadata(
+    supabase,
+    job,
+    verification,
+    fingerprint,
+  );
+
+  if (
+    fromVerifyPhase &&
+    !verification.complete &&
+    verifyMeta.sameFingerprint &&
+    verifyMeta.verifyAttemptCount >= VERIFY_LOOP_TERMINAL_THRESHOLD &&
+    !verification.hasRetryableWork
+  ) {
+    verification.terminalPartial = true;
+    verification.finalStatus = "partial_external_blocker";
+    if (!verification.blockers?.includes("verify_loop_guard")) {
+      verification.blockers = [...(verification.blockers || []), "verify_loop_guard"];
+    }
+  }
+
   if (verification.complete) {
-    const status =
-      verification.finalStatus === "complete"
-        ? "completed"
-        : "completed_with_warnings";
-    return releaseLease(supabase, job.id, job.lease_worker_id, {
-      status,
-      phase: "complete",
-      attachments_state: verification.states.attachments,
-      project_info_state: verification.states.projectInformation,
-      plan_review_state: verification.states.planReview,
-      checkpoint_version: verification.checkpointVersion,
-      completed_at: new Date().toISOString(),
-      next_attempt_at: null,
-      current_stage: "completed",
-      current_user_message: "Arlington scrape completed.",
-      metadata: {
-        arlington: {
-          terminalReason: verification.finalStatus,
-          lastProgressAt: new Date().toISOString(),
-        },
-      },
+    const hasWarnings =
+      verification.finalStatus === "complete_with_warnings" ||
+      (verification.warnings?.length || 0) > 0;
+    const status = hasWarnings ? "completed_with_warnings" : "completed";
+    const terminalReason = hasWarnings ? "completed_with_warnings" : "completed";
+    const patch = buildTerminalReleasePatch(verification, terminalReason, status);
+    logVerifyDiagnostics(job, verification, {
+      releaseOutcome: "terminal_complete",
+      verifyFingerprint: fingerprint,
+      verifyAttemptCount: verifyMeta.verifyAttemptCount,
     });
+    return releaseLease(supabase, job.id, job.lease_worker_id, patch);
   }
 
   if (verification.finalStatus === "partial_rate_limited") {
-    return releaseLease(supabase, job.id, job.lease_worker_id, {
+    const patch = {
       status: "rate_limited",
-      phase: job.phase,
+      phase: verification.retryPhase || "attachments",
       attachments_state: verification.states.attachments,
       project_info_state: verification.states.projectInformation,
       plan_review_state: verification.states.planReview,
@@ -333,57 +419,74 @@ async function finalizeJobFromVerification(supabase, job, verification) {
       next_attempt_at: formatRetryAfterIso(
         computeRateLimitRetryAfterMs(Number(job.attempt_count) || 0),
       ),
+      run_intent: "retry",
       current_stage: "rate_limited",
       current_user_message: "Arlington scrape rate-limited; worker will retry.",
+    };
+    logVerifyDiagnostics(job, verification, {
+      releaseOutcome: "rate_limited_retry",
+      requeueReason: "rate_limited",
+      nextAttemptAt: patch.next_attempt_at,
+      verifyFingerprint: fingerprint,
+      verifyAttemptCount: verifyMeta.verifyAttemptCount,
     });
+    return releaseLease(supabase, job.id, job.lease_worker_id, patch);
   }
 
   if (verification.terminalPartial || !verification.hasRetryableWork) {
     const terminalReason = verification.blockers?.includes("plan_review_metadata_only")
       ? "plan_review_metadata_only"
-      : verification.blockers?.includes("no_progress_guard")
-        ? "no_progress_guard"
-        : verification.finalStatus;
-    return releaseLease(supabase, job.id, job.lease_worker_id, {
-      status: terminalStatusFromVerification(verification),
-      phase: "complete",
-      attachments_state: verification.states.attachments,
-      project_info_state: verification.states.projectInformation,
-      plan_review_state:
-        verification.blockers?.includes("plan_review_metadata_only")
-          ? "complete"
-          : verification.states.planReview,
-      checkpoint_version: verification.checkpointVersion,
-      completed_at: new Date().toISOString(),
-      next_attempt_at: null,
-      current_stage:
-        terminalStatusFromVerification(verification) === "partial_external_blocker"
-          ? "partial_external_blocker"
-          : "completed_with_warnings",
-      current_user_message: `Arlington scrape stopped: ${verification.finalStatus}.`,
-      metadata: {
-        arlington: {
-          terminalReason,
-          metadataOnlyCount: verification.counts?.planReviewMetadataOnly || 0,
-          metadataOnlyDocumentNames:
-            verification.counts?.planReviewMetadataOnlyNames || [],
-          lastProgressAt: new Date().toISOString(),
-        },
-      },
+      : verification.blockers?.includes("verify_loop_guard")
+        ? "verify_loop_guard"
+        : verification.blockers?.includes("no_progress_guard")
+          ? "no_progress_guard"
+          : verification.finalStatus;
+    const status = terminalStatusFromVerification(verification);
+    const patch = buildTerminalReleasePatch(verification, terminalReason, status);
+    if (verification.blockers?.includes("plan_review_metadata_only")) {
+      patch.plan_review_state = "complete";
+    }
+    logVerifyDiagnostics(job, verification, {
+      releaseOutcome: "terminal_partial",
+      verifyFingerprint: fingerprint,
+      verifyAttemptCount: verifyMeta.verifyAttemptCount,
     });
+    return releaseLease(supabase, job.id, job.lease_worker_id, patch);
   }
 
-  return releaseLease(supabase, job.id, job.lease_worker_id, {
+  const retryPhase = verification.retryPhase || "attachments";
+  const retryDelayMs =
+    verification.finalStatus === "partial_rate_limited"
+      ? computeRateLimitRetryAfterMs(Number(job.attempt_count) || 0)
+      : VERIFY_RETRY_DELAY_MS;
+  const nextAttemptAt = formatRetryAfterIso(retryDelayMs);
+  const patch = {
     status: "partial",
-    phase: job.phase,
+    phase: retryPhase,
     attachments_state: verification.states.attachments,
     project_info_state: verification.states.projectInformation,
     plan_review_state: verification.states.planReview,
     checkpoint_version: verification.checkpointVersion,
-    next_attempt_at: new Date().toISOString(),
-    current_stage: "partial",
-    current_user_message: `Arlington scrape partial: ${verification.finalStatus}`,
+    next_attempt_at: nextAttemptAt,
+    run_intent: "retry",
+    current_stage: retryPhase,
+    current_user_message: `Arlington scrape resuming ${retryPhase} after verify.`,
+    metadata: {
+      arlington: {
+        sectionOutcomes: verification.sectionOutcomes || {},
+        lastVerifyReason: verification.blockers?.join(",") || verification.finalStatus,
+        lastProgressAt: new Date().toISOString(),
+      },
+    },
+  };
+  logVerifyDiagnostics(job, verification, {
+    releaseOutcome: "scheduled_retry",
+    requeueReason: verification.blockers?.join(",") || verification.finalStatus,
+    nextAttemptAt,
+    verifyFingerprint: fingerprint,
+    verifyAttemptCount: verifyMeta.verifyAttemptCount,
   });
+  return releaseLease(supabase, job.id, job.lease_worker_id, patch);
 }
 
 async function evaluateNoProgressGuard(supabase, job, phaseResult, verification) {

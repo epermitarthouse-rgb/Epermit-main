@@ -183,7 +183,7 @@ describe("Arlington orchestration", () => {
     assert.equal(verification.finalStatus, "complete");
   });
 
-  it("preserves weak project information as partial completion", async () => {
+  it("weak project information completes with warnings, not retry loop", async () => {
     const portalData = {
       checkpointVersion: 3,
       arlingtonSectionStates: { projectInformation: "weak_extraction" },
@@ -233,8 +233,9 @@ describe("Arlington orchestration", () => {
         requestedTabs: ["attachments", "plan_review"],
       },
     );
-    assert.equal(verification.complete, false);
-    assert.ok(verification.blockers.includes("project_info_weak"));
+    assert.equal(verification.complete, true);
+    assert.equal(verification.finalStatus, "complete_with_warnings");
+    assert.ok((verification.warnings || []).includes("project_information_warnings"));
   });
 
   it("zero rows on error page cannot be complete (rate_limited)", async () => {
