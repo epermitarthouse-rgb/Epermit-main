@@ -70,13 +70,13 @@ BEGIN
 
   v_priority := EXTRACT(EPOCH FROM now())::INTEGER;
 
-  UPDATE public.scrape_jobs
+  UPDATE public.scrape_jobs sj
   SET
     run_intent = 'foreground',
-    dispatch_priority = GREATEST(COALESCE(dispatch_priority, 0), v_priority),
+    dispatch_priority = GREATEST(COALESCE(sj.dispatch_priority, 0), v_priority),
     requested_at = now(),
     updated_at = now()
-  WHERE id = p_job_id
+  WHERE sj.id = p_job_id
     AND jurisdiction ILIKE '%arlington%'
     AND completed_at IS NULL
     AND status NOT IN ('completed', 'completed_with_warnings', 'partial_external_blocker', 'failed', 'failed_unrecoverable', 'cancelled')
