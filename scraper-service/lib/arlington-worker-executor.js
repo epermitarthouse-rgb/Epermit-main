@@ -5,18 +5,22 @@ const { createArlingtonWorkerSession } = require("./arlington-worker-session.js"
 const {
   parseRequestedScope,
   heartbeatLease,
-  releaseLease,
   releaseLeaseWithDispatchPolicy,
   scheduleRateLimitRelease,
   finalizeJobFromVerification,
   verifyArlingtonJobCompletion,
   evaluateNoProgressGuard,
+  pollArlingtonJobCancelled,
+  isArlingtonJobCancelled,
 } = require("./arlington-job-store.js");
 
 const LEASE_TTL_SECONDS = 180;
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
 
 async function runVerificationAndFinalize(supabase, job, workerId, ctx) {
+  if (await pollArlingtonJobCancelled(supabase, job.id)) {
+    return { verification: null, finalized: null, cancelled: true };
+  }
   const { projectId, userId, permitNumber, requestedScope } = ctx;
   const verification = await verifyArlingtonJobCompletion(supabase, {
     projectId,
@@ -24,12 +28,15 @@ async function runVerificationAndFinalize(supabase, job, workerId, ctx) {
     permitNumber,
     requestedTabs: requestedScope.tabs,
   });
+  if (await pollArlingtonJobCancelled(supabase, job.id)) {
+    return { verification, finalized: null, cancelled: true };
+  }
   const finalized = await finalizeJobFromVerification(
     supabase,
     { ...job, lease_worker_id: workerId },
     verification,
   );
-  return { verification, finalized };
+  return { verification, finalized, cancelled: false };
 }
 
 /**
@@ -49,6 +56,10 @@ async function executeArlingtonWorkerCycle(ctx) {
     sanitizeStorageKey,
   } = ctx;
 
+  if (isArlingtonJobCancelled(job) || (await pollArlingtonJobCancelled(supabase, job.id))) {
+    return { ok: true, outcome: "cancelled" };
+  }
+
   const requestedScope = parseRequestedScope(job);
   const userId = `${job.user_id || ""}`.trim();
   const projectId = `${job.project_id || ""}`.trim();
@@ -59,15 +70,24 @@ async function executeArlingtonWorkerCycle(ctx) {
   let heartbeatTimer = null;
   let sessionHandle = null;
 
+  const isCancelRequested = () => pollArlingtonJobCancelled(supabase, job.id);
+
   const startHeartbeat = () => {
     heartbeatTimer = setInterval(() => {
-      heartbeatLease(supabase, job.id, workerId, LEASE_TTL_SECONDS).catch(
-        () => {},
-      );
+      isCancelRequested()
+        .then((cancelled) => {
+          if (cancelled) return;
+          return heartbeatLease(supabase, job.id, workerId, LEASE_TTL_SECONDS);
+        })
+        .catch(() => {});
     }, HEARTBEAT_INTERVAL_MS);
   };
 
   try {
+    if (await isCancelRequested()) {
+      return { ok: true, outcome: "cancelled" };
+    }
+
     sessionHandle = await createArlingtonWorkerSession({
       supabase,
       job,
@@ -76,6 +96,10 @@ async function executeArlingtonWorkerCycle(ctx) {
       cleanupSession,
       preferSessionId: null,
     });
+
+    if (await isCancelRequested()) {
+      return { ok: true, outcome: "cancelled" };
+    }
 
     startHeartbeat();
 
@@ -90,10 +114,17 @@ async function executeArlingtonWorkerCycle(ctx) {
         sanitizeStorageKey,
         requestedScope,
         phase,
-        onHeartbeat: () =>
-          heartbeatLease(supabase, job.id, workerId, LEASE_TTL_SECONDS),
+        isCancelRequested,
+        onHeartbeat: async () => {
+          if (await isCancelRequested()) return false;
+          return heartbeatLease(supabase, job.id, workerId, LEASE_TTL_SECONDS);
+        },
       },
     );
+
+    if (phaseResult?.cancelled || (await isCancelRequested())) {
+      return { ok: true, outcome: "cancelled", phaseResult };
+    }
 
     if (phaseResult.rateLimited) {
       const attemptCount = Number(job.attempt_count) || 0;
@@ -116,12 +147,13 @@ async function executeArlingtonWorkerCycle(ctx) {
     }
 
     if (phaseResult.terminalMetadataOnly) {
-      const { verification, finalized } = await runVerificationAndFinalize(
+      const { verification, finalized, cancelled } = await runVerificationAndFinalize(
         supabase,
         job,
         workerId,
         verifyCtx,
       );
+      if (cancelled) return { ok: true, outcome: "cancelled", phaseResult };
       return {
         ok: true,
         outcome: "metadata_only_terminal",
@@ -132,12 +164,13 @@ async function executeArlingtonWorkerCycle(ctx) {
     }
 
     if (phaseResult.verify) {
-      const { verification, finalized } = await runVerificationAndFinalize(
+      const { verification, finalized, cancelled } = await runVerificationAndFinalize(
         supabase,
         job,
         workerId,
         verifyCtx,
       );
+      if (cancelled) return { ok: true, outcome: "cancelled", phaseResult };
       return {
         ok: true,
         outcome: verification.complete ? "completed" : "partial",
@@ -152,6 +185,10 @@ async function executeArlingtonWorkerCycle(ctx) {
       permitNumber,
       requestedTabs: requestedScope.tabs,
     });
+    if (await isCancelRequested()) {
+      return { ok: true, outcome: "cancelled", phaseResult };
+    }
+
     const guard = await evaluateNoProgressGuard(
       supabase,
       job,
@@ -171,6 +208,9 @@ async function executeArlingtonWorkerCycle(ctx) {
             : "no_progress_guard",
         ],
       };
+      if (await isCancelRequested()) {
+        return { ok: true, outcome: "cancelled", phaseResult };
+      }
       const finalized = await finalizeJobFromVerification(
         supabase,
         { ...job, lease_worker_id: workerId },
@@ -211,6 +251,9 @@ async function executeArlingtonWorkerCycle(ctx) {
 
     return { ok: true, outcome: "checkpointed", phaseResult };
   } catch (err) {
+    if (await isCancelRequested()) {
+      return { ok: true, outcome: "cancelled" };
+    }
     const msg = err?.message || String(err);
     console.warn(`[Arlington][Worker] cycle failed job=${job.id}: ${msg}`);
     const unrecoverable =

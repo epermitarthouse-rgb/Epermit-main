@@ -54,7 +54,7 @@ function startArlingtonDurableWorkerLoop(deps) {
         `[Arlington][Worker] claimed job=${job.id} phase=${job.phase} status=${job.status}`,
       );
 
-      await executeArlingtonWorkerCycle({
+      const cycleResult = await executeArlingtonWorkerCycle({
         supabase: deps.supabase,
         job,
         workerId,
@@ -65,6 +65,9 @@ function startArlingtonDurableWorkerLoop(deps) {
         uploadToSupabaseStorage: deps.uploadToSupabaseStorage,
         sanitizeStorageKey: deps.sanitizeStorageKey,
       });
+      if (cycleResult?.outcome === "cancelled") {
+        console.log(`[Arlington][Worker] stopped cancelled job=${job.id}`);
+      }
     } catch (err) {
       console.warn(
         `[Arlington][Worker] poll tick error: ${err?.message || err}`,

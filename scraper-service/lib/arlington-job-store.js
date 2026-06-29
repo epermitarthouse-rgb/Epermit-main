@@ -32,6 +32,37 @@ const WORKER_POLLABLE = new Set([
 
 const NO_PROGRESS_CLAIM_THRESHOLD = 3;
 
+function isArlingtonJobCancelled(job) {
+  if (!job) return false;
+  if (`${job.status || ""}`.toLowerCase() === "cancelled") return true;
+  const arlington =
+    job?.metadata?.arlington && typeof job.metadata.arlington === "object"
+      ? job.metadata.arlington
+      : null;
+  return `${arlington?.terminalReason || ""}` === "user_cancelled";
+}
+
+async function pollArlingtonJobCancelled(supabase, jobId) {
+  if (!jobId) return false;
+  const { data, error } = await supabase
+    .from("scrape_jobs")
+    .select("id, status, completed_at, metadata, cancellation_reason")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error) throw error;
+  return isArlingtonJobCancelled(data);
+}
+
+async function cancelArlingtonScrapeJob(supabase, { jobId, projectId, userId }) {
+  const { data, error } = await supabase.rpc("cancel_arlington_scrape_job", {
+    p_job_id: jobId,
+    p_project_id: projectId,
+    p_user_id: userId || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
 function parseRequestedScope(job) {
   return normalizeArlingtonRequestedScope(job?.requested_scope);
 }
@@ -73,6 +104,11 @@ async function releaseLease(supabase, jobId, workerId, patch = {}) {
     p_current_user_message: patch.current_user_message ?? null,
   });
   if (error) throw error;
+
+  if (!data?.id && patch.status) {
+    const cancelled = await pollArlingtonJobCancelled(supabase, jobId);
+    if (cancelled) return null;
+  }
 
   if (patch.run_intent || patch.dispatch_priority != null) {
     const jobPatch = {};
@@ -403,7 +439,9 @@ async function evaluateNoProgressGuard(supabase, job, phaseResult, verification)
         },
       },
     })
-    .eq("id", job.id);
+    .eq("id", job.id)
+    .neq("status", "cancelled")
+    .is("completed_at", null);
 
   if (consecutive >= NO_PROGRESS_CLAIM_THRESHOLD) {
     return { terminal: true, reason: "no_progress_guard", fingerprint, consecutive };
@@ -445,6 +483,9 @@ module.exports = {
   TERMINAL_STATUSES,
   WORKER_POLLABLE,
   NO_PROGRESS_CLAIM_THRESHOLD,
+  isArlingtonJobCancelled,
+  pollArlingtonJobCancelled,
+  cancelArlingtonScrapeJob,
   parseRequestedScope,
   claimJobViaRpc,
   heartbeatLease,

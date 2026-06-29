@@ -376,25 +376,51 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
   );
 
   const cancelScrape = useCallback(async () => {
+    const jid = activeJobId ? `${activeJobId}`.trim() : "";
+    const projectId = `${activeProjectIdRef.current || ""}`.trim();
     const sid = activeSessionIdRef.current;
-    if (!sid) return;
+
+    if (!jid && !sid) return;
+
     setCancelling(true);
     try {
-      const res = await fetch(`${SCRAPER_URL}/api/scrape/cancel/${sid}`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        toast.error("Failed to cancel scrape");
+      let res: Response;
+      if (jid && projectId) {
+        res = await fetch(`${SCRAPER_URL}/api/scrape-jobs/${jid}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId }),
+        });
+      } else if (sid) {
+        res = await fetch(`${SCRAPER_URL}/api/scrape/cancel/${sid}`, {
+          method: "POST",
+        });
+      } else {
+        toast.error("No active scrape to cancel");
         return;
       }
-      cleanupScrapeState();
-      clearPersistedSession();
-      clearAccelaBrowserSession();
-      setLastScrapeOutcome("cancelled");
-      toast.info("Scrape cancelled");
-      if (activeJobId) {
-        terminalHandledRef.current = activeJobId;
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!res.ok || payload.success === false) {
+        toast.error(payload.error || "Failed to cancel scrape");
+        return;
       }
+
+      if (jid) {
+        terminalHandledRef.current = jid;
+      }
+      setLastScrapeOutcome("cancelled");
+      clearPersistedSession();
+      clearAccelaBrowserSession(projectId || undefined);
+      cleanupScrapeState();
+      setActiveJobId(null);
+      setPanelVisible(false);
+      toast.info("Scrape cancelled");
     } catch {
       toast.error("Could not reach scraper to cancel");
     } finally {
@@ -490,7 +516,7 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
   const isScraping =
     panelVisible &&
     Boolean(activeJobId) &&
-    Boolean(jobState.job) &&
+    (jobState.loading || Boolean(jobState.job)) &&
     !isScrapeJobTerminal(jobState.job?.status);
 
   const ctx: ScrapeContextType = {

@@ -20,6 +20,10 @@ import {
 } from "@/contexts/ScrapeContext";
 import { isArlingtonAccelaStaleSessionScrapeError } from "@/lib/arlingtonAccelaSession";
 import {
+  durableScrapePortalLabel,
+  durableScrapePortalStepStatus,
+} from "@/lib/scrapeJobTypes";
+import {
   arlingtonPlanReviewDocumentScrapeOpts,
   arlingtonPlanReviewProjectInformationScrapeOpts,
   arlingtonScrapeAllOpts,
@@ -335,6 +339,23 @@ export function AgentWorkflowStatus() {
   }, [projectBySelectedId?.id, latestProjectId]);
 
   useEffect(() => {
+    const jobStatus = scrape.scrapeJobStatus;
+    const hasDurableJob = Boolean(scrape.activeJobId);
+
+    if (hasDurableJob && jobStatus) {
+      if (jobStatus === "cancelled") {
+        setPortalStatus("idle");
+        setPortalStatusText("Cancelled");
+        return;
+      }
+      const step = durableScrapePortalStepStatus(jobStatus, true);
+      setPortalStatus(step);
+      setPortalStatusText(
+        durableScrapePortalLabel(jobStatus, scrape.scrapeLiveMessage),
+      );
+      return;
+    }
+
     if (scrape.isScraping) {
       setPortalStatus("checking");
       if (scrape.scrapeLiveMessage) {
@@ -355,6 +376,7 @@ export function AgentWorkflowStatus() {
     scrape.isScraping,
     scrape.scrapeLiveMessage,
     scrape.scrapeJobStatus,
+    scrape.activeJobId,
   ]);
 
   const cp = pipelineResult?.comment_parser;

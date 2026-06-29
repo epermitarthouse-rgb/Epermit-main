@@ -342,16 +342,30 @@ describe("metadata_only terminal verification", () => {
 });
 
 describe("no-progress guard", () => {
-  it("terminates immediately for metadata_only-only pending", async () => {
-    const supabase = {
+  function mockSupabaseForGuard() {
+    return {
       from() {
         return {
           update() {
-            return { eq: async () => ({ error: null }) };
+            return {
+              eq() {
+                return {
+                  neq() {
+                    return {
+                      is: async () => ({ error: null }),
+                    };
+                  },
+                };
+              },
+            };
           },
         };
       },
     };
+  }
+
+  it("terminates immediately for metadata_only-only pending", async () => {
+    const supabase = mockSupabaseForGuard();
     const job = {
       id: "j1",
       phase: "plan_review",
@@ -375,15 +389,7 @@ describe("no-progress guard", () => {
   });
 
   it("requires NO_PROGRESS_CLAIM_THRESHOLD consecutive claims for generic stall", async () => {
-    const supabase = {
-      from() {
-        return {
-          update() {
-            return { eq: async () => ({ error: null }) };
-          },
-        };
-      },
-    };
+    const supabase = mockSupabaseForGuard();
     const fingerprintPayload = {
       phase: "attachments",
       checkpointVersion: 2,

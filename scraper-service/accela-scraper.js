@@ -23582,6 +23582,20 @@ async function arlingtonAttachmentStopDownloads(dc, reason, attachments, extra =
 /** @param {Record<string, unknown> | null | undefined} dc @param {unknown[]} attachments */
 async function arlingtonAttachmentShouldStopBeforeDownload(dc, attachments) {
   if (!dc || typeof dc !== "object") return { stop: false, reason: "" };
+  if (typeof dc.isCancelRequested === "function") {
+    try {
+      if (await dc.isCancelRequested()) {
+        await arlingtonAttachmentStopDownloads(
+          dc,
+          "user_cancelled",
+          attachments,
+        );
+        return { stop: true, reason: "user_cancelled", cancelled: true };
+      }
+    } catch (_) {
+      /* ignore poll errors */
+    }
+  }
   if (dc.attachmentsDownloadsAbortedDeadline === true) {
     return {
       stop: true,
@@ -28058,6 +28072,7 @@ async function continueArlingtonAttachmentsDownloads(
     uploadToSupabaseStorage,
     sanitizeStorageKey,
     workerCycleDeadlineMs,
+    isCancelRequested,
   },
 ) {
   const logPrefix = "[Arlington][Attachments][Continue]";
@@ -28146,6 +28161,7 @@ async function continueArlingtonAttachmentsDownloads(
     continueRun: true,
     skipMetadataScan: true,
     attachmentsFromPortal: priorRows,
+    isCancelRequested,
   };
 
   const arResult = await runArlingtonAttachmentsResumableLifecycle(
@@ -28440,7 +28456,21 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
     requestedScope,
     phase: phaseIn,
     onHeartbeat,
+    isCancelRequested,
   } = opts;
+
+  const cancelPoll =
+    typeof isCancelRequested === "function"
+      ? isCancelRequested
+      : async () => false;
+
+  const stopIfCancelled = async () => {
+    if (await cancelPoll()) {
+      result.cancelled = true;
+      return true;
+    }
+    return false;
+  };
 
   const permitNumber = `${job.permit_number || ""}`.trim();
   const projectId = `${job.project_id || ""}`.trim();
@@ -28469,6 +28499,7 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
     rateLimited: false,
     verify: false,
     done: false,
+    cancelled: false,
     cycleTimedOut: false,
     attachments_state: job.attachments_state || "not_started",
     project_info_state: job.project_info_state || "not_started",
@@ -28480,14 +28511,19 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
   const cycleExpired = () => Date.now() >= workerCycleDeadlineMs;
 
   const maybeHeartbeat = async () => {
+    if (await stopIfCancelled()) return false;
     if (typeof onHeartbeat === "function") await onHeartbeat();
+    return true;
   };
+
+  if (await stopIfCancelled()) return result;
 
   if (!isArlingtonCapDetailPage(page)) {
     mirrorSessionProgress(session, `${permitNumber} → Searching...`);
     await searchPermit(page, portalUrl, permitNumber);
   }
   await maybeHeartbeat();
+  if (await stopIfCancelled()) return result;
 
   if (phase === "record_info") {
     mirrorSessionProgress(session, `${permitNumber} → Record Header`);
@@ -28539,6 +28575,8 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
     return result;
   }
 
+  if (await stopIfCancelled()) return result;
+
   if (phase === "attachments") {
     if (!tabSet.has("attachments")) {
       result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "attachments", {
@@ -28587,8 +28625,13 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
               ? session.touchSessionKeepalive.bind(session)
               : null,
           _arlingtonSession: session,
+          isCancelRequested: cancelPoll,
         },
       );
+      if (attResult?.cancelled === true || (await stopIfCancelled())) {
+        result.cancelled = true;
+        return result;
+      }
       if (attResult?.rateLimited === true) {
         result.rateLimited = true;
         result.attachments_state = "rate_limited";
@@ -28604,7 +28647,12 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
         uploadToSupabaseStorage,
         sanitizeStorageKey,
         workerCycleDeadlineMs,
+        isCancelRequested: cancelPoll,
       });
+      if (await stopIfCancelled()) {
+        result.cancelled = true;
+        return result;
+      }
     }
 
     await maybeHeartbeat();

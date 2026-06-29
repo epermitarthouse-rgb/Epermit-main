@@ -10,6 +10,9 @@ export const SCRAPE_JOB_TERMINAL_STATUSES = [
 export type ScrapeJobStatus =
   | "queued"
   | "running"
+  | "resuming"
+  | "partial"
+  | "rate_limited"
   | "waiting_user"
   | "completed"
   | "completed_with_warnings"
@@ -72,7 +75,11 @@ export function scrapeJobStatusLabel(status: ScrapeJobStatus | string): string {
     case "queued":
       return "Queued";
     case "running":
+    case "resuming":
+    case "partial":
       return "Running";
+    case "rate_limited":
+      return "Waiting to retry";
     case "waiting_user":
       return "Waiting for User";
     case "completed":
@@ -109,6 +116,62 @@ export function scrapeJobStatusBadgeClass(status: string): string {
     default:
       return "bg-teal/15 text-teal border-teal/35";
   }
+}
+
+/** Map durable scrape_jobs.status to agent workflow portal step label. */
+export function durableScrapePortalLabel(
+  status: string | null | undefined,
+  liveMessage?: string | null,
+): string {
+  switch (status) {
+    case "queued":
+      return liveMessage?.trim() || "Queued";
+    case "running":
+    case "resuming":
+    case "partial":
+      return liveMessage?.trim() || "Running";
+    case "rate_limited":
+      return "Waiting to retry";
+    case "cancelled":
+      return "Cancelled";
+    case "completed":
+      return "Completed";
+    case "completed_with_warnings":
+    case "partial_external_blocker":
+      return "Completed with warnings";
+    case "failed":
+    case "failed_unrecoverable":
+      return "Failed";
+    default:
+      return liveMessage?.trim() || "Idle";
+  }
+}
+
+/** Map durable scrape_jobs.status to agent workflow step state. */
+export function durableScrapePortalStepStatus(
+  status: string | null | undefined,
+  isActiveJob: boolean,
+): "idle" | "checking" | "done" {
+  if (!status || !isActiveJob) return "idle";
+  if (status === "cancelled") return "idle";
+  if (
+    status === "completed" ||
+    status === "completed_with_warnings" ||
+    status === "partial_external_blocker"
+  ) {
+    return "done";
+  }
+  if (
+    status === "queued" ||
+    status === "running" ||
+    status === "resuming" ||
+    status === "partial" ||
+    status === "rate_limited" ||
+    status === "waiting_user"
+  ) {
+    return "checking";
+  }
+  return "idle";
 }
 
 /** Map durable job status to legacy scrape outcome for intake chain. */

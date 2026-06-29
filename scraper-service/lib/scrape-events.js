@@ -322,7 +322,9 @@ async function updateScrapeJob(supabase, jobId, patch) {
     const { error } = await supabase
       .from("scrape_jobs")
       .update(payload)
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .neq("status", "cancelled")
+      .is("completed_at", null);
     if (error) throw error;
     return true;
   } catch (err) {
