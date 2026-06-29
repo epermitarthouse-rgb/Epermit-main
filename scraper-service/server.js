@@ -8,11 +8,14 @@ const {
 const { sessions, cleanupSession } = require("./app/session/in-memory-store.js");
 
 const app = createSharedHttpApp({ scraperServiceRoot: __dirname });
-const { PORT } = registerExecutionRoutes(app);
+const { PORT, arlingtonWorker } = registerExecutionRoutes(app);
 
 // ─── Shutdown ────────────────────────────────────────────────────────────────
 process.on("SIGINT", () => {
   console.log("\n🛑 Shutting down...");
+  if (arlingtonWorker && typeof arlingtonWorker.stop === "function") {
+    arlingtonWorker.stop();
+  }
   for (const sid of Object.keys(sessions)) cleanupSession(sid, "sigint");
   process.exit(0);
 });
@@ -36,6 +39,11 @@ async function startServer() {
     console.log(
       "[SCRAPER SERVER] Do not run multiple scraper server instances at the same time.",
     );
+    if (arlingtonWorker?.workerId) {
+      console.log(
+        `[SCRAPER SERVER] Arlington durable worker active workerId=${arlingtonWorker.workerId}`,
+      );
+    }
     console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║  🏛️  ProjectDox Data Extractor                        ║

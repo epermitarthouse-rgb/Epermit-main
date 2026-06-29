@@ -81,6 +81,10 @@ const scrapeEvents = require("../lib/scrape-events.js");
 const { SCRAPE_STAGES } = require("../lib/scrape-stages.js");
 const scrapeFileResults = require("../lib/scrape-file-results.js");
 const scrapeLease = require("../lib/scrape-lease.js");
+const arlingtonDurableJob = require("../lib/arlington-durable-job.js");
+const arlingtonJobStore = require("../lib/arlington-job-store.js");
+const arlingtonOrchestration = require("../lib/arlington-orchestration.js");
+const { startArlingtonDurableWorkerLoop } = require("../lib/arlington-durable-worker-loop.js");
 const { mirrorSessionProgress } = require("../lib/session-progress.js");
 
 function publishScrapeOrchestration(session, opts = {}) {
@@ -1873,6 +1877,12 @@ app.post("/api/scrape", async (req, res) => {
       console.log(
         `[api/scrape accela] permitNumber=${String(permitNumber).trim()} projectId=${projectId || "(none)"} arlington=${accelaIsArlington} tabs=${JSON.stringify(arlingtonScrapeTabsArg ?? "(legacy default)")} planReviewScope=${session.arlingtonPlanReviewScope ?? "(default)"} planReviewMode=${session.arlingtonPlanReviewMode ?? "(none)"} downloadDocuments=${session.arlingtonDownloadDocuments === false ? "false" : "(default)"} autoContinueDownloads=${session.arlingtonAutoContinueDownloads === true} autoContinueAttachments=${session.arlingtonAutoContinueAttachments === true}`,
       );
+      if (projectId && String(projectId).trim()) {
+        session.arlingtonDurableMode = true;
+        console.log(
+          "[Arlington][DurableJob] enabled for project-linked scrape (no scrape-wide wall)",
+        );
+      }
     } else if (
       !accelaIsBaltimore &&
       !accelaIsFairfax &&
@@ -1904,6 +1914,54 @@ app.post("/api/scrape", async (req, res) => {
         skipFeed: true,
       },
     );
+
+    if (
+      accelaIsArlington &&
+      projectId &&
+      String(projectId).trim() &&
+      scrapeJobId
+    ) {
+      const requestedScope = {
+        tabs:
+          arlingtonScrapeTabsArg || ["info", "attachments", "plan_review"],
+        planReviewScope: session.arlingtonPlanReviewScope || "all",
+        autoContinueAttachments: session.arlingtonAutoContinueAttachments !== false,
+        autoContinueDownloads: session.arlingtonAutoContinueDownloads !== false,
+        downloadDocuments: session.arlingtonDownloadDocuments !== false,
+      };
+      await arlingtonJobStore.initializeArlingtonDurableJob(
+        supabase,
+        scrapeJobId,
+        {
+          requestedScope,
+          phase: "record_info",
+          user_message:
+            "Arlington scrape queued — durable worker will process in bounded cycles.",
+        },
+      );
+      session._scrapeJobId = scrapeJobId;
+      session._scrapeProjectId = String(projectId).trim();
+      session._scrapePermitNumber = String(permitNumber).trim();
+      session.arlingtonDurableWorkerEnqueued = true;
+      session.status = "queued";
+      session._scrapeActive = false;
+      publishScrapeOrchestration(session, {
+        stage: SCRAPE_STAGES.QUEUED,
+        event_type: "job_queued",
+        user_message:
+          "Arlington scrape queued for durable worker. Progress will update in portal data.",
+        dedupeKey: "arlington_durable_queued",
+        forceFeed: true,
+      });
+      return res.json({
+        message: "Arlington scrape queued for durable worker",
+        total: 1,
+        portalType: "accela",
+        jobId: scrapeJobId,
+        durableWorker: true,
+      });
+    }
+
     res.json({
       message: "Accela scraping started",
       total: 1,
@@ -1948,6 +2006,34 @@ app.post("/api/scrape", async (req, res) => {
           console.log("   🛑 Accela scrape was cancelled — not marking as done");
           await finalizeSessionScrapeJob("cancelled");
           return;
+        }
+        if (accelaIsArlington && projectId && String(projectId).trim()) {
+          const verification = await arlingtonDurableJob.finalizeArlingtonDurableJob(
+            supabase,
+            session,
+            {
+              permitNumber: String(permitNumber).trim(),
+              requestedTabs: arlingtonScrapeTabsArg || [
+                "info",
+                "attachments",
+                "plan_review",
+              ],
+            },
+          );
+          if (verification) {
+            console.log(
+              `[Arlington][DurableJob] verification complete=${verification.complete} finalStatus=${verification.finalStatus} blockers=${JSON.stringify(verification.blockers || [])}`,
+            );
+            if (!verification.complete) {
+              const mapped =
+                arlingtonOrchestration.mapVerificationToSessionStatus(verification);
+              session.status = mapped;
+              session.progress = 1;
+              session.message = `Accela scrape partially complete for ${permitNumber}; ${verification.finalStatus}.`;
+              await finalizeSessionScrapeJob(mapped);
+              return;
+            }
+          }
         }
         if (session.arlingtonPartialSuccessPlanReviewFailed === true) {
           session.status = "partial_success_plan_review_failed";
@@ -12500,7 +12586,15 @@ app.post("/api/filing/reauth", async (req, res) => {
   }
 });
 
-  return { PORT, runPlaywrightStartupDiagnostics };
+  return { PORT, runPlaywrightStartupDiagnostics, arlingtonWorker: startArlingtonDurableWorkerLoop({
+    supabase,
+    sessions,
+    rearmSessionIdleTimeout,
+    cleanupSession,
+    hashPortalData,
+    uploadToSupabaseStorage,
+    sanitizeStorageKey,
+  }) };
 }
 
 module.exports = {

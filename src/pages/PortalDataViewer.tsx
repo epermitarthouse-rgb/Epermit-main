@@ -33,6 +33,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useScrape } from "@/contexts/ScrapeContext";
+import { useArlingtonLivePortalRefresh } from "@/hooks/useArlingtonLivePortalRefresh";
+import { mergePortalDataIfNewer } from "@/lib/arlingtonPortalCheckpoint";
 import {
   isLiveScrapeJobActive,
   useScrapeFileResults,
@@ -315,6 +317,8 @@ interface ReviewTabData extends TabData {
 
 interface PortalData {
   portalType?: string;
+  checkpointVersion?: number;
+  arlingtonSectionStates?: Record<string, string>;
   name: string;
   projectNum: string;
   description: string;
@@ -944,6 +948,23 @@ export default function PortalDataViewer() {
     scrape.activeJobId,
     scrape.scrapeJobStatus,
   );
+  const isArlingtonPortalProject = useMemo(() => {
+    const url = `${credentialForView?.login_url || ""}`.toUpperCase();
+    const jur = `${credentialForView?.jurisdiction || ""}`.toLowerCase();
+    const pdJur = `${portalData?.jurisdiction || ""}`.toLowerCase();
+    return (
+      url.includes("ARLINGTONCO") ||
+      jur.includes("arlington") ||
+      pdJur.includes("arlington")
+    );
+  }, [credentialForView, portalData?.jurisdiction]);
+  const arlingtonLivePortal = useArlingtonLivePortalRefresh(resolvedProjectId, {
+    enabled: isArlingtonPortalProject && Boolean(resolvedProjectId),
+    userId: user?.id ?? null,
+    scrapeJobId: scrape.activeJobId,
+    isScraping: liveScrapeJobActive || scrape.isScraping,
+  });
+  const portalCheckpointVersionRef = useRef(0);
   const liveFileResults = useScrapeFileResults(
     scrape.activeJobId,
     resolvedProjectId,
@@ -1147,7 +1168,17 @@ export default function PortalDataViewer() {
             setResolvedPermitNumber(project.permit_number ?? null);
             setResolvedCredentialId(project.credential_id ?? null);
           } else {
-            setPortalData(pd);
+            setPortalData((prev) => {
+            const merged = mergePortalDataIfNewer(
+              (prev || null) as Record<string, unknown>,
+              pd as Record<string, unknown>,
+            ) as PortalData | null;
+            const v = Number(merged?.checkpointVersion) || 0;
+            if (v > portalCheckpointVersionRef.current) {
+              portalCheckpointVersionRef.current = v;
+            }
+            return merged;
+          });
             setPortalStatus((project.portal_status as string) ?? null);
             setLastCheckedAt((project.last_checked_at as string) ?? null);
             setResolvedProjectId(project.id);
@@ -1259,7 +1290,17 @@ export default function PortalDataViewer() {
                 `[PortalDataViewer] silentRefetch: ${urlCount} files with viewUrl`,
               );
           }
-          setPortalData(pd);
+          setPortalData((prev) => {
+            const merged = mergePortalDataIfNewer(
+              (prev || null) as Record<string, unknown>,
+              pd as Record<string, unknown>,
+            ) as PortalData | null;
+            const v = Number(merged?.checkpointVersion) || 0;
+            if (v > portalCheckpointVersionRef.current) {
+              portalCheckpointVersionRef.current = v;
+            }
+            return merged;
+          });
         } else {
           setPortalData(null);
         }
@@ -1307,10 +1348,36 @@ export default function PortalDataViewer() {
   }, [user, resolvedProjectId, silentRefetch]);
 
   useEffect(() => {
-    if (!scrape.isScraping || !resolvedProjectId) return;
-    const interval = setInterval(silentRefetch, 10000);
+    if (!isArlingtonPortalProject || !arlingtonLivePortal.latestPortalData) return;
+    const pd = arlingtonLivePortal.latestPortalData;
+    setPortalData((prev) => {
+      const merged = mergePortalDataIfNewer(
+        (prev || null) as Record<string, unknown>,
+        pd,
+      ) as PortalData | null;
+      const v = Number(merged?.checkpointVersion) || 0;
+      if (v > portalCheckpointVersionRef.current) {
+        portalCheckpointVersionRef.current = v;
+      }
+      return merged;
+    });
+  }, [
+    isArlingtonPortalProject,
+    arlingtonLivePortal.latestPortalData,
+    arlingtonLivePortal.checkpointVersion,
+  ]);
+
+  useEffect(() => {
+    if (!scrape.isScraping && !liveScrapeJobActive) return;
+    if (!resolvedProjectId) return;
+    const interval = setInterval(silentRefetch, 5000);
     return () => clearInterval(interval);
-  }, [scrape.isScraping, resolvedProjectId, silentRefetch]);
+  }, [
+    scrape.isScraping,
+    liveScrapeJobActive,
+    resolvedProjectId,
+    silentRefetch,
+  ]);
 
   /** Must run before any early return — same hook count on every render (PGC report row → download links). */
   const reportEntryByReportName = useMemo(() => {

@@ -7,6 +7,9 @@ const {
   ArlingtonAccelaProfile,
 } = require("./accela-tenant-profiles");
 const { mirrorSessionProgress } = require("./lib/session-progress");
+const arlingtonOrchestration = require("./lib/arlington-orchestration.js");
+const arlingtonDurableJob = require("./lib/arlington-durable-job.js");
+const arlingtonJobStore = require("./lib/arlington-job-store.js");
 
 function getAccelaDebugDir() {
   const dir = path.join(__dirname, "debug");
@@ -1701,6 +1704,19 @@ async function persistArlingtonPlanReviewCheckpoint({
       sanitizeArlingtonPortalDataTabsPlanReviewForDb(portalPayloadForDb);
   }
 
+  const prSectionState =
+    planReviewTabPayload?.sectionState ||
+    (planReviewTabPayload?.partialPendingDownloads ? "partial" : "downloading");
+  portalPayloadForDb = arlingtonOrchestration.applyCheckpointVersionAndStates(
+    portalPayloadForDb,
+    existingRow.portal_data,
+    {
+      planReview: prSectionState,
+      projectInformation:
+        planReviewTabPayload?.tabs?.projectInformation?.sectionState,
+    },
+  );
+
   const newHash = hashPortalData(portalPayloadForDb);
   const { error } = await supabase
     .from("projects")
@@ -1716,6 +1732,9 @@ async function persistArlingtonPlanReviewCheckpoint({
     );
     return false;
   }
+  console.log(
+    `[Arlington][PlanReview] checkpoint persisted checkpointVersion=${portalPayloadForDb.checkpointVersion}`,
+  );
   return true;
 }
 
@@ -2414,10 +2433,28 @@ function arlingtonMaybePreserveProjectInformationFieldsInIntegratedTabs(
   if (!arlingtonProjectInformationExtractionIsWeak(fieldArr, permitNumber)) return;
   const priorPi = priorTabs?.projectInformation;
   const priorFields = Array.isArray(priorPi?.fields) ? priorPi.fields : [];
+  const diagnostics = arlingtonOrchestration.buildProjectInfoDiagnostics({
+    mode: integratedTabs?._arlingtonRecordMode,
+    extractedKeys: fieldArr.map((f) => `${f.label || ""}`.trim()).filter(Boolean),
+    fieldCount: fieldArr.length,
+    missingRequiredFields: [
+      "Project ID",
+      "Plan Review Project Name",
+      "Accela CAP ID",
+      "Address",
+      "Review Type",
+    ].filter((label) => {
+      const f = fieldArr.find((x) => `${x.label || ""}`.trim() === label);
+      return !f || !`${f.value ?? ""}`.trim();
+    }),
+    rejectionReason: "weak_extraction_validation_failed",
+  });
+  if (pi && typeof pi === "object") {
+    /** @type {Record<string, unknown>} */ (pi).sectionState = "weak_extraction";
+    /** @type {Record<string, unknown>} */ (pi).diagnostics = diagnostics;
+    /** @type {Record<string, unknown>} */ (pi).extractionStatus = "weak_failed";
+  }
   if (priorFields.length === 0) {
-    if (pi && typeof pi === "object") {
-      /** @type {Record<string, unknown>} */ (pi).extractionStatus = "weak_failed";
-    }
     console.log(
       "[Arlington][ProjectInfo] weak extraction rejected; preserving prior projectInformation",
     );
@@ -2426,6 +2463,8 @@ function arlingtonMaybePreserveProjectInformationFieldsInIntegratedTabs(
   /** @type {Record<string, unknown>} */ (integratedTabs).projectInformation = {
     ...(priorPi && typeof priorPi === "object" ? priorPi : {}),
     extractionStatus: "preserved_prior",
+    sectionState: "weak_extraction",
+    diagnostics,
   };
   console.log(
     "[Arlington][ProjectInfo] weak extraction rejected; preserving prior projectInformation",
@@ -2580,6 +2619,8 @@ function buildArlingtonAttachmentsCheckpointTabSlice({
   screenshotBase64,
   partialPendingDownloads,
   scrapeStatus,
+  sectionState,
+  rateLimitRetryAfter,
   logSummary = false,
 }) {
   const rows = arlingtonNormalizeAttachmentsForPortal(
@@ -2609,6 +2650,8 @@ function buildArlingtonAttachmentsCheckpointTabSlice({
     screenshot: screenshotBase64,
     source: "attachments",
     jurisdiction: "arlington_county_va",
+    ...(sectionState ? { sectionState } : {}),
+    ...(rateLimitRetryAfter ? { rateLimitRetryAfter } : {}),
     ...(partialPendingDownloads ? { partialPendingDownloads: true } : {}),
     ...(scrapeStatus ? { scrapeStatus } : {}),
   };
@@ -2668,15 +2711,25 @@ async function persistArlingtonAttachmentsCheckpoint({
       : {};
 
   /** @type {Record<string, unknown>} */
-  const nextPd = {
-    ...priorPd,
-    portalType: priorPd.portalType || "accela",
-    schemaVersion: Math.max(Number(priorPd.schemaVersion) || 0, 2),
-    tabs: {
-      ...priorTabs,
-      attachments: attachmentsTabPayload,
+  const nextPd = arlingtonOrchestration.applyCheckpointVersionAndStates(
+    {
+      ...priorPd,
+      portalType: priorPd.portalType || "accela",
+      schemaVersion: Math.max(Number(priorPd.schemaVersion) || 0, 2),
+      tabs: {
+        ...priorTabs,
+        attachments: attachmentsTabPayload,
+      },
     },
-  };
+    priorPd,
+    {
+      attachments:
+        attachmentsTabPayload?.sectionState ||
+        (attachmentsTabPayload?.partialPendingDownloads
+          ? "partial"
+          : "downloading"),
+    },
+  );
 
   const newHash = hashPortalData(nextPd);
   const { error } = await supabase
@@ -2693,6 +2746,9 @@ async function persistArlingtonAttachmentsCheckpoint({
     );
     return false;
   }
+  console.log(
+    `[Arlington][Attachments] checkpoint persisted checkpointVersion=${nextPd.checkpointVersion}`,
+  );
   return true;
 }
 
@@ -23701,6 +23757,16 @@ async function runArlingtonAttachmentsResumableLifecycle(
       screenshotBase64,
       partialPendingDownloads: partial,
       scrapeStatus: partial ? "partial_pending_downloads" : undefined,
+      sectionState: downloadCtx.attachmentsRateLimited
+        ? "rate_limited"
+        : partial
+          ? "partial"
+          : downloadCtx.skipMetadataScan === true
+            ? "downloading"
+            : metaTotals.total > 0
+              ? "downloading"
+              : "complete",
+      rateLimitRetryAfter: downloadCtx.attachmentsRateLimitRetryAfter,
       logSummary: false,
     });
     await persistArlingtonAttachmentsCheckpoint({
@@ -24100,6 +24166,33 @@ async function extractAttachments(
           console.log(
             `  [Arlington][Attachments] iframe body/table probe: ${JSON.stringify(brief)}`,
           );
+          const rateProbe = arlingtonOrchestration.detectCloudflareRateLimit(
+            brief.bodySnippet,
+          );
+          if (rateProbe.rateLimited) {
+            const retryAfter = arlingtonOrchestration.formatRetryAfterIso(
+              arlingtonOrchestration.computeRateLimitRetryAfterMs(
+                session?.arlingtonRateLimitAttempts || 0,
+              ),
+            );
+            console.log(
+              `[Arlington][Attachments] rate limited by Accela/Cloudflare error=${rateProbe.errorCode || "1015"} retryAfter=${retryAfter}`,
+            );
+            if (session && typeof session === "object") {
+              session.arlingtonAttachmentsRateLimited = true;
+              session.arlingtonAttachmentsRateLimitRetryAfter = retryAfter;
+              session.arlingtonRateLimitAttempts =
+                (Number(session.arlingtonRateLimitAttempts) || 0) + 1;
+            }
+            return {
+              attachments: null,
+              screenshot: null,
+              rateLimited: true,
+              attachmentsState: "rate_limited",
+              rateLimitRetryAfter: retryAfter,
+              preservePriorAttachments: true,
+            };
+          }
         }
         return { attachments: [], screenshot: null };
       }
@@ -25027,18 +25120,27 @@ async function scrapeAccelaRecord(
     (!arlingtonTabSet || arlingtonTabSet.has("attachments")) &&
     !extendArlingtonPlanReviewTimeout;
 
-  const TIMEOUT =
-    extendArlingtonPlanReviewTimeout || extendArlingtonAttachmentsTimeout
-      ? ARLINGTON_ATTACHMENTS_GLOBAL_TIMEOUT_MS
-      : 600000;
+  const arlingtonDurableMode =
+    page._isArlington && session?.arlingtonDurableMode !== false;
 
-  if (extendArlingtonPlanReviewTimeout) {
+  const TIMEOUT =
+    arlingtonDurableMode
+      ? null
+      : extendArlingtonPlanReviewTimeout || extendArlingtonAttachmentsTimeout
+        ? ARLINGTON_ATTACHMENTS_GLOBAL_TIMEOUT_MS
+        : 600000;
+
+  if (extendArlingtonPlanReviewTimeout && !arlingtonDurableMode) {
     console.log(
       `[Arlington][PlanReview] using extended global timeout=${TIMEOUT}`,
     );
-  } else if (extendArlingtonAttachmentsTimeout) {
+  } else if (extendArlingtonAttachmentsTimeout && !arlingtonDurableMode) {
     console.log(
       `[Arlington][Attachments] using extended global timeout=${TIMEOUT}`,
+    );
+  } else if (arlingtonDurableMode) {
+    console.log(
+      "[Arlington][DurableJob] scrape-wide wall disabled — resumable job lifecycle active",
     );
   }
 
@@ -25046,6 +25148,7 @@ async function scrapeAccelaRecord(
   const accelaSid = `${session._accelaSessionId || ""}`.trim();
 
   const checkTimeout = () => {
+    if (arlingtonDurableMode || TIMEOUT == null) return;
     if (Date.now() - startTime > TIMEOUT) {
       if (
         page._isArlington &&
@@ -25104,6 +25207,22 @@ async function scrapeAccelaRecord(
     const header = await extractRecordHeader(page);
     const visiblePermit = (header.record_number || "").trim();
     console.log(`[Scrape] visible permit loaded: ${visiblePermit || "(empty)"}`);
+    if (page._isArlington) {
+      const arlingtonMode = arlingtonOrchestration.detectArlingtonRecordMode(
+        header,
+        permitNumber,
+      );
+      session.arlingtonRecordMode = arlingtonMode;
+      console.log(`[Arlington][Mode] type=${arlingtonMode}`);
+      if (session._scrapeJobId && supabase) {
+        arlingtonOrchestration
+          .updateArlingtonJobPhase(supabase, session._scrapeJobId, {
+            recordMode: arlingtonMode,
+            phase: "record_info",
+          })
+          .catch(() => {});
+      }
+    }
     if (page._isBaltimore || page._isFairfax) {
       const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
       if (!visiblePermit) {
@@ -25285,7 +25404,9 @@ async function scrapeAccelaRecord(
                 supabase,
                 userId,
                 hashPortalData,
-                scrapeDeadlineMs: startTime + TIMEOUT,
+                scrapeDeadlineMs: arlingtonDurableMode
+                  ? startTime + 365 * 24 * 60 * 60 * 1000
+                  : startTime + (TIMEOUT || 600000),
                 reserveMsForFinalSave:
                   ARLINGTON_ATTACHMENTS_RESUME_RESERVE_FINAL_SAVE_MS,
                 touchSessionKeepalive:
@@ -25304,6 +25425,73 @@ async function scrapeAccelaRecord(
           sanitizeStorageKey,
           arlingtonAttDownloadCtx,
         );
+        if (attachments.rateLimited === true) {
+          session.arlingtonAttachmentsRateLimited = true;
+          session.arlingtonAttachmentsPartialPending = true;
+          session.arlingtonAttachmentsCheckpointSaved = true;
+          const priorRows = arlingtonPriorAttachmentRowsFromPortalData(
+            arlingtonPriorPortalForAtt,
+          );
+          if (priorRows.length > 0) {
+            attachments.attachments = arlingtonNormalizeAttachmentsForPortal(
+              priorRows,
+              { logSummary: true },
+            );
+          } else {
+            attachments.attachments = [];
+          }
+          attachments.scrapeStatus = "rate_limited";
+          attachments.partialPendingDownloads = true;
+          if (supabase && userId && typeof hashPortalData === "function") {
+            const slice = buildArlingtonAttachmentsCheckpointTabSlice({
+              attachments: attachments.attachments,
+              screenshotBase64: attachments.screenshot || null,
+              partialPendingDownloads: true,
+              scrapeStatus: "rate_limited",
+              sectionState: "rate_limited",
+              rateLimitRetryAfter: attachments.rateLimitRetryAfter,
+            });
+            await persistArlingtonAttachmentsCheckpoint({
+              supabase,
+              userId,
+              supabaseProjectId,
+              permitNumber,
+              hashPortalData,
+              attachmentsTabPayload: slice,
+            });
+          }
+          if (session.arlingtonDurableMode === true && supabase) {
+            session.arlingtonSkipRemainingPhasesDueToRateLimit = true;
+            await arlingtonDurableJob.scheduleRateLimitResume(
+              supabase,
+              session,
+              async () => {
+                if (!session.arlingtonAutoContinueAttachments) return;
+                await runArlingtonAttachmentsAutoContinueLoop({
+                  session,
+                  projectId: supabaseProjectId,
+                  userId,
+                  permitNumber,
+                  maxCycles: arlingtonOrchestration.resolveDurableAutoContinueMaxCycles(
+                    session,
+                  ),
+                  delayMs: session.arlingtonAutoContinueDelayMs ?? 2000,
+                  maxNoProgressCycles:
+                    session.arlingtonAutoContinueMaxNoProgressCycles ?? 2,
+                  supabase,
+                  hashPortalData,
+                  uploadToSupabaseStorage,
+                  sanitizeStorageKey,
+                  initialResultOrStats: session.arlingtonAttachmentsRunStats,
+                });
+              },
+              {
+                errorCode: "1015",
+                attempt: session.arlingtonRateLimitAttempts || 0,
+              },
+            );
+          }
+        }
         if (attachments.partialPendingDownloads === true) {
           session.arlingtonAttachmentsPartialPending = true;
         }
@@ -25346,7 +25534,9 @@ async function scrapeAccelaRecord(
           projectId: supabaseProjectId,
           userId,
           permitNumber,
-          maxCycles: session.arlingtonAutoContinueMaxCycles ?? 8,
+          maxCycles: arlingtonOrchestration.resolveDurableAutoContinueMaxCycles(
+            session,
+          ),
           delayMs: session.arlingtonAutoContinueDelayMs ?? 2000,
           maxNoProgressCycles:
             session.arlingtonAutoContinueMaxNoProgressCycles ?? 2,
@@ -25434,7 +25624,8 @@ async function scrapeAccelaRecord(
     if (
       page._isArlington &&
       !isMinimalTabsPortal(page) &&
-      wantsArlingtonPlanReview
+      wantsArlingtonPlanReview &&
+      session.arlingtonSkipRemainingPhasesDueToRateLimit !== true
     ) {
       try {
         mirrorSessionProgress(session, `${permitNumber} → Plan Review`);
@@ -25479,7 +25670,9 @@ async function scrapeAccelaRecord(
             supabase,
             userId,
             hashPortalData,
-            scrapeDeadlineMs: startTime + TIMEOUT,
+            scrapeDeadlineMs: arlingtonDurableMode
+              ? startTime + 365 * 24 * 60 * 60 * 1000
+              : startTime + (TIMEOUT || 600000),
             reserveMsForFinalSave:
               ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
             touchSessionKeepalive:
@@ -25514,6 +25707,14 @@ async function scrapeAccelaRecord(
         );
       }
       checkTimeout();
+    } else if (
+      page._isArlington &&
+      wantsArlingtonPlanReview &&
+      session.arlingtonSkipRemainingPhasesDueToRateLimit === true
+    ) {
+      console.log(
+        "[Arlington][PlanReview] deferred — attachments rate-limited; remaining phases scheduled after cooldown",
+      );
     }
 
     if (page._isArlington && wantsArlingtonPlanReview) {
@@ -25546,7 +25747,9 @@ async function scrapeAccelaRecord(
             userId,
             permitNumber,
             scope: continueScope,
-            maxCycles: session.arlingtonAutoContinueMaxCycles ?? 8,
+            maxCycles: arlingtonOrchestration.resolveDurableAutoContinueMaxCycles(
+              session,
+            ),
             delayMs: session.arlingtonAutoContinueDelayMs ?? 2000,
             maxNoProgressCycles:
               session.arlingtonAutoContinueMaxNoProgressCycles ?? 2,
@@ -27360,6 +27563,7 @@ async function continueArlingtonPlanReviewDownloads(
     uploadToSupabaseStorage,
     sanitizeStorageKey,
     scope: scopeRaw,
+    workerCycleDeadlineMs,
   },
 ) {
   const scope = arlingtonPlanReviewNormalizeContinueScope(scopeRaw);
@@ -27447,7 +27651,9 @@ async function continueArlingtonPlanReviewDownloads(
   }
 
   const wallStart = Date.now();
-  const scrapeDeadlineMs = wallStart + ARLINGTON_PLAN_REVIEW_CONTINUE_WALL_MS;
+  const scrapeDeadlineMs =
+    workerCycleDeadlineMs ||
+    wallStart + ARLINGTON_PLAN_REVIEW_CONTINUE_WALL_MS;
 
   /** @type {string|null} */
   let screenshotBase64 = await page
@@ -27850,6 +28056,7 @@ async function continueArlingtonAttachmentsDownloads(
     hashPortalData,
     uploadToSupabaseStorage,
     sanitizeStorageKey,
+    workerCycleDeadlineMs,
   },
 ) {
   const logPrefix = "[Arlington][Attachments][Continue]";
@@ -27925,7 +28132,10 @@ async function continueArlingtonAttachmentsDownloads(
     supabase,
     userId,
     hashPortalData,
-    scrapeDeadlineMs: Date.now() + ARLINGTON_ATTACHMENTS_CONTINUE_WALL_MS,
+    workerCycleDeadlineMs,
+    scrapeDeadlineMs:
+      workerCycleDeadlineMs ||
+      Date.now() + ARLINGTON_ATTACHMENTS_CONTINUE_WALL_MS,
     reserveMsForFinalSave: ARLINGTON_ATTACHMENTS_RESUME_RESERVE_FINAL_SAVE_MS,
     touchSessionKeepalive:
       typeof session.touchSessionKeepalive === "function"
@@ -28135,9 +28345,464 @@ async function runArlingtonAttachmentsAutoContinueLoop(opts) {
   };
 }
 
+const ARLINGTON_WORKER_CYCLE_MS = 8 * 60 * 1000;
+
+function arlingtonWorkerBuildInfoTabSlice(header, details) {
+  const ar = details?.arlingtonRecordInfo;
+  const recordStatusDisplay = (header?.record_status || "")
+    .replace(/^Record Status:\s*/i, "")
+    .trim();
+  const expirationDisplay = (header?.expiration_date || "")
+    .replace(/^Expiration Date:\s*/i, "")
+    .trim();
+  if (ar?.workLocation && Array.isArray(ar.workLocation.lines) && ar.workLocation.lines.length > 0) {
+    return {
+      title: "Record Info",
+      jurisdiction: "arlington_county_va",
+      tables: details.tables || [],
+      fields: header,
+      keyValues: [
+        { key: "Record Number", value: header.record_number || "" },
+        { key: "Record Type", value: header.record_type || "" },
+        { key: "Record Status", value: recordStatusDisplay },
+        { key: "Expiration Date", value: expirationDisplay },
+        { key: "Work Location", value: ar.workLocation?.text || "" },
+        {
+          key: "Applicant",
+          value: ar.applicant?.text || (ar.applicant?.lines || []).join("\n") || "",
+        },
+        {
+          key: "Licensed Professional",
+          value:
+            ar.licensedProfessional?.text ||
+            (ar.licensedProfessional?.lines || []).join("\n") ||
+            "",
+        },
+        {
+          key: "Owner",
+          value: ar.owner?.text || (ar.owner?.lines || []).join("\n") || "",
+        },
+      ],
+      arlingtonRecordInfo: ar,
+      screenshot: details.screenshot,
+    };
+  }
+  return {
+    tables: details.tables || [],
+    fields: header,
+    screenshot: details.screenshot,
+  };
+}
+
+function arlingtonWorkerResolveNextPhase(tabSet, currentPhase, states) {
+  const order = [
+    "record_info",
+    "attachments",
+    "project_information",
+    "plan_review",
+    "verify",
+  ];
+  const idx = order.indexOf(currentPhase);
+  if (idx < 0) return "verify";
+  if (currentPhase === "attachments" && states.attachmentsPending > 0) {
+    return "attachments";
+  }
+  if (currentPhase === "plan_review" && states.planReviewPending > 0) {
+    return "plan_review";
+  }
+  for (let i = idx + 1; i < order.length; i += 1) {
+    const phase = order[i];
+    if (phase === "attachments" && !tabSet.has("attachments")) continue;
+    if (phase === "project_information" && !tabSet.has("plan_review")) continue;
+    if (phase === "plan_review" && !tabSet.has("plan_review")) continue;
+    return phase;
+  }
+  return "verify";
+}
+
+/**
+ * Run one bounded Arlington worker phase (single claim cycle).
+ * @param {object} session Playwright session (recreated per worker claim).
+ * @param {object} opts
+ */
+async function runArlingtonWorkerBoundedPhase(session, opts) {
+  const {
+    job,
+    userId,
+    supabase,
+    hashPortalData,
+    uploadToSupabaseStorage,
+    sanitizeStorageKey,
+    requestedScope,
+    phase: phaseIn,
+    onHeartbeat,
+  } = opts;
+
+  const permitNumber = `${job.permit_number || ""}`.trim();
+  const projectId = `${job.project_id || ""}`.trim();
+  const page = session?.page;
+  if (!page) throw new Error("worker_session_no_page");
+
+  const portalUrl = session.portalUrl || session.dashboardUrl;
+  const accelaTenantProfile = resolveAccelaTenantProfile(portalUrl);
+  page._accelaTenantProfile = accelaTenantProfile;
+  page._isArlington = accelaTenantProfile?.key === "arlington_county_va";
+
+  const tabList = requestedScope?.tabs || ["info", "attachments", "plan_review"];
+  const tabSet = new Set(tabList);
+  const workerCycleDeadlineMs = Date.now() + ARLINGTON_WORKER_CYCLE_MS;
+  const phase = `${phaseIn || job.phase || "record_info"}`.trim();
+
+  session.arlingtonDurableMode = true;
+  session._scrapeJobId = job.id;
+  session._scrapeProjectId = projectId;
+  session._scrapePermitNumber = permitNumber;
+  session.userId = userId;
+
+  const result = {
+    phase,
+    nextPhase: phase,
+    rateLimited: false,
+    verify: false,
+    done: false,
+    cycleTimedOut: false,
+    attachments_state: job.attachments_state || "not_started",
+    project_info_state: job.project_info_state || "not_started",
+    plan_review_state: job.plan_review_state || "not_started",
+    checkpoint_version: Number(job.checkpoint_version) || 0,
+    error: null,
+  };
+
+  const cycleExpired = () => Date.now() >= workerCycleDeadlineMs;
+
+  const maybeHeartbeat = async () => {
+    if (typeof onHeartbeat === "function") await onHeartbeat();
+  };
+
+  if (!isArlingtonCapDetailPage(page)) {
+    mirrorSessionProgress(session, `${permitNumber} → Searching...`);
+    await searchPermit(page, portalUrl, permitNumber);
+  }
+  await maybeHeartbeat();
+
+  if (phase === "record_info") {
+    mirrorSessionProgress(session, `${permitNumber} → Record Header`);
+    const header = await extractRecordHeader(page);
+    const mode = arlingtonOrchestration.detectArlingtonRecordMode(header, permitNumber);
+    session.arlingtonRecordMode = mode;
+
+    let details = { fields: {}, tables: [], screenshot: null };
+    if (tabSet.has("info")) {
+      try {
+        mirrorSessionProgress(session, `${permitNumber} → Record Details`);
+        details = await extractRecordDetails(page);
+      } catch (err) {
+        console.log(`[Arlington][Worker] record details: ${err.message}`);
+      }
+    }
+
+    const infoTab = arlingtonWorkerBuildInfoTabSlice(header, details);
+    const persistResult = await arlingtonJobStore.persistPortalDataPatch(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+      hashPortalData,
+      (prior) => {
+        const scrapedSlice = {
+          portalType: "accela",
+          schemaVersion: 2,
+          name: header.record_number || permitNumber,
+          projectNum: header.record_number || permitNumber,
+          tabs: { info: infoTab },
+        };
+        const merged = mergeArlingtonPartialPortalData(prior, scrapedSlice, new Set(["info"]));
+        merged.arlingtonSectionStates = arlingtonOrchestration.mergeArlingtonSectionStates(
+          prior,
+          { recordInfo: "complete" },
+        );
+        return merged;
+      },
+    );
+    if (persistResult.ok) {
+      result.checkpoint_version = persistResult.checkpointVersion;
+    }
+
+    result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "record_info", {
+      attachmentsPending: 0,
+      planReviewPending: 0,
+    });
+    return result;
+  }
+
+  if (phase === "attachments") {
+    if (!tabSet.has("attachments")) {
+      result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "attachments", {
+        attachmentsPending: 0,
+        planReviewPending: 0,
+      });
+      return result;
+    }
+
+    result.attachments_state = "downloading";
+    const priorPortal = await arlingtonFetchLatestPortalDataRow(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+    );
+    const priorRows = arlingtonPriorAttachmentRowsFromPortalData(priorPortal);
+    const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
+    if (!fs.existsSync(DOWNLOADS_ROOT)) {
+      fs.mkdirSync(DOWNLOADS_ROOT, { recursive: true });
+    }
+
+    if (priorRows.length === 0) {
+      const attResult = await extractAttachments(
+        page,
+        session,
+        projectId,
+        supabase,
+        uploadToSupabaseStorage,
+        sanitizeStorageKey,
+        {
+          DOWNLOADS_DIR: DOWNLOADS_ROOT,
+          supabaseProjectId: projectId,
+          uploadFn: uploadToSupabaseStorage,
+          sanitizeFn: sanitizeStorageKey,
+          permitNumber,
+          priorPortalData: priorPortal,
+          supabase,
+          userId,
+          hashPortalData,
+          workerCycleDeadlineMs,
+          scrapeDeadlineMs: workerCycleDeadlineMs,
+          reserveMsForFinalSave: ARLINGTON_ATTACHMENTS_RESUME_RESERVE_FINAL_SAVE_MS,
+          touchSessionKeepalive:
+            typeof session.touchSessionKeepalive === "function"
+              ? session.touchSessionKeepalive.bind(session)
+              : null,
+          _arlingtonSession: session,
+        },
+      );
+      if (attResult?.rateLimited === true) {
+        result.rateLimited = true;
+        result.attachments_state = "rate_limited";
+        return result;
+      }
+    } else if (!cycleExpired()) {
+      await continueArlingtonAttachmentsDownloads(session, {
+        projectId,
+        permitNumber,
+        userId,
+        supabase,
+        hashPortalData,
+        uploadToSupabaseStorage,
+        sanitizeStorageKey,
+        workerCycleDeadlineMs,
+      });
+    }
+
+    await maybeHeartbeat();
+    const latestPortal = await arlingtonFetchLatestPortalDataRow(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+    );
+    const rows = arlingtonPriorAttachmentRowsFromPortalData(latestPortal);
+    const pending = arlingtonOrchestration.arlingtonAttachmentPendingCount(rows);
+    result.attachments_state =
+      pending > 0 ? (cycleExpired() ? "partial" : "partial") : "complete";
+    result.checkpoint_version =
+      arlingtonOrchestration.readCheckpointVersion(latestPortal) ||
+      result.checkpoint_version;
+    result.cycleTimedOut = cycleExpired() && pending > 0;
+    result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "attachments", {
+      attachmentsPending: pending,
+      planReviewPending: 0,
+    });
+    return result;
+  }
+
+  if (phase === "project_information") {
+    if (!tabSet.has("plan_review")) {
+      result.nextPhase = "verify";
+      return result;
+    }
+
+    session.arlingtonPlanReviewScope = "projectInformation";
+    session.arlingtonDownloadDocuments = false;
+
+    const priorPortal = await arlingtonFetchLatestPortalDataRow(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+    );
+    const piSection =
+      priorPortal?.tabs?.planReview?.tabs?.projectInformation ||
+      priorPortal?.tabs?.planReview?.projectInformation;
+    const piState = `${piSection?.sectionState || ""}`.trim();
+    const piFields = Array.isArray(piSection?.fields) ? piSection.fields : [];
+
+    if (
+      piState !== "complete" &&
+      piState !== "weak_extraction" &&
+      !cycleExpired()
+    ) {
+      const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
+      if (!fs.existsSync(DOWNLOADS_ROOT)) {
+        fs.mkdirSync(DOWNLOADS_ROOT, { recursive: true });
+      }
+      const planReviewHashes = new Map();
+      await extractPlanReviewArlington(page, getExtractionContext(page), {
+        DOWNLOADS_DIR: DOWNLOADS_ROOT,
+        supabaseProjectId: projectId,
+        uploadFn: uploadToSupabaseStorage,
+        sanitizeFn: sanitizeStorageKey,
+        downloadedHashes: planReviewHashes,
+        attachmentRows: [],
+        permitNumber,
+        priorPortalData: priorPortal,
+        supabase,
+        userId,
+        hashPortalData,
+        scrapeDeadlineMs: workerCycleDeadlineMs,
+        reserveMsForFinalSave: ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
+        touchSessionKeepalive:
+          typeof session.touchSessionKeepalive === "function"
+            ? session.touchSessionKeepalive.bind(session)
+            : null,
+        _arlingtonSession: session,
+        planReviewScope: "projectInformation",
+        downloadDocuments: false,
+      });
+    }
+
+    await maybeHeartbeat();
+    const latestPortal = await arlingtonFetchLatestPortalDataRow(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+    );
+    const latestPi =
+      latestPortal?.tabs?.planReview?.tabs?.projectInformation ||
+      latestPortal?.tabs?.planReview?.projectInformation;
+    const latestState = `${latestPi?.sectionState || ""}`.trim();
+    const latestFields = Array.isArray(latestPi?.fields) ? latestPi.fields : [];
+    result.project_info_state =
+      latestState === "weak_extraction" || latestFields.length < 3
+        ? "weak_extraction"
+        : latestState || (latestFields.length > 0 ? "complete" : "not_started");
+    result.checkpoint_version =
+      arlingtonOrchestration.readCheckpointVersion(latestPortal) ||
+      result.checkpoint_version;
+    result.nextPhase = "plan_review";
+    return result;
+  }
+
+  if (phase === "plan_review") {
+    if (!tabSet.has("plan_review")) {
+      result.nextPhase = "verify";
+      return result;
+    }
+
+    const prScope = requestedScope?.planReviewScope || "all";
+    session.arlingtonPlanReviewScope = prScope;
+    session.arlingtonDownloadDocuments = requestedScope?.downloadDocuments !== false;
+
+    const priorPortal = await arlingtonFetchLatestPortalDataRow(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+    );
+    const integratedTabs =
+      arlingtonPlanReviewHydrateIntegratedTabsFromPortalData(priorPortal);
+
+    if (!integratedTabs && !cycleExpired()) {
+      const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
+      if (!fs.existsSync(DOWNLOADS_ROOT)) {
+        fs.mkdirSync(DOWNLOADS_ROOT, { recursive: true });
+      }
+      const planReviewHashes = new Map();
+      const attRows = arlingtonPriorAttachmentRowsFromPortalData(priorPortal);
+      await extractPlanReviewArlington(page, getExtractionContext(page), {
+        DOWNLOADS_DIR: DOWNLOADS_ROOT,
+        supabaseProjectId: projectId,
+        uploadFn: uploadToSupabaseStorage,
+        sanitizeFn: sanitizeStorageKey,
+        downloadedHashes: planReviewHashes,
+        attachmentRows: attRows,
+        permitNumber,
+        priorPortalData: priorPortal,
+        supabase,
+        userId,
+        hashPortalData,
+        scrapeDeadlineMs: workerCycleDeadlineMs,
+        reserveMsForFinalSave: ARLINGTON_PLAN_REVIEW_RESUME_RESERVE_FINAL_SAVE_MS,
+        touchSessionKeepalive:
+          typeof session.touchSessionKeepalive === "function"
+            ? session.touchSessionKeepalive.bind(session)
+            : null,
+        _arlingtonSession: session,
+        planReviewScope: prScope,
+        downloadDocuments: session.arlingtonDownloadDocuments,
+      });
+    } else if (!cycleExpired()) {
+      const continueScope = arlingtonPlanReviewMapScrapeScopeToContinueScope(prScope);
+      await continueArlingtonPlanReviewDownloads(session, {
+        projectId,
+        permitNumber,
+        userId,
+        supabase,
+        hashPortalData,
+        uploadToSupabaseStorage,
+        sanitizeStorageKey,
+        scope: continueScope,
+        workerCycleDeadlineMs,
+      });
+    }
+
+    await maybeHeartbeat();
+    const latestPortal = await arlingtonFetchLatestPortalDataRow(
+      supabase,
+      userId,
+      projectId,
+      permitNumber,
+    );
+    const prPending = arlingtonOrchestration.countPlanReviewPendingDocuments(
+      latestPortal?.tabs?.planReview,
+    );
+    result.plan_review_state = prPending.total > 0 ? "partial" : "complete";
+    result.checkpoint_version =
+      arlingtonOrchestration.readCheckpointVersion(latestPortal) ||
+      result.checkpoint_version;
+    result.cycleTimedOut = cycleExpired() && prPending.total > 0;
+    result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "plan_review", {
+      attachmentsPending: 0,
+      planReviewPending: prPending.total,
+    });
+    return result;
+  }
+
+  if (phase === "verify") {
+    result.verify = true;
+    result.nextPhase = "complete";
+    result.done = true;
+    return result;
+  }
+
+  result.nextPhase = "verify";
+  return result;
+}
+
 module.exports = {
   accelaLogin,
   scrapeAccelaRecord,
+  runArlingtonWorkerBoundedPhase,
   continueArlingtonPlanReviewDownloads,
   resumeArlingtonPlanReviewPendingDownloads,
   continueArlingtonAttachmentsDownloads,
