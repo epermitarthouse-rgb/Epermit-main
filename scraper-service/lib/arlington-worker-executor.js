@@ -6,6 +6,7 @@ const {
   parseRequestedScope,
   heartbeatLease,
   releaseLease,
+  releaseLeaseWithDispatchPolicy,
   scheduleRateLimitRelease,
   finalizeJobFromVerification,
   verifyArlingtonJobCompletion,
@@ -104,7 +105,13 @@ async function executeArlingtonWorkerCycle(ctx) {
         },
         attemptCount,
       );
-      await releaseLease(supabase, job.id, workerId, patch);
+      await releaseLeaseWithDispatchPolicy(
+        supabase,
+        job.id,
+        workerId,
+        job,
+        patch,
+      );
       return { ok: true, outcome: "rate_limited", phaseResult };
     }
 
@@ -181,7 +188,7 @@ async function executeArlingtonWorkerCycle(ctx) {
 
     const nextPhase = phaseResult.nextPhase || phase;
 
-    await releaseLease(supabase, job.id, workerId, {
+    await releaseLeaseWithDispatchPolicy(supabase, job.id, workerId, job, {
       status: "partial",
       phase: nextPhase,
       attachments_state: phaseResult.attachments_state,
@@ -208,7 +215,7 @@ async function executeArlingtonWorkerCycle(ctx) {
     console.warn(`[Arlington][Worker] cycle failed job=${job.id}: ${msg}`);
     const unrecoverable =
       /credential_not|login_requires_manual|not_arlington_credential/i.test(msg);
-    await releaseLease(supabase, job.id, workerId, {
+    await releaseLeaseWithDispatchPolicy(supabase, job.id, workerId, job, {
       status: unrecoverable ? "failed_unrecoverable" : "partial",
       last_error: msg.slice(0, 500),
       next_attempt_at: unrecoverable
@@ -219,6 +226,7 @@ async function executeArlingtonWorkerCycle(ctx) {
         ? "Arlington scrape failed with an unrecoverable error."
         : "Arlington worker hit a transient error; will retry.",
       completed_at: unrecoverable ? new Date().toISOString() : null,
+      run_intent: unrecoverable ? "dormant" : "retry",
     });
     return { ok: false, error: msg, unrecoverable };
   } finally {

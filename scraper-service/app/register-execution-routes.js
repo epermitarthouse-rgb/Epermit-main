@@ -1967,12 +1967,20 @@ app.post("/api/scrape", async (req, res) => {
       session._scrapeActive = false;
       const reusedExisting = enqueueResult.reusedExisting;
       const jobRow = enqueueResult.job || {};
+      const dispatch = enqueueResult.dispatch || {};
+      const queuePosition = Number(dispatch.queuePosition) || 0;
+      const currentlyRunningJobId = dispatch.currentlyRunningJobId || null;
+      const userMessage = currentlyRunningJobId
+        ? "Your scrape is queued — finishing the current worker cycle first."
+        : queuePosition > 0
+          ? "Your scrape is queued — it will run next."
+          : reusedExisting
+            ? "Attached to existing Arlington scrape job. Progress will update in portal data."
+            : "Arlington scrape queued for durable worker. Progress will update in portal data.";
       publishScrapeOrchestration(session, {
         stage: SCRAPE_STAGES.QUEUED,
         event_type: reusedExisting ? "job_reused" : "job_queued",
-        user_message: reusedExisting
-          ? "Attached to existing Arlington scrape job. Progress will update in portal data."
-          : "Arlington scrape queued for durable worker. Progress will update in portal data.",
+        user_message: userMessage,
         dedupeKey: reusedExisting
           ? "arlington_durable_reused"
           : "arlington_durable_queued",
@@ -1987,8 +1995,13 @@ app.post("/api/scrape", async (req, res) => {
         jobId: scrapeJobId,
         durableWorker: true,
         reusedExistingJob: reusedExisting,
+        runIntent: dispatch.runIntent || jobRow.run_intent || "foreground",
+        queuePosition,
+        currentlyRunningJobId,
         status: jobRow.status || "queued",
         phase: jobRow.phase || "record_info",
+        permitNumber: String(permitNumber).trim(),
+        projectId: String(projectId).trim(),
       });
     }
 

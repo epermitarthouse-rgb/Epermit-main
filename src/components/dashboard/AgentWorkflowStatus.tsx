@@ -25,7 +25,6 @@ import {
   arlingtonScrapeAllOpts,
   type ArlingtonScrapeTabOpts,
 } from "@/lib/arlingtonPlanReviewScrapeScope";
-import { findActiveArlingtonScrapeJob } from "@/lib/arlingtonActiveScrapeJob";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
@@ -1189,37 +1188,12 @@ export function AgentWorkflowStatus() {
         arlingtonOpts.tabs.length > 0;
 
       if (useArlingtonCustomTabs) {
-        if (scrape.isScraping) {
+        if (scrape.isScraping && scrape.activeJobId) {
           toast.info("Scrape already running for this project.");
           setChainPhase("idle");
           setPortalStatus("checking");
           setPortalStatusText(scrape.scrapeLiveMessage || "Scrape in progress");
           return;
-        }
-        const existingJob = await findActiveArlingtonScrapeJob(
-          projectIdToUse,
-          String(permitNumberToUse).trim(),
-          arlingtonOpts,
-        );
-        if (existingJob?.id) {
-          const existingSessionId = resolveAccelaSessionForProject(projectIdToUse);
-          if (existingSessionId) {
-            scrape.setAccelaSessionId(existingSessionId, {
-              projectId: projectIdToUse,
-              permitNumber: String(permitNumberToUse).trim(),
-            });
-            scrape.startScrapeSession(
-              existingSessionId,
-              projectIdToUse,
-              String(permitNumberToUse).trim(),
-              existingJob.id,
-            );
-            toast.info("Scrape already running — attached to existing job.");
-            setChainPhase("idle");
-            setPortalStatus("checking");
-            setPortalStatusText("Scrape in progress");
-            return;
-          }
         }
       }
 
@@ -1352,9 +1326,16 @@ export function AgentWorkflowStatus() {
         const scrapePayload = (await scrapeRes.json().catch(() => ({}))) as {
           jobId?: string | null;
           reusedExistingJob?: boolean;
+          runIntent?: string;
+          queuePosition?: number;
+          currentlyRunningJobId?: string | null;
         };
 
-        if (scrapePayload.reusedExistingJob) {
+        if (scrapePayload.currentlyRunningJobId) {
+          toast.info("Your scrape is queued — finishing the current worker cycle first.");
+        } else if ((scrapePayload.queuePosition ?? 0) > 0) {
+          toast.info("Your scrape is queued — it will run next.");
+        } else if (scrapePayload.reusedExistingJob) {
           toast.info("Scrape already running — attached to existing job.");
         } else {
           toast.success("Scraping started — you can continue using the app.");

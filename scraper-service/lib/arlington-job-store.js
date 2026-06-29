@@ -74,6 +74,13 @@ async function releaseLease(supabase, jobId, workerId, patch = {}) {
   });
   if (error) throw error;
 
+  if (patch.run_intent || patch.dispatch_priority != null) {
+    const jobPatch = {};
+    if (patch.run_intent) jobPatch.run_intent = patch.run_intent;
+    if (patch.dispatch_priority != null) jobPatch.dispatch_priority = patch.dispatch_priority;
+    await supabase.from("scrape_jobs").update(jobPatch).eq("id", jobId);
+  }
+
   if (patch.metadata || patch.cancellation_reason || patch.canonical_job_id) {
     const { data: row } = await supabase
       .from("scrape_jobs")
@@ -130,14 +137,74 @@ async function enqueueOrGetArlingtonScrapeJob(supabase, fields) {
   const row = Array.isArray(data) ? data[0] : data;
   const job = row?.job || row;
   const reusedExisting = Boolean(row?.reused_existing);
+  let dispatch = null;
+  try {
+    dispatch = await requestArlingtonJobDispatch(supabase, job?.id);
+  } catch (err) {
+    if (!/request_arlington_job_dispatch|unknown rpc/i.test(`${err?.message || err}`)) {
+      throw err;
+    }
+  }
   return {
-    job,
+    job: dispatch?.job || job,
     jobId: job?.id || null,
     reusedExisting,
     requestedScope,
     normalizedPermitNumber: normalizedPermit,
     normalizedScopeKey: scopeKey,
+    dispatch,
   };
+}
+
+async function requestArlingtonJobDispatch(supabase, jobId) {
+  if (!jobId) return null;
+  const { data, error } = await supabase.rpc("request_arlington_job_dispatch", {
+    p_job_id: jobId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  return {
+    jobId: row.job_id,
+    runIntent: row.run_intent || "foreground",
+    dispatchPriority: row.dispatch_priority,
+    queuePosition: Number(row.queue_position) || 0,
+    currentlyRunningJobId: row.currently_running_job_id || null,
+  };
+}
+
+async function hasWaitingForegroundJobs(supabase, excludeJobId) {
+  const { data, error } = await supabase
+    .from("scrape_jobs")
+    .select("id, lease_expires_at")
+    .ilike("jurisdiction", "%arlington%")
+    .eq("run_intent", "foreground")
+    .is("completed_at", null)
+    .neq("id", excludeJobId);
+  if (error) throw error;
+  const now = Date.now();
+  return (data || []).some((row) => {
+    if (!row?.lease_expires_at) return true;
+    return Date.parse(row.lease_expires_at) <= now;
+  });
+}
+
+async function applyPostReleaseDispatchPolicy(supabase, job, patch = {}) {
+  const runIntent = `${job?.run_intent || ""}`.trim();
+  if (runIntent === "foreground") return patch;
+  const foregroundWaiting = await hasWaitingForegroundJobs(supabase, job.id);
+  if (foregroundWaiting) {
+    return { ...patch, run_intent: "dormant", dispatch_priority: 0 };
+  }
+  if (runIntent === "retry") {
+    return { ...patch, run_intent: "retry" };
+  }
+  return { ...patch, run_intent: "dormant", dispatch_priority: 0 };
+}
+
+async function releaseLeaseWithDispatchPolicy(supabase, jobId, workerId, job, patch = {}) {
+  const policyPatch = await applyPostReleaseDispatchPolicy(supabase, job, patch);
+  return releaseLease(supabase, jobId, workerId, policyPatch);
 }
 
 /** @deprecated Use enqueueOrGetArlingtonScrapeJob for new Arlington enqueues. */
@@ -176,6 +243,7 @@ function scheduleRateLimitRelease(patch, attemptCount) {
     current_stage: "attachments",
     current_user_message:
       "Accela rate-limited attachment access. Worker will retry after cooldown.",
+    run_intent: "retry",
   };
 }
 
@@ -382,6 +450,10 @@ module.exports = {
   heartbeatLease,
   releaseLease,
   enqueueOrGetArlingtonScrapeJob,
+  requestArlingtonJobDispatch,
+  releaseLeaseWithDispatchPolicy,
+  applyPostReleaseDispatchPolicy,
+  hasWaitingForegroundJobs,
   initializeArlingtonDurableJob,
   scheduleRateLimitRelease,
   finalizeJobFromVerification,
