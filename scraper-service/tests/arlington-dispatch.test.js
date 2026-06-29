@@ -23,12 +23,18 @@ function claimTier(job, now = Date.now()) {
   if (job.run_intent === "recovery" && job.explicitly_resumed_at) return 1;
   if (
     ["foreground", "recovery", "retry"].includes(job.run_intent) &&
-    ["running", "resuming"].includes(job.status) &&
+    ["running", "resuming", "partial"].includes(job.status) &&
     recent(new Date(lastActivity).toISOString())
   ) {
     return 2;
   }
-  if (job.run_intent === "retry") return 3;
+  if (
+    job.run_intent === "retry" &&
+    ["rate_limited", "partial"].includes(job.status) &&
+    (!job.next_attempt_at || Date.parse(job.next_attempt_at) <= now)
+  ) {
+    return 3;
+  }
   return 99;
 }
 
@@ -173,6 +179,31 @@ describe("Arlington dispatch priority (claim ordering simulation)", () => {
     });
     assert.equal(pickClaimable([recent])?.id, "recent");
     assert.equal(claimTier(recent), 0);
+  });
+
+  it("due partial retry job is claimable after bounded phase checkpoint", () => {
+    const partialRetry = baseJob({
+      id: "partial-retry",
+      run_intent: "retry",
+      status: "partial",
+      phase: "project_information",
+      next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+      last_heartbeat_at: new Date(Date.now() - 2 * RECOVERY_WINDOW_MS).toISOString(),
+    });
+    assert.equal(pickClaimable([partialRetry])?.id, "partial-retry");
+    assert.equal(claimTier(partialRetry), 3);
+  });
+
+  it("restart resumes partial job within recovery window after worker interruption", () => {
+    const recentPartial = baseJob({
+      id: "recent-partial",
+      run_intent: "foreground",
+      status: "partial",
+      last_worker_started_at: new Date(Date.now() - 90_000).toISOString(),
+      lease_expires_at: new Date(Date.now() - 1000).toISOString(),
+    });
+    assert.equal(pickClaimable([recentPartial])?.id, "recent-partial");
+    assert.equal(claimTier(recentPartial), 0);
   });
 
   it("restart does not revive unrelated historical jobs outside recovery window", () => {
