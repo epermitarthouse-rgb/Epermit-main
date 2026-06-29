@@ -27198,7 +27198,8 @@ function arlingtonPlanReviewOnlyNonRetryablePendingRemain(pendingByReason) {
       k.includes("non_retryable") ||
       k.includes("unavailable") ||
       k === "pending_tab_not_resolved" ||
-      k === "pending_token_missing"
+      k === "pending_token_missing" ||
+      k === "metadata_only"
     );
   });
 }
@@ -28407,7 +28408,10 @@ function arlingtonWorkerResolveNextPhase(tabSet, currentPhase, states) {
   if (currentPhase === "attachments" && states.attachmentsPending > 0) {
     return "attachments";
   }
-  if (currentPhase === "plan_review" && states.planReviewPending > 0) {
+  if (
+    currentPhase === "plan_review" &&
+    Number(states.planReviewPending) > 0
+  ) {
     return "plan_review";
   }
   for (let i = idx + 1; i < order.length; i += 1) {
@@ -28722,6 +28726,7 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
     const integratedTabs =
       arlingtonPlanReviewHydrateIntegratedTabsFromPortalData(priorPortal);
 
+    let continueResponse = null;
     if (!integratedTabs && !cycleExpired()) {
       const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
       if (!fs.existsSync(DOWNLOADS_ROOT)) {
@@ -28753,7 +28758,7 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
       });
     } else if (!cycleExpired()) {
       const continueScope = arlingtonPlanReviewMapScrapeScopeToContinueScope(prScope);
-      await continueArlingtonPlanReviewDownloads(session, {
+      continueResponse = await continueArlingtonPlanReviewDownloads(session, {
         projectId,
         permitNumber,
         userId,
@@ -28773,18 +28778,46 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
       projectId,
       permitNumber,
     );
-    const prPending = arlingtonOrchestration.countPlanReviewPendingDocuments(
+    const prAnalysis = arlingtonOrchestration.analyzePlanReviewPendingDocuments(
       latestPortal?.tabs?.planReview,
     );
-    result.plan_review_state = prPending.total > 0 ? "partial" : "complete";
+    const retryablePending = prAnalysis.retryable.total;
+    const metadataOnlyPending = prAnalysis.metadataOnly.total;
+    const integratedAfter =
+      arlingtonPlanReviewHydrateIntegratedTabsFromPortalData(latestPortal);
+    const pendingByReason = integratedAfter
+      ? arlingtonPlanReviewPendingByReason(integratedAfter, prScope)
+      : metadataOnlyPending > 0
+        ? { metadata_only: metadataOnlyPending }
+        : {};
+    const downloadedThisRun = Number(continueResponse?.downloadedThisRun) || 0;
+
+    result.downloadedThisRun = downloadedThisRun;
+    result.pendingByReason = pendingByReason;
+    result.planReviewRetryablePending = retryablePending;
+    result.planReviewMetadataOnly = metadataOnlyPending;
+    result.metadataOnlyDocumentNames = prAnalysis.metadataOnly.names;
+
+    const metadataOnlyTerminal =
+      downloadedThisRun === 0 &&
+      retryablePending === 0 &&
+      metadataOnlyPending > 0;
+
+    result.plan_review_state =
+      metadataOnlyTerminal || retryablePending === 0 ? "complete" : "partial";
     result.checkpoint_version =
       arlingtonOrchestration.readCheckpointVersion(latestPortal) ||
       result.checkpoint_version;
-    result.cycleTimedOut = cycleExpired() && prPending.total > 0;
-    result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "plan_review", {
-      attachmentsPending: 0,
-      planReviewPending: prPending.total,
-    });
+    result.cycleTimedOut = cycleExpired() && retryablePending > 0;
+    if (metadataOnlyTerminal) {
+      result.terminalMetadataOnly = true;
+      result.nextPhase = "verify";
+    } else {
+      result.nextPhase = arlingtonWorkerResolveNextPhase(tabSet, "plan_review", {
+        attachmentsPending: 0,
+        planReviewPending: retryablePending,
+      });
+    }
     return result;
   }
 

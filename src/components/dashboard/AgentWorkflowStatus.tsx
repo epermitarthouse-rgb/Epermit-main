@@ -25,6 +25,7 @@ import {
   arlingtonScrapeAllOpts,
   type ArlingtonScrapeTabOpts,
 } from "@/lib/arlingtonPlanReviewScrapeScope";
+import { findActiveArlingtonScrapeJob } from "@/lib/arlingtonActiveScrapeJob";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
@@ -252,6 +253,7 @@ export function AgentWorkflowStatus() {
   const [chainError, setChainError] = useState<string | null>(null);
   const [isShadowMode, setIsShadowMode] = useState(false);
   const realtimeTriggeredRef = useRef(false);
+  const scrapeEnqueuePendingRef = useRef(false);
   const pipelineTriggerInFlightRef = useRef(false);
   const pipelineResumeAttemptedRef = useRef<string | null>(null);
   const chainPipelineRef = useRef<
@@ -1100,6 +1102,11 @@ export function AgentWorkflowStatus() {
       return;
     }
 
+    if (scrapeEnqueuePendingRef.current) {
+      toast.info("Scrape request already in progress.");
+      return;
+    }
+
     setChainPhase("scraping");
     setChainError(null);
     setPipelineResult(null);
@@ -1179,6 +1186,41 @@ export function AgentWorkflowStatus() {
         isArlingtonCred &&
         !!arlingtonOpts?.tabs &&
         arlingtonOpts.tabs.length > 0;
+
+      if (useArlingtonCustomTabs) {
+        if (scrape.isScraping) {
+          toast.info("Scrape already running for this project.");
+          setChainPhase("idle");
+          setPortalStatus("checking");
+          setPortalStatusText(scrape.scrapeLiveMessage || "Scrape in progress");
+          return;
+        }
+        const existingJob = await findActiveArlingtonScrapeJob(
+          projectIdToUse,
+          String(permitNumberToUse).trim(),
+          arlingtonOpts,
+        );
+        if (existingJob?.id) {
+          const existingSessionId = resolveAccelaSessionForProject(projectIdToUse);
+          if (existingSessionId) {
+            scrape.setAccelaSessionId(existingSessionId, {
+              projectId: projectIdToUse,
+              permitNumber: String(permitNumberToUse).trim(),
+            });
+            scrape.startScrapeSession(
+              existingSessionId,
+              projectIdToUse,
+              String(permitNumberToUse).trim(),
+              existingJob.id,
+            );
+            toast.info("Scrape already running — attached to existing job.");
+            setChainPhase("idle");
+            setPortalStatus("checking");
+            setPortalStatusText("Scrape in progress");
+            return;
+          }
+        }
+      }
 
       const maxAttempts = arlingtonPortalMonitor ? 2 : 1;
       let scrapeStarted = false;
@@ -1286,6 +1328,7 @@ export function AgentWorkflowStatus() {
           tabs: scrapeBody.tabs ?? "(default scrapeMode)",
         });
 
+        scrapeEnqueuePendingRef.current = true;
         const scrapeRes = await fetch(`${SCRAPER_URL}/api/scrape`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1307,9 +1350,14 @@ export function AgentWorkflowStatus() {
 
         const scrapePayload = (await scrapeRes.json().catch(() => ({}))) as {
           jobId?: string | null;
+          reusedExistingJob?: boolean;
         };
 
-        toast.success("Scraping started — you can continue using the app.");
+        if (scrapePayload.reusedExistingJob) {
+          toast.info("Scrape already running — attached to existing job.");
+        } else {
+          toast.success("Scraping started — you can continue using the app.");
+        }
         scrape.startScrapeSession(
           sessionId,
           projectIdToUse,
@@ -1350,6 +1398,8 @@ export function AgentWorkflowStatus() {
             : "Something went wrong. Try again.",
         );
       }
+    } finally {
+      scrapeEnqueuePendingRef.current = false;
     }
   };
 

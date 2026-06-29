@@ -185,24 +185,61 @@ function arlingtonAttachmentPendingCount(rows) {
 }
 
 function countPlanReviewPendingDocuments(planReviewTab) {
+  const analysis = analyzePlanReviewPendingDocuments(planReviewTab);
+  return {
+    planSet: analysis.retryable.planSet,
+    reviewResults: analysis.retryable.reviewResults,
+    approved: analysis.retryable.approved,
+    total: analysis.retryable.total,
+  };
+}
+
+function isMetadataOnlyPlanReviewDoc(doc) {
+  if (!doc || typeof doc !== "object") return false;
+  const ds = `${doc.downloadStatus || ""}`.trim();
+  return ds === "metadata_only";
+}
+
+function isRetryablePlanReviewPendingDoc(doc) {
+  if (!doc || typeof doc !== "object") return false;
+  const ds = `${doc.downloadStatus || ""}`.trim();
+  if (ds === "uploaded" || ds === "success") return false;
+  if (ds === "failed_non_retryable") return false;
+  if (ds === "metadata_only") return false;
+  const url = `${doc.publicUrl || doc.viewUrl || doc.storagePath || ""}`.trim();
+  return !/^https?:\/\//i.test(url) && !url.startsWith("projects/");
+}
+
+function analyzePlanReviewPendingDocuments(planReviewTab) {
   if (!planReviewTab || typeof planReviewTab !== "object") {
-    return { planSet: 0, reviewResults: 0, approved: 0, total: 0 };
+    return {
+      retryable: { planSet: 0, reviewResults: 0, approved: 0, total: 0 },
+      metadataOnly: { planSet: 0, reviewResults: 0, approved: 0, total: 0, names: [] },
+    };
   }
   const tabs =
     planReviewTab.tabs && typeof planReviewTab.tabs === "object"
       ? planReviewTab.tabs
       : planReviewTab;
 
-  const pendingInList = (docs) => {
-    if (!Array.isArray(docs)) return 0;
-    return docs.filter((d) => {
-      if (!d || typeof d !== "object") return false;
-      const ds = `${d.downloadStatus || ""}`.trim();
-      if (ds === "uploaded" || ds === "success") return false;
-      if (ds === "failed_non_retryable") return false;
-      const url = `${d.publicUrl || d.viewUrl || d.storagePath || ""}`.trim();
-      return !/^https?:\/\//i.test(url) && !url.startsWith("projects/");
-    }).length;
+  const classifyList = (docs) => {
+    let retryable = 0;
+    let metadataOnly = 0;
+    const names = [];
+    if (!Array.isArray(docs)) {
+      return { retryable, metadataOnly, names };
+    }
+    for (const d of docs) {
+      if (!d || typeof d !== "object") continue;
+      if (isMetadataOnlyPlanReviewDoc(d)) {
+        metadataOnly += 1;
+        const label = `${d.name || d.fileName || d.documentName || d.id || ""}`.trim();
+        if (label) names.push(label);
+        continue;
+      }
+      if (isRetryablePlanReviewPendingDoc(d)) retryable += 1;
+    }
+    return { retryable, metadataOnly, names };
   };
 
   const planSet =
@@ -210,15 +247,41 @@ function countPlanReviewPendingDocuments(planReviewTab) {
   const reviewResults = tabs?.reviewResultsAndMarkups?.documents;
   const approved = tabs?.approvedDocuments?.documents;
 
-  const planSetPending = pendingInList(planSet);
-  const reviewPending = pendingInList(reviewResults);
-  const approvedPending = pendingInList(approved);
+  const ps = classifyList(planSet);
+  const rr = classifyList(reviewResults);
+  const ad = classifyList(approved);
+
   return {
-    planSet: planSetPending,
-    reviewResults: reviewPending,
-    approved: approvedPending,
-    total: planSetPending + reviewPending + approvedPending,
+    retryable: {
+      planSet: ps.retryable,
+      reviewResults: rr.retryable,
+      approved: ad.retryable,
+      total: ps.retryable + rr.retryable + ad.retryable,
+    },
+    metadataOnly: {
+      planSet: ps.metadataOnly,
+      reviewResults: rr.metadataOnly,
+      approved: ad.metadataOnly,
+      total: ps.metadataOnly + rr.metadataOnly + ad.metadataOnly,
+      names: [...ps.names, ...rr.names, ...ad.names].slice(0, 40),
+    },
   };
+}
+
+function computeArlingtonProgressFingerprint(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  return JSON.stringify({
+    phase: `${p.phase || ""}`,
+    checkpointVersion: Number(p.checkpointVersion) || 0,
+    attachmentsState: `${p.attachmentsState || ""}`,
+    projectInfoState: `${p.projectInfoState || ""}`,
+    planReviewState: `${p.planReviewState || ""}`,
+    attachmentsPending: Number(p.attachmentsPending) || 0,
+    planReviewRetryablePending: Number(p.planReviewRetryablePending) || 0,
+    planReviewMetadataOnly: Number(p.planReviewMetadataOnly) || 0,
+    downloadedThisRun: Number(p.downloadedThisRun) || 0,
+    pendingReasons: p.pendingReasons || null,
+  });
 }
 
 function applyCheckpointVersionAndStates(nextPd, priorPd, sectionStatePatch) {
@@ -445,7 +508,8 @@ async function verifyArlingtonJobCompletion(supabase, opts) {
     (wantsPlanReview || wantsInfo ? "not_started" : "complete");
   const piFields = tabs.planReview?.tabs?.projectInformation?.fields || [];
 
-  const prPending = countPlanReviewPendingDocuments(tabs.planReview);
+  const prAnalysis = analyzePlanReviewPendingDocuments(tabs.planReview);
+  const prPending = prAnalysis.retryable;
   const planReviewState =
     states.planReview ||
     tabs.planReview?.sectionState ||
@@ -482,26 +546,59 @@ async function verifyArlingtonJobCompletion(supabase, opts) {
     }
     if (planReviewState === "failed") blockers.push("plan_review_failed");
     if (prPending.total > 0) blockers.push("plan_review_pending");
+    if (
+      prAnalysis.metadataOnly.total > 0 &&
+      prPending.total === 0 &&
+      wantsPlanReview
+    ) {
+      blockers.push("plan_review_metadata_only");
+    }
   }
+
+  const hasRetryableWork = blockers.some((b) =>
+    [
+      "attachments_not_started",
+      "attachments_in_progress",
+      "attachments_pending",
+      "attachments_rate_limited",
+      "attachments_failed",
+      "project_info_loading",
+      "project_info_failed",
+      "plan_review_in_progress",
+      "plan_review_failed",
+      "plan_review_pending",
+    ].includes(b),
+  );
 
   let finalStatus = "complete";
   if (blockers.includes("attachments_rate_limited")) {
     finalStatus = "partial_rate_limited";
   } else if (blockers.includes("project_info_weak")) {
     finalStatus = "partial_project_info";
+  } else if (blockers.includes("plan_review_metadata_only") && !hasRetryableWork) {
+    finalStatus = "partial_external_blocker";
   } else if (blockers.length > 0) {
     finalStatus = "partial_external_blocker";
   }
+
+  const terminalPartial =
+    !hasRetryableWork &&
+    (finalStatus === "partial_external_blocker" ||
+      finalStatus === "partial_project_info");
 
   return {
     complete: blockers.length === 0,
     finalStatus,
     blockers,
+    hasRetryableWork,
+    terminalPartial,
     checkpointVersion: readCheckpointVersion(portalData),
     counts: {
       attachmentsDownloaded,
       attachmentsPending,
       planReviewPending: prPending.total,
+      planReviewMetadataOnly: prAnalysis.metadataOnly.total,
+      planReviewMetadataOnlyNames: prAnalysis.metadataOnly.names,
       projectInfoFields: Array.isArray(piFields) ? piFields.length : 0,
     },
     states: {
@@ -590,6 +687,10 @@ module.exports = {
   arlingtonAttachmentDownloadedCount,
   arlingtonAttachmentPendingCount,
   countPlanReviewPendingDocuments,
+  analyzePlanReviewPendingDocuments,
+  isMetadataOnlyPlanReviewDoc,
+  isRetryablePlanReviewPendingDoc,
+  computeArlingtonProgressFingerprint,
   applyCheckpointVersionAndStates,
   readProjectPortalRow,
   claimArlingtonJobLease,

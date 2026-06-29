@@ -38,9 +38,10 @@ describe("Arlington durability (post worker implementation)", () => {
 
   it("Arlington project scrape enqueues durable worker instead of scrapeAccelaRecord", () => {
     const routes = readSource("app/register-execution-routes.js");
-    assert.match(routes, /initializeArlingtonDurableJob/);
+    assert.match(routes, /enqueueOrGetArlingtonScrapeJob/);
     assert.match(routes, /durableWorker: true/);
-    const enqueueIdx = routes.indexOf("initializeArlingtonDurableJob");
+    assert.match(routes, /reusedExistingJob/);
+    const enqueueIdx = routes.indexOf("enqueueOrGetArlingtonScrapeJob");
     const scrapeIdx = routes.indexOf("scrapeAccelaRecord(");
     assert.ok(enqueueIdx > 0 && scrapeIdx > 0);
     assert.ok(

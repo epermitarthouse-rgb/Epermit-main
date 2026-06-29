@@ -1709,15 +1709,26 @@ app.post("/api/scrape", async (req, res) => {
     SESSION_IDLE_TIMEOUT_MS,
   );
 
+  const portalUrlForJobGate = String(session.portalUrl || "");
+  const accelaIsArlingtonForJob =
+    session.portalType === "accela" &&
+    portalUrlForJobGate.toUpperCase().includes("ARLINGTONCO");
+
   let scrapeJobId = null;
   if (projectId && String(projectId).trim()) {
-    const begun = await scrapeEvents.beginScrapeJob(
-      supabase,
-      session,
-      req.body,
-      sessionId,
-    );
-    scrapeJobId = begun.jobId || null;
+    const skipGenericJobInsert =
+      accelaIsArlingtonForJob &&
+      permitNumber != null &&
+      String(permitNumber).trim() !== "";
+    if (!skipGenericJobInsert) {
+      const begun = await scrapeEvents.beginScrapeJob(
+        supabase,
+        session,
+        req.body,
+        sessionId,
+      );
+      scrapeJobId = begun.jobId || null;
+    }
   }
 
   async function finalizeSessionScrapeJob(statusHint) {
@@ -1915,50 +1926,69 @@ app.post("/api/scrape", async (req, res) => {
       },
     );
 
-    if (
-      accelaIsArlington &&
-      projectId &&
-      String(projectId).trim() &&
-      scrapeJobId
-    ) {
-      const requestedScope = {
+    if (accelaIsArlington && projectId && String(projectId).trim()) {
+      const requestedScope = arlingtonJobStore.normalizeArlingtonRequestedScope({
         tabs:
           arlingtonScrapeTabsArg || ["info", "attachments", "plan_review"],
         planReviewScope: session.arlingtonPlanReviewScope || "all",
-        autoContinueAttachments: session.arlingtonAutoContinueAttachments !== false,
+        autoContinueAttachments:
+          session.arlingtonAutoContinueAttachments !== false,
         autoContinueDownloads: session.arlingtonAutoContinueDownloads !== false,
         downloadDocuments: session.arlingtonDownloadDocuments !== false,
-      };
-      await arlingtonJobStore.initializeArlingtonDurableJob(
+      });
+      const enqueueResult = await arlingtonJobStore.enqueueOrGetArlingtonScrapeJob(
         supabase,
-        scrapeJobId,
         {
+          projectId: String(projectId).trim(),
+          userId: userId ? String(userId).trim() : null,
+          credentialId: session.credentialId || null,
+          permitNumber: String(permitNumber).trim(),
           requestedScope,
-          phase: "record_info",
-          user_message:
-            "Arlington scrape queued — durable worker will process in bounded cycles.",
+          scraperSessionId: String(sessionId),
+          metadata: {
+            portal_subtype: session.portalSubtype || null,
+            durable_worker: true,
+          },
         },
       );
-      session._scrapeJobId = scrapeJobId;
-      session._scrapeProjectId = String(projectId).trim();
-      session._scrapePermitNumber = String(permitNumber).trim();
+      scrapeJobId = enqueueResult.jobId;
+      if (!scrapeJobId) {
+        return res.status(500).json({ error: "Failed to enqueue Arlington scrape job" });
+      }
+      scrapeEvents.attachScrapeJobBridge(supabase, session, {
+        jobId: scrapeJobId,
+        projectId: String(projectId).trim(),
+        permitNumber: String(permitNumber).trim(),
+        jurisdiction: scrapeEvents.detectJurisdictionFromSession(session),
+        scrapeMode: scrapeMode ? String(scrapeMode).trim() : null,
+      });
       session.arlingtonDurableWorkerEnqueued = true;
       session.status = "queued";
       session._scrapeActive = false;
+      const reusedExisting = enqueueResult.reusedExisting;
+      const jobRow = enqueueResult.job || {};
       publishScrapeOrchestration(session, {
         stage: SCRAPE_STAGES.QUEUED,
-        event_type: "job_queued",
-        user_message:
-          "Arlington scrape queued for durable worker. Progress will update in portal data.",
-        dedupeKey: "arlington_durable_queued",
+        event_type: reusedExisting ? "job_reused" : "job_queued",
+        user_message: reusedExisting
+          ? "Attached to existing Arlington scrape job. Progress will update in portal data."
+          : "Arlington scrape queued for durable worker. Progress will update in portal data.",
+        dedupeKey: reusedExisting
+          ? "arlington_durable_reused"
+          : "arlington_durable_queued",
         forceFeed: true,
       });
       return res.json({
-        message: "Arlington scrape queued for durable worker",
+        message: reusedExisting
+          ? "Attached to existing Arlington scrape job"
+          : "Arlington scrape queued for durable worker",
         total: 1,
         portalType: "accela",
         jobId: scrapeJobId,
         durableWorker: true,
+        reusedExistingJob: reusedExisting,
+        status: jobRow.status || "queued",
+        phase: jobRow.phase || "record_info",
       });
     }
 

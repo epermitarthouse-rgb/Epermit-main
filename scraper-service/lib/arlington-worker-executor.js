@@ -9,10 +9,27 @@ const {
   scheduleRateLimitRelease,
   finalizeJobFromVerification,
   verifyArlingtonJobCompletion,
+  evaluateNoProgressGuard,
 } = require("./arlington-job-store.js");
 
 const LEASE_TTL_SECONDS = 180;
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
+
+async function runVerificationAndFinalize(supabase, job, workerId, ctx) {
+  const { projectId, userId, permitNumber, requestedScope } = ctx;
+  const verification = await verifyArlingtonJobCompletion(supabase, {
+    projectId,
+    userId,
+    permitNumber,
+    requestedTabs: requestedScope.tabs,
+  });
+  const finalized = await finalizeJobFromVerification(
+    supabase,
+    { ...job, lease_worker_id: workerId },
+    verification,
+  );
+  return { verification, finalized };
+}
 
 /**
  * Execute one claimed Arlington job cycle: session recreate → bounded phase → lease release.
@@ -36,6 +53,7 @@ async function executeArlingtonWorkerCycle(ctx) {
   const projectId = `${job.project_id || ""}`.trim();
   const permitNumber = `${job.permit_number || ""}`.trim();
   const phase = `${job.phase || "record_info"}`.trim();
+  const verifyCtx = { projectId, userId, permitNumber, requestedScope };
 
   let heartbeatTimer = null;
   let sessionHandle = null;
@@ -90,17 +108,28 @@ async function executeArlingtonWorkerCycle(ctx) {
       return { ok: true, outcome: "rate_limited", phaseResult };
     }
 
-    if (phaseResult.verify) {
-      const verification = await verifyArlingtonJobCompletion(supabase, {
-        projectId,
-        userId,
-        permitNumber,
-        requestedTabs: requestedScope.tabs,
-      });
-      const finalized = await finalizeJobFromVerification(
+    if (phaseResult.terminalMetadataOnly) {
+      const { verification, finalized } = await runVerificationAndFinalize(
         supabase,
-        { ...job, lease_worker_id: workerId },
+        job,
+        workerId,
+        verifyCtx,
+      );
+      return {
+        ok: true,
+        outcome: "metadata_only_terminal",
+        phaseResult,
         verification,
+        finalized,
+      };
+    }
+
+    if (phaseResult.verify) {
+      const { verification, finalized } = await runVerificationAndFinalize(
+        supabase,
+        job,
+        workerId,
+        verifyCtx,
       );
       return {
         ok: true,
@@ -110,15 +139,50 @@ async function executeArlingtonWorkerCycle(ctx) {
       };
     }
 
+    const verificationForGuard = await verifyArlingtonJobCompletion(supabase, {
+      projectId,
+      userId,
+      permitNumber,
+      requestedTabs: requestedScope.tabs,
+    });
+    const guard = await evaluateNoProgressGuard(
+      supabase,
+      job,
+      phaseResult,
+      verificationForGuard,
+    );
+    if (guard.terminal) {
+      const terminalVerification = {
+        ...verificationForGuard,
+        complete: false,
+        hasRetryableWork: false,
+        terminalPartial: true,
+        finalStatus: "partial_external_blocker",
+        blockers: [
+          guard.reason === "plan_review_metadata_only"
+            ? "plan_review_metadata_only"
+            : "no_progress_guard",
+        ],
+      };
+      const finalized = await finalizeJobFromVerification(
+        supabase,
+        { ...job, lease_worker_id: workerId },
+        terminalVerification,
+      );
+      return {
+        ok: true,
+        outcome: guard.reason || "no_progress_terminal",
+        phaseResult,
+        verification: terminalVerification,
+        finalized,
+        guard,
+      };
+    }
+
     const nextPhase = phaseResult.nextPhase || phase;
 
     await releaseLease(supabase, job.id, workerId, {
-      status:
-        nextPhase === "complete"
-          ? "partial"
-          : phaseResult.cycleTimedOut
-            ? "partial"
-            : "partial",
+      status: "partial",
       phase: nextPhase,
       attachments_state: phaseResult.attachments_state,
       project_info_state: phaseResult.project_info_state,
@@ -129,6 +193,13 @@ async function executeArlingtonWorkerCycle(ctx) {
       current_user_message: phaseResult.cycleTimedOut
         ? `Arlington worker cycle checkpointed at ${nextPhase}; resuming shortly.`
         : `Arlington worker advanced to ${nextPhase}.`,
+      metadata: {
+        arlington: {
+          downloadedThisRun: Number(phaseResult.downloadedThisRun) || 0,
+          pendingByReason: phaseResult.pendingByReason || null,
+          lastProgressAt: new Date().toISOString(),
+        },
+      },
     });
 
     return { ok: true, outcome: "checkpointed", phaseResult };

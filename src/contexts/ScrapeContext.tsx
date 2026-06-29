@@ -9,7 +9,9 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
+import { supabase } from "@/lib/supabase";
 import { useScrapeJob } from "@/hooks/useScrapeJob";
+import { findActiveArlingtonScrapeJobForProject } from "@/lib/arlingtonActiveScrapeJob";
 import { ScrapeProgressPanel } from "@/components/scrape/ScrapeProgressPanel";
 import {
   isScrapeJobTerminal,
@@ -427,8 +429,62 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
         setStartedAtMs(persisted.startedAt);
         setActiveJobId(persisted.jobId);
         setPanelVisible(true);
+        void (async () => {
+          try {
+            const { data: jobRow } = await supabase
+              .from("scrape_jobs")
+              .select("status")
+              .eq("id", persisted.jobId)
+              .maybeSingle();
+            if (jobRow && isScrapeJobTerminal(jobRow.status)) {
+              const active = await findActiveArlingtonScrapeJobForProject(
+                persisted.projectId,
+              );
+              if (active?.id && active.id !== persisted.jobId) {
+                setActiveJobId(active.id);
+                persistSession({
+                  sessionId: persisted.sessionId,
+                  jobId: active.id,
+                  projectId: persisted.projectId,
+                  projectNum: persisted.projectNum,
+                  startedAt: persisted.startedAt,
+                });
+              }
+            }
+          } catch {
+            /* best-effort reattach */
+          }
+        })();
         return;
       }
+
+      void (async () => {
+        try {
+          const active = await findActiveArlingtonScrapeJobForProject(
+            persisted.projectId,
+          );
+          if (active?.id) {
+            toast.info("Re-attaching to active Arlington scrape…");
+            activeSessionIdRef.current = persisted.sessionId;
+            activeProjectIdRef.current = persisted.projectId;
+            setAccelaSessionIdState(persisted.sessionId);
+            setPermitNumber(persisted.projectNum);
+            setStartedAtMs(persisted.startedAt);
+            setActiveJobId(active.id);
+            setPanelVisible(true);
+            persistSession({
+              sessionId: persisted.sessionId,
+              jobId: active.id,
+              projectId: persisted.projectId,
+              projectNum: persisted.projectNum,
+              startedAt: persisted.startedAt,
+            });
+            return;
+          }
+        } catch {
+          /* fall through to legacy reattach */
+        }
+      })();
 
       (async () => {
         try {
