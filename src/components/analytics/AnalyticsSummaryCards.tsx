@@ -93,7 +93,7 @@ export function AnalyticsSummaryCards({ summary }: AnalyticsSummaryCardsProps) {
       {cards.map((card) => (
         <Card key={card.title} className={cn(DATA_INTELLIGENCE_PANEL)}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-ink-secondary-dark">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-ink-secondary-dark">
               {card.title}
             </CardTitle>
             <div className={cn('rounded-full p-2', toneIcon[card.tone])}>
@@ -101,8 +101,8 @@ export function AnalyticsSummaryCards({ summary }: AnalyticsSummaryCardsProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-ink-primary-dark">{card.value}</div>
-            <p className="mt-1 text-xs text-ink-tertiary-dark">{card.subtitle}</p>
+            <div className="text-2xl font-bold text-foreground dark:text-ink-primary-dark">{card.value}</div>
+            <p className="mt-1 text-xs text-muted-foreground dark:text-ink-tertiary-dark">{card.subtitle}</p>
           </CardContent>
         </Card>
       ))}

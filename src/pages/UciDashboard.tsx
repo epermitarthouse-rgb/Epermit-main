@@ -121,7 +121,7 @@ function uciLifecycleStateBadgeClass(state: string | undefined): string {
   switch (state as LifecycleState) {
     case "NOT_STARTED":
       return cn(
-        "shadow-sm !border-transparent !bg-obsidian !text-foreground dark:!bg-obsidian-sunken dark:!text-foreground",
+        "shadow-sm !border-transparent !bg-muted !text-foreground dark:!bg-obsidian dark:!text-foreground",
       );
     case "IN_PROGRESS":
       return cn("!border-transparent !bg-teal !text-white shadow-sm dark:!bg-teal dark:!text-white");
@@ -138,8 +138,8 @@ function uciLifecycleStateBadgeClass(state: string | undefined): string {
       return cn("!border-transparent !bg-success !text-success-foreground shadow-sm");
     default:
       return cn(
-        "shadow-sm !border-transparent !bg-obsidian-raised !text-foreground",
-        "dark:!bg-obsidian-strong dark:!text-foreground",
+        "shadow-sm !border-transparent !bg-muted !text-foreground",
+        "dark:!bg-obsidian-raised dark:!text-foreground",
       );
   }
 }
@@ -178,22 +178,22 @@ const uciInsetPanelClass = cn(
   "dark:border-teal/30 dark:bg-obsidian-strong/95 dark:ring-1 dark:ring-gold/20",
 );
 
-/** Transition history rows: dark raised card + cream text (no pale card + inherited cream). */
+/** Transition history rows: light card in light mode, dark raised in dark mode */
 const uciTransitionCardClass = cn(
   "overflow-hidden rounded-lg border p-3 text-xs shadow-sm",
-  "border-teal/25 bg-obsidian-raised/90 text-foreground ring-1 ring-teal/20",
+  "border-border/60 bg-muted/40 text-foreground ring-1 ring-border/40",
   "dark:border-teal/35 dark:bg-obsidian-strong/95 dark:ring-gold/20",
 );
 
-/** Drawer read-only child sections only (Applications, Costs, …) — dark navy, not gray slabs */
+/** Drawer read-only child sections: light card in light mode, dark navy in dark mode */
 const uciDrawerChildCardClass = cn(
   "overflow-hidden rounded-xl border text-foreground shadow-sm",
-  "border-teal/25 bg-obsidian-raised/85 ring-1 ring-teal/20",
+  "border-border/60 bg-muted/30 ring-1 ring-border/30",
   "dark:border-teal/35 dark:bg-obsidian-strong/90 dark:ring-gold/25",
 );
 
 const uciDrawerChildCardHeaderClass = cn(
-  "border-b border-teal/20 bg-obsidian/35 px-4 py-3",
+  "border-b border-border/40 bg-muted/20 px-4 py-3",
   "dark:border-teal/25 dark:bg-obsidian/50",
 );
 

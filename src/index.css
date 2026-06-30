@@ -77,7 +77,7 @@
     --navy-foreground: 210 40% 98%;
 
     --gradient-primary: linear-gradient(135deg, hsl(172 58% 36%) 0%, hsl(200 52% 36%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(172 54% 40%) 0%, hsl(36 56% 52%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(172 54% 40%) 0%, hsl(var(--accent-orange)) 100%);
     --gradient-hero: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--muted)) 100%);
 
     --surface-cream: 40 36% 96%;
@@ -96,9 +96,15 @@
     --ink-secondary-dark: 40 12% 72%;
     --ink-tertiary-dark: 219 16% 55%;
 
-    --accent-gold: 36 56% 52%;
-    --accent-gold-soft: 34 76% 90%;
-    --accent-gold-deep: 30 62% 40%;
+    /* PermitPilot orange (#FF6B2B) — canonical brand accent */
+    --accent-orange: 18 100% 58%;
+    --accent-orange-soft: 24 100% 94%;
+    --accent-orange-deep: 17 78% 42%;
+
+    /* Gold aliases → orange for backward compat (all text-gold/bg-gold/border-gold classes become orange) */
+    --accent-gold: var(--accent-orange);
+    --accent-gold-soft: var(--accent-orange-soft);
+    --accent-gold-deep: var(--accent-orange-deep);
 
     --accent-teal: 172 60% 40%;
     --accent-teal-soft: 172 44% 88%;
@@ -135,7 +141,7 @@
 
     --sidebar-background: 38 26% 95%;
     --sidebar-foreground: 219 76% 12%;
-    --sidebar-primary: 36 56% 54%;
+    --sidebar-primary: 18 100% 55%;
     --sidebar-primary-foreground: 219 70% 7%;
     --sidebar-accent: 38 22% 91%;
     --sidebar-accent-foreground: 219 76% 12%;
@@ -143,7 +149,7 @@
     --sidebar-ring: 172 62% 40%;
 
     --chart-1: 172 60% 40%;
-    --chart-2: 36 56% 50%;
+    --chart-2: 18 100% 52%;
     --chart-3: 219 20% 45%;
     --chart-4: 142 52% 38%;
     --chart-5: 32 92% 50%;
@@ -200,7 +206,7 @@
     --navy-foreground: 40 35% 97%;
 
     --gradient-primary: linear-gradient(135deg, hsl(172 55% 48%) 0%, hsl(200 48% 42%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(172 50% 45%) 0%, hsl(36 56% 56%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(172 50% 45%) 0%, hsl(var(--accent-orange)) 100%);
     --gradient-hero: linear-gradient(135deg, hsl(219 52% 6%) 0%, hsl(219 42% 10%) 45%, hsl(219 36% 14%) 100%);
 
     --surface-cream: 219 36% 12%;
@@ -219,9 +225,15 @@
     --ink-secondary-dark: 40 12% 72%;
     --ink-tertiary-dark: 219 14% 55%;
 
-    --accent-gold: 36 56% 58%;
-    --accent-gold-soft: 36 40% 18%;
-    --accent-gold-deep: 32 58% 48%;
+    /* PermitPilot orange — dark mode */
+    --accent-orange: 18 100% 62%;
+    --accent-orange-soft: 18 50% 18%;
+    --accent-orange-deep: 17 82% 48%;
+
+    /* Gold aliases → orange */
+    --accent-gold: var(--accent-orange);
+    --accent-gold-soft: var(--accent-orange-soft);
+    --accent-gold-deep: var(--accent-orange-deep);
 
     --accent-teal: 172 58% 50%;
     --accent-teal-soft: 172 35% 18%;
@@ -241,7 +253,7 @@
 
     --sidebar-background: 219 58% 5%;
     --sidebar-foreground: 40 32% 95%;
-    --sidebar-primary: 36 56% 58%;
+    --sidebar-primary: 18 100% 60%;
     --sidebar-primary-foreground: 219 60% 6%;
     --sidebar-accent: 219 44% 11%;
     --sidebar-accent-foreground: 40 32% 95%;
@@ -249,7 +261,7 @@
     --sidebar-ring: 172 58% 50%;
 
     --chart-1: 172 58% 52%;
-    --chart-2: 36 56% 58%;
+    --chart-2: 18 100% 58%;
     --chart-3: 215 16% 62%;
     --chart-4: 142 50% 46%;
     --chart-5: 32 90% 54%;
@@ -452,6 +464,47 @@
     background-image:
       linear-gradient(hsl(0 0% 100% / 0.045) 1px, transparent 1px),
       linear-gradient(90deg, hsl(0 0% 100% / 0.045) 1px, transparent 1px);
+  }
+
+  /** Light-mode subtle grid — navy ink lines at ~5% opacity. Use on dashboard/canvas areas. */
+  .bg-grid-light {
+    background-image:
+      linear-gradient(hsl(219 44% 16% / 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(219 44% 16% / 0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .dark .bg-grid-light {
+    background-image:
+      linear-gradient(hsl(0 0% 100% / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(0 0% 100% / 0.04) 1px, transparent 1px);
+  }
+
+  /**
+   * Pipeline canvas — theme-aware surface for the agent pipeline section.
+   * Light: card surface with subtle border and grid.
+   * Dark: retains the premium obsidian gradient.
+   */
+  .pipeline-canvas {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    box-shadow: var(--shadow-md);
+  }
+
+  .dark .pipeline-canvas {
+    border-color: hsl(var(--border-obsidian-strong) / 0.45);
+    background: linear-gradient(
+      135deg,
+      hsl(var(--surface-obsidian-raised)) 0%,
+      hsl(var(--surface-obsidian)) 55%,
+      hsl(var(--surface-obsidian-sunken)) 100%
+    );
+    color: hsl(var(--ink-primary-dark));
+    box-shadow: 0 10px 44px -14px rgba(0, 0, 0, 0.52);
   }
 
   .shadow-elegant {

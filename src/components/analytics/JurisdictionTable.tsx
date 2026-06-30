@@ -28,13 +28,13 @@ export function JurisdictionTable({ metrics }: JurisdictionTableProps) {
     return (
       <Card className={panel}>
         <CardHeader>
-          <CardTitle className="text-ink-primary-dark">Cycle Time by Jurisdiction</CardTitle>
-          <CardDescription className="text-ink-secondary-dark">
+          <CardTitle className="text-foreground dark:text-ink-primary-dark">Cycle Time by Jurisdiction</CardTitle>
+          <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
             Average processing times and approval rates
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="py-8 text-center text-ink-tertiary-dark">
+          <p className="py-8 text-center text-muted-foreground dark:text-ink-tertiary-dark">
             No jurisdiction data available yet. Add projects with jurisdictions to see metrics.
           </p>
         </CardContent>
@@ -45,8 +45,8 @@ export function JurisdictionTable({ metrics }: JurisdictionTableProps) {
   return (
     <Card className={panel}>
       <CardHeader>
-        <CardTitle className="text-ink-primary-dark">Cycle Time by Jurisdiction</CardTitle>
-        <CardDescription className="text-ink-secondary-dark">
+        <CardTitle className="text-foreground dark:text-ink-primary-dark">Cycle Time by Jurisdiction</CardTitle>
+        <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
           Average processing times and approval rates by jurisdiction
         </CardDescription>
       </CardHeader>
@@ -55,30 +55,30 @@ export function JurisdictionTable({ metrics }: JurisdictionTableProps) {
           <Table className="min-w-[500px] [&_.border-b]:border-teal/10 [&_thead_tr]:border-teal/20">
           <TableHeader>
             <TableRow className="border-teal/15 hover:bg-transparent">
-              <TableHead className="text-ink-secondary-dark">Jurisdiction</TableHead>
-              <TableHead className="text-center text-ink-secondary-dark">Projects</TableHead>
-              <TableHead className="text-center text-ink-secondary-dark">Avg Cycle</TableHead>
-              <TableHead className="text-center text-ink-secondary-dark">Avg Review</TableHead>
-              <TableHead className="text-center text-ink-secondary-dark">Rejections</TableHead>
-              <TableHead className="text-ink-secondary-dark">Approval Rate</TableHead>
+              <TableHead className="text-muted-foreground dark:text-ink-secondary-dark">Jurisdiction</TableHead>
+              <TableHead className="text-center text-muted-foreground dark:text-ink-secondary-dark">Projects</TableHead>
+              <TableHead className="text-center text-muted-foreground dark:text-ink-secondary-dark">Avg Cycle</TableHead>
+              <TableHead className="text-center text-muted-foreground dark:text-ink-secondary-dark">Avg Review</TableHead>
+              <TableHead className="text-center text-muted-foreground dark:text-ink-secondary-dark">Rejections</TableHead>
+              <TableHead className="text-muted-foreground dark:text-ink-secondary-dark">Approval Rate</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {metrics.slice(0, 10).map((metric) => (
               <TableRow key={metric.jurisdiction} className="border-teal/10 hover:bg-teal/[0.04]">
-                <TableCell className="font-medium text-ink-primary-dark">{metric.jurisdiction}</TableCell>
+                <TableCell className="font-medium text-foreground dark:text-ink-primary-dark">{metric.jurisdiction}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant="outline" className="border-teal/30 text-ink-secondary-dark">
+                  <Badge variant="outline" className="border-teal/30 text-muted-foreground dark:text-ink-secondary-dark">
                     {metric.projectCount}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-center text-ink-primary-dark">{formatDays(metric.avgCycleTime)}</TableCell>
-                <TableCell className="text-center text-ink-primary-dark">{formatDays(metric.avgSubmitToApproval)}</TableCell>
+                <TableCell className="text-center text-foreground dark:text-ink-primary-dark">{formatDays(metric.avgCycleTime)}</TableCell>
+                <TableCell className="text-center text-foreground dark:text-ink-primary-dark">{formatDays(metric.avgSubmitToApproval)}</TableCell>
                 <TableCell className="text-center">
                   {metric.rejectionCount > 0 ? (
                     <Badge variant="destructive">{metric.rejectionCount}</Badge>
                   ) : (
-                    <span className="text-ink-tertiary-dark">0</span>
+                    <span className="text-muted-foreground dark:text-ink-tertiary-dark">0</span>
                   )}
                 </TableCell>
                 <TableCell>

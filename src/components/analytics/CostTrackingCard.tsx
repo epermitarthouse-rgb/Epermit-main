@@ -46,14 +46,14 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
     return (
       <Card className={panel}>
         <CardHeader>
-          <CardTitle className="text-ink-primary-dark">Cost per Permit by Type</CardTitle>
-          <CardDescription className="text-ink-secondary-dark">
+          <CardTitle className="text-foreground dark:text-ink-primary-dark">Cost per Permit by Type</CardTitle>
+          <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
             Permit fees and expeditor costs breakdown
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex h-[300px] items-center justify-center">
-            <p className="text-center text-ink-tertiary-dark">
+            <p className="text-center text-muted-foreground dark:text-ink-tertiary-dark">
               No cost data available yet.<br />
               Add permit fees and expeditor costs to projects to see this chart.
             </p>
@@ -66,8 +66,8 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
   return (
     <Card className={panel}>
       <CardHeader>
-        <CardTitle className="text-ink-primary-dark">Cost per Permit by Type</CardTitle>
-        <CardDescription className="text-ink-secondary-dark">
+        <CardTitle className="text-foreground dark:text-ink-primary-dark">Cost per Permit by Type</CardTitle>
+        <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
           Permit fees and expeditor costs breakdown by project type
         </CardDescription>
       </CardHeader>
@@ -82,27 +82,27 @@ export function CostTrackingCard({ projects }: CostTrackingCardProps) {
               <CartesianGrid strokeDasharray="3 3" className="stroke-teal/15" />
               <XAxis 
                 type="number"
-                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
-                stroke="hsl(var(--ink-tertiary-dark))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                stroke="hsl(var(--border))"
                 tickFormatter={(value) => formatCurrency(value)}
               />
               <YAxis 
                 type="category"
                 dataKey="type"
-                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
-                stroke="hsl(var(--ink-tertiary-dark))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                stroke="hsl(var(--border))"
                 width={90}
               />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(219 42% 16%)', 
-                  border: '1px solid hsl(var(--border-obsidian-strong) / 0.55)',
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
-                  color: 'hsl(var(--ink-primary-dark))',
+                  color: 'hsl(var(--foreground))',
                 }}
                 formatter={(value: number) => formatCurrency(value)}
               />
-              <Legend wrapperStyle={{ color: 'hsl(var(--ink-secondary-dark))' }} />
+              <Legend wrapperStyle={{ color: 'hsl(var(--muted-foreground))' }} />
               <Bar 
                 dataKey="permitFees" 
                 name="Permit Fees" 

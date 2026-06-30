@@ -2164,9 +2164,9 @@ export function AgentWorkflowStatus() {
       return "border-gold/50 bg-gold/10 text-gold animate-pulse-glow";
     }
     if (status === "pending") {
-      return "border-obsidian-raised bg-obsidian-sunken text-ink-tertiary-dark";
+      return "border-border bg-muted text-muted-foreground dark:border-obsidian-raised dark:bg-obsidian-sunken dark:text-ink-tertiary-dark";
     }
-    return "border-ink-tertiary-dark/40 bg-obsidian-raised text-ink-secondary-dark animate-pulse-glow";
+    return "border-border/60 bg-muted/70 text-muted-foreground animate-pulse-glow dark:border-ink-tertiary-dark/40 dark:bg-obsidian-raised dark:text-ink-secondary-dark";
   };
 
   const statusPillClass = (status: StepStatus) => {
@@ -2183,7 +2183,7 @@ export function AgentWorkflowStatus() {
       return "border-gold/40 bg-gold/10 text-gold border animate-pulse-glow";
     }
     if (status === "pending") {
-      return "border-obsidian-raised text-ink-secondary-dark bg-obsidian-sunken border";
+      return "border-border bg-muted text-muted-foreground border dark:border-obsidian-raised dark:text-ink-secondary-dark dark:bg-obsidian-sunken";
     }
     return "border-gold/30 bg-gold/10 text-gold border";
   };
@@ -2197,18 +2197,18 @@ export function AgentWorkflowStatus() {
   ).trim();
 
   return (
-    <div className="relative w-full text-ink-primary-dark">
+    <div className="relative w-full text-foreground dark:text-ink-primary-dark">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_min(100%,17.5rem)] lg:gap-8 xl:gap-10 lg:items-start">
         <div className="min-w-0 lg:max-w-3xl">
           <div className="mb-8">
             <EyebrowDark className="mb-2">Intake pipeline</EyebrowDark>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 max-w-3xl">
-                <SectionTitle className="flex flex-wrap items-center gap-3 text-ink-primary-dark !text-2xl sm:!text-3xl">
+                <SectionTitle className="flex flex-wrap items-center gap-3 text-foreground dark:text-ink-primary-dark !text-2xl sm:!text-3xl">
                   <Workflow className="h-7 w-7 text-teal shrink-0" aria-hidden />
                   <span>PermitPilot Intake Pipeline</span>
                 </SectionTitle>
-                <p className="text-sm text-ink-secondary-dark mt-2">
+                <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark mt-2">
                   {chainRunning
                     ? `Agent chain in progress — ${chainPhase} step active. All agents fire sequentially.`
                     : "Agentic workflow status (Steps 1-5). Run a manual portal check to trigger the full chain."}
@@ -2300,7 +2300,7 @@ export function AgentWorkflowStatus() {
                 </div>
                 <div className="pb-8 min-w-0 flex-1 last:pb-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-ink-primary-dark">{step.title}</p>
+                    <p className="font-medium text-foreground dark:text-ink-primary-dark">{step.title}</p>
                     <span
                       className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${statusPillClass(
                         step.status,
@@ -2343,7 +2343,7 @@ export function AgentWorkflowStatus() {
                       ].includes(step.status) && "Idle"}
                     </span>
                   </div>
-                  <p className="text-sm text-ink-secondary-dark mt-0.5">
+                  <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark mt-0.5">
                     {step.description}
                   </p>
                   <div className="mt-2 [&_button]:transition-all [&_button]:duration-200 [&_button:hover]:-translate-y-0.5 [&_button:hover]:shadow-md [&_button:active]:scale-[0.98] [&_a.inline-flex]:transition-all">
@@ -2356,35 +2356,35 @@ export function AgentWorkflowStatus() {
         </div>
 
         <aside
-          className="mt-10 min-w-0 rounded-xl border border-[hsl(var(--border-obsidian-strong)/0.38)] bg-gradient-to-br from-obsidian-raised/92 via-[hsl(219_52%_13%)] to-obsidian-sunken p-4 text-sm shadow-[0_10px_44px_-14px_rgba(0,0,0,0.52)] ring-1 ring-white/[0.05] backdrop-blur-[1px] lg:mt-0"
+          className="mt-10 min-w-0 rounded-xl border border-border bg-card p-4 text-sm shadow-md lg:mt-0 dark:border-[hsl(var(--border-obsidian-strong)/0.38)] dark:bg-gradient-to-br dark:from-obsidian-raised/92 dark:via-[hsl(219_52%_13%)] dark:to-obsidian-sunken dark:shadow-[0_10px_44px_-14px_rgba(0,0,0,0.52)] dark:ring-1 dark:ring-white/[0.05] dark:backdrop-blur-[1px]"
           aria-label="Pipeline context"
         >
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-dark mb-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-ink-secondary-dark mb-3">
             Pipeline context
           </p>
           {selectedProjectId ? (
             projectBySelectedId ? (
-              <dl className="space-y-3 text-ink-primary-dark">
+              <dl className="space-y-3 text-foreground dark:text-ink-primary-dark">
                 <div>
-                  <dt className="text-xs text-ink-secondary-dark">Permit</dt>
+                  <dt className="text-xs text-muted-foreground dark:text-ink-secondary-dark">Permit</dt>
                   <dd className="font-mono text-sm mt-0.5 tabular-nums">
                     {pipelinePermitTrim || "—"}
                   </dd>
                 </div>
                 {pipelineJurisdictionTrim ? (
                   <div>
-                    <dt className="text-xs text-ink-secondary-dark">Jurisdiction</dt>
+                    <dt className="text-xs text-muted-foreground dark:text-ink-secondary-dark">Jurisdiction</dt>
                     <dd className="mt-0.5">{pipelineJurisdictionTrim}</dd>
                   </div>
                 ) : null}
               </dl>
             ) : (
-              <p className="text-xs text-ink-secondary-dark leading-relaxed">
+              <p className="text-xs text-muted-foreground dark:text-ink-secondary-dark leading-relaxed">
                 Project is selected; permit and jurisdiction will appear here when loaded from your workspace.
               </p>
             )
           ) : (
-            <p className="text-xs text-ink-secondary-dark leading-relaxed">
+            <p className="text-xs text-muted-foreground dark:text-ink-secondary-dark leading-relaxed">
               Select a project from the workspace to scope portal checks and the agent chain.
             </p>
           )}

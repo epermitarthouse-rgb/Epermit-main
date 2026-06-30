@@ -17,8 +17,8 @@ export function CycleTimeChart({ monthlyMetrics }: CycleTimeChartProps) {
   return (
     <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
       <CardHeader>
-        <CardTitle className="text-ink-primary-dark">Project Activity & Cycle Time</CardTitle>
-        <CardDescription className="text-ink-secondary-dark">Monthly submissions, approvals, and average cycle time</CardDescription>
+        <CardTitle className="text-foreground dark:text-ink-primary-dark">Project Activity & Cycle Time</CardTitle>
+        <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">Monthly submissions, approvals, and average cycle time</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
@@ -28,32 +28,32 @@ export function CycleTimeChart({ monthlyMetrics }: CycleTimeChartProps) {
               <XAxis 
                 dataKey="month" 
                 className="text-xs"
-                stroke="hsl(var(--ink-tertiary-dark))"
-                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
+                stroke="hsl(var(--border))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
               />
               <YAxis 
                 yAxisId="left"
                 className="text-xs"
-                stroke="hsl(var(--ink-tertiary-dark))"
-                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
+                stroke="hsl(var(--border))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
               />
               <YAxis 
                 yAxisId="right" 
                 orientation="right"
                 className="text-xs"
-                stroke="hsl(var(--ink-tertiary-dark))"
-                tick={{ fill: 'hsl(var(--ink-secondary-dark))', fontSize: 12 }}
-                label={{ value: 'Days', angle: 90, position: 'insideRight', fill: 'hsl(var(--ink-secondary-dark))' }}
+                stroke="hsl(var(--border))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                label={{ value: 'Days', angle: 90, position: 'insideRight', fill: 'hsl(var(--muted-foreground))' }}
               />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(219 42% 16%)',
-                  border: '1px solid hsl(var(--border-obsidian-strong) / 0.5)',
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
-                  color: 'hsl(var(--ink-primary-dark))',
+                  color: 'hsl(var(--foreground))',
                 }}
               />
-              <Legend wrapperStyle={{ color: 'hsl(var(--ink-secondary-dark))' }} />
+              <Legend wrapperStyle={{ color: 'hsl(var(--muted-foreground))' }} />
               <Bar 
                 yAxisId="left" 
                 dataKey="submitted" 

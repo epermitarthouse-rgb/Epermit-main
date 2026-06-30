@@ -888,18 +888,18 @@ function ReportsExtractedTextDetails({
     len > 120_000 ? `${text.slice(0, 120_000)}\n\n[truncated]` : text;
   return (
     <div className="mt-4 w-full min-w-0">
-      <p className="text-xs text-ink-tertiary-dark">Extracted text available</p>
+      <p className="text-xs text-muted-foreground dark:text-ink-tertiary-dark">Extracted text available</p>
       <details
-        className="mt-2 rounded-lg border border-obsidian-raised bg-obsidian-sunken"
+        className="mt-2 rounded-lg border border-border bg-muted/20 dark:border-obsidian-raised dark:bg-obsidian-sunken"
         data-testid={testId}
       >
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 px-4 py-3 text-sm font-medium text-gold [&::-webkit-details-marker]:hidden">
           <span>{summaryLabel}</span>
-          <span className="text-xs font-mono font-normal text-ink-tertiary-dark">
+          <span className="text-xs font-mono font-normal text-muted-foreground dark:text-ink-tertiary-dark">
             {len.toLocaleString()} chars
           </span>
         </summary>
-        <pre className="max-h-[min(55vh,480px)] overflow-auto border-t border-obsidian-raised p-4 font-mono text-[11px] leading-relaxed text-ink-secondary-dark whitespace-pre-wrap break-words">
+        <pre className="max-h-[min(55vh,480px)] overflow-auto border-t border-border p-4 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words dark:border-obsidian-raised dark:text-ink-secondary-dark">
           {display}
         </pre>
       </details>
@@ -3356,7 +3356,7 @@ export default function PortalDataViewer() {
                     <summary className="cursor-pointer text-ink-tertiary-light select-none hover:text-ink-primary-light">
                       Info extraction debug
                     </summary>
-                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-obsidian-raised bg-obsidian-sunken/90 p-3 font-mono text-ink-secondary-dark">
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/30 p-3 font-mono text-muted-foreground dark:border-obsidian-raised dark:bg-obsidian-sunken/90 dark:text-ink-secondary-dark">
                       {JSON.stringify(infoTab.info_debug, null, 2)}
                     </pre>
                   </details>
@@ -3923,22 +3923,22 @@ export default function PortalDataViewer() {
 
         <TabsContent
           value="reports"
-          className="mt-8 pt-0 pb-0 bg-obsidian text-ink-primary-dark focus-visible:outline-none"
+          className="mt-8 pt-0 pb-0 bg-background text-foreground focus-visible:outline-none dark:bg-obsidian dark:text-ink-primary-dark"
         >
-          <Section variant="obsidian" className="py-10 sm:py-14 px-4 sm:px-6 md:px-8">
+          <Section variant="cream" className="py-10 sm:py-14 px-4 sm:px-6 md:px-8">
             <div className="max-w-7xl mx-auto">
               <EyebrowDark className="mb-2">REPORTS</EyebrowDark>
-              <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-ink-primary-dark">
+              <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-foreground dark:text-ink-primary-dark">
                 Extracted <em className="text-gold italic">Reports</em>
               </h2>
-              <p className="mt-3 text-ink-secondary-dark max-w-2xl text-sm sm:text-base leading-relaxed">
+              <p className="mt-3 text-muted-foreground max-w-2xl text-sm sm:text-base leading-relaxed dark:text-ink-secondary-dark">
                 Stored report artifacts, live viewer links, screenshots, and extracted text used by the AI pipeline.
               </p>
-              <p className="text-sm text-ink-secondary-dark/90 mb-6 mt-4">
+              <p className="text-sm text-muted-foreground/90 mb-6 mt-4 dark:text-ink-secondary-dark/90">
             Source data from the portal. For an actionable comment list and
-            responses, use <strong className="text-ink-primary-dark font-semibold">Comment Review</strong>.
+            responses, use <strong className="text-foreground font-semibold dark:text-ink-primary-dark">Comment Review</strong>.
           </p>
-          <Card className="border border-obsidian-raised bg-obsidian-raised/50 shadow-none">
+          <Card className="border border-border bg-card shadow-none dark:border-obsidian-raised dark:bg-obsidian-raised/50">
             <CardContent className="p-0">
               <TabErrorBoundary tabName="Reports">
                 {reportsTab?.error ? (
@@ -3956,12 +3956,12 @@ export default function PortalDataViewer() {
                       /^status$/i.test(String(h).trim()),
                     );
                     return (
-                    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-obsidian-raised bg-obsidian-raised/50">
-                    <div className="grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-obsidian-raised px-5 py-3">
-                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark">
+                    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card dark:border-obsidian-raised dark:bg-obsidian-raised/50">
+                    <div className="grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-border px-5 py-3 dark:border-obsidian-raised">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-tertiary-dark">
                         Report Name
                       </div>
-                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-tertiary-dark">
                         Status
                       </div>
                       <div className="justify-self-end" aria-hidden />
@@ -4002,9 +4002,9 @@ export default function PortalDataViewer() {
                             <CollapsibleTrigger asChild>
                               <button
                                 type="button"
-                                className={`grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-obsidian-raised px-5 py-4 text-left transition-colors ${ri % 2 === 1 ? "bg-obsidian-sunken/40 hover:bg-obsidian-sunken/60" : "bg-obsidian/80 hover:bg-obsidian-raised/45"}`}
+                                className={`grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-border px-5 py-4 text-left transition-colors dark:border-obsidian-raised ${ri % 2 === 1 ? "bg-muted/30 hover:bg-muted/50 dark:bg-obsidian-sunken/40 dark:hover:bg-obsidian-sunken/60" : "bg-card hover:bg-muted/20 dark:bg-obsidian/80 dark:hover:bg-obsidian-raised/45"}`}
                               >
-                                <span className="truncate text-sm font-medium text-ink-primary-dark">
+                                <span className="truncate text-sm font-medium text-foreground dark:text-ink-primary-dark">
                                   {reportName}
                                 </span>
                                 <span className="text-sm text-ink-secondary-dark">
@@ -4026,8 +4026,8 @@ export default function PortalDataViewer() {
                               </button>
                             </CollapsibleTrigger>
                               <CollapsibleContent>
-                                <div className="w-full border-b border-obsidian-raised bg-obsidian-sunken/50 p-4">
-                                      <Card className="rounded-xl border border-gold/25 bg-obsidian-raised/70 p-5 shadow-none">
+                                <div className="w-full border-b border-border bg-muted/20 p-4 dark:border-obsidian-raised dark:bg-obsidian-sunken/50">
+                                      <Card className="rounded-xl border border-gold/25 bg-card p-5 shadow-none dark:bg-obsidian-raised/70">
                                         <CardHeader className="space-y-0 p-0 pb-4">
                                           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                             <div className="min-w-0 flex-1">
@@ -4273,7 +4273,7 @@ export default function PortalDataViewer() {
                                                 when available.
                                               </p>
                                               <div
-                                                className="overflow-auto rounded-lg border border-obsidian-raised bg-obsidian-sunken cursor-pointer transition-all hover:ring-1 hover:ring-gold/40"
+                                                className="overflow-auto rounded-lg border border-border bg-muted/30 cursor-pointer transition-all hover:ring-1 hover:ring-gold/40 dark:border-obsidian-raised dark:bg-obsidian-sunken"
                                                 style={{ maxHeight: "420px" }}
                                                 onClick={() => {
                                                   setReportReaderOpen({
@@ -4388,7 +4388,7 @@ export default function PortalDataViewer() {
                             return (
                               <Card
                                 key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                                className="w-full border border-obsidian-raised bg-obsidian-sunken/20 text-ink-primary-dark shadow-none"
+                                className="w-full border border-border bg-muted/20 text-foreground shadow-none dark:border-obsidian-raised dark:bg-obsidian-sunken/20 dark:text-ink-primary-dark"
                               >
                                 <CardHeader className="pb-2">
                                   <CardTitle className="text-base">
@@ -4465,7 +4465,7 @@ export default function PortalDataViewer() {
                           return (
                             <Card
                               key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                              className="w-full border border-obsidian-raised bg-obsidian-sunken/20 text-ink-primary-dark shadow-none"
+                              className="w-full border border-border bg-muted/20 text-foreground shadow-none dark:border-obsidian-raised dark:bg-obsidian-sunken/20 dark:text-ink-primary-dark"
                             >
                               <CardHeader className="pb-2">
                                 <CardTitle className="text-base">

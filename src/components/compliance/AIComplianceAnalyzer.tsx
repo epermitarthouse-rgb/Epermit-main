@@ -111,7 +111,7 @@ const severityConfig = {
   critical: {
     icon: AlertCircle,
     color: "text-destructive",
-    bg: "bg-obsidian-sunken/40",
+    bg: "bg-muted/30 dark:bg-obsidian-sunken/40",
     border: "border-destructive",
     stripe: "bg-destructive",
     iconBg: "bg-destructive/15",
@@ -120,7 +120,7 @@ const severityConfig = {
   warning: {
     icon: AlertTriangle,
     color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-obsidian-sunken/40",
+    bg: "bg-muted/30 dark:bg-obsidian-sunken/40",
     border: "border-amber-500 dark:border-amber-400",
     stripe: "bg-amber-500 dark:bg-amber-400",
     iconBg: "bg-amber-500/15",
@@ -129,7 +129,7 @@ const severityConfig = {
   advisory: {
     icon: Info,
     color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-obsidian-sunken/40",
+    bg: "bg-muted/30 dark:bg-obsidian-sunken/40",
     border: "border-blue-500 dark:border-blue-400",
     stripe: "bg-blue-500 dark:bg-blue-400",
     iconBg: "bg-blue-500/15",
@@ -1067,20 +1067,20 @@ export function AIComplianceAnalyzer() {
     return (
       <Card className={cn(DATA_INTELLIGENCE_PANEL, "overflow-hidden shadow-lg")}>
         {/* Header with progress */}
-        <CardHeader className="pb-4 border-b border-[hsl(var(--border-obsidian-strong)/0.35)] bg-obsidian-sunken/35">
+        <CardHeader className="pb-4 border-b border-border/40 bg-muted/20 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-obsidian-sunken/35">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2 text-xl text-ink-primary-dark">
+              <CardTitle className="flex items-center gap-2 text-xl text-foreground dark:text-ink-primary-dark">
                 <AlertTriangle className="h-5 w-5 text-teal" />
                 Compliance Findings
               </CardTitle>
-              <CardDescription className="mt-1 text-ink-secondary-dark">
+              <CardDescription className="mt-1 text-muted-foreground dark:text-ink-secondary-dark">
                 Review each finding and take action on suggested fixes
               </CardDescription>
             </div>
             <div className="text-right">
               <div className="text-2xl font-bold text-gold-deep">{resolvedInResult}/{issues.length}</div>
-              <div className="text-xs text-ink-secondary-dark">Issues Resolved</div>
+              <div className="text-xs text-muted-foreground dark:text-ink-secondary-dark">Issues Resolved</div>
             </div>
           </div>
           {/* Progress bar */}
@@ -1093,11 +1093,11 @@ export function AIComplianceAnalyzer() {
         <CardContent className="p-0">
           <Tabs defaultValue="all" className="w-full">
             {/* Severity filter tabs */}
-            <div className="border-b border-[hsl(var(--border-obsidian-strong)/0.35)] bg-obsidian-sunken/25 px-4 py-3">
-              <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-obsidian-raised/40 border border-[hsl(var(--border-obsidian-strong)/0.28)]">
+            <div className="border-b border-border/40 bg-muted/15 px-4 py-3 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-obsidian-sunken/25">
+              <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/50 border border-border/50 dark:bg-obsidian-raised/40 dark:border-[hsl(var(--border-obsidian-strong)/0.28)]">
                 <TabsTrigger 
                   value="all" 
-                  className="data-[state=active]:bg-obsidian-sunken data-[state=active]:text-ink-primary-dark data-[state=active]:shadow-sm py-2"
+                  className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm py-2 dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-ink-primary-dark"
                 >
                   <span className="flex items-center gap-1.5">
                     <span className="hidden sm:inline">All</span>
@@ -1161,7 +1161,7 @@ export function AIComplianceAnalyzer() {
                             transition={{ delay: index * 0.03, duration: 0.2 }}
                             className={`group relative rounded-xl border-l-4 border shadow-sm transition-all duration-200 ${
                               response
-                                ? "border-l-teal/25 border-[hsl(var(--border-obsidian-strong)/0.28)] bg-obsidian-sunken/20 opacity-70"
+                                ? "border-l-teal/25 border-border/40 bg-muted/20 opacity-70 dark:border-[hsl(var(--border-obsidian-strong)/0.28)] dark:bg-obsidian-sunken/20"
                                 : `${config.border} border-l-4 ${config.bg} hover:shadow-lg`
                             }`}
                           >
@@ -1223,7 +1223,7 @@ export function AIComplianceAnalyzer() {
                                   </div>
 
                                   {/* Suggested fix box */}
-                                  <div className="p-3 rounded-lg bg-obsidian-raised/35 border border-[hsl(var(--border-obsidian-strong)/0.35)]">
+                                  <div className="p-3 rounded-lg bg-muted/40 border border-border/50 dark:bg-obsidian-raised/35 dark:border-[hsl(var(--border-obsidian-strong)/0.35)]">
                                     <div className="flex items-center gap-2 mb-1.5">
                                       <CheckCircle2 className="h-4 w-4 text-teal" />
                                       <span className="text-sm font-medium text-ink-primary-dark">Suggested Fix</span>
@@ -1665,11 +1665,11 @@ export function AIComplianceAnalyzer() {
               <Tabs value={activeResultTab} onValueChange={(v) => setActiveResultTab(v as "ibc" | "local")}>
                 <div className={cn(DATA_INTELLIGENCE_PANEL, "p-2 mb-2")}>
                   <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent p-0 h-auto shadow-none border-0">
-                  <TabsTrigger value="ibc" className="flex items-center gap-2 text-ink-secondary-dark data-[state=active]:bg-obsidian-sunken data-[state=active]:text-ink-primary-dark">
+                  <TabsTrigger value="ibc" className="flex items-center gap-2 text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:text-ink-secondary-dark dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-ink-primary-dark">
                     <Scale className="h-4 w-4" />
                     General IBC ({ibcResult.summary.totalIssues} issues)
                   </TabsTrigger>
-                  <TabsTrigger value="local" className="flex items-center gap-2 text-ink-secondary-dark data-[state=active]:bg-obsidian-sunken data-[state=active]:text-ink-primary-dark">
+                  <TabsTrigger value="local" className="flex items-center gap-2 text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:text-ink-secondary-dark dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-ink-primary-dark">
                     <MapPin className="h-4 w-4" />
                     Local Amendments ({localResult.summary.totalIssues} issues)
                   </TabsTrigger>
@@ -1692,31 +1692,31 @@ export function AIComplianceAnalyzer() {
                       <div className={`text-4xl font-bold ${getScoreColor(currentResult.summary.overallScore ?? 0)}`}>
                         {currentResult.summary.overallScore ?? 0}%
                       </div>
-                      <p className="text-sm text-ink-secondary-dark mt-1">Compliance Score</p>
+                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Compliance Score</p>
                     </CardContent>
                   </Card>
                   <Card className={DATA_INTELLIGENCE_PANEL}>
                     <CardContent className="pt-6 text-center">
-                      <div className="text-4xl font-bold text-ink-primary-dark">{currentResult.summary.totalIssues ?? 0}</div>
-                      <p className="text-sm text-ink-secondary-dark mt-1">Total Issues</p>
+                      <div className="text-4xl font-bold text-foreground dark:text-ink-primary-dark">{currentResult.summary.totalIssues ?? 0}</div>
+                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Total Issues</p>
                     </CardContent>
                   </Card>
                   <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-destructive")}>
                     <CardContent className="pt-6 text-center">
                       <div className="text-4xl font-bold text-destructive">{currentResult.summary.critical ?? 0}</div>
-                      <p className="text-sm text-ink-secondary-dark mt-1">Critical</p>
+                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Critical</p>
                     </CardContent>
                   </Card>
                   <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
                     <CardContent className="pt-6 text-center">
                       <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{currentResult.summary.warnings ?? 0}</div>
-                      <p className="text-sm text-ink-secondary-dark mt-1">Warnings</p>
+                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Warnings</p>
                     </CardContent>
                   </Card>
                   <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
                     <CardContent className="pt-6 text-center">
                       <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{currentResult.summary.advisory ?? 0}</div>
-                      <p className="text-sm text-ink-secondary-dark mt-1">Advisory</p>
+                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Advisory</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1726,8 +1726,8 @@ export function AIComplianceAnalyzer() {
                   <Card className={DATA_INTELLIGENCE_PANEL}>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-ink-primary-dark">Resolution Progress</span>
-                        <span className="text-sm text-ink-secondary-dark">
+                        <span className="text-sm font-medium text-foreground dark:text-ink-primary-dark">Resolution Progress</span>
+                        <span className="text-sm text-muted-foreground dark:text-ink-secondary-dark">
                           {resolvedCount} / {totalIssues} resolved
                         </span>
                       </div>

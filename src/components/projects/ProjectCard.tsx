@@ -26,9 +26,8 @@ import { Project, PROJECT_STATUS_CONFIG, PROJECT_TYPE_LABELS, ProjectStatus, STA
 import { cn } from '@/lib/utils';
 import { SlaEstimateDisplay } from './SlaEstimateDisplay';
 
-/** Navy/obsidian card: primary = light headline ink; secondary = readable muted (not grey-washed). */
-const cardPrimary = 'text-ink-primary-dark';
-const cardSecondary = 'text-ink-secondary-dark';
+const cardPrimary = 'text-foreground dark:text-ink-primary-dark';
+const cardSecondary = 'text-muted-foreground dark:text-ink-secondary-dark';
 
 interface ProjectCardProps {
   project: Project;
@@ -68,10 +67,11 @@ export function ProjectCard({
     >
       <Card
         className={cn(
-          'border-navy-line/40 bg-gradient-to-b from-navy-elev to-navy-deep',
+          'border-border bg-card transition-[box-shadow,border-color] duration-200',
+          'shadow-sm hover:border-primary/40 hover:shadow-md hover:!translate-y-0 active:!translate-y-0',
+          'dark:border-navy-line/40 dark:bg-gradient-to-b dark:from-navy-elev dark:to-navy-deep',
+          'dark:shadow-[0_4px_20px_-6px_rgba(15,23,42,0.5)] dark:hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.58)]',
           cardPrimary,
-          'shadow-[0_4px_20px_-6px_rgba(15,23,42,0.5)] transition-[box-shadow,border-color] duration-200',
-          'hover:border-primary/40 hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.58)] hover:!translate-y-0 active:!translate-y-0'
         )}
       >
         <CardHeader className="space-y-0 px-3 pb-2 pt-3">
@@ -92,7 +92,7 @@ export function ProjectCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 shrink-0 text-ink-primary-dark hover:bg-white/[0.12]"
+                  className="h-8 w-8 shrink-0 text-foreground hover:bg-muted dark:text-ink-primary-dark dark:hover:bg-white/[0.12]"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
@@ -136,7 +136,7 @@ export function ProjectCard({
               {statusConfig.label}
             </Badge>
             {project.project_type ? (
-              <Badge variant="outline" className={cn('border-white/20 bg-white/10 font-tight text-[10px] font-medium normal-case tracking-normal', cardPrimary)}>
+              <Badge variant="outline" className={cn('border-border/60 bg-muted/40 font-tight text-[10px] font-medium normal-case tracking-normal dark:border-white/20 dark:bg-white/10', cardPrimary)}>
                 {PROJECT_TYPE_LABELS[project.project_type]}
               </Badge>
             ) : null}
@@ -145,14 +145,14 @@ export function ProjectCard({
         <CardContent className="space-y-2 px-3 pb-3 pt-0">
           {(project.city || project.state) ? (
             <div className={cn('flex items-start gap-2 font-sans text-xs leading-snug', cardSecondary)}>
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-secondary-dark" aria-hidden />
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-ink-secondary-dark" aria-hidden />
               <span className="min-w-0 truncate">{[project.city, project.state].filter(Boolean).join(', ')}</span>
             </div>
           ) : null}
 
           {project.jurisdiction ? (
             <div className={cn('flex items-start gap-2 font-sans text-xs leading-snug', cardSecondary)}>
-              <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-secondary-dark" aria-hidden />
+              <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-ink-secondary-dark" aria-hidden />
               <span className="min-w-0 truncate">{project.jurisdiction}</span>
             </div>
           ) : null}
@@ -184,7 +184,7 @@ export function ProjectCard({
             />
           )}
 
-          <div className="flex items-center justify-between border-t border-white/[0.14] pt-2">
+          <div className="flex items-center justify-between border-t border-border/40 pt-2 dark:border-white/[0.14]">
             <span className={cn('font-sans text-[11px]', cardSecondary)}>
               Updated{' '}
               <span className={cn('font-mono tabular-nums', cardPrimary)}>{format(new Date(project.updated_at), 'MMM d, yyyy')}</span>

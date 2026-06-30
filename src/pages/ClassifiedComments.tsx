@@ -217,12 +217,12 @@ export default function ClassifiedComments() {
               const items = grouped.map.get(discipline)!;
               return (
                 <Card key={discipline} className={DATA_INTELLIGENCE_PANEL}>
-                  <CardHeader className="pb-2 border-b border-[hsl(var(--border-obsidian-strong)/0.35)]">
-                    <CardTitle className="text-lg text-ink-primary-dark">
+                  <CardHeader className="pb-2 border-b border-border/40 dark:border-[hsl(var(--border-obsidian-strong)/0.35)]">
+                    <CardTitle className="text-lg text-foreground dark:text-ink-primary-dark">
                       {discipline}
-                      <span className="text-ink-secondary-dark font-normal ml-2">({items.length})</span>
+                      <span className="text-muted-foreground dark:text-ink-secondary-dark font-normal ml-2">({items.length})</span>
                     </CardTitle>
-                    <CardDescription className="text-ink-secondary-dark">
+                    <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
                       Parsed comment text retained verbatim from the classifier.
                     </CardDescription>
                   </CardHeader>
@@ -231,11 +231,11 @@ export default function ClassifiedComments() {
                       {items.map((c) => (
                         <li
                           key={c.id}
-                          className="text-sm text-ink-secondary-dark border-l-2 border-teal/40 pl-3 py-1.5 bg-obsidian-sunken/25 rounded-r-md"
+                          className="text-sm text-muted-foreground dark:text-ink-secondary-dark border-l-2 border-teal/40 pl-3 py-1.5 bg-muted/30 dark:bg-obsidian-sunken/25 rounded-r-md"
                         >
-                          <span className="text-ink-primary-dark">{c.original_text}</span>
+                          <span className="text-foreground dark:text-ink-primary-dark">{c.original_text}</span>
                           {c.code_reference && (
-                            <span className="text-ink-tertiary-dark ml-2 font-mono text-xs">({c.code_reference})</span>
+                            <span className="text-muted-foreground dark:text-ink-tertiary-dark ml-2 font-mono text-xs">({c.code_reference})</span>
                           )}
                         </li>
                       ))}

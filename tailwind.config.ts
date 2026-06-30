@@ -49,6 +49,12 @@ export default {
           "secondary-dark": "hsl(var(--ink-secondary-dark))",
           "tertiary-dark": "hsl(var(--ink-tertiary-dark))",
         },
+        orange: {
+          DEFAULT: "hsl(var(--accent-orange))",
+          soft: "hsl(var(--accent-orange-soft))",
+          deep: "hsl(var(--accent-orange-deep))",
+        },
+        /* gold → orange aliases for backward compat; all text-gold/bg-gold/border-gold classes resolve to orange */
         gold: {
           DEFAULT: "hsl(var(--accent-gold))",
           soft: "hsl(var(--accent-gold-soft))",

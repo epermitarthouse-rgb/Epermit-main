@@ -141,7 +141,7 @@ export function ScrapeProgressPanel({
   if (minimized) {
     return (
       <button
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-obsidian-raised transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors dark:hover:bg-obsidian-raised"
         onClick={onExpand}
         data-testid="button-expand-scrape"
       >
@@ -154,7 +154,7 @@ export function ScrapeProgressPanel({
         ) : (
           <XCircle className="h-4 w-4 text-red-400 shrink-0" />
         )}
-        <span className="text-xs text-ink-secondary-dark truncate flex-1">
+        <span className="text-xs text-muted-foreground truncate flex-1 dark:text-ink-secondary-dark">
           {currentMessage}
         </span>
         <span className="text-xs font-mono text-teal tabular-nums shrink-0">
@@ -176,7 +176,7 @@ export function ScrapeProgressPanel({
             ) : (
               <XCircle className="h-4 w-4 text-red-400 shrink-0" />
             )}
-            <h3 className="text-sm font-semibold text-ink-primary-dark truncate">
+            <h3 className="text-sm font-semibold text-foreground truncate dark:text-ink-primary-dark">
               Portal scrape
             </h3>
             <Badge
@@ -186,7 +186,7 @@ export function ScrapeProgressPanel({
               {scrapeJobStatusLabel(status)}
             </Badge>
           </div>
-          <p className="text-xs text-ink-tertiary-dark">
+          <p className="text-xs text-muted-foreground dark:text-ink-tertiary-dark">
             Permit{" "}
             <span className="font-medium text-teal">{permitNumber || "—"}</span>
             {" · "}
@@ -198,7 +198,7 @@ export function ScrapeProgressPanel({
             {formatElapsed(elapsedTime)}
           </span>
           <button
-            className="p-1 rounded hover:bg-obsidian-raised text-ink-tertiary-dark hover:text-ink-primary-dark"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground dark:hover:bg-obsidian-raised dark:text-ink-tertiary-dark dark:hover:text-ink-primary-dark"
             onClick={onMinimize}
             title="Minimize"
             type="button"
@@ -222,13 +222,13 @@ export function ScrapeProgressPanel({
         </div>
       )}
 
-      <div className="rounded-md bg-obsidian-raised/60 border border-teal/15 px-3 py-2">
-        <p className="text-xs font-medium text-ink-tertiary-dark uppercase tracking-wide mb-1">
+      <div className="rounded-md bg-muted/50 border border-teal/15 px-3 py-2 dark:bg-obsidian-raised/60">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 dark:text-ink-tertiary-dark">
           Current activity
         </p>
-        <p className="text-sm text-ink-primary-dark leading-snug">{currentMessage}</p>
+        <p className="text-sm text-foreground leading-snug dark:text-ink-primary-dark">{currentMessage}</p>
         {lastActivityAt && (
-          <p className="text-[10px] text-ink-tertiary-dark mt-1">
+          <p className="text-[10px] text-muted-foreground mt-1 dark:text-ink-tertiary-dark">
             Last activity {format(new Date(lastActivityAt), "MMM d, h:mm:ss a")}
           </p>
         )}
@@ -236,13 +236,13 @@ export function ScrapeProgressPanel({
 
       {progressPct != null && (
         <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-ink-tertiary-dark">
+          <div className="flex justify-between text-[10px] text-muted-foreground dark:text-ink-tertiary-dark">
             <span>Progress</span>
             <span>
               {progress!.current} / {progress!.total} ({progressPct}%)
             </span>
           </div>
-          <div className="h-1.5 rounded-full bg-obsidian-raised overflow-hidden">
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden dark:bg-obsidian-raised">
             <div
               className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal transition-all duration-500"
               style={{ width: `${progressPct}%` }}
@@ -254,7 +254,7 @@ export function ScrapeProgressPanel({
       <div className="border border-teal/15 rounded-md overflow-hidden">
         <button
           type="button"
-          className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-ink-secondary-dark hover:bg-obsidian-raised/50"
+          className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 dark:text-ink-secondary-dark dark:hover:bg-obsidian-raised/50"
           onClick={() => setFeedExpanded((v) => !v)}
         >
           <span>Activity feed ({meaningfulEvents.length})</span>
@@ -312,7 +312,7 @@ export function ScrapeProgressPanel({
           <Button
             size="sm"
             variant="outline"
-            className="flex-1 h-8 text-xs border-obsidian-raised"
+            className="flex-1 h-8 text-xs border-border dark:border-obsidian-raised"
             onClick={onDismiss}
             data-testid="button-dismiss-scrape"
           >
@@ -323,7 +323,7 @@ export function ScrapeProgressPanel({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 text-xs border-obsidian-raised"
+            className="h-8 text-xs border-border dark:border-obsidian-raised"
             onClick={onMinimize}
           >
             <Minimize2 className="h-3.5 w-3.5 mr-1" />

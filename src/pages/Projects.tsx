@@ -351,13 +351,13 @@ export default function Projects() {
                     <motion.div
                       key={project.id}
                       variants={staggerItem}
-                      className="grid cursor-pointer grid-cols-12 gap-4 rounded-xl border border-navy-line/35 bg-navy-deep px-4 py-3.5 text-white shadow-sm ring-1 ring-white/10 transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-navy hover:shadow-md"
+                      className="grid cursor-pointer grid-cols-12 gap-4 rounded-xl border border-border bg-card px-4 py-3.5 text-foreground shadow-sm transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-muted/50 hover:shadow-md dark:border-navy-line/35 dark:bg-navy-deep dark:text-white dark:ring-1 dark:ring-white/10 dark:hover:bg-navy"
                       onClick={() => handleViewProject(project)}
                     >
                       <div className="col-span-12 md:col-span-4">
-                        <p className="truncate font-semibold text-white">{project.name}</p>
+                        <p className="truncate font-semibold text-foreground dark:text-white">{project.name}</p>
                         {project.permit_number ? (
-                          <p className="mt-0.5 font-mono text-xs tabular-nums tracking-tight text-white/70">
+                          <p className="mt-0.5 font-mono text-xs tabular-nums tracking-tight text-muted-foreground dark:text-white/70">
                             {project.permit_number}
                           </p>
                         ) : null}
@@ -367,13 +367,13 @@ export default function Projects() {
                           {statusConfig.label}
                         </Badge>
                       </div>
-                      <div className="col-span-6 md:col-span-2 truncate text-sm text-white/70">
+                      <div className="col-span-6 md:col-span-2 truncate text-sm text-muted-foreground dark:text-white/70">
                         {project.jurisdiction || '—'}
                       </div>
-                      <div className="col-span-6 md:col-span-2 truncate text-sm text-white/70">
+                      <div className="col-span-6 md:col-span-2 truncate text-sm text-muted-foreground dark:text-white/70">
                         {[project.city, project.state].filter(Boolean).join(', ') || '—'}
                       </div>
-                      <div className="col-span-6 md:col-span-2 font-mono text-sm tabular-nums text-white/70">
+                      <div className="col-span-6 md:col-span-2 font-mono text-sm tabular-nums text-muted-foreground dark:text-white/70">
                         {new Date(project.updated_at).toLocaleDateString()}
                       </div>
                     </motion.div>

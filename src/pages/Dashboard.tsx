@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import architectureBg from "@/assets/permitpilot-architecture-background.png";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,17 +49,16 @@ const surfCreamRaised =
 const surfGoldSoft =
   "rounded-2xl border border-gold/30 bg-gradient-to-br from-gold-soft/70 via-cream-raised to-cream-raised text-ink-primary-light shadow-cream transition-colors hover:border-gold/45 dark:border-gold/30 dark:bg-gradient-to-br dark:from-gold-soft/65 dark:via-cream-raised dark:to-cream-raised dark:text-ink-primary-light";
 
-/** Blue-gray intelligence surface (Permit Intelligence quick card) */
+/** Blue-gray intelligence surface (Permit Intelligence quick card) — theme-aware */
 const surfIntelBlueGray =
-  "rounded-2xl border border-[hsl(var(--border-obsidian-strong)/0.42)] bg-gradient-to-br from-obsidian-raised/95 via-obsidian to-obsidian-sunken text-ink-primary-dark shadow-lg shadow-black/20 transition-colors hover:border-teal/30 dark:border-[hsl(var(--border-obsidian-strong)/0.42)] dark:bg-gradient-to-br dark:from-obsidian-raised/95 dark:via-obsidian dark:to-obsidian-sunken dark:text-ink-primary-dark";
+  "rounded-2xl border border-border bg-muted/60 text-foreground shadow-sm transition-colors hover:border-teal/40 hover:shadow-md dark:border-[hsl(var(--border-obsidian-strong)/0.42)] dark:bg-gradient-to-br dark:from-obsidian-raised/95 dark:via-obsidian dark:to-obsidian-sunken dark:text-ink-primary-dark dark:shadow-lg dark:shadow-black/20 dark:hover:border-teal/30";
 
 /** Teal-soft light card (Interactive Demos) */
 const surfTealSoftLight =
   "rounded-2xl border border-teal/22 bg-teal-soft/55 text-ink-primary-light shadow-cream transition-colors hover:border-teal/40 hover:shadow-md dark:border-teal/25 dark:bg-teal-soft/50 dark:text-ink-primary-light";
 
-/** Dark pipeline feature shell */
-const intakePipelineShell =
-  "relative overflow-hidden rounded-2xl border border-[hsl(var(--border-obsidian-strong)/0.45)] bg-gradient-to-br from-obsidian-raised via-obsidian to-obsidian-sunken p-6 text-ink-primary-dark shadow-xl shadow-black/30 dark:border-[hsl(var(--border-obsidian-strong)/0.45)] dark:bg-gradient-to-br dark:from-obsidian-raised dark:via-obsidian dark:to-obsidian-sunken dark:text-ink-primary-dark sm:p-8";
+/** Pipeline feature shell — uses pipeline-canvas CSS class (theme-aware, defined in index.css) */
+const intakePipelineShell = "pipeline-canvas p-6 sm:p-8";
 
 /** Gold outline icon tile — light backgrounds */
 const tileGoldAccent =
@@ -264,12 +264,32 @@ export default function Dashboard() {
             className="mb-10"
           >
             <div className={intakePipelineShell}>
+              {/* Architecture background image */}
               <div
-                className="pointer-events-none absolute inset-0 bg-grid-navy-lines opacity-[0.28]"
+                className="pointer-events-none absolute inset-0 bg-cover bg-right-center bg-no-repeat"
+                style={{ backgroundImage: `url(${architectureBg})`, backgroundPosition: "right center" }}
                 aria-hidden
               />
+              {/* Light-mode overlay: strong cream wash so image is subtle and text stays readable */}
               <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_78%_60%_at_68%_-12%,hsl(219_48%_20%/0.45),transparent_58%)]"
+                className="pointer-events-none absolute inset-0 dark:hidden"
+                style={{ background: "linear-gradient(to right, hsl(42 38% 99% / 0.96) 38%, hsl(42 38% 99% / 0.80) 68%, hsl(42 38% 99% / 0.55) 100%)" }}
+                aria-hidden
+              />
+              {/* Dark-mode overlay: deep navy wash, preserves orange image highlights */}
+              <div
+                className="pointer-events-none absolute inset-0 hidden dark:block"
+                style={{ background: "linear-gradient(to right, hsl(219 52% 6% / 0.97) 32%, hsl(219 52% 6% / 0.82) 62%, hsl(219 52% 6% / 0.58) 100%)" }}
+                aria-hidden
+              />
+              {/* Grid overlay — theme-aware */}
+              <div
+                className="pointer-events-none absolute inset-0 bg-grid-light opacity-[0.6] dark:bg-grid-navy-lines dark:opacity-[0.22]"
+                aria-hidden
+              />
+              {/* Subtle top-right radial glow (dark only) */}
+              <div
+                className="pointer-events-none absolute inset-0 hidden dark:block bg-[radial-gradient(ellipse_78%_60%_at_68%_-12%,hsl(219_48%_20%/0.45),transparent_58%)]"
                 aria-hidden
               />
               <div className="relative">
@@ -390,12 +410,12 @@ export default function Dashboard() {
                     <Database className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-display text-xl font-normal tracking-tight text-ink-primary-dark">
+                    <h3 className="font-display text-xl font-normal tracking-tight text-foreground dark:text-ink-primary-dark">
                       Permit Intelligence
                     </h3>
-                    <p className="text-sm text-ink-secondary-dark">Shovels data</p>
+                    <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark">Shovels data</p>
                   </div>
-                  <Plus className="ml-auto h-5 w-5 text-ink-tertiary-dark transition-colors group-hover:text-teal" />
+                  <Plus className="ml-auto h-5 w-5 text-muted-foreground dark:text-ink-tertiary-dark transition-colors group-hover:text-teal" />
                 </CardContent>
               </Card>
             </motion.div>

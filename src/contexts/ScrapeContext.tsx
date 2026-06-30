@@ -550,7 +550,7 @@ export function ScrapeProvider({ children }: { children: ReactNode }) {
           aria-label="Scraping progress"
           data-testid="scrape-progress-bar"
         >
-          <div className="relative rounded-xl border border-teal/30 bg-obsidian shadow-2xl shadow-emerald-900/20 overflow-hidden text-ink-primary-dark">
+          <div className="relative rounded-xl border border-teal/30 bg-card text-foreground shadow-2xl shadow-black/20 overflow-hidden dark:bg-obsidian dark:text-ink-primary-dark dark:shadow-emerald-900/20">
             <div className="absolute inset-0 bg-gradient-to-br from-teal/10 via-transparent to-emerald-600/5 pointer-events-none" />
             <div className="relative">
               {activeJobId ? (

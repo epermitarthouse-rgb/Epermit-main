@@ -853,21 +853,21 @@ const ROICalculator = () => {
             <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
               <CardContent className="p-8">
                 <div className="mb-8 text-center">
-                  <h2 className="mb-2 font-display text-3xl font-normal text-ink-primary-dark">Your ROI Report</h2>
-                  <p className="text-ink-secondary-dark">Personalized for {leadInfo.company}</p>
+                  <h2 className="mb-2 font-display text-3xl font-normal text-foreground dark:text-ink-primary-dark">Your ROI Report</h2>
+                  <p className="text-muted-foreground dark:text-ink-secondary-dark">Personalized for {leadInfo.company}</p>
                 </div>
                 <div className="grid gap-6 md:grid-cols-3">
-                  <div className="rounded-xl border border-teal/20 bg-obsidian-sunken/80 p-4 text-center">
+                  <div className="rounded-xl border border-teal/20 bg-muted/50 p-4 text-center dark:bg-obsidian-sunken/80">
                     <p className="text-4xl font-bold text-gold">${Math.round(results.totalAnnualSavings).toLocaleString()}</p>
-                    <p className="text-ink-secondary-dark">Annual Savings</p>
+                    <p className="text-muted-foreground dark:text-ink-secondary-dark">Annual Savings</p>
                   </div>
-                  <div className="rounded-xl border border-teal/20 bg-obsidian-sunken/80 p-4 text-center">
+                  <div className="rounded-xl border border-teal/20 bg-muted/50 p-4 text-center dark:bg-obsidian-sunken/80">
                     <p className="text-4xl font-bold text-teal">{Math.round(results.roi)}%</p>
-                    <p className="text-ink-secondary-dark">Return on Investment</p>
+                    <p className="text-muted-foreground dark:text-ink-secondary-dark">Return on Investment</p>
                   </div>
-                  <div className="rounded-xl border border-teal/20 bg-obsidian-sunken/80 p-4 text-center">
+                  <div className="rounded-xl border border-teal/20 bg-muted/50 p-4 text-center dark:bg-obsidian-sunken/80">
                     <p className="text-4xl font-bold text-gold">{results.paybackMonths.toFixed(1)} mo</p>
-                    <p className="text-ink-secondary-dark">Payback Period</p>
+                    <p className="text-muted-foreground dark:text-ink-secondary-dark">Payback Period</p>
                   </div>
                 </div>
               </CardContent>
@@ -876,7 +876,7 @@ const ROICalculator = () => {
             {/* Savings Breakdown */}
             <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
               <CardHeader>
-                <CardTitle className="text-ink-primary-dark">Savings Breakdown</CardTitle>
+                <CardTitle className="text-foreground dark:text-ink-primary-dark">Savings Breakdown</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
@@ -901,21 +901,21 @@ const ROICalculator = () => {
                 </div>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-teal/15 bg-obsidian-sunken/60 p-4">
+                  <div className="rounded-lg border border-teal/15 bg-muted/40 p-4 dark:bg-obsidian-sunken/60">
                     <div className="mb-2 flex items-center gap-3">
                       <Clock className="h-5 w-5 text-teal" />
-                      <span className="font-medium text-ink-primary-dark">Time Efficiency</span>
+                      <span className="font-medium text-foreground dark:text-ink-primary-dark">Time Efficiency</span>
                     </div>
-                    <p className="text-2xl font-bold text-ink-primary-dark">{results.timeSavingsPercent.toFixed(0)}% faster</p>
-                    <p className="text-sm text-ink-secondary-dark">{Math.round(results.totalHoursSaved)} hours saved annually</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-ink-primary-dark">{results.timeSavingsPercent.toFixed(0)}% faster</p>
+                    <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark">{Math.round(results.totalHoursSaved)} hours saved annually</p>
                   </div>
-                  <div className="rounded-lg border border-teal/15 bg-obsidian-sunken/60 p-4">
+                  <div className="rounded-lg border border-teal/15 bg-muted/40 p-4 dark:bg-obsidian-sunken/60">
                     <div className="mb-2 flex items-center gap-3">
                       <Shield className="h-5 w-5 text-teal" />
-                      <span className="font-medium text-ink-primary-dark">Rejection Rate</span>
+                      <span className="font-medium text-foreground dark:text-ink-primary-dark">Rejection Rate</span>
                     </div>
-                    <p className="text-2xl font-bold text-ink-primary-dark">{results.rejectionReductionPercent.toFixed(0)}% reduction</p>
-                    <p className="text-sm text-ink-secondary-dark">{results.rejectionsSaved.toFixed(1)} fewer rejections/year</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-ink-primary-dark">{results.rejectionReductionPercent.toFixed(0)}% reduction</p>
+                    <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark">{results.rejectionsSaved.toFixed(1)} fewer rejections/year</p>
                   </div>
                 </div>
               </CardContent>

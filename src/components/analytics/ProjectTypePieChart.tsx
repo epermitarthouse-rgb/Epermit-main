@@ -33,13 +33,13 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
     return (
       <Card className={panel}>
         <CardHeader>
-          <CardTitle className="text-ink-primary-dark">Permits by Type</CardTitle>
-          <CardDescription className="text-ink-secondary-dark">
+          <CardTitle className="text-foreground dark:text-ink-primary-dark">Permits by Type</CardTitle>
+          <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
             Distribution of permit applications by project type
           </CardDescription>
         </CardHeader>
         <CardContent className="flex h-64 items-center justify-center">
-          <p className="text-ink-tertiary-dark">No project data available</p>
+          <p className="text-muted-foreground dark:text-ink-tertiary-dark">No project data available</p>
         </CardContent>
       </Card>
     );
@@ -55,8 +55,8 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
   return (
     <Card className={panel}>
       <CardHeader>
-        <CardTitle className="text-ink-primary-dark">Permits by Type</CardTitle>
-        <CardDescription className="text-ink-secondary-dark">
+        <CardTitle className="text-foreground dark:text-ink-primary-dark">Permits by Type</CardTitle>
+        <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
           Distribution of permit applications by project type
         </CardDescription>
       </CardHeader>
@@ -81,15 +81,15 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload as typeof chartData[0];
                   return (
-                    <div className="rounded-lg border border-[hsl(var(--border-obsidian-strong)/0.5)] bg-obsidian-raised p-3 text-sm text-ink-primary-dark shadow-lg">
+                    <div className="rounded-lg border border-border bg-card p-3 text-sm text-foreground shadow-lg dark:border-[hsl(var(--border-obsidian-strong)/0.5)] dark:bg-obsidian-raised dark:text-ink-primary-dark">
                       <p className="font-medium">{data.name}</p>
-                      <p className="text-ink-tertiary-dark">{data.value} permits</p>
+                      <p className="text-muted-foreground dark:text-ink-tertiary-dark">{data.value} permits</p>
                       {data.avgCycleTime && (
-                        <p className="text-ink-tertiary-dark">
+                        <p className="text-muted-foreground dark:text-ink-tertiary-dark">
                           Avg cycle: {data.avgCycleTime.toFixed(1)} days
                         </p>
                       )}
-                      <p className="text-ink-tertiary-dark">
+                      <p className="text-muted-foreground dark:text-ink-tertiary-dark">
                         Approval rate: {data.approvalRate.toFixed(0)}%
                       </p>
                     </div>
@@ -98,7 +98,7 @@ export function ProjectTypePieChart({ metrics }: ProjectTypePieChartProps) {
                 return null;
               }}
             />
-            <Legend wrapperStyle={{ color: 'hsl(var(--ink-secondary-dark))' }} />
+            <Legend wrapperStyle={{ color: 'hsl(var(--muted-foreground))' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>

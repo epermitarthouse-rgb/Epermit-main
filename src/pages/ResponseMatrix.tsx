@@ -1540,7 +1540,7 @@ export default function ResponseMatrix() {
               className="w-full min-w-[960px]"
             >
               <TableHeader className="dark:[&_tr]:!bg-transparent">
-                <TableRow className="border-b border-obsidian-raised/70 !bg-obsidian-raised hover:!bg-obsidian dark:!border-obsidian-raised/55 dark:!bg-obsidian-raised dark:hover:!bg-obsidian">
+                <TableRow className="border-b border-border !bg-muted/60 hover:!bg-muted/80 dark:!border-obsidian-raised/55 dark:!bg-obsidian-raised dark:hover:!bg-obsidian">
                   <TableHead className="w-10 table-head-sticky px-2 py-3">
                     <Checkbox
                       checked={rows.length > 0 && selectedRowIds.size === rows.length}
@@ -1549,22 +1549,22 @@ export default function ResponseMatrix() {
                     />
                   </TableHead>
                   <TableHead className="w-10 table-head-sticky px-2 py-3" />
-                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
                     Status
                   </TableHead>
-                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
                     Discipline
                   </TableHead>
-                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
                     Comment
                   </TableHead>
-                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
                     Code Ref.
                   </TableHead>
-                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
                     Response
                   </TableHead>
-                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-secondary-dark">
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
                     Draft
                   </TableHead>
                 </TableRow>
@@ -1616,9 +1616,9 @@ export default function ResponseMatrix() {
                           <Select value={row.status} onValueChange={(v) => updateRow(row.id, "status", v)}>
                             <SelectTrigger
                               className={cn(
-                                "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold text-ink-primary-dark shadow-sm",
-                                "bg-obsidian hover:bg-obsidian-raised dark:bg-obsidian dark:hover:bg-obsidian-raised",
-                                "!text-ink-primary-dark text-[11px] md:text-xs",
+                                "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold shadow-sm",
+                                "bg-muted/60 hover:bg-muted/80 dark:bg-obsidian dark:hover:bg-obsidian-raised",
+                                "text-foreground dark:!text-ink-primary-dark text-[11px] md:text-xs",
                                 statusSelectTriggerAccentClass(row.status),
                               )}
                             >

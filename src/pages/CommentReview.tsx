@@ -1505,16 +1505,16 @@ export default function CommentReview() {
           </Card>
         ) : (
           <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream p-4 sm:p-5">
-            <div className="overflow-hidden rounded-lg border border-obsidian-raised bg-obsidian shadow-inner">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-obsidian-raised bg-obsidian-raised px-4 py-3 sm:px-5">
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm dark:border-obsidian-raised dark:bg-obsidian dark:shadow-inner">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3 sm:px-5 dark:border-obsidian-raised dark:bg-obsidian-raised">
                 <div className="min-w-0">
-                  <SectionTitle className="!text-xl sm:!text-2xl text-ink-primary-dark">
+                  <SectionTitle className="!text-xl sm:!text-2xl text-foreground dark:text-ink-primary-dark">
                     {savedCommentsTitle}
                   </SectionTitle>
-                  <p className="text-sm text-ink-secondary-dark mt-1">
+                  <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">
                     {savedCommentsSubtitle}
                   </p>
-                  <p className="mt-1 text-xs text-ink-tertiary-dark">
+                  <p className="mt-1 text-xs text-muted-foreground dark:text-ink-tertiary-dark">
                     Render source: <span className="font-mono text-teal">{renderSource}</span>
                     {renderSource === "fallback_llm" ? " (fallback mode active)" : ""}
                   </p>
@@ -1551,14 +1551,14 @@ export default function CommentReview() {
                   {renderSource === "raw_ref" ? (
                     <>
                       <TableHeader>
-                        <TableRow className="border-obsidian-raised bg-obsidian-raised hover:bg-obsidian-raised border-0">
-                          <TableHead className="table-head-sticky w-[48px] min-w-[44px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">REF #</TableHead>
-                          <TableHead className="table-head-sticky w-[56px] min-w-[48px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">CYCLE</TableHead>
-                          <TableHead className="table-head-sticky min-w-[140px] max-w-[200px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">REVIEWED BY</TableHead>
-                          <TableHead className="table-head-sticky min-w-[88px] w-[100px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">TYPE</TableHead>
-                          <TableHead className="table-head-sticky min-w-[120px] max-w-[160px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">FILENAME</TableHead>
-                          <TableHead className="table-head-sticky min-w-[240px] max-w-[480px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">DISCUSSION</TableHead>
-                          <TableHead className="table-head-sticky w-[100px] min-w-[88px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">STATUS</TableHead>
+                        <TableRow className="border-0 border-border bg-muted/60 hover:bg-muted/80 dark:border-obsidian-raised dark:bg-obsidian-raised dark:hover:bg-obsidian-raised">
+                          <TableHead className="table-head-sticky w-[48px] min-w-[44px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">REF #</TableHead>
+                          <TableHead className="table-head-sticky w-[56px] min-w-[48px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">CYCLE</TableHead>
+                          <TableHead className="table-head-sticky min-w-[140px] max-w-[200px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">REVIEWED BY</TableHead>
+                          <TableHead className="table-head-sticky min-w-[88px] w-[100px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">TYPE</TableHead>
+                          <TableHead className="table-head-sticky min-w-[120px] max-w-[160px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">FILENAME</TableHead>
+                          <TableHead className="table-head-sticky min-w-[240px] max-w-[480px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">DISCUSSION</TableHead>
+                          <TableHead className="table-head-sticky w-[100px] min-w-[88px] whitespace-nowrap px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">STATUS</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1567,30 +1567,30 @@ export default function CommentReview() {
                           return (
                             <TableRow
                               key={row.id}
-                              className="border-t border-obsidian-raised bg-obsidian-sunken/40 text-ink-primary-dark hover:bg-obsidian-raised/35 transition-colors"
+                              className="border-t border-border bg-transparent text-foreground transition-colors hover:bg-muted/40 dark:border-obsidian-raised dark:bg-obsidian-sunken/40 dark:text-ink-primary-dark dark:hover:bg-obsidian-raised/35"
                             >
-                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top font-mono-data tabular-nums text-ink-secondary-dark">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top font-mono-data tabular-nums text-muted-foreground dark:text-ink-secondary-dark">
                                 {portalRawRefCellDash(f.ref)}
                               </TableCell>
-                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top font-mono-data tabular-nums text-ink-secondary-dark">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top font-mono-data tabular-nums text-muted-foreground dark:text-ink-secondary-dark">
                                 {portalRawRefCellDash(f.cycle)}
                               </TableCell>
-                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap break-words text-ink-primary-dark">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap break-words text-foreground dark:text-ink-primary-dark">
                                 {portalRawRefCellDash(f.reviewedBy)}
                               </TableCell>
-                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap text-ink-primary-dark">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap text-foreground dark:text-ink-primary-dark">
                                 {portalRawRefCellDash(f.type)}
                               </TableCell>
                               <TableCell
-                                className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap break-all text-ink-primary-dark"
+                                className="px-4 py-2.5 sm:px-5 text-sm align-top whitespace-pre-wrap break-all text-foreground dark:text-ink-primary-dark"
                                 title={f.filename ?? undefined}
                               >
                                 {portalRawRefCellDash(f.filename)}
                               </TableCell>
-                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top text-ink-primary-dark whitespace-pre-wrap break-words max-w-[480px]">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm align-top text-foreground whitespace-pre-wrap break-words max-w-[480px] dark:text-ink-primary-dark">
                                 {f.discussion}
                               </TableCell>
-                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm whitespace-nowrap align-top text-ink-primary-dark">
+                              <TableCell className="px-4 py-2.5 sm:px-5 text-sm whitespace-nowrap align-top text-foreground dark:text-ink-primary-dark">
                                 {portalStatusDisplayText(row)}
                               </TableCell>
                             </TableRow>
@@ -1601,20 +1601,20 @@ export default function CommentReview() {
                   ) : (
                     <>
                       <TableHeader>
-                        <TableRow className="border-obsidian-raised bg-obsidian-raised hover:bg-obsidian-raised border-0">
-                          <TableHead className="table-head-sticky min-w-[220px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Comment</TableHead>
-                          <TableHead className="table-head-sticky w-[140px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Discipline</TableHead>
-                          <TableHead className="table-head-sticky w-[120px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Code ref.</TableHead>
-                          <TableHead className="table-head-sticky w-[100px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-dark sm:px-5 sm:py-3.5">Status</TableHead>
+                        <TableRow className="border-0 border-border bg-muted/60 hover:bg-muted/80 dark:border-obsidian-raised dark:bg-obsidian-raised dark:hover:bg-obsidian-raised">
+                          <TableHead className="table-head-sticky min-w-[220px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">Comment</TableHead>
+                          <TableHead className="table-head-sticky w-[140px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">Discipline</TableHead>
+                          <TableHead className="table-head-sticky w-[120px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">Code ref.</TableHead>
+                          <TableHead className="table-head-sticky w-[100px] px-4 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground sm:px-5 sm:py-3.5 dark:text-ink-tertiary-dark">Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {renderedSavedComments.map((row) => (
                           <TableRow
                             key={row.id}
-                            className="border-t border-obsidian-raised bg-obsidian-sunken/40 text-ink-primary-dark hover:bg-obsidian-raised/35 transition-colors"
+                            className="border-t border-border bg-transparent text-foreground transition-colors hover:bg-muted/40 dark:border-obsidian-raised dark:bg-obsidian-sunken/40 dark:text-ink-primary-dark dark:hover:bg-obsidian-raised/35"
                           >
-                            <TableCell className="px-4 py-2.5 sm:px-5 text-sm text-ink-primary-dark align-top max-w-[480px] whitespace-pre-wrap">
+                            <TableCell className="px-4 py-2.5 sm:px-5 text-sm text-foreground align-top max-w-[480px] whitespace-pre-wrap dark:text-ink-primary-dark">
                               {renderSource === "manual_letter" ? (
                                 <div className="space-y-2">
                                   {row.original_text?.trim() ? (
@@ -1625,7 +1625,7 @@ export default function CommentReview() {
                                       <summary className="cursor-pointer text-amber-600 dark:text-amber-400 font-medium">
                                         Previous comment
                                       </summary>
-                                      <p className="mt-1.5 text-ink-secondary-dark whitespace-pre-wrap">
+                                      <p className="mt-1.5 text-muted-foreground whitespace-pre-wrap dark:text-ink-secondary-dark">
                                         {row.previous_comment_text.trim()}
                                       </p>
                                     </details>
@@ -1638,13 +1638,13 @@ export default function CommentReview() {
                                 portalCommentTableCellContent(row)
                               )}
                             </TableCell>
-                            <TableCell className="px-4 py-2.5 sm:px-5 text-ink-secondary-dark">
+                            <TableCell className="px-4 py-2.5 sm:px-5 text-muted-foreground dark:text-ink-secondary-dark">
                               {renderSource === "manual_letter"
                                 ? (row.discipline ?? "—")
                                 : portalDisciplineDisplayText(row)}
                             </TableCell>
-                            <TableCell className="px-4 py-2.5 sm:px-5 font-mono-data text-xs align-top text-ink-secondary-dark">{row.code_reference ?? "—"}</TableCell>
-                            <TableCell className="px-4 py-2.5 sm:px-5 text-ink-primary-dark">{portalStatusDisplayText(row)}</TableCell>
+                            <TableCell className="px-4 py-2.5 sm:px-5 font-mono-data text-xs align-top text-muted-foreground dark:text-ink-secondary-dark">{row.code_reference ?? "—"}</TableCell>
+                            <TableCell className="px-4 py-2.5 sm:px-5 text-foreground dark:text-ink-primary-dark">{portalStatusDisplayText(row)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

@@ -26,12 +26,12 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
     return (
       <Card className={panel}>
         <CardHeader>
-          <CardTitle className="text-ink-primary-dark">Rejection Reason Trends</CardTitle>
-          <CardDescription className="text-ink-secondary-dark">Common reasons for permit corrections</CardDescription>
+          <CardTitle className="text-foreground dark:text-ink-primary-dark">Rejection Reason Trends</CardTitle>
+          <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">Common reasons for permit corrections</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex h-[300px] items-center justify-center">
-            <p className="text-center text-ink-tertiary-dark">
+            <p className="text-center text-muted-foreground dark:text-ink-tertiary-dark">
               No rejection data available yet.<br />
               Rejection reasons will appear here when projects receive corrections.
             </p>
@@ -50,8 +50,8 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
   return (
     <Card className={panel}>
       <CardHeader>
-        <CardTitle className="text-ink-primary-dark">Rejection Reason Trends</CardTitle>
-        <CardDescription className="text-ink-secondary-dark">
+        <CardTitle className="text-foreground dark:text-ink-primary-dark">Rejection Reason Trends</CardTitle>
+        <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
           Most common reasons for permit corrections and resubmissions
         </CardDescription>
       </CardHeader>
@@ -76,10 +76,10 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
               </Pie>
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(219 42% 16%)', 
-                  border: '1px solid hsl(var(--border-obsidian-strong) / 0.55)',
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
-                  color: 'hsl(var(--ink-primary-dark))',
+                  color: 'hsl(var(--foreground))',
                 }}
                 formatter={(value: number, name: string) => [`${value} occurrences`, name]}
               />
@@ -87,7 +87,7 @@ export function RejectionTrendsChart({ trends }: RejectionTrendsChartProps) {
                 layout="vertical" 
                 align="right" 
                 verticalAlign="middle"
-                formatter={(value) => <span className="text-sm text-ink-secondary-dark">{value}</span>}
+                formatter={(value) => <span className="text-sm text-muted-foreground dark:text-ink-secondary-dark">{value}</span>}
               />
             </PieChart>
           </ResponsiveContainer>
