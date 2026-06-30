@@ -13855,6 +13855,19 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         sourceTab: "projectInformation",
       }));
 
+      const addrVal = mapped.get("Address") || "";
+      const nameVal = mapped.get("Plan Review Project Name") || "";
+      const cphdIdx = fields.findIndex((f) => f.label === "CPHD Case #");
+      if (cphdIdx >= 0) {
+        const cphdVal = `${fields[cphdIdx].value || ""}`.trim();
+        if (
+          cphdVal &&
+          (cphdVal === addrVal || cphdVal === nameVal)
+        ) {
+          fields[cphdIdx] = { ...fields[cphdIdx], value: "" };
+        }
+      }
+
       return {
         panelFound: true,
         bodyLen: norm(panel.innerText || panel.textContent || "").length,
@@ -19477,6 +19490,7 @@ function arlingtonMergeProjectInformationFieldsDest(
   }
   if (integratedTabs.projectInformation) {
     integratedTabs.projectInformation.extractionStatus = "ok";
+    integratedTabs.projectInformation.sectionState = "complete";
   }
   const nFields = integratedTabs.projectInformation?.fields?.length ?? 0;
   const nDocs = integratedTabs.projectInformation?.documents?.length ?? 0;
