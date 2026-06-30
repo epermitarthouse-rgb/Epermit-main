@@ -28703,10 +28703,13 @@ async function runArlingtonWorkerBoundedPhase(session, opts) {
       priorPortal?.tabs?.planReview?.projectInformation;
     const piState = `${piSection?.sectionState || ""}`.trim();
     const piFields = Array.isArray(piSection?.fields) ? piSection.fields : [];
+    const piOnlyJob =
+      requestedScope?.planReviewScope === "projectInformation" ||
+      session.arlingtonPlanReviewScope === "projectInformation";
 
     if (
       piState !== "complete" &&
-      piState !== "weak_extraction" &&
+      (piState !== "weak_extraction" || piOnlyJob) &&
       !cycleExpired()
     ) {
       const DOWNLOADS_ROOT = path.join(__dirname, "downloads");
