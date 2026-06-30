@@ -9,6 +9,7 @@ const {
 } = require("../accela-scraper.js");
 const { launchChromiumForScraper } = require("../shared/playwright-launch-for-scraper.js");
 const { SESSION_IDLE_TIMEOUT_MS } = require("../sessions/session-ttl.js");
+const { attachArlingtonWorkerProgressBridge } = require("./arlington-worker-progress.js");
 
 const DEFAULT_DASHBOARD_URL =
   "https://aca-prod.accela.com/ARLINGTONCO/Default.aspx";
@@ -38,6 +39,7 @@ async function createArlingtonWorkerSession(opts) {
     session._scrapePermitNumber = job.permit_number;
     session.userId = job.user_id;
     session.arlingtonDurableMode = true;
+    attachArlingtonWorkerProgressBridge(supabase, session, job);
     return {
       session,
       sessionId: preferSessionId,
@@ -128,6 +130,7 @@ async function createArlingtonWorkerSession(opts) {
     _scrapePermitNumber: job.permit_number,
   };
   sessions[sessionId] = session;
+  attachArlingtonWorkerProgressBridge(supabase, session, job);
   if (typeof rearmSessionIdleTimeout === "function") {
     rearmSessionIdleTimeout(sessionId);
   } else if (typeof cleanupSession === "function") {

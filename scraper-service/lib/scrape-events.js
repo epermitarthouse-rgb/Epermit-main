@@ -583,7 +583,7 @@ const {
 } = require("./scrape-progress-publisher.js");
 const { SCRAPE_STAGES } = require("./scrape-stages.js");
 
-function attachScrapeJobBridge(supabase, session, meta) {
+function attachScrapeJobBridge(supabase, session, meta, options = {}) {
   const jobId = meta.jobId;
   const projectId = meta.projectId;
   session._scrapeJobId = jobId;
@@ -649,7 +649,9 @@ function attachScrapeJobBridge(supabase, session, meta) {
     }
   };
 
-  startHeartbeat(supabase, session);
+  if (!options.skipUiHeartbeat) {
+    startHeartbeat(supabase, session);
+  }
 }
 
 async function beginScrapeJob(supabase, session, reqBody, sessionId) {

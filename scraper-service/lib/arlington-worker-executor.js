@@ -13,6 +13,11 @@ const {
   pollArlingtonJobCancelled,
   isArlingtonJobCancelled,
 } = require("./arlington-job-store.js");
+const {
+  emitWorkerClaimedProgress,
+  emitWorkerPhaseCheckpointProgress,
+  emitWorkerTerminalProgress,
+} = require("./arlington-worker-progress.js");
 
 const LEASE_TTL_SECONDS = 180;
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
@@ -105,6 +110,18 @@ async function executeArlingtonWorkerCycle(ctx) {
 
     startHeartbeat();
 
+    await emitWorkerClaimedProgress(
+      supabase,
+      sessionHandle.session,
+      job,
+      workerId,
+    );
+    await sessionHandle.session.publishArlingtonPhaseProgress?.(
+      phase,
+      "start",
+      { forceFeed: true },
+    );
+
     const phaseResult = await runArlingtonWorkerBoundedPhase(
       sessionHandle.session,
       {
@@ -145,6 +162,13 @@ async function executeArlingtonWorkerCycle(ctx) {
         job,
         patch,
       );
+      await emitWorkerPhaseCheckpointProgress(
+        supabase,
+        sessionHandle.session,
+        job,
+        { ...phaseResult, phase: "attachments", nextPhase: "attachments" },
+        { status: "rate_limited", user_message: patch.current_user_message },
+      );
       return { ok: true, outcome: "rate_limited", phaseResult };
     }
 
@@ -156,6 +180,12 @@ async function executeArlingtonWorkerCycle(ctx) {
         verifyCtx,
       );
       if (cancelled) return { ok: true, outcome: "cancelled", phaseResult };
+      await emitWorkerTerminalProgress(
+        supabase,
+        sessionHandle.session,
+        job,
+        finalized || { status: verification?.complete ? "completed" : "completed_with_warnings" },
+      );
       return {
         ok: true,
         outcome: "metadata_only_terminal",
@@ -173,6 +203,21 @@ async function executeArlingtonWorkerCycle(ctx) {
         verifyCtx,
       );
       if (cancelled) return { ok: true, outcome: "cancelled", phaseResult };
+      await emitWorkerTerminalProgress(
+        supabase,
+        sessionHandle.session,
+        job,
+        finalized || {
+          status: verification?.complete
+            ? verification?.finalStatus === "complete_with_warnings"
+              ? "completed_with_warnings"
+              : "completed"
+            : "completed_with_warnings",
+          current_user_message: verification?.complete
+            ? "Arlington scrape completed."
+            : `Arlington scrape stopped: ${verification?.finalStatus}.`,
+        },
+      );
       return {
         ok: true,
         outcome: verification.complete ? "completed" : "partial",
@@ -220,6 +265,12 @@ async function executeArlingtonWorkerCycle(ctx) {
         { ...job, lease_worker_id: workerId },
         terminalVerification,
       );
+      await emitWorkerTerminalProgress(
+        supabase,
+        sessionHandle.session,
+        job,
+        finalized || { status: "partial_external_blocker" },
+      );
       return {
         ok: true,
         outcome: guard.reason || "no_progress_terminal",
@@ -253,6 +304,13 @@ async function executeArlingtonWorkerCycle(ctx) {
       },
     });
 
+    await emitWorkerPhaseCheckpointProgress(
+      supabase,
+      sessionHandle.session,
+      job,
+      { ...phaseResult, phase, nextPhase },
+    );
+
     return { ok: true, outcome: "checkpointed", phaseResult };
   } catch (err) {
     if (await isCancelRequested()) {
@@ -275,6 +333,14 @@ async function executeArlingtonWorkerCycle(ctx) {
       completed_at: unrecoverable ? new Date().toISOString() : null,
       run_intent: unrecoverable ? "dormant" : "retry",
     });
+    if (sessionHandle?.session) {
+      await emitWorkerTerminalProgress(supabase, sessionHandle.session, job, {
+        status: unrecoverable ? "failed_unrecoverable" : "partial",
+        current_user_message: unrecoverable
+          ? "Arlington scrape failed with an unrecoverable error."
+          : "Arlington worker hit a transient error; will retry.",
+      });
+    }
     return { ok: false, error: msg, unrecoverable };
   } finally {
     if (heartbeatTimer) clearInterval(heartbeatTimer);

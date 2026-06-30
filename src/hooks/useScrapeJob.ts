@@ -6,6 +6,7 @@ import {
   type ScrapeEvent,
   type ScrapeJob,
 } from "@/lib/scrapeJobTypes";
+import { resolveScrapeCurrentMessage } from "@/lib/scrapeJobMessage";
 
 const POLL_INTERVAL_MS = 8000;
 const STALE_ACTIVITY_MS = 2 * 60 * 1000;
@@ -195,11 +196,13 @@ export function useScrapeJob(
 
     const schedulePoll = () => {
       pollTimerRef.current = setTimeout(async () => {
+        let jobRow: ScrapeJob | null = null;
         try {
-          const [jobRow, newEvents] = await Promise.all([
+          const [fetchedJob, newEvents] = await Promise.all([
             fetchJob(),
             fetchEventsSince(lastSequenceRef.current),
           ]);
+          jobRow = fetchedJob;
           if (jobRow) setJob(jobRow);
           if (newEvents.length > 0) {
             setEvents((prev) => mergeEvents(prev, newEvents));
@@ -219,7 +222,7 @@ export function useScrapeJob(
             POLL_INTERVAL_MS * 2 ** Math.min(consecutiveFailuresRef.current, 3),
           );
         }
-        if (!isScrapeJobTerminal(job?.status)) {
+        if (!isScrapeJobTerminal(jobRow?.status)) {
           schedulePoll();
         }
       }, pollBackoffRef.current);
@@ -230,6 +233,11 @@ export function useScrapeJob(
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, [fetchEventsSince, fetchJob, job?.status, jobId]);
+
+  useEffect(() => {
+    if (!jobId || !isScrapeJobTerminal(job?.status)) return;
+    void refetch();
+  }, [job?.completed_at, job?.status, jobId, refetch]);
 
   useEffect(() => {
     const startMs =
@@ -290,14 +298,13 @@ export function useScrapeJob(
       ? { current: job.progress_current, total: job.progress_total }
       : null;
 
-  const baseMessage =
-    latestMeaningfulEvent?.user_message ||
-    job?.current_user_message ||
-    job?.error_user_message ||
-    (loading ? "Loading scrape progress…" : "Waiting for updates…");
-
-  const currentMessage =
-    isStale && !isTerminal ? "Still working…" : baseMessage;
+  const currentMessage = resolveScrapeCurrentMessage({
+    job,
+    latestMeaningfulEvent,
+    loading,
+    isStale,
+    isTerminal,
+  });
 
   return {
     job,

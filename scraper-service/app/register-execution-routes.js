@@ -1961,7 +1961,7 @@ app.post("/api/scrape", async (req, res) => {
         permitNumber: String(permitNumber).trim(),
         jurisdiction: scrapeEvents.detectJurisdictionFromSession(session),
         scrapeMode: scrapeMode ? String(scrapeMode).trim() : null,
-      });
+      }, { skipUiHeartbeat: true });
       session.arlingtonDurableWorkerEnqueued = true;
       session.status = "queued";
       session._scrapeActive = false;
@@ -1986,6 +1986,7 @@ app.post("/api/scrape", async (req, res) => {
           : "arlington_durable_queued",
         forceFeed: true,
       });
+      scrapeEvents.stopHeartbeat(scrapeJobId);
       return res.json({
         message: reusedExisting
           ? "Attached to existing Arlington scrape job"
