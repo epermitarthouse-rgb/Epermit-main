@@ -10,6 +10,18 @@ const { mirrorSessionProgress } = require("./lib/session-progress");
 const arlingtonOrchestration = require("./lib/arlington-orchestration.js");
 const arlingtonDurableJob = require("./lib/arlington-durable-job.js");
 const arlingtonJobStore = require("./lib/arlington-job-store.js");
+const {
+  normalizeArlingtonBaseProjectId,
+  arlingtonProjectIdsMatch,
+  arlingtonProjectInformationPreviewLooksLikeTabShellOnly,
+  scoreArlingtonProjectInformationFrameCandidate,
+  selectArlingtonProjectInformationFrameFromRanked,
+  arlingtonProjectInformationValueLooksLikeAddressDropdownList,
+  arlingtonProjectInformationFieldValueIsRejected,
+  arlingtonProjectInformationExtractionIsWeak,
+  arlingtonProjectInformationUnityTextExtractionIsValid,
+  ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND,
+} = require("./lib/arlington-project-information.js");
 
 function getAccelaDebugDir() {
   const dir = path.join(__dirname, "debug");
@@ -12935,112 +12947,116 @@ async function extractArlingtonSecondaryTabRowsFromPanel(panelHandle, tabKey) {
 const extractArlingtonSecondaryRowsFromPanel =
   extractArlingtonSecondaryTabRowsFromPanel;
 
-/** Tab-nav-only shell: labels without actual PI field copy. */
-function arlingtonProjectInformationPreviewLooksLikeTabShellOnly(preview) {
-  const t = `${preview ?? ""}`.trim().replace(/\s+/g, " ");
-  if (!t) return false;
-  if (/Project\s+ID/i.test(t)) return false;
-  if (
-    /Plans\s*&\s*Documents/i.test(t) &&
-    /Review Results/i.test(t) &&
-    /Project Information/i.test(t) &&
-    t.length < 220
-  ) {
-    return true;
-  }
-  return false;
-}
-
 /**
- * Rank Project Information iframe candidates; prefer UnityForm readOnly over tab shell.
- * @param {Record<string, unknown> | null | undefined} diag
- * @param {string} [permitHint]
- * @returns {{ score: number; reason: string }}
+ * Collect frame diagnostics for Project Information candidate ranking.
+ * Runs inside Playwright frame.evaluate.
  */
-function scoreArlingtonProjectInformationFrameCandidate(diag, permitHint) {
-  if (!diag || typeof diag !== "object") {
-    return { score: -9999, reason: "no-diag" };
-  }
+function arlingtonProjectInformationFrameEvaluateScript() {
+  const norm = (s) =>
+    `${s ?? ""}`
+      .trim()
+      .replace(/\s+/g, " ");
+  const text = norm(
+    document.body?.innerText || document.body?.textContent || "",
+  );
+  const url = location.href;
 
-  let score = 0;
-  /** @type {string[]} */
-  const reasons = [];
-  const url = `${diag.url || ""}`;
-  const preview = `${diag.preview || ""}`;
-  const bodyLen = Number(diag.bodyLen) || 0;
-  const inputCount = Number(diag.inputCount) || 0;
-  const filledInputCount = Number(diag.filledInputCount) || 0;
-  const likelyThinShell = diag.likelyThinShell === true;
-  const hasProjectLabels = diag.hasProjectLabels === true;
-  const hasProjectValues = diag.hasProjectValues === true;
-  const permit = `${permitHint || ""}`.trim();
-
-  if (likelyThinShell) {
-    score -= 1000;
-    reasons.push("likelyThinShell");
-  }
-
-  if (
-    /\/GetUnityForm\//i.test(url) &&
-    /readOnly=true/i.test(url) &&
-    !likelyThinShell
-  ) {
-    score += 500;
-    reasons.push("unityFormReadOnly");
-  }
-
-  if (
-    /\/Plan\/ProjectInformation(?:\?|$|#)/i.test(url) &&
-    !/\/GetUnityForm\//i.test(url)
-  ) {
-    if (
-      bodyLen < 200 ||
-      arlingtonProjectInformationPreviewLooksLikeTabShellOnly(preview)
+  /** @returns {{ id: string; name: string; value: string; parentText: string }}[] */
+  const inputs = [
+    ...document.querySelectorAll("input, textarea, select"),
+  ].map((c) => {
+    let v = "";
+    if (c instanceof HTMLSelectElement) {
+      const opt = c.selectedOptions?.[0];
+      v = norm(
+        `${opt?.textContent || opt?.value || c.value || ""}`,
+      );
+    } else if (
+      c instanceof HTMLInputElement ||
+      c instanceof HTMLTextAreaElement
     ) {
-      score -= 800;
-      reasons.push("projectInformationShell");
+      v = norm(
+        `${c.value || c.defaultValue || c.getAttribute("value") || ""}`,
+      );
+    }
+    if (!v.trim()) v = norm(`${c.getAttribute("value") || ""}`);
+    return {
+      id: c.id || "",
+      name: c.name || "",
+      value: v.slice(0, 300),
+      parentText: norm(
+        c.closest("tr,.row,.form-group,div,li")?.innerText || "",
+      ),
+    };
+  });
+
+  const haystack = `${text} ${JSON.stringify(inputs)}`;
+  const hasProjectLabels =
+    /Project ID|Plan Review Project Name|Accela CAP ID|Review Type|CPHD Case|Address/i.test(
+      haystack,
+    );
+  const filledInputs = inputs.filter((i) => `${i.value || ""}`.trim().length > 0);
+  const filledInputCount = filledInputs.length;
+  const hasProjectValues = filledInputCount >= 3;
+  const isOuterShellUrl =
+    /\/Plan\/ProjectInformation(?:\?|$|#)/i.test(url) &&
+    !/\/GetUnityForm\//i.test(url);
+
+  let extractedProjectId = "";
+  const pidMatch = text.match(
+    /Project\s+ID\s+([A-Z]{2,8}\d{2}-\d{4,6}(?:-(?:RA|REN|RB)\d+)?)/i,
+  );
+  if (pidMatch) extractedProjectId = norm(pidMatch[1]);
+
+  let nonEmptyExpectedFieldCount = 0;
+  for (const label of [
+    "Project ID",
+    "Accela CAP ID",
+    "Review Type",
+    "Plan Review Project Name",
+    "Address",
+  ]) {
+    const row = inputs.find((i) =>
+      new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(
+        `${i.parentText} ${i.id} ${i.name}`,
+      ),
+    );
+    if (row && `${row.value || ""}`.trim()) nonEmptyExpectedFieldCount += 1;
+    else if (label === "Project ID" && extractedProjectId) {
+      nonEmptyExpectedFieldCount += 1;
     }
   }
 
-  if (permit && preview.includes(permit)) {
-    score += 200;
-    reasons.push("permitMatch");
+  let likelyThinShell = false;
+  if (isOuterShellUrl && (text.length < 200 || filledInputCount < 1)) {
+    likelyThinShell = true;
+  } else if (isOuterShellUrl && hasProjectLabels && filledInputCount < 1) {
+    likelyThinShell = true;
+  } else if (
+    inputs.length <= 24 &&
+    filledInputCount < 1 &&
+    isOuterShellUrl
+  ) {
+    likelyThinShell = true;
   }
 
-  if (/\b[A-Z0-9]{2,5}-\d{5}-\d{4}[A-Z0-9]{1,4}\b/i.test(preview)) {
-    score += 150;
-    reasons.push("capIdInPreview");
-  }
-
-  if (hasProjectValues) {
-    score += 100;
-    reasons.push("hasProjectValues");
-  }
-
-  if (hasProjectLabels && /Project\s+ID/i.test(preview)) {
-    score += 80;
-    reasons.push("projectIdLabelInPreview");
-  }
-
-  if (filledInputCount > 0) {
-    score += filledInputCount * 15;
-    reasons.push(`filledInputs=${filledInputCount}`);
-  }
-
-  if (inputCount >= 4 && inputCount <= 24) {
-    score += 40;
-    reasons.push("expectedInputCount");
-  }
-
-  if (bodyLen >= 200) {
-    score += 30;
-    reasons.push("substantialBody");
-  } else if (bodyLen < 120) {
-    score -= 100;
-    reasons.push("shortBody");
-  }
-
-  return { score, reason: reasons.join(",") || "baseline" };
+  return {
+    url,
+    bodyLen: text.length,
+    preview: text.slice(0, 500),
+    inputCount: inputs.length,
+    filledInputCount,
+    hasProjectLabels,
+    hasProjectValues,
+    likelyThinShell,
+    nonEmptyExpectedFieldCount,
+    extractedProjectId,
+    isOuterShellUrl,
+    isUnityFormUrl:
+      /\/GetUnityForm\//i.test(url) && /readOnly=true/i.test(url),
+    hasUnityFormPath: /\/GetUnityForm\//i.test(url),
+    readOnlyQuery: /readOnly=true/i.test(url),
+  };
 }
 
 /**
@@ -13072,232 +13088,129 @@ async function findArlingtonProjectInformationDataFrame(prFrame, permitNumber) {
     );
   }
 
-  const fallback =
-    candidates[0] ||
-    /** @type {import("playwright").Frame | null | undefined} */ (prFrame);
-
-  /** @type {{ frame: import("playwright").Frame, diag: Record<string, unknown> | null }[]} */
+  /** @type {{ frame: import("playwright").Frame, diag: Record<string, unknown> | null; score: number; reason: string; frameName: string }[]} */
   const framed = [];
 
   for (const frame of candidates) {
+    let frameName = "";
+    try {
+      frameName = `${frame.name?.() || ""}`;
+    } catch (_) {
+      frameName = "";
+    }
+
     /** @type {Record<string, unknown> | null} */
     const diag = await frame
-      .evaluate(() => {
-        const norm = (s) =>
-          `${s ?? ""}`
-            .trim()
-            .replace(/\s+/g, " ");
-        const text = norm(
-          document.body?.innerText || document.body?.textContent || "",
-        );
-
-        /** @returns {{ id: string, name: string, value: string, parentText: string }}[] */
-        const inputs = [
-          ...document.querySelectorAll("input, textarea, select"),
-        ].map((c) => {
-          let v = "";
-          if (c instanceof HTMLSelectElement) v = `${c.value || ""}`;
-          else if (
-            c instanceof HTMLInputElement ||
-            c instanceof HTMLTextAreaElement
-          ) {
-            v = `${c.value || ""}`;
-          }
-          if (!v.trim()) v = `${c.getAttribute("value") || ""}`;
-          return {
-            id: c.id || "",
-            name: c.name || "",
-            value: norm(v).slice(0, 300),
-            parentText: norm(
-              c.closest("tr,.row,.form-group,div,li")?.innerText || "",
-            ),
-          };
-        });
-
-        const haystack = `${text} ${JSON.stringify(inputs)}`;
-
-        const hasProjectLabels =
-          /Project ID|Plan Review Project Name|Accela CAP ID|Review Type|CPHD Case|Address/i.test(
-            haystack,
-          );
-        const hasProjectValues =
-          inputs.filter((i) => `${i.value || ""}`.trim().length > 0).length >=
-          3;
-        /**
-         * Outer ProjectInformation shell: few controls and no "Project ID" copy;
-         * must not win on sparse values alone over a nested data frame.
-         */
-        const likelyThinShell =
-          inputs.length <= 24 && !/Project\s+ID/i.test(text);
-
-        return {
-          url: location.href,
-          bodyLen: text.length,
-          preview: text.slice(0, 500),
-          inputCount: inputs.length,
-          filledInputCount: inputs.filter((i) => `${i.value || ""}`.trim()).length,
-          hasProjectLabels,
-          hasProjectValues,
-          likelyThinShell,
-        };
-      })
+      .evaluate(arlingtonProjectInformationFrameEvaluateScript)
       .catch(() => null);
 
-    console.log(
-      `[Arlington][PlanReview] ProjectInfo frame candidate ${JSON.stringify(diag)}`,
+    const { score, reason } = scoreArlingtonProjectInformationFrameCandidate(
+      diag,
+      permitNumber,
     );
 
-    framed.push({ frame, diag });
+    const structured = {
+      frameName,
+      url: `${diag?.url || ""}`,
+      bodyLen: Number(diag?.bodyLen) || 0,
+      filledInputCount: Number(diag?.filledInputCount) || 0,
+      hasUnityForm: diag?.hasUnityFormPath === true,
+      readOnly: diag?.readOnlyQuery === true,
+      likelyThinShell: diag?.likelyThinShell === true,
+      extractedProjectId: `${diag?.extractedProjectId || ""}`,
+      score,
+      reason,
+    };
+    console.log(
+      `[Arlington][PlanReview] ProjectInfo frame candidate ${JSON.stringify(structured)}`,
+    );
+
+    framed.push({ frame, diag, score, reason, frameName });
   }
 
   const permitHint = `${permitNumber || ""}`.trim();
   const ranked = framed
-    .map((entry) => {
-      const { score, reason } = scoreArlingtonProjectInformationFrameCandidate(
-        entry.diag,
-        permitHint,
-      );
-      return { ...entry, score, reason };
-    })
+    .slice()
     .sort((a, b) => b.score - a.score);
 
-  const best = ranked[0];
-  if (best && best.score > -500) {
-    const bestUrl = `${best.diag?.url || ""}`;
+  for (const entry of ranked) {
     console.log(
-      `[Arlington][ProjectInfo] selected candidate score=${best.score} url=${bestUrl} reason=${best.reason}`,
+      `[Arlington][ProjectInfo] ranked candidate score=${entry.score} url=${entry.diag?.url || ""} reason=${entry.reason}`,
     );
-    return best.frame;
   }
 
-  const valuePick = ranked.find(
-    (x) =>
-      x.diag?.hasProjectValues === true && x.diag?.likelyThinShell !== true,
-  );
-  if (valuePick) {
+  const pick = selectArlingtonProjectInformationFrameFromRanked(ranked);
+  if (pick && ranked[pick.index]) {
+    const chosen = ranked[pick.index];
     console.log(
-      `[Arlington][ProjectInfo] selected candidate score=${valuePick.score} url=${valuePick.diag?.url || ""} reason=fallbackHasProjectValues,${valuePick.reason}`,
+      `[Arlington][ProjectInfo] selected candidate score=${chosen.score} url=${chosen.diag?.url || ""} reason=${pick.reason}`,
     );
-    return valuePick.frame;
+    return chosen.frame;
   }
 
   console.log(
-    `[Arlington][ProjectInfo] selected candidate score=0 url=${framed[0]?.diag?.url || ""} reason=fallbackFirstCandidate`,
+    `[Arlington][ProjectInfo] no populated Project Information data frame found (${ranked.length} candidates)`,
   );
-  return fallback;
+  return null;
 }
 
-/** Detect Project Group / address dropdown option strings (not PI form values). */
-function arlingtonProjectInformationValueLooksLikeAddressDropdownList(value) {
-  const v = `${value ?? ""}`.trim().replace(/\s+/g, " ");
-  if (!v) return false;
-  if (/^<none>/i.test(v)) return true;
-  if (
-    /\b40 N GLEBE RD\b/i.test(v) &&
-    (/\b4500 31ST ST S\b/i.test(v) || /\b4505 31ST ST S\b/i.test(v))
-  ) {
-    return true;
-  }
-  if (
-    /\b4500 31ST ST S\b/i.test(v) &&
-    /\b4505 31ST ST S\b/i.test(v) &&
-    /\b4834 LANGSTON BLVD\b/i.test(v)
-  ) {
-    return true;
-  }
-  const streets =
-    v.match(/\b\d{3,5}\s+[A-Z0-9 .]+(?:ST|AVE|BLVD|RD|DR|LN|WAY|CT|PL)\b/gi) ||
-    [];
-  return streets.length >= 2 && v.length > 40;
-}
+/**
+ * Poll descendant frames until a populated Unity Project Information form appears.
+ * @param {import("playwright").Page} page
+ * @param {import("playwright").Page | import("playwright").Frame} ermsRoot
+ * @param {string} [permitNumber]
+ * @param {number} [timeoutMs]
+ */
+async function waitForArlingtonProjectInformationUnityFormFrame(
+  page,
+  ermsRoot,
+  permitNumber,
+  timeoutMs = 20000,
+) {
+  const logP = "[Arlington][PlanReview][ProjectInfo]";
+  const deadline = Date.now() + timeoutMs;
+  let root = ermsRoot;
+  let lastRankedCount = 0;
 
-/** @param {{ label: string; value: string }[]} fields @param {string} [permitNumber] */
-function arlingtonProjectInformationExtractionIsWeak(fields, permitNumber) {
-  if (!Array.isArray(fields) || fields.length === 0) return true;
-  const get = (label) => {
-    const f = fields.find((x) => `${x.label || ""}`.trim() === label);
-    return `${f?.value ?? ""}`.trim();
-  };
-  for (const label of [
-    "Project ID",
-    "Plan Review Project Name",
-    "Accela CAP ID",
-    "Address",
-    "Review Type",
-  ]) {
-    if (arlingtonProjectInformationFieldValueIsRejected(label, get(label))) {
-      return true;
+  while (Date.now() < deadline) {
+    const dataFrame = await findArlingtonProjectInformationDataFrame(
+      root,
+      permitNumber,
+    );
+    if (dataFrame) {
+      const dataUrl = await arlingtonPlanReviewFrameUrlShort(dataFrame);
+      if (
+        /\/GetUnityForm\//i.test(dataUrl) ||
+        (await dataFrame
+          .evaluate(arlingtonProjectInformationFrameEvaluateScript)
+          .then((d) => Number(d?.filledInputCount) > 0)
+          .catch(() => false))
+      ) {
+        console.log(
+          `${logP} nested Unity form ready url=${dataUrl}`,
+        );
+        return { frame: dataFrame, found: true, url: dataUrl };
+      }
     }
+
+    const refreshed = await waitForArlingtonPlanReviewErmsShellReady(
+      page,
+      Math.min(3000, deadline - Date.now()),
+    );
+    if (refreshed) root = refreshed;
+    lastRankedCount += 1;
+    await page.waitForTimeout(250).catch(() => {});
   }
 
-  const permit = `${permitNumber || ""}`.trim();
-  const pid = get("Project ID");
-  if (permit) {
-    if (!pid || pid.toUpperCase() !== permit.toUpperCase()) return true;
-  } else if (pid === "0" || !pid) {
-    return true;
-  }
-
-  let strongFields = 0;
-  const cap = get("Accela CAP ID");
-  const name = get("Plan Review Project Name");
-  const addr = get("Address");
-  const reviewType = get("Review Type");
-
-  if (pid && permit && pid.toUpperCase() === permit.toUpperCase()) strongFields++;
-  else if (pid && /^[A-Z]{2,6}\d{2}-\d+/i.test(pid)) strongFields++;
-  if (cap && /\dREC-\d+-\w+/i.test(cap)) strongFields++;
-  if (name && /LANGSTON/i.test(name) && name.length >= 8) strongFields++;
-  if (addr && /LANGSTON/i.test(addr) && addr.length >= 8) strongFields++;
-  if (reviewType && /^\d{1,6}$/.test(reviewType)) strongFields++;
-
-  return strongFields < 2;
-}
-
-/** @param {string} label @param {string} value */
-function arlingtonProjectInformationFieldValueIsRejected(label, value) {
-  const v = `${value ?? ""}`.trim();
-  if (!v) return false;
-  const low = v.toLowerCase();
-  if (/^<none>/i.test(v)) return true;
-  if (arlingtonProjectInformationValueLooksLikeAddressDropdownList(v)) return true;
-  if (label === "Project ID" && (v === "0" || !/[A-Za-z0-9-]/.test(v))) {
-    return true;
-  }
-  if (
-    (label === "Review Type" || label === "Accela CAP ID") &&
-    /\b40 n glebe rd\b/i.test(low)
-  ) {
-    return true;
-  }
-  if (
-    (label === "Review Type" || label === "Accela CAP ID") &&
-    /\b4500 31st st\b/i.test(low)
-  ) {
-    return true;
-  }
-  if (
-    label === "Review Type" &&
-    !/^\d{1,6}$/.test(v) &&
-    /\b(st|ave|blvd|rd|dr)\b/i.test(v)
-  ) {
-    return true;
-  }
-  if (
-    label === "Accela CAP ID" &&
-    v &&
-    !/\dREC-\d+-\w+/i.test(v) &&
-    v.length < 10
-  ) {
-    return true;
-  }
-  if (
-    (label === "Plan Review Project Name" || label === "Address") &&
-    /^<none>\s+\d/i.test(v)
-  ) {
-    return true;
-  }
-  return false;
+  console.warn(
+    `${logP} nested Unity form not found within ${timeoutMs}ms (polls=${lastRankedCount})`,
+  );
+  return {
+    frame: null,
+    found: false,
+    url: "",
+    diagnosticReason: ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND,
+  };
 }
 
 /** Escape label text for use in RegExp. */
@@ -13383,45 +13296,6 @@ function extractArlingtonProjectInfoFromUnityText(text, requestedPermit) {
   };
 }
 
-/**
- * @param {ReturnType<typeof extractArlingtonProjectInfoFromUnityText>} parsed
- * @param {string} [requestedPermit]
- */
-function arlingtonProjectInformationUnityTextExtractionIsValid(
-  parsed,
-  requestedPermit,
-) {
-  if (!parsed || typeof parsed !== "object") return false;
-  const permit = `${requestedPermit || ""}`.trim();
-  const pid = `${parsed.projectId || ""}`.trim();
-  if (pid === "0") return false;
-  if (permit) {
-    if (!pid || pid.toUpperCase() !== permit.toUpperCase()) return false;
-  } else if (!pid) {
-    return false;
-  }
-
-  for (const v of [
-    parsed.projectId,
-    parsed.accelaCapId,
-    parsed.reviewType,
-    parsed.planReviewProjectName,
-    parsed.address,
-    parsed.cphdCase,
-  ]) {
-    const s = `${v ?? ""}`.trim();
-    if (!s) continue;
-    if (/^<none>/i.test(s)) return false;
-    if (arlingtonProjectInformationValueLooksLikeAddressDropdownList(s)) {
-      return false;
-    }
-  }
-
-  const cap = `${parsed.accelaCapId || ""}`.trim();
-  const addr = `${parsed.address || ""}`.trim();
-  const name = `${parsed.planReviewProjectName || ""}`.trim();
-  return !!(cap || addr || name);
-}
 
 /** @param {ReturnType<typeof extractArlingtonProjectInfoFromUnityText>} parsed */
 function arlingtonProjectInfoUnityTextToFields(parsed) {
@@ -13581,14 +13455,16 @@ function arlingtonPriorProjectInformationFields(priorPortalData) {
  */
 async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNumber) {
   if (!frame || typeof frame.evaluate !== "function") {
-    return [];
+    return { fields: [], panelFound: false };
   }
 
   const permitHint = `${permitNumber || ""}`.trim();
 
   try {
+    const permitBaseArg = normalizeArlingtonBaseProjectId(permitHint);
     /** @type {unknown} */
-    const raw = await frame.evaluate((permitArg) => {
+    const raw = await frame.evaluate(
+      ({ permitArg, permitBase }) => {
       const wanted = [
         "Project ID",
         "Plan Review Project Name",
@@ -13613,9 +13489,23 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         return wantedKeys.has(k) ? wantedKeys.get(k) : null;
       };
 
-      const isUnrelatedSelect = (el) => {
+      const REV_SUFFIX = /-(?:RA|REN|RB)\d+$/i;
+      const normalizeBase = (s) => `${s || ""}`.trim().replace(REV_SUFFIX, "");
+      const projectIdMatchesPermit = (pid) => {
+        const p = norm(pid);
+        const permit = `${permitArg || ""}`.trim();
+        if (!p) return false;
+        if (!permit) return p !== "0";
+        if (p.toUpperCase() === permit.toUpperCase()) return true;
+        return (
+          normalizeBase(p).toUpperCase() === normalizeBase(permit).toUpperCase()
+        );
+      };
+
+      const isProjectGroupSelect = (el) => {
         if (!(el instanceof HTMLSelectElement)) return false;
-        return true;
+        const idName = `${el.id || ""} ${el.name || ""}`.toLowerCase();
+        return idName.includes("projectgroup");
       };
 
       const looksLikeAddressDropdownList = (value) => {
@@ -13665,7 +13555,7 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         }
         if (
           label === "Accela CAP ID" &&
-          !/\dREC-\d+-\w+/i.test(v) &&
+          !/\d{2}REC-\d+-\w+/i.test(v) &&
           v.length < 10
         ) {
           return true;
@@ -13676,13 +13566,8 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         ) {
           return true;
         }
-        const permit = `${permitArg || ""}`.trim();
-        if (
-          label === "Project ID" &&
-          permit &&
-          v.toUpperCase() !== permit.toUpperCase()
-        ) {
-          return true;
+        if (label === "Project ID" && `${permitArg || ""}`.trim()) {
+          return !projectIdMatchesPermit(v);
         }
         return false;
       };
@@ -13738,7 +13623,19 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         return best;
       }
 
-      const panel = resolveProjectInformationPanel();
+      let panel = resolveProjectInformationPanel();
+      if (!panel) {
+        const body = document.body;
+        const bodyText = norm(body?.innerText || body?.textContent || "");
+        if (
+          body &&
+          /Project Information/i.test(bodyText) &&
+          /\bProject ID\b/i.test(bodyText) &&
+          /\bAccela CAP ID\b/i.test(bodyText)
+        ) {
+          panel = body;
+        }
+      }
       if (!panel) {
         return {
           panelFound: false,
@@ -13756,7 +13653,13 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
       /** @type {(el?: Element | null, sourceHint?: string) => string} */
       const readControlValue = (el, sourceHint) => {
         if (!el || !(el instanceof Element)) return "";
-        if (el instanceof HTMLSelectElement) return "";
+        if (el instanceof HTMLSelectElement) {
+          if (isProjectGroupSelect(el)) return "";
+          const opt = el.selectedOptions?.[0];
+          return norm(
+            `${opt?.textContent || opt?.value || el.value || ""}`,
+          );
+        }
         const tag = `${el.tagName || ""}`.toUpperCase();
         if (tag === "INPUT" || tag === "TEXTAREA") {
           const inp = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (el);
@@ -13768,7 +13671,7 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
       };
 
       const controlSelector =
-        'input:not([type="button"]):not([type="submit"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]), textarea';
+        'input:not([type="button"]):not([type="submit"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]), textarea, select';
 
       /** @type {(labelEl: Element) => { value: string; source: string }} */
       function findValueNearLabel(labelEl) {
@@ -13808,8 +13711,12 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
           if (!container) continue;
           const controls = [
             ...container.querySelectorAll(controlSelector),
-          ].filter((c) => !(c instanceof HTMLSelectElement));
+          ].filter(
+            (c) =>
+              !(c instanceof HTMLSelectElement && isProjectGroupSelect(c)),
+          );
           const preferred = controls.filter((c) => {
+            if (c instanceof HTMLSelectElement) return true;
             if (
               c instanceof HTMLInputElement ||
               c instanceof HTMLTextAreaElement
@@ -13921,7 +13828,9 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
           const canonical = isWantedLabel(labelText);
           if (!canonical || mapped.has(canonical)) continue;
           for (const c of cells[i + 1].querySelectorAll(controlSelector)) {
-            if (c instanceof HTMLSelectElement) continue;
+            if (c instanceof HTMLSelectElement && isProjectGroupSelect(c)) {
+              continue;
+            }
             const idPart = `${c.id || c.getAttribute("name") || "table_cell"}`.trim();
             const v = readControlValue(c, idPart);
             if (v && !isRejectedValue(canonical, v)) {
@@ -13953,7 +13862,9 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         rejected,
         fields,
       };
-    }, permitHint);
+    },
+      { permitArg: permitHint, permitBase: permitBaseArg },
+    );
 
     const payload =
       raw && typeof raw === "object"
@@ -14027,7 +13938,12 @@ async function extractArlingtonProjectInformationFieldsFromFrame(frame, permitNu
         `[Arlington][ProjectInfo] field ${`${f.label}`.trim()}=${`${f.value != null ? f.value : ""}`.trim()} source=${src}`,
       );
     }
-    return { fields, panelFound: payload.panelFound === true };
+    return {
+      fields,
+      panelFound:
+        payload.panelFound === true &&
+        fields.some((f) => `${f?.value ?? ""}`.trim().length > 0),
+    };
   } catch (_) {
     return { fields: [], panelFound: false };
   }
@@ -19344,20 +19260,47 @@ async function arlingtonExtractArlingtonProjectInformationFields(
   const { root, markers } =
     await arlingtonPrepareArlingtonProjectInformationErmsFrame(page, ermsRoot);
 
-  let dataFrame = await findArlingtonProjectInformationDataFrame(
+  const unityWait = await waitForArlingtonProjectInformationUnityFormFrame(
+    page,
     root,
     permitHint,
+    20000,
   );
+
+  let dataFrame = unityWait.frame;
+  if (!dataFrame) {
+    dataFrame = await findArlingtonProjectInformationDataFrame(root, permitHint);
+  }
+
   let dataUrl = dataFrame
     ? await arlingtonPlanReviewFrameUrlShort(dataFrame)
     : "(none)";
   console.log(
-    `${logP} dataFrameFound=${!!dataFrame} url=${dataUrl}`,
+    `${logP} dataFrameFound=${!!dataFrame} url=${dataUrl} unityWait=${unityWait.found}`,
   );
 
+  /** @type {string | null} */
+  let diagnosticReason = unityWait.found
+    ? null
+    : unityWait.diagnosticReason || null;
+
+  if (!dataFrame) {
+    console.warn(
+      `${logP} ${diagnosticReason || ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND}`,
+    );
+    return {
+      fields: [],
+      panelFound: false,
+      unityFrameFound: false,
+      diagnosticReason:
+        diagnosticReason || ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND,
+      selectedFrameUrl: dataUrl,
+    };
+  }
+
   /** @type {import("playwright").Page | import("playwright").Frame} */
-  let extractTarget = dataFrame || root;
-  await page.waitForTimeout(800).catch(() => {});
+  let extractTarget = dataFrame;
+  await page.waitForTimeout(300).catch(() => {});
 
   let piFields = [];
   let panelFound = false;
@@ -19377,7 +19320,17 @@ async function arlingtonExtractArlingtonProjectInformationFields(
 
   if (arlingtonProjectInformationExtractionIsWeak(piFields, permitHint)) {
     for (let attempt = 0; attempt < 4; attempt++) {
-      await page.waitForTimeout(750).catch(() => {});
+      const retryUnity = await waitForArlingtonProjectInformationUnityFormFrame(
+        page,
+        root,
+        permitHint,
+        4000,
+      );
+      if (retryUnity.frame) {
+        extractTarget = retryUnity.frame;
+        dataFrame = retryUnity.frame;
+        dataUrl = retryUnity.url || dataUrl;
+      }
       const retryResult = await extractArlingtonProjectInformationFieldsFromFrame(
         extractTarget,
         permitHint,
@@ -19392,7 +19345,7 @@ async function arlingtonExtractArlingtonProjectInformationFields(
   }
 
   if (
-    piFields.length === 0 &&
+    arlingtonProjectInformationExtractionIsWeak(piFields, permitHint) &&
     (markers.projectId || markers.projectName || markers.accelCap)
   ) {
     /** @type {import("playwright").Frame[]} */
@@ -19410,20 +19363,36 @@ async function arlingtonExtractArlingtonProjectInformationFields(
         permitHint,
       );
       const attempt = applyExtract(attemptResult);
-      if (attempt.length > piFields.length) {
+      if (
+        !arlingtonProjectInformationExtractionIsWeak(attempt, permitHint) ||
+        attempt.length > piFields.length
+      ) {
         piFields = attempt;
         dataFrame = fr;
         dataUrl = await arlingtonPlanReviewFrameUrlShort(fr);
       }
-      if (piFields.length >= 4) break;
+      if (!arlingtonProjectInformationExtractionIsWeak(piFields, permitHint)) {
+        break;
+      }
     }
     console.log(
       `${logP} dataFrameFound=${!!dataFrame} url=${dataUrl} (frame sweep)`,
     );
   }
 
+  const weak = arlingtonProjectInformationExtractionIsWeak(piFields, permitHint);
+  if (weak && !diagnosticReason) {
+    diagnosticReason = ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND;
+  }
+
   console.log(`${logP} fields=${piFields.length}`);
-  return { fields: piFields, panelFound };
+  return {
+    fields: piFields,
+    panelFound,
+    unityFrameFound: unityWait.found || /\/GetUnityForm\//i.test(dataUrl),
+    diagnosticReason: weak ? diagnosticReason : null,
+    selectedFrameUrl: dataUrl,
+  };
 }
 
 /**
@@ -19436,12 +19405,18 @@ function arlingtonMergeProjectInformationFieldsDest(
   piFields,
   priorPortalData,
   permitNumber,
+  extractMeta,
 ) {
   if (!Array.isArray(piFields)) return;
   const destFields = integratedTabs?.projectInformation?.fields;
   if (!Array.isArray(destFields)) return;
 
   const priorFields = arlingtonPriorProjectInformationFields(priorPortalData);
+  const diagnosticReason =
+    extractMeta && typeof extractMeta === "object"
+      ? `${extractMeta.diagnosticReason || ""}`.trim()
+      : "";
+
   if (arlingtonProjectInformationExtractionIsWeak(piFields, permitNumber)) {
     console.log(
       "[Arlington][ProjectInfo] weak extraction rejected; preserving prior projectInformation",
@@ -19465,7 +19440,26 @@ function arlingtonMergeProjectInformationFieldsDest(
     } else {
       destFields.length = 0;
       if (integratedTabs.projectInformation) {
-        integratedTabs.projectInformation.extractionStatus = "weak_failed";
+        const reason =
+          diagnosticReason || ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND;
+        integratedTabs.projectInformation.extractionStatus =
+          reason === ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND
+            ? "unity_frame_not_found"
+            : "weak_failed";
+        integratedTabs.projectInformation.diagnostics = {
+          rejectionReason: reason,
+          selectedFrameUrl:
+            extractMeta && typeof extractMeta === "object"
+              ? `${extractMeta.selectedFrameUrl || ""}`.trim() || null
+              : null,
+          unityFrameFound:
+            extractMeta && typeof extractMeta === "object"
+              ? extractMeta.unityFrameFound === true
+              : false,
+        };
+        console.warn(
+          `[Arlington][ProjectInfo] ${reason} selectedFrameUrl=${integratedTabs.projectInformation.diagnostics.selectedFrameUrl || "(none)"}`,
+        );
       }
     }
     return;
@@ -20399,8 +20393,8 @@ async function arlingtonSecondaryTabOptionalDomMerge(
       );
       if (
         planReviewStateRef &&
-        piResult.panelFound === true &&
-        !piWeak
+        !piWeak &&
+        piResult.fields.some((f) => `${f?.value ?? ""}`.trim().length > 0)
       ) {
         planReviewStateRef.projectInformationPanelResolved = true;
       }
@@ -20409,6 +20403,11 @@ async function arlingtonSecondaryTabOptionalDomMerge(
         piResult.fields,
         priorPortalData,
         permitNumber,
+        {
+          diagnosticReason: piResult.diagnosticReason,
+          unityFrameFound: piResult.unityFrameFound,
+          selectedFrameUrl: piResult.selectedFrameUrl,
+        },
       );
     }
 
