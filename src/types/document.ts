@@ -57,10 +57,19 @@ export type AiIngestionStatus =
 
 export type ProjectDocumentUploadStep = 'auth' | 'validation' | 'storage' | 'database';
 
+export type ProjectDocumentUploadSubstep =
+  | 'file_read'
+  | 'storage_upload'
+  | 'database_insert'
+  | 'activity_log';
+
 export interface ProjectDocumentUploadResult {
   document: ProjectDocument | null;
   error?: string;
   step?: ProjectDocumentUploadStep;
+  substep?: ProjectDocumentUploadSubstep;
+  /** Last sub-step active when the upload aborted or timed out. */
+  hungSubstep?: ProjectDocumentUploadSubstep;
 }
 
 export const AI_INGESTION_STATUS_LABELS: Record<AiIngestionStatus, string> = {
@@ -270,11 +279,11 @@ export function buildProjectDocumentStoragePath(
   userId: string,
   projectId: string,
   originalFileName: string,
-  timestamp: number = Date.now(),
-): { filePath: string; storageFileName: string } {
+  objectId: string = crypto.randomUUID(),
+): { filePath: string; storageFileName: string; objectId: string } {
   const storageFileName = sanitizeStorageFileName(originalFileName);
-  const filePath = `${userId}/${projectId}/${timestamp}_${storageFileName}`;
-  return { filePath, storageFileName };
+  const filePath = `${userId}/${projectId}/${objectId}_${storageFileName}`;
+  return { filePath, storageFileName, objectId };
 }
 
 export function formatCommentLetterSaveError(
@@ -284,10 +293,14 @@ export function formatCommentLetterSaveError(
     return 'Failed to save comment letter to project documents';
   }
   if (result.step === 'storage') {
-    return `Failed to save comment letter during storage upload: ${result.error}`;
+    return result.error.startsWith('Failed during storage upload')
+      ? result.error
+      : `Failed during storage upload: ${result.error}`;
   }
   if (result.step === 'database') {
-    return `Failed to save comment letter during database insert: ${result.error}`;
+    return result.error.startsWith('Failed creating document record')
+      ? result.error
+      : `Failed creating document record: ${result.error}`;
   }
   if (result.step === 'validation') {
     return `Failed to save comment letter: ${result.error}`;

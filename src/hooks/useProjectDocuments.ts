@@ -3,12 +3,7 @@ import { supabase } from '@/lib/supabase';
 import {
   ProjectDocument,
   DocumentType,
-  DOCUMENT_TYPE_LABELS,
-  MAX_FILE_SIZE_BYTES,
-  MAX_FILE_SIZE_MB,
   formatProjectDocumentUploadError,
-  buildProjectDocumentStoragePath,
-  resolveProjectDocumentContentType,
   type DocumentIngestionJob,
   type IngestionProgressInfo,
   type ProjectDocumentUploadResult,
@@ -23,6 +18,7 @@ import {
   jobToProgressInfo,
   parseIngestInvokeError,
 } from '@/utils/documentIngestionUi';
+import { executeProjectDocumentUpload } from '@/lib/projectDocumentUpload';
 
 export interface UploadDocumentData {
   file: File;
@@ -31,14 +27,7 @@ export interface UploadDocumentData {
   parent_document_id?: string;
   /** When true, caller handles success/error toasts (e.g. Comment Review parse flow). */
   suppressToasts?: boolean;
-}
-
-function supabaseErrorMessage(err: unknown): string {
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message?: string }).message ?? 'Unknown error');
-  }
-  if (err instanceof Error) return err.message;
-  return String(err ?? 'Unknown error');
+  signal?: AbortSignal;
 }
 
 const TERMINAL_JOB_STATUSES = new Set(['completed', 'failed', 'partial', 'cancelled']);
@@ -298,56 +287,6 @@ export function useProjectDocuments(projectId: string | null) {
     setUploading(true);
 
     try {
-      if (data.file.size > MAX_FILE_SIZE_BYTES) {
-        return {
-          document: null,
-          step: 'validation',
-          error: `"${data.file.name}" exceeds the ${MAX_FILE_SIZE_MB}MB limit`,
-        };
-      }
-
-      const contentType = resolveProjectDocumentContentType(data.file);
-      if (!contentType) {
-        return {
-          document: null,
-          step: 'validation',
-          error: `"${data.file.name}" is not a supported file type for project documents`,
-        };
-      }
-
-      const timestamp = Date.now();
-      const { filePath, storageFileName } = buildProjectDocumentStoragePath(
-        user.id,
-        projectId,
-        data.file.name,
-        timestamp,
-      );
-
-      console.log('[project-documents upload]', {
-        originalFileName: data.file.name,
-        storageFileName,
-        browserFileType: data.file.type || '(empty)',
-        resolvedContentType: contentType,
-        filePath,
-        document_type: data.document_type,
-        projectId,
-      });
-
-      const uploadBody = new Blob([await data.file.arrayBuffer()], { type: contentType });
-
-      const { error: uploadError } = await supabase.storage
-        .from('project-documents')
-        .upload(filePath, uploadBody, { contentType });
-
-      if (uploadError) {
-        console.error('[project-documents upload] storage error:', uploadError);
-        return {
-          document: null,
-          step: 'storage',
-          error: formatProjectDocumentUploadError(uploadError),
-        };
-      }
-
       let version = 1;
       if (data.parent_document_id) {
         const parentDoc = documents.find((d) => d.id === data.parent_document_id);
@@ -361,51 +300,22 @@ export function useProjectDocuments(projectId: string | null) {
         }
       }
 
-      const { data: newDocument, error: insertError } = await supabase
-        .from('project_documents')
-        .insert({
-          project_id: projectId,
-          user_id: user.id,
-          file_name: data.file.name,
-          file_path: filePath,
-          file_size: data.file.size,
-          file_type: contentType,
-          document_type: data.document_type,
-          version,
-          parent_document_id: data.parent_document_id || null,
-          description: data.description || null,
-        })
-        .select()
-        .single();
+      const result = await executeProjectDocumentUpload({
+        userId: user.id,
+        projectId,
+        file: data.file,
+        document_type: data.document_type,
+        description: data.description,
+        parent_document_id: data.parent_document_id,
+        version,
+        signal: data.signal,
+      });
 
-      if (insertError) {
-        console.error('[project-documents upload] database insert error:', insertError);
-        await supabase.storage.from('project-documents').remove([filePath]);
-        return {
-          document: null,
-          step: 'database',
-          error: supabaseErrorMessage(insertError),
-        };
+      if (result.document) {
+        setDocuments((prev) => [result.document as ProjectDocument, ...prev]);
       }
 
-      console.log('[project-documents upload] saved row:', newDocument);
-
-      setDocuments((prev) => [newDocument as ProjectDocument, ...prev]);
-
-      const activityType = data.parent_document_id ? 'document_version_uploaded' : 'document_uploaded';
-      const docTypeLabel = DOCUMENT_TYPE_LABELS[data.document_type];
-      await logProjectActivity(
-        projectId,
-        user.id,
-        activityType,
-        data.parent_document_id
-          ? `New version (v${version}) of "${data.file.name}" uploaded`
-          : `${docTypeLabel} "${data.file.name}" uploaded`,
-        data.description || undefined,
-        { document_type: data.document_type, version, file_size: data.file.size },
-      );
-
-      return { document: newDocument as ProjectDocument };
+      return result;
     } catch (err) {
       console.error('[project-documents upload] unexpected error:', err);
       return {

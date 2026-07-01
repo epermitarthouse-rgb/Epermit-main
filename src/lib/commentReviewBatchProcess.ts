@@ -5,11 +5,17 @@ import {
   type PendingUploadFile,
 } from "@/lib/commentReviewBatchUpload";
 import {
+  getActiveProjectDocumentUploadSubstep,
+  uploadFailureMessage,
+  uploadTimeoutMessage,
+} from "@/lib/projectDocumentUpload";
+import {
   extractDocumentForCommentParse,
   fileToBase64,
   isLegacyDocFile,
 } from "@/utils/extractDocumentText";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
+import type { ProjectDocumentUploadSubstep } from "@/types/document";
 
 export const BATCH_TIMEOUTS = {
   upload: 60_000,
@@ -28,23 +34,36 @@ interface ParserSummary {
 
 export class BatchStageTimeoutError extends Error {
   readonly stage: BatchProcessStage;
+  readonly uploadSubstep?: ProjectDocumentUploadSubstep;
 
-  constructor(stage: BatchProcessStage) {
-    super(`Timed out during ${stageDisplayName(stage)}`);
+  constructor(stage: BatchProcessStage, uploadSubstep?: ProjectDocumentUploadSubstep) {
+    const message =
+      stage === "upload"
+        ? uploadTimeoutMessage(uploadSubstep ?? getActiveProjectDocumentUploadSubstep())
+        : `Timed out during ${stageDisplayName(stage)}`;
+    super(message);
     this.name = "BatchStageTimeoutError";
     this.stage = stage;
+    this.uploadSubstep = uploadSubstep;
   }
 }
 
 export class BatchStageError extends Error {
   readonly stage: BatchProcessStage;
   readonly code: string;
+  readonly uploadSubstep?: ProjectDocumentUploadSubstep;
 
-  constructor(stage: BatchProcessStage, message: string, code: string) {
+  constructor(
+    stage: BatchProcessStage,
+    message: string,
+    code: string,
+    uploadSubstep?: ProjectDocumentUploadSubstep,
+  ) {
     super(message);
     this.name = "BatchStageError";
     this.stage = stage;
     this.code = code;
+    this.uploadSubstep = uploadSubstep;
   }
 }
 
@@ -67,10 +86,16 @@ export function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
   stage: BatchProcessStage,
+  onTimeout?: () => void,
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new BatchStageTimeoutError(stage)), ms);
+    timer = setTimeout(() => {
+      onTimeout?.();
+      const uploadSubstep =
+        stage === "upload" ? getActiveProjectDocumentUploadSubstep() ?? undefined : undefined;
+      reject(new BatchStageTimeoutError(stage, uploadSubstep));
+    }, ms);
   });
   return Promise.race([promise, timeoutPromise]).finally(() => {
     if (timer) clearTimeout(timer);
@@ -110,8 +135,17 @@ export function pendingFileStatusDisplay(item: PendingUploadFile): string {
     return `Complete · ${item.commentCount} comment${item.commentCount !== 1 ? "s" : ""}`;
   }
   if (item.status === "failed") {
+    if (item.timedOut && item.failedStage === "upload") {
+      if (item.uploadSubstep === "database_insert" || item.uploadSubstep === "activity_log") {
+        return "Timed out creating document record";
+      }
+      return "Timed out during storage upload";
+    }
     if (item.timedOut && item.failedStage) {
       return `Timed out during ${stageDisplayName(item.failedStage)}`;
+    }
+    if (item.failedStage === "upload" && item.error) {
+      return item.error;
     }
     if (item.failedStage) {
       const prefix = `Failed during ${stageDisplayName(item.failedStage)}`;
@@ -127,6 +161,7 @@ export function classifyBatchFailure(err: unknown): {
   timedOut: boolean;
   code: string;
   message: string;
+  uploadSubstep?: ProjectDocumentUploadSubstep;
 } {
   if (err instanceof BatchStageTimeoutError) {
     return {
@@ -134,6 +169,7 @@ export function classifyBatchFailure(err: unknown): {
       timedOut: true,
       code: "timeout",
       message: err.message,
+      uploadSubstep: err.uploadSubstep,
     };
   }
   if (err instanceof BatchStageError) {
@@ -142,6 +178,7 @@ export function classifyBatchFailure(err: unknown): {
       timedOut: false,
       code: err.code,
       message: err.message,
+      uploadSubstep: err.uploadSubstep,
     };
   }
 
@@ -214,7 +251,10 @@ export interface ProcessOneCommentReviewFileParams {
   fileRow: PendingUploadFile;
   projectId: string;
   onStageUpdate: (id: string, patch: Partial<PendingUploadFile>) => void;
-  persistCommentLetterForFile: (file: File) => Promise<{ docId: string | null; error?: string }>;
+  persistCommentLetterForFile: (
+    file: File,
+    signal?: AbortSignal,
+  ) => Promise<{ docId: string | null; error?: string; uploadSubstep?: ProjectDocumentUploadSubstep }>;
   invokeCommentParser: (
     invokeBody: Record<string, unknown>,
   ) => Promise<{
@@ -279,19 +319,23 @@ export async function processOneCommentReviewFile(
         error: undefined,
         failedStage: undefined,
         timedOut: false,
+        uploadSubstep: undefined,
       });
 
+      const uploadAbort = new AbortController();
       const uploadResult = await withTimeout(
-        persistCommentLetterForFile(fileRow.file),
+        persistCommentLetterForFile(fileRow.file, uploadAbort.signal),
         BATCH_TIMEOUTS.upload,
         "upload",
+        () => uploadAbort.abort(),
       );
 
       if (!uploadResult.docId) {
         throw new BatchStageError(
           "upload",
-          uploadResult.error ?? "Failed to save comment letter to project documents",
+          uploadResult.error ?? uploadFailureMessage({ document: null, error: "Upload failed" }),
           "upload_rejected",
+          uploadResult.uploadSubstep,
         );
       }
 
@@ -424,6 +468,7 @@ export async function processOneCommentReviewFile(
       failedStage: failure.stage,
       timedOut: failure.timedOut,
       error: failure.message,
+      uploadSubstep: failure.uploadSubstep,
     });
     return { success: false, commentCount: 0 };
   }

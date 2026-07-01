@@ -31,7 +31,7 @@ import {
   COMMENT_LETTER_SUPPORTED_FORMATS_HINT,
   isSpreadsheetFile,
 } from "@/utils/extractDocumentText";
-import { formatCommentLetterSaveError, type ProjectDocument } from "@/types/document";
+import { formatCommentLetterSaveError, type ProjectDocument, type ProjectDocumentUploadSubstep } from "@/types/document";
 import {
   isManualCommentLetter,
   type ManualLetterCommentScope,
@@ -1067,7 +1067,14 @@ export default function CommentReview() {
   );
 
   const persistCommentLetterForFile = useCallback(
-    async (file: File): Promise<{ docId: string | null; error?: string }> => {
+    async (
+      file: File,
+      signal?: AbortSignal,
+    ): Promise<{
+      docId: string | null;
+      error?: string;
+      uploadSubstep?: ProjectDocumentUploadSubstep;
+    }> => {
       if (!projectId || !user) {
         return { docId: null, error: "Missing project or user" };
       }
@@ -1077,13 +1084,18 @@ export default function CommentReview() {
         document_type: "correspondence",
         description: "Manual comment letter upload (Comment Review)",
         suppressToasts: true,
+        signal,
       });
 
       if (result.document?.id) {
         return { docId: result.document.id };
       }
 
-      return { docId: null, error: formatCommentLetterSaveError(result) };
+      return {
+        docId: null,
+        error: formatCommentLetterSaveError(result),
+        uploadSubstep: result.hungSubstep ?? result.substep,
+      };
     },
     [projectId, user, uploadDocumentWithResult],
   );

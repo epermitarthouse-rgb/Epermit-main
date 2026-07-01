@@ -3,6 +3,8 @@ import {
   LEGACY_XLS_ERROR_MESSAGE,
 } from "@/utils/extractDocumentText";
 
+import type { ProjectDocumentUploadSubstep } from "@/types/document";
+
 export type BatchFileStatus =
   | "pending"
   | "uploading"
@@ -24,6 +26,7 @@ export interface PendingUploadFile {
   parseMethod?: string;
   failedStage?: BatchFailureStage;
   timedOut?: boolean;
+  uploadSubstep?: ProjectDocumentUploadSubstep;
 }
 
 export function newBatchFileId(): string {
