@@ -18,7 +18,8 @@ import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
 import type { ProjectDocumentUploadSubstep } from "@/types/document";
 
 export const BATCH_TIMEOUTS = {
-  upload: 60_000,
+  upload: 180_000,
+  uploadSoftStatusMs: 60_000,
   conversion: 120_000,
   extraction: 60_000,
   parsing: 120_000,
@@ -153,6 +154,9 @@ export function pendingFileStatusDisplay(item: PendingUploadFile): string {
     }
     return item.error || "Failed";
   }
+  if (item.status === "uploading" && item.uploadLongRunning) {
+    return "Upload still processing…";
+  }
   return batchFileStatusLabel(item.status);
 }
 
@@ -253,8 +257,14 @@ export interface ProcessOneCommentReviewFileParams {
   onStageUpdate: (id: string, patch: Partial<PendingUploadFile>) => void;
   persistCommentLetterForFile: (
     file: File,
-    signal?: AbortSignal,
-  ) => Promise<{ docId: string | null; error?: string; uploadSubstep?: ProjectDocumentUploadSubstep }>;
+    fileRowId: string,
+    jobId: string,
+  ) => Promise<{
+    docId: string | null;
+    error?: string;
+    uploadSubstep?: ProjectDocumentUploadSubstep;
+    reusedExistingDocument?: boolean;
+  }>;
   invokeCommentParser: (
     invokeBody: Record<string, unknown>,
   ) => Promise<{
@@ -320,15 +330,54 @@ export async function processOneCommentReviewFile(
         failedStage: undefined,
         timedOut: false,
         uploadSubstep: undefined,
+        uploadLongRunning: false,
       });
 
-      const uploadAbort = new AbortController();
-      const uploadResult = await withTimeout(
-        persistCommentLetterForFile(fileRow.file, uploadAbort.signal),
-        BATCH_TIMEOUTS.upload,
-        "upload",
-        () => uploadAbort.abort(),
+      const uploadPromise = persistCommentLetterForFile(
+        fileRow.file,
+        fileRow.id,
+        jobId,
       );
+
+      const softStatusTimer = setTimeout(() => {
+        onStageUpdate(fileRow.id, { uploadLongRunning: true });
+        logProcessStage(logKind, jobId, "upload still processing", {
+          fileId: fileRow.id,
+          durationMs: Date.now() - startedAt,
+        });
+      }, BATCH_TIMEOUTS.uploadSoftStatusMs);
+
+      let uploadResult: Awaited<ReturnType<typeof persistCommentLetterForFile>>;
+      try {
+        try {
+          uploadResult = await withTimeout(
+            uploadPromise,
+            BATCH_TIMEOUTS.upload,
+            "upload",
+          );
+        } catch (uploadWaitErr) {
+          if (uploadWaitErr instanceof BatchStageTimeoutError) {
+            logProcessStage(logKind, jobId, "upload threshold reached, awaiting in-flight completion", {
+              fileId: fileRow.id,
+              durationMs: Date.now() - startedAt,
+              uploadSubstep: getActiveProjectDocumentUploadSubstep() ?? undefined,
+            });
+            onStageUpdate(fileRow.id, { uploadLongRunning: true });
+            uploadResult = await uploadPromise;
+            logProcessStage(logKind, jobId, "upload recovered after threshold", {
+              fileId: fileRow.id,
+              documentId: uploadResult.docId ?? undefined,
+              reusedExistingDocument: uploadResult.reusedExistingDocument ? 1 : 0,
+              durationMs: Date.now() - startedAt,
+            });
+          } else {
+            throw uploadWaitErr;
+          }
+        }
+      } finally {
+        clearTimeout(softStatusTimer);
+        onStageUpdate(fileRow.id, { uploadLongRunning: false });
+      }
 
       if (!uploadResult.docId) {
         throw new BatchStageError(

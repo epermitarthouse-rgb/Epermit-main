@@ -51,6 +51,7 @@ interface CommentReviewInputPanelProps {
   originalUploadFile: File | null;
   pendingUploadFiles: PendingUploadFile[];
   onRequestRemovePendingBatchFile: (id: string) => void;
+  isFileUploadInFlight?: (fileRowId: string) => boolean;
   pendingRemovalFileId: string | null;
   fileInputRef: React.RefObject<HTMLInputElement>;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -121,6 +122,7 @@ export function CommentReviewInputPanel({
   originalUploadFile,
   pendingUploadFiles,
   onRequestRemovePendingBatchFile,
+  isFileUploadInFlight,
   pendingRemovalFileId,
   fileInputRef,
   onFileChange,
@@ -351,7 +353,9 @@ export function CommentReviewInputPanel({
                 Selected files ({pendingUploadFiles.length})
               </li>
               {pendingUploadFiles.map((item) => {
-                const rowProcessing = isPendingFileRowProcessing(item, parsing);
+                const rowProcessing =
+                  isPendingFileRowProcessing(item, parsing) ||
+                  (isFileUploadInFlight?.(item.id) ?? false);
                 const rowRemoving = pendingRemovalFileId === item.id;
                 const canRemove = !rowProcessing && !rowRemoving;
 

@@ -28,6 +28,7 @@ export interface UploadDocumentData {
   /** When true, caller handles success/error toasts (e.g. Comment Review parse flow). */
   suppressToasts?: boolean;
   signal?: AbortSignal;
+  uploadJobId?: string;
 }
 
 const TERMINAL_JOB_STATUSES = new Set(['completed', 'failed', 'partial', 'cancelled']);
@@ -309,6 +310,7 @@ export function useProjectDocuments(projectId: string | null) {
         parent_document_id: data.parent_document_id,
         version,
         signal: data.signal,
+        uploadJobId: data.uploadJobId,
       });
 
       if (result.document) {

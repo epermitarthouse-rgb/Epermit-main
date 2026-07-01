@@ -31,7 +31,11 @@ import {
   COMMENT_LETTER_SUPPORTED_FORMATS_HINT,
   isSpreadsheetFile,
 } from "@/utils/extractDocumentText";
-import { formatCommentLetterSaveError, type ProjectDocument, type ProjectDocumentUploadSubstep } from "@/types/document";
+import {
+  runDedupedCommentLetterUpload,
+  isCommentLetterUploadInFlight,
+} from "@/lib/commentReviewUploadInFlight";
+import { formatCommentLetterSaveError, type ProjectDocument } from "@/types/document";
 import {
   isManualCommentLetter,
   type ManualLetterCommentScope,
@@ -862,7 +866,7 @@ export default function CommentReview() {
 
   const removePendingBatchFile = useCallback(
     (fileRowId: string) => {
-      if (batchInFlightRef.current.has(fileRowId)) {
+      if (batchInFlightRef.current.has(fileRowId) || isCommentLetterUploadInFlight(fileRowId)) {
         toast.info("This file is still processing and cannot be removed yet");
         return;
       }
@@ -886,7 +890,7 @@ export default function CommentReview() {
       const item = pendingUploadFiles.find((row) => row.id === fileRowId);
       if (!item) return;
 
-      if (batchInFlightRef.current.has(fileRowId)) {
+      if (batchInFlightRef.current.has(fileRowId) || isCommentLetterUploadInFlight(fileRowId)) {
         toast.info("This file is still processing and cannot be removed yet");
         return;
       }
@@ -1149,33 +1153,27 @@ export default function CommentReview() {
   const persistCommentLetterForFile = useCallback(
     async (
       file: File,
-      signal?: AbortSignal,
-    ): Promise<{
-      docId: string | null;
-      error?: string;
-      uploadSubstep?: ProjectDocumentUploadSubstep;
-    }> => {
+      fileRowId: string,
+      jobId: string,
+    ) => {
       if (!projectId || !user) {
         return { docId: null, error: "Missing project or user" };
       }
 
-      const result = await uploadDocumentWithResult({
+      return runDedupedCommentLetterUpload({
+        fileRowId,
+        jobId,
+        projectId,
         file,
-        document_type: "correspondence",
-        description: "Manual comment letter upload (Comment Review)",
-        suppressToasts: true,
-        signal,
+        upload: () =>
+          uploadDocumentWithResult({
+            file,
+            document_type: "correspondence",
+            description: "Manual comment letter upload (Comment Review)",
+            suppressToasts: true,
+            uploadJobId: jobId,
+          }),
       });
-
-      if (result.document?.id) {
-        return { docId: result.document.id };
-      }
-
-      return {
-        docId: null,
-        error: formatCommentLetterSaveError(result),
-        uploadSubstep: result.hungSubstep ?? result.substep,
-      };
     },
     [projectId, user, uploadDocumentWithResult],
   );
@@ -1190,7 +1188,8 @@ export default function CommentReview() {
     let queue = pendingUploadFiles.filter(
       (item) =>
         (item.status === "pending" || item.status === "failed") &&
-        !batchInFlightRef.current.has(item.id),
+        !batchInFlightRef.current.has(item.id) &&
+        !isCommentLetterUploadInFlight(item.id),
     );
 
     let logKind: "batch" | "saved-letter" = "batch";
@@ -1243,7 +1242,7 @@ export default function CommentReview() {
 
     try {
       for (const item of queue) {
-        if (batchInFlightRef.current.has(item.id)) continue;
+        if (batchInFlightRef.current.has(item.id) || isCommentLetterUploadInFlight(item.id)) continue;
         batchInFlightRef.current.add(item.id);
 
         try {
@@ -2012,6 +2011,7 @@ export default function CommentReview() {
                         originalUploadFile={originalUploadFile}
                         pendingUploadFiles={pendingUploadFiles}
                         onRequestRemovePendingBatchFile={requestRemovePendingBatchFile}
+                        isFileUploadInFlight={isCommentLetterUploadInFlight}
                         pendingRemovalFileId={pendingRemovalFileId}
                         fileInputRef={fileInputRef}
                         onFileChange={handleFileChange}

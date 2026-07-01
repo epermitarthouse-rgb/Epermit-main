@@ -22,6 +22,7 @@ export interface ExecuteProjectDocumentUploadParams {
   parent_document_id?: string;
   version?: number;
   signal?: AbortSignal;
+  uploadJobId?: string;
 }
 
 let activeUploadSubstep: ProjectDocumentUploadSubstep | null = null;
@@ -93,10 +94,19 @@ export async function executeProjectDocumentUpload(
     parent_document_id,
     version = 1,
     signal,
+    uploadJobId,
   } = params;
 
   const startedAt = Date.now();
+  let substepStartedAt = startedAt;
   setActiveSubstep(null);
+
+  const baseLog = {
+    uploadJobId,
+    projectId,
+    originalFileName: file.name,
+    fileSizeBytes: file.size,
+  };
 
   try {
     throwIfAborted(signal);
@@ -125,33 +135,34 @@ export async function executeProjectDocumentUpload(
     );
 
     logUploadStage("prepared", {
-      originalFileName: file.name,
+      ...baseLog,
       storageFileName,
       objectId,
       browserFileType: file.type || "(empty)",
       resolvedContentType: contentType,
       filePath,
-      fileSizeBytes: file.size,
       document_type,
-      projectId,
       upsert: false,
+      storageAbortSupported: false,
     });
 
     setActiveSubstep("file_read");
-    logUploadStage("file read started", {
-      filePath,
-      fileSizeBytes: file.size,
-    });
+    substepStartedAt = Date.now();
+    logUploadStage("file read started", { ...baseLog, filePath });
     await runAbortable(signal, async () => {
       await file.arrayBuffer();
     });
     logUploadStage("file read completed", {
+      ...baseLog,
       filePath,
-      durationMs: Date.now() - startedAt,
+      elapsedMs: Date.now() - substepStartedAt,
+      totalElapsedMs: Date.now() - startedAt,
     });
 
     setActiveSubstep("storage_upload");
+    substepStartedAt = Date.now();
     logUploadStage("storage upload started", {
+      ...baseLog,
       filePath,
       contentType,
       upsert: false,
@@ -166,9 +177,11 @@ export async function executeProjectDocumentUpload(
 
     if (uploadError) {
       logUploadStage("storage upload failed", {
+        ...baseLog,
         filePath,
         error: uploadError.message,
-        durationMs: Date.now() - startedAt,
+        elapsedMs: Date.now() - substepStartedAt,
+        totalElapsedMs: Date.now() - startedAt,
       });
       return {
         document: null,
@@ -179,15 +192,15 @@ export async function executeProjectDocumentUpload(
     }
 
     logUploadStage("storage upload completed", {
+      ...baseLog,
       filePath,
-      durationMs: Date.now() - startedAt,
+      elapsedMs: Date.now() - substepStartedAt,
+      totalElapsedMs: Date.now() - startedAt,
     });
 
     setActiveSubstep("database_insert");
-    logUploadStage("project_documents insert started", {
-      filePath,
-      projectId,
-    });
+    substepStartedAt = Date.now();
+    logUploadStage("project_documents insert started", { ...baseLog, filePath });
 
     const { data: newDocument, error: insertError } = await runAbortable(signal, async () =>
       supabase
@@ -210,9 +223,11 @@ export async function executeProjectDocumentUpload(
 
     if (insertError) {
       logUploadStage("project_documents insert failed", {
+        ...baseLog,
         filePath,
         error: insertError.message,
-        durationMs: Date.now() - startedAt,
+        elapsedMs: Date.now() - substepStartedAt,
+        totalElapsedMs: Date.now() - startedAt,
       });
       await supabase.storage.from("project-documents").remove([filePath]);
       return {
@@ -224,39 +239,56 @@ export async function executeProjectDocumentUpload(
     }
 
     logUploadStage("project_documents insert completed", {
+      ...baseLog,
       filePath,
       documentId: newDocument.id,
-      durationMs: Date.now() - startedAt,
+      elapsedMs: Date.now() - substepStartedAt,
+      totalElapsedMs: Date.now() - startedAt,
     });
 
-    setActiveSubstep("activity_log");
-    logUploadStage("activity log started", {
-      documentId: newDocument.id,
-      filePath,
-    });
+    setActiveSubstep(null);
+
     const activityType = parent_document_id ? "document_version_uploaded" : "document_uploaded";
     const docTypeLabel = DOCUMENT_TYPE_LABELS[document_type];
-    await runAbortable(signal, async () =>
-      logProjectActivity(
-        projectId,
-        userId,
-        activityType,
-        parent_document_id
-          ? `New version (v${version}) of "${file.name}" uploaded`
-          : `${docTypeLabel} "${file.name}" uploaded`,
-        description || undefined,
-        { document_type, version, file_size: file.size },
-      ),
-    );
-    logUploadStage("activity log completed", {
-      documentId: newDocument.id,
-      durationMs: Date.now() - startedAt,
-    });
-
-    logUploadStage("completed", {
+    const activityStartedAt = Date.now();
+    logUploadStage("activity log started", {
+      ...baseLog,
       documentId: newDocument.id,
       filePath,
-      durationMs: Date.now() - startedAt,
+      blocking: false,
+    });
+    void logProjectActivity(
+      projectId,
+      userId,
+      activityType,
+      parent_document_id
+        ? `New version (v${version}) of "${file.name}" uploaded`
+        : `${docTypeLabel} "${file.name}" uploaded`,
+      description || undefined,
+      { document_type, version, file_size: file.size },
+    )
+      .then(() => {
+        logUploadStage("activity log completed", {
+          ...baseLog,
+          documentId: newDocument.id,
+          elapsedMs: Date.now() - activityStartedAt,
+          totalElapsedMs: Date.now() - startedAt,
+        });
+      })
+      .catch((activityError) => {
+        console.warn("[project-documents upload] activity log failed (non-blocking)", {
+          ...baseLog,
+          documentId: newDocument.id,
+          error: supabaseErrorMessage(activityError),
+          elapsedMs: Date.now() - activityStartedAt,
+        });
+      });
+
+    logUploadStage("upload function returning", {
+      ...baseLog,
+      documentId: newDocument.id,
+      filePath,
+      totalElapsedMs: Date.now() - startedAt,
     });
 
     return { document: newDocument as ProjectDocument };
@@ -264,8 +296,9 @@ export async function executeProjectDocumentUpload(
     const hungSubstep = activeUploadSubstep ?? undefined;
     if (err instanceof DOMException && err.name === "AbortError") {
       logUploadStage("aborted", {
+        ...baseLog,
         hungSubstep,
-        durationMs: Date.now() - startedAt,
+        totalElapsedMs: Date.now() - startedAt,
       });
       return {
         document: null,
@@ -280,9 +313,10 @@ export async function executeProjectDocumentUpload(
     }
 
     logUploadStage("unexpected error", {
+      ...baseLog,
       hungSubstep,
       error: supabaseErrorMessage(err),
-      durationMs: Date.now() - startedAt,
+      totalElapsedMs: Date.now() - startedAt,
     });
     return {
       document: null,

@@ -27,6 +27,7 @@ export interface PendingUploadFile {
   failedStage?: BatchFailureStage;
   timedOut?: boolean;
   uploadSubstep?: ProjectDocumentUploadSubstep;
+  uploadLongRunning?: boolean;
 }
 
 export function newBatchFileId(): string {
