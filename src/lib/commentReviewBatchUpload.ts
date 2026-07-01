@@ -75,7 +75,7 @@ export function batchFileStatusLabel(status: BatchFileStatus): string {
     case "extracting":
       return "Extracting…";
     case "parsing":
-      return "Parsing and classifying…";
+      return "Parsing...";
     case "success":
       return "Complete";
     case "failed":

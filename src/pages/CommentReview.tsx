@@ -101,7 +101,7 @@ interface ParsedCommentRow {
 }
 
 type ConfirmDialogState =
-  | { kind: "deleteLetter"; alsoDeleteComments: boolean }
+  | { kind: "deleteLetter" }
   | { kind: "clearSaved" }
   | { kind: "approveAll"; conflict: "same_source" | "other_letters" | "none" }
   | { kind: "newUpload"; file: File }
@@ -1528,12 +1528,12 @@ export default function CommentReview() {
     toast.success(`Removed ${count} saved manual-letter comment${count === 1 ? "" : "s"}`);
   }, [projectId, sourceDocumentId, deleteManualLetterComments, refetchComments]);
 
-  const deleteUploadedLetter = useCallback(
-    async (alsoDeleteComments: boolean) => {
+  const deleteUploadedLetter = useCallback(async () => {
       const deletedDocId = sourceDocumentId;
 
       if (!deletedDocId) {
         setOriginalUploadFile(null);
+        setPendingUploadFiles([]);
         resetExtractedParseState();
         setImagePreview((prev) => {
           if (prev) URL.revokeObjectURL(prev);
@@ -1549,39 +1549,60 @@ export default function CommentReview() {
         .maybeSingle();
       if (fetchError) throw fetchError;
 
-      if (alsoDeleteComments) {
-        const count = await deleteManualLetterComments("source_document", deletedDocId);
-        if (count > 0) {
-          toast.info(`Removed ${count} saved comment${count === 1 ? "" : "s"} from this letter`);
-        }
-      }
+      const removedCount = await deleteManualLetterComments("source_document", deletedDocId);
 
       if (doc) {
         const deleted = await deleteDocument(doc as ProjectDocument);
         if (!deleted) throw new Error("Failed to delete uploaded letter");
       }
 
+      if (projectId) {
+        queryClient.setQueryData<ParsedCommentRow[]>(
+          ["parsed_comments", projectId],
+          (existing) =>
+            (existing ?? []).filter(
+              (row) =>
+                !(
+                  row.ingest_source === "manual_letter" &&
+                  row.source_document_id === deletedDocId
+                ),
+            ),
+        );
+        await queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
+      }
+
+      setUploadRows((prev) => prev.filter((row) => row._sourceDocumentId !== deletedDocId));
+      setPendingUploadFiles((prev) =>
+        prev.filter((item) => item.sourceDocumentId !== deletedDocId),
+      );
+
       await fetchDocuments();
       await refetchComments();
 
       setSourceDocumentId(null);
       setOriginalUploadFile(null);
-      setPendingUploadFiles([]);
       resetExtractedParseState();
       setNewUploadReplaceProject(false);
       setImagePreview((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
-      toast.success("Deleted uploaded comment letter");
+
+      toast.success(
+        removedCount > 0
+          ? `Deleted letter and ${removedCount} parsed comment${removedCount === 1 ? "" : "s"}`
+          : "Deleted uploaded comment letter",
+      );
     },
     [
       sourceDocumentId,
+      projectId,
       deleteManualLetterComments,
       deleteDocument,
       fetchDocuments,
       refetchComments,
       resetExtractedParseState,
+      queryClient,
     ],
   );
 
@@ -1590,15 +1611,9 @@ export default function CommentReview() {
       if (!action) return;
       try {
         if (action.kind === "deleteLetter") {
-          await deleteUploadedLetter(action.alsoDeleteComments);
+          await deleteUploadedLetter();
         } else if (action.kind === "clearSaved") {
           await clearSavedManualLetterComments();
-        } else if (action.kind === "approveAll") {
-          if (action.conflict === "same_source") {
-            await executeApproveAll({ replaceScope: "source_document" });
-          } else if (action.conflict === "none") {
-            await executeApproveAll({ replaceScope: "none" });
-          }
         }
       } catch (err: unknown) {
         console.error(err);
@@ -1609,7 +1624,6 @@ export default function CommentReview() {
       deleteUploadedLetter,
       clearSavedManualLetterComments,
       executeApproveAll,
-      applyNewUpload,
     ],
   );
 
@@ -1916,9 +1930,7 @@ export default function CommentReview() {
                         parseButtonLabel={parseButtonLabel}
                         onParseDocument={() => void runParse()}
                         onClearSaved={() => setPendingConfirm({ kind: "clearSaved" })}
-                        onDeleteLetter={() =>
-                          setPendingConfirm({ kind: "deleteLetter", alsoDeleteComments: true })
-                        }
+                        onDeleteLetter={() => setPendingConfirm({ kind: "deleteLetter" })}
                         disciplineOptions={disciplineOptions}
                         onParsePasted={handleParsePastedComments}
                         onAddPastedSingle={handleAddPastedSingleComment}
@@ -1962,34 +1974,33 @@ export default function CommentReview() {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {pendingConfirm?.kind === "deleteLetter"
-                ? "Delete uploaded comment letter?"
+                ? "Delete this letter and its parsed comments?"
                 : pendingConfirm?.kind === "clearSaved"
                   ? "Clear saved comments from this letter?"
-                  : pendingConfirm?.kind === "newUpload"
-                    ? "Saved manual-letter comments already exist"
-                    : pendingConfirm?.kind === "newBatchUpload"
-                      ? "Add more comment letter files?"
-                      : pendingConfirm?.conflict === "other_letters"
-                      ? "Other manual letters have saved comments"
-                      : pendingConfirm?.conflict === "same_source"
-                        ? "Replace saved comments for this letter?"
-                        : "Replace all manual-letter comments?"}
+                  : pendingConfirm?.kind === "approveAll"
+                    ? "Save parsed comments"
+                    : pendingConfirm?.kind === "newUpload"
+                      ? "Saved manual-letter comments already exist"
+                      : pendingConfirm?.kind === "newBatchUpload"
+                        ? "Add more comment letter files?"
+                        : "Confirm action"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm text-muted-foreground">
                 {pendingConfirm?.kind === "deleteLetter" ? (
-                  <>
-                    <p>
-                      This removes the letter from project documents and clears the current parse review.
-                      Portal comments are not affected.
-                    </p>
-                    {savedManualLetterCount > 0 ? (
-                      <p>
-                        {savedManualLetterCount} saved manual-letter comment
-                        {savedManualLetterCount !== 1 ? "s" : ""} are linked to this letter.
-                      </p>
-                    ) : null}
-                  </>
+                  <p>
+                    This removes the uploaded letter, its storage file, and only the parsed comments
+                    linked to this letter&apos;s source document. Portal comments and comments from
+                    other documents are not affected.
+                  </p>
+                ) : pendingConfirm?.kind === "approveAll" ? (
+                  <p>
+                    {pendingConfirm.conflict === "same_source"
+                      ? `This letter already has ${savedManualLetterCount} saved comment${savedManualLetterCount !== 1 ? "s" : ""}. Append keeps them and adds ${uploadRows.length} new row${uploadRows.length !== 1 ? "s" : ""}. Replace removes the saved comments for this letter first.`
+                      : pendingConfirm.conflict === "other_letters"
+                        ? `This project has ${otherManualLetterCount} saved manual-letter comment${otherManualLetterCount !== 1 ? "s" : ""} from other uploaded letters. Append keeps all existing saved comments. Replace removes all manual-letter comments for this project first.`
+                        : `Replace removes all ${projectManualLetterCount} existing manual-letter comment${projectManualLetterCount !== 1 ? "s" : ""} before saving the current parse.`}
+                  </p>
                 ) : pendingConfirm?.kind === "clearSaved" ? (
                   <p>
                     Deletes {savedManualLetterCount} approved manual-letter comment
@@ -2006,50 +2017,50 @@ export default function CommentReview() {
                     Saved manual-letter comments already exist for this project ({projectManualLetterCount} total).
                     New files will be parsed and added to the review list without removing existing saved comments.
                   </p>
-                ) : pendingConfirm?.conflict === "other_letters" ? (
-                  <p>
-                    This project has {otherManualLetterCount} saved manual-letter comment
-                    {otherManualLetterCount !== 1 ? "s" : ""} from other uploaded letters.
-                    You can replace all manual-letter comments for this project or save this letter separately.
-                  </p>
-                ) : pendingConfirm?.conflict === "same_source" ? (
-                  <p>
-                    This letter already has {savedManualLetterCount} saved comment
-                    {savedManualLetterCount !== 1 ? "s" : ""}. Replace them with the current{" "}
-                    {uploadRows.length} parsed row{uploadRows.length !== 1 ? "s" : ""}?
-                  </p>
-                ) : (
-                  <p>
-                    Replace all {projectManualLetterCount} manual-letter comment
-                    {projectManualLetterCount !== 1 ? "s" : ""} for this project with the current parse?
-                  </p>
-                )}
+                ) : null}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             {pendingConfirm?.kind === "deleteLetter" ? (
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  const action = pendingConfirm;
+                  setPendingConfirm(null);
+                  void executeConfirmAction(action);
+                }}
+              >
+                Delete letter and comments
+              </AlertDialogAction>
+            ) : pendingConfirm?.kind === "approveAll" ? (
               <>
                 <Button
                   variant="outline"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
                   onClick={() => {
-                    const action = pendingConfirm;
+                    const conflict = pendingConfirm.conflict;
                     setPendingConfirm(null);
-                    void executeConfirmAction({ ...action, alsoDeleteComments: false });
+                    if (conflict === "same_source") {
+                      void executeApproveAll({ replaceScope: "source_document" });
+                    } else {
+                      void executeApproveAll({ replaceScope: "project_manual" });
+                    }
                   }}
                 >
-                  Delete letter only
+                  Replace saved comments
                 </Button>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => {
-                    const action = pendingConfirm;
-                    setPendingConfirm(null);
-                    void executeConfirmAction({ ...action, alsoDeleteComments: true });
-                  }}
-                >
-                  Delete letter and saved comments
+                <AlertDialogAction asChild>
+                  <Button
+                    variant="gold"
+                    onClick={() => {
+                      setPendingConfirm(null);
+                      void executeApproveAll({ replaceScope: "none" });
+                    }}
+                  >
+                    Append new comments
+                  </Button>
                 </AlertDialogAction>
               </>
             ) : pendingConfirm?.kind === "newUpload" ? (
@@ -2096,45 +2107,18 @@ export default function CommentReview() {
               >
                 Add files to batch
               </AlertDialogAction>
-            ) : pendingConfirm?.conflict === "other_letters" ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setPendingConfirm(null);
-                    void executeApproveAll({ replaceScope: "none" });
-                  }}
-                >
-                  Save separately
-                </Button>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => {
-                    setPendingConfirm(null);
-                    void executeApproveAll({ replaceScope: "project_manual" });
-                  }}
-                >
-                  Replace all manual-letter comments
-                </AlertDialogAction>
-              </>
-            ) : (
+            ) : pendingConfirm?.kind === "clearSaved" ? (
               <AlertDialogAction
-                className={
-                  pendingConfirm?.kind === "clearSaved" ||
-                  pendingConfirm?.conflict === "same_source" ||
-                  pendingConfirm?.conflict === "none"
-                    ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    : undefined
-                }
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => {
                   const action = pendingConfirm;
                   setPendingConfirm(null);
                   void executeConfirmAction(action);
                 }}
               >
-                Confirm
+                Clear saved comments
               </AlertDialogAction>
-            )}
+            ) : null}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

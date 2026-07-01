@@ -77,9 +77,12 @@ export function CommentReviewExtractedRow({
             <span>{row.reviewer_name.trim()}</span>
           ) : null}
           {row.source_page != null ? <span>Page {row.source_page}</span> : null}
-          {row.source_label?.trim() ? (
-            <span className="truncate max-w-[200px]" title={row.source_label}>
-              {row.source_label}
+          {(row.source_file?.trim() || row.source_label?.trim()) ? (
+            <span
+              className="truncate max-w-[200px]"
+              title={row.source_file?.trim() || row.source_label?.trim() || undefined}
+            >
+              {row.source_file?.trim() || row.source_label?.trim()}
             </span>
           ) : null}
           {row._savedCommentId ? <span>Saved · pending re-approval</span> : null}
