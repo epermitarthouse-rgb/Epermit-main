@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertCircle,
+  CheckCircle2,
   FileImage,
   FileSpreadsheet,
   Loader2,
@@ -20,6 +22,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentReviewToolbarBtn } from "@/lib/commentReviewToolbar";
+import {
+  batchFileStatusLabel,
+  type PendingUploadFile,
+} from "@/lib/commentReviewBatchUpload";
 import {
   COMMENT_REVIEW_DISCIPLINES,
   PASTED_COMMENTS_SOURCE_LABEL,
@@ -44,8 +50,11 @@ interface CommentReviewInputPanelProps {
   savedManualLetterCount: number;
   imagePreview: string | null;
   originalUploadFile: File | null;
+  pendingUploadFiles: PendingUploadFile[];
+  onRemovePendingFile: (id: string) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onFilesDropped: (files: File[]) => void;
   fileSelectionError: string | null;
   isSpreadsheetFile: (file: File) => boolean;
   formatLetterDate: (iso: string) => string;
@@ -73,6 +82,19 @@ interface CommentReviewInputPanelProps {
   }) => void;
 }
 
+function PendingFileStatusIcon({ status }: { status: PendingUploadFile["status"] }) {
+  if (status === "success") {
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />;
+  }
+  if (status === "failed") {
+    return <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />;
+  }
+  if (status === "pending") {
+    return null;
+  }
+  return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal" />;
+}
+
 export function CommentReviewInputPanel({
   inputMethod,
   onInputMethodChange,
@@ -84,8 +106,11 @@ export function CommentReviewInputPanel({
   savedManualLetterCount,
   imagePreview,
   originalUploadFile,
+  pendingUploadFiles,
+  onRemovePendingFile,
   fileInputRef,
   onFileChange,
+  onFilesDropped,
   fileSelectionError,
   isSpreadsheetFile,
   formatLetterDate,
@@ -107,6 +132,7 @@ export function CommentReviewInputPanel({
   const [pastedText, setPastedText] = useState("");
   const [pasteSourceLabel, setPasteSourceLabel] = useState("");
   const [pasteDiscipline, setPasteDiscipline] = useState("Architecture");
+  const [dragActive, setDragActive] = useState(false);
 
   const disciplineSelectOptions = [
     ...new Set([...COMMENT_REVIEW_DISCIPLINES, ...disciplineOptions]),
@@ -123,6 +149,35 @@ export function CommentReviewInputPanel({
         : "text-muted-foreground hover:text-foreground",
     );
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+      const files = Array.from(e.dataTransfer.files ?? []);
+      if (files.length > 0) {
+        onFilesDropped(files);
+      }
+    },
+    [onFilesDropped],
+  );
+
+  const showSingleFilePreview =
+    pendingUploadFiles.length === 0 &&
+    (imagePreview || originalUploadFile || selectedLetter);
+
   return (
     <div className="space-y-4">
       <div className="space-y-1">
@@ -130,7 +185,7 @@ export function CommentReviewInputPanel({
           Add comments
         </h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Upload a comment letter or paste reviewer comments directly.
+          Upload one or more comment letters, or paste reviewer comments directly.
         </p>
       </div>
 
@@ -199,49 +254,122 @@ export function CommentReviewInputPanel({
             </div>
           ) : null}
 
-          <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 py-5 dark:border-obsidian-raised/80 dark:bg-obsidian-sunken/20">
+          <div
+            className={cn(
+              "rounded-xl border border-dashed px-4 py-5 transition-colors dark:border-obsidian-raised/80 dark:bg-obsidian-sunken/20",
+              dragActive
+                ? "border-teal bg-teal/5 dark:bg-teal/10"
+                : "border-border/60 bg-muted/10",
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div className="flex min-h-[100px] flex-col items-center justify-center text-center">
-              {imagePreview ? (
-                <img
-                  src={imagePreview}
-                  alt="Letter preview"
-                  className="mb-2 max-h-[140px] w-auto rounded border object-contain"
-                />
-              ) : originalUploadFile ? (
-                <div className="mb-2 space-y-1">
-                  {isSpreadsheetFile(originalUploadFile) ? (
-                    <FileSpreadsheet className="mx-auto h-8 w-8 text-teal/80" />
-                  ) : (
-                    <FileImage className="mx-auto h-8 w-8 text-teal/80" />
-                  )}
-                  <p className="max-w-[220px] truncate text-xs font-medium">
-                    {originalUploadFile.name}
-                  </p>
-                </div>
-              ) : selectedLetter ? (
-                <div className="mb-2 space-y-1">
-                  {/\.(xlsx|csv)$/i.test(selectedLetter.file_name) ? (
-                    <FileSpreadsheet className="mx-auto h-8 w-8 text-teal/80" />
-                  ) : (
-                    <FileImage className="mx-auto h-8 w-8 text-teal/80" />
-                  )}
-                  <p className="max-w-[220px] truncate text-xs font-medium">
-                    {selectedLetter.file_name}
-                  </p>
-                </div>
+              {showSingleFilePreview ? (
+                <>
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Letter preview"
+                      className="mb-2 max-h-[140px] w-auto rounded border object-contain"
+                    />
+                  ) : originalUploadFile ? (
+                    <div className="mb-2 space-y-1">
+                      {isSpreadsheetFile(originalUploadFile) ? (
+                        <FileSpreadsheet className="mx-auto h-8 w-8 text-teal/80" />
+                      ) : (
+                        <FileImage className="mx-auto h-8 w-8 text-teal/80" />
+                      )}
+                      <p className="max-w-[220px] truncate text-xs font-medium">
+                        {originalUploadFile.name}
+                      </p>
+                    </div>
+                  ) : selectedLetter ? (
+                    <div className="mb-2 space-y-1">
+                      {/\.(xlsx|csv)$/i.test(selectedLetter.file_name) ? (
+                        <FileSpreadsheet className="mx-auto h-8 w-8 text-teal/80" />
+                      ) : (
+                        <FileImage className="mx-auto h-8 w-8 text-teal/80" />
+                      )}
+                      <p className="max-w-[220px] truncate text-xs font-medium">
+                        {selectedLetter.file_name}
+                      </p>
+                    </div>
+                  ) : null}
+                </>
+              ) : pendingUploadFiles.length > 0 ? (
+                <Upload className="mb-2 h-8 w-8 text-teal/70" />
               ) : (
                 <Upload className="mb-2 h-8 w-8 text-teal/70" />
               )}
-              <p className="text-[11px] text-muted-foreground">Choose a file to upload</p>
+              <p className="text-[11px] text-muted-foreground">
+                {dragActive
+                  ? "Drop files here"
+                  : "Choose or drag one or more files"}
+              </p>
               <Input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 accept="image/*,application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,.doc,application/msword,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,text/csv,.csv,application/csv"
                 onChange={onFileChange}
                 className="mt-2 max-w-[220px] text-xs"
               />
             </div>
           </div>
+
+          {pendingUploadFiles.length > 0 ? (
+            <ul className="space-y-1.5 rounded-lg border border-border/40 bg-muted/5 px-3 py-2 dark:bg-obsidian-sunken/20">
+              <li className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Selected files ({pendingUploadFiles.length})
+              </li>
+              {pendingUploadFiles.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start gap-2 rounded-md border border-border/30 bg-background/50 px-2 py-1.5 text-xs dark:bg-obsidian/40"
+                >
+                  <PendingFileStatusIcon status={item.status} />
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="truncate font-medium" title={item.file.name}>
+                      {item.file.name}
+                    </p>
+                    <p
+                      className={cn(
+                        "text-[11px]",
+                        item.status === "failed"
+                          ? "text-destructive"
+                          : item.status === "success"
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {item.status === "success" && item.commentCount != null
+                        ? `${batchFileStatusLabel(item.status)} · ${item.commentCount} comment${item.commentCount !== 1 ? "s" : ""}`
+                        : item.status === "failed" && item.error
+                          ? item.error
+                          : batchFileStatusLabel(item.status)}
+                      {item.parseMethod && item.status === "success" ? (
+                        <span className="text-muted-foreground/70"> · {item.parseMethod}</span>
+                      ) : null}
+                    </p>
+                  </div>
+                  {item.status === "pending" && !parsing ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label={`Remove ${item.file.name}`}
+                      onClick={() => onRemovePendingFile(item.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           <p className="text-[10px] leading-relaxed text-muted-foreground">
             {supportedFormatsHint}
@@ -277,7 +405,7 @@ export function CommentReviewInputPanel({
             <Button
               variant="gold"
               onClick={onParseDocument}
-              disabled={parsing || !canParseLetter}
+              disabled={parsing || saving || !canParseLetter}
               size="sm"
               className={commentReviewToolbarBtn.primary}
             >

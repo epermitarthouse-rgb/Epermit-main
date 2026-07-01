@@ -27,6 +27,8 @@ export interface ParsedRow {
   _clientId: string;
   /** Set when a row was hydrated from an already-saved parsed_comments record. */
   _savedCommentId?: string | null;
+  /** Set when a row was parsed from a batch upload with its own project_documents record. */
+  _sourceDocumentId?: string | null;
 }
 
 export interface SavedCommentRowInput {

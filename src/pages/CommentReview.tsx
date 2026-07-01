@@ -31,17 +31,19 @@ import {
   COMMENT_LETTER_SUPPORTED_FORMATS_HINT,
   extractDocumentForCommentParse,
   fileToBase64,
-  isLegacyDocFile,
-  isLegacyXlsFile,
   isSpreadsheetFile,
-  LEGACY_DOC_ERROR_MESSAGE,
-  LEGACY_XLS_ERROR_MESSAGE,
 } from "@/utils/extractDocumentText";
 import { formatCommentLetterSaveError, type ProjectDocument } from "@/types/document";
 import {
   isManualCommentLetter,
   type ManualLetterCommentScope,
 } from "@/lib/commentReviewManualLetter";
+import {
+  createPendingUploadFile,
+  formatBatchParseError,
+  validateCommentLetterFile,
+  type PendingUploadFile,
+} from "@/lib/commentReviewBatchUpload";
 import {
   COMMENT_REVIEW_DISCIPLINES,
   createPastedSingleCommentRow,
@@ -98,6 +100,7 @@ type ConfirmDialogState =
   | { kind: "clearSaved" }
   | { kind: "approveAll"; conflict: "same_source" | "other_letters" | "none" }
   | { kind: "newUpload"; file: File }
+  | { kind: "newBatchUpload"; files: File[] }
   | null;
 
 function formatLetterDate(iso: string): string {
@@ -191,6 +194,7 @@ export default function CommentReview() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   /** Original file selected by the user — persisted to project_documents. */
   const [originalUploadFile, setOriginalUploadFile] = useState<File | null>(null);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<PendingUploadFile[]>([]);
   const [sourceDocumentId, setSourceDocumentId] = useState<string | null>(null);
   const [uploadRows, setUploadRows] = useState<ParsedRow[]>([]);
   const [parseStatus, setParseStatus] = useState<string | null>(null);
@@ -210,6 +214,7 @@ export default function CommentReview() {
   const [commentInputMethod, setCommentInputMethod] = useState<CommentInputMethod>("upload");
   const reviewListClearedRef = useRef(false);
   const reviewListHydratedForRef = useRef<string | null>(null);
+  const batchProcessingRef = useRef(false);
   const timerRef = useRef<ReviewTimerHandle>(null);
 
   const disciplineOptions = useMemo(() => {
@@ -281,8 +286,25 @@ export default function CommentReview() {
     [commentLetters, sourceDocumentId],
   );
 
-  const canParseLetter = Boolean(projectId && (originalUploadFile || sourceDocumentId));
-  const parseButtonLabel = uploadRows.length > 0 ? "Re-parse document" : "Parse comments";
+  const pendingBatchCount = pendingUploadFiles.filter(
+    (item) => item.status === "pending" || item.status === "failed",
+  ).length;
+  const canParseLetter = Boolean(
+    projectId &&
+      (originalUploadFile ||
+        sourceDocumentId ||
+        pendingBatchCount > 0),
+  );
+  const parseButtonLabel =
+    pendingBatchCount > 1
+      ? `Parse ${pendingBatchCount} files`
+      : pendingBatchCount === 1
+        ? uploadRows.length > 0
+          ? "Parse file"
+          : "Parse comments"
+        : uploadRows.length > 0
+          ? "Re-parse document"
+          : "Parse comments";
 
   const savedCommentsForSelectedLetter = useMemo(
     () =>
@@ -751,6 +773,7 @@ export default function CommentReview() {
     (docId: string) => {
       setSourceDocumentId(docId);
       setOriginalUploadFile(null);
+      setPendingUploadFiles([]);
       setNewUploadReplaceProject(false);
       resetExtractedParseState();
       setImagePreview((prev) => {
@@ -760,6 +783,19 @@ export default function CommentReview() {
     },
     [resetExtractedParseState],
   );
+
+  const updatePendingFile = useCallback(
+    (id: string, patch: Partial<PendingUploadFile>) => {
+      setPendingUploadFiles((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      );
+    },
+    [],
+  );
+
+  const removePendingFile = useCallback((id: string) => {
+    setPendingUploadFiles((prev) => prev.filter((item) => item.id !== id));
+  }, []);
 
   const applyNewUpload = useCallback(
     (file: File, replaceProjectOnApprove: boolean) => {
@@ -797,46 +833,79 @@ export default function CommentReview() {
     [resetExtractedParseState],
   );
 
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = "";
-      if (!file) return;
+  const ingestSelectedFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
 
-      if (isLegacyDocFile(file) || file.type === "application/msword") {
-        setFileSelectionError(LEGACY_DOC_ERROR_MESSAGE);
-        setOriginalUploadFile(null);
-        setSourceDocumentId(null);
-        resetExtractedParseState();
-        setImagePreview((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return null;
-        });
-        toast.error(LEGACY_DOC_ERROR_MESSAGE);
-        return;
+      const validated = files.map((file) => ({
+        file,
+        validation: validateCommentLetterFile(file),
+      }));
+      const invalid = validated.filter((entry) => !entry.validation.valid);
+      const valid = validated.filter((entry) => entry.validation.valid).map((entry) => entry.file);
+
+      if (invalid.length > 0) {
+        const invalidNames = invalid.map((entry) => entry.file.name).join(", ");
+        const firstError =
+          invalid[0].validation.valid === false ? invalid[0].validation.error : "Invalid file";
+        setFileSelectionError(
+          invalid.length === 1
+            ? firstError
+            : `${invalid.length} file(s) rejected (${invalidNames}). ${firstError}`,
+        );
+        if (valid.length === 0) {
+          toast.error(firstError);
+          return;
+        }
+        toast.warning(`${invalid.length} file(s) skipped due to unsupported format.`);
+      } else {
+        setFileSelectionError(null);
       }
 
-      if (isLegacyXlsFile(file) || file.type === "application/vnd.ms-excel") {
-        setFileSelectionError(LEGACY_XLS_ERROR_MESSAGE);
-        setOriginalUploadFile(null);
-        setSourceDocumentId(null);
-        resetExtractedParseState();
-        setImagePreview((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return null;
-        });
-        toast.error(LEGACY_XLS_ERROR_MESSAGE);
+      if (valid.length === 0) return;
+
+      const useClassicSinglePath =
+        valid.length === 1 &&
+        pendingUploadFiles.length === 0 &&
+        uploadRows.length === 0;
+
+      if (useClassicSinglePath) {
+        if (projectManualLetterCount > 0) {
+          setPendingConfirm({ kind: "newUpload", file: valid[0] });
+          return;
+        }
+        applyNewUpload(valid[0], false);
         return;
       }
 
       if (projectManualLetterCount > 0) {
-        setPendingConfirm({ kind: "newUpload", file });
+        setPendingConfirm({ kind: "newBatchUpload", files: valid });
         return;
       }
 
-      applyNewUpload(file, false);
+      setPendingUploadFiles((prev) => [
+        ...prev,
+        ...valid.map((file) => createPendingUploadFile(file)),
+      ]);
     },
-    [applyNewUpload, projectManualLetterCount, resetExtractedParseState],
+    [applyNewUpload, pendingUploadFiles.length, projectManualLetterCount, uploadRows.length],
+  );
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files ?? []);
+      e.target.value = "";
+      if (files.length === 0) return;
+      ingestSelectedFiles(files);
+    },
+    [ingestSelectedFiles],
+  );
+
+  const handleFilesDropped = useCallback(
+    (files: File[]) => {
+      ingestSelectedFiles(files);
+    },
+    [ingestSelectedFiles],
   );
 
   const loadCommentLetterFile = useCallback(async (): Promise<File | null> => {
@@ -903,7 +972,178 @@ export default function CommentReview() {
     return { docId: null, error: message };
   }, [projectId, user, originalUploadFile, sourceDocumentId, uploadDocumentWithResult, fetchDocuments]);
 
+  const invokeCommentParser = useCallback(
+    async (
+      invokeBody: Record<string, unknown>,
+    ): Promise<{
+      comments: Array<Omit<ParsedRow, "row_source" | "_clientId">>;
+      parse_method?: string;
+      parser_summary?: ParserSummary;
+    }> => {
+      const { data, error } = await supabase.functions.invoke("parse-manual-comment-letter", {
+        body: invokeBody,
+      });
+      if (error) throw error;
+
+      const payload = data as {
+        comments?: Array<Omit<ParsedRow, "row_source" | "_clientId">>;
+        parse_method?: string;
+        parser_summary?: ParserSummary;
+        error?: string;
+      } | null;
+
+      if (payload?.error) throw new Error(payload.error);
+
+      return {
+        comments: Array.isArray(payload?.comments) ? payload.comments : [],
+        parse_method: payload?.parse_method,
+        parser_summary: payload?.parser_summary ?? undefined,
+      };
+    },
+    [],
+  );
+
+  const persistCommentLetterForFile = useCallback(
+    async (file: File): Promise<{ docId: string | null; error?: string }> => {
+      if (!projectId || !user) {
+        return { docId: null, error: "Missing project or user" };
+      }
+
+      const result = await uploadDocumentWithResult({
+        file,
+        document_type: "correspondence",
+        description: "Manual comment letter upload (Comment Review)",
+        suppressToasts: true,
+      });
+
+      if (result.document?.id) {
+        return { docId: result.document.id };
+      }
+
+      return { docId: null, error: formatCommentLetterSaveError(result) };
+    },
+    [projectId, user, uploadDocumentWithResult],
+  );
+
   const runParse = useCallback(async () => {
+    if (batchProcessingRef.current) return;
+
+    if (pendingBatchCount > 0) {
+      if (!projectId) {
+        toast.error("Select a project in the sidebar before parsing");
+        return;
+      }
+
+      const queue = pendingUploadFiles.filter(
+        (item) => item.status === "pending" || item.status === "failed",
+      );
+      if (queue.length === 0) return;
+
+      batchProcessingRef.current = true;
+      setParsing(true);
+      setParseStatus(`Processing ${queue.length} file${queue.length !== 1 ? "s" : ""}…`);
+
+      let successCount = 0;
+      let failCount = 0;
+      let totalComments = 0;
+
+      try {
+        for (const item of queue) {
+          try {
+            updatePendingFile(item.id, { status: "uploading", error: undefined });
+
+            const { docId, error: saveError } = await persistCommentLetterForFile(item.file);
+            if (!docId) {
+              throw new Error(saveError ?? "Failed to save comment letter to project documents");
+            }
+
+            updatePendingFile(item.id, { status: "extracting", sourceDocumentId: docId });
+
+            const extraction = await extractDocumentForCommentParse(item.file);
+            if (extraction.kind === "unsupported_doc") {
+              throw new Error(extraction.message);
+            }
+
+            updatePendingFile(item.id, { status: "parsing" });
+
+            let invokeBody: Record<string, unknown> = {
+              sourceFileName: item.file.name,
+              sourceDocumentId: docId,
+            };
+
+            if (extraction.kind === "text") {
+              invokeBody = {
+                ...invokeBody,
+                fullText: extraction.fullText,
+                pages: extraction.pages,
+              };
+            } else {
+              const fileForVision =
+                extraction.file.type === "application/pdf"
+                  ? await pdfFirstPageToImageFile(extraction.file)
+                  : extraction.file;
+              invokeBody = {
+                ...invokeBody,
+                imageBase64: await fileToBase64(fileForVision),
+                imageType: fileForVision.type,
+                pageNumber: 1,
+              };
+            }
+
+            const { comments, parse_method, parser_summary } = await invokeCommentParser(invokeBody);
+            const parsedRows = markRowsAsParsed(comments, { sourceLabel: item.file.name }).map(
+              (row) => ({
+                ...row,
+                _sourceDocumentId: docId,
+              }),
+            );
+
+            setUploadRows((prev) => [...prev, ...parsedRows]);
+            updatePendingFile(item.id, {
+              status: "success",
+              commentCount: parsedRows.length,
+              parseMethod: parse_method,
+              sourceDocumentId: docId,
+              error: undefined,
+            });
+
+            if (parser_summary) {
+              setParserSummary(parser_summary);
+            }
+            setLastParseMethod(parse_method ?? null);
+            successCount += 1;
+            totalComments += parsedRows.length;
+          } catch (err: unknown) {
+            console.error(err);
+            const message = formatBatchParseError(err);
+            updatePendingFile(item.id, { status: "failed", error: message });
+            failCount += 1;
+          }
+        }
+
+        await fetchDocuments();
+        setParseAttempted(true);
+        setParseStatus(
+          failCount > 0
+            ? `Processed ${successCount} of ${queue.length} files (${totalComments} comments); ${failCount} failed`
+            : `Extracted ${totalComments} comment${totalComments !== 1 ? "s" : ""} from ${successCount} file${successCount !== 1 ? "s" : ""}`,
+        );
+
+        if (successCount > 0) {
+          toast.success(
+            `Parsed ${totalComments} comment${totalComments !== 1 ? "s" : ""} from ${successCount} file${successCount !== 1 ? "s" : ""}`,
+          );
+        }
+        if (failCount > 0) {
+          toast.error(`${failCount} file${failCount !== 1 ? "s" : ""} failed to parse`);
+        }
+      } finally {
+        setParsing(false);
+        batchProcessingRef.current = false;
+      }
+      return;
+    }
+
     const letterFile = await loadCommentLetterFile();
     if (!letterFile) {
       toast.error("Select or upload a comment letter first");
@@ -980,7 +1220,10 @@ export default function CommentReview() {
 
       const comments = markRowsAsParsed(
         Array.isArray(payload?.comments) ? payload.comments : [],
-      );
+      ).map((row) => ({
+        ...row,
+        _sourceDocumentId: docId,
+      }));
       const summary = payload?.parser_summary ?? null;
       if (summary) {
         console.log("[CommentReview] parser_summary", summary);
@@ -1010,44 +1253,19 @@ export default function CommentReview() {
       setParsing(false);
     }
   }, [
-    loadCommentLetterFile,
+    pendingBatchCount,
+    pendingUploadFiles,
     projectId,
+    persistCommentLetterForFile,
+    updatePendingFile,
+    fetchDocuments,
+    loadCommentLetterFile,
     originalUploadFile,
     parseAttempted,
     uploadRows.length,
     persistCommentLetter,
+    invokeCommentParser,
   ]);
-
-  const invokeCommentParser = useCallback(
-    async (
-      invokeBody: Record<string, unknown>,
-    ): Promise<{
-      comments: Array<Omit<ParsedRow, "row_source" | "_clientId">>;
-      parse_method?: string;
-      parser_summary?: ParserSummary;
-    }> => {
-      const { data, error } = await supabase.functions.invoke("parse-manual-comment-letter", {
-        body: invokeBody,
-      });
-      if (error) throw error;
-
-      const payload = data as {
-        comments?: Array<Omit<ParsedRow, "row_source" | "_clientId">>;
-        parse_method?: string;
-        parser_summary?: ParserSummary;
-        error?: string;
-      } | null;
-
-      if (payload?.error) throw new Error(payload.error);
-
-      return {
-        comments: Array.isArray(payload?.comments) ? payload.comments : [],
-        parse_method: payload?.parse_method,
-        parser_summary: payload?.parser_summary ?? undefined,
-      };
-    },
-    [],
-  );
 
   const handleParsePastedComments = useCallback(
     async ({
@@ -1192,7 +1410,7 @@ export default function CommentReview() {
             ? JSON.stringify(r.code_references)
             : null,
         confidence: typeof r.confidence === "number" ? r.confidence : null,
-        source_document_id: docId,
+        source_document_id: r._sourceDocumentId ?? docId,
       }));
       const { error } = await supabase.from("parsed_comments").insert(toInsert);
       if (error) throw error;
@@ -1351,6 +1569,7 @@ export default function CommentReview() {
 
       setSourceDocumentId(null);
       setOriginalUploadFile(null);
+      setPendingUploadFiles([]);
       resetExtractedParseState();
       setNewUploadReplaceProject(false);
       setImagePreview((prev) => {
@@ -1682,8 +1901,11 @@ export default function CommentReview() {
                         savedManualLetterCount={savedManualLetterCount}
                         imagePreview={imagePreview}
                         originalUploadFile={originalUploadFile}
+                        pendingUploadFiles={pendingUploadFiles}
+                        onRemovePendingFile={removePendingFile}
                         fileInputRef={fileInputRef}
                         onFileChange={handleFileChange}
+                        onFilesDropped={handleFilesDropped}
                         fileSelectionError={fileSelectionError}
                         isSpreadsheetFile={isSpreadsheetFile}
                         formatLetterDate={formatLetterDate}
@@ -1748,7 +1970,9 @@ export default function CommentReview() {
                   ? "Clear saved comments from this letter?"
                   : pendingConfirm?.kind === "newUpload"
                     ? "Saved manual-letter comments already exist"
-                    : pendingConfirm?.conflict === "other_letters"
+                    : pendingConfirm?.kind === "newBatchUpload"
+                      ? "Add more comment letter files?"
+                      : pendingConfirm?.conflict === "other_letters"
                       ? "Other manual letters have saved comments"
                       : pendingConfirm?.conflict === "same_source"
                         ? "Replace saved comments for this letter?"
@@ -1779,6 +2003,11 @@ export default function CommentReview() {
                   <p>
                     Saved manual-letter comments already exist for this project ({projectManualLetterCount} total).
                     Choose how to handle them before uploading the new letter.
+                  </p>
+                ) : pendingConfirm?.kind === "newBatchUpload" ? (
+                  <p>
+                    Saved manual-letter comments already exist for this project ({projectManualLetterCount} total).
+                    New files will be parsed and added to the review list without removing existing saved comments.
                   </p>
                 ) : pendingConfirm?.conflict === "other_letters" ? (
                   <p>
@@ -1848,6 +2077,19 @@ export default function CommentReview() {
                   Replace on Approve All
                 </AlertDialogAction>
               </>
+            ) : pendingConfirm?.kind === "newBatchUpload" ? (
+              <AlertDialogAction
+                onClick={() => {
+                  const files = pendingConfirm.files;
+                  setPendingConfirm(null);
+                  setPendingUploadFiles((prev) => [
+                    ...prev,
+                    ...files.map((file) => createPendingUploadFile(file)),
+                  ]);
+                }}
+              >
+                Add files to batch
+              </AlertDialogAction>
             ) : pendingConfirm?.conflict === "other_letters" ? (
               <>
                 <Button
