@@ -5,6 +5,7 @@ export async function prepareCommentLetterExtractionFile(options: {
   projectId: string;
   sourceDocumentId: string;
   originalFile: File;
+  conversionTimeoutMs?: number;
 }): Promise<File> {
   if (!isLegacyDocFile(options.originalFile)) {
     return options.originalFile;
@@ -13,7 +14,12 @@ export async function prepareCommentLetterExtractionFile(options: {
   const converted = await convertLegacyWordDocument({
     projectId: options.projectId,
     sourceDocumentId: options.sourceDocumentId,
+    timeoutMs: options.conversionTimeoutMs,
   });
+
+  if (converted.file.size === 0) {
+    throw new Error("Legacy Word conversion returned an empty file");
+  }
 
   return converted.file;
 }

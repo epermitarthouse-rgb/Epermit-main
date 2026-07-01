@@ -12,6 +12,8 @@ export type BatchFileStatus =
   | "success"
   | "failed";
 
+export type BatchFailureStage = "upload" | "conversion" | "extraction" | "parsing";
+
 export interface PendingUploadFile {
   id: string;
   file: File;
@@ -20,6 +22,8 @@ export interface PendingUploadFile {
   commentCount?: number;
   sourceDocumentId?: string;
   parseMethod?: string;
+  failedStage?: BatchFailureStage;
+  timedOut?: boolean;
 }
 
 export function newBatchFileId(): string {
@@ -69,9 +73,9 @@ export function batchFileStatusLabel(status: BatchFileStatus): string {
     case "converting":
       return "Converting legacy Word document…";
     case "extracting":
-      return "Extracting text…";
+      return "Extracting…";
     case "parsing":
-      return "Parsing & classifying…";
+      return "Parsing and classifying…";
     case "success":
       return "Complete";
     case "failed":

@@ -22,10 +22,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentReviewToolbarBtn } from "@/lib/commentReviewToolbar";
-import {
-  batchFileStatusLabel,
-  type PendingUploadFile,
-} from "@/lib/commentReviewBatchUpload";
+import type { PendingUploadFile } from "@/lib/commentReviewBatchUpload";
+import { pendingFileStatusDisplay } from "@/lib/commentReviewBatchProcess";
 import {
   COMMENT_REVIEW_DISCIPLINES,
   PASTED_COMMENTS_SOURCE_LABEL,
@@ -344,11 +342,7 @@ export function CommentReviewInputPanel({
                             : "text-muted-foreground",
                       )}
                     >
-                      {item.status === "success" && item.commentCount != null
-                        ? `${batchFileStatusLabel(item.status)} · ${item.commentCount} comment${item.commentCount !== 1 ? "s" : ""}`
-                        : item.status === "failed" && item.error
-                          ? item.error
-                          : batchFileStatusLabel(item.status)}
+                      {pendingFileStatusDisplay(item)}
                       {item.parseMethod && item.status === "success" ? (
                         <span className="text-muted-foreground/70"> · {item.parseMethod}</span>
                       ) : null}

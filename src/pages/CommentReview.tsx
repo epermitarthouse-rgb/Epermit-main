@@ -42,10 +42,13 @@ import {
 } from "@/lib/commentReviewManualLetter";
 import {
   createPendingUploadFile,
-  formatBatchParseError,
   validateCommentLetterFile,
   type PendingUploadFile,
 } from "@/lib/commentReviewBatchUpload";
+import {
+  logCommentBatch,
+  processOneCommentReviewFile,
+} from "@/lib/commentReviewBatchProcess";
 import {
   COMMENT_REVIEW_DISCIPLINES,
   createPastedSingleCommentRow,
@@ -217,6 +220,7 @@ export default function CommentReview() {
   const reviewListClearedRef = useRef(false);
   const reviewListHydratedForRef = useRef<string | null>(null);
   const batchProcessingRef = useRef(false);
+  const batchInFlightRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReviewTimerHandle>(null);
 
   const disciplineOptions = useMemo(() => {
@@ -885,10 +889,19 @@ export default function CommentReview() {
         return;
       }
 
-      setPendingUploadFiles((prev) => [
-        ...prev,
-        ...valid.map((file) => createPendingUploadFile(file)),
-      ]);
+      setPendingUploadFiles((prev) => {
+        const existingKeys = new Set(
+          prev.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`),
+        );
+        const next = [...prev];
+        for (const file of valid) {
+          const key = `${file.name}:${file.size}:${file.lastModified}`;
+          if (existingKeys.has(key)) continue;
+          existingKeys.add(key);
+          next.push(createPendingUploadFile(file));
+        }
+        return next;
+      });
     },
     [applyNewUpload, pendingUploadFiles.length, projectManualLetterCount, uploadRows.length],
   );
@@ -1037,13 +1050,16 @@ export default function CommentReview() {
       }
 
       const queue = pendingUploadFiles.filter(
-        (item) => item.status === "pending" || item.status === "failed",
+        (item) =>
+          (item.status === "pending" || item.status === "failed") &&
+          !batchInFlightRef.current.has(item.id),
       );
       if (queue.length === 0) return;
 
+      const batchJobId = crypto.randomUUID();
       batchProcessingRef.current = true;
       setParsing(true);
-      setParseStatus(`Processing ${queue.length} file${queue.length !== 1 ? "s" : ""}…`);
+      logCommentBatch(batchJobId, "batch started", { fileCount: queue.length });
 
       let successCount = 0;
       let failCount = 0;
@@ -1051,88 +1067,36 @@ export default function CommentReview() {
 
       try {
         for (const item of queue) {
+          if (batchInFlightRef.current.has(item.id)) continue;
+          batchInFlightRef.current.add(item.id);
+
           try {
-            updatePendingFile(item.id, { status: "uploading", error: undefined });
-
-            const { docId, error: saveError } = await persistCommentLetterForFile(item.file);
-            if (!docId) {
-              throw new Error(saveError ?? "Failed to save comment letter to project documents");
-            }
-
-            updatePendingFile(item.id, { sourceDocumentId: docId });
-            if (isLegacyDocFile(item.file)) {
-              updatePendingFile(item.id, { status: "converting" });
-            } else {
-              updatePendingFile(item.id, { status: "extracting" });
-            }
-
-            const extractionFile = await prepareCommentLetterExtractionFile({
+            const result = await processOneCommentReviewFile({
+              jobId: batchJobId,
+              fileRow: item,
               projectId,
-              sourceDocumentId: docId,
-              originalFile: item.file,
+              onStageUpdate: updatePendingFile,
+              persistCommentLetterForFile,
+              invokeCommentParser,
+              appendRows: (rows) => {
+                setUploadRows((prev) => [...prev, ...rows]);
+              },
             });
 
-            updatePendingFile(item.id, { status: "extracting" });
-
-            const extraction = await extractDocumentForCommentParse(extractionFile);
-            if (extraction.kind === "unsupported_doc") {
-              throw new Error(extraction.message);
-            }
-
-            updatePendingFile(item.id, { status: "parsing" });
-
-            let invokeBody: Record<string, unknown> = {
-              sourceFileName: item.file.name,
-              sourceDocumentId: docId,
-            };
-
-            if (extraction.kind === "text") {
-              invokeBody = {
-                ...invokeBody,
-                fullText: extraction.fullText,
-                pages: extraction.pages,
-              };
+            if (result.success) {
+              successCount += 1;
+              totalComments += result.commentCount;
+              if (result.parserSummary) {
+                setParserSummary(result.parserSummary);
+              }
+              if (result.parseMethod) {
+                setLastParseMethod(result.parseMethod);
+              }
             } else {
-              const fileForVision =
-                extraction.file.type === "application/pdf"
-                  ? await pdfFirstPageToImageFile(extraction.file)
-                  : extraction.file;
-              invokeBody = {
-                ...invokeBody,
-                imageBase64: await fileToBase64(fileForVision),
-                imageType: fileForVision.type,
-                pageNumber: 1,
-              };
+              failCount += 1;
             }
-
-            const { comments, parse_method, parser_summary } = await invokeCommentParser(invokeBody);
-            const parsedRows = markRowsAsParsed(comments, { sourceLabel: item.file.name }).map(
-              (row) => ({
-                ...row,
-                _sourceDocumentId: docId,
-              }),
-            );
-
-            setUploadRows((prev) => [...prev, ...parsedRows]);
-            updatePendingFile(item.id, {
-              status: "success",
-              commentCount: parsedRows.length,
-              parseMethod: parse_method,
-              sourceDocumentId: docId,
-              error: undefined,
-            });
-
-            if (parser_summary) {
-              setParserSummary(parser_summary);
-            }
-            setLastParseMethod(parse_method ?? null);
-            successCount += 1;
-            totalComments += parsedRows.length;
-          } catch (err: unknown) {
-            console.error(err);
-            const message = formatBatchParseError(err);
-            updatePendingFile(item.id, { status: "failed", error: message });
-            failCount += 1;
+          } finally {
+            batchInFlightRef.current.delete(item.id);
           }
         }
 
@@ -1140,8 +1104,8 @@ export default function CommentReview() {
         setParseAttempted(true);
         setParseStatus(
           failCount > 0
-            ? `Processed ${successCount} of ${queue.length} files (${totalComments} comments); ${failCount} failed`
-            : `Extracted ${totalComments} comment${totalComments !== 1 ? "s" : ""} from ${successCount} file${successCount !== 1 ? "s" : ""}`,
+            ? `${successCount} complete, ${failCount} failed (${totalComments} comments parsed)`
+            : `${successCount} file${successCount !== 1 ? "s" : ""} complete · ${totalComments} comment${totalComments !== 1 ? "s" : ""}`,
         );
 
         if (successCount > 0) {
@@ -1150,11 +1114,17 @@ export default function CommentReview() {
           );
         }
         if (failCount > 0) {
-          toast.error(`${failCount} file${failCount !== 1 ? "s" : ""} failed to parse`);
+          toast.error(`${failCount} file${failCount !== 1 ? "s" : ""} failed`);
         }
       } finally {
-        setParsing(false);
+        batchInFlightRef.current.clear();
         batchProcessingRef.current = false;
+        setParsing(false);
+        logCommentBatch(batchJobId, "batch finished", {
+          successCount,
+          failCount,
+          totalComments,
+        });
       }
       return;
     }
@@ -2109,10 +2079,19 @@ export default function CommentReview() {
                 onClick={() => {
                   const files = pendingConfirm.files;
                   setPendingConfirm(null);
-                  setPendingUploadFiles((prev) => [
-                    ...prev,
-                    ...files.map((file) => createPendingUploadFile(file)),
-                  ]);
+                  setPendingUploadFiles((prev) => {
+                    const existingKeys = new Set(
+                      prev.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`),
+                    );
+                    const next = [...prev];
+                    for (const file of files) {
+                      const key = `${file.name}:${file.size}:${file.lastModified}`;
+                      if (existingKeys.has(key)) continue;
+                      existingKeys.add(key);
+                      next.push(createPendingUploadFile(file));
+                    }
+                    return next;
+                  });
                 }}
               >
                 Add files to batch
