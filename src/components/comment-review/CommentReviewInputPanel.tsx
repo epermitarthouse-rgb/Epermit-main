@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentReviewToolbarBtn } from "@/lib/commentReviewToolbar";
@@ -49,7 +50,8 @@ interface CommentReviewInputPanelProps {
   imagePreview: string | null;
   originalUploadFile: File | null;
   pendingUploadFiles: PendingUploadFile[];
-  onRemovePendingFile: (id: string) => void;
+  onRequestRemovePendingBatchFile: (id: string) => void;
+  pendingRemovalFileId: string | null;
   fileInputRef: React.RefObject<HTMLInputElement>;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onFilesDropped: (files: File[]) => void;
@@ -66,7 +68,7 @@ interface CommentReviewInputPanelProps {
   parseButtonLabel: string;
   onParseDocument: () => void;
   onClearSaved: () => void;
-  onDeleteLetter: () => void;
+  onDeleteSavedLetter: () => void;
   disciplineOptions: string[];
   onParsePasted: (payload: {
     text: string;
@@ -93,6 +95,19 @@ function PendingFileStatusIcon({ status }: { status: PendingUploadFile["status"]
   return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal" />;
 }
 
+function isPendingFileRowProcessing(
+  item: PendingUploadFile,
+  parsing: boolean,
+): boolean {
+  return (
+    parsing &&
+    (item.status === "uploading" ||
+      item.status === "converting" ||
+      item.status === "extracting" ||
+      item.status === "parsing")
+  );
+}
+
 export function CommentReviewInputPanel({
   inputMethod,
   onInputMethodChange,
@@ -105,7 +120,8 @@ export function CommentReviewInputPanel({
   imagePreview,
   originalUploadFile,
   pendingUploadFiles,
-  onRemovePendingFile,
+  onRequestRemovePendingBatchFile,
+  pendingRemovalFileId,
   fileInputRef,
   onFileChange,
   onFilesDropped,
@@ -122,7 +138,7 @@ export function CommentReviewInputPanel({
   parseButtonLabel,
   onParseDocument,
   onClearSaved,
-  onDeleteLetter,
+  onDeleteSavedLetter,
   disciplineOptions,
   onParsePasted,
   onAddPastedSingle,
@@ -239,14 +255,26 @@ export function CommentReviewInputPanel({
                 ) : null}
               </div>
               {selectedLetter ? (
-                <div className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                  <p className="truncate text-foreground/90">{selectedLetter.file_name}</p>
-                  <p>
-                    {formatLetterDate(selectedLetter.created_at)}
-                    {savedManualLetterCount > 0
-                      ? ` · ${savedManualLetterCount} saved comment${savedManualLetterCount !== 1 ? "s" : ""}`
-                      : ""}
-                  </p>
+                <div className="mt-1.5 space-y-2">
+                  <div className="space-y-0.5 text-[11px] text-muted-foreground">
+                    <p className="truncate text-foreground/90">{selectedLetter.file_name}</p>
+                    <p>
+                      {formatLetterDate(selectedLetter.created_at)}
+                      {savedManualLetterCount > 0
+                        ? ` · ${savedManualLetterCount} saved comment${savedManualLetterCount !== 1 ? "s" : ""}`
+                        : ""}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={onDeleteSavedLetter}
+                    disabled={parsing || saving || !sourceDocumentId}
+                    size="sm"
+                    className={cn(commentReviewToolbarBtn.dangerOutline, "h-7 w-full text-[11px]")}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete saved letter and comments
+                  </Button>
                 </div>
               ) : null}
             </div>
@@ -322,7 +350,12 @@ export function CommentReviewInputPanel({
               <li className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 Selected files ({pendingUploadFiles.length})
               </li>
-              {pendingUploadFiles.map((item) => (
+              {pendingUploadFiles.map((item) => {
+                const rowProcessing = isPendingFileRowProcessing(item, parsing);
+                const rowRemoving = pendingRemovalFileId === item.id;
+                const canRemove = !rowProcessing && !rowRemoving;
+
+                return (
                 <li
                   key={item.id}
                   className="flex items-start gap-2 rounded-md border border-border/30 bg-background/50 px-2 py-1.5 text-xs dark:bg-obsidian/40"
@@ -348,20 +381,20 @@ export function CommentReviewInputPanel({
                       ) : null}
                     </p>
                   </div>
-                  {item.status === "pending" && !parsing ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label={`Remove ${item.file.name}`}
-                      onClick={() => onRemovePendingFile(item.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={`Remove ${item.file.name} from batch`}
+                    disabled={!canRemove}
+                    onClick={() => onRequestRemovePendingBatchFile(item.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : null}
 
@@ -415,18 +448,6 @@ export function CommentReviewInputPanel({
                 className={commentReviewToolbarBtn.ghost}
               >
                 Clear saved comments
-              </Button>
-            ) : null}
-            {originalUploadFile || sourceDocumentId ? (
-              <Button
-                variant="outline"
-                onClick={onDeleteLetter}
-                disabled={parsing || saving}
-                size="sm"
-                className={commentReviewToolbarBtn.dangerOutline}
-              >
-                <Trash2 />
-                Delete letter
               </Button>
             ) : null}
           </div>

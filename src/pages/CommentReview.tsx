@@ -91,7 +91,18 @@ interface ParserSummary {
 interface ParsedCommentRow extends CommentReviewParsedCommentRow {}
 
 type ConfirmDialogState =
-  | { kind: "deleteLetter" }
+  | {
+      kind: "deleteSavedLetter";
+      sourceDocumentId: string;
+      fileName: string;
+      savedCommentCount: number;
+    }
+  | {
+      kind: "removeParsedBatchFile";
+      fileRowId: string;
+      fileName: string;
+      sourceDocumentId?: string | null;
+    }
   | { kind: "clearSaved" }
   | { kind: "approveAll"; conflict: "same_source" | "other_letters" | "none" }
   | { kind: "newUpload"; file: File }
@@ -198,6 +209,7 @@ export default function CommentReview() {
   const [lastParseMethod, setLastParseMethod] = useState<string | null>(null);
   const [parseAttempted, setParseAttempted] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmDialogState>(null);
+  const [pendingRemovalFileId, setPendingRemovalFileId] = useState<string | null>(null);
   const [newUploadReplaceProject, setNewUploadReplaceProject] = useState(false);
   const initializedLetterProjectRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -844,9 +856,77 @@ export default function CommentReview() {
     [resetExtractedParseState],
   );
 
-  const removePendingFile = useCallback((id: string) => {
-    setPendingUploadFiles((prev) => prev.filter((item) => item.id !== id));
+  const removeUnsavedParsedFile = useCallback((sourceDocId: string) => {
+    setUploadRows((prev) => prev.filter((row) => row._sourceDocumentId !== sourceDocId));
   }, []);
+
+  const removePendingBatchFile = useCallback(
+    (fileRowId: string) => {
+      if (batchInFlightRef.current.has(fileRowId)) {
+        toast.info("This file is still processing and cannot be removed yet");
+        return;
+      }
+
+      const target = pendingUploadFiles.find((item) => item.id === fileRowId);
+      if (!target) return;
+
+      setPendingUploadFiles((prev) => prev.filter((item) => item.id !== fileRowId));
+
+      if (target.sourceDocumentId) {
+        removeUnsavedParsedFile(target.sourceDocumentId);
+      }
+
+      setPendingRemovalFileId(null);
+    },
+    [pendingUploadFiles, removeUnsavedParsedFile],
+  );
+
+  const requestRemovePendingBatchFile = useCallback(
+    (fileRowId: string) => {
+      const item = pendingUploadFiles.find((row) => row.id === fileRowId);
+      if (!item) return;
+
+      if (batchInFlightRef.current.has(fileRowId)) {
+        toast.info("This file is still processing and cannot be removed yet");
+        return;
+      }
+
+      const rowProcessing =
+        parsing &&
+        (item.status === "uploading" ||
+          item.status === "converting" ||
+          item.status === "extracting" ||
+          item.status === "parsing");
+      if (rowProcessing) {
+        toast.info("Wait until processing finishes for this file");
+        return;
+      }
+
+      if (item.status === "success") {
+        setPendingRemovalFileId(fileRowId);
+        setPendingConfirm({
+          kind: "removeParsedBatchFile",
+          fileRowId,
+          fileName: item.file.name,
+          sourceDocumentId: item.sourceDocumentId,
+        });
+        return;
+      }
+
+      removePendingBatchFile(fileRowId);
+    },
+    [pendingUploadFiles, parsing, removePendingBatchFile],
+  );
+
+  const requestDeleteSavedLetterAndComments = useCallback(() => {
+    if (!sourceDocumentId || !selectedLetter) return;
+    setPendingConfirm({
+      kind: "deleteSavedLetter",
+      sourceDocumentId,
+      fileName: selectedLetter.file_name,
+      savedCommentCount: savedManualLetterCount,
+    });
+  }, [sourceDocumentId, selectedLetter, savedManualLetterCount]);
 
   const applyNewUpload = useCallback(
     (file: File, replaceProjectOnApprove: boolean) => {
@@ -1524,20 +1604,8 @@ export default function CommentReview() {
     toast.success(`Removed ${count} saved manual-letter comment${count === 1 ? "" : "s"}`);
   }, [projectId, sourceDocumentId, deleteManualLetterComments, refetchComments]);
 
-  const deleteUploadedLetter = useCallback(async () => {
-      const deletedDocId = sourceDocumentId;
-
-      if (!deletedDocId) {
-        setOriginalUploadFile(null);
-        setPendingUploadFiles([]);
-        resetExtractedParseState();
-        setImagePreview((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return null;
-        });
-        return;
-      }
-
+  const deleteSavedLetterAndComments = useCallback(
+    async (targetDocumentId: string) => {
       if (!projectId) {
         throw new Error("Select a project before deleting the letter");
       }
@@ -1545,7 +1613,7 @@ export default function CommentReview() {
       const { data: doc, error: fetchError } = await supabase
         .from("project_documents")
         .select("*")
-        .eq("id", deletedDocId)
+        .eq("id", targetDocumentId)
         .maybeSingle();
       if (fetchError) {
         throw new Error(`Failed to load letter metadata: ${fetchError.message}`);
@@ -1553,7 +1621,7 @@ export default function CommentReview() {
 
       let removedCount = 0;
       try {
-        removedCount = await deleteManualLetterCommentsForDocument(projectId, deletedDocId);
+        removedCount = await deleteManualLetterCommentsForDocument(projectId, targetDocumentId);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         throw new Error(`Failed to delete parsed comments: ${message}`);
@@ -1561,7 +1629,7 @@ export default function CommentReview() {
 
       const remainingLinkedComments = await countManualLetterCommentsForDocument(
         projectId,
-        deletedDocId,
+        targetDocumentId,
       );
       if (remainingLinkedComments > 0) {
         throw new Error(
@@ -1580,7 +1648,7 @@ export default function CommentReview() {
         const { error: dbError } = await supabase
           .from("project_documents")
           .delete()
-          .eq("id", deletedDocId);
+          .eq("id", targetDocumentId);
         if (dbError) {
           throw new Error(`Failed to delete letter record: ${dbError.message}`);
         }
@@ -1593,28 +1661,30 @@ export default function CommentReview() {
             (row) =>
               !(
                 row.ingest_source === "manual_letter" &&
-                row.source_document_id === deletedDocId
+                row.source_document_id === targetDocumentId
               ),
           ),
       );
       await queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
 
-      setUploadRows((prev) => prev.filter((row) => row._sourceDocumentId !== deletedDocId));
+      setUploadRows((prev) => prev.filter((row) => row._sourceDocumentId !== targetDocumentId));
       setPendingUploadFiles((prev) =>
-        prev.filter((item) => item.sourceDocumentId !== deletedDocId),
+        prev.filter((item) => item.sourceDocumentId !== targetDocumentId),
       );
 
       await fetchDocuments();
       await refetchComments();
 
-      setSourceDocumentId(null);
-      setOriginalUploadFile(null);
-      resetExtractedParseState();
-      setNewUploadReplaceProject(false);
-      setImagePreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
+      if (sourceDocumentId === targetDocumentId) {
+        setSourceDocumentId(null);
+        setOriginalUploadFile(null);
+        resetExtractedParseState();
+        setNewUploadReplaceProject(false);
+        setImagePreview((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+      }
 
       toast.success(
         removedCount > 0
@@ -1623,8 +1693,8 @@ export default function CommentReview() {
       );
     },
     [
-      sourceDocumentId,
       projectId,
+      sourceDocumentId,
       fetchDocuments,
       refetchComments,
       resetExtractedParseState,
@@ -1636,8 +1706,10 @@ export default function CommentReview() {
     async (action: ConfirmDialogState) => {
       if (!action) return;
       try {
-        if (action.kind === "deleteLetter") {
-          await deleteUploadedLetter();
+        if (action.kind === "deleteSavedLetter") {
+          await deleteSavedLetterAndComments(action.sourceDocumentId);
+        } else if (action.kind === "removeParsedBatchFile") {
+          removePendingBatchFile(action.fileRowId);
         } else if (action.kind === "clearSaved") {
           await clearSavedManualLetterComments();
         }
@@ -1647,9 +1719,9 @@ export default function CommentReview() {
       }
     },
     [
-      deleteUploadedLetter,
+      deleteSavedLetterAndComments,
+      removePendingBatchFile,
       clearSavedManualLetterComments,
-      executeApproveAll,
     ],
   );
 
@@ -1939,7 +2011,8 @@ export default function CommentReview() {
                         imagePreview={imagePreview}
                         originalUploadFile={originalUploadFile}
                         pendingUploadFiles={pendingUploadFiles}
-                        onRemovePendingFile={removePendingFile}
+                        onRequestRemovePendingBatchFile={requestRemovePendingBatchFile}
+                        pendingRemovalFileId={pendingRemovalFileId}
                         fileInputRef={fileInputRef}
                         onFileChange={handleFileChange}
                         onFilesDropped={handleFilesDropped}
@@ -1956,7 +2029,7 @@ export default function CommentReview() {
                         parseButtonLabel={parseButtonLabel}
                         onParseDocument={() => void runParse()}
                         onClearSaved={() => setPendingConfirm({ kind: "clearSaved" })}
-                        onDeleteLetter={() => setPendingConfirm({ kind: "deleteLetter" })}
+                        onDeleteSavedLetter={requestDeleteSavedLetterAndComments}
                         disciplineOptions={disciplineOptions}
                         onParsePasted={handleParsePastedComments}
                         onAddPastedSingle={handleAddPastedSingleComment}
@@ -1995,29 +2068,48 @@ export default function CommentReview() {
         onSave={handleSaveCommentFromDialog}
       />
 
-      <AlertDialog open={pendingConfirm != null} onOpenChange={(open) => !open && setPendingConfirm(null)}>
+      <AlertDialog
+        open={pendingConfirm != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingConfirm(null);
+            setPendingRemovalFileId(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingConfirm?.kind === "deleteLetter"
-                ? "Delete this letter and its parsed comments?"
-                : pendingConfirm?.kind === "clearSaved"
-                  ? "Clear saved comments from this letter?"
-                  : pendingConfirm?.kind === "approveAll"
-                    ? "Save parsed comments"
-                    : pendingConfirm?.kind === "newUpload"
-                      ? "Saved manual-letter comments already exist"
-                      : pendingConfirm?.kind === "newBatchUpload"
-                        ? "Add more comment letter files?"
-                        : "Confirm action"}
+              {pendingConfirm?.kind === "deleteSavedLetter"
+                ? `Delete “${pendingConfirm.fileName}” and its saved comments?`
+                : pendingConfirm?.kind === "removeParsedBatchFile"
+                  ? `Remove “${pendingConfirm.fileName}” from this batch?`
+                  : pendingConfirm?.kind === "clearSaved"
+                    ? "Clear saved comments from this letter?"
+                    : pendingConfirm?.kind === "approveAll"
+                      ? "Save parsed comments"
+                      : pendingConfirm?.kind === "newUpload"
+                        ? "Saved manual-letter comments already exist"
+                        : pendingConfirm?.kind === "newBatchUpload"
+                          ? "Add more comment letter files?"
+                          : "Confirm action"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm text-muted-foreground">
-                {pendingConfirm?.kind === "deleteLetter" ? (
+                {pendingConfirm?.kind === "deleteSavedLetter" ? (
                   <p>
-                    This removes the uploaded letter, its storage file, and only the parsed comments
-                    linked to this letter&apos;s source document. Portal comments and comments from
-                    other documents are not affected.
+                    Delete &ldquo;{pendingConfirm.fileName}&rdquo; and its{" "}
+                    {pendingConfirm.savedCommentCount} saved comment
+                    {pendingConfirm.savedCommentCount !== 1 ? "s" : ""}? This removes the uploaded
+                    letter, its storage file, and only parsed comments linked to this letter&apos;s
+                    source document. Portal comments and comments from other documents are not
+                    affected.
+                  </p>
+                ) : pendingConfirm?.kind === "removeParsedBatchFile" ? (
+                  <p>
+                    Remove this parsed file from the current review? Only unsaved parsed rows for
+                    &ldquo;{pendingConfirm.fileName}&rdquo; will be cleared. Already approved saved
+                    comments are not affected.
                   </p>
                 ) : pendingConfirm?.kind === "approveAll" ? (
                   <p>
@@ -2049,7 +2141,7 @@ export default function CommentReview() {
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            {pendingConfirm?.kind === "deleteLetter" ? (
+            {pendingConfirm?.kind === "deleteSavedLetter" ? (
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => {
@@ -2059,6 +2151,16 @@ export default function CommentReview() {
                 }}
               >
                 Delete letter and comments
+              </AlertDialogAction>
+            ) : pendingConfirm?.kind === "removeParsedBatchFile" ? (
+              <AlertDialogAction
+                onClick={() => {
+                  const action = pendingConfirm;
+                  setPendingConfirm(null);
+                  void executeConfirmAction(action);
+                }}
+              >
+                Remove from batch
               </AlertDialogAction>
             ) : pendingConfirm?.kind === "approveAll" ? (
               <>
