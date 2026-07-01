@@ -46,6 +46,15 @@ import {
   processOneCommentReviewFile,
 } from "@/lib/commentReviewBatchProcess";
 import {
+  auditOrphanedManualLetterComments,
+  deleteManualLetterCommentsForDocument,
+  deleteOrphanedManualLetterComments,
+  fetchCommentReviewParsedComments,
+  countManualLetterCommentsForDocument,
+  uploadRowRequiresSourceDocument,
+  type CommentReviewParsedCommentRow,
+} from "@/lib/commentReviewParsedComments";
+import {
   COMMENT_REVIEW_DISCIPLINES,
   createPastedSingleCommentRow,
   markRowsAsParsed,
@@ -79,22 +88,7 @@ interface ParserSummary {
   by_discipline: Record<string, number>;
 }
 
-interface ParsedCommentRow {
-  id: string;
-  project_id: string;
-  original_text: string;
-  discipline: string | null;
-  code_reference: string | null;
-  status: string;
-  page_number: number | null;
-  ingest_source: "raw_ref" | "fallback_llm" | "manual_letter" | null;
-  source_document_id?: string | null;
-  previous_comment_text?: string | null;
-  existing_response_text?: string | null;
-  code_references?: string[] | string | null;
-  reviewer_name?: string | null;
-  comment_number?: string | null;
-}
+interface ParsedCommentRow extends CommentReviewParsedCommentRow {}
 
 type ConfirmDialogState =
   | { kind: "deleteLetter" }
@@ -156,7 +150,7 @@ export default function CommentReview() {
   const { user, loading: authLoading } = useAuth();
   const { projects } = useProjects();
   const { projectId, projectIdFromUrl } = useResolvedProjectId();
-  const { uploadDocumentWithResult, deleteDocument, getDownloadUrl, documents, fetchDocuments } =
+  const { uploadDocumentWithResult, getDownloadUrl, documents, fetchDocuments } =
     useProjectDocuments(projectId);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -217,6 +211,7 @@ export default function CommentReview() {
   const reviewListHydratedForRef = useRef<string | null>(null);
   const batchProcessingRef = useRef(false);
   const batchInFlightRef = useRef<Set<string>>(new Set());
+  const orphanCleanupProjectRef = useRef<string | null>(null);
   const timerRef = useRef<ReviewTimerHandle>(null);
 
   const disciplineOptions = useMemo(() => {
@@ -226,16 +221,13 @@ export default function CommentReview() {
 
   const fetchComments = useCallback(async (): Promise<ParsedCommentRow[]> => {
     if (!projectId) return [];
-    const { data, error } = await supabase
-      .from("parsed_comments")
-      .select("id, project_id, original_text, discipline, code_reference, status, page_number, ingest_source, source_document_id, previous_comment_text, existing_response_text, code_references, reviewer_name, comment_number")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: true });
-    if (error) {
+    try {
+      return await fetchCommentReviewParsedComments(projectId);
+    } catch (error) {
+      console.error("[CommentReview] failed to load comments", error);
       toast.error("Failed to load comments");
       return [];
     }
-    return (data as ParsedCommentRow[]) || [];
   }, [projectId]);
 
   const extractRefFromOriginalText = useCallback((text: string): string | null => {
@@ -248,6 +240,72 @@ export default function CommentReview() {
     queryFn: fetchComments,
     enabled: !!projectId,
   });
+
+  useEffect(() => {
+    if (!projectId) {
+      orphanCleanupProjectRef.current = null;
+      return;
+    }
+    if (orphanCleanupProjectRef.current === projectId) return;
+    orphanCleanupProjectRef.current = projectId;
+
+    void (async () => {
+      try {
+        const audit = await auditOrphanedManualLetterComments(projectId);
+        if (audit.orphanedRows.length === 0) {
+          console.info("[comment-review] orphan audit", {
+            projectId,
+            orphanedCount: 0,
+            validManualLetterDocumentIds: audit.validManualLetterDocumentIds,
+          });
+          return;
+        }
+
+        const sourceDocumentIdsInvolved = [
+          ...new Set(
+            audit.orphanedRows
+              .map((row) => row.source_document_id)
+              .filter((value): value is string => Boolean(value)),
+          ),
+        ];
+
+        console.info("[comment-review] orphan audit", {
+          projectId,
+          orphanedCount: audit.orphanedRows.length,
+          validManualLetterDocumentIds: audit.validManualLetterDocumentIds,
+          sourceDocumentIdsInvolved,
+          orphanIds: audit.orphanedRows.map((row) => row.id),
+          reasons: audit.orphanedRows.reduce<Record<string, number>>((acc, row) => {
+            acc[row.reason] = (acc[row.reason] ?? 0) + 1;
+            return acc;
+          }, {}),
+        });
+
+        const deleted = await deleteOrphanedManualLetterComments(
+          projectId,
+          audit.orphanedRows.map((row) => row.id),
+        );
+
+        console.info("[comment-review] orphan cleanup complete", {
+          projectId,
+          deleted,
+          sourceDocumentIdsInvolved,
+        });
+
+        queryClient.setQueryData<ParsedCommentRow[]>(
+          ["parsed_comments", projectId],
+          (existing) =>
+            (existing ?? []).filter(
+              (row) => !audit.orphanedRows.some((orphan) => orphan.id === row.id),
+            ),
+        );
+        await queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
+        await refetchComments();
+      } catch (error) {
+        console.error("[comment-review] orphan cleanup failed", error);
+      }
+    })();
+  }, [projectId, queryClient, refetchComments]);
 
   const savedManualLetterCount = useMemo(() => {
     if (!sourceDocumentId) return 0;
@@ -1281,49 +1339,46 @@ export default function CommentReview() {
   const deleteManualLetterComments = useCallback(
     async (scope: ManualLetterCommentScope, docId?: string | null): Promise<number> => {
       if (!projectId) return 0;
-      let query = supabase
+      if (scope === "source_document" && docId) {
+        return deleteManualLetterCommentsForDocument(projectId, docId);
+      }
+
+      const { error, count } = await supabase
         .from("parsed_comments")
         .delete({ count: "exact" })
         .eq("project_id", projectId)
         .eq("ingest_source", "manual_letter");
-      if (scope === "source_document" && docId) {
-        query = query.eq("source_document_id", docId);
-      }
-      const { error, count } = await query;
       if (error) throw error;
       return count ?? 0;
     },
     [projectId],
   );
 
-  const insertApprovedRows = useCallback(
-    async (docId: string | null) => {
-      if (!projectId) return 0;
-      const toInsert = uploadRows.map((r) => ({
-        project_id: projectId,
-        original_text: r.original_text,
-        discipline: r.discipline,
-        code_reference: r.code_reference || null,
-        status: "Approved",
-        page_number: r.source_page ?? null,
-        ingest_source: "manual_letter" as const,
-        reviewer_name: r.reviewer_name ?? null,
-        comment_number: r.comment_number ?? null,
-        previous_comment_text: r.previous_comment_text ?? null,
-        existing_response_text: r.existing_response_text ?? null,
-        code_references:
-          r.code_references && r.code_references.length > 0
-            ? JSON.stringify(r.code_references)
-            : null,
-        confidence: typeof r.confidence === "number" ? r.confidence : null,
-        source_document_id: r._sourceDocumentId ?? docId,
-      }));
-      const { error } = await supabase.from("parsed_comments").insert(toInsert);
-      if (error) throw error;
-      return toInsert.length;
-    },
-    [projectId, uploadRows],
-  );
+  const insertApprovedRows = useCallback(async () => {
+    if (!projectId) return 0;
+    const toInsert = uploadRows.map((row) => ({
+      project_id: projectId,
+      original_text: row.original_text,
+      discipline: row.discipline,
+      code_reference: row.code_reference || null,
+      status: "Approved",
+      page_number: row.source_page ?? null,
+      ingest_source: "manual_letter" as const,
+      reviewer_name: row.reviewer_name ?? null,
+      comment_number: row.comment_number ?? null,
+      previous_comment_text: row.previous_comment_text ?? null,
+      existing_response_text: row.existing_response_text ?? null,
+      code_references:
+        row.code_references && row.code_references.length > 0
+          ? JSON.stringify(row.code_references)
+          : null,
+      confidence: typeof row.confidence === "number" ? row.confidence : null,
+      source_document_id: row._sourceDocumentId ?? null,
+    }));
+    const { error } = await supabase.from("parsed_comments").insert(toInsert);
+    if (error) throw error;
+    return toInsert.length;
+  }, [projectId, uploadRows]);
 
   const executeApproveAll = useCallback(
     async (options: { replaceScope: ManualLetterCommentScope | "none" }) => {
@@ -1333,6 +1388,16 @@ export default function CommentReview() {
         await timerRef.current.stopAndSave();
       }
       try {
+        const rowsMissingSourceDocument = uploadRows.filter(
+          (row) => uploadRowRequiresSourceDocument(row) && !row._sourceDocumentId,
+        );
+        if (rowsMissingSourceDocument.length > 0) {
+          toast.error(
+            `${rowsMissingSourceDocument.length} parsed comment${rowsMissingSourceDocument.length !== 1 ? "s" : ""} from uploaded files are missing a source document link. Re-parse the letter and try again.`,
+          );
+          return;
+        }
+
         let docId: string | null = sourceDocumentId;
         if (!docId) {
           docId = uploadRows.find((row) => row._sourceDocumentId)?._sourceDocumentId ?? null;
@@ -1355,12 +1420,16 @@ export default function CommentReview() {
           }
           setNewUploadReplaceProject(false);
         } else if (options.replaceScope === "source_document") {
+          if (!docId) {
+            toast.error("Select the source comment letter before replacing saved comments");
+            return;
+          }
           await deleteManualLetterComments("source_document", docId);
         } else if (options.replaceScope === "project_manual") {
           await deleteManualLetterComments("project_manual");
         }
 
-        const inserted = await insertApprovedRows(docId);
+        const inserted = await insertApprovedRows();
         if (import.meta.env.DEV) {
           console.info("[CommentReview] Approved rows saved to parsed_comments", {
             projectId,
@@ -1457,34 +1526,66 @@ export default function CommentReview() {
         return;
       }
 
+      if (!projectId) {
+        throw new Error("Select a project before deleting the letter");
+      }
+
       const { data: doc, error: fetchError } = await supabase
         .from("project_documents")
         .select("*")
         .eq("id", deletedDocId)
         .maybeSingle();
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        throw new Error(`Failed to load letter metadata: ${fetchError.message}`);
+      }
 
-      const removedCount = await deleteManualLetterComments("source_document", deletedDocId);
+      let removedCount = 0;
+      try {
+        removedCount = await deleteManualLetterCommentsForDocument(projectId, deletedDocId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        throw new Error(`Failed to delete parsed comments: ${message}`);
+      }
+
+      const remainingLinkedComments = await countManualLetterCommentsForDocument(
+        projectId,
+        deletedDocId,
+      );
+      if (remainingLinkedComments > 0) {
+        throw new Error(
+          `Failed to delete all parsed comments for this letter (${remainingLinkedComments} remaining)`,
+        );
+      }
 
       if (doc) {
-        const deleted = await deleteDocument(doc as ProjectDocument);
-        if (!deleted) throw new Error("Failed to delete uploaded letter");
+        const { error: storageError } = await supabase.storage
+          .from("project-documents")
+          .remove([doc.file_path]);
+        if (storageError) {
+          throw new Error(`Failed to delete letter file from storage: ${storageError.message}`);
+        }
+
+        const { error: dbError } = await supabase
+          .from("project_documents")
+          .delete()
+          .eq("id", deletedDocId);
+        if (dbError) {
+          throw new Error(`Failed to delete letter record: ${dbError.message}`);
+        }
       }
 
-      if (projectId) {
-        queryClient.setQueryData<ParsedCommentRow[]>(
-          ["parsed_comments", projectId],
-          (existing) =>
-            (existing ?? []).filter(
-              (row) =>
-                !(
-                  row.ingest_source === "manual_letter" &&
-                  row.source_document_id === deletedDocId
-                ),
-            ),
-        );
-        await queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
-      }
+      queryClient.setQueryData<ParsedCommentRow[]>(
+        ["parsed_comments", projectId],
+        (existing) =>
+          (existing ?? []).filter(
+            (row) =>
+              !(
+                row.ingest_source === "manual_letter" &&
+                row.source_document_id === deletedDocId
+              ),
+          ),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
 
       setUploadRows((prev) => prev.filter((row) => row._sourceDocumentId !== deletedDocId));
       setPendingUploadFiles((prev) =>
@@ -1512,8 +1613,6 @@ export default function CommentReview() {
     [
       sourceDocumentId,
       projectId,
-      deleteManualLetterComments,
-      deleteDocument,
       fetchDocuments,
       refetchComments,
       resetExtractedParseState,
