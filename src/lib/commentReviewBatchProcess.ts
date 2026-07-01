@@ -85,6 +85,26 @@ export function logCommentBatch(
   console.info("[comment-batch]", event, { jobId, ...details });
 }
 
+export function logCommentReviewSavedLetter(
+  event: string,
+  details: Record<string, string | number | undefined>,
+): void {
+  console.info(`[comment-review] saved-letter ${event}`, details);
+}
+
+function logProcessStage(
+  logKind: "batch" | "saved-letter",
+  jobId: string,
+  event: string,
+  details: Record<string, string | number | undefined>,
+): void {
+  if (logKind === "saved-letter") {
+    logCommentReviewSavedLetter(event, details);
+  } else {
+    logCommentBatch(jobId, event, details);
+  }
+}
+
 export function pendingFileStatusDisplay(item: PendingUploadFile): string {
   if (item.status === "success" && item.commentCount != null) {
     return `Complete · ${item.commentCount} comment${item.commentCount !== 1 ? "s" : ""}`;
@@ -203,6 +223,8 @@ export interface ProcessOneCommentReviewFileParams {
     parser_summary?: ParserSummary;
   }>;
   appendRows: (rows: ParsedRow[]) => void;
+  existingDocumentId?: string | null;
+  logKind?: "batch" | "saved-letter";
 }
 
 export interface ProcessOneCommentReviewFileResult {
@@ -210,6 +232,7 @@ export interface ProcessOneCommentReviewFileResult {
   commentCount: number;
   parseMethod?: string;
   parserSummary?: ParserSummary;
+  sourceDocumentId?: string | null;
 }
 
 export async function processOneCommentReviewFile(
@@ -223,47 +246,71 @@ export async function processOneCommentReviewFile(
     persistCommentLetterForFile,
     invokeCommentParser,
     appendRows,
+    existingDocumentId,
+    logKind = "batch",
   } = params;
 
   const startedAt = Date.now();
-  logCommentBatch(jobId, "file started", {
+  logProcessStage(logKind, jobId, "file started", {
     fileId: fileRow.id,
     fileName: fileRow.file.name,
+    documentId: existingDocumentId ?? fileRow.sourceDocumentId,
   });
 
   try {
-    onStageUpdate(fileRow.id, {
-      status: "uploading",
-      error: undefined,
-      failedStage: undefined,
-      timedOut: false,
-    });
+    let docId = existingDocumentId ?? fileRow.sourceDocumentId ?? null;
 
-    const uploadResult = await withTimeout(
-      persistCommentLetterForFile(fileRow.file),
-      BATCH_TIMEOUTS.upload,
-      "upload",
-    );
+    if (docId) {
+      onStageUpdate(fileRow.id, {
+        sourceDocumentId: docId,
+        error: undefined,
+        failedStage: undefined,
+        timedOut: false,
+      });
+      logProcessStage(logKind, jobId, "upload complete", {
+        fileId: fileRow.id,
+        documentId: docId,
+        durationMs: Date.now() - startedAt,
+        skipped: 1,
+      });
+    } else {
+      onStageUpdate(fileRow.id, {
+        status: "uploading",
+        error: undefined,
+        failedStage: undefined,
+        timedOut: false,
+      });
 
-    if (!uploadResult.docId) {
-      throw new BatchStageError(
+      const uploadResult = await withTimeout(
+        persistCommentLetterForFile(fileRow.file),
+        BATCH_TIMEOUTS.upload,
         "upload",
-        uploadResult.error ?? "Failed to save comment letter to project documents",
-        "upload_rejected",
       );
-    }
 
-    const docId = uploadResult.docId;
-    onStageUpdate(fileRow.id, { sourceDocumentId: docId });
-    logCommentBatch(jobId, "upload complete", {
-      fileId: fileRow.id,
-      sourceDocumentId: docId,
-      durationMs: Date.now() - startedAt,
-    });
+      if (!uploadResult.docId) {
+        throw new BatchStageError(
+          "upload",
+          uploadResult.error ?? "Failed to save comment letter to project documents",
+          "upload_rejected",
+        );
+      }
+
+      docId = uploadResult.docId;
+      onStageUpdate(fileRow.id, { sourceDocumentId: docId });
+      logProcessStage(logKind, jobId, "upload complete", {
+        fileId: fileRow.id,
+        documentId: docId,
+        durationMs: Date.now() - startedAt,
+      });
+    }
 
     let extractionFile = fileRow.file;
     if (isLegacyDocFile(fileRow.file)) {
       onStageUpdate(fileRow.id, { status: "converting" });
+      logProcessStage(logKind, jobId, "conversion started", {
+        fileId: fileRow.id,
+        documentId: docId,
+      });
       extractionFile = await withTimeout(
         prepareCommentLetterExtractionFile({
           projectId,
@@ -283,14 +330,18 @@ export async function processOneCommentReviewFile(
         );
       }
 
-      logCommentBatch(jobId, "conversion complete", {
+      logProcessStage(logKind, jobId, "conversion complete", {
         fileId: fileRow.id,
-        sourceDocumentId: docId,
+        documentId: docId,
         durationMs: Date.now() - startedAt,
       });
     }
 
     onStageUpdate(fileRow.id, { status: "extracting" });
+    logProcessStage(logKind, jobId, "extraction started", {
+      fileId: fileRow.id,
+      documentId: docId,
+    });
     const extraction = await withTimeout(
       extractDocumentForCommentParse(extractionFile),
       BATCH_TIMEOUTS.extraction,
@@ -301,21 +352,27 @@ export async function processOneCommentReviewFile(
       throw new BatchStageError("extraction", extraction.message, "unsupported_doc");
     }
 
-    logCommentBatch(jobId, "extraction complete", {
+    logProcessStage(logKind, jobId, "extraction complete", {
       fileId: fileRow.id,
-      sourceDocumentId: docId,
+      documentId: docId,
       durationMs: Date.now() - startedAt,
     });
 
     onStageUpdate(fileRow.id, { status: "parsing" });
-    const invokeBody = await buildParserInvokeBody(
-      extraction,
-      fileRow.file.name,
-      docId,
-    );
+    logProcessStage(logKind, jobId, "parser started", {
+      fileId: fileRow.id,
+      documentId: docId,
+    });
 
     const { comments, parse_method, parser_summary } = await withTimeout(
-      invokeCommentParser(invokeBody),
+      (async () => {
+        const invokeBody = await buildParserInvokeBody(
+          extraction,
+          fileRow.file.name,
+          docId,
+        );
+        return invokeCommentParser(invokeBody);
+      })(),
       BATCH_TIMEOUTS.parsing,
       "parsing",
     );
@@ -339,9 +396,9 @@ export async function processOneCommentReviewFile(
       timedOut: false,
     });
 
-    logCommentBatch(jobId, "parser complete", {
+    logProcessStage(logKind, jobId, "parser complete", {
       fileId: fileRow.id,
-      sourceDocumentId: docId,
+      documentId: docId,
       commentCount: parsedRows.length,
       durationMs: Date.now() - startedAt,
     });
@@ -351,11 +408,13 @@ export async function processOneCommentReviewFile(
       commentCount: parsedRows.length,
       parseMethod: parse_method,
       parserSummary: parser_summary,
+      sourceDocumentId: docId,
     };
   } catch (err: unknown) {
     const failure = classifyBatchFailure(err);
-    logCommentBatch(jobId, "file failed", {
+    logProcessStage(logKind, jobId, "failed", {
       fileId: fileRow.id,
+      documentId: existingDocumentId ?? fileRow.sourceDocumentId,
       stage: failure.stage,
       errorCode: failure.code,
       durationMs: Date.now() - startedAt,

@@ -29,12 +29,8 @@ import { parsePgcRawRefDisplayText } from "@/lib/parsePgcRawRefDisplayText";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
 import {
   COMMENT_LETTER_SUPPORTED_FORMATS_HINT,
-  extractDocumentForCommentParse,
-  fileToBase64,
-  isLegacyDocFile,
   isSpreadsheetFile,
 } from "@/utils/extractDocumentText";
-import { prepareCommentLetterExtractionFile } from "@/lib/commentReviewLegacyDocParse";
 import { formatCommentLetterSaveError, type ProjectDocument } from "@/types/document";
 import {
   isManualCommentLetter,
@@ -790,15 +786,6 @@ export default function CommentReview() {
     [resetExtractedParseState],
   );
 
-  const updatePendingFile = useCallback(
-    (id: string, patch: Partial<PendingUploadFile>) => {
-      setPendingUploadFiles((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-      );
-    },
-    [],
-  );
-
   const removePendingFile = useCallback((id: string) => {
     setPendingUploadFiles((prev) => prev.filter((item) => item.id !== id));
   }, []);
@@ -870,22 +857,11 @@ export default function CommentReview() {
 
       if (valid.length === 0) return;
 
-      const useClassicSinglePath =
-        valid.length === 1 &&
-        pendingUploadFiles.length === 0 &&
-        uploadRows.length === 0;
-
-      if (useClassicSinglePath) {
-        if (projectManualLetterCount > 0) {
-          setPendingConfirm({ kind: "newUpload", file: valid[0] });
-          return;
-        }
-        applyNewUpload(valid[0], false);
-        return;
-      }
-
       if (projectManualLetterCount > 0) {
-        setPendingConfirm({ kind: "newBatchUpload", files: valid });
+        setPendingConfirm({
+          kind: valid.length === 1 ? "newUpload" : "newBatchUpload",
+          ...(valid.length === 1 ? { file: valid[0] } : { files: valid }),
+        });
         return;
       }
 
@@ -903,8 +879,24 @@ export default function CommentReview() {
         return next;
       });
     },
-    [applyNewUpload, pendingUploadFiles.length, projectManualLetterCount, uploadRows.length],
+    [projectManualLetterCount],
   );
+
+  const appendFilesToPendingBatch = useCallback((files: File[]) => {
+    setPendingUploadFiles((prev) => {
+      const existingKeys = new Set(
+        prev.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`),
+      );
+      const next = [...prev];
+      for (const file of files) {
+        const key = `${file.name}:${file.size}:${file.lastModified}`;
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
+        next.push(createPendingUploadFile(file));
+      }
+      return next;
+    });
+  }, []);
 
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -972,8 +964,6 @@ export default function CommentReview() {
     });
 
     if (result.document?.id) {
-      setSourceDocumentId(result.document.id);
-      await fetchDocuments();
       return { docId: result.document.id };
     }
 
@@ -985,7 +975,7 @@ export default function CommentReview() {
       fileType: originalUploadFile.type,
     });
     return { docId: null, error: message };
-  }, [projectId, user, originalUploadFile, sourceDocumentId, uploadDocumentWithResult, fetchDocuments]);
+  }, [projectId, user, originalUploadFile, sourceDocumentId, uploadDocumentWithResult]);
 
   const invokeCommentParser = useCallback(
     async (
@@ -1042,226 +1032,145 @@ export default function CommentReview() {
 
   const runParse = useCallback(async () => {
     if (batchProcessingRef.current) return;
+    if (!projectId) {
+      toast.error("Select a project in the sidebar before parsing");
+      return;
+    }
 
-    if (pendingBatchCount > 0) {
-      if (!projectId) {
-        toast.error("Select a project in the sidebar before parsing");
+    let queue = pendingUploadFiles.filter(
+      (item) =>
+        (item.status === "pending" || item.status === "failed") &&
+        !batchInFlightRef.current.has(item.id),
+    );
+
+    let logKind: "batch" | "saved-letter" = "batch";
+    let existingDocumentId: string | null = null;
+    let reparseSeedRow: PendingUploadFile | null = null;
+
+    if (queue.length === 0 && sourceDocumentId) {
+      const letterFile = await loadCommentLetterFile();
+      if (!letterFile) {
+        toast.error("Select or upload a comment letter first");
         return;
       }
 
-      const queue = pendingUploadFiles.filter(
-        (item) =>
-          (item.status === "pending" || item.status === "failed") &&
-          !batchInFlightRef.current.has(item.id),
-      );
-      if (queue.length === 0) return;
+      reparseSeedRow = {
+        ...createPendingUploadFile(letterFile),
+        sourceDocumentId,
+      };
+      setPendingUploadFiles([reparseSeedRow]);
+      setUploadRows([]);
+      queue = [reparseSeedRow];
+      logKind = "saved-letter";
+      existingDocumentId = sourceDocumentId;
+    }
 
-      const batchJobId = crypto.randomUUID();
-      batchProcessingRef.current = true;
-      setParsing(true);
+    if (queue.length === 0) {
+      toast.error("Select or upload a comment letter first");
+      return;
+    }
+
+    const batchJobId = crypto.randomUUID();
+    batchProcessingRef.current = true;
+    setParsing(true);
+    setParseStatus(null);
+
+    if (logKind === "batch") {
       logCommentBatch(batchJobId, "batch started", { fileCount: queue.length });
+    }
 
-      let successCount = 0;
-      let failCount = 0;
-      let totalComments = 0;
+    let successCount = 0;
+    let failCount = 0;
+    let totalComments = 0;
+    let lastSuccessfulDocId: string | null = null;
 
-      try {
-        for (const item of queue) {
-          if (batchInFlightRef.current.has(item.id)) continue;
-          batchInFlightRef.current.add(item.id);
+    const onStageUpdate = (id: string, patch: Partial<PendingUploadFile>) => {
+      setPendingUploadFiles((prev) => {
+        const base = prev.length > 0 ? prev : reparseSeedRow ? [reparseSeedRow] : prev;
+        return base.map((item) => (item.id === id ? { ...item, ...patch } : item));
+      });
+    };
 
-          try {
-            const result = await processOneCommentReviewFile({
-              jobId: batchJobId,
-              fileRow: item,
-              projectId,
-              onStageUpdate: updatePendingFile,
-              persistCommentLetterForFile,
-              invokeCommentParser,
-              appendRows: (rows) => {
-                setUploadRows((prev) => [...prev, ...rows]);
-              },
-            });
+    try {
+      for (const item of queue) {
+        if (batchInFlightRef.current.has(item.id)) continue;
+        batchInFlightRef.current.add(item.id);
 
-            if (result.success) {
-              successCount += 1;
-              totalComments += result.commentCount;
-              if (result.parserSummary) {
-                setParserSummary(result.parserSummary);
-              }
-              if (result.parseMethod) {
-                setLastParseMethod(result.parseMethod);
-              }
-            } else {
-              failCount += 1;
+        try {
+          const result = await processOneCommentReviewFile({
+            jobId: batchJobId,
+            fileRow: item,
+            projectId,
+            onStageUpdate,
+            persistCommentLetterForFile,
+            invokeCommentParser,
+            appendRows: (rows) => {
+              setUploadRows((prev) => [...prev, ...rows]);
+            },
+            existingDocumentId: existingDocumentId ?? item.sourceDocumentId ?? null,
+            logKind,
+          });
+
+          if (result.success) {
+            successCount += 1;
+            totalComments += result.commentCount;
+            if (result.sourceDocumentId) {
+              lastSuccessfulDocId = result.sourceDocumentId;
             }
-          } finally {
-            batchInFlightRef.current.delete(item.id);
+            if (result.parserSummary) {
+              setParserSummary(result.parserSummary);
+            }
+            if (result.parseMethod) {
+              setLastParseMethod(result.parseMethod);
+            }
+          } else {
+            failCount += 1;
           }
+        } finally {
+          batchInFlightRef.current.delete(item.id);
         }
+      }
 
+      if (successCount > 0 && lastSuccessfulDocId) {
+        setSourceDocumentId(lastSuccessfulDocId);
         await fetchDocuments();
-        setParseAttempted(true);
-        setParseStatus(
-          failCount > 0
-            ? `${successCount} complete, ${failCount} failed (${totalComments} comments parsed)`
-            : `${successCount} file${successCount !== 1 ? "s" : ""} complete · ${totalComments} comment${totalComments !== 1 ? "s" : ""}`,
-        );
+      }
 
-        if (successCount > 0) {
-          toast.success(
-            `Parsed ${totalComments} comment${totalComments !== 1 ? "s" : ""} from ${successCount} file${successCount !== 1 ? "s" : ""}`,
-          );
-        }
-        if (failCount > 0) {
-          toast.error(`${failCount} file${failCount !== 1 ? "s" : ""} failed`);
-        }
-      } finally {
-        batchInFlightRef.current.clear();
-        batchProcessingRef.current = false;
-        setParsing(false);
+      setParseAttempted(true);
+      setParseStatus(
+        failCount > 0
+          ? `${successCount} complete, ${failCount} failed (${totalComments} comments parsed)`
+          : `${successCount} file${successCount !== 1 ? "s" : ""} complete · ${totalComments} comment${totalComments !== 1 ? "s" : ""}`,
+      );
+
+      if (successCount > 0) {
+        toast.success(
+          `Parsed ${totalComments} comment${totalComments !== 1 ? "s" : ""} from ${successCount} file${successCount !== 1 ? "s" : ""}`,
+        );
+      }
+      if (failCount > 0) {
+        toast.error(`${failCount} file${failCount !== 1 ? "s" : ""} failed`);
+      }
+    } finally {
+      batchInFlightRef.current.clear();
+      batchProcessingRef.current = false;
+      setParsing(false);
+      if (logKind === "batch") {
         logCommentBatch(batchJobId, "batch finished", {
           successCount,
           failCount,
           totalComments,
         });
       }
-      return;
-    }
-
-    const letterFile = await loadCommentLetterFile();
-    if (!letterFile) {
-      toast.error("Select or upload a comment letter first");
-      return;
-    }
-    if (!projectId) {
-      toast.error("Select a project in the sidebar before parsing");
-      return;
-    }
-    if (!originalUploadFile) {
-      setOriginalUploadFile(letterFile);
-    }
-    setParsing(true);
-    setParseStatus(uploadRows.length > 0 ? "Re-extracting text…" : "Extracting text…");
-    setUploadRows([]);
-    try {
-      const { docId, error: saveError } = await persistCommentLetter();
-      if (!docId) {
-        toast.error(saveError ?? "Failed to save comment letter to project documents");
-        return;
-      }
-
-      if (isLegacyDocFile(letterFile)) {
-        setParseStatus("Converting legacy Word document…");
-      }
-
-      const extractionFile = await prepareCommentLetterExtractionFile({
-        projectId,
-        sourceDocumentId: docId,
-        originalFile: letterFile,
-      });
-
-      setParseStatus(uploadRows.length > 0 ? "Re-extracting text…" : "Extracting text…");
-
-      const extraction = await extractDocumentForCommentParse(extractionFile);
-      if (extraction.kind === "unsupported_doc") {
-        toast.error(extraction.message);
-        return;
-      }
-
-      setParseStatus(parseAttempted || uploadRows.length > 0 ? "Re-parsing comments…" : "Parsing comments…");
-
-      let invokeBody: Record<string, unknown> = {
-        sourceFileName: letterFile.name,
-        sourceDocumentId: docId,
-      };
-
-      if (extraction.kind === "text") {
-        invokeBody = {
-          ...invokeBody,
-          fullText: extraction.fullText,
-          pages: extraction.pages,
-        };
-        if (extraction.sparsePageNumbers.length > 0) {
-          toast.info(
-            `${extraction.sparsePageNumbers.length} page(s) had little text; scanned-page OCR is not yet enabled.`,
-          );
-        }
-      } else {
-        const fileForVision =
-          extraction.file.type === "application/pdf"
-            ? await pdfFirstPageToImageFile(extraction.file)
-            : extraction.file;
-        invokeBody = {
-          ...invokeBody,
-          imageBase64: await fileToBase64(fileForVision),
-          imageType: fileForVision.type,
-          pageNumber: 1,
-        };
-      }
-
-      const { data, error } = await supabase.functions.invoke("parse-manual-comment-letter", {
-        body: invokeBody,
-      });
-      if (error) throw error;
-
-      const payload = data as {
-        comments?: ParsedRow[];
-        parse_method?: string;
-        comment_count?: number;
-        parser_summary?: ParserSummary;
-        error?: string;
-      } | null;
-
-      if (payload?.error) throw new Error(payload.error);
-
-      const comments = markRowsAsParsed(
-        Array.isArray(payload?.comments) ? payload.comments : [],
-      ).map((row) => ({
-        ...row,
-        _sourceDocumentId: docId,
-      }));
-      const summary = payload?.parser_summary ?? null;
-      if (summary) {
-        console.log("[CommentReview] parser_summary", summary);
-      }
-      setUploadRows(comments);
-      setParserSummary(summary);
-      setLastParseMethod(payload?.parse_method ?? null);
-      setParseAttempted(true);
-      const summaryLine = summary
-        ? Object.entries(summary.by_discipline)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(", ")
-        : null;
-      setParseStatus(
-        summaryLine
-          ? `Found ${comments.length} comments (${summaryLine})`
-          : `Found ${comments.length} comment${comments.length !== 1 ? "s" : ""}`,
-      );
-      toast.success(
-        parseAttempted ? `Re-parsed ${comments.length} comments` : `Extracted ${comments.length} comments`,
-      );
-    } catch (err: unknown) {
-      console.error(err);
-      setParseStatus(null);
-      toast.error(err instanceof Error ? err.message : "Parse failed");
-    } finally {
-      setParsing(false);
     }
   }, [
-    pendingBatchCount,
     pendingUploadFiles,
     projectId,
     persistCommentLetterForFile,
-    updatePendingFile,
+    invokeCommentParser,
     fetchDocuments,
     loadCommentLetterFile,
-    originalUploadFile,
-    parseAttempted,
-    uploadRows.length,
-    persistCommentLetter,
-    invokeCommentParser,
+    sourceDocumentId,
   ]);
 
   const handleParsePastedComments = useCallback(
@@ -1425,6 +1334,9 @@ export default function CommentReview() {
       }
       try {
         let docId: string | null = sourceDocumentId;
+        if (!docId) {
+          docId = uploadRows.find((row) => row._sourceDocumentId)?._sourceDocumentId ?? null;
+        }
         if (!docId && originalUploadFile) {
           const saveResult = await persistCommentLetter();
           if (!saveResult.docId) {
@@ -1432,6 +1344,8 @@ export default function CommentReview() {
             return;
           }
           docId = saveResult.docId;
+          setSourceDocumentId(docId);
+          await fetchDocuments();
         }
 
         if (newUploadReplaceProject) {
@@ -1480,6 +1394,7 @@ export default function CommentReview() {
       sourceDocumentId,
       originalUploadFile,
       persistCommentLetter,
+      fetchDocuments,
       newUploadReplaceProject,
       deleteManualLetterComments,
       insertApprovedRows,
@@ -2070,7 +1985,8 @@ export default function CommentReview() {
                   onClick={() => {
                     const file = pendingConfirm.file;
                     setPendingConfirm(null);
-                    applyNewUpload(file, false);
+                    setNewUploadReplaceProject(false);
+                    appendFilesToPendingBatch([file]);
                   }}
                 >
                   Keep existing, parse for review
@@ -2079,7 +1995,8 @@ export default function CommentReview() {
                   onClick={() => {
                     const file = pendingConfirm.file;
                     setPendingConfirm(null);
-                    applyNewUpload(file, true);
+                    setNewUploadReplaceProject(true);
+                    appendFilesToPendingBatch([file]);
                   }}
                 >
                   Replace on Approve All
@@ -2090,19 +2007,7 @@ export default function CommentReview() {
                 onClick={() => {
                   const files = pendingConfirm.files;
                   setPendingConfirm(null);
-                  setPendingUploadFiles((prev) => {
-                    const existingKeys = new Set(
-                      prev.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`),
-                    );
-                    const next = [...prev];
-                    for (const file of files) {
-                      const key = `${file.name}:${file.size}:${file.lastModified}`;
-                      if (existingKeys.has(key)) continue;
-                      existingKeys.add(key);
-                      next.push(createPendingUploadFile(file));
-                    }
-                    return next;
-                  });
+                  appendFilesToPendingBatch(files);
                 }}
               >
                 Add files to batch
