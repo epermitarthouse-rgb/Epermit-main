@@ -31,8 +31,10 @@ import {
   COMMENT_LETTER_SUPPORTED_FORMATS_HINT,
   extractDocumentForCommentParse,
   fileToBase64,
+  isLegacyDocFile,
   isSpreadsheetFile,
 } from "@/utils/extractDocumentText";
+import { prepareCommentLetterExtractionFile } from "@/lib/commentReviewLegacyDocParse";
 import { formatCommentLetterSaveError, type ProjectDocument } from "@/types/document";
 import {
   isManualCommentLetter,
@@ -1057,9 +1059,22 @@ export default function CommentReview() {
               throw new Error(saveError ?? "Failed to save comment letter to project documents");
             }
 
-            updatePendingFile(item.id, { status: "extracting", sourceDocumentId: docId });
+            updatePendingFile(item.id, { sourceDocumentId: docId });
+            if (isLegacyDocFile(item.file)) {
+              updatePendingFile(item.id, { status: "converting" });
+            } else {
+              updatePendingFile(item.id, { status: "extracting" });
+            }
 
-            const extraction = await extractDocumentForCommentParse(item.file);
+            const extractionFile = await prepareCommentLetterExtractionFile({
+              projectId,
+              sourceDocumentId: docId,
+              originalFile: item.file,
+            });
+
+            updatePendingFile(item.id, { status: "extracting" });
+
+            const extraction = await extractDocumentForCommentParse(extractionFile);
             if (extraction.kind === "unsupported_doc") {
               throw new Error(extraction.message);
             }
@@ -1166,7 +1181,19 @@ export default function CommentReview() {
         return;
       }
 
-      const extraction = await extractDocumentForCommentParse(letterFile);
+      if (isLegacyDocFile(letterFile)) {
+        setParseStatus("Converting legacy Word document…");
+      }
+
+      const extractionFile = await prepareCommentLetterExtractionFile({
+        projectId,
+        sourceDocumentId: docId,
+        originalFile: letterFile,
+      });
+
+      setParseStatus(uploadRows.length > 0 ? "Re-extracting text…" : "Extracting text…");
+
+      const extraction = await extractDocumentForCommentParse(extractionFile);
       if (extraction.kind === "unsupported_doc") {
         toast.error(extraction.message);
         return;

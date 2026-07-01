@@ -1,13 +1,12 @@
 import {
-  isLegacyDocFile,
   isLegacyXlsFile,
-  LEGACY_DOC_ERROR_MESSAGE,
   LEGACY_XLS_ERROR_MESSAGE,
 } from "@/utils/extractDocumentText";
 
 export type BatchFileStatus =
   | "pending"
   | "uploading"
+  | "converting"
   | "extracting"
   | "parsing"
   | "success"
@@ -40,9 +39,6 @@ export type CommentLetterValidationResult =
   | { valid: false; error: string };
 
 export function validateCommentLetterFile(file: File): CommentLetterValidationResult {
-  if (isLegacyDocFile(file) || file.type === "application/msword") {
-    return { valid: false, error: LEGACY_DOC_ERROR_MESSAGE };
-  }
   if (isLegacyXlsFile(file) || file.type === "application/vnd.ms-excel") {
     return { valid: false, error: LEGACY_XLS_ERROR_MESSAGE };
   }
@@ -54,7 +50,9 @@ export function formatBatchParseError(err: unknown): string {
   if (err instanceof Error) {
     const message = err.message.trim();
     if (!message) return "Processing failed";
-    if (/^(Missing|Select|Failed to|Unsupported|Legacy)/i.test(message)) return message;
+    if (/^(Missing|Select|Failed to|Unsupported|Legacy|Authentication|Conversion|Document|File)/i.test(message)) {
+      return message;
+    }
     if (message.length <= 200 && !/stack|supabase|postgres|internal/i.test(message)) {
       return message;
     }
@@ -68,6 +66,8 @@ export function batchFileStatusLabel(status: BatchFileStatus): string {
       return "Ready";
     case "uploading":
       return "Uploading…";
+    case "converting":
+      return "Converting legacy Word document…";
     case "extracting":
       return "Extracting text…";
     case "parsing":

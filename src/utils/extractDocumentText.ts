@@ -32,7 +32,7 @@ export type DocumentExtractionResult =
     };
 
 export const COMMENT_LETTER_SUPPORTED_FORMATS_HINT =
-  "Supported: PDF, DOCX, XLSX, CSV, PNG, JPG. Legacy DOC/XLS may require conversion.";
+  "Supported: PDF, DOC, DOCX, XLSX, CSV, PNG, JPG. Legacy .XLS is not supported.";
 
 export const LEGACY_DOC_ERROR_MESSAGE =
   "Legacy .DOC files are not supported. Please open the file in Word/Google Docs and save it as .DOCX or PDF.";

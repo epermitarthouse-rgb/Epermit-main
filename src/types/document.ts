@@ -176,6 +176,7 @@ export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 /** MIME types allowed by the project-documents storage bucket. */
 export const PROJECT_DOCUMENT_ALLOWED_MIME_TYPES = [
   'application/pdf',
+  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'image/png',
   'image/jpeg',
@@ -189,6 +190,7 @@ export const PROJECT_DOCUMENT_ALLOWED_MIME_TYPES = [
 
 const PROJECT_DOCUMENT_EXT_TO_MIME: Record<string, string> = {
   pdf: 'application/pdf',
+  doc: 'application/msword',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -212,6 +214,10 @@ export function resolveProjectDocumentContentType(file: File): string | null {
 
   if (ext === 'docx') {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+
+  if (ext === 'doc') {
+    return 'application/msword';
   }
 
   const declared = (file.type || '').trim().toLowerCase();

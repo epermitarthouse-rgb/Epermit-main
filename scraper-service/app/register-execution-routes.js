@@ -2617,6 +2617,9 @@ app.use(createPortalCredentialsRouter({ supabase }));
 const { createQuickBooksRouter } = require("./routes/quickbooks.routes.js");
 app.use("/api/quickbooks", createQuickBooksRouter({ supabase }));
 
+const { createDocumentsRouter } = require("./routes/documents.routes.js");
+app.use("/api/documents", createDocumentsRouter(supabase));
+
 const { createMicrosoftRouter } = require("./routes/microsoft.routes.js");
 app.use("/api/microsoft", createMicrosoftRouter({ supabase }));
 

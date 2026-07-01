@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const { spawn } = require("child_process");
 const { createSharedHttpApp } = require("./app/http-app.js");
 const {
   registerExecutionRoutes,
@@ -20,9 +21,33 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
+async function logLibreOfficeAvailability() {
+  return new Promise((resolve) => {
+    const child = spawn("libreoffice", ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.on("error", () => {
+      console.warn("[SCRAPER SERVER] LibreOffice not available; legacy .DOC conversion disabled");
+      resolve(false);
+    });
+    child.on("close", (code) => {
+      if (code === 0 && output.trim()) {
+        console.log(`[SCRAPER SERVER] LibreOffice available: ${output.trim().split("\n")[0]}`);
+        resolve(true);
+      } else {
+        console.warn("[SCRAPER SERVER] LibreOffice not available; legacy .DOC conversion disabled");
+        resolve(false);
+      }
+    });
+  });
+}
+
 async function startServer() {
   console.log("Playwright startup diagnostics:");
   const browserOk = await runPlaywrightStartupDiagnostics();
+  await logLibreOfficeAvailability();
   if (!browserOk) {
     console.log(
       "Server will start anyway; login/scrape will return 503 until Chromium is installed.",
