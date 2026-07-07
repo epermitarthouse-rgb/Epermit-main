@@ -1,3 +1,5 @@
+> **Deprecation notice:** This document is retained as historical execution planning. The active roadmap is [`uci/UCI_DELIVERY_ROADMAP.md`](./UCI_DELIVERY_ROADMAP.md). See also [`uci/UCI_EXECUTION_HISTORY.md`](./UCI_EXECUTION_HISTORY.md) for a condensed completion summary.
+
 # UCI Execution Plan — Sprints and Phases
 
 ## Source Context
