@@ -37,6 +37,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { useProjects } from "@/hooks/useProjects";
 import {
@@ -56,6 +57,7 @@ import {
 import { getMicrosoftMailboxStatus } from "@/lib/microsoftMailboxApi";
 import { toast } from "sonner";
 import {
+  ChevronRight,
   Info,
   Loader2,
   RadioTower,
@@ -63,13 +65,18 @@ import {
   Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PepcoSelectedProjectDetailTabs } from "@/components/uci/PepcoApplicationDetailsPanel";
+import { PepcoProjectList } from "@/components/uci/PepcoProjectList";
 import {
-  PepcoApplicationDetailProgressLog,
-  PepcoApplicationDetailsPanel,
-} from "@/components/uci/PepcoApplicationDetailsPanel";
+  PepcoDeveloperTools,
+  PepcoPortalHeaderSection,
+} from "@/components/uci/PepcoPortalDrawerSection";
 import {
+  buildPepcoMergedProjects,
   PEPCO_APP_DETAIL_PROGRESS_START,
   parsePepcoApplicationDetailDiscovery,
+  pickDefaultPepcoProjectKey,
+  type PepcoMergedProject,
 } from "@/lib/pepcoApplicationDetailUi";
 import type {
   CoordinationApplication,
@@ -207,6 +214,19 @@ const uciDrawerChildCardClass = cn(
   "dark:border-teal/35 dark:bg-obsidian-strong/90 dark:ring-gold/25",
 );
 
+/**
+ * Selected PEPCO project detail tabs wrapper: a low-opacity tint of the
+ * app's existing orange brand accent (same token used for gold/orange
+ * borders elsewhere), replacing the neutral grey card background so this
+ * container stands out. Overrides only the border/background/ring color
+ * utilities of `uciDrawerChildCardClass` — radius, spacing, and shadow are
+ * unchanged.
+ */
+const uciPepcoDetailTabsWrapperClass = cn(
+  "border-orange/25 bg-orange/[0.06] ring-orange/20",
+  "dark:border-orange/30 dark:bg-orange/10 dark:ring-orange/25",
+);
+
 const uciDrawerChildCardHeaderClass = cn(
   "border-b border-border/40 bg-muted/20 px-4 py-3",
   "dark:border-teal/25 dark:bg-obsidian/50",
@@ -233,12 +253,8 @@ const uciSheetControlClass = cn(
   "dark:border-teal/25 dark:bg-obsidian-raised dark:text-foreground",
 );
 
-/** Manual stage update card only: ink labels/title on cream panel (overrides sheet inherit). */
+/** Manual stage update / compact section labels on cream panel (overrides sheet inherit). */
 const uciManualFormTextClass = "text-foreground dark:text-foreground";
-const uciManualFormTitleClass = cn(
-  "mb-3 font-display text-base font-semibold tracking-tight",
-  uciManualFormTextClass,
-);
 
 export default function UciDashboard() {
   const { projects, loading: projectsLoading } = useProjects();
@@ -287,6 +303,7 @@ export default function UciDashboard() {
   );
   const [pepcoAppDetailResumeBusy, setPepcoAppDetailResumeBusy] = useState(false);
   const [pepcoDownloadDocuments, setPepcoDownloadDocuments] = useState(false);
+  const [pepcoSelectedProjectKey, setPepcoSelectedProjectKey] = useState<string | null>(null);
   const [pepcoRowScrapeBusyId, setPepcoRowScrapeBusyId] = useState<string | null>(null);
   const [pepcoRowScrapeStatus, setPepcoRowScrapeStatus] = useState<
     Record<string, { status: "ok" | "error"; message?: string }>
@@ -405,6 +422,29 @@ export default function UciDashboard() {
     void refreshCoordination();
   }, [refreshCoordination]);
 
+  /**
+   * Project/tenant safety: when the active PermitPilot project changes, any
+   * open coordination detail (and its PEPCO selection/progress state) may
+   * belong to the previous project and must be cleared. Backend access
+   * checks remain the source of truth; this only prevents stale UI state.
+   */
+  useEffect(() => {
+    setDetailOpen(false);
+    setDetailId(null);
+    setDetail(null);
+    setPepcoSelectedProjectKey(null);
+    setPepcoRowScrapeStatus({});
+    setPepcoAppDetailProgress([]);
+    setPepcoAppDetailMsg(null);
+    setPepcoDashboardMsg(null);
+    setPepcoDiscoveryMsg(null);
+    setPepcoPendingSessionId(null);
+    setPepcoAppDetailPendingSessionId(null);
+    setPepcoAppDetailMfaSessionId(null);
+    setPepcoCodeModalOpen(false);
+    clearPendingAppDetailRunOptions();
+  }, [projectId]);
+
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
     [projects, projectId],
@@ -426,6 +466,8 @@ export default function UciDashboard() {
     setPepcoAppDetailMsg(null);
     setPepcoAppDetailProgress([]);
     setPepcoAppDetailPendingSessionId(null);
+    setPepcoSelectedProjectKey(null);
+    setPepcoRowScrapeStatus({});
     clearPendingAppDetailRunOptions();
     try {
       const d = await getCoordinationDetail(id);
@@ -607,18 +649,59 @@ export default function UciDashboard() {
   const hasPepcoApplicationDetails =
     (pepcoApplicationDetailDiscovery?.applications?.length ?? 0) > 0;
 
-  const pepcoCardLastUpdated = (c: UciPepcoDashboardCardMeta): string | null =>
-    c.lastUpdatedDateTime ?? c.lastUpdated ?? null;
+  const pepcoMergedProjects: PepcoMergedProject[] = useMemo(
+    () =>
+      buildPepcoMergedProjects(
+        pepcoDashboardFromMetadata?.cards ?? [],
+        pepcoApplicationDetailDiscovery?.applications ?? [],
+        pepcoRowScrapeStatus,
+      ),
+    [pepcoDashboardFromMetadata?.cards, pepcoApplicationDetailDiscovery?.applications, pepcoRowScrapeStatus],
+  );
 
-  const pepcoCardSubmitted = (c: UciPepcoDashboardCardMeta): string | null =>
-    c.submittedDateTime ?? c.dateSubmitted ?? null;
+  const selectedPepcoProject: PepcoMergedProject | null = useMemo(
+    () => pepcoMergedProjects.find((p) => p.key === pepcoSelectedProjectKey) ?? null,
+    [pepcoMergedProjects, pepcoSelectedProjectKey],
+  );
 
-  const pepcoCardHasDetail = (applicationId: string | undefined): boolean => {
-    if (!applicationId) return false;
-    return (pepcoApplicationDetailDiscovery?.applications ?? []).some(
-      (a) => a.applicationUuid === applicationId,
-    );
+  /** Auto-select the default project and drop selections that no longer exist. */
+  useEffect(() => {
+    if (!isPepcoCoordination) return;
+    const stillExists = pepcoMergedProjects.some((p) => p.key === pepcoSelectedProjectKey);
+    if (stillExists) return;
+    setPepcoSelectedProjectKey(pickDefaultPepcoProjectKey(pepcoMergedProjects));
+  }, [isPepcoCoordination, pepcoMergedProjects, pepcoSelectedProjectKey]);
+
+  const handleSelectPepcoProject = (key: string) => {
+    setPepcoSelectedProjectKey(key);
   };
+
+  const handleScrapePepcoProject = (project: PepcoMergedProject) => {
+    if (!project.applicationId) return;
+    setPepcoSelectedProjectKey(project.key);
+    void handlePepcoRowDetailScrape(project.applicationId);
+  };
+
+  const pepcoActivePendingProjectId = resolvePendingRowApplicationUuid();
+
+  const isSelectedPepcoProjectBusy =
+    Boolean(selectedPepcoProject) &&
+    (pepcoRowScrapeBusyId === selectedPepcoProject?.applicationId ||
+      ((pepcoAppDetailBusy || pepcoAppDetailResumeBusy || pepcoCodeSubmitBusy) &&
+        Boolean(selectedPepcoProject?.applicationId) &&
+        pepcoActivePendingProjectId === selectedPepcoProject?.applicationId));
+
+  const isSelectedPepcoProjectAwaitingVerification =
+    Boolean(selectedPepcoProject) &&
+    pepcoCodeModalTarget === "application_detail" &&
+    (pepcoCodeModalOpen || Boolean(pepcoAppDetailMfaSessionId)) &&
+    Boolean(selectedPepcoProject?.applicationId) &&
+    pepcoActivePendingProjectId === selectedPepcoProject?.applicationId;
+
+  const selectedPepcoProjectRowStatus =
+    selectedPepcoProject?.applicationId
+      ? pepcoRowScrapeStatus[selectedPepcoProject.applicationId]
+      : undefined;
 
   useEffect(() => {
     if (!detailOpen || !detailId || !isPepcoCoordination) return;
@@ -1175,6 +1258,16 @@ export default function UciDashboard() {
     }
   };
 
+  const handlePepcoResumeInterrupted = () => {
+    if (pepcoAppDetailPendingSessionId) {
+      void handlePepcoApplicationDetailResume();
+      return;
+    }
+    if (pepcoPendingSessionId) {
+      void handlePepcoResume();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <EditorialPageHeader
@@ -1494,626 +1587,349 @@ export default function UciDashboard() {
             </div>
           ) : detail && detailRecord ? (
             <div className="mt-6 space-y-6 pb-10">
-              <div
-                className={cn(
-                  "space-y-1.5 rounded-lg border border-cream-sunken/50 bg-cream-raised/40 p-3 text-sm",
-                  "dark:border-teal/20 dark:bg-obsidian/30",
-                )}
-              >
-                <p className="text-ink-primary-light dark:text-foreground">
-                  <span className={uciDetailLabelClass}>Stage / state:</span>{" "}
-                  <span className={uciDetailValueClass}>
-                    {detailRecord.current_stage} ·{" "}
-                    {formatLifecycleState(detailRecord.current_stage_state)}
-                  </span>
+              <div>
+                <p className={cn("mb-1.5 text-xs font-semibold uppercase tracking-wide", uciMutedClass)}>
+                  Coordination status
                 </p>
-                <p className="text-ink-primary-light dark:text-foreground">
-                  <span className={uciDetailLabelClass}>Application submitted:</span>{" "}
-                  <span className={uciDetailValueClass}>{formatWhen(detailRecord.application_submitted_at)}</span>
-                </p>
-                <p className="text-ink-primary-light dark:text-foreground">
-                  <span className={uciDetailLabelClass}>Acknowledgment received:</span>{" "}
-                  <span className={uciDetailValueClass}>{formatWhen(detailRecord.acknowledgment_received_at)}</span>
-                </p>
-                <p className="text-ink-primary-light dark:text-foreground">
-                  <span className={uciDetailLabelClass}>Class of service issued:</span>{" "}
-                  <span className={uciDetailValueClass}>{formatWhen(detailRecord.class_of_service_issued_at)}</span>
-                </p>
-                <p className="text-ink-primary-light dark:text-foreground">
-                  <span className={uciDetailLabelClass}>Energization target:</span>{" "}
-                  <span className={uciDetailValueClass}>{formatDateOnly(detailRecord.energization_target_date)}</span>
-                </p>
-                <p className="text-ink-primary-light dark:text-foreground">
-                  <span className={uciDetailLabelClass}>Energization actual:</span>{" "}
-                  <span className={uciDetailValueClass}>{formatDateOnly(detailRecord.energization_actual_date)}</span>
-                </p>
+                <div
+                  className={cn(
+                    "grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-cream-sunken/50 bg-cream-raised/40 px-3 py-2 text-xs",
+                    "sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-1",
+                    "dark:border-teal/20 dark:bg-obsidian/30",
+                  )}
+                >
+                  <CoordinationStatusField
+                    label="Stage"
+                    value={String(detailRecord.current_stage)}
+                    mutedClass={uciMutedClass}
+                  />
+                  <CoordinationStatusField
+                    label="State"
+                    value={formatLifecycleState(detailRecord.current_stage_state)}
+                    mutedClass={uciMutedClass}
+                  />
+                  <CoordinationStatusField
+                    label="Submitted"
+                    value={formatDateOnly(detailRecord.application_submitted_at)}
+                    mutedClass={uciMutedClass}
+                    hideIfEmpty
+                  />
+                  <CoordinationStatusField
+                    label="Acknowledged"
+                    value={formatDateOnly(detailRecord.acknowledgment_received_at)}
+                    mutedClass={uciMutedClass}
+                    hideIfEmpty
+                  />
+                  <CoordinationStatusField
+                    label="COS issued"
+                    value={formatDateOnly(detailRecord.class_of_service_issued_at)}
+                    mutedClass={uciMutedClass}
+                    hideIfEmpty
+                  />
+                  <CoordinationStatusField
+                    label="Energization target"
+                    value={formatDateOnly(detailRecord.energization_target_date)}
+                    mutedClass={uciMutedClass}
+                    hideIfEmpty
+                  />
+                  {detailRecord.energization_actual_date ? (
+                    <CoordinationStatusField
+                      label="Energization actual"
+                      value={formatDateOnly(detailRecord.energization_actual_date)}
+                      mutedClass={uciMutedClass}
+                    />
+                  ) : null}
+                </div>
                 {detailRecord.last_error ? (
-                  <p className="text-destructive">
+                  <p className="mt-1.5 text-xs text-destructive">
                     <span className="font-medium">Last error:</span> {detailRecord.last_error}
                   </p>
                 ) : null}
               </div>
 
               {isPepcoCoordination ? (
-                <div
-                  className={cn(
-                    "rounded-lg border border-teal/25 bg-cream-raised/60 p-3 dark:border-teal/35 dark:bg-obsidian/40",
-                  )}
-                >
-                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
-                    PEPCO portal
-                  </p>
-                  <div className="mb-3 flex items-start gap-2">
-                    <Checkbox
-                      id={`pepco-auto-email-${detailId ?? "row"}`}
-                      checked={pepcoAutoEmailMfa}
-                      onCheckedChange={(c) => setPepcoAutoEmailMfa(Boolean(c))}
-                      disabled={
-                        pepcoDiscoveryBusy ||
-                        pepcoResumeBusy ||
-                        pepcoDashboardBusy ||
-                        detailLoading
-                      }
-                      className={cn(
-                        "mt-1 shrink-0 border-gold/50 dark:border-cream/35",
-                        "data-[state=checked]:border-teal data-[state=checked]:bg-teal data-[state=checked]:text-white",
-                        "dark:data-[state=checked]:border-teal-soft dark:data-[state=checked]:bg-teal",
-                      )}
-                    />
-                    <div className="space-y-0.5">
-                      <Label htmlFor={`pepco-auto-email-${detailId ?? "row"}`} className={uciManualFormTextClass}>
-                        Auto-fetch email MFA code
-                      </Label>
-                      <p className={cn("text-[11px] leading-snug", uciMutedClass)}>
-                        Requires a connected Microsoft mailbox in Settings. Leave off for manual MFA only.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      disabled={
-                        pepcoDiscoveryBusy || pepcoDashboardBusy || detailLoading
-                      }
-                      aria-busy={pepcoDiscoveryBusy}
-                      onClick={() => void handlePepcoDiscovery()}
-                    >
-                      {pepcoDiscoveryBusy ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Run PEPCO Login Check
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      disabled={
-                        pepcoResumeBusy ||
-                        pepcoDashboardBusy ||
-                        detailLoading ||
-                        !pepcoPendingSessionId
-                      }
-                      aria-busy={pepcoResumeBusy}
-                      onClick={() => void handlePepcoResume()}
-                    >
-                      {pepcoResumeBusy ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Resume PEPCO Login
-                    </Button>
-                  </div>
-                  {pepcoDiscoveryMsg ? (
-                    <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoDiscoveryMsg}</p>
-                  ) : null}
-
-                  <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
-
-                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
-                    1. Dashboard project discovery (read-only)
-                  </p>
-                  <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
-                    After login/MFA, fetches all PEPCO projects from the authenticated applications list API.
-                    DOM card extraction is used only when the list API or GetSession token is unavailable.
-                  </p>
-
-                  <div className="mb-3 space-y-1 text-xs leading-snug">
-                    <p className={uciManualFormTextClass}>
-                      <span className="font-medium">Last discovery:</span>{" "}
-                      {pepcoDashboardFromMetadata?.lastAt
-                        ? formatWhen(pepcoDashboardFromMetadata.lastAt)
-                        : "—"}
-                    </p>
-                    <p className={uciManualFormTextClass}>
-                      <span className="font-medium">Stored status:</span>{" "}
-                      {pepcoDashboardFromMetadata?.status ?? "—"}
-                      {typeof pepcoDashboardFromMetadata?.cardsFound === "number" ? (
-                        <>
-                          {" "}
-                          · {pepcoDashboardFromMetadata.cardsFound} card
-                          {pepcoDashboardFromMetadata.cardsFound === 1 ? "" : "s"}
-                        </>
-                      ) : null}
-                      {typeof pepcoDashboardFromMetadata?.applicationIdsFound === "number" &&
-                      pepcoDashboardFromMetadata.applicationIdsFound > 0 ? (
-                        <>
-                          {" "}
-                          · {pepcoDashboardFromMetadata.applicationIdsFound} application ID
-                          {pepcoDashboardFromMetadata.applicationIdsFound === 1 ? "" : "s"}
-                        </>
-                      ) : null}
-                      {pepcoDashboardFromMetadata?.discoverySource ? (
-                        <>
-                          {" "}
-                          · source {pepcoDashboardFromMetadata.discoverySource}
-                        </>
-                      ) : null}
-                    </p>
-                    {pepcoDashboardFromMetadata?.listApiWarning ? (
-                      <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
-                        {pepcoDashboardFromMetadata.listApiWarning}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      disabled={
-                        pepcoDashboardBusy ||
-                        pepcoDiscoveryBusy ||
-                        pepcoResumeBusy ||
-                        detailLoading
-                      }
-                      aria-busy={pepcoDashboardBusy}
-                      onClick={() => void handlePepcoDashboardDiscover(false)}
-                    >
-                      {pepcoDashboardBusy ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Discover PEPCO Dashboard
-                    </Button>
-                  </div>
-                  {pepcoDashboardMsg ? (
-                    <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoDashboardMsg}</p>
-                  ) : null}
-
-                  <div className="mb-3 mt-3 flex items-start gap-2">
-                    <Checkbox
-                      id={`pepco-download-docs-${detailId ?? "row"}`}
-                      checked={pepcoDownloadDocuments}
-                      onCheckedChange={(checked) => setPepcoDownloadDocuments(checked === true)}
-                      disabled={
-                        pepcoDashboardBusy ||
-                        pepcoDiscoveryBusy ||
-                        pepcoResumeBusy ||
-                        detailLoading ||
-                        Boolean(pepcoRowScrapeBusyId)
-                      }
-                      className={cn(
-                        "mt-1 shrink-0 border-gold/50 dark:border-cream/35",
-                        "data-[state=checked]:border-teal data-[state=checked]:bg-teal data-[state=checked]:text-white",
-                      )}
-                    />
-                    <div className="space-y-0.5">
-                      <Label
-                        htmlFor={`pepco-download-docs-${detailId ?? "row"}`}
-                        className={uciManualFormTextClass}
-                      >
-                        Download PEPCO documents
-                      </Label>
-                      <p className={cn("text-[11px] leading-snug", uciMutedClass)}>
-                        When checked, Scrape Details saves every listed document to the scraper host. When
-                        unchecked, documents are listed only.
-                      </p>
-                    </div>
-                  </div>
-
-                  {pepcoDashboardFromMetadata && pepcoDashboardFromMetadata.cards.length > 0 ? (
-                    <div className="mt-4 overflow-x-auto rounded-md border border-cream-sunken/60 dark:border-teal/25">
-                      <Table className="min-w-[720px] text-xs">
-                        <TableHeader className={uciTableHeaderRowClass}>
-                          <TableRow className="border-cream-sunken/40 dark:border-teal/15">
-                            <TableHead className={uciTableHeadClass}>Project</TableHead>
-                            <TableHead className={uciTableHeadClass}>Address</TableHead>
-                            <TableHead className={uciTableHeadClass}>Status</TableHead>
-                            <TableHead className={uciTableHeadClass}>Last updated</TableHead>
-                            <TableHead className={uciTableHeadClass}>Date submitted</TableHead>
-                            <TableHead className={uciTableHeadClass}>Job ID</TableHead>
-                            <TableHead className={uciTableHeadClass}>Action</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {pepcoDashboardFromMetadata.cards.map((c, idx) => {
-                            const appId = c.applicationId?.trim() || "";
-                            const rowBusy = pepcoRowScrapeBusyId === appId;
-                            const rowStatus = appId ? pepcoRowScrapeStatus[appId] : undefined;
-                            const hasDetail = pepcoCardHasDetail(appId);
-                            const scrapeDisabled =
-                              !appId ||
-                              rowBusy ||
-                              pepcoAppDetailBusy ||
-                              pepcoAppDetailResumeBusy ||
-                              pepcoCodeSubmitBusy ||
-                              pepcoCodeModalOpen ||
-                              Boolean(pepcoAppDetailPendingSessionId) ||
-                              pepcoDashboardBusy ||
-                              pepcoDiscoveryBusy ||
-                              pepcoResumeBusy ||
-                              detailLoading;
-
-                            return (
-                              <TableRow
-                                key={`${String(c.jobId ?? "")}-${String(c.applicationId ?? "")}-${idx}`}
-                                className="border-cream-sunken/35 dark:border-teal/12"
-                              >
-                                <TableCell className={uciTableCellClass}>{c.title ?? "—"}</TableCell>
-                                <TableCell className={uciTableCellClass}>{c.address ?? "—"}</TableCell>
-                                <TableCell className={uciTableCellClass}>{c.status ?? "—"}</TableCell>
-                                <TableCell className={cn(uciTableCellClass, "tabular-nums")}>
-                                  {formatWhen(pepcoCardLastUpdated(c))}
-                                </TableCell>
-                                <TableCell className={cn(uciTableCellClass, "tabular-nums")}>
-                                  {formatWhen(pepcoCardSubmitted(c))}
-                                </TableCell>
-                                <TableCell className={cn(uciTableCellClass, "font-mono text-[11px]")}>
-                                  {c.jobId ?? "—"}
-                                </TableCell>
-                                <TableCell className={uciTableCellClass}>
-                                  <div className="flex flex-col gap-1">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7 px-2 text-[11px]"
-                                      disabled={scrapeDisabled}
-                                      aria-busy={rowBusy}
-                                      onClick={() => void handlePepcoRowDetailScrape(appId)}
-                                    >
-                                      {rowBusy ? (
-                                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                      ) : null}
-                                      {hasDetail ? "Refresh Details" : "Scrape Details"}
-                                    </Button>
-                                    {rowStatus?.status === "error" && rowStatus.message ? (
-                                      <span className="text-[10px] text-destructive">{rowStatus.message}</span>
-                                    ) : rowStatus?.status === "ok" ? (
-                                      <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                                        Details saved
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : null}
-
-                  <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
-
-                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
-                    2. Application detail scrape (read-only API)
-                  </p>
-                  <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
-                    Use Scrape Details on a dashboard row to fetch overview, status history, messages, and document
-                    metadata for that project only. Check Download PEPCO documents above the table before scraping.
-                    Previously scraped projects are preserved when you scrape another row.
-                  </p>
-
-                  {hasPepcoDashboardCards && !hasPepcoApplicationDetails ? (
-                    <p className={cn("mb-3 rounded-md border border-cream-sunken/60 px-3 py-2 text-xs", uciMutedClass)}>
-                      Dashboard cards found. Application details have not been scraped yet.
-                    </p>
-                  ) : null}
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      disabled={
-                        pepcoAppDetailResumeBusy ||
-                        pepcoAppDetailBusy ||
-                        detailLoading ||
-                        !pepcoAppDetailPendingSessionId
-                      }
-                      aria-busy={pepcoAppDetailResumeBusy}
-                      onClick={() => void handlePepcoApplicationDetailResume()}
-                    >
-                      {pepcoAppDetailResumeBusy ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Resume Application Detail Scrape
-                    </Button>
-                  </div>
-
-                  <PepcoApplicationDetailProgressLog
-                    lines={pepcoAppDetailProgress}
-                    busy={pepcoAppDetailBusy || pepcoAppDetailResumeBusy}
-                    mutedClass={uciMutedClass}
-                  />
-                  {pepcoAppDetailMsg ? (
-                    <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoAppDetailMsg}</p>
-                  ) : null}
-
-                  <PepcoApplicationDetailsPanel
-                    coordinationId={detailId}
-                    discovery={pepcoApplicationDetailDiscovery}
+                <div className="space-y-4">
+                  <PepcoPortalHeaderSection
+                    detailId={detailId}
+                    detailLoading={detailLoading}
                     formatWhen={formatWhen}
                     mutedClass={uciMutedClass}
-                    sectionTitleClass={cn("text-sm font-semibold", uciManualFormTextClass)}
-                    tableHeadClass={uciTableHeadClass}
-                    tableCellClass={uciTableCellClass}
-                    tableHeaderRowClass={uciTableHeaderRowClass}
+                    sectionTitleClass={uciManualFormTextClass}
+                    pepcoDownloadDocuments={pepcoDownloadDocuments}
+                    onPepcoDownloadDocumentsChange={setPepcoDownloadDocuments}
+                    pepcoDiscoveryBusy={pepcoDiscoveryBusy}
+                    pepcoResumeBusy={pepcoResumeBusy}
+                    pepcoDashboardBusy={pepcoDashboardBusy}
+                    pepcoAppDetailBusy={pepcoAppDetailBusy}
+                    pepcoAppDetailResumeBusy={pepcoAppDetailResumeBusy}
+                    pepcoCodeSubmitBusy={pepcoCodeSubmitBusy}
+                    pepcoCodeModalOpen={pepcoCodeModalOpen}
+                    normalizedSyncBusy={normalizedSyncBusy}
+                    pepcoPendingSessionId={pepcoPendingSessionId}
+                    pepcoAppDetailPendingSessionId={pepcoAppDetailPendingSessionId}
+                    pepcoAppDetailMfaSessionId={pepcoAppDetailMfaSessionId}
+                    pepcoDiscoveryMsg={pepcoDiscoveryMsg}
+                    pepcoDashboardMsg={pepcoDashboardMsg}
+                    pepcoAppDetailMsg={pepcoAppDetailMsg}
+                    pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
+                    pepcoApplicationDetailDiscovery={pepcoApplicationDetailDiscovery}
+                    hasPepcoDashboardCards={hasPepcoDashboardCards}
+                    hasPepcoApplicationDetails={hasPepcoApplicationDetails}
+                    onLoginCheck={() => void handlePepcoDiscovery()}
+                    onDiscoverDashboard={() => void handlePepcoDashboardDiscover(false)}
+                    onResumeInterrupted={handlePepcoResumeInterrupted}
+                    onNormalizedSync={() => void handleNormalizedSync()}
+                  />
+
+                  <PepcoProjectList
+                    projects={pepcoMergedProjects}
+                    selectedKey={pepcoSelectedProjectKey}
+                    onSelect={handleSelectPepcoProject}
+                    onScrapeProject={handleScrapePepcoProject}
+                    rowBusyKey={pepcoRowScrapeBusyId}
+                    disableScrape={
+                      pepcoAppDetailBusy ||
+                      pepcoAppDetailResumeBusy ||
+                      pepcoCodeSubmitBusy ||
+                      pepcoCodeModalOpen ||
+                      Boolean(pepcoAppDetailPendingSessionId)
+                    }
+                    formatWhen={formatWhen}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={uciManualFormTextClass}
+                  />
+
+                  {selectedPepcoProject ? (
+                    <PepcoSelectedProjectProgress
+                      isBusy={isSelectedPepcoProjectBusy}
+                      isAwaitingVerification={isSelectedPepcoProjectAwaitingVerification}
+                      rowStatus={selectedPepcoProjectRowStatus}
+                      project={selectedPepcoProject}
+                      mutedClass={uciMutedClass}
+                    />
+                  ) : null}
+
+                  {!selectedPepcoProject ? (
+                    <p className={cn("rounded-md border border-border/60 px-3 py-3 text-xs", uciMutedClass)}>
+                      Select a PEPCO project to view its portal details.
+                    </p>
+                  ) : !selectedPepcoProject.app ? (
+                    <div className={cn("rounded-md border border-border/60 px-3 py-4 text-xs", uciMutedClass)}>
+                      <p>This project has not been synchronized yet.</p>
+                      <p className="mt-1">
+                        Use Scrape Details to load status, messages, and documents.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className={cn(uciDrawerChildCardClass, uciPepcoDetailTabsWrapperClass, "p-4")}>
+                      <PepcoSelectedProjectDetailTabs
+                        app={selectedPepcoProject.app}
+                        coordinationId={detailId}
+                        formatWhen={formatWhen}
+                        mutedClass={uciMutedClass}
+                        tableHeadClass={uciTableHeadClass}
+                        tableCellClass={uciTableCellClass}
+                        tableHeaderRowClass={uciTableHeaderRowClass}
+                      />
+                    </div>
+                  )}
+
+                  <PepcoSystemDataSection
+                    project={selectedPepcoProject}
+                    applications={(detail.applications ?? []) as CoordinationApplication[]}
+                    communications={(detail.communications_recent ?? []) as CoordinationCommunication[]}
+                    milestones={(detail.milestones ?? []) as CoordinationMilestone[]}
+                    formatWhen={formatWhen}
+                    mutedClass={uciMutedClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                  />
+
+                  <PepcoDeveloperTools
+                    detailId={detailId}
+                    mutedClass={uciMutedClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    manualFormTextClass={uciManualFormTextClass}
+                    pepcoAutoEmailMfa={pepcoAutoEmailMfa}
+                    onPepcoAutoEmailMfaChange={setPepcoAutoEmailMfa}
+                    globalBusy={
+                      pepcoDiscoveryBusy ||
+                      pepcoResumeBusy ||
+                      pepcoDashboardBusy ||
+                      pepcoAppDetailBusy ||
+                      pepcoAppDetailResumeBusy ||
+                      pepcoCodeSubmitBusy ||
+                      normalizedSyncBusy ||
+                      detailLoading
+                    }
+                    pepcoPendingSessionId={pepcoPendingSessionId}
+                    pepcoAppDetailPendingSessionId={pepcoAppDetailPendingSessionId}
+                    pepcoAppDetailMfaSessionId={pepcoAppDetailMfaSessionId}
+                    pepcoResumeBusy={pepcoResumeBusy}
+                    pepcoAppDetailResumeBusy={pepcoAppDetailResumeBusy}
+                    pepcoAppDetailBusy={pepcoAppDetailBusy}
+                    pepcoAppDetailProgress={pepcoAppDetailProgress}
+                    pepcoDiscoveryMsg={pepcoDiscoveryMsg}
+                    pepcoDashboardMsg={pepcoDashboardMsg}
+                    pepcoAppDetailMsg={pepcoAppDetailMsg}
+                    pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
+                    onResumeLogin={() => void handlePepcoResume()}
+                    onResumeApplicationDetail={() => void handlePepcoApplicationDetailResume()}
                   />
                 </div>
               ) : null}
 
-              <div>
-                <h4 className={cn("mb-2", uciSheetSectionTitleClass)}>Transitions</h4>
-                <div className="space-y-2">
-                  {(detail.transitions ?? []).length === 0 ? (
-                    <p className="text-sm font-medium text-ink-primary-light/90 dark:text-foreground/90">None yet.</p>
-                  ) : (
-                    (detail.transitions ?? []).map((t) => (
-                      <div
-                        key={t.id}
-                        className={uciTransitionCardClass}
-                      >
-                        <p className="font-mono text-[11px] font-semibold text-foreground">
-                          Stage {t.from_stage ?? "—"} / {t.from_state ?? "—"} → {t.to_stage} /{" "}
-                          {t.to_state}
-                        </p>
-                        <p className="mt-0.5 font-medium text-foreground">
-                          {t.triggered_by_type ?? "—"}
-                          {t.reason ? ` · ${t.reason}` : ""}
-                        </p>
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {formatWhen(t.created_at)}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <LifecycleSection
+                transitions={detail.transitions ?? []}
+                formatWhen={formatWhen}
+                mutedClass={uciMutedClass}
+                sectionTitleClass={uciSheetSectionTitleClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                toStage={toStage}
+                onToStageChange={setToStage}
+                toState={toState}
+                onToStateChange={setToState}
+                reason={reason}
+                onReasonChange={setReason}
+                transitionSaving={transitionSaving}
+                onSubmitTransition={() => void handleTransition()}
+              />
 
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className={cn(uciSheetSectionTitleClass, "mb-0")}>Normalized portal data</h4>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={uciToolbarOutlineButtonClass}
-                  disabled={!detailId || detailLoading || normalizedSyncBusy}
-                  aria-busy={normalizedSyncBusy}
-                  onClick={() => void handleNormalizedSync()}
-                >
-                  {normalizedSyncBusy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Re-sync from stored snapshot
-                </Button>
-              </div>
+              {!isPepcoCoordination ? (
+                <>
+                  <h4 className={cn(uciSheetSectionTitleClass, "mb-2")}>Normalized portal data</h4>
 
-              <Card className={uciDrawerChildCardClass}>
-                <CardHeader className={uciDrawerChildCardHeaderClass}>
-                  <CardTitle className={uciDrawerChildCardTitleClass}>
-                    Utility applications
-                  </CardTitle>
-                  <CardDescription className={cn("text-[11px]", uciMutedClass)}>
-                    Provider-neutral rows from portal sync. PEPCO diagnostic snapshots remain above.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="px-4 py-4">
-                  {(detail.applications ?? []).length === 0 ? (
-                    <p className={uciDrawerChildEmptyClass}>
-                      No normalized application rows yet. Run application detail scrape or re-sync.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {(detail.applications as CoordinationApplication[]).map((app) => (
-                        <div key={app.id} className={uciTransitionCardClass}>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="secondary">Read-only portal record</Badge>
-                            {app.record_source === "agent_draft" ? (
-                              <Badge variant="outline">Agent draft</Badge>
-                            ) : null}
-                            {app.action_required ? (
-                              <Badge variant="destructive">Action required</Badge>
-                            ) : null}
-                          </div>
-                          <p className="mt-2 font-medium text-foreground">
-                            {app.portal_status || "Unknown status"}
-                            {app.portal_milestone ? ` · ${app.portal_milestone}` : ""}
-                          </p>
-                          <p className={cn("mt-1 text-xs", uciMutedClass)}>
-                            Provider {app.provider_slug || "—"} · Job {app.external_job_id || "—"}
-                          </p>
-                          <p className={cn("mt-1 font-mono text-[11px]", uciMutedClass)}>
-                            {app.external_application_id || "—"}
-                          </p>
-                          <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
-                            Last synced {formatWhen(app.last_synced_at)} · Portal updated{" "}
-                            {formatWhen(app.portal_last_updated_at)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className={uciDrawerChildCardClass}>
-                <CardHeader className={uciDrawerChildCardHeaderClass}>
-                  <CardTitle className={uciDrawerChildCardTitleClass}>Communications</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 py-4">
-                  {(detail.communications_recent ?? []).length === 0 ? (
-                    <p className={uciDrawerChildEmptyClass}>No portal communications yet.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {(detail.communications_recent as CoordinationCommunication[]).map((comm) => (
-                        <div key={comm.id} className={uciTransitionCardClass}>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">{comm.direction || "—"}</Badge>
-                            <Badge variant="secondary">{comm.channel || "message"}</Badge>
-                            {comm.needs_human_attention ? (
-                              <Badge variant="destructive">Needs attention</Badge>
-                            ) : null}
-                          </div>
-                          <p className="mt-2 font-medium text-foreground">
-                            {comm.raw_subject || "(no subject)"}
-                          </p>
-                          {comm.raw_body ? (
-                            <p className={cn("mt-1 text-sm", uciMutedClass)}>{comm.raw_body}</p>
-                          ) : null}
-                          <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
-                            {formatWhen(comm.message_timestamp || comm.created_at)}
-                            {comm.sender ? ` · ${comm.sender}` : ""}
-                            {comm.recipient ? ` → ${comm.recipient}` : ""}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className={uciDrawerChildCardClass}>
-                <CardHeader className={uciDrawerChildCardHeaderClass}>
-                  <CardTitle className={uciDrawerChildCardTitleClass}>
-                    Portal status history
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 py-4">
-                  {(() => {
-                    const portalEvents = (detail.milestones as CoordinationMilestone[]).filter(
-                      (m) => m.milestone_type === "portal_status_event",
-                    );
-                    if (portalEvents.length === 0) {
-                      return (
-                        <p className={uciDrawerChildEmptyClass}>
-                          No portal status events yet.
-                        </p>
-                      );
-                    }
-                    return (
-                      <div className="space-y-2">
-                        {portalEvents.map((m) => (
-                          <div key={m.id} className={uciTransitionCardClass}>
-                            <p className="font-medium text-foreground">
-                              {m.portal_status || "—"}
-                              {m.portal_milestone ? ` · ${m.portal_milestone}` : ""}
-                            </p>
-                            <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
-                              {formatWhen(m.occurred_at || m.actual_date)}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
-
-              {(["costs", "equipment"] as const).map((key) => {
-                const label = key.replace(/_/g, " ");
-                const rows = detail[key] as unknown[];
-                return (
-                  <Card key={key} className={uciDrawerChildCardClass}>
+                  <Card className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
-                      <CardTitle className={uciDrawerChildCardTitleClass}>{label}</CardTitle>
+                      <CardTitle className={uciDrawerChildCardTitleClass}>
+                        Utility applications
+                      </CardTitle>
+                      <CardDescription className={cn("text-[11px]", uciMutedClass)}>
+                        Provider-neutral rows from portal sync.
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="px-4 py-4">
-                      {rows.length === 0 ? (
-                        <p className={uciDrawerChildEmptyClass}>No entries.</p>
+                      {(detail.applications ?? []).length === 0 ? (
+                        <p className={uciDrawerChildEmptyClass}>
+                          No normalized application rows yet. Run application detail scrape or re-sync.
+                        </p>
                       ) : (
-                        <p className={uciDrawerChildCountClass}>{rows.length} row(s)</p>
+                        <div className="space-y-3">
+                          {(detail.applications as CoordinationApplication[]).map((app) => (
+                            <div key={app.id} className={uciTransitionCardClass}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="secondary">Read-only portal record</Badge>
+                                {app.record_source === "agent_draft" ? (
+                                  <Badge variant="outline">Agent draft</Badge>
+                                ) : null}
+                                {app.action_required ? (
+                                  <Badge variant="destructive">Action required</Badge>
+                                ) : null}
+                              </div>
+                              <p className="mt-2 font-medium text-foreground">
+                                {app.portal_status || "Unknown status"}
+                                {app.portal_milestone ? ` · ${app.portal_milestone}` : ""}
+                              </p>
+                              <p className={cn("mt-1 text-xs", uciMutedClass)}>
+                                Provider {app.provider_slug || "—"} · Job {app.external_job_id || "—"}
+                              </p>
+                              <p className={cn("mt-1 font-mono text-[11px]", uciMutedClass)}>
+                                {app.external_application_id || "—"}
+                              </p>
+                              <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
+                                Last synced {formatWhen(app.last_synced_at)} · Portal updated{" "}
+                                {formatWhen(app.portal_last_updated_at)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
-                );
-              })}
 
-              <div className={cn(uciInsetPanelClass, "p-4", uciManualFormTextClass)}>
-                <h4 className={uciManualFormTitleClass}>Manual stage update</h4>
-                <div className="grid gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="uci-to-stage" className={uciManualFormTextClass}>
-                      To stage (1–10)
-                    </Label>
-                    <Select value={toStage} onValueChange={setToStage}>
-                      <SelectTrigger id="uci-to-stage" className={uciSheetControlClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STAGE_OPTIONS.map((n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="uci-to-state" className={uciManualFormTextClass}>
-                      To state
-                    </Label>
-                    <Select
-                      value={toState}
-                      onValueChange={(v) => setToState(v as LifecycleState)}
-                    >
-                      <SelectTrigger id="uci-to-state" className={uciSheetControlClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {LIFECYCLE_OPTIONS.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {formatLifecycleState(s)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="uci-reason" className={uciManualFormTextClass}>
-                      Reason (required)
-                    </Label>
-                    <Textarea
-                      id="uci-reason"
-                      placeholder="Why is the stage changing?"
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      rows={3}
-                      className={uciSheetControlClass}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    className="bg-teal hover:bg-teal/90 text-white"
-                    disabled={transitionSaving}
-                    aria-busy={transitionSaving}
-                    onClick={() => void handleTransition()}
-                  >
-                    {transitionSaving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Update stage
-                  </Button>
-                </div>
-              </div>
+                  <Card className={uciDrawerChildCardClass}>
+                    <CardHeader className={uciDrawerChildCardHeaderClass}>
+                      <CardTitle className={uciDrawerChildCardTitleClass}>Communications</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 py-4">
+                      {(detail.communications_recent ?? []).length === 0 ? (
+                        <p className={uciDrawerChildEmptyClass}>No portal communications yet.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {(detail.communications_recent as CoordinationCommunication[]).map((comm) => (
+                            <div key={comm.id} className={uciTransitionCardClass}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline">{comm.direction || "—"}</Badge>
+                                <Badge variant="secondary">{comm.channel || "message"}</Badge>
+                                {comm.needs_human_attention ? (
+                                  <Badge variant="destructive">Needs attention</Badge>
+                                ) : null}
+                              </div>
+                              <p className="mt-2 font-medium text-foreground">
+                                {comm.raw_subject || "(no subject)"}
+                              </p>
+                              {comm.raw_body ? (
+                                <p className={cn("mt-1 text-sm", uciMutedClass)}>{comm.raw_body}</p>
+                              ) : null}
+                              <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
+                                {formatWhen(comm.message_timestamp || comm.created_at)}
+                                {comm.sender ? ` · ${comm.sender}` : ""}
+                                {comm.recipient ? ` → ${comm.recipient}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className={uciDrawerChildCardClass}>
+                    <CardHeader className={uciDrawerChildCardHeaderClass}>
+                      <CardTitle className={uciDrawerChildCardTitleClass}>
+                        Portal status history
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 py-4">
+                      {(() => {
+                        const portalEvents = (detail.milestones as CoordinationMilestone[]).filter(
+                          (m) => m.milestone_type === "portal_status_event",
+                        );
+                        if (portalEvents.length === 0) {
+                          return (
+                            <p className={uciDrawerChildEmptyClass}>
+                              No portal status events yet.
+                            </p>
+                          );
+                        }
+                        return (
+                          <div className="space-y-2">
+                            {portalEvents.map((m) => (
+                              <div key={m.id} className={uciTransitionCardClass}>
+                                <p className="font-medium text-foreground">
+                                  {m.portal_status || "—"}
+                                  {m.portal_milestone ? ` · ${m.portal_milestone}` : ""}
+                                </p>
+                                <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
+                                  {formatWhen(m.occurred_at || m.actual_date)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                </>
+              ) : null}
+
+              <CostsEquipmentSection
+                costs={(detail.costs ?? []) as unknown[]}
+                equipment={(detail.equipment ?? []) as unknown[]}
+                childCardClass={uciDrawerChildCardClass}
+                childCardHeaderClass={uciDrawerChildCardHeaderClass}
+                childCardTitleClass={uciDrawerChildCardTitleClass}
+                childCountClass={uciDrawerChildCountClass}
+                mutedClass={uciMutedClass}
+              />
             </div>
           ) : (
             <p className="mt-6 text-sm font-medium text-ink-primary-light dark:text-foreground">
@@ -2195,6 +2011,560 @@ export default function UciDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function CoordinationStatusField({
+  label,
+  value,
+  mutedClass,
+  hideIfEmpty,
+}: {
+  label: string;
+  value: string;
+  mutedClass: string;
+  hideIfEmpty?: boolean;
+}) {
+  if (hideIfEmpty && (!value || value === "—")) return null;
+  return (
+    <div className="min-w-0">
+      <p className={cn("text-[10px] uppercase tracking-wide", mutedClass)}>{label}</p>
+      <p className="text-xs font-medium text-foreground">{value}</p>
+    </div>
+  );
+}
+
+/** Compact progress indicator for the currently selected PEPCO project only. */
+function PepcoSelectedProjectProgress({
+  isBusy,
+  isAwaitingVerification,
+  rowStatus,
+  project,
+  mutedClass,
+}: {
+  isBusy: boolean;
+  isAwaitingVerification: boolean;
+  rowStatus: { status: "ok" | "error"; message?: string } | undefined;
+  project: PepcoMergedProject;
+  mutedClass: string;
+}) {
+  const [showTechnical, setShowTechnical] = useState(false);
+
+  if (isAwaitingVerification) {
+    return (
+      <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
+        <p className="font-semibold">Verification required</p>
+        <p className="mt-0.5 opacity-90">
+          Enter the PEPCO verification code to continue syncing {project.title}.
+        </p>
+      </div>
+    );
+  }
+
+  if (isBusy) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-foreground">
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        <span>Syncing {project.title}…</span>
+      </div>
+    );
+  }
+
+  if (rowStatus?.status === "error") {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="font-semibold">Project sync failed</p>
+        {rowStatus.message ? <p className="mt-0.5 opacity-90">{rowStatus.message}</p> : null}
+      </div>
+    );
+  }
+
+  if (!project.app) return null;
+
+  return (
+    <div className="text-xs text-foreground">
+      <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+        <span className="font-medium">
+          Project sync {project.app.scrapeStatus === "partial" ? "partially completed" : "completed"}
+        </span>
+        <span className={mutedClass}>
+          · {project.statusUpdateCount} status update{project.statusUpdateCount === 1 ? "" : "s"} ·{" "}
+          {project.messageCount} message{project.messageCount === 1 ? "" : "s"} · {project.documentCount}{" "}
+          document{project.documentCount === 1 ? "" : "s"}
+        </span>
+        <button
+          type="button"
+          className="text-[11px] font-medium text-muted-foreground underline underline-offset-2"
+          onClick={() => setShowTechnical((v) => !v)}
+        >
+          {showTechnical ? "Hide technical details" : "View technical details"}
+        </button>
+      </p>
+      {showTechnical ? (
+        <div
+          className={cn(
+            "mt-1.5 space-y-0.5 rounded-md border border-border/40 bg-muted/15 px-2 py-1.5 font-mono text-[10px]",
+            mutedClass,
+          )}
+        >
+          <p>Application UUID: {project.applicationUuid ?? "—"}</p>
+          <p>Scrape status: {project.app.scrapeStatus ?? "—"}</p>
+          <p>Scraped at: {project.lastScrapedAt ?? "—"}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Compact card/row styling used only inside System Data (technical, collapsed content). */
+const uciSystemDataGroupClass = cn(
+  "overflow-hidden rounded-md border border-border/50 bg-muted/15",
+  "dark:border-teal/20 dark:bg-obsidian/35",
+);
+const uciSystemDataGroupHeaderClass = cn(
+  "border-b border-border/30 bg-muted/10 px-2.5 py-1",
+  "dark:border-teal/15 dark:bg-obsidian/45",
+);
+const uciSystemDataRowClass = cn(
+  "rounded-md border border-border/40 bg-background/50 p-2 text-xs",
+  "dark:border-teal/15 dark:bg-obsidian/25",
+);
+
+const COMMUNICATION_PREVIEW_LIMIT = 160;
+
+/** Communication row with a truncated body preview and an expand toggle for long text. */
+function CommunicationPreviewRow({
+  comm,
+  formatWhen,
+  mutedClass,
+}: {
+  comm: CoordinationCommunication;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const body = comm.raw_body?.trim() || null;
+  const isLong = Boolean(body && body.length > COMMUNICATION_PREVIEW_LIMIT);
+
+  return (
+    <div className={uciSystemDataRowClass}>
+      <p className="font-medium text-foreground">{comm.raw_subject || "(no subject)"}</p>
+      <p className={cn("mt-0.5 text-[11px] tabular-nums", mutedClass)}>
+        {formatWhen(comm.message_timestamp || comm.created_at)}
+      </p>
+      {body ? (
+        <p className={cn("mt-1 leading-snug text-foreground/90", !expanded && "line-clamp-2")}>
+          {body}
+        </p>
+      ) : null}
+      {isLong ? (
+        <button
+          type="button"
+          className="mt-1 text-[11px] font-medium text-primary underline underline-offset-2"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : "View full message"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** Normalized rows filtered to the selected PEPCO project only; collapsed by default. */
+function PepcoSystemDataSection({
+  project,
+  applications,
+  communications,
+  milestones,
+  formatWhen,
+  mutedClass,
+  toolbarOutlineButtonClass,
+}: {
+  project: PepcoMergedProject | null;
+  applications: CoordinationApplication[];
+  communications: CoordinationCommunication[];
+  milestones: CoordinationMilestone[];
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  toolbarOutlineButtonClass: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showTechnical, setShowTechnical] = useState(false);
+
+  const matchId = project?.applicationUuid ?? project?.applicationId ?? null;
+  const filteredApplications = matchId
+    ? applications.filter((a) => a.external_application_id === matchId)
+    : [];
+  const filteredCommunications = matchId
+    ? communications.filter((c) => c.external_application_id === matchId)
+    : [];
+  const portalEvents = matchId
+    ? milestones.filter(
+        (m) => m.milestone_type === "portal_status_event" && m.external_application_id === matchId,
+      )
+    : [];
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn("h-8 w-full justify-between px-2", toolbarOutlineButtonClass)}
+          aria-expanded={open}
+        >
+          <span className="text-sm font-semibold">System Data</span>
+          <ChevronRight className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-90")} />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-2">
+        {!project ? (
+          <p className={cn("rounded-md border border-border/60 px-3 py-3 text-xs", mutedClass)}>
+            Select a PEPCO project to view its normalized system data.
+          </p>
+        ) : (
+          <>
+            <div className={uciSystemDataGroupClass}>
+              <div className={uciSystemDataGroupHeaderClass}>
+                <p className="text-xs font-semibold text-foreground">Utility application</p>
+              </div>
+              <div className="p-2">
+                {filteredApplications.length === 0 ? (
+                  <p className={cn("px-1 py-1 text-xs", mutedClass)}>
+                    No normalized application row yet for this project.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {filteredApplications.map((app) => (
+                      <div key={app.id} className={uciSystemDataRowClass}>
+                        <p className="font-medium text-foreground">
+                          {app.portal_status || "Unknown status"}
+                          {app.portal_milestone ? ` · ${app.portal_milestone}` : ""}
+                        </p>
+                        <p className={cn("mt-0.5 text-[11px] tabular-nums", mutedClass)}>
+                          Last synced {formatWhen(app.last_synced_at)} · Portal updated{" "}
+                          {formatWhen(app.portal_last_updated_at)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={uciSystemDataGroupClass}>
+              <div className={uciSystemDataGroupHeaderClass}>
+                <p className="text-xs font-semibold text-foreground">Communications</p>
+              </div>
+              <div className="p-2">
+                {filteredCommunications.length === 0 ? (
+                  <p className={cn("px-1 py-1 text-xs", mutedClass)}>
+                    No portal communications yet for this project.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {filteredCommunications.map((comm) => (
+                      <CommunicationPreviewRow
+                        key={comm.id}
+                        comm={comm}
+                        formatWhen={formatWhen}
+                        mutedClass={mutedClass}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={uciSystemDataGroupClass}>
+              <div className={uciSystemDataGroupHeaderClass}>
+                <p className="text-xs font-semibold text-foreground">Portal status events</p>
+              </div>
+              <div className="p-2">
+                {portalEvents.length === 0 ? (
+                  <p className={cn("px-1 py-1 text-xs", mutedClass)}>
+                    No portal status events yet for this project.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {portalEvents.map((m) => (
+                      <div key={m.id} className={uciSystemDataRowClass}>
+                        <p className="font-medium text-foreground">
+                          {m.portal_status || "—"}
+                          {m.portal_milestone ? ` · ${m.portal_milestone}` : ""}
+                        </p>
+                        <p className={cn("mt-0.5 text-[11px] tabular-nums", mutedClass)}>
+                          {formatWhen(m.occurred_at || m.actual_date)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="text-[11px] font-medium text-muted-foreground underline underline-offset-2"
+              onClick={() => setShowTechnical((v) => !v)}
+            >
+              {showTechnical ? "Hide technical details" : "Technical details"}
+            </button>
+            {showTechnical ? (
+              <div className="space-y-1 rounded-md border border-border/50 bg-background/50 p-2 font-mono text-[10px] text-muted-foreground">
+                <p>Application UUID: {project.applicationUuid ?? "—"}</p>
+                <p>Application ID: {project.applicationId ?? "—"}</p>
+                <p>Coordination record ID: {filteredApplications[0]?.coordination_record_id ?? "—"}</p>
+                <p>Project ID: {filteredApplications[0]?.project_id ?? "—"}</p>
+              </div>
+            ) : null}
+          </>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/**
+ * Compact lifecycle timeline plus the manual stage-update form; collapsed by
+ * default to keep the main workflow uncluttered. When opened, the transition
+ * summary is shown directly; the manual update form stays nested under its
+ * own "Update stage" toggle (collapsed by default) so it's never permanently
+ * expanded.
+ */
+function LifecycleSection({
+  transitions,
+  formatWhen,
+  mutedClass,
+  sectionTitleClass,
+  toolbarOutlineButtonClass,
+  toStage,
+  onToStageChange,
+  toState,
+  onToStateChange,
+  reason,
+  onReasonChange,
+  transitionSaving,
+  onSubmitTransition,
+}: {
+  transitions: Array<{
+    id: string;
+    from_stage: number | null;
+    to_stage: number;
+    to_state: LifecycleState;
+    triggered_by_type: string | null;
+    reason: string | null;
+    created_at: string;
+  }>;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  sectionTitleClass: string;
+  toolbarOutlineButtonClass: string;
+  toStage: string;
+  onToStageChange: (value: string) => void;
+  toState: LifecycleState;
+  onToStateChange: (value: LifecycleState) => void;
+  reason: string;
+  onReasonChange: (value: string) => void;
+  transitionSaving: boolean;
+  onSubmitTransition: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn("h-8 w-full justify-between px-2", toolbarOutlineButtonClass)}
+          aria-expanded={open}
+        >
+          <span className={sectionTitleClass}>Lifecycle</span>
+          <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+            {transitions.length} transition{transitions.length === 1 ? "" : "s"}
+            <ChevronRight className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-90")} />
+          </span>
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-3">
+        <div className="space-y-1.5">
+          {transitions.length === 0 ? (
+            <p className="text-sm font-medium text-ink-primary-light/90 dark:text-foreground/90">
+              No transitions yet.
+            </p>
+          ) : (
+            transitions.map((t) => {
+              const isSystem = String(t.triggered_by_type ?? "").toLowerCase() === "system";
+              return (
+                <div
+                  key={t.id}
+                  className={cn(
+                    "rounded-md border-l-2 px-3 py-1.5 text-xs",
+                    isSystem
+                      ? "border-l-border/50 bg-muted/15 text-muted-foreground"
+                      : "border-l-teal/50 bg-cream-raised/40 text-foreground dark:bg-obsidian/35",
+                  )}
+                >
+                  <p className={cn("font-medium", isSystem ? "italic" : "")}>
+                    Stage {t.from_stage ?? "—"} → {t.to_stage} · {formatLifecycleState(t.to_state)}
+                  </p>
+                  <p className={cn("mt-0.5", mutedClass)}>
+                    {isSystem ? "System" : t.triggered_by_type ?? "User"}
+                    {t.reason ? ` · ${t.reason}` : ""} · {formatWhen(t.created_at)}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <Collapsible open={updateOpen} onOpenChange={setUpdateOpen}>
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn("h-7 w-full justify-between px-2 text-xs", toolbarOutlineButtonClass)}
+              aria-expanded={updateOpen}
+            >
+              <span>Update stage</span>
+              <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", updateOpen && "rotate-90")} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className={cn(uciInsetPanelClass, "mt-2 p-3", uciManualFormTextClass)}>
+            <div className="grid gap-3">
+              <div className="grid gap-1">
+                <Label htmlFor="uci-to-stage" className={cn("text-xs", uciManualFormTextClass)}>
+                  To stage (1–10)
+                </Label>
+                <Select value={toStage} onValueChange={onToStageChange}>
+                  <SelectTrigger id="uci-to-stage" className={uciSheetControlClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAGE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="uci-to-state" className={cn("text-xs", uciManualFormTextClass)}>
+                  To state
+                </Label>
+                <Select value={toState} onValueChange={(v) => onToStateChange(v as LifecycleState)}>
+                  <SelectTrigger id="uci-to-state" className={uciSheetControlClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LIFECYCLE_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {formatLifecycleState(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="uci-reason" className={cn("text-xs", uciManualFormTextClass)}>
+                  Reason (required)
+                </Label>
+                <Textarea
+                  id="uci-reason"
+                  placeholder="Why is the stage changing?"
+                  value={reason}
+                  onChange={(e) => onReasonChange(e.target.value)}
+                  rows={3}
+                  className={uciSheetControlClass}
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-teal hover:bg-teal/90 text-white"
+                disabled={transitionSaving}
+                aria-busy={transitionSaving}
+                onClick={onSubmitTransition}
+              >
+                {transitionSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Update stage
+              </Button>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/**
+ * Costs and equipment are consolidated: when both are empty they render as
+ * one compact muted "Not available yet" section instead of two large empty
+ * cards. Populated sections still render normally; the missing counterpart
+ * is represented as a compact note rather than hidden entirely.
+ */
+function CostsEquipmentSection({
+  costs,
+  equipment,
+  childCardClass,
+  childCardHeaderClass,
+  childCardTitleClass,
+  childCountClass,
+  mutedClass,
+}: {
+  costs: unknown[];
+  equipment: unknown[];
+  childCardClass: string;
+  childCardHeaderClass: string;
+  childCardTitleClass: string;
+  childCountClass: string;
+  mutedClass: string;
+}) {
+  const sections = [
+    { key: "costs", label: "Costs", rows: costs },
+    { key: "equipment", label: "Equipment", rows: equipment },
+  ] as const;
+  const hasAnyData = sections.some((s) => s.rows.length > 0);
+
+  if (!hasAnyData) {
+    return (
+      <div className={cn("rounded-lg border border-border/50 bg-muted/15 px-3 py-3 text-xs", mutedClass)}>
+        <p className="font-medium text-foreground">Not available yet</p>
+        <p className="mt-0.5 leading-snug">
+          Costs and equipment data have not been added for this coordination record.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {sections.map((section) =>
+        section.rows.length > 0 ? (
+          <Card key={section.key} className={childCardClass}>
+            <CardHeader className={childCardHeaderClass}>
+              <CardTitle className={childCardTitleClass}>{section.label}</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 py-3">
+              <p className={childCountClass}>{section.rows.length} row(s)</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <p
+            key={section.key}
+            className={cn("rounded-md border border-border/40 bg-muted/10 px-3 py-2 text-[11px]", mutedClass)}
+          >
+            {section.label}: Not available yet.
+          </p>
+        ),
+      )}
     </div>
   );
 }

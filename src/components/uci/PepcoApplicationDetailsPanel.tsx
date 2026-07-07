@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -24,34 +25,28 @@ import {
 import { cn } from "@/lib/utils";
 import { downloadPepcoApplicationDocument } from "@/lib/uciApi";
 import {
+  buildPepcoMilestoneTrackingGroups,
   findDownloadForDocument,
   flattenProjectInformation,
   formatAddressBlock,
   formatFileSize,
   listElectricServiceLoads,
   normalizePepcoAppDetailProgress,
+  parsePepcoMessageBodySegments,
+  sortMessagesNewestFirst,
   sortStatusChangesNewestFirst,
 } from "@/lib/pepcoApplicationDetailUi";
-import type { PepcoApplicationDetail, PepcoApplicationDetailDiscovery } from "@/types/uci";
-import { AlertTriangle, Building2, Download, Loader2 } from "lucide-react";
+import type { PepcoApplicationDetail, PepcoMessage } from "@/types/uci";
+import {
+  AlertTriangle,
+  Check,
+  Circle,
+  Download,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 
-type PepcoApplicationDetailsPanelProps = {
-  coordinationId: string | null;
-  discovery: PepcoApplicationDetailDiscovery | null;
-  formatWhen: (iso: string | null | undefined) => string;
-  mutedClass: string;
-  sectionTitleClass: string;
-  tableHeadClass: string;
-  tableCellClass: string;
-  tableHeaderRowClass: string;
-};
-
-function yesNo(value: boolean | null | undefined): string {
-  if (value === true) return "Yes";
-  if (value === false) return "No";
-  return "—";
-}
+type PepcoDetailTab = "overview" | "status" | "messages" | "documents";
 
 function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -70,16 +65,6 @@ function portalStatusLabel(app: PepcoApplicationDetail): string {
   return "—";
 }
 
-function pickMostRecentlyScrapedUuid(apps: PepcoApplicationDetail[]): string | undefined {
-  if (apps.length === 0) return undefined;
-  const sorted = [...apps].sort((a, b) => {
-    const ta = a.scrapedAt ? Date.parse(a.scrapedAt) : 0;
-    const tb = b.scrapedAt ? Date.parse(b.scrapedAt) : 0;
-    return tb - ta;
-  });
-  return sorted[0]?.applicationUuid;
-}
-
 function DetailField({
   label,
   value,
@@ -96,7 +81,496 @@ function DetailField({
   );
 }
 
-function PepcoApplicationDetailCard({
+function ReadOnlyNotice({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <p
+      className={cn(
+        "rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground",
+        className,
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+function ActionRequiredBanner({
+  statusLabel,
+  supportingText,
+  onViewDetails,
+}: {
+  statusLabel: string;
+  supportingText?: string | null;
+  onViewDetails: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">
+            Action required: {statusLabel}
+          </p>
+          <p className="mt-1 text-xs leading-snug text-muted-foreground">
+            {supportingText?.trim() ||
+              "Review the latest PEPCO message or status update for required next steps."}
+          </p>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 shrink-0 border-destructive/30 text-xs"
+        onClick={onViewDetails}
+      >
+        View details
+      </Button>
+    </div>
+  );
+}
+
+function StatusTrackingPanel({
+  app,
+  formatWhen,
+  mutedClass,
+}: {
+  app: PepcoApplicationDetail;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+}) {
+  const groups = useMemo(
+    () =>
+      buildPepcoMilestoneTrackingGroups(
+        app.statusTracking,
+        app.statusChanges ?? [],
+        app.currentMilestone,
+        app.currentStatus,
+      ),
+    [app.statusTracking, app.statusChanges, app.currentMilestone, app.currentStatus],
+  );
+
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-lg border border-border/60 bg-card p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Status tracking
+        </p>
+        <p className={cn("mt-2 text-xs", mutedClass)}>No milestone tracking data is available.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Status tracking
+      </p>
+      <div className="mt-3 space-y-3">
+        {groups.map((group) => (
+          <div
+            key={group.milestoneName}
+            className={cn(
+              "rounded-md border px-3 py-2",
+              group.isCurrentMilestone
+                ? "border-primary/30 bg-primary/5"
+                : "border-border/50 bg-muted/20",
+            )}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-foreground">{group.milestoneName}</p>
+              {group.isCurrentMilestone ? (
+                <Badge variant="secondary" className="text-[10px]">
+                  Current
+                </Badge>
+              ) : null}
+            </div>
+            {group.statuses.length === 0 ? (
+              <p className={cn("mt-1.5 text-[11px]", mutedClass)}>No statuses recorded.</p>
+            ) : (
+              <ul className="mt-2 space-y-1.5">
+                {group.statuses.map((status) => (
+                  <li key={`${group.milestoneName}-${status.statusName}`} className="flex items-start gap-2">
+                    {status.isCurrent ? (
+                      <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-primary text-primary" />
+                    ) : status.isCompleted ? (
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal dark:text-teal-soft" />
+                    ) : (
+                      <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "text-xs leading-snug",
+                          status.isCurrent ? "font-semibold text-foreground" : "text-foreground/90",
+                        )}
+                      >
+                        {status.statusName}
+                      </p>
+                      {status.lastUpdatedAt ? (
+                        <p className={cn("text-[10px]", mutedClass)}>
+                          {formatWhen(status.lastUpdatedAt)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({
+  app,
+  formatWhen,
+  mutedClass,
+  onSwitchTab,
+}: {
+  app: PepcoApplicationDetail;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  onSwitchTab: (tab: PepcoDetailTab) => void;
+}) {
+  const overview = app.overview;
+  const summary = app.projectSummary;
+  const details = app.projectDetails;
+  const contacts = details?.applicationDetails?.projectContacts ?? [];
+  const billing = details?.applicationDetails?.billing;
+  const projectInfoRows = flattenProjectInformation(details);
+  const electricLoads = listElectricServiceLoads(details?.applicationDetails?.electricServiceLoads);
+  const partial = hasSectionErrors(app);
+  const actionStatus = portalStatusLabel(app);
+  const latestMessage = sortMessagesNewestFirst(app.messages ?? [])[0];
+
+  return (
+    <div className="space-y-4">
+      {partial ? (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Some PEPCO sections could not be fetched.
+            {app.errors?.overview ? ` Overview: ${app.errors.overview}.` : ""}
+            {app.errors?.statusChanges ? ` Status: ${app.errors.statusChanges}.` : ""}
+            {app.errors?.messages ? ` Messages: ${app.errors.messages}.` : ""}
+            {app.errors?.documents ? ` Documents: ${app.errors.documents}.` : ""}
+          </span>
+        </div>
+      ) : null}
+
+      {overview?.actionRequired === true ? (
+        <ActionRequiredBanner
+          statusLabel={actionStatus}
+          supportingText={
+            latestMessage?.senderMessage ||
+            latestMessage?.receiverMessage ||
+            latestMessage?.statusChangeDisplayName
+          }
+          onViewDetails={() => onSwitchTab("messages")}
+        />
+      ) : null}
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_1fr]">
+        <StatusTrackingPanel app={app} formatWhen={formatWhen} mutedClass={mutedClass} />
+
+        <div className="space-y-4">
+          {summary ? (
+            <div className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Project summary
+              </p>
+              <DetailField label="Project owner" value={summary.projectOwnerName} className={mutedClass} />
+              <DetailField label="Submitter" value={summary.submitterName} className={mutedClass} />
+              <DetailField label="PEPCO contact" value={summary.opcoContactName} className={mutedClass} />
+              <DetailField
+                label="PEPCO contact email"
+                value={summary.opcoContactEmail}
+                className={mutedClass}
+              />
+              <DetailField
+                label="Expected in-service date"
+                value={formatWhen(summary.expectedInServiceByDate ?? null)}
+                className={mutedClass}
+              />
+            </div>
+          ) : null}
+
+          {(contacts.length > 0 || billing || projectInfoRows.length > 0 || electricLoads.length > 0) ? (
+            <Accordion type="multiple" className="w-full rounded-lg border border-border/60 bg-card">
+              {contacts.length > 0 ? (
+                <AccordionItem value="contacts" className="border-border/50 px-1">
+                  <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
+                    Project contacts
+                  </AccordionTrigger>
+                  <AccordionContent className="px-3">
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[640px] text-xs">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Contact type</TableHead>
+                            <TableHead>Custom type</TableHead>
+                            <TableHead>Full name</TableHead>
+                            <TableHead>Preferred method</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Phone</TableHead>
+                            <TableHead>Address type</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {contacts.map((c, idx) => (
+                            <TableRow key={`${c.contactFullName ?? ""}-${idx}`}>
+                              <TableCell>{c.contactType ?? "—"}</TableCell>
+                              <TableCell>{c.customContactType ?? "—"}</TableCell>
+                              <TableCell>{c.contactFullName ?? "—"}</TableCell>
+                              <TableCell>{c.contactPreferredMethod ?? "—"}</TableCell>
+                              <TableCell>{c.email ?? "—"}</TableCell>
+                              <TableCell>{c.primaryPhone ?? "—"}</TableCell>
+                              <TableCell>{c.addressType ?? "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ) : null}
+
+              {billing ? (
+                <AccordionItem value="billing" className="border-border/50 px-1">
+                  <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
+                    Billing address
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-2 px-3 text-xs">
+                    <DetailField
+                      label="Construction billing"
+                      value={formatAddressBlock(billing.constructionBillingAddress)}
+                      className={mutedClass}
+                    />
+                    <DetailField
+                      label="Monthly billing"
+                      value={formatAddressBlock(billing.monthlyBillingAddress)}
+                      className={mutedClass}
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+              ) : null}
+
+              {projectInfoRows.length > 0 ? (
+                <AccordionItem value="project-info" className="border-border/50 px-1">
+                  <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
+                    Project information
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-1 px-3">
+                    {projectInfoRows.map((row) => (
+                      <DetailField key={row.label} label={row.label} value={row.value} className={mutedClass} />
+                    ))}
+                  </AccordionContent>
+                </AccordionItem>
+              ) : null}
+
+              {electricLoads.length > 0 ? (
+                <AccordionItem value="loads" className="border-border/50 px-1">
+                  <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
+                    Electric service loads
+                  </AccordionTrigger>
+                  <AccordionContent className="flex flex-wrap gap-2 px-3">
+                    {electricLoads.map((load) => (
+                      <Badge key={load.label} variant={load.enabled ? "ai" : "secondary"}>
+                        {load.label}: {load.enabled ? "Yes" : "No"}
+                      </Badge>
+                    ))}
+                  </AccordionContent>
+                </AccordionItem>
+              ) : null}
+            </Accordion>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function messageSenderLabel(message: PepcoMessage): string {
+  if (message.isSPOC) return message.receiverName?.trim() || "PEPCO contact";
+  if (message.isInternalUser) return "Internal user";
+  if (message.receiverName?.trim()) return message.receiverName;
+  return "Project team";
+}
+
+function MessageBody({ body }: { body: string }) {
+  const segments = useMemo(() => parsePepcoMessageBodySegments(body), [body]);
+  return (
+    <p className="mt-2 whitespace-pre-wrap break-words leading-relaxed text-foreground/90">
+      {segments.map((segment, idx) =>
+        segment.type === "link" ? (
+          <a
+            key={idx}
+            href={segment.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-words text-primary underline underline-offset-2"
+          >
+            {segment.label}
+          </a>
+        ) : (
+          <span key={idx}>{segment.value}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
+function MessageCard({
+  message,
+  formatWhen,
+  mutedClass,
+}: {
+  message: PepcoMessage;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+}) {
+  const inbound = message.isSPOC === true;
+  const body = message.senderMessage?.trim() || message.receiverMessage?.trim() || null;
+
+  return (
+    <article
+      className={cn(
+        "rounded-lg border p-3 text-xs",
+        inbound
+          ? "border-primary/20 bg-primary/5"
+          : "border-border/60 bg-muted/30",
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground">{messageSenderLabel(message)}</p>
+          <p className={cn("text-[11px]", mutedClass)}>{formatWhen(message.messageDateTime ?? null)}</p>
+        </div>
+        {message.statusChangeDisplayName ? (
+          <Badge variant={inbound ? "secondary" : "outline"} className="shrink-0 text-[10px]">
+            {message.statusChangeDisplayName}
+          </Badge>
+        ) : null}
+      </div>
+      {body ? (
+        <MessageBody body={body} />
+      ) : (
+        <p className={cn("mt-2 italic", mutedClass)}>No message body provided.</p>
+      )}
+    </article>
+  );
+}
+
+function StatusTab({
+  statusRows,
+  formatWhen,
+  mutedClass,
+  tableHeadClass,
+  tableCellClass,
+  tableHeaderRowClass,
+}: {
+  statusRows: ReturnType<typeof sortStatusChangesNewestFirst>;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  tableHeadClass: string;
+  tableCellClass: string;
+  tableHeaderRowClass: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Status Updates</h3>
+        {statusRows.length > 0 ? (
+          <Badge variant="outline" className="text-[10px]">
+            {countLabel(statusRows.length, "update", "updates")}
+          </Badge>
+        ) : null}
+      </div>
+      {statusRows.length === 0 ? (
+        <p className={cn("rounded-md border border-border/60 bg-muted/20 px-3 py-4 text-xs", mutedClass)}>
+          No status updates are available for this project.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border/60">
+          <Table className="min-w-[520px] text-xs">
+            <TableHeader className={tableHeaderRowClass}>
+              <TableRow>
+                <TableHead className={tableHeadClass}>Milestone</TableHead>
+                <TableHead className={tableHeadClass}>Status</TableHead>
+                <TableHead className={tableHeadClass}>Last Updated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {statusRows.map((row, idx) => (
+                <TableRow
+                  key={`${row.statusChangeDateTime ?? idx}`}
+                  className={idx % 2 === 1 ? "bg-muted/20" : undefined}
+                >
+                  <TableCell className={tableCellClass}>{row.milestoneName ?? "—"}</TableCell>
+                  <TableCell className={tableCellClass}>{row.statusName ?? "—"}</TableCell>
+                  <TableCell className={cn(tableCellClass, "min-w-[140px] whitespace-nowrap")}>
+                    {formatWhen(row.statusChangeDateTime ?? null)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessagesTab({
+  messages,
+  contactName,
+  formatWhen,
+  mutedClass,
+}: {
+  messages: PepcoMessage[];
+  contactName: string | null | undefined;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+}) {
+  const sorted = useMemo(() => sortMessagesNewestFirst(messages), [messages]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Messages</h3>
+        {contactName ? (
+          <p className={cn("text-xs", mutedClass)}>
+            PEPCO contact: <span className="font-medium text-foreground">{contactName}</span>
+          </p>
+        ) : null}
+      </div>
+      <ReadOnlyNotice>
+        Messages are synchronized from the PEPCO portal. Reply functionality is not enabled.
+      </ReadOnlyNotice>
+      {sorted.length === 0 ? (
+        <p className={cn("rounded-md border border-border/60 bg-muted/20 px-3 py-4 text-xs", mutedClass)}>
+          No messages are available for this project.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {sorted.map((message, idx) => (
+            <MessageCard
+              key={`${message.messageDateTime ?? idx}`}
+              message={message}
+              formatWhen={formatWhen}
+              mutedClass={mutedClass}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentsTab({
   app,
   coordinationId,
   formatWhen,
@@ -114,25 +588,8 @@ function PepcoApplicationDetailCard({
   tableHeaderRowClass: string;
 }) {
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
-  const overview = app.overview;
-  const summary = app.projectSummary;
-  const details = app.projectDetails;
-  const contacts = details?.applicationDetails?.projectContacts ?? [];
-  const billing = details?.applicationDetails?.billing;
-  const projectInfoRows = flattenProjectInformation(details);
-  const electricLoads = listElectricServiceLoads(details?.applicationDetails?.electricServiceLoads);
-  const statusRows = sortStatusChangesNewestFirst(app.statusChanges ?? []);
-  const messages = app.messages ?? [];
   const documents = app.documents ?? [];
   const downloaded = app.downloadedFiles ?? [];
-  const partial = hasSectionErrors(app);
-  const projectName = overview?.projectName ?? "PEPCO application";
-  const jobId = overview?.jobId ?? app.applicationUuid;
-  const address = overview?.propertyAddress;
-  const portalStatus = portalStatusLabel(app);
-  const statusUpdateCount = statusRows.length;
-  const messageCount = messages.length;
-  const documentCount = documents.length;
 
   const handleDocumentDownload = async (documentIndex: number, suggestedFileName?: string | null) => {
     if (!coordinationId || !app.applicationUuid) return;
@@ -153,407 +610,221 @@ function PepcoApplicationDetailCard({
   };
 
   return (
-    <AccordionItem
-      value={app.applicationUuid}
-      className="mb-3 overflow-hidden rounded-lg border border-cream-sunken/60 bg-cream-raised/50 shadow-sm dark:border-teal/25 dark:bg-obsidian/40"
-    >
-      <AccordionTrigger
-        className={cn(
-          "border-b border-cream-sunken/40 px-4 py-3 hover:bg-cream-sunken/25 hover:no-underline",
-          "dark:border-teal/15 dark:hover:bg-teal/10",
-          "[&[data-state=open]]:border-b [&[data-state=open]]:bg-cream-sunken/15 dark:[&[data-state=open]]:bg-teal/10",
-        )}
-      >
-        <div className="flex w-full flex-col gap-3 pr-2 text-left sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
-            <Building2 className="mt-1 h-4 w-4 shrink-0 text-teal dark:text-teal-soft" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <p className="text-base font-semibold leading-snug text-foreground">{projectName}</p>
-              <p className={cn("mt-0.5 text-xs leading-snug", mutedClass)}>
-                <span className="font-mono">{jobId}</span>
-                {address ? <> · {address}</> : null}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <Badge variant="secondary">{portalStatus}</Badge>
-                {app.scrapeStatus ? (
-                  <Badge variant={app.scrapeStatus === "completed" ? "ai" : "secondary"}>
-                    {app.scrapeStatus}
-                  </Badge>
-                ) : null}
-                {overview?.actionRequired === true ? (
-                  <Badge variant="destructive">Action required</Badge>
-                ) : null}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {statusUpdateCount > 0 ? (
-                  <Badge variant="outline">{countLabel(statusUpdateCount, "status update", "status updates")}</Badge>
-                ) : null}
-                {messageCount > 0 ? (
-                  <Badge variant="outline">{countLabel(messageCount, "message", "messages")}</Badge>
-                ) : null}
-                {documentCount > 0 ? (
-                  <Badge variant="outline">{countLabel(documentCount, "document", "documents")}</Badge>
-                ) : null}
-              </div>
-              <p className={cn("mt-2 text-[11px] sm:hidden", mutedClass)}>
-                Last updated {formatWhen(app.statusLastUpdatedAt ?? app.scrapedAt ?? null)}
-              </p>
-            </div>
-          </div>
-          <div className={cn("shrink-0 text-[11px] leading-snug sm:text-right", mutedClass)}>
-            <p className="hidden sm:block">Last scraped</p>
-            <p className="hidden font-medium text-foreground sm:block">
-              {formatWhen(app.scrapedAt ?? null)}
-            </p>
-            <p className="mt-1 hidden sm:block">Portal updated {formatWhen(app.statusLastUpdatedAt ?? null)}</p>
-          </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Documents</h3>
+        {documents.length > 0 ? (
+          <Badge variant="outline" className="text-[10px]">
+            {countLabel(documents.length, "document", "documents")}
+          </Badge>
+        ) : null}
+      </div>
+      <ReadOnlyNotice>
+        Documents are synchronized from the PEPCO portal. Upload functionality is not enabled.
+      </ReadOnlyNotice>
+      {documents.length === 0 ? (
+        <p className={cn("rounded-md border border-border/60 bg-muted/20 px-3 py-4 text-xs", mutedClass)}>
+          No documents are available for this project.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border/60">
+          <Table className="min-w-[760px] text-xs">
+            <TableHeader className={tableHeaderRowClass}>
+              <TableRow>
+                <TableHead className={cn(tableHeadClass, "min-w-[220px]")}>Document</TableHead>
+                <TableHead className={cn(tableHeadClass, "min-w-[120px]")}>Category</TableHead>
+                <TableHead className={cn(tableHeadClass, "min-w-[130px]")}>Uploaded</TableHead>
+                <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Status</TableHead>
+                <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {documents.map((doc, idx) => {
+                const dl = findDownloadForDocument(doc, downloaded);
+                const isDownloaded = dl?.status === "saved";
+                const docName = doc.documentName ?? "—";
+                const downloadKey = `${app.applicationUuid}-${idx}`;
+                const busy = downloadingKey === downloadKey;
+                return (
+                  <TableRow key={`${doc.documentName ?? idx}`} className={idx % 2 === 1 ? "bg-muted/20" : undefined}>
+                    <TableCell className={cn(tableCellClass, "max-w-[320px] align-top")}>
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="line-clamp-2 break-words font-medium leading-snug" title={docName}>
+                              {docName}
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-sm break-words">
+                            {docName}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      {isDownloaded ? (
+                        <p className={cn("mt-1 text-[11px]", mutedClass)}>{formatFileSize(dl?.sizeBytes)}</p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className={cn(tableCellClass, "whitespace-normal align-top")}>
+                      {doc.documentType ?? "—"}
+                    </TableCell>
+                    <TableCell className={cn(tableCellClass, "whitespace-nowrap align-top")}>
+                      {formatWhen(doc.documentUploadDateTime ?? null)}
+                    </TableCell>
+                    <TableCell className={cn(tableCellClass, "align-top")}>
+                      {isDownloaded ? (
+                        <Badge variant="ai">Downloaded</Badge>
+                      ) : dl?.status === "failed" ? (
+                        <Badge variant="destructive">Failed</Badge>
+                      ) : (
+                        <Badge variant="secondary">Listed only</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className={cn(tableCellClass, "align-top")}>
+                      {isDownloaded ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-[11px]"
+                          disabled={!coordinationId || busy}
+                          aria-busy={busy}
+                          onClick={() => void handleDocumentDownload(idx, dl?.fileName ?? doc.documentName)}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          Download
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" disabled>
+                          Not downloaded
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
-      </AccordionTrigger>
-
-      <AccordionContent className="px-4 pb-4 pt-3">
-        <div className="space-y-4">
-          {partial ? (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                Some PEPCO sections could not be fetched. See details below.
-                {app.errors?.overview ? ` Overview: ${app.errors.overview}.` : ""}
-                {app.errors?.statusChanges ? ` Status: ${app.errors.statusChanges}.` : ""}
-                {app.errors?.messages ? ` Messages: ${app.errors.messages}.` : ""}
-                {app.errors?.documents ? ` Documents: ${app.errors.documents}.` : ""}
-              </span>
-            </div>
-          ) : null}
-
-          {summary ? (
-            <div className="space-y-1 rounded-md border border-cream-sunken/50 bg-cream/40 p-3 dark:border-teal/15 dark:bg-obsidian/20">
-              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Project summary</p>
-              <DetailField label="Project owner" value={summary.projectOwnerName} className={mutedClass} />
-              <DetailField label="Submitter" value={summary.submitterName} className={mutedClass} />
-              <DetailField label="PEPCO contact" value={summary.opcoContactName} className={mutedClass} />
-              <DetailField label="PEPCO contact email" value={summary.opcoContactEmail} className={mutedClass} />
-              <DetailField
-                label="Expected in-service date"
-                value={formatWhen(summary.expectedInServiceByDate ?? null)}
-                className={mutedClass}
-              />
-            </div>
-          ) : null}
-
-          <Accordion type="multiple" className="w-full rounded-md border border-cream-sunken/50 dark:border-teal/15">
-            {contacts.length > 0 ? (
-              <AccordionItem value="contacts" className="border-cream-sunken/40 dark:border-teal/12">
-                <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
-                  Project contacts
-                </AccordionTrigger>
-                <AccordionContent className="px-3">
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[640px] text-xs">
-                      <TableHeader className={tableHeaderRowClass}>
-                        <TableRow>
-                          <TableHead className={tableHeadClass}>Contact type</TableHead>
-                          <TableHead className={tableHeadClass}>Custom type</TableHead>
-                          <TableHead className={tableHeadClass}>Full name</TableHead>
-                          <TableHead className={tableHeadClass}>Preferred method</TableHead>
-                          <TableHead className={tableHeadClass}>Email</TableHead>
-                          <TableHead className={tableHeadClass}>Phone</TableHead>
-                          <TableHead className={tableHeadClass}>Address type</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {contacts.map((c, idx) => (
-                          <TableRow key={`${c.contactFullName ?? ""}-${idx}`}>
-                            <TableCell className={tableCellClass}>{c.contactType ?? "—"}</TableCell>
-                            <TableCell className={tableCellClass}>{c.customContactType ?? "—"}</TableCell>
-                            <TableCell className={tableCellClass}>{c.contactFullName ?? "—"}</TableCell>
-                            <TableCell className={tableCellClass}>{c.contactPreferredMethod ?? "—"}</TableCell>
-                            <TableCell className={tableCellClass}>{c.email ?? "—"}</TableCell>
-                            <TableCell className={tableCellClass}>{c.primaryPhone ?? "—"}</TableCell>
-                            <TableCell className={tableCellClass}>{c.addressType ?? "—"}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ) : null}
-
-            {billing ? (
-              <AccordionItem value="billing" className="border-cream-sunken/40 dark:border-teal/12">
-                <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
-                  Billing address
-                </AccordionTrigger>
-                <AccordionContent className="space-y-2 px-3 text-xs">
-                  <DetailField
-                    label="Construction billing"
-                    value={formatAddressBlock(billing.constructionBillingAddress)}
-                    className={mutedClass}
-                  />
-                  <DetailField
-                    label="Monthly billing"
-                    value={formatAddressBlock(billing.monthlyBillingAddress)}
-                    className={mutedClass}
-                  />
-                </AccordionContent>
-              </AccordionItem>
-            ) : null}
-
-            {projectInfoRows.length > 0 ? (
-              <AccordionItem value="project-info" className="border-cream-sunken/40 dark:border-teal/12">
-                <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
-                  Project information
-                </AccordionTrigger>
-                <AccordionContent className="space-y-1 px-3">
-                  {projectInfoRows.map((row) => (
-                    <DetailField key={row.label} label={row.label} value={row.value} className={mutedClass} />
-                  ))}
-                </AccordionContent>
-              </AccordionItem>
-            ) : null}
-
-            {electricLoads.length > 0 ? (
-              <AccordionItem value="loads" className="border-cream-sunken/40 dark:border-teal/12">
-                <AccordionTrigger className="px-3 py-2 text-xs font-semibold hover:no-underline">
-                  Electric service loads
-                </AccordionTrigger>
-                <AccordionContent className="flex flex-wrap gap-2 px-3">
-                  {electricLoads.map((load) => (
-                    <Badge key={load.label} variant={load.enabled ? "ai" : "secondary"}>
-                      {load.label}: {load.enabled ? "Yes" : "No"}
-                    </Badge>
-                  ))}
-                </AccordionContent>
-              </AccordionItem>
-            ) : null}
-          </Accordion>
-
-          <div className="space-y-2 border-t border-cream-sunken/50 pt-3 dark:border-teal/20">
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Status history</p>
-            {statusRows.length === 0 ? (
-              <p className={cn("text-xs", mutedClass)}>No status history found.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[520px] text-xs">
-                  <TableHeader className={tableHeaderRowClass}>
-                    <TableRow>
-                      <TableHead className={tableHeadClass}>Milestone</TableHead>
-                      <TableHead className={tableHeadClass}>Status</TableHead>
-                      <TableHead className={tableHeadClass}>Date/time</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {statusRows.map((row, idx) => (
-                      <TableRow key={`${row.statusChangeDateTime ?? idx}`}>
-                        <TableCell className={tableCellClass}>{row.milestoneName ?? "—"}</TableCell>
-                        <TableCell className={tableCellClass}>{row.statusName ?? "—"}</TableCell>
-                        <TableCell className={cn(tableCellClass, "min-w-[140px] whitespace-normal")}>
-                          {formatWhen(row.statusChangeDateTime ?? null)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2 border-t border-cream-sunken/50 pt-3 dark:border-teal/20">
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Messages</p>
-            {messages.length === 0 ? (
-              <p className={cn("text-xs", mutedClass)}>No PEPCO messages found.</p>
-            ) : (
-              <div className="space-y-3">
-                {messages.map((m, idx) => (
-                  <div
-                    key={`${m.messageDateTime ?? idx}`}
-                    className="rounded-md border border-cream-sunken/50 p-2 text-xs dark:border-teal/15"
-                  >
-                    <p className="font-medium">{formatWhen(m.messageDateTime ?? null)}</p>
-                    <p className={mutedClass}>
-                      Receiver: {m.receiverName ?? "—"}
-                      {m.statusChangeDisplayName ? ` · ${m.statusChangeDisplayName}` : ""}
-                    </p>
-                    {m.senderMessage ? <p className="mt-1 whitespace-pre-wrap">{m.senderMessage}</p> : null}
-                    {m.receiverMessage ? (
-                      <p className="mt-1 whitespace-pre-wrap opacity-90">{m.receiverMessage}</p>
-                    ) : null}
-                    <p className={cn("mt-1", mutedClass)}>
-                      Internal user: {yesNo(m.isInternalUser)} · SPOC: {yesNo(m.isSPOC)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2 border-t border-cream-sunken/50 pt-3 dark:border-teal/20">
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-              Documents ({documents.length}
-              {downloaded.some((d) => d.status === "saved") ? " · downloaded copies available" : ""})
-            </p>
-            {documents.length === 0 ? (
-              <p className={cn("text-xs", mutedClass)}>No PEPCO documents listed.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[760px] text-xs">
-                  <TableHeader className={tableHeaderRowClass}>
-                    <TableRow>
-                      <TableHead className={cn(tableHeadClass, "min-w-[220px]")}>Document</TableHead>
-                      <TableHead className={cn(tableHeadClass, "min-w-[120px]")}>Category</TableHead>
-                      <TableHead className={cn(tableHeadClass, "min-w-[130px]")}>Uploaded</TableHead>
-                      <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Status</TableHead>
-                      <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {documents.map((doc, idx) => {
-                      const dl = findDownloadForDocument(doc, downloaded);
-                      const isDownloaded = dl?.status === "saved";
-                      const docName = doc.documentName ?? "—";
-                      const downloadKey = `${app.applicationUuid}-${idx}`;
-                      const busy = downloadingKey === downloadKey;
-                      return (
-                        <TableRow key={`${doc.documentName ?? idx}`}>
-                          <TableCell className={cn(tableCellClass, "max-w-[320px] align-top")}>
-                            <TooltipProvider delayDuration={200}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <p className="line-clamp-3 break-words font-medium leading-snug">{docName}</p>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-sm break-words">
-                                  {docName}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            {isDownloaded ? (
-                              <p className={cn("mt-1 text-[11px]", mutedClass)}>
-                                {formatFileSize(dl?.sizeBytes)}
-                              </p>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className={cn(tableCellClass, "whitespace-normal align-top")}>
-                            {doc.documentType ?? "—"}
-                          </TableCell>
-                          <TableCell className={cn(tableCellClass, "whitespace-nowrap align-top")}>
-                            {formatWhen(doc.documentUploadDateTime ?? null)}
-                          </TableCell>
-                          <TableCell className={cn(tableCellClass, "align-top")}>
-                            {isDownloaded ? (
-                              <Badge variant="ai">Downloaded</Badge>
-                            ) : dl?.status === "failed" ? (
-                              <Badge variant="destructive">Failed</Badge>
-                            ) : (
-                              <Badge variant="secondary">Listed only</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className={cn(tableCellClass, "align-top")}>
-                            {isDownloaded ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 gap-1.5 text-[11px]"
-                                disabled={!coordinationId || busy}
-                                aria-busy={busy}
-                                onClick={() => void handleDocumentDownload(idx, dl?.fileName ?? doc.documentName)}
-                              >
-                                {busy ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Download className="h-3.5 w-3.5" />
-                                )}
-                                Download
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-[11px]"
-                                disabled
-                              >
-                                Not downloaded
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-        </div>
-      </AccordionContent>
-    </AccordionItem>
+      )}
+    </div>
   );
 }
 
-export function PepcoApplicationDetailsPanel({
+/**
+ * Detail tabs (Overview / Status / Messages / Documents) for exactly one
+ * selected PEPCO project. The active tab resets to Overview whenever the
+ * selected project changes, satisfying the "no stale content" requirement.
+ */
+export function PepcoSelectedProjectDetailTabs({
+  app,
   coordinationId,
-  discovery,
   formatWhen,
   mutedClass,
-  sectionTitleClass,
   tableHeadClass,
   tableCellClass,
   tableHeaderRowClass,
-}: PepcoApplicationDetailsPanelProps) {
-  const apps = discovery?.applications ?? [];
-  const defaultOpenUuid = useMemo(() => pickMostRecentlyScrapedUuid(apps), [apps]);
-  const accordionKey = `${coordinationId ?? "none"}:${apps.map((a) => a.applicationUuid).join(",")}`;
+}: {
+  app: PepcoApplicationDetail;
+  coordinationId: string | null;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  tableHeadClass: string;
+  tableCellClass: string;
+  tableHeaderRowClass: string;
+}) {
+  const [activeTab, setActiveTab] = useState<PepcoDetailTab>("overview");
+
+  useEffect(() => {
+    setActiveTab("overview");
+  }, [app.applicationUuid]);
+
+  const summary = app.projectSummary;
+  const statusRows = useMemo(
+    () => sortStatusChangesNewestFirst(app.statusChanges ?? []),
+    [app.statusChanges],
+  );
+  const messages = app.messages ?? [];
+  const documents = app.documents ?? [];
+  const statusUpdateCount = statusRows.length;
+  const messageCount = messages.length;
+  const documentCount = documents.length;
 
   return (
-    <div className="mt-4 space-y-3">
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className={cn(sectionTitleClass, "text-base")}>PEPCO Project Details</p>
-          {apps.length > 0 ? (
-            <Badge variant="secondary">
-              {apps.length} project{apps.length === 1 ? "" : "s"}
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as PepcoDetailTab)}
+      className="w-full"
+    >
+      <TabsList className="mb-3 h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:flex-nowrap">
+        <TabsTrigger value="overview" className="shrink-0 text-xs sm:text-sm">
+          Overview
+        </TabsTrigger>
+        <TabsTrigger value="status" className="shrink-0 text-xs sm:text-sm">
+          Status
+          {statusUpdateCount > 0 ? (
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+              {statusUpdateCount}
             </Badge>
           ) : null}
-        </div>
-        <p className={cn("text-xs leading-snug", mutedClass)}>
-          Review portal status, contacts, messages, documents, and activity for each discovered PEPCO project.
-        </p>
-        {discovery?.lastScrapedAt ? (
-          <p className={cn("text-[11px]", mutedClass)}>
-            Last scrape run {formatWhen(discovery.lastScrapedAt)}
-            {discovery.lastStatus ? ` · ${discovery.lastStatus}` : ""}
-          </p>
-        ) : null}
-      </div>
+        </TabsTrigger>
+        <TabsTrigger value="messages" className="shrink-0 text-xs sm:text-sm">
+          Messages
+          {messageCount > 0 ? (
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+              {messageCount}
+            </Badge>
+          ) : null}
+        </TabsTrigger>
+        <TabsTrigger value="documents" className="shrink-0 text-xs sm:text-sm">
+          Documents
+          {documentCount > 0 ? (
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+              {documentCount}
+            </Badge>
+          ) : null}
+        </TabsTrigger>
+      </TabsList>
 
-      {apps.length === 0 ? (
-        <p className={cn("rounded-md border border-cream-sunken/60 px-3 py-3 text-xs", mutedClass)}>
-          No PEPCO project details have been scraped yet. Select Scrape Details from a discovered project above.
-        </p>
-      ) : (
-        <Accordion
-          key={accordionKey}
-          type="single"
-          collapsible
-          defaultValue={defaultOpenUuid}
-          className="space-y-0"
-        >
-          {apps.map((app) => (
-            <PepcoApplicationDetailCard
-              key={app.applicationUuid}
-              app={app}
-              coordinationId={coordinationId}
-              formatWhen={formatWhen}
-              mutedClass={mutedClass}
-              tableHeadClass={tableHeadClass}
-              tableCellClass={tableCellClass}
-              tableHeaderRowClass={tableHeaderRowClass}
-            />
-          ))}
-        </Accordion>
-      )}
-    </div>
+      <TabsContent value="overview" className="mt-0 focus-visible:outline-none">
+        <OverviewTab app={app} formatWhen={formatWhen} mutedClass={mutedClass} onSwitchTab={setActiveTab} />
+      </TabsContent>
+
+      <TabsContent value="status" className="mt-0 focus-visible:outline-none">
+        <StatusTab
+          statusRows={statusRows}
+          formatWhen={formatWhen}
+          mutedClass={mutedClass}
+          tableHeadClass={tableHeadClass}
+          tableCellClass={tableCellClass}
+          tableHeaderRowClass={tableHeaderRowClass}
+        />
+      </TabsContent>
+
+      <TabsContent value="messages" className="mt-0 focus-visible:outline-none">
+        <MessagesTab
+          messages={messages}
+          contactName={summary?.opcoContactName}
+          formatWhen={formatWhen}
+          mutedClass={mutedClass}
+        />
+      </TabsContent>
+
+      <TabsContent value="documents" className="mt-0 focus-visible:outline-none">
+        <DocumentsTab
+          app={app}
+          coordinationId={coordinationId}
+          formatWhen={formatWhen}
+          mutedClass={mutedClass}
+          tableHeadClass={tableHeadClass}
+          tableCellClass={tableCellClass}
+          tableHeaderRowClass={tableHeaderRowClass}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }
 
