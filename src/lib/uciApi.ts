@@ -3,10 +3,13 @@ import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import type {
   LifecycleState,
   UciApplicationsListResponse,
+  UciCommunicationsListResponse,
   UciDiscoveryResponse,
   UciInitResponse,
+  UciMilestonesListResponse,
   UciPepcoDashboardDiscoveryResponse,
   UciPepcoApplicationDetailDiscoveryResponse,
+  UciPortalSyncResponse,
   UciProjectCoordinationResponse,
   UciProvidersResponse,
   UciRecordDetailResponse,
@@ -226,6 +229,78 @@ export async function postPepcoDashboardDiscovery(
     );
   }
   return (await res.json()) as UciPepcoDashboardDiscoveryResponse;
+}
+
+export async function triggerCoordinationSync(
+  coordinationId: string,
+  body?: { provider_slug?: string },
+): Promise<UciPortalSyncResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/sync`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `Coordination sync failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciPortalSyncResponse;
+}
+
+export async function listCoordinationCommunications(
+  coordinationId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<UciCommunicationsListResponse> {
+  const base = getScraperBaseUrl();
+  const headers = await getBearerHeader();
+  const qs = new URLSearchParams();
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/communications${suffix}`,
+    { headers },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `Failed to load communications (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciCommunicationsListResponse;
+}
+
+export async function listCoordinationMilestones(
+  coordinationId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<UciMilestonesListResponse> {
+  const base = getScraperBaseUrl();
+  const headers = await getBearerHeader();
+  const qs = new URLSearchParams();
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/milestones${suffix}`,
+    { headers },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `Failed to load milestones (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciMilestonesListResponse;
 }
 
 export async function postPepcoApplicationDetailDiscovery(

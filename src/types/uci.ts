@@ -70,6 +70,7 @@ export interface CoordinationApplication {
   id: string;
   coordination_record_id: string;
   project_id: string;
+  tenant_id?: string | null;
   application_type: string | null;
   package_documents: unknown;
   load_summary: unknown;
@@ -83,6 +84,17 @@ export interface CoordinationApplication {
   agent_draft_metadata: Record<string, unknown>;
   idempotency_key: string | null;
   last_error: string | null;
+  provider_slug?: string | null;
+  external_application_id?: string | null;
+  external_job_id?: string | null;
+  portal_status?: string | null;
+  portal_milestone?: string | null;
+  portal_last_updated_at?: string | null;
+  portal_submitted_at?: string | null;
+  action_required?: boolean;
+  last_synced_at?: string | null;
+  record_source?: "portal_sync" | "agent_draft" | string;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -128,12 +140,21 @@ export interface CoordinationMilestone {
   id: string;
   coordination_record_id: string;
   project_id: string;
+  tenant_id?: string | null;
   milestone_type: string | null;
   parent_stage: number | null;
   target_date: string | null;
   actual_date: string | null;
   status: "pending" | "scheduled" | "completed" | "missed" | string;
   notes: string | null;
+  provider_slug?: string | null;
+  external_application_id?: string | null;
+  portal_status?: string | null;
+  portal_milestone?: string | null;
+  occurred_at?: string | null;
+  source?: string | null;
+  idempotency_key?: string | null;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -142,6 +163,7 @@ export interface CoordinationCommunication {
   id: string;
   coordination_record_id: string;
   project_id: string;
+  tenant_id?: string | null;
   direction: string | null;
   channel: string | null;
   classification: string | null;
@@ -156,6 +178,14 @@ export interface CoordinationCommunication {
   reviewed_by: string | null;
   reviewed_at: string | null;
   agent_processed_metadata: Record<string, unknown>;
+  provider_slug?: string | null;
+  external_application_id?: string | null;
+  external_message_id?: string | null;
+  idempotency_key?: string | null;
+  sender?: string | null;
+  recipient?: string | null;
+  message_timestamp?: string | null;
+  updated_at?: string | null;
   created_at: string;
 }
 
@@ -190,6 +220,38 @@ export interface UciTransitionResponse {
 
 export interface UciApplicationsListResponse {
   applications: CoordinationApplication[];
+}
+
+export interface UciEntityCountBucket {
+  discovered: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface UciPortalSyncResponse {
+  providerSlug: string;
+  applications: UciEntityCountBucket;
+  communications: UciEntityCountBucket;
+  milestones: UciEntityCountBucket;
+  warnings: string[];
+  errors: string[];
+  syncedAt?: string;
+}
+
+export interface UciCommunicationsListResponse {
+  communications: CoordinationCommunication[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface UciMilestonesListResponse {
+  milestones: CoordinationMilestone[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 /** POST /api/uci/coordination/:id/discovery/pepco (+ MFA resume) — login only */
