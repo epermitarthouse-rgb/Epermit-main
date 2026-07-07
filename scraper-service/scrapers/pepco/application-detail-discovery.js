@@ -445,6 +445,10 @@ function filenameFromContentDisposition(contentDisposition) {
   }
 }
 
+function getPepcoDocStorageRoot() {
+  return path.join(SCRAPER_SERVICE_ROOT, "debug", "pepco-docs");
+}
+
 function safeLocalDocDir(opts) {
   const parts = ["pepco-docs"];
   if (opts.coordinationId) parts.push(String(opts.coordinationId).replace(/[^a-zA-Z0-9_-]/g, "_"));
@@ -455,6 +459,31 @@ function safeLocalDocDir(opts) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   } catch (_) {}
   return dir;
+}
+
+/**
+ * Resolve an on-disk PEPCO document path under the configured download root.
+ *
+ * @param {{ coordinationId: string, applicationUuid: string, fileName: string }} opts
+ * @returns {string | null}
+ */
+function resolvePepcoStoredDocumentPath(opts) {
+  const fileName = String(opts.fileName || "").trim();
+  if (!fileName) return null;
+  const dir = safeLocalDocDir({
+    coordinationId: opts.coordinationId,
+    applicationUuid: opts.applicationUuid,
+  });
+  const root = path.resolve(getPepcoDocStorageRoot());
+  const safeName = path.basename(fileName.replace(/[/\\?%*:|"<>]/g, "_"));
+  const resolved = path.resolve(dir, safeName);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    return null;
+  }
+  if (resolved.includes(`${path.sep}..${path.sep}`) || resolved.endsWith(`${path.sep}..`)) {
+    return null;
+  }
+  return resolved;
 }
 
 /**
@@ -1160,6 +1189,8 @@ async function scrapePepcoApplicationDetails(page, applicationUuid, options = {}
 }
 
 module.exports = {
+  getPepcoDocStorageRoot,
+  resolvePepcoStoredDocumentPath,
   PEPCO_EUAPI_BASE,
   PEPCO_GET_SESSION_URL,
   PEPCO_API_HEADERS,

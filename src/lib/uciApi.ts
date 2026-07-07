@@ -291,6 +291,43 @@ export async function resumePepcoApplicationDetailDiscovery(
   return (await res.json()) as UciPepcoApplicationDetailDiscoveryResponse;
 }
 
+/** Trigger a browser download for a scraped PEPCO document via the UCI download route. */
+export async function downloadPepcoApplicationDocument(
+  coordinationId: string,
+  applicationUuid: string,
+  documentIndex: number,
+  suggestedFileName?: string | null,
+): Promise<void> {
+  const base = getScraperBaseUrl();
+  const headers = await getBearerHeader();
+  const url = `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/${encodeURIComponent(applicationUuid)}/documents/${documentIndex}/download`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    const detail = String(err.message || err.error || `HTTP ${res.status}`);
+    throw new Error(detail);
+  }
+  const blob = await res.blob();
+  if (!blob.size) {
+    throw new Error("empty_file");
+  }
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = /filename="([^"]+)"/i.exec(disposition);
+  const fileName = match?.[1] || suggestedFileName || "pepco-document";
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export async function submitPepcoMfaCode(
   coordinationId: string,
   body: {

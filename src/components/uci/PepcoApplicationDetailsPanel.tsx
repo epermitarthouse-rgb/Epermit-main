@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -6,6 +6,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -14,18 +15,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { downloadPepcoApplicationDocument } from "@/lib/uciApi";
 import {
   findDownloadForDocument,
   flattenProjectInformation,
   formatAddressBlock,
+  formatFileSize,
   listElectricServiceLoads,
+  normalizePepcoAppDetailProgress,
   sortStatusChangesNewestFirst,
 } from "@/lib/pepcoApplicationDetailUi";
 import type { PepcoApplicationDetail, PepcoApplicationDetailDiscovery } from "@/types/uci";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 type PepcoApplicationDetailsPanelProps = {
+  coordinationId: string | null;
   discovery: PepcoApplicationDetailDiscovery | null;
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
@@ -65,6 +77,7 @@ function DetailField({
 
 function PepcoApplicationDetailCard({
   app,
+  coordinationId,
   formatWhen,
   mutedClass,
   tableHeadClass,
@@ -72,12 +85,14 @@ function PepcoApplicationDetailCard({
   tableHeaderRowClass,
 }: {
   app: PepcoApplicationDetail;
+  coordinationId: string | null;
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
   tableHeadClass: string;
   tableCellClass: string;
   tableHeaderRowClass: string;
 }) {
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
   const overview = app.overview;
   const summary = app.projectSummary;
   const details = app.projectDetails;
@@ -90,6 +105,24 @@ function PepcoApplicationDetailCard({
   const documents = app.documents ?? [];
   const downloaded = app.downloadedFiles ?? [];
   const partial = hasSectionErrors(app);
+
+  const handleDocumentDownload = async (documentIndex: number, suggestedFileName?: string | null) => {
+    if (!coordinationId || !app.applicationUuid) return;
+    const key = `${app.applicationUuid}-${documentIndex}`;
+    setDownloadingKey(key);
+    try {
+      await downloadPepcoApplicationDocument(
+        coordinationId,
+        app.applicationUuid,
+        documentIndex,
+        suggestedFileName,
+      );
+    } catch {
+      toast.error("The PEPCO document could not be downloaded.");
+    } finally {
+      setDownloadingKey(null);
+    }
+  };
 
   return (
     <div className="space-y-4 rounded-lg border border-cream-sunken/60 bg-cream-raised/40 p-3 dark:border-teal/25 dark:bg-obsidian/30">
@@ -244,8 +277,8 @@ function PepcoApplicationDetailCard({
                   <TableRow key={`${row.statusChangeDateTime ?? idx}`}>
                     <TableCell className={tableCellClass}>{row.milestoneName ?? "—"}</TableCell>
                     <TableCell className={tableCellClass}>{row.statusName ?? "—"}</TableCell>
-                    <TableCell className={cn(tableCellClass, "font-mono text-[11px]")}>
-                      {row.statusChangeDateTime ?? "—"}
+                    <TableCell className={cn(tableCellClass, "min-w-[140px] whitespace-normal")}>
+                      {formatWhen(row.statusChangeDateTime ?? null)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -286,47 +319,93 @@ function PepcoApplicationDetailCard({
 
       <div className="space-y-2 border-t border-cream-sunken/50 pt-3 dark:border-teal/20">
         <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-          3. Documents (listed metadata
+          Documents ({documents.length}
           {downloaded.some((d) => d.status === "saved") ? " · downloaded copies available" : ""})
         </p>
         {documents.length === 0 ? (
           <p className={cn("text-xs", mutedClass)}>No PEPCO documents listed.</p>
         ) : (
           <div className="overflow-x-auto">
-            <Table className="min-w-[720px] text-xs">
+            <Table className="min-w-[760px] text-xs">
               <TableHeader className={tableHeaderRowClass}>
                 <TableRow>
-                  <TableHead className={tableHeadClass}>Document name</TableHead>
-                  <TableHead className={tableHeadClass}>Type</TableHead>
-                  <TableHead className={tableHeadClass}>Status</TableHead>
-                  <TableHead className={tableHeadClass}>Uploaded</TableHead>
-                  <TableHead className={tableHeadClass}>Download</TableHead>
+                  <TableHead className={cn(tableHeadClass, "min-w-[220px]")}>Document</TableHead>
+                  <TableHead className={cn(tableHeadClass, "min-w-[120px]")}>Category</TableHead>
+                  <TableHead className={cn(tableHeadClass, "min-w-[130px]")}>Uploaded</TableHead>
+                  <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Status</TableHead>
+                  <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documents.map((doc, idx) => {
                   const dl = findDownloadForDocument(doc, downloaded);
-                  let downloadLabel = "Listed only — not downloaded.";
-                  if (dl?.status === "saved") {
-                    const path = dl.storagePath ?? dl.localPath;
-                    downloadLabel = path
-                      ? `Downloaded · ${dl.sizeBytes ?? 0} bytes · ${path}`
-                      : `Downloaded · ${dl.sizeBytes ?? 0} bytes`;
-                  } else if (dl?.status === "failed") {
-                    downloadLabel = dl.error ? `Failed: ${dl.error}` : "Download failed";
-                  }
+                  const isDownloaded = dl?.status === "saved";
+                  const docName = doc.documentName ?? "—";
+                  const downloadKey = `${app.applicationUuid}-${idx}`;
+                  const busy = downloadingKey === downloadKey;
                   return (
                     <TableRow key={`${doc.documentName ?? idx}`}>
-                      <TableCell className={cn(tableCellClass, "max-w-[240px] break-all")}>
-                        {doc.documentName ?? "—"}
+                      <TableCell className={cn(tableCellClass, "max-w-[320px] align-top")}>
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="line-clamp-3 break-words font-medium leading-snug">{docName}</p>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-sm break-words">
+                              {docName}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {isDownloaded ? (
+                          <p className={cn("mt-1 text-[11px]", mutedClass)}>
+                            {formatFileSize(dl?.sizeBytes)}
+                          </p>
+                        ) : null}
                       </TableCell>
-                      <TableCell className={tableCellClass}>{doc.documentType ?? "—"}</TableCell>
-                      <TableCell className={tableCellClass}>{doc.documentStatus ?? "—"}</TableCell>
-                      <TableCell className={tableCellClass}>
+                      <TableCell className={cn(tableCellClass, "whitespace-normal align-top")}>
+                        {doc.documentType ?? "—"}
+                      </TableCell>
+                      <TableCell className={cn(tableCellClass, "whitespace-nowrap align-top")}>
                         {formatWhen(doc.documentUploadDateTime ?? null)}
                       </TableCell>
-                      <TableCell className={cn(tableCellClass, "max-w-[280px] break-all text-[11px]")}>
-                        {downloadLabel}
+                      <TableCell className={cn(tableCellClass, "align-top")}>
+                        {isDownloaded ? (
+                          <Badge variant="ai">Downloaded</Badge>
+                        ) : dl?.status === "failed" ? (
+                          <Badge variant="destructive">Failed</Badge>
+                        ) : (
+                          <Badge variant="secondary">Listed only</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className={cn(tableCellClass, "align-top")}>
+                        {isDownloaded ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 text-[11px]"
+                            disabled={!coordinationId || busy}
+                            aria-busy={busy}
+                            onClick={() => void handleDocumentDownload(idx, dl?.fileName ?? doc.documentName)}
+                          >
+                            {busy ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                            Download
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-[11px]"
+                            disabled
+                          >
+                            Not downloaded
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -341,6 +420,7 @@ function PepcoApplicationDetailCard({
 }
 
 export function PepcoApplicationDetailsPanel({
+  coordinationId,
   discovery,
   formatWhen,
   mutedClass,
@@ -367,6 +447,7 @@ export function PepcoApplicationDetailsPanel({
         <PepcoApplicationDetailCard
           key={app.applicationUuid}
           app={app}
+          coordinationId={coordinationId}
           formatWhen={formatWhen}
           mutedClass={mutedClass}
           tableHeadClass={tableHeadClass}
@@ -387,7 +468,18 @@ export function PepcoApplicationDetailProgressLog({
   busy: boolean;
   mutedClass: string;
 }) {
-  if (lines.length === 0 && !busy) return null;
+  const milestones = normalizePepcoAppDetailProgress(lines);
+  const showDevDetails = import.meta.env.DEV && lines.some((line) => normalizePepcoAppDetailProgress([line]).length === 0);
+
+  if (milestones.length === 0 && !busy) return null;
+
+  const displayLines =
+    milestones.length > 0
+      ? milestones
+      : busy
+        ? ["Starting PEPCO login"]
+        : [];
+
   return (
     <div
       className={cn(
@@ -400,21 +492,31 @@ export function PepcoApplicationDetailProgressLog({
         {busy ? " · running…" : ""}
       </p>
       <ol className={cn("list-decimal space-y-1 pl-5 text-[11px]", mutedClass)}>
-        {lines.map((line, idx) => (
+        {displayLines.map((line, idx) => (
           <li
             key={`${idx}-${line}`}
             className={cn(
               "leading-snug",
-              busy && idx === lines.length - 1 ? "font-medium text-teal dark:text-teal-soft" : "",
+              busy && idx === displayLines.length - 1 ? "font-medium text-teal dark:text-teal-soft" : "",
             )}
           >
             {line}
-            {busy && idx === lines.length - 1 ? (
+            {busy && idx === displayLines.length - 1 ? (
               <span className="ml-1 inline-block animate-pulse">…</span>
             ) : null}
           </li>
         ))}
       </ol>
+      {showDevDetails ? (
+        <details className="mt-2 border-t border-teal/10 pt-2">
+          <summary className={cn("cursor-pointer text-[10px] font-medium", mutedClass)}>
+            Technical details (development only)
+          </summary>
+          <pre className={cn("mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[10px]", mutedClass)}>
+            {lines.slice(-20).join("\n")}
+          </pre>
+        </details>
+      ) : null}
     </div>
   );
 }

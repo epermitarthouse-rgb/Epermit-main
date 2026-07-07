@@ -17,12 +17,136 @@ function isLikelyLoginUrl(url) {
 }
 
 /**
+ * True when Azure B2C `.loadingBkg` overlay is visible and intercepting interaction.
+ *
+ * @param {import('playwright').Page} page
+ */
+async function isLoadingOverlayBlocking(page) {
+  return page
+    .evaluate(() => {
+      const el = document.querySelector(".loadingBkg");
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+        return false;
+      }
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
+      if (style.pointerEvents === "none") return false;
+      return true;
+    })
+    .catch(() => false);
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {{ timeoutMs?: number }} [opts]
+ */
+async function waitForLoadingOverlayClear(page, { timeoutMs = 20000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await isLoadingOverlayBlocking(page))) return true;
+    await page.waitForTimeout(200).catch(() => {});
+  }
+  return !(await isLoadingOverlayBlocking(page));
+}
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function isEmailContactOptionVisible(page) {
+  const maskedRow = page
+    .getByText(/[a-zA-Z0-9][*‧·•\s\u2022]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+    .first();
+  if (await maskedRow.isVisible({ timeout: 350 }).catch(() => false)) return true;
+
+  const emailRadio = page.getByRole("radio", { name: /\bemail\b/i }).first();
+  if (await emailRadio.isVisible({ timeout: 350 }).catch(() => false)) return true;
+
+  const emailBtn = page.getByRole("button", { name: /^\s*email\s*$/i }).first();
+  if (await emailBtn.isVisible({ timeout: 350 }).catch(() => false)) return true;
+
+  return false;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function isSendCodeButtonVisible(page) {
+  const nameRes = [/send\s+verification\s+code/i, /send\s+code/i, /^continue$/i, /^next$/i];
+  for (const re of nameRes) {
+    const b = page.getByRole("button", { name: re }).first();
+    if (await b.isVisible({ timeout: 350 }).catch(() => false)) return true;
+    const l = page.getByRole("link", { name: re }).first();
+    if (await l.isVisible({ timeout: 250 }).catch(() => false)) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {(msg: string) => void} log
+ * @param {string} reason
+ */
+async function logMfaHumanRequiredDiagnostics(page, log, reason) {
+  const contactMethodVisible = await detectPepcoContactMethodScreen(page);
+  const sendCodeVisible = await isSendCodeButtonVisible(page);
+  const codeInputVisible = await isPepcoCodeEntryInputVisible(page);
+  log(
+    `MFA human_required reason=${reason} url=${page.url()} contactMethodVisible=${contactMethodVisible} sendCodeVisible=${sendCodeVisible} codeInputVisible=${codeInputVisible}`,
+  );
+}
+
+/**
+ * Wait until MFA contact-method UI is rendered and interactive.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ timeoutMs?: number }} [opts]
+ */
+async function waitForMfaContactScreenReady(page, { timeoutMs = 35000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await waitForLoadingOverlayClear(page, { timeoutMs: 4000 }).catch(() => {});
+    const title = await page.title().catch(() => "");
+    const titleMatch = /choose multi factor authentication method/i.test(title);
+    const contact = await detectPepcoContactMethodScreen(page);
+    if (contact || titleMatch) {
+      if (await isEmailContactOptionVisible(page)) return true;
+      if (contact && titleMatch) return true;
+    }
+    if (await isPepcoCodeEntryInputVisible(page)) return true;
+    await page.waitForTimeout(350).catch(() => {});
+  }
+  return false;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} startUrl
+ * @param {(msg: string) => void} log
+ */
+async function returnMfaCodeInputRequired(page, startUrl, log) {
+  await logMfaHumanRequiredDiagnostics(page, log, "mfa_email_code_input_required");
+  return {
+    status: "human_required",
+    reason: "mfa_email_code_input_required",
+    message: "Enter the PEPCO verification code sent by email.",
+    currentUrl: page.url() || startUrl,
+  };
+}
+
+/**
  * PEPCO / Azure — "Choose how you'd like us to contact you" (Text / Call / Email).
  *
  * @param {import('playwright').Page} page
  * @returns {Promise<boolean>}
  */
 async function detectPepcoContactMethodScreen(page) {
+  const title = await page.title().catch(() => "");
+  if (/choose multi factor authentication method/i.test(title)) {
+    return true;
+  }
+
   const raw = await page
     .evaluate(() => (document.body && document.body.innerText) || "")
     .catch(() => "");
@@ -31,10 +155,31 @@ async function detectPepcoContactMethodScreen(page) {
   const hasPrompt =
     raw.includes("Choose how you'd like us to contact you") ||
     lower.includes("choose how you'd like us to contact you for verification") ||
-    lower.includes("a contact method is required");
+    lower.includes("a contact method is required") ||
+    lower.includes("choose multi factor authentication method");
   const hasChannels =
     /\btext\b/i.test(raw) && /\bcall\b/i.test(raw) && /\bemail\b/i.test(raw);
   return hasPrompt && hasChannels;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @returns {Promise<boolean>}
+ */
+async function isPepcoCodeEntryScreen(page) {
+  const title = await page.title().catch(() => "");
+  if (/verification code|enter code|one.?time|verify your/i.test(title)) return true;
+
+  return page
+    .evaluate(() => {
+      const t = ((document.body && document.body.innerText) || "").toLowerCase();
+      return (
+        /enter.*verification code|verification code has been sent|we('ve| have) sent.*code|enter the code|one.?time password|enter your code/.test(
+          t,
+        ) && !/choose how you'd like us to contact you|choose multi factor authentication method/.test(t)
+      );
+    })
+    .catch(() => false);
 }
 
 /**
@@ -44,13 +189,18 @@ async function detectPepcoContactMethodScreen(page) {
  * @returns {Promise<boolean>}
  */
 async function isPepcoCodeEntryInputVisible(page) {
-  if (await detectPepcoContactMethodScreen(page)) return false;
+  const url = page.url().toLowerCase();
+  const onSelfAsserted = /selfasserted/i.test(url);
+  const codeScreen = await isPepcoCodeEntryScreen(page);
 
   const otpSelectors = [
     'input[autocomplete="one-time-code"]',
     'input[name="verificationCode"]',
+    'input[name="otpCode"]',
     'input[id*="verificationCode"]',
     'input[id*="VerificationCode"]',
+    'input[id*="otpCode"]',
+    'input[id*="OtpCode"]',
     'input[id*="otp"]',
     'input[name*="otp"]',
     'input[placeholder*="code"]',
@@ -58,12 +208,26 @@ async function isPepcoCodeEntryInputVisible(page) {
     'input[data-bind*="verificationCode"]',
     'input[inputmode="numeric"]',
     'input[type="tel"]',
+    "#otpCode",
+    "#emailVerificationCode",
   ];
 
   for (const sel of otpSelectors) {
     const loc = page.locator(sel).first();
-    if (await loc.isVisible({ timeout: 400 }).catch(() => false)) return true;
+    if (await loc.isVisible({ timeout: 400 }).catch(() => false)) {
+      if (onSelfAsserted || codeScreen || !(await detectPepcoContactMethodScreen(page))) {
+        return true;
+      }
+    }
   }
+
+  if (onSelfAsserted || codeScreen) {
+    const textInputs = page.locator('input[type="text"]:visible, input:not([type]):visible');
+    const n = await textInputs.count().catch(() => 0);
+    if (n >= 1 && n <= 8) return true;
+  }
+
+  if (await detectPepcoContactMethodScreen(page)) return false;
 
   const n = await page.locator('input[inputmode="numeric"]').count().catch(() => 0);
   if (n >= 4) return true;
@@ -81,37 +245,70 @@ async function selectPepcoEmailMfaMethod(page, opts = {}) {
   const log =
     typeof opts.logger === "function" ? opts.logger : (m) => console.log(`[PEPCO][login-flow] ${m}`);
 
+  await waitForLoadingOverlayClear(page, { timeoutMs: 30000 });
+  await waitForMfaContactScreenReady(page, { timeoutMs: 35000 });
+
   if (await isPepcoCodeEntryInputVisible(page)) {
     log("Verification code input ready");
     return { outcome: "code_input_ready" };
   }
 
-  if (!(await detectPepcoContactMethodScreen(page))) {
+  const title = await page.title().catch(() => "");
+  const onContactScreen =
+    (await detectPepcoContactMethodScreen(page)) ||
+    /choose multi factor authentication method/i.test(title);
+
+  if (!onContactScreen) {
     return { outcome: "not_contact_screen" };
   }
 
   log("MFA contact method screen detected");
 
-  const emailClicked = await clickPepcoEmailContactOption(page);
+  await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+
+  let emailClicked = await clickPepcoEmailContactOption(page);
+  if (!emailClicked) {
+    await waitForLoadingOverlayClear(page, { timeoutMs: 10000 });
+    await page.waitForTimeout(600).catch(() => {});
+    emailClicked = await clickPepcoEmailContactOption(page);
+  }
   if (!emailClicked) {
     return { outcome: "needs_manual_contact" };
   }
   log("Clicked Email contact method");
 
-  await page.waitForTimeout(800).catch(() => {});
+  await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+  await page.waitForTimeout(600).catch(() => {});
 
-  const sent = await clickPepcoSendCodeOrContinue(page);
+  let sent = await clickPepcoSendVerificationCodeOnly(page);
+  if (!sent) {
+    const continued = await clickPepcoMfaContinueOnly(page);
+    if (continued) {
+      await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+      await page.waitForTimeout(800).catch(() => {});
+      sent = await clickPepcoSendVerificationCodeOnly(page);
+    }
+  }
+  if (!sent) {
+    sent = await clickPepcoSendCodeOrContinue(page);
+  }
   if (sent) {
     log("Clicked Send Code after Email selection");
   }
 
-  const deadline = Date.now() + 35000;
-  while (Date.now() < deadline) {
-    if (await isPepcoCodeEntryInputVisible(page)) {
+  await waitForLoadingOverlayClear(page, { timeoutMs: 20000 });
+
+  const codeReady = await waitForPepcoCodeInputReady(page, { timeoutMs: 45000, log });
+  if (codeReady) {
+    log("Verification code input ready");
+    return { outcome: "code_input_ready" };
+  }
+
+  if (emailClicked && sent && !(await detectPepcoContactMethodScreen(page))) {
+    if (await isPepcoCodeEntryScreen(page)) {
       log("Verification code input ready");
       return { outcome: "code_input_ready" };
     }
-    await page.waitForTimeout(400).catch(() => {});
   }
 
   if (await detectPepcoContactMethodScreen(page)) {
@@ -131,6 +328,8 @@ async function selectPepcoEmailMfaMethod(page, opts = {}) {
  * @returns {Promise<boolean>}
  */
 async function clickPepcoEmailContactOption(page) {
+  await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+
   const maskedRow = page
     .getByText(/[a-zA-Z0-9][*‧·•\s\u2022]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
     .first();
@@ -175,26 +374,24 @@ async function clickPepcoEmailContactOption(page) {
 }
 
 /**
+ * Click Send verification code / Send code only (not generic Continue).
+ *
  * @param {import('playwright').Page} page
  */
-async function clickPepcoSendCodeOrContinue(page) {
-  const nameRes = [
-    /send\s+verification\s+code/i,
-    /send\s+code/i,
-    /^continue$/i,
-    /^next$/i,
-  ];
+async function clickPepcoSendVerificationCodeOnly(page) {
+  await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+
+  const nameRes = [/send\s+verification\s+code/i, /send\s+code/i];
   for (const re of nameRes) {
     const b = page.getByRole("button", { name: re }).first();
     try {
       if (await b.isVisible({ timeout: 1800 }).catch(() => false)) {
+        if (!(await b.isEnabled().catch(() => false))) continue;
         await b.click({ timeout: 15000 }).catch(() => {});
         await page.waitForTimeout(600).catch(() => {});
         return true;
       }
     } catch (_) {}
-  }
-  for (const re of nameRes) {
     const l = page.getByRole("link", { name: re }).first();
     try {
       if (await l.isVisible({ timeout: 800 }).catch(() => false)) {
@@ -204,6 +401,59 @@ async function clickPepcoSendCodeOrContinue(page) {
       }
     } catch (_) {}
   }
+  return false;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function clickPepcoMfaContinueOnly(page) {
+  await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+  const nameRes = [/^continue$/i, /^next$/i];
+  for (const re of nameRes) {
+    const b = page.getByRole("button", { name: re }).first();
+    try {
+      if (await b.isVisible({ timeout: 1500 }).catch(() => false)) {
+        if (!(await b.isEnabled().catch(() => false))) continue;
+        await b.click({ timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(600).catch(() => {});
+        return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function clickPepcoSendCodeOrContinue(page) {
+  if (await clickPepcoSendVerificationCodeOnly(page)) return true;
+  return clickPepcoMfaContinueOnly(page);
+}
+
+/**
+ * Poll until OTP/code input or code-entry screen is ready.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ timeoutMs?: number, log?: (m: string) => void }} [opts]
+ */
+async function waitForPepcoCodeInputReady(page, opts = {}) {
+  const timeoutMs = opts.timeoutMs ?? 45000;
+  const log = typeof opts.log === "function" ? opts.log : () => {};
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await waitForLoadingOverlayClear(page, { timeoutMs: 4000 }).catch(() => {});
+    if (await isPepcoCodeEntryInputVisible(page)) return true;
+    if (await isPepcoCodeEntryScreen(page)) {
+      await page.waitForTimeout(800).catch(() => {});
+      if (await isPepcoCodeEntryInputVisible(page)) return true;
+    }
+    await page.waitForTimeout(450).catch(() => {});
+  }
+
+  log("code input not detected within wait window");
   return false;
 }
 
@@ -774,9 +1024,27 @@ async function handlePepcoMfaBranch(opts) {
   /** @type {(msg: string) => void} */
   const log = typeof opts.log === "function" ? opts.log : (m) => console.log(`[PEPCO][login-flow] ${m}`);
 
-  const emailPrep = await selectPepcoEmailMfaMethod(page, { logger: log });
+  await waitForLoadingOverlayClear(page, { timeoutMs: 30000 });
+
+  let emailPrep = await selectPepcoEmailMfaMethod(page, { logger: log });
   if (emailPrep.outcome === "needs_manual_contact") {
+    await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+    if (await isPepcoCodeEntryInputVisible(page) || (await isPepcoCodeEntryScreen(page))) {
+      log("Verification code input ready");
+      emailPrep = { outcome: "code_input_ready" };
+    } else {
+      log("MFA contact method automation incomplete; retrying email/send-code once");
+      emailPrep = await selectPepcoEmailMfaMethod(page, { logger: log });
+    }
+  }
+
+  if (emailPrep.outcome === "code_input_ready") {
+    if (!fetchEmailCode) {
+      return returnMfaCodeInputRequired(page, startUrl, log);
+    }
+  } else if (emailPrep.outcome === "needs_manual_contact") {
     await maybeDebugScreenshot(page, { label: "pepco-mfa-contact" });
+    await logMfaHumanRequiredDiagnostics(page, log, "mfa_contact_method_selection_required");
     return {
       status: "human_required",
       reason: "mfa_contact_method_selection_required",
@@ -788,19 +1056,20 @@ async function handlePepcoMfaBranch(opts) {
   if (!fetchEmailCode) {
     if (emailPrep.outcome === "not_contact_screen") {
       await tryTriggerEmailVerificationOption(page, log);
+      await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
+      if (await isPepcoCodeEntryInputVisible(page)) {
+        return returnMfaCodeInputRequired(page, startUrl, log);
+      }
     }
     await maybeDebugScreenshot(page, { label: "pepco-mfa" });
-    return {
-      status: "human_required",
-      reason: "mfa_email_code",
-      message: EMAIL_MFA_MANUAL_ONLY_MSG,
-      currentUrl: page.url() || startUrl,
-    };
+    return returnMfaCodeInputRequired(page, startUrl, log);
   }
 
   if (emailPrep.outcome === "not_contact_screen") {
     await tryTriggerEmailVerificationOption(page, log);
+    await waitForLoadingOverlayClear(page, { timeoutMs: 15000 });
   }
+
   const requestedAt = new Date();
 
   /** @type {{ status?: string, reason?: string, code?: string } | undefined | null} */
@@ -820,9 +1089,10 @@ async function handlePepcoMfaBranch(opts) {
       else if (poll.reason === "failed") pollReason = /** @type {const} */ ("failed");
     }
 
+    await logMfaHumanRequiredDiagnostics(page, log, "mfa_email_code_input_required");
     return {
       status: "human_required",
-      reason: "mfa_email_code",
+      reason: "mfa_email_code_input_required",
       message: EMAIL_MFA_AUTO_FETCH_FAILED_MSG,
       currentUrl: page.url() || startUrl,
       __pepcoAutomation: {
@@ -837,9 +1107,10 @@ async function handlePepcoMfaBranch(opts) {
 
   if (!typed) {
     await maybeDebugScreenshot(page, { label: "pepco-email-mfa-fill-failed" });
+    await logMfaHumanRequiredDiagnostics(page, log, "mfa_email_code_input_required");
     return {
       status: "human_required",
-      reason: "mfa_email_code",
+      reason: "mfa_email_code_input_required",
       message: EMAIL_MFA_AUTO_FETCH_FAILED_MSG,
       currentUrl: page.url() || startUrl,
       __pepcoAutomation: { attempted: true, succeeded: false, reason: "otp_fill_failed" },
@@ -864,9 +1135,10 @@ async function handlePepcoMfaBranch(opts) {
 
   if (await detectMfaScreen(page)) {
     await maybeDebugScreenshot(page, { label: "pepco-email-mfa-still-pending" });
+    await logMfaHumanRequiredDiagnostics(page, log, "mfa_email_code_input_required");
     return {
       status: "human_required",
-      reason: "mfa_email_code",
+      reason: "mfa_email_code_input_required",
       message: EMAIL_MFA_AUTO_FETCH_FAILED_MSG,
       currentUrl: url,
       __pepcoAutomation: { attempted: true, succeeded: false, reason: "mfa_still_visible" },
@@ -874,13 +1146,500 @@ async function handlePepcoMfaBranch(opts) {
   }
 
   await maybeDebugScreenshot(page, { label: "pepco-email-mfa-unknown-post-otp" });
+  await logMfaHumanRequiredDiagnostics(page, log, "mfa_email_code_input_required");
   return {
     status: "human_required",
-    reason: "mfa_email_code",
+    reason: "mfa_email_code_input_required",
     message: EMAIL_MFA_AUTO_FETCH_FAILED_MSG,
     currentUrl: url,
     __pepcoAutomation: { attempted: true, succeeded: false, reason: "unknown_post_submit" },
   };
+}
+
+const EMPTY_USERNAME_VALIDATION_MSG = "Email or Username is required.";
+
+const B2C_USERNAME_SELECTORS = [
+  "#signInName",
+  'input[name="signInName"]',
+  'input[type="email"]',
+  'input[name="loginfmt"]',
+  'input[name="identifier"]',
+  'input[id*="signInName"]',
+  'input[type="text"]:visible',
+];
+
+const B2C_PASSWORD_SELECTORS = [
+  'input[type="password"]',
+  'input[name="passwd"]',
+  'input[name="password"]',
+  "#password",
+];
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function isSubmitControlReady(page) {
+  const submitBtns = [
+    page.locator('button[type="submit"]').first(),
+    page.locator('input[type="submit"]').first(),
+    page.getByRole("button", { name: /sign\s*in/i }).first(),
+    page.getByRole("button", { name: /^continue$/i }).first(),
+    page.getByRole("button", { name: /^verify$/i }).first(),
+  ];
+  for (const b of submitBtns) {
+    try {
+      if (await b.isVisible({ timeout: 350 }).catch(() => false)) {
+        if (await b.isEnabled().catch(() => false)) return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+/**
+ * Wait for Azure B2C combined sign-in form to be interactive.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ timeoutMs?: number, requireSubmit?: boolean }} [opts]
+ */
+async function waitForB2cFormReady(page, { timeoutMs = 15000, requireSubmit = false } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const formVis = await page
+      .locator("#localAccountForm")
+      .first()
+      .isVisible({ timeout: 400 })
+      .catch(() => false);
+    const signInVis = await page
+      .locator("#signInName")
+      .first()
+      .isVisible({ timeout: 400 })
+      .catch(() => false);
+    const passVis = await page
+      .locator('input[type="password"]')
+      .first()
+      .isVisible({ timeout: 400 })
+      .catch(() => false);
+    const overlay = await isLoadingOverlayBlocking(page);
+    const submitReady = requireSubmit ? await isSubmitControlReady(page) : true;
+
+    if (formVis && signInVis && passVis && !overlay && submitReady) {
+      return true;
+    }
+    await page.waitForTimeout(200).catch(() => {});
+  }
+  return false;
+}
+
+/**
+ * @param {import('playwright').Locator} loc
+ */
+async function dispatchInputChangeBlur(loc) {
+  await loc
+    .evaluate((el) => {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      el.dispatchEvent(new Event("blur", { bubbles: true }));
+    })
+    .catch(() => {});
+}
+
+/**
+ * @param {import('playwright').Locator} loc
+ */
+async function inputValueLength(loc) {
+  const v = await loc.inputValue().catch(() => "");
+  return String(v || "").length;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string[]} selectors
+ */
+async function resolveVisibleInput(page, selectors) {
+  for (const sel of selectors) {
+    const loc = page.locator(sel).first();
+    try {
+      await loc.waitFor({ state: "visible", timeout: 4000 });
+      const tag = await loc.evaluate((el) => el.tagName).catch(() => "");
+      const typ = await loc.getAttribute("type").catch(() => "");
+      if (String(typ).toLowerCase() === "password") continue;
+      if (/^INPUT$/i.test(tag)) return loc;
+    } catch (_) {}
+  }
+  return null;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string[]} selectors
+ */
+async function resolveVisiblePasswordInput(page, selectors) {
+  for (const sel of selectors) {
+    const loc = page.locator(sel).first();
+    try {
+      await loc.waitFor({ state: "visible", timeout: 4000 });
+      return loc;
+    } catch (_) {}
+  }
+  return null;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} value
+ * @param {(msg: string) => void} log
+ * @param {import('playwright').Locator} [existingLoc]
+ */
+async function fillUsernameFieldRobust(page, value, log, existingLoc) {
+  await waitForB2cFormReady(page, { timeoutMs: 15000 });
+  const loc =
+    existingLoc || (await resolveVisibleInput(page, B2C_USERNAME_SELECTORS));
+  if (!loc) return false;
+
+  await loc.focus().catch(() => loc.click({ timeout: 3000 }).catch(() => {}));
+  await loc.fill("").catch(() => {});
+  await loc.fill(String(value)).catch(() => {});
+  await dispatchInputChangeBlur(loc);
+  await page.waitForTimeout(300).catch(() => {});
+
+  let len = await inputValueLength(loc);
+  log(`username field populated: ${len > 0 ? "yes" : "no"}${len > 0 ? ` (length=${len})` : ""}`);
+  if (len === 0) return false;
+
+  await page.waitForTimeout(250).catch(() => {});
+  len = await inputValueLength(loc);
+  return len > 0;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} value
+ * @param {(msg: string) => void} log
+ * @param {import('playwright').Locator} [existingLoc]
+ */
+async function fillPasswordFieldRobust(page, value, log, existingLoc) {
+  await waitForB2cFormReady(page, { timeoutMs: 15000 });
+  const loc =
+    existingLoc || (await resolveVisiblePasswordInput(page, B2C_PASSWORD_SELECTORS));
+  if (!loc) return false;
+
+  await loc.focus().catch(() => loc.click({ timeout: 3000 }).catch(() => {}));
+  await loc.fill("").catch(() => {});
+  await loc.fill(String(value)).catch(() => {});
+  await dispatchInputChangeBlur(loc);
+  await page.waitForTimeout(250).catch(() => {});
+
+  const len = await inputValueLength(loc);
+  log(`password field populated: ${len > 0 ? "yes" : "no"}${len > 0 ? ` (length=${len})` : ""}`);
+  return len > 0;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ */
+async function hasEmptyUsernameValidationError(page) {
+  return page
+    .evaluate((msg) => {
+      const t = (document.body && document.body.innerText) || "";
+      return t.includes(msg);
+    }, EMPTY_USERNAME_VALIDATION_MSG)
+    .catch(() => false);
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @returns {Promise<string>}
+ */
+async function getLoginValidationErrorText(page) {
+  return page
+    .evaluate((emptyMsg) => {
+      const lines = ((document.body && document.body.innerText) || "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const line of lines) {
+        if (line.includes(emptyMsg)) return emptyMsg;
+        if (
+          /\b(invalid|incorrect|wrong|does not match|unable to sign|account.*locked|password.*expired)\b/i.test(
+            line,
+          ) &&
+          line.length < 220
+        ) {
+          return line.slice(0, 200);
+        }
+      }
+      return "";
+    }, EMPTY_USERNAME_VALIDATION_MSG)
+    .catch(() => "");
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {(msg: string) => void} log
+ */
+async function clickSubmitButtonSafe(page, log) {
+  const submitBtns = [
+    page.locator('button[type="submit"]').first(),
+    page.locator('input[type="submit"]').first(),
+    page.getByRole("button", { name: /sign\s*in/i }).first(),
+    page.getByRole("button", { name: /^continue$/i }).first(),
+    page.getByRole("button", { name: /^verify$/i }).first(),
+  ];
+
+  for (const b of submitBtns) {
+    try {
+      if (await b.isVisible({ timeout: 1200 }).catch(() => false)) {
+        if (!(await b.isEnabled().catch(() => false))) continue;
+        await b.click({ timeout: 15000 });
+        log("clicked submit-style control");
+        return true;
+      }
+    } catch (_) {}
+  }
+
+  await page.keyboard.press("Enter").catch(() => {});
+  log("pressed Enter as fallback submit");
+  return true;
+}
+
+/**
+ * Poll after submit until navigation, MFA, dashboard, or validation error.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} startUrl
+ * @param {{ maxWaitMs?: number }} [opts]
+ */
+async function waitForPostSubmitOutcome(page, startUrl, { maxWaitMs = 60000 } = {}) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxWaitMs) {
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
+
+    const url = page.url();
+    if (url !== startUrl) {
+      return { outcome: "url_changed", url };
+    }
+
+    if (/\/service-installation-upgrades-portal/i.test(url) && !isLikelyLoginUrl(url)) {
+      return { outcome: "dashboard", url };
+    }
+
+    if (await peHasDashboardShellInDom(page)) {
+      return { outcome: "dashboard", url };
+    }
+
+    if (await detectPepcoContactMethodScreen(page)) {
+      return { outcome: "mfa_contact", url };
+    }
+
+    if (await isPepcoCodeEntryInputVisible(page)) {
+      return { outcome: "mfa_code", url };
+    }
+
+    if (await detectMfaScreen(page)) {
+      return { outcome: "mfa", url };
+    }
+
+    if (await hasEmptyUsernameValidationError(page)) {
+      return { outcome: "empty_username_error", url };
+    }
+
+    const validationError = await getLoginValidationErrorText(page);
+    if (validationError) {
+      return { outcome: "validation_error", url, validationError };
+    }
+
+    await page.waitForTimeout(450).catch(() => {});
+  }
+
+  return { outcome: "timeout", url: page.url() };
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {(msg: string) => void} log
+ * @param {{ error_code: string, message: string }} payload
+ */
+async function logLoginFailureDiagnostics(page, log, payload) {
+  const title = await page.title().catch(() => "");
+  const loginFormVisible = await page
+    .locator("#localAccountForm")
+    .first()
+    .isVisible({ timeout: 500 })
+    .catch(() => false);
+  const mfaVisible = await detectMfaScreen(page);
+  const dashboardShell = await peHasDashboardShellInDom(page);
+  const validationError = await getLoginValidationErrorText(page);
+
+  log(`login failed error_code=${payload.error_code} message=${payload.message}`);
+  log(
+    `login failure diagnostics url=${page.url()} title=${title} loginFormVisible=${loginFormVisible} mfaVisible=${mfaVisible} dashboardShell=${dashboardShell}${validationError ? ` validationError=${validationError}` : ""}`,
+  );
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {(msg: string) => void} log
+ * @param {{ error_code: string, message: string }} payload
+ */
+async function returnLoginFailure(page, log, payload) {
+  await maybeDebugScreenshot(page, { label: "pepco-login-failed" });
+  await logLoginFailureDiagnostics(page, log, payload);
+  return {
+    status: "failed",
+    error_code: payload.error_code,
+    message: payload.message,
+    currentUrl: page.url(),
+  };
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} username
+ * @param {string} password
+ * @param {(msg: string) => void} log
+ */
+async function ensureBothFieldsPopulated(page, username, password, log) {
+  const userLoc = await resolveVisibleInput(page, B2C_USERNAME_SELECTORS);
+  const passLoc = await resolveVisiblePasswordInput(page, B2C_PASSWORD_SELECTORS);
+  if (!userLoc || !passLoc) return false;
+
+  let userLen = await inputValueLength(userLoc);
+  if (userLen === 0) {
+    log("username empty before submit; refilling once");
+    if (!(await fillUsernameFieldRobust(page, username, log, userLoc))) return false;
+    userLen = await inputValueLength(userLoc);
+  }
+
+  let passLen = await inputValueLength(passLoc);
+  if (passLen === 0) {
+    log("password empty before submit; refilling once");
+    if (!(await fillPasswordFieldRobust(page, password, log, passLoc))) return false;
+    passLen = await inputValueLength(passLoc);
+  }
+
+  return userLen > 0 && passLen > 0;
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} username
+ * @param {string} password
+ * @param {(msg: string) => void} log
+ * @param {(args: { requestedAt: Date }) => Promise<object | undefined | null>} [fetchEmailCode]
+ * @param {{ isRetry?: boolean }} [opts]
+ */
+async function attemptB2cLoginSubmit(page, username, password, log, fetchEmailCode, opts = {}) {
+  const isRetry = opts.isRetry === true;
+
+  const ready = await waitForB2cFormReady(page, { timeoutMs: 15000, requireSubmit: true });
+  if (!ready) {
+    log("B2C form not fully ready before submit; continuing best-effort");
+  }
+
+  if (!(await ensureBothFieldsPopulated(page, username, password, log))) {
+    return returnLoginFailure(page, log, {
+      error_code: "LOGIN_FAILED",
+      message: "Could not populate username and password before submit.",
+    });
+  }
+
+  log("B2C form ready; submitting login");
+  const startUrl = page.url();
+  await clickSubmitButtonSafe(page, log);
+
+  const post = await waitForPostSubmitOutcome(page, startUrl, { maxWaitMs: 60000 });
+  let currentUrl = post.url || page.url();
+  log(`after submit url=${currentUrl}`);
+
+  if (post.outcome === "empty_username_error") {
+    if (!isRetry) {
+      log("PEPCO login form rejected empty username; retrying form fill once");
+      await waitForB2cFormReady(page, { timeoutMs: 15000, requireSubmit: true });
+      await fillUsernameFieldRobust(page, username, log);
+      await fillPasswordFieldRobust(page, password, log);
+      return attemptB2cLoginSubmit(page, username, password, log, fetchEmailCode, {
+        isRetry: true,
+      });
+    }
+    return returnLoginFailure(page, log, {
+      error_code: "LOGIN_USERNAME_BINDING_FAILED",
+      message: "PEPCO login form cleared the username during submit.",
+    });
+  }
+
+  if (post.outcome === "validation_error" && post.validationError) {
+    return returnLoginFailure(page, log, {
+      error_code: "LOGIN_FAILED",
+      message: post.validationError,
+    });
+  }
+
+  if (post.outcome === "dashboard") {
+    return {
+      status: "completed",
+      checkpoint: "dashboard_ready",
+      currentUrl,
+    };
+  }
+
+  if (
+    post.outcome === "mfa" ||
+    post.outcome === "mfa_contact" ||
+    post.outcome === "mfa_code" ||
+    (await detectMfaScreen(page))
+  ) {
+    await waitForLoadingOverlayClear(page, { timeoutMs: 30000 });
+    return handlePepcoMfaBranch({ page, fetchEmailCode, log, currentUrl });
+  }
+
+  // URL may have changed while MFA UI is still rendering (CombinedSigninAndSignup loading overlay).
+  const pollDeadline = Date.now() + 35000;
+  while (Date.now() < pollDeadline) {
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
+    if (await isLoadingOverlayBlocking(page)) {
+      await page.waitForTimeout(400).catch(() => {});
+      continue;
+    }
+
+    currentUrl = page.url();
+
+    if (await hasEmptyUsernameValidationError(page)) {
+      if (!isRetry) {
+        log("PEPCO login form rejected empty username; retrying form fill once");
+        await waitForB2cFormReady(page, { timeoutMs: 15000, requireSubmit: true });
+        await fillUsernameFieldRobust(page, username, log);
+        await fillPasswordFieldRobust(page, password, log);
+        return attemptB2cLoginSubmit(page, username, password, log, fetchEmailCode, {
+          isRetry: true,
+        });
+      }
+      return returnLoginFailure(page, log, {
+        error_code: "LOGIN_USERNAME_BINDING_FAILED",
+        message: "PEPCO login form cleared the username during submit.",
+      });
+    }
+
+    if (/\/service-installation-upgrades-portal/i.test(currentUrl) && !isLikelyLoginUrl(currentUrl)) {
+      return {
+        status: "completed",
+        checkpoint: "dashboard_ready",
+        currentUrl,
+      };
+    }
+
+    if (await detectMfaScreen(page)) {
+      await waitForLoadingOverlayClear(page, { timeoutMs: 30000 });
+      return handlePepcoMfaBranch({ page, fetchEmailCode, log, currentUrl });
+    }
+
+    await page.waitForTimeout(500).catch(() => {});
+  }
+
+  return returnLoginFailure(page, log, {
+    error_code: "LOGIN_FAILED",
+    message: "Login did not reach MFA or dashboard; unexpected page state.",
+  });
 }
 
 /**
@@ -905,67 +1664,35 @@ async function runPepcoLoginFlow({ page, loginUrl, username, password, logger, f
     log(`landed url=${page.url()}`);
   } catch (e) {
     await maybeDebugScreenshot(page, { label: "pepco-goto-failed" });
-    return {
-      status: "failed",
+    return returnLoginFailure(page, log, {
       error_code: "LOGIN_FAILED",
       message: e instanceof Error ? e.message : String(e),
-      currentUrl: page.url(),
-    };
+    });
   }
 
-  const userSelectors = [
-    'input[type="email"]',
-    'input[name="signInName"]',
-    'input[name="loginfmt"]',
-    'input[name="identifier"]',
-    "#signInName",
-    'input[id*="signInName"]',
-    'input[type="text"]:visible',
-  ];
-
-  let userFilled = false;
-  for (const sel of userSelectors) {
-    const loc = page.locator(sel).first();
-    try {
-      await loc.waitFor({ state: "visible", timeout: 7000 });
-      const tag = await loc.evaluate((el) => el.tagName).catch(() => "");
-      const typ = await loc.getAttribute("type").catch(() => "");
-      if (String(typ).toLowerCase() === "password") continue;
-      if (/^INPUT$/i.test(tag)) {
-        await loc.fill(String(username));
-        userFilled = true;
-        log(`filled username via ${sel}`);
-        break;
-      }
-    } catch (_) {}
+  const readyBeforeFill = await waitForB2cFormReady(page, { timeoutMs: 20000 });
+  if (!readyBeforeFill) {
+    log("B2C form not fully ready before fill; continuing best-effort");
   }
 
-  if (!userFilled) {
+  let userLoc = await resolveVisibleInput(page, B2C_USERNAME_SELECTORS);
+  if (!userLoc) {
     await maybeDebugScreenshot(page, { label: "pepco-no-username" });
-    return {
-      status: "failed",
+    return returnLoginFailure(page, log, {
       error_code: "LOGIN_FAILED",
       message: "Could not find username/email field",
-      currentUrl: page.url(),
-    };
+    });
   }
 
-  const passSelectors = [
-    'input[type="password"]',
-    'input[name="passwd"]',
-    'input[name="password"]',
-    "#password",
-  ];
-
-  let passLoc = null;
-  for (const sel of passSelectors) {
-    const loc = page.locator(sel).first();
-    try {
-      await loc.waitFor({ state: "visible", timeout: 6000 });
-      passLoc = loc;
-      break;
-    } catch (_) {}
+  if (!(await fillUsernameFieldRobust(page, username, log, userLoc))) {
+    await maybeDebugScreenshot(page, { label: "pepco-no-username" });
+    return returnLoginFailure(page, log, {
+      error_code: "LOGIN_FAILED",
+      message: "Could not populate username/email field",
+    });
   }
+
+  let passLoc = await resolveVisiblePasswordInput(page, B2C_PASSWORD_SELECTORS);
 
   if (!passLoc) {
     const nextCandidates = [
@@ -984,95 +1711,27 @@ async function runPepcoLoginFlow({ page, loginUrl, username, password, logger, f
       } catch (_) {}
     }
 
-    for (const sel of passSelectors) {
-      const loc = page.locator(sel).first();
-      try {
-        await loc.waitFor({ state: "visible", timeout: 20000 });
-        passLoc = loc;
-        break;
-      } catch (_) {}
-    }
+    await waitForB2cFormReady(page, { timeoutMs: 20000 });
+    passLoc = await resolveVisiblePasswordInput(page, B2C_PASSWORD_SELECTORS);
   }
 
   if (!passLoc) {
     await maybeDebugScreenshot(page, { label: "pepco-no-password" });
-    return {
-      status: "failed",
+    return returnLoginFailure(page, log, {
       error_code: "LOGIN_FAILED",
       message: "Could not find password field",
-      currentUrl: page.url(),
-    };
+    });
   }
 
-  await passLoc.fill(String(password));
-  log("filled password");
-
-  let clicked = false;
-  const submitBtns = [
-    page.locator('button[type="submit"]').first(),
-    page.locator('input[type="submit"]').first(),
-    page.getByRole("button", { name: /sign\s*in/i }).first(),
-    page.getByRole("button", { name: /^verify$/i }).first(),
-  ];
-
-  for (const b of submitBtns) {
-    try {
-      if (await b.isVisible({ timeout: 1500 }).catch(() => false)) {
-        await b.click({ timeout: 15000 });
-        clicked = true;
-        log("clicked submit-style control");
-        break;
-      }
-    } catch (_) {}
+  if (!(await fillPasswordFieldRobust(page, password, log, passLoc))) {
+    await maybeDebugScreenshot(page, { label: "pepco-no-password" });
+    return returnLoginFailure(page, log, {
+      error_code: "LOGIN_FAILED",
+      message: "Could not populate password field",
+    });
   }
 
-  if (!clicked) {
-    await page.keyboard.press("Enter").catch(() => {});
-    log("pressed Enter as fallback submit");
-  }
-
-  await page.waitForTimeout(2500);
-  try {
-    await page.waitForLoadState("networkidle", { timeout: 25000 });
-  } catch (_) {}
-
-  let currentUrl = page.url();
-  log(`after submit url=${currentUrl}`);
-
-  if (/\/service-installation-upgrades-portal/i.test(currentUrl) && !isLikelyLoginUrl(currentUrl)) {
-    return {
-      status: "completed",
-      checkpoint: "dashboard_ready",
-      currentUrl,
-    };
-  }
-
-  if (await detectMfaScreen(page)) {
-    return handlePepcoMfaBranch({ page, fetchEmailCode, log, currentUrl });
-  }
-
-  await page.waitForTimeout(2000);
-  currentUrl = page.url();
-
-  if (/\/service-installation-upgrades-portal/i.test(currentUrl) && !isLikelyLoginUrl(currentUrl)) {
-    return {
-      status: "completed",
-      checkpoint: "dashboard_ready",
-      currentUrl,
-    };
-  }
-
-  if (await detectMfaScreen(page)) {
-    return handlePepcoMfaBranch({ page, fetchEmailCode, log, currentUrl });
-  }
-
-  await maybeDebugScreenshot(page, { label: "pepco-unknown-state" });
-  return {
-    status: "failed",
-    error_code: "LOGIN_FAILED",
-    message: "Login did not reach MFA or dashboard; unexpected page state.",
-    currentUrl,
-  };
+  return attemptB2cLoginSubmit(page, username, password, log, fetchEmailCode);
 }
 
 module.exports = {
@@ -1085,4 +1744,5 @@ module.exports = {
   detectPepcoContactMethodScreen,
   isPepcoCodeEntryInputVisible,
   maybePepcoSubmitCodeFailureScreenshot,
+  waitForB2cFormReady,
 };

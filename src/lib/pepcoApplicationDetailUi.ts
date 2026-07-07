@@ -142,13 +142,17 @@ export function parsePepcoDownloadedFiles(raw: unknown): PepcoDownloadedFile[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((row) => {
     const r = asRecord(row) ?? {};
+    const storagePathRaw = str(r.storagePath);
+    const storagePath =
+      storagePathRaw && !storagePathRaw.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(storagePathRaw)
+        ? storagePathRaw
+        : null;
     return {
       documentName: str(r.documentName),
       fileName: str(r.fileName),
       status: str(r.status),
       sizeBytes: num(r.sizeBytes),
-      localPath: str(r.localPath),
-      storagePath: str(r.storagePath),
+      storagePath,
       contentDisposition: str(r.contentDisposition),
       error: str(r.error),
     };
@@ -282,12 +286,106 @@ export function findDownloadForDocument(
   );
 }
 
-export const PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS = [
-  "Starting PEPCO application detail scrape",
-  "Logging in to PEPCO portal…",
-  "Fetching dashboard applications",
-  "Fetching overview",
-  "Fetching status history",
-  "Fetching messages",
-  "Fetching documents list",
-] as const;
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const INTERNAL_PROGRESS_PATTERNS =
+  /url=|https?:\/\/|getsession|token found|token length|dashboardshell|mfainputvisible|rejectionlanguage|username field populated|password field populated|b2c form|landed url|after submit|mfa human_required|error_code=|diagnostics|\[pepco\]|contactmethodvisible|sendcodevisible|codeinputvisible|filled username via|filled password|clicked submit-style|csrf_token|selfasserted|combinedsigninandsignup/i;
+
+function safeFailureMessage(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return "Application detail scrape failed";
+  if (INTERNAL_PROGRESS_PATTERNS.test(trimmed)) return "Application detail scrape failed";
+  const withoutPrefix = trimmed.replace(/^\[[^\]]+\]\s*/g, "").slice(0, 160);
+  return withoutPrefix || "Application detail scrape failed";
+}
+
+/**
+ * Map verbose backend progress lines to concise user-facing milestones.
+ */
+export function mapPepcoAppDetailProgressLine(line: string): string | null {
+  const raw = String(line || "").trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+
+  if (/starting pepco application detail|starting pepco login/i.test(lower)) {
+    return "Starting PEPCO login";
+  }
+  if (
+    /username field populated|password field populated|b2c form ready|clicked submit|filled password|pepco login submitted/i.test(
+      lower,
+    )
+  ) {
+    return "PEPCO login submitted";
+  }
+  if (
+    /verification code required|pepco verification code required|mfa email|mfa_email_code|enter the pepco verification|verification code input ready|clicked email contact|send code after email|select email in the pepco browser/i.test(
+      lower,
+    )
+  ) {
+    return "Verification code required";
+  }
+  if (
+    /mfa code accepted|verification code accepted|entered verification code|post-otp verification|submitting pepco verification code/i.test(
+      lower,
+    )
+  ) {
+    return "Verification code accepted";
+  }
+  if (
+    /dashboard url reached|pepco dashboard|landing on siup|overview api ready|checking overview api readiness/i.test(
+      lower,
+    )
+  ) {
+    return "PEPCO dashboard reached";
+  }
+  if (/found \d+ application|loading application|using \d+ application uuid|fetching overview for/i.test(lower)) {
+    return "Loading application";
+  }
+  if (/fetching overview/i.test(lower) && !/api readiness|getsession/i.test(lower)) {
+    return "Fetching project overview";
+  }
+  if (/fetching status history/i.test(lower)) return "Fetching status history";
+  if (/fetching messages/i.test(lower)) return "Fetching messages";
+  if (/fetching documents list|fetching documents(?! list)/i.test(lower) && !/downloading/i.test(lower)) {
+    return "Fetching documents";
+  }
+  if (/downloading documents|saved document /i.test(lower)) return "Downloading documents";
+  if (/saving pepco application detail|persist pepco application detail/i.test(lower)) {
+    return "Saving PEPCO application details";
+  }
+  if (/completed \(|completed —|status: completed|applications_scraped/i.test(lower)) {
+    return "Completed";
+  }
+  if (/status: failed|login failed|scrape failed|application detail scrape failed|^failed:/i.test(lower)) {
+    return lower.startsWith("failed:")
+      ? `Failed: ${safeFailureMessage(raw.replace(/^failed:\s*/i, ""))}`
+      : `Failed: ${safeFailureMessage(raw)}`;
+  }
+  if (/resuming pepco application detail|resuming application detail scrape/i.test(lower)) {
+    return "Verification code accepted";
+  }
+
+  if (INTERNAL_PROGRESS_PATTERNS.test(raw)) return null;
+  if (/\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b/i.test(raw)) return null;
+
+  return null;
+}
+
+/** Keep the latest deduplicated milestone labels for UI display. */
+export function normalizePepcoAppDetailProgress(rawLines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of rawLines) {
+    const mapped = mapPepcoAppDetailProgressLine(line);
+    if (!mapped) continue;
+    if (out[out.length - 1] === mapped) continue;
+    out.push(mapped);
+  }
+  return out.slice(-12);
+}
+
+export const PEPCO_APP_DETAIL_PROGRESS_START = "Starting PEPCO login";

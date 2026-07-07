@@ -28,6 +28,47 @@ const {
   resumePepcoApplicationDetailDiscovery,
   submitPepcoCodeAndContinueApplicationDetailDiscovery,
 } = require("../services/uci/uci-pepco-application-detail-discovery.service.js");
+const {
+  resolvePepcoDownloadedDocumentFile,
+  sanitizeCoordinationDetailBundleForApi,
+} = require("../services/uci/uci-pepco-document-download.service.js");
+
+/**
+ * @param {string} prefix
+ * @param {unknown} result
+ */
+function logPepcoRouteComplete(prefix, result) {
+  const st =
+    result && typeof result === "object" && "status" in result
+      ? String(/** @type {{ status?: string }} */ (result).status)
+      : "unknown";
+  if (result && typeof result === "object") {
+    const rec = /** @type {{ error_code?: unknown, message?: unknown, reason?: unknown }} */ (
+      result
+    );
+    if (st === "failed") {
+      const errorCode =
+        rec.error_code != null && String(rec.error_code).trim()
+          ? String(rec.error_code).trim()
+          : "unknown";
+      const message = String(rec.message || "").slice(0, 200);
+      console.log(
+        `[${prefix}] complete status=${st} error_code=${errorCode} message=${message}`,
+      );
+      return;
+    }
+    if (st === "human_required") {
+      const reason =
+        rec.reason != null && String(rec.reason).trim()
+          ? String(rec.reason).trim()
+          : "unknown";
+      const message = String(rec.message || "").slice(0, 200);
+      console.log(`[${prefix}] complete status=${st} reason=${reason} message=${message}`);
+      return;
+    }
+  }
+  console.log(`[${prefix}] complete status=${st}`);
+}
 
 /**
  * @param {{ supabase: import("@supabase/supabase-js").SupabaseClient }} opts
@@ -135,7 +176,7 @@ function createUciRouter(opts) {
         projectId,
       );
 
-      res.json(detail);
+      res.json(sanitizeCoordinationDetailBundleForApi(detail));
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
@@ -248,11 +289,7 @@ function createUciRouter(opts) {
         autoEmailMfa: auto_email_mfa,
       });
 
-      const st =
-        result && typeof result === "object" && "status" in result
-          ? String(/** @type {{ status?: string }} */ (result).status)
-          : "unknown";
-      console.log(`[uci-pepco] coordination discovery complete status=${st}`);
+      logPepcoRouteComplete("uci-pepco", result);
 
       res.status(200).json(result);
     } catch (err) {
@@ -298,11 +335,7 @@ function createUciRouter(opts) {
         capture_application_ids,
       });
 
-      const st =
-        result && typeof result === "object" && "status" in result
-          ? String(/** @type {{ status?: string }} */ (result).status)
-          : "unknown";
-      console.log(`[uci-pepco-dashboard] complete status=${st}`);
+      logPepcoRouteComplete("uci-pepco-dashboard", result);
 
       res.status(200).json(result);
     } catch (err) {
@@ -349,11 +382,7 @@ function createUciRouter(opts) {
         capture_application_ids,
       });
 
-      const st =
-        result && typeof result === "object" && "status" in result
-          ? String(/** @type {{ status?: string }} */ (result).status)
-          : "unknown";
-      console.log(`[uci-pepco-dashboard] submit-code complete status=${st}`);
+      logPepcoRouteComplete("uci-pepco-dashboard", result);
 
       res.status(200).json(result);
     } catch (err) {
@@ -403,11 +432,7 @@ function createUciRouter(opts) {
         download_documents,
       });
 
-      const st =
-        result && typeof result === "object" && "status" in result
-          ? String(/** @type {{ status?: string }} */ (result).status)
-          : "unknown";
-      console.log(`[uci-pepco-app-detail] complete status=${st}`);
+      logPepcoRouteComplete("uci-pepco-app-detail", result);
 
       res.status(200).json(result);
     } catch (err) {
@@ -461,11 +486,7 @@ function createUciRouter(opts) {
               download_documents,
             });
 
-      const st =
-        result && typeof result === "object" && "status" in result
-          ? String(/** @type {{ status?: string }} */ (result).status)
-          : "unknown";
-      console.log(`[uci-pepco-app-detail] resume complete status=${st}`);
+      logPepcoRouteComplete("uci-pepco-app-detail", result);
 
       res.status(200).json(result);
     } catch (err) {
@@ -480,6 +501,69 @@ function createUciRouter(opts) {
       res.status(s.httpStatus).json(s.body);
     }
   });
+
+  router.get(
+    "/coordination/:id/discovery/pepco/application-details/:applicationUuid/documents/:documentIndex/download",
+    async (req, res) => {
+      const coordinationId = String(req.params.id || "").trim();
+      const applicationUuid = String(req.params.applicationUuid || "").trim();
+      const documentIndex = Number.parseInt(String(req.params.documentIndex || ""), 10);
+
+      try {
+        const user = await requireAuthenticatedUser(req, supabase);
+        const fileOut = await resolvePepcoDownloadedDocumentFile({
+          supabase,
+          userId: user.id,
+          coordinationId,
+          applicationUuid,
+          documentIndex,
+        });
+
+        res.setHeader("Content-Type", fileOut.contentType);
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${fileOut.downloadName.replace(/"/g, "")}"`,
+        );
+        res.sendFile(fileOut.filePath, (sendErr) => {
+          if (sendErr) {
+            console.error("[uci-pepco-app-detail] document download sendFile failed", {
+              coordinationId,
+              applicationUuid,
+              documentIndex,
+              message: sendErr instanceof Error ? sendErr.message : String(sendErr),
+            });
+            if (!res.headersSent) {
+              const err = new Error("Downloaded file could not be streamed");
+              err.statusCode = 500;
+              err.code = "DOCUMENT_STREAM_FAILED";
+              const s = sanitizeUciError(err);
+              res.status(s.httpStatus).json(s.body);
+            }
+          }
+        });
+      } catch (err) {
+        const e = /** @type {Error & { statusCode?: number, code?: string }} */ (err);
+        if (e.statusCode && e.statusCode !== 500) {
+          console.warn("[uci-pepco-app-detail] document download rejected", {
+            coordinationId,
+            applicationUuid,
+            documentIndex,
+            code: e.code,
+            message: e.message,
+          });
+        } else {
+          console.error("[uci-pepco-app-detail] document download error", {
+            coordinationId,
+            applicationUuid,
+            documentIndex,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+        const s = sanitizeUciError(err);
+        res.status(s.httpStatus).json(s.body);
+      }
+    },
+  );
 
   router.post("/coordination/:id/discovery/pepco/resume", async (req, res) => {
     const coordinationIdParam = String(req.params.id || "").trim();
@@ -499,11 +583,7 @@ function createUciRouter(opts) {
         sessionId: rawSid,
       });
 
-      const st =
-        result && typeof result === "object" && "status" in result
-          ? String(/** @type {{ status?: string }} */ (result).status)
-          : "unknown";
-      console.log(`[uci-pepco] coordination discovery resume complete status=${st}`);
+      logPepcoRouteComplete("uci-pepco", result);
 
       res.status(200).json(result);
     } catch (err) {

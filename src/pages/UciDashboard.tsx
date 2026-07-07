@@ -67,7 +67,7 @@ import {
   PepcoApplicationDetailsPanel,
 } from "@/components/uci/PepcoApplicationDetailsPanel";
 import {
-  PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS,
+  PEPCO_APP_DETAIL_PROGRESS_START,
   parsePepcoApplicationDetailDiscovery,
 } from "@/lib/pepcoApplicationDetailUi";
 import type {
@@ -282,7 +282,10 @@ export default function UciDashboard() {
   );
   const [pepcoAppDetailResumeBusy, setPepcoAppDetailResumeBusy] = useState(false);
   const [pepcoDownloadDocuments, setPepcoDownloadDocuments] = useState(false);
-  const pepcoAppDetailProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const appendPepcoAppDetailProgress = (line: string) => {
+    setPepcoAppDetailProgress((prev) => [...prev, line]);
+  };
 
   const loadProviders = useCallback(async () => {
     setProvidersLoading(true);
@@ -494,14 +497,6 @@ export default function UciDashboard() {
 
   const hasPepcoApplicationDetails =
     (pepcoApplicationDetailDiscovery?.applications?.length ?? 0) > 0;
-
-  useEffect(() => {
-    return () => {
-      if (pepcoAppDetailProgressTimerRef.current) {
-        clearInterval(pepcoAppDetailProgressTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!detailOpen || !detailId || !isPepcoCoordination) return;
@@ -775,20 +770,13 @@ export default function UciDashboard() {
   };
 
   const openAppDetailMfaModal = (sessionId: string, message?: string) => {
-    stopAppDetailProgressTicker();
     setPepcoAppDetailMfaSessionId(sessionId);
     setPepcoAppDetailPendingSessionId(sessionId);
     setPepcoCodeModalTarget("application_detail");
     setPepcoCodeModalError(null);
     setPepcoCodeModalOpen(true);
     setPepcoAppDetailMsg(message || "PEPCO verification code required.");
-    setPepcoAppDetailProgress((prev) => {
-      const next = [...prev];
-      if (!next.includes("PEPCO verification code required.")) {
-        next.push("PEPCO verification code required.");
-      }
-      return next;
-    });
+    appendPepcoAppDetailProgress("Verification code required");
     toast.message("Enter the PEPCO verification code sent by email.");
   };
 
@@ -802,7 +790,6 @@ export default function UciDashboard() {
         "session_id" in out && typeof out.session_id === "string" ? out.session_id : null;
 
       if (reason === "mfa_contact_method_selection_required") {
-        stopAppDetailProgressTicker();
         if (sessionId) setPepcoAppDetailPendingSessionId(sessionId);
         toast.message(out.message || "Select Email in the PEPCO browser, then continue.");
         setPepcoAppDetailMsg(
@@ -817,7 +804,6 @@ export default function UciDashboard() {
           out.message || "Enter the PEPCO verification code sent by email.",
         );
       } else {
-        stopAppDetailProgressTicker();
         toast.message(out.message || "Verification required");
         if (sessionId) setPepcoAppDetailPendingSessionId(sessionId);
         setPepcoAppDetailMsg(
@@ -853,26 +839,6 @@ export default function UciDashboard() {
     }
   };
 
-  const startAppDetailProgressTicker = () => {
-    if (pepcoAppDetailProgressTimerRef.current) {
-      clearInterval(pepcoAppDetailProgressTimerRef.current);
-    }
-    let step = 0;
-    setPepcoAppDetailProgress([PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS[0]]);
-    pepcoAppDetailProgressTimerRef.current = setInterval(() => {
-      step += 1;
-      if (step >= PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS.length) return;
-      setPepcoAppDetailProgress(PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS.slice(0, step + 1));
-    }, 4500);
-  };
-
-  const stopAppDetailProgressTicker = () => {
-    if (pepcoAppDetailProgressTimerRef.current) {
-      clearInterval(pepcoAppDetailProgressTimerRef.current);
-      pepcoAppDetailProgressTimerRef.current = null;
-    }
-  };
-
   const handlePepcoApplicationDetailScrape = async () => {
     if (!detailId) return;
     if (
@@ -893,21 +859,20 @@ export default function UciDashboard() {
     setPepcoAppDetailMfaSessionId(null);
     setPepcoCodeModalOpen(false);
     if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
-    startAppDetailProgressTicker();
+    setPepcoAppDetailProgress([PEPCO_APP_DETAIL_PROGRESS_START]);
     try {
       const out = await postPepcoApplicationDetailDiscovery(detailId, {
         headed: true,
         auto_email_mfa: pepcoAutoEmailMfa,
         download_documents: pepcoDownloadDocuments,
       });
-      stopAppDetailProgressTicker();
       await applyAppDetailResponse(out);
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
       await refreshCoordination();
     } catch (e: unknown) {
-      stopAppDetailProgressTicker();
       const msg = e instanceof Error ? e.message : "PEPCO application detail scrape failed";
+      appendPepcoAppDetailProgress(`Failed: ${msg}`);
       toast.error(msg);
       setPepcoAppDetailMsg(msg);
     } finally {
@@ -918,20 +883,19 @@ export default function UciDashboard() {
   const handlePepcoApplicationDetailResume = async () => {
     if (!detailId || !pepcoAppDetailPendingSessionId) return;
     setPepcoAppDetailResumeBusy(true);
-    startAppDetailProgressTicker();
+    appendPepcoAppDetailProgress("Resuming PEPCO application detail scrape");
     try {
       const out = await resumePepcoApplicationDetailDiscovery(detailId, {
         session_id: pepcoAppDetailPendingSessionId,
         download_documents: pepcoDownloadDocuments,
       });
-      stopAppDetailProgressTicker();
       await applyAppDetailResponse(out);
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
       await refreshCoordination();
     } catch (e: unknown) {
-      stopAppDetailProgressTicker();
       const msg = e instanceof Error ? e.message : "PEPCO application detail resume failed";
+      appendPepcoAppDetailProgress(`Failed: ${msg}`);
       toast.error(msg);
       setPepcoAppDetailMsg(msg);
     } finally {
@@ -949,7 +913,7 @@ export default function UciDashboard() {
     }
     setPepcoCodeSubmitBusy(true);
     setPepcoCodeModalError(null);
-    setPepcoAppDetailProgress((prev) => [...prev, "Submitting PEPCO verification code…"]);
+    appendPepcoAppDetailProgress("Submitting PEPCO verification code");
     try {
       const out = await resumePepcoApplicationDetailDiscovery(detailId, {
         session_id: pepcoAppDetailMfaSessionId,
@@ -1312,7 +1276,7 @@ export default function UciDashboard() {
         <SheetContent
           overlayClassName="bg-black/45 dark:bg-black/50"
           className={cn(
-            "w-full overflow-y-auto sm:max-w-lg",
+            "flex w-full max-w-[100vw] flex-col overflow-y-auto sm:max-w-[88vw] lg:max-w-[78vw] xl:max-w-[1280px]",
             "border-cream-sunken bg-cream text-ink-primary-light shadow-2xl",
             "ring-1 ring-cream-sunken/70 dark:ring-teal/25",
             "dark:border-obsidian-strong dark:bg-obsidian-raised dark:text-foreground",
@@ -1668,6 +1632,7 @@ export default function UciDashboard() {
                   ) : null}
 
                   <PepcoApplicationDetailsPanel
+                    coordinationId={detailId}
                     discovery={pepcoApplicationDetailDiscovery}
                     formatWhen={formatWhen}
                     mutedClass={uciMutedClass}
