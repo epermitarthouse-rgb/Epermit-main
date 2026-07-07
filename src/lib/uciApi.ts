@@ -366,6 +366,90 @@ export async function resumePepcoApplicationDetailDiscovery(
   return (await res.json()) as UciPepcoApplicationDetailDiscoveryResponse;
 }
 
+/** Build the authenticated inline-view URL for a scraped PEPCO PDF document. */
+export function buildPepcoApplicationDocumentViewUrl(
+  coordinationId: string,
+  applicationUuid: string,
+  documentIndex: number,
+): string {
+  const base = getScraperBaseUrl();
+  return `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/${encodeURIComponent(applicationUuid)}/documents/${documentIndex}/view`;
+}
+
+export type PepcoDocumentViewFailureReason =
+  | "api_error"
+  | "empty_file"
+  | "not_pdf"
+  | "popup_blocked";
+
+export type PepcoDocumentViewResult =
+  | { ok: true }
+  | { ok: false; reason: PepcoDocumentViewFailureReason };
+
+/** Map a view result to a user-facing toast message, or null when no toast should be shown. */
+export function pepcoDocumentViewErrorMessage(result: PepcoDocumentViewResult): string | null {
+  if (result.ok) return null;
+  if (result.reason === "popup_blocked") {
+    return "Your browser blocked the preview tab. Allow pop-ups for PermitPilot and try again.";
+  }
+  return "The PEPCO document could not be opened for viewing.";
+}
+
+/**
+ * Fetch a scraped PEPCO PDF and display it inline in a preview tab.
+ * The preview tab must be opened synchronously from the click handler and
+ * passed in so popup blockers allow navigation after the async fetch.
+ */
+export async function openPepcoApplicationDocumentView(
+  coordinationId: string,
+  applicationUuid: string,
+  documentIndex: number,
+  previewWindow: Window | null,
+): Promise<PepcoDocumentViewResult> {
+  if (!previewWindow) {
+    return { ok: false, reason: "popup_blocked" };
+  }
+
+  try {
+    const headers = await getBearerHeader();
+    const url = buildPepcoApplicationDocumentViewUrl(
+      coordinationId,
+      applicationUuid,
+      documentIndex,
+    );
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      previewWindow.close();
+      return { ok: false, reason: "api_error" };
+    }
+
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/pdf")) {
+      previewWindow.close();
+      return { ok: false, reason: "not_pdf" };
+    }
+
+    const blob = await res.blob();
+    if (!blob.size) {
+      previewWindow.close();
+      return { ok: false, reason: "empty_file" };
+    }
+
+    const typedBlob = blob.type ? blob : new Blob([blob], { type: "application/pdf" });
+    const objectUrl = URL.createObjectURL(typedBlob);
+    previewWindow.location.href = objectUrl;
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    return { ok: true };
+  } catch {
+    try {
+      previewWindow.close();
+    } catch {
+      // Ignore close failures on an already-closed preview tab.
+    }
+    return { ok: false, reason: "api_error" };
+  }
+}
+
 /** Trigger a browser download for a scraped PEPCO document via the UCI download route. */
 export async function downloadPepcoApplicationDocument(
   coordinationId: string,

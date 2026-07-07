@@ -34,8 +34,8 @@ const {
   submitPepcoCodeAndContinueApplicationDetailDiscovery,
 } = require("../services/uci/uci-pepco-application-detail-discovery.service.js");
 const {
-  resolvePepcoDownloadedDocumentFile,
   sanitizeCoordinationDetailBundleForApi,
+  streamPepcoDocumentForRequest,
 } = require("../services/uci/uci-pepco-document-download.service.js");
 
 /**
@@ -615,63 +615,30 @@ function createUciRouter(opts) {
   router.get(
     "/coordination/:id/discovery/pepco/application-details/:applicationUuid/documents/:documentIndex/download",
     async (req, res) => {
-      const coordinationId = String(req.params.id || "").trim();
-      const applicationUuid = String(req.params.applicationUuid || "").trim();
-      const documentIndex = Number.parseInt(String(req.params.documentIndex || ""), 10);
+      await streamPepcoDocumentForRequest({
+        req,
+        res,
+        supabase,
+        requireAuthenticatedUser,
+        sanitizeUciError,
+        disposition: "attachment",
+        logLabel: "download",
+      });
+    },
+  );
 
-      try {
-        const user = await requireAuthenticatedUser(req, supabase);
-        const fileOut = await resolvePepcoDownloadedDocumentFile({
-          supabase,
-          userId: user.id,
-          coordinationId,
-          applicationUuid,
-          documentIndex,
-        });
-
-        res.setHeader("Content-Type", fileOut.contentType);
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${fileOut.downloadName.replace(/"/g, "")}"`,
-        );
-        res.sendFile(fileOut.filePath, (sendErr) => {
-          if (sendErr) {
-            console.error("[uci-pepco-app-detail] document download sendFile failed", {
-              coordinationId,
-              applicationUuid,
-              documentIndex,
-              message: sendErr instanceof Error ? sendErr.message : String(sendErr),
-            });
-            if (!res.headersSent) {
-              const err = new Error("Downloaded file could not be streamed");
-              err.statusCode = 500;
-              err.code = "DOCUMENT_STREAM_FAILED";
-              const s = sanitizeUciError(err);
-              res.status(s.httpStatus).json(s.body);
-            }
-          }
-        });
-      } catch (err) {
-        const e = /** @type {Error & { statusCode?: number, code?: string }} */ (err);
-        if (e.statusCode && e.statusCode !== 500) {
-          console.warn("[uci-pepco-app-detail] document download rejected", {
-            coordinationId,
-            applicationUuid,
-            documentIndex,
-            code: e.code,
-            message: e.message,
-          });
-        } else {
-          console.error("[uci-pepco-app-detail] document download error", {
-            coordinationId,
-            applicationUuid,
-            documentIndex,
-            message: err instanceof Error ? err.message : String(err),
-          });
-        }
-        const s = sanitizeUciError(err);
-        res.status(s.httpStatus).json(s.body);
-      }
+  router.get(
+    "/coordination/:id/discovery/pepco/application-details/:applicationUuid/documents/:documentIndex/view",
+    async (req, res) => {
+      await streamPepcoDocumentForRequest({
+        req,
+        res,
+        supabase,
+        requireAuthenticatedUser,
+        sanitizeUciError,
+        disposition: "inline",
+        logLabel: "view",
+      });
     },
   );
 

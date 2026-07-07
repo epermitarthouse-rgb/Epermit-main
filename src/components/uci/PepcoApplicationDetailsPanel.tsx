@@ -23,7 +23,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { downloadPepcoApplicationDocument } from "@/lib/uciApi";
+import {
+  downloadPepcoApplicationDocument,
+  openPepcoApplicationDocumentView,
+  pepcoDocumentViewErrorMessage,
+} from "@/lib/uciApi";
 import {
   buildPepcoMilestoneTrackingGroups,
   findDownloadForDocument,
@@ -42,6 +46,7 @@ import {
   Check,
   Circle,
   Download,
+  Eye,
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -588,8 +593,30 @@ function DocumentsTab({
   tableHeaderRowClass: string;
 }) {
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+  const [viewingKey, setViewingKey] = useState<string | null>(null);
   const documents = app.documents ?? [];
   const downloaded = app.downloadedFiles ?? [];
+
+  const handleDocumentView = async (documentIndex: number) => {
+    if (!coordinationId || !app.applicationUuid) return;
+    const key = `${app.applicationUuid}-${documentIndex}`;
+    const previewWindow = window.open("about:blank", "_blank");
+    setViewingKey(key);
+    try {
+      const result = await openPepcoApplicationDocumentView(
+        coordinationId,
+        app.applicationUuid,
+        documentIndex,
+        previewWindow,
+      );
+      const message = pepcoDocumentViewErrorMessage(result);
+      if (message) {
+        toast.error(message);
+      }
+    } finally {
+      setViewingKey(null);
+    }
+  };
 
   const handleDocumentDownload = async (documentIndex: number, suggestedFileName?: string | null) => {
     if (!coordinationId || !app.applicationUuid) return;
@@ -635,7 +662,7 @@ function DocumentsTab({
                 <TableHead className={cn(tableHeadClass, "min-w-[120px]")}>Category</TableHead>
                 <TableHead className={cn(tableHeadClass, "min-w-[130px]")}>Uploaded</TableHead>
                 <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Status</TableHead>
-                <TableHead className={cn(tableHeadClass, "min-w-[110px]")}>Action</TableHead>
+                <TableHead className={cn(tableHeadClass, "min-w-[150px]")}>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -645,6 +672,10 @@ function DocumentsTab({
                 const docName = doc.documentName ?? "—";
                 const downloadKey = `${app.applicationUuid}-${idx}`;
                 const busy = downloadingKey === downloadKey;
+                const viewing = viewingKey === downloadKey;
+                const fileLabel = dl?.fileName ?? doc.documentName ?? "";
+                const isPdf = /\.pdf$/i.test(fileLabel);
+                const canView = isDownloaded && isPdf;
                 return (
                   <TableRow key={`${doc.documentName ?? idx}`} className={idx % 2 === 1 ? "bg-muted/20" : undefined}>
                     <TableCell className={cn(tableCellClass, "max-w-[320px] align-top")}>
@@ -681,22 +712,42 @@ function DocumentsTab({
                     </TableCell>
                     <TableCell className={cn(tableCellClass, "align-top")}>
                       {isDownloaded ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 gap-1.5 text-[11px]"
-                          disabled={!coordinationId || busy}
-                          aria-busy={busy}
-                          onClick={() => void handleDocumentDownload(idx, dl?.fileName ?? doc.documentName)}
-                        >
-                          {busy ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                          Download
-                        </Button>
+                        <div className="flex flex-wrap gap-1.5">
+                          {canView ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1.5 text-[11px]"
+                              disabled={!coordinationId || viewing || busy}
+                              aria-busy={viewing}
+                              onClick={() => void handleDocumentView(idx)}
+                            >
+                              {viewing ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                              View
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 text-[11px]"
+                            disabled={!coordinationId || busy || viewing}
+                            aria-busy={busy}
+                            onClick={() => void handleDocumentDownload(idx, dl?.fileName ?? doc.documentName)}
+                          >
+                            {busy ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                            Download
+                          </Button>
+                        </div>
                       ) : (
                         <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" disabled>
                           Not downloaded

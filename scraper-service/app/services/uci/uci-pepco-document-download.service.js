@@ -212,14 +212,131 @@ async function resolvePepcoDownloadedDocumentFile(opts) {
     throw err;
   }
 
-  const detectedPdf = savedRec.detectedPdf === true || /\.pdf$/i.test(fileName);
-  const contentType = detectedPdf ? "application/pdf" : "application/octet-stream";
+  const isPdf = savedRec.detectedPdf === true || /\.pdf$/i.test(fileName);
+  const contentType = isPdf ? "application/pdf" : "application/octet-stream";
 
   return {
     filePath: normalized,
     downloadName: path.basename(fileName),
     contentType,
+    isPdf,
   };
+}
+
+/**
+ * Strip control characters and quotes from a filename used in Content-Disposition.
+ *
+ * @param {string | null | undefined} name
+ * @returns {string}
+ */
+function sanitizeContentDispositionFilename(name) {
+  const base = path.basename(String(name || "pepco-document").trim() || "pepco-document");
+  return base.replace(/[\r\n"]/g, "_");
+}
+
+/**
+ * Build HTTP headers for streaming a resolved PEPCO document.
+ * Inline viewing is limited to PDFs; non-PDF inline requests return 415.
+ *
+ * @param {{
+ *   contentType: string;
+ *   downloadName: string;
+ *   isPdf: boolean;
+ * }} fileOut
+ * @param {"inline" | "attachment"} disposition
+ * @returns {{ contentType: string, contentDisposition: string }}
+ */
+function buildPepcoDocumentHttpHeaders(fileOut, disposition) {
+  const safeName = sanitizeContentDispositionFilename(fileOut.downloadName);
+
+  if (disposition === "inline") {
+    if (!fileOut.isPdf) {
+      const err = new Error("Only PDF documents can be viewed inline in the browser");
+      err.statusCode = 415;
+      err.code = "UNSUPPORTED_MEDIA_TYPE";
+      throw err;
+    }
+    return {
+      contentType: "application/pdf",
+      contentDisposition: `inline; filename="${safeName}"`,
+    };
+  }
+
+  return {
+    contentType: fileOut.contentType,
+    contentDisposition: `attachment; filename="${safeName}"`,
+  };
+}
+
+/**
+ * Shared Express handler for PEPCO document download (attachment) and view (inline).
+ *
+ * @param {{
+ *   req: import("express").Request;
+ *   res: import("express").Response;
+ *   supabase: import("@supabase/supabase-js").SupabaseClient;
+ *   requireAuthenticatedUser: (req: import("express").Request, supabase: import("@supabase/supabase-js").SupabaseClient) => Promise<{ id: string }>;
+ *   sanitizeUciError: (err: unknown) => { httpStatus: number, body: Record<string, unknown> };
+ *   disposition: "inline" | "attachment";
+ *   logLabel: string;
+ * }} opts
+ */
+async function streamPepcoDocumentForRequest(opts) {
+  const coordinationId = String(opts.req.params.id || "").trim();
+  const applicationUuid = String(opts.req.params.applicationUuid || "").trim();
+  const documentIndex = Number.parseInt(String(opts.req.params.documentIndex || ""), 10);
+
+  try {
+    const user = await opts.requireAuthenticatedUser(opts.req, opts.supabase);
+    const fileOut = await resolvePepcoDownloadedDocumentFile({
+      supabase: opts.supabase,
+      userId: user.id,
+      coordinationId,
+      applicationUuid,
+      documentIndex,
+    });
+    const headers = buildPepcoDocumentHttpHeaders(fileOut, opts.disposition);
+
+    opts.res.setHeader("Content-Type", headers.contentType);
+    opts.res.setHeader("Content-Disposition", headers.contentDisposition);
+    opts.res.sendFile(fileOut.filePath, (sendErr) => {
+      if (sendErr) {
+        console.error(`[uci-pepco-app-detail] document ${opts.logLabel} sendFile failed`, {
+          coordinationId,
+          applicationUuid,
+          documentIndex,
+          message: sendErr instanceof Error ? sendErr.message : String(sendErr),
+        });
+        if (!opts.res.headersSent) {
+          const err = new Error("Downloaded file could not be streamed");
+          err.statusCode = 500;
+          err.code = "DOCUMENT_STREAM_FAILED";
+          const s = opts.sanitizeUciError(err);
+          opts.res.status(s.httpStatus).json(s.body);
+        }
+      }
+    });
+  } catch (err) {
+    const e = /** @type {Error & { statusCode?: number, code?: string }} */ (err);
+    if (e.statusCode && e.statusCode !== 500) {
+      console.warn(`[uci-pepco-app-detail] document ${opts.logLabel} rejected`, {
+        coordinationId,
+        applicationUuid,
+        documentIndex,
+        code: e.code,
+        message: e.message,
+      });
+    } else {
+      console.error(`[uci-pepco-app-detail] document ${opts.logLabel} error`, {
+        coordinationId,
+        applicationUuid,
+        documentIndex,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    const s = opts.sanitizeUciError(err);
+    opts.res.status(s.httpStatus).json(s.body);
+  }
 }
 
 module.exports = {
@@ -227,4 +344,7 @@ module.exports = {
   sanitizeCoordinationRecordForApi,
   sanitizeCoordinationDetailBundleForApi,
   resolvePepcoDownloadedDocumentFile,
+  sanitizeContentDispositionFilename,
+  buildPepcoDocumentHttpHeaders,
+  streamPepcoDocumentForRequest,
 };
