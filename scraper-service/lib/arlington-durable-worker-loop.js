@@ -25,7 +25,7 @@ function newWorkerId() {
 function startArlingtonDurableWorkerLoop(deps) {
   if (!WORKER_ENABLED) {
     console.log(
-      "[Arlington][Worker] durable worker disabled (ARLINGTON_DURABLE_WORKER_ENABLED=false)",
+      "[dev-worker][Arlington] background durable worker disabled (ARLINGTON_DURABLE_WORKER_ENABLED=false)",
     );
     return { stop: () => {}, workerId: null };
   }
@@ -35,7 +35,7 @@ function startArlingtonDurableWorkerLoop(deps) {
   let inFlight = false;
 
   console.log(
-    `[Arlington][Worker] starting poll loop workerId=${workerId} intervalMs=${ARLINGTON_WORKER_POLL_INTERVAL_MS}`,
+    `[dev-worker][Arlington] background durable worker starting workerId=${workerId} intervalMs=${ARLINGTON_WORKER_POLL_INTERVAL_MS}`,
   );
 
   const tick = async () => {
@@ -87,7 +87,9 @@ function startArlingtonDurableWorkerLoop(deps) {
     stop() {
       stopped = true;
       clearInterval(interval);
-      console.log(`[Arlington][Worker] stopped workerId=${workerId}`);
+      console.log(
+        `[dev-worker][Arlington] background durable worker stopped (dev stack shutdown) workerId=${workerId}`,
+      );
     },
   };
 }

@@ -122,6 +122,26 @@ async function revokeAwaitingPepcoSession(sessionId, reason = "explicit") {
   if (rec) await disposePepcoSessionRecord(rec, reason);
 }
 
+/** @returns {PepcoAwaitingSession | null} */
+function findAwaitingPepcoSessionForCoordination(coordinationId, userId, continueAction) {
+  pruneStaleSessions();
+  const cid = String(coordinationId);
+  const uid = String(userId);
+  const action = continueAction != null ? String(continueAction) : "";
+  for (const [, rec] of sessions.entries()) {
+    if (
+      rec.coordinationId === cid &&
+      rec.userId === uid &&
+      rec.page &&
+      rec.browser &&
+      String(rec.continueAction || "") === action
+    ) {
+      return rec;
+    }
+  }
+  return null;
+}
+
 /**
  * Dispose any in-memory PEP CO MFA sessions tied to this coordination + user (e.g. new login run).
  * @param {string} coordinationId
@@ -141,6 +161,7 @@ async function disposeSessionsForCoordinationAndUser(coordinationId, userId) {
 module.exports = {
   registerAwaitingMfaSession,
   getAwaitingPepcoSession,
+  findAwaitingPepcoSessionForCoordination,
   touchAwaitingPepcoSession,
   revokeAwaitingPepcoSession,
   disposeSessionsForCoordinationAndUser,

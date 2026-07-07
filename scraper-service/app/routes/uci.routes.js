@@ -23,6 +23,11 @@ const {
   runPepcoDashboardDiscovery,
   submitPepcoCodeAndContinueDashboardDiscovery,
 } = require("../services/uci/uci-pepco-dashboard-discovery.service.js");
+const {
+  runPepcoApplicationDetailDiscovery,
+  resumePepcoApplicationDetailDiscovery,
+  submitPepcoCodeAndContinueApplicationDetailDiscovery,
+} = require("../services/uci/uci-pepco-application-detail-discovery.service.js");
 
 /**
  * @param {{ supabase: import("@supabase/supabase-js").SupabaseClient }} opts
@@ -360,6 +365,116 @@ function createUciRouter(opts) {
         code,
         statusCode,
         message: statusCode === 500 ? "(see INTERNAL_ERROR response)" : message,
+      });
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/discovery/pepco/application-details", async (req, res) => {
+    const coordinationIdParam = String(req.params.id || "").trim();
+
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      console.log("[uci-pepco-app-detail] application detail discovery started");
+
+      const coordinationId = coordinationIdParam;
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+
+      const credential_id =
+        body.credential_id != null && String(body.credential_id).trim()
+          ? String(body.credential_id).trim()
+          : undefined;
+      const headed = body.headed === true;
+      const auto_email_mfa = body.auto_email_mfa === true;
+      const download_documents = body.download_documents === true;
+      const application_uuids = Array.isArray(body.application_uuids)
+        ? body.application_uuids.map((x) => String(x))
+        : undefined;
+
+      const result = await runPepcoApplicationDetailDiscovery({
+        supabase,
+        user,
+        coordinationId,
+        credentialId: credential_id,
+        headed,
+        autoEmailMfa: auto_email_mfa,
+        application_uuids,
+        download_documents,
+      });
+
+      const st =
+        result && typeof result === "object" && "status" in result
+          ? String(/** @type {{ status?: string }} */ (result).status)
+          : "unknown";
+      console.log(`[uci-pepco-app-detail] complete status=${st}`);
+
+      res.status(200).json(result);
+    } catch (err) {
+      const e = /** @type {Error & { statusCode?: number, code?: string }} */ (err);
+      console.error("[uci-pepco-app-detail] error", {
+        code: typeof e.code === "string" ? e.code : undefined,
+        statusCode: typeof e.statusCode === "number" ? e.statusCode : undefined,
+      });
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/discovery/pepco/application-details/resume", async (req, res) => {
+    const coordinationIdParam = String(req.params.id || "").trim();
+
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      console.log("[uci-pepco-app-detail] application detail resume started");
+
+      const coordinationId = coordinationIdParam;
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const session_id =
+        body.session_id != null && String(body.session_id).trim()
+          ? String(body.session_id).trim()
+          : "";
+      const download_documents = body.download_documents === true;
+      const application_uuids = Array.isArray(body.application_uuids)
+        ? body.application_uuids.map((x) => String(x))
+        : undefined;
+      const rawCode = body.code != null ? String(body.code) : "";
+      const codeTrim = rawCode.trim().replace(/\s+/g, "");
+
+      const result =
+        codeTrim.length > 0
+          ? await submitPepcoCodeAndContinueApplicationDetailDiscovery({
+              supabase,
+              user,
+              coordinationId,
+              sessionId: session_id,
+              code: codeTrim,
+              application_uuids,
+              download_documents,
+            })
+          : await resumePepcoApplicationDetailDiscovery({
+              supabase,
+              user,
+              coordinationId,
+              sessionId: session_id,
+              application_uuids,
+              download_documents,
+            });
+
+      const st =
+        result && typeof result === "object" && "status" in result
+          ? String(/** @type {{ status?: string }} */ (result).status)
+          : "unknown";
+      console.log(`[uci-pepco-app-detail] resume complete status=${st}`);
+
+      res.status(200).json(result);
+    } catch (err) {
+      const e = /** @type {Error & { statusCode?: number, code?: string, detail?: string }} */ (err);
+      console.error("[uci-pepco-app-detail] resume error", {
+        code: typeof e.code === "string" ? e.code : undefined,
+        statusCode: typeof e.statusCode === "number" ? e.statusCode : undefined,
+        message: err instanceof Error ? err.message : String(err),
+        detail: typeof e.detail === "string" ? e.detail.slice(0, 500) : undefined,
       });
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

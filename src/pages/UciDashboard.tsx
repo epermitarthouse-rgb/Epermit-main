@@ -46,6 +46,8 @@ import {
   listUciProviders,
   postPepcoDashboardDiscovery,
   postPepcoDiscovery,
+  postPepcoApplicationDetailDiscovery,
+  resumePepcoApplicationDetailDiscovery,
   resumePepcoDiscovery,
   submitPepcoMfaCode,
   transitionCoordination,
@@ -60,9 +62,18 @@ import {
   Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PepcoApplicationDetailProgressLog,
+  PepcoApplicationDetailsPanel,
+} from "@/components/uci/PepcoApplicationDetailsPanel";
+import {
+  PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS,
+  parsePepcoApplicationDetailDiscovery,
+} from "@/lib/pepcoApplicationDetailUi";
 import type {
   CoordinationRecord,
   LifecycleState,
+  UciPepcoApplicationDetailDiscoveryResponse,
   UciPepcoDashboardCardMeta,
   UtilityProvider,
   UciRecordDetailResponse,
@@ -254,11 +265,24 @@ export default function UciDashboard() {
   const [pepcoCodeModalError, setPepcoCodeModalError] = useState<string | null>(null);
   const [pepcoCodeSubmitBusy, setPepcoCodeSubmitBusy] = useState(false);
   const [pepcoDashboardMfaSessionId, setPepcoDashboardMfaSessionId] = useState<string | null>(null);
+  const [pepcoAppDetailMfaSessionId, setPepcoAppDetailMfaSessionId] = useState<string | null>(null);
+  const [pepcoCodeModalTarget, setPepcoCodeModalTarget] = useState<"dashboard" | "application_detail">(
+    "dashboard",
+  );
   const [pepcoDashboardMfaCaptureIds, setPepcoDashboardMfaCaptureIds] = useState(false);
   const pepcoCodeInputRef = useRef<HTMLInputElement>(null);
   const [pepcoPendingSessionId, setPepcoPendingSessionId] = useState<string | null>(null);
   const [pepcoResumeBusy, setPepcoResumeBusy] = useState(false);
   const [pepcoAutoEmailMfa, setPepcoAutoEmailMfa] = useState(false);
+  const [pepcoAppDetailBusy, setPepcoAppDetailBusy] = useState(false);
+  const [pepcoAppDetailMsg, setPepcoAppDetailMsg] = useState<string | null>(null);
+  const [pepcoAppDetailProgress, setPepcoAppDetailProgress] = useState<string[]>([]);
+  const [pepcoAppDetailPendingSessionId, setPepcoAppDetailPendingSessionId] = useState<string | null>(
+    null,
+  );
+  const [pepcoAppDetailResumeBusy, setPepcoAppDetailResumeBusy] = useState(false);
+  const [pepcoDownloadDocuments, setPepcoDownloadDocuments] = useState(false);
+  const pepcoAppDetailProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadProviders = useCallback(async () => {
     setProvidersLoading(true);
@@ -322,6 +346,9 @@ export default function UciDashboard() {
     setPepcoDashboardMfaCaptureIds(false);
     if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
     setPepcoPendingSessionId(null);
+    setPepcoAppDetailMsg(null);
+    setPepcoAppDetailProgress([]);
+    setPepcoAppDetailPendingSessionId(null);
     try {
       const d = await getCoordinationDetail(id);
       setDetail(d);
@@ -450,6 +477,32 @@ export default function UciDashboard() {
     };
   }, [detailRecord?.metadata]);
 
+  const pepcoApplicationDetailDiscovery = useMemo(() => {
+    const m =
+      detailRecord?.metadata &&
+      typeof detailRecord.metadata === "object" &&
+      detailRecord.metadata !== null &&
+      !Array.isArray(detailRecord.metadata)
+        ? (detailRecord.metadata as Record<string, unknown>)
+        : null;
+    return parsePepcoApplicationDetailDiscovery(m);
+  }, [detailRecord?.metadata]);
+
+  const hasPepcoDashboardCards =
+    (pepcoDashboardFromMetadata?.cards.length ?? 0) > 0 ||
+    (pepcoDashboardFromMetadata?.cardsFound ?? 0) > 0;
+
+  const hasPepcoApplicationDetails =
+    (pepcoApplicationDetailDiscovery?.applications?.length ?? 0) > 0;
+
+  useEffect(() => {
+    return () => {
+      if (pepcoAppDetailProgressTimerRef.current) {
+        clearInterval(pepcoAppDetailProgressTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!detailOpen || !detailId || !isPepcoCoordination) return;
     let cancelled = false;
@@ -571,6 +624,7 @@ export default function UciDashboard() {
           "session_id" in out &&
           typeof out.session_id === "string"
         ) {
+          setPepcoCodeModalTarget("dashboard");
           setPepcoDashboardMfaSessionId(out.session_id);
           setPepcoDashboardMfaCaptureIds(
             "capture_application_ids" in out ? out.capture_application_ids === true : captureApplicationIds,
@@ -687,6 +741,270 @@ export default function UciDashboard() {
       await refreshCoordination();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Submit code failed";
+      setPepcoCodeModalError(msg);
+      toast.error(msg);
+    } finally {
+      setPepcoCodeSubmitBusy(false);
+    }
+  };
+
+  const isRecoverableAppDetailFailure = (
+    out: UciPepcoApplicationDetailDiscoveryResponse,
+  ): boolean => {
+    return (
+      out.status === "failed" &&
+      "session_id" in out &&
+      typeof out.session_id === "string" &&
+      "error_code" in out &&
+      (out.error_code === "DASHBOARD_API_NOT_READY" ||
+        out.error_code === "SCRAPE_FAILED" ||
+        out.error_code === "PEPCO_API_ERROR" ||
+        out.error_code === "NO_APPLICATION_UUIDS" ||
+        out.error_code === "PEPCO_BEARER_TOKEN_NOT_FOUND")
+    );
+  };
+
+  const preserveRecoverableAppDetailSession = (
+    out: UciPepcoApplicationDetailDiscoveryResponse,
+  ): boolean => {
+    if (!isRecoverableAppDetailFailure(out)) return false;
+    setPepcoAppDetailPendingSessionId(out.session_id as string);
+    setPepcoAppDetailMfaSessionId(out.session_id as string);
+    setPepcoCodeModalOpen(false);
+    return true;
+  };
+
+  const openAppDetailMfaModal = (sessionId: string, message?: string) => {
+    stopAppDetailProgressTicker();
+    setPepcoAppDetailMfaSessionId(sessionId);
+    setPepcoAppDetailPendingSessionId(sessionId);
+    setPepcoCodeModalTarget("application_detail");
+    setPepcoCodeModalError(null);
+    setPepcoCodeModalOpen(true);
+    setPepcoAppDetailMsg(message || "PEPCO verification code required.");
+    setPepcoAppDetailProgress((prev) => {
+      const next = [...prev];
+      if (!next.includes("PEPCO verification code required.")) {
+        next.push("PEPCO verification code required.");
+      }
+      return next;
+    });
+    toast.message("Enter the PEPCO verification code sent by email.");
+  };
+
+  const applyAppDetailResponse = async (out: UciPepcoApplicationDetailDiscoveryResponse) => {
+    if ("progress" in out && Array.isArray(out.progress) && out.progress.length > 0) {
+      setPepcoAppDetailProgress(out.progress);
+    }
+    if (out.status === "human_required") {
+      const reason = "reason" in out ? String(out.reason || "") : "";
+      const sessionId =
+        "session_id" in out && typeof out.session_id === "string" ? out.session_id : null;
+
+      if (reason === "mfa_contact_method_selection_required") {
+        stopAppDetailProgressTicker();
+        if (sessionId) setPepcoAppDetailPendingSessionId(sessionId);
+        toast.message(out.message || "Select Email in the PEPCO browser, then continue.");
+        setPepcoAppDetailMsg(
+          out.message || "Select Email in the PEPCO browser, then click Resume Application Detail Scrape.",
+        );
+      } else if (
+        sessionId &&
+        (reason === "mfa_email_code_input_required" || reason === "mfa_email_code")
+      ) {
+        openAppDetailMfaModal(
+          sessionId,
+          out.message || "Enter the PEPCO verification code sent by email.",
+        );
+      } else {
+        stopAppDetailProgressTicker();
+        toast.message(out.message || "Verification required");
+        if (sessionId) setPepcoAppDetailPendingSessionId(sessionId);
+        setPepcoAppDetailMsg(
+          out.message ||
+            "PEPCO MFA required. Complete verification in the opened browser, then click Resume Application Detail Scrape.",
+        );
+      }
+    } else if (out.status === "completed" || out.status === "partial") {
+      setPepcoAppDetailPendingSessionId(null);
+      setPepcoAppDetailMfaSessionId(null);
+      setPepcoCodeModalOpen(false);
+      const count =
+        "applications_scraped" in out && typeof out.applications_scraped === "number"
+          ? out.applications_scraped
+          : undefined;
+      toast.success(
+        count !== undefined
+          ? `PEPCO application detail scrape ${out.status} (${count} application${count === 1 ? "" : "s"}).`
+          : `PEPCO application detail scrape ${out.status}.`,
+      );
+      setPepcoAppDetailMsg(`Status: ${out.status}`);
+    } else if (out.status === "failed") {
+      if (!preserveRecoverableAppDetailSession(out)) {
+        setPepcoAppDetailPendingSessionId(null);
+        setPepcoAppDetailMfaSessionId(null);
+      }
+      const failMsg =
+        "message" in out && out.message
+          ? out.message
+          : "Application detail scrape failed";
+      toast.error(failMsg);
+      setPepcoAppDetailMsg(failMsg);
+    }
+  };
+
+  const startAppDetailProgressTicker = () => {
+    if (pepcoAppDetailProgressTimerRef.current) {
+      clearInterval(pepcoAppDetailProgressTimerRef.current);
+    }
+    let step = 0;
+    setPepcoAppDetailProgress([PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS[0]]);
+    pepcoAppDetailProgressTimerRef.current = setInterval(() => {
+      step += 1;
+      if (step >= PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS.length) return;
+      setPepcoAppDetailProgress(PEPCO_APP_DETAIL_PROGRESS_PLACEHOLDERS.slice(0, step + 1));
+    }, 4500);
+  };
+
+  const stopAppDetailProgressTicker = () => {
+    if (pepcoAppDetailProgressTimerRef.current) {
+      clearInterval(pepcoAppDetailProgressTimerRef.current);
+      pepcoAppDetailProgressTimerRef.current = null;
+    }
+  };
+
+  const handlePepcoApplicationDetailScrape = async () => {
+    if (!detailId) return;
+    if (
+      pepcoAppDetailBusy ||
+      pepcoAppDetailResumeBusy ||
+      pepcoCodeSubmitBusy ||
+      pepcoCodeModalOpen ||
+      pepcoAppDetailPendingSessionId
+    ) {
+      toast.message(
+        "PEPCO application detail scrape is already in progress. Enter the verification code or click Resume Application Detail Scrape.",
+      );
+      return;
+    }
+    setPepcoAppDetailBusy(true);
+    setPepcoAppDetailMsg(null);
+    setPepcoAppDetailPendingSessionId(null);
+    setPepcoAppDetailMfaSessionId(null);
+    setPepcoCodeModalOpen(false);
+    if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+    startAppDetailProgressTicker();
+    try {
+      const out = await postPepcoApplicationDetailDiscovery(detailId, {
+        headed: true,
+        auto_email_mfa: pepcoAutoEmailMfa,
+        download_documents: pepcoDownloadDocuments,
+      });
+      stopAppDetailProgressTicker();
+      await applyAppDetailResponse(out);
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      stopAppDetailProgressTicker();
+      const msg = e instanceof Error ? e.message : "PEPCO application detail scrape failed";
+      toast.error(msg);
+      setPepcoAppDetailMsg(msg);
+    } finally {
+      setPepcoAppDetailBusy(false);
+    }
+  };
+
+  const handlePepcoApplicationDetailResume = async () => {
+    if (!detailId || !pepcoAppDetailPendingSessionId) return;
+    setPepcoAppDetailResumeBusy(true);
+    startAppDetailProgressTicker();
+    try {
+      const out = await resumePepcoApplicationDetailDiscovery(detailId, {
+        session_id: pepcoAppDetailPendingSessionId,
+        download_documents: pepcoDownloadDocuments,
+      });
+      stopAppDetailProgressTicker();
+      await applyAppDetailResponse(out);
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      stopAppDetailProgressTicker();
+      const msg = e instanceof Error ? e.message : "PEPCO application detail resume failed";
+      toast.error(msg);
+      setPepcoAppDetailMsg(msg);
+    } finally {
+      setPepcoAppDetailResumeBusy(false);
+    }
+  };
+
+  const handleSubmitPepcoApplicationDetailCode = async () => {
+    if (!detailId || !pepcoAppDetailMfaSessionId) return;
+    const raw = pepcoCodeInputRef.current?.value ?? "";
+    const code = raw.trim().replace(/\s+/g, "");
+    if (!/^\d{4,8}$/.test(code)) {
+      setPepcoCodeModalError("Enter a numeric code (4–8 digits).");
+      return;
+    }
+    setPepcoCodeSubmitBusy(true);
+    setPepcoCodeModalError(null);
+    setPepcoAppDetailProgress((prev) => [...prev, "Submitting PEPCO verification code…"]);
+    try {
+      const out = await resumePepcoApplicationDetailDiscovery(detailId, {
+        session_id: pepcoAppDetailMfaSessionId,
+        code,
+        download_documents: pepcoDownloadDocuments,
+      });
+      if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
+
+      if (out.status === "human_required") {
+        const reason = "reason" in out ? String(out.reason || "") : "";
+        if (
+          reason === "mfa_email_code_input_required" &&
+          "session_id" in out &&
+          typeof out.session_id === "string"
+        ) {
+          setPepcoAppDetailMfaSessionId(out.session_id);
+          setPepcoAppDetailPendingSessionId(out.session_id);
+          setPepcoCodeModalError(
+            "PEPCO verification code was rejected or expired. Request a new code and try again.",
+          );
+        } else {
+          await applyAppDetailResponse(out);
+        }
+      } else if (out.status === "completed" || out.status === "partial") {
+        setPepcoCodeModalOpen(false);
+        setPepcoAppDetailMfaSessionId(null);
+        await applyAppDetailResponse(out);
+      } else if (out.status === "failed") {
+        if ("progress" in out && Array.isArray(out.progress)) setPepcoAppDetailProgress(out.progress);
+        if (preserveRecoverableAppDetailSession(out)) {
+          const failMsg =
+            "message" in out && out.message
+              ? out.message
+              : "PEPCO login succeeded, but application detail scraping could not continue because no valid application UUID/API readiness was available.";
+          toast.error(failMsg);
+          setPepcoAppDetailMsg(failMsg);
+        } else {
+          setPepcoCodeModalOpen(false);
+          setPepcoAppDetailMfaSessionId(null);
+          setPepcoAppDetailPendingSessionId(null);
+          toast.error("message" in out ? out.message || "Application detail scrape failed" : "Failed");
+          setPepcoAppDetailMsg("message" in out ? out.message || "Failed" : "Failed");
+        }
+      } else {
+        await applyAppDetailResponse(out);
+      }
+
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      await refreshCoordination();
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error && e.message
+          ? e.message
+          : "PEPCO verification code was rejected or expired. Request a new code and try again.";
       setPepcoCodeModalError(msg);
       toast.error(msg);
     } finally {
@@ -1132,7 +1450,7 @@ export default function UciDashboard() {
                   <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
 
                   <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
-                    PEPCO dashboard (read-only discovery)
+                    1. Dashboard cards discovery (read-only)
                   </p>
                   <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
                     Extracts dashboard cards after login/MFA. Optional second pass clicks each card only to read the
@@ -1245,6 +1563,119 @@ export default function UciDashboard() {
                       </Table>
                     </div>
                   ) : null}
+
+                  <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
+
+                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
+                    2. Application detail scrape (read-only API)
+                  </p>
+                  <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
+                    Separate from dashboard cards. Fetches overview, status history, messages, and document
+                    metadata via PEPCO .euapi endpoints after login/MFA.
+                  </p>
+
+                  {hasPepcoDashboardCards && !hasPepcoApplicationDetails ? (
+                    <p className={cn("mb-3 rounded-md border border-cream-sunken/60 px-3 py-2 text-xs", uciMutedClass)}>
+                      Dashboard cards found. Application details have not been scraped yet.
+                    </p>
+                  ) : null}
+
+                  <div className="mb-3 flex items-start gap-2">
+                    <Checkbox
+                      id={`pepco-download-docs-${detailId ?? "row"}`}
+                      checked={pepcoDownloadDocuments}
+                      onCheckedChange={(c) => setPepcoDownloadDocuments(Boolean(c))}
+                      disabled={
+                        pepcoAppDetailBusy ||
+                        pepcoAppDetailResumeBusy ||
+                        pepcoDashboardBusy ||
+                        pepcoDiscoveryBusy ||
+                        pepcoResumeBusy ||
+                        detailLoading
+                      }
+                      className={cn(
+                        "mt-1 shrink-0 border-gold/50 dark:border-cream/35",
+                        "data-[state=checked]:border-teal data-[state=checked]:bg-teal data-[state=checked]:text-white",
+                      )}
+                    />
+                    <div className="space-y-0.5">
+                      <Label
+                        htmlFor={`pepco-download-docs-${detailId ?? "row"}`}
+                        className={uciManualFormTextClass}
+                      >
+                        Download PEPCO documents
+                      </Label>
+                      <p className={cn("text-[11px] leading-snug", uciMutedClass)}>
+                        Saves files to the scraper host debug folder only. Leave unchecked unless you need local
+                        copies.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={uciToolbarOutlineButtonClass}
+                      disabled={
+                        pepcoAppDetailBusy ||
+                        pepcoAppDetailResumeBusy ||
+                        pepcoCodeSubmitBusy ||
+                        pepcoCodeModalOpen ||
+                        Boolean(pepcoAppDetailPendingSessionId) ||
+                        pepcoDashboardBusy ||
+                        pepcoDiscoveryBusy ||
+                        pepcoResumeBusy ||
+                        detailLoading
+                      }
+                      aria-busy={pepcoAppDetailBusy}
+                      onClick={() => void handlePepcoApplicationDetailScrape()}
+                    >
+                      {pepcoAppDetailBusy ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Scrape PEPCO Application Details
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={uciToolbarOutlineButtonClass}
+                      disabled={
+                        pepcoAppDetailResumeBusy ||
+                        pepcoAppDetailBusy ||
+                        detailLoading ||
+                        !pepcoAppDetailPendingSessionId
+                      }
+                      aria-busy={pepcoAppDetailResumeBusy}
+                      onClick={() => void handlePepcoApplicationDetailResume()}
+                    >
+                      {pepcoAppDetailResumeBusy ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Resume Application Detail Scrape
+                    </Button>
+                  </div>
+
+                  <PepcoApplicationDetailProgressLog
+                    lines={pepcoAppDetailProgress}
+                    busy={pepcoAppDetailBusy || pepcoAppDetailResumeBusy}
+                    mutedClass={uciMutedClass}
+                  />
+                  {pepcoAppDetailMsg ? (
+                    <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoAppDetailMsg}</p>
+                  ) : null}
+
+                  <PepcoApplicationDetailsPanel
+                    discovery={pepcoApplicationDetailDiscovery}
+                    formatWhen={formatWhen}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={cn("text-sm font-semibold", uciManualFormTextClass)}
+                    tableHeadClass={uciTableHeadClass}
+                    tableCellClass={uciTableCellClass}
+                    tableHeaderRowClass={uciTableHeaderRowClass}
+                  />
                 </div>
               ) : null}
 
@@ -1280,16 +1711,30 @@ export default function UciDashboard() {
                 ["applications", "costs", "equipment", "milestones", "communications_recent"] as const
               ).map((key) => {
                 const label =
-                  key === "communications_recent" ? "Recent communications (5)" : key.replace(/_/g, " ");
+                  key === "applications"
+                    ? "Normalized applications (database rows)"
+                    : key === "communications_recent"
+                      ? "Recent communications (5)"
+                      : key.replace(/_/g, " ");
                 const rows = detail[key] as unknown[];
                 return (
                   <Card key={key} className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
                       <CardTitle className={uciDrawerChildCardTitleClass}>{label}</CardTitle>
+                      {key === "applications" ? (
+                        <CardDescription className={cn("text-[11px]", uciMutedClass)}>
+                          PEPCO portal cards and API detail snapshots live above. This section only shows
+                          normalized `coordination_applications` rows when created separately.
+                        </CardDescription>
+                      ) : null}
                     </CardHeader>
                     <CardContent className="px-4 py-4">
                       {rows.length === 0 ? (
-                        <p className={uciDrawerChildEmptyClass}>No entries.</p>
+                        <p className={uciDrawerChildEmptyClass}>
+                          {key === "applications"
+                            ? "No normalized application rows yet."
+                            : "No entries."}
+                        </p>
                       ) : (
                         <p className={uciDrawerChildCountClass}>
                           {rows.length} row(s)
@@ -1397,8 +1842,9 @@ export default function UciDashboard() {
               Enter PEPCO verification code
             </DialogTitle>
             <DialogDescription className="text-ink-primary-light/85 dark:text-muted-foreground">
-              A verification code was sent to the PEPCO mailbox. Paste it here and PermitPilot will
-              continue the dashboard discovery.
+              {pepcoCodeModalTarget === "application_detail"
+                ? "Enter the PEPCO verification code sent by email. PermitPilot will continue the application detail scrape."
+                : "A verification code was sent to the PEPCO mailbox. Paste it here and PermitPilot will continue the dashboard discovery."}
             </DialogDescription>
           </DialogHeader>
           {pepcoCodeModalError ? (
@@ -1426,9 +1872,18 @@ export default function UciDashboard() {
             <Button
               type="button"
               className="bg-teal hover:bg-teal/90 text-white"
-              disabled={pepcoCodeSubmitBusy || !pepcoDashboardMfaSessionId}
+              disabled={
+                pepcoCodeSubmitBusy ||
+                (pepcoCodeModalTarget === "application_detail"
+                  ? !pepcoAppDetailMfaSessionId
+                  : !pepcoDashboardMfaSessionId)
+              }
               aria-busy={pepcoCodeSubmitBusy}
-              onClick={() => void handleSubmitPepcoDashboardCode()}
+              onClick={() =>
+                void (pepcoCodeModalTarget === "application_detail"
+                  ? handleSubmitPepcoApplicationDetailCode()
+                  : handleSubmitPepcoDashboardCode())
+              }
             >
               {pepcoCodeSubmitBusy ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

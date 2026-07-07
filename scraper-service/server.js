@@ -13,8 +13,11 @@ const { PORT, arlingtonWorker } = registerExecutionRoutes(app);
 
 // ─── Shutdown ────────────────────────────────────────────────────────────────
 process.on("SIGINT", () => {
-  console.log("\n🛑 Shutting down...");
+  console.log("\n🛑 Shutting down scraper dev stack...");
   if (arlingtonWorker && typeof arlingtonWorker.stop === "function") {
+    console.log(
+      "[SCRAPER SERVER] Stopping background Arlington durable worker (unrelated to PEPCO/UCI scrape sessions)",
+    );
     arlingtonWorker.stop();
   }
   for (const sid of Object.keys(sessions)) cleanupSession(sid, "sigint");
@@ -66,7 +69,7 @@ async function startServer() {
     );
     if (arlingtonWorker?.workerId) {
       console.log(
-        `[SCRAPER SERVER] Arlington durable worker active workerId=${arlingtonWorker.workerId}`,
+        `[SCRAPER SERVER] Background Arlington durable worker active workerId=${arlingtonWorker.workerId} (polls scrape_jobs; not PEPCO/UCI)`,
       );
     }
     console.log(`

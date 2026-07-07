@@ -6,6 +6,7 @@ import type {
   UciDiscoveryResponse,
   UciInitResponse,
   UciPepcoDashboardDiscoveryResponse,
+  UciPepcoApplicationDetailDiscoveryResponse,
   UciProjectCoordinationResponse,
   UciProvidersResponse,
   UciRecordDetailResponse,
@@ -225,6 +226,69 @@ export async function postPepcoDashboardDiscovery(
     );
   }
   return (await res.json()) as UciPepcoDashboardDiscoveryResponse;
+}
+
+export async function postPepcoApplicationDetailDiscovery(
+  coordinationId: string,
+  body?: {
+    credential_id?: string;
+    headed?: boolean;
+    auto_email_mfa?: boolean;
+    application_uuids?: string[];
+    download_documents?: boolean;
+  },
+): Promise<UciPepcoApplicationDetailDiscoveryResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `PEPCO application detail discovery failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciPepcoApplicationDetailDiscoveryResponse;
+}
+
+export async function resumePepcoApplicationDetailDiscovery(
+  coordinationId: string,
+  body: {
+    session_id: string;
+    code?: string;
+    application_uuids?: string[];
+    download_documents?: boolean;
+  },
+): Promise<UciPepcoApplicationDetailDiscoveryResponse> {
+  const base = getScraperBaseUrl();
+  const headers = {
+    ...(await getBearerHeader()),
+    "Content-Type": "application/json",
+  };
+  const res = await fetch(
+    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/resume`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw new Error(
+      String(err.message || err.error || `PEPCO application detail resume failed (${res.status})`),
+    );
+  }
+  return (await res.json()) as UciPepcoApplicationDetailDiscoveryResponse;
 }
 
 export async function submitPepcoMfaCode(

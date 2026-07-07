@@ -202,7 +202,7 @@ export type UciDiscoveryResponse =
       currentUrl?: string;
       session_id?: string;
       /** Phase 4.5 — in-app code entry continues dashboard discovery */
-      continue_action?: "discover_dashboard";
+      continue_action?: "discover_dashboard" | "discover_application_details";
       capture_application_ids?: boolean;
     }
   | {
@@ -231,6 +231,137 @@ export interface UciPepcoDashboardCardMeta {
   overviewUrl?: string;
   applicationIdError?: string;
 }
+
+export interface UciPepcoApplicationDetailErrors {
+  overview?: string | null;
+  statusChanges?: string | null;
+  messages?: string | null;
+  documents?: string | null;
+  downloads?: Array<{ documentName?: string; error?: string }>;
+}
+
+/** PEPCO portal overview block from .euapi includeOverview=true */
+export interface PepcoProjectOverview {
+  projectName?: string | null;
+  propertyAddress?: string | null;
+  jobId?: string | null;
+  statusName?: string | null;
+  actionRequired?: boolean | null;
+}
+
+export interface PepcoProjectSummary {
+  projectOwnerName?: string | null;
+  submitterName?: string | null;
+  opco?: string | null;
+  opcoContactName?: string | null;
+  opcoContactEmail?: string | null;
+  expectedInServiceByDate?: string | null;
+}
+
+export interface PepcoProjectContact {
+  contactType?: string | null;
+  customContactType?: string | null;
+  primaryContact?: boolean | null;
+  contactFullName?: string | null;
+  contactPreferredMethod?: string | null;
+  email?: string | null;
+  primaryPhone?: string | null;
+  addressType?: string | null;
+}
+
+export interface PepcoProjectDetails {
+  applicationDetails?: {
+    projectContacts?: PepcoProjectContact[];
+    billing?: {
+      constructionBillingAddress?: unknown;
+      monthlyBillingAddress?: unknown;
+    };
+    projectInformation?: {
+      siteDetails?: Record<string, unknown>;
+      estimatedDates?: Record<string, unknown>;
+      siteOperationalDetails?: Record<string, unknown>;
+    };
+    electricServiceLoads?: Record<string, unknown>;
+  };
+}
+
+export interface PepcoStatusChange {
+  milestoneName?: string | null;
+  statusName?: string | null;
+  statusChangeDateTime?: string | null;
+}
+
+export interface PepcoMessage {
+  statusChangeDisplayName?: string | null;
+  senderMessage?: string | null;
+  isSPOC?: boolean;
+  isInternalUser?: boolean;
+  receiverName?: string | null;
+  receiverMessage?: string | null;
+  messageDateTime?: string | null;
+}
+
+export interface PepcoDocument {
+  documentName?: string | null;
+  documentType?: string | null;
+  documentStatus?: string | null;
+  documentUploadDateTime?: string | null;
+}
+
+export interface PepcoDownloadedFile {
+  documentName?: string | null;
+  fileName?: string | null;
+  status?: string | null;
+  sizeBytes?: number | null;
+  localPath?: string | null;
+  storagePath?: string | null;
+  contentDisposition?: string | null;
+  error?: string | null;
+}
+
+export interface PepcoApplicationDetail {
+  applicationUuid: string;
+  overview?: PepcoProjectOverview | null;
+  projectSummary?: PepcoProjectSummary | null;
+  projectDetails?: PepcoProjectDetails | null;
+  statusTracking?: Record<string, unknown> | null;
+  statusChanges?: PepcoStatusChange[];
+  currentMilestone?: string | null;
+  currentStatus?: string | null;
+  statusLastUpdatedAt?: string | null;
+  messageCount?: number;
+  latestMessageAt?: string | null;
+  messages?: PepcoMessage[];
+  documentCount?: number;
+  documents?: PepcoDocument[];
+  downloadedFiles?: PepcoDownloadedFile[];
+  scrapedAt?: string;
+  scrapeStatus?: "completed" | "partial" | "failed";
+  errors?: UciPepcoApplicationDetailErrors;
+}
+
+export interface PepcoApplicationDetailDiscovery {
+  lastStatus?: "completed" | "partial" | "failed" | string | null;
+  lastScrapedAt?: string | null;
+  applications?: PepcoApplicationDetail[];
+}
+
+export interface UciPepcoApplicationDetailSnapshot extends PepcoApplicationDetail {}
+
+/** POST /api/uci/coordination/:id/discovery/pepco/application-details */
+export type UciPepcoApplicationDetailDiscoveryResponse =
+  | UciDiscoveryResponse
+  | {
+      status: "completed" | "partial" | "failed";
+      checkpoint?: string;
+      applications_scraped?: number;
+      applications?: UciPepcoApplicationDetailSnapshot[];
+      progress?: string[];
+      error_code?: string;
+      message?: string;
+      session_id?: string;
+      continue_action?: "discover_application_details";
+    };
 
 /** POST /api/uci/coordination/:id/discovery/pepco/dashboard — same MFA shapes + optional dashboard payload */
 export type UciPepcoDashboardDiscoveryResponse =
