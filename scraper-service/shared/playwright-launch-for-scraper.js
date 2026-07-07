@@ -1,7 +1,11 @@
 "use strict";
 
 const { chromium } = require("playwright");
-const { scraperRunsHeadless } = require("./browser.js");
+const {
+  resolveScraperHeadlessMode,
+  resolveChromiumExecutableInfo,
+  sanitizePlaywrightErrorMessage,
+} = require("./playwright-runtime.js");
 
 /**
  * Browser install / launch failures (used by routes and UCI discovery).
@@ -28,8 +32,8 @@ async function launchChromiumForScraper(callerInfo = {}) {
   const route = callerInfo.route || "";
   const file = callerInfo.file || "server.js";
 
-  let headless = scraperRunsHeadless();
-  if (callerInfo.headed === true) headless = false;
+  const { headless, headedRequested, headedHonored } = resolveScraperHeadlessMode(callerInfo);
+  const { executablePath, executableExists } = resolveChromiumExecutableInfo();
 
   const launchOptions = {
     headless,
@@ -41,10 +45,23 @@ async function launchChromiumForScraper(callerInfo = {}) {
   };
 
   const isQuickScrape = label === "quick-scrape";
-  if (isQuickScrape) {
-    console.log("[Quick Scrape] browser launch starting");
-    console.log("[Quick Scrape] launch options:", JSON.stringify(launchOptions));
-    console.log("[Quick Scrape] launching from:", file, route || "(login flow)");
+  const shouldLogLaunch =
+    isQuickScrape || label.startsWith("uci-pepco") || label === "health-playwright";
+
+  if (shouldLogLaunch) {
+    console.log(`[playwright] launch starting label=${label} headless=${headless}`);
+    if (headedRequested && !headedHonored) {
+      console.warn(
+        `[playwright] headed=true requested for ${label} but host requires headless; continuing headless`,
+      );
+    }
+    console.log(
+      `[playwright] chromium executable exists=${executableExists} path=${executablePath || "(unresolved)"}`,
+    );
+    if (isQuickScrape) {
+      console.log("[Quick Scrape] launch options:", JSON.stringify(launchOptions));
+      console.log("[Quick Scrape] launching from:", file, route || "(login flow)");
+    }
   }
 
   try {
@@ -52,8 +69,13 @@ async function launchChromiumForScraper(callerInfo = {}) {
     if (isQuickScrape) console.log("[Quick Scrape] browser launch success");
     return browser;
   } catch (err) {
+    const message = sanitizePlaywrightErrorMessage(
+      err instanceof Error ? err.message : String(err),
+    );
+    console.error(
+      `[playwright] launch failed label=${label} headless=${headless} executableExists=${executableExists} message=${message}`,
+    );
     if (isQuickScrape) {
-      console.error("[Quick Scrape] browser launch failed:", err.message);
       console.error("[Quick Scrape] full error:", err);
     }
     throw err;

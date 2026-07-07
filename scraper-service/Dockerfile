@@ -4,6 +4,8 @@ FROM mcr.microsoft.com/playwright:v1.58.2-jammy
 
 WORKDIR /app
 
+# Official image ships browsers under /ms-playwright; npm playwright must use that path.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # Image already includes browser binaries; skip npm postinstall browser download.
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 

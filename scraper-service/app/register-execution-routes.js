@@ -94,7 +94,6 @@ function publishScrapeOrchestration(session, opts = {}) {
 
 const MONTGOMERY_RETRIEVE_TIMEOUT_MS = 120000;
 
-const { scraperRunsHeadless } = require("../shared/browser.js");
 const {
   launchChromiumForScraper,
   isBrowserLaunchError,
@@ -116,16 +115,8 @@ function sendBrowserLaunchError(res, err) {
 }
 
 async function runPlaywrightStartupDiagnostics() {
-  let playwrightVersion = "unknown";
-  try {
-    const pkg = require("playwright/package.json");
-    playwrightVersion = pkg.version || playwrightVersion;
-  } catch (_) {}
-
-  const platform = `${process.platform}/${process.arch}`;
-  console.log(`  Playwright version: ${playwrightVersion}`);
-  console.log(`  Platform: ${platform}`);
-  console.log(`  Headless mode: ${scraperRunsHeadless()}`);
+  const { logPlaywrightRuntimeDiagnostics } = require("../shared/playwright-runtime.js");
+  logPlaywrightRuntimeDiagnostics();
 
   let browser;
   try {
@@ -211,6 +202,39 @@ function hashPortalData(data) {
 function registerExecutionRoutes(app) {
 const PORT = process.env.PORT || 3001;
 const DEFAULT_DASHBOARD_URL = "https://washington-dc-us.avolvecloud.com";
+
+app.get("/api/health/playwright", async (req, res) => {
+  const { probePlaywrightChromiumLaunch } = require("../shared/playwright-runtime.js");
+  try {
+    const result = await probePlaywrightChromiumLaunch();
+    if (result.ok) {
+      return res.status(200).json({
+        ok: true,
+        launchable: true,
+        browser: "chromium",
+      });
+    }
+    return res.status(503).json({
+      ok: false,
+      launchable: false,
+      browser: "chromium",
+      error: result.error,
+      chromiumExecutablePath: result.diagnostics.chromiumExecutablePath,
+      chromiumExecutableExists: result.diagnostics.chromiumExecutableExists,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(503).json({
+      ok: false,
+      launchable: false,
+      browser: "chromium",
+      error: {
+        name: err instanceof Error ? err.name : "Error",
+        message: message.slice(0, 500),
+      },
+    });
+  }
+});
 
 const MIN_FILE_SIZE = 1024;
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
