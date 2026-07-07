@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { getCoordinationRecordById } = require("./uci-records.service.js");
 const { requireProjectAccess } = require("./uci-access.service.js");
+const { sanitizeApplicationRowsForApi } = require("./uci-sync-utils.js");
 const { assertPepcoCoordination } = require("./uci-pepco-discovery.service.js");
 const {
   getPepcoDocStorageRoot,
@@ -63,6 +64,11 @@ function sanitizeCoordinationDetailBundleForApi(detail) {
   const out = { ...detail };
   if (out.record && typeof out.record === "object") {
     out.record = sanitizeCoordinationRecordForApi(/** @type {Record<string, unknown>} */ (out.record));
+  }
+  if (Array.isArray(out.applications)) {
+    out.applications = sanitizeApplicationRowsForApi(
+      /** @type {Array<Record<string, unknown>>} */ (out.applications),
+    );
   }
   return out;
 }

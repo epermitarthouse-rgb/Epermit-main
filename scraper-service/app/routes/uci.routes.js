@@ -18,6 +18,11 @@ const {
 } = require("../services/uci/uci-records.service.js");
 const { recordUserTransition } = require("../services/uci/uci-transitions.service.js");
 const { listApplicationsByCoordination } = require("../services/uci/uci-applications.service.js");
+const { runPortalSync } = require("../services/uci/uci-portal-sync.service.js");
+const {
+  listCommunicationsByCoordination,
+  listMilestonesByCoordination,
+} = require("../services/uci/uci-communications.service.js");
 const { runPepcoDiscoveryLoginOnly, resumePepcoDiscoveryAfterMfa } = require("../services/uci/uci-pepco-discovery.service.js");
 const {
   runPepcoDashboardDiscovery,
@@ -256,6 +261,110 @@ function createUciRouter(opts) {
       );
 
       res.json({ applications });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/sync", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      const projectId = String(record.project_id);
+      await requireProjectAccess({ supabase, userId: user.id, projectId });
+
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const providerSlug =
+        body.provider_slug != null && String(body.provider_slug).trim()
+          ? String(body.provider_slug).trim().toLowerCase()
+          : undefined;
+
+      const summary = await runPortalSync(supabase, {
+        coordinationRecordId: coordinationId,
+        providerSlug,
+      });
+
+      res.json(summary);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/communications", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      const projectId = String(record.project_id);
+      await requireProjectAccess({ supabase, userId: user.id, projectId });
+
+      const limit = req.query.limit;
+      const offset = req.query.offset;
+      const result = await listCommunicationsByCoordination(
+        supabase,
+        coordinationId,
+        projectId,
+        {
+          limit: limit != null ? Number(limit) : undefined,
+          offset: offset != null ? Number(offset) : undefined,
+        },
+      );
+
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/milestones", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      const projectId = String(record.project_id);
+      await requireProjectAccess({ supabase, userId: user.id, projectId });
+
+      const limit = req.query.limit;
+      const offset = req.query.offset;
+      const result = await listMilestonesByCoordination(
+        supabase,
+        coordinationId,
+        projectId,
+        {
+          limit: limit != null ? Number(limit) : undefined,
+          offset: offset != null ? Number(offset) : undefined,
+        },
+      );
+
+      res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

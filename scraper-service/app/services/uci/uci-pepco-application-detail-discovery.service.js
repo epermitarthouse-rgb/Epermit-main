@@ -33,6 +33,7 @@ const {
   resolvePepcoPortalCredential,
   pickPepcoMfaCoordinationMeta,
 } = require("./uci-pepco-discovery.service.js");
+const { runPortalSyncFromPepcoApplications } = require("./uci-portal-sync.service.js");
 
 const CONTINUE_ACTION = "discover_application_details";
 
@@ -231,6 +232,44 @@ function pickOverviewProjectName(overview) {
   if (!overview || typeof overview !== "object") return null;
   const name = /** @type {{ projectName?: unknown }} */ (overview).projectName;
   return typeof name === "string" ? name : null;
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} existingApps
+ * @param {Array<Record<string, unknown>>} incomingApps
+ */
+function isNormalizedPortalSyncEnabled() {
+  return process.env.UCI_NORMALIZED_SYNC_ENABLED !== "false";
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} coordinationId
+ * @param {string} projectId
+ * @param {Array<Record<string, unknown>>} applications
+ */
+async function maybeRunNormalizedPortalSyncAfterPersist(
+  supabase,
+  coordinationId,
+  projectId,
+  applications,
+) {
+  if (!isNormalizedPortalSyncEnabled()) return;
+
+  try {
+    await runPortalSyncFromPepcoApplications(supabase, {
+      coordinationRecordId: coordinationId,
+      projectId,
+      applications,
+      providerSlug: "pepco",
+    });
+  } catch (err) {
+    console.error("[uci-pepco-app-detail] normalized portal sync failed", {
+      coordinationId,
+      provider: "pepco",
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**
@@ -459,6 +498,13 @@ async function runApplicationDetailScrapeOnPage(opts) {
     projectId,
     applications,
     lastStatus,
+  );
+
+  await maybeRunNormalizedPortalSyncAfterPersist(
+    supabase,
+    coordinationIdTrim,
+    projectId,
+    applications,
   );
 
   log(`Completed (${lastStatus}) — scraped ${applications.length} application(s)`);
@@ -1006,6 +1052,13 @@ async function runPepcoApplicationDetailDiscovery(opts) {
       lastStatus,
     );
 
+    await maybeRunNormalizedPortalSyncAfterPersist(
+      supabase,
+      coordinationIdTrim,
+      projectId,
+      applications,
+    );
+
     await patchCoordinationAfterDiscovery(supabase, coordinationIdTrim, projectId, "completed", null, {
       pepco_discovery_session_status: "completed",
       ...mfaCoordMetaPatch,
@@ -1310,6 +1363,7 @@ module.exports = {
   resumePepcoApplicationDetailDiscovery,
   submitPepcoCodeAndContinueApplicationDetailDiscovery,
   persistPepcoApplicationDetailDiscovery,
+  maybeRunNormalizedPortalSyncAfterPersist,
   mergeApplicationDetailsByUuid,
   buildAppDetailRunOptions,
   resolveAppDetailResumeOptions,
