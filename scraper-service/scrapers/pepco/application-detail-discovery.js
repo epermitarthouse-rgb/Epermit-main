@@ -962,59 +962,213 @@ async function waitForPepcoDashboardReady(page, opts = {}) {
 }
 
 /**
- * List applications from PEPCO API (legacy list endpoint — often unavailable).
- * Prefer dashboard capture or known application UUIDs instead.
+ * Normalize one PEPCO applications-list API row into a dashboard card shape.
  *
+ * @param {unknown} row
+ * @param {number} index
+ */
+function normalizePepcoDashboardCardFromApiRow(row, index) {
+  if (!row || typeof row !== "object") return null;
+  const r = /** @type {Record<string, unknown>} */ (row);
+  const applicationId =
+    typeof r.applicationId === "string"
+      ? r.applicationId.trim()
+      : typeof r.applicationUuid === "string"
+        ? r.applicationUuid.trim()
+        : typeof r.id === "string"
+          ? r.id.trim()
+          : "";
+  if (!applicationId) return null;
+
+  const projectName = typeof r.projectName === "string" ? r.projectName.trim() : null;
+  const projectAddress = typeof r.projectAddress === "string" ? r.projectAddress.trim() : null;
+  const status = typeof r.status === "string" ? r.status.trim() : null;
+  const jobId = typeof r.jobId === "string" ? r.jobId.trim() : null;
+  const lastUpdatedDateTime =
+    typeof r.lastUpdatedDateTime === "string"
+      ? r.lastUpdatedDateTime
+      : typeof r.lastUpdated === "string"
+        ? r.lastUpdated
+        : null;
+  const submittedDateTime =
+    typeof r.submittedDateTime === "string"
+      ? r.submittedDateTime
+      : typeof r.submitted === "string"
+        ? r.submitted
+        : null;
+
+  return {
+    index,
+    applicationId,
+    jobId,
+    title: projectName,
+    address: projectAddress,
+    status,
+    actionRequired: r.actionRequired === true,
+    lastUpdated: lastUpdatedDateTime,
+    dateSubmitted: submittedDateTime,
+    lastUpdatedDateTime,
+    submittedDateTime,
+    draft: r.draft === true,
+    source: "api",
+  };
+}
+
+/**
+ * Parse authenticated GET /.euapi/nbp/applications list payload.
+ *
+ * @param {unknown} body
+ */
+function parsePepcoApplicationsListResponse(body) {
+  if (!body || typeof body !== "object" || body === null) {
+    return { ok: false, reason: "invalid_body", cards: [], customerFirstName: null };
+  }
+
+  const o = /** @type {{ isSuccess?: unknown, value?: unknown }} */ (body);
+  if (o.isSuccess !== true) {
+    return { ok: false, reason: "isSuccess_false", cards: [], customerFirstName: null };
+  }
+
+  const value =
+    o.value && typeof o.value === "object" && o.value !== null
+      ? /** @type {{ data?: unknown, customerFirstName?: unknown }} */ (o.value)
+      : null;
+  const data = value && Array.isArray(value.data) ? value.data : null;
+  if (!data) {
+    return { ok: false, reason: "missing_value_data_array", cards: [], customerFirstName: null };
+  }
+
+  /** @type {Array<Record<string, unknown>>} */
+  const cards = [];
+  data.forEach((row, idx) => {
+    const card = normalizePepcoDashboardCardFromApiRow(row, idx);
+    if (card) cards.push(card);
+  });
+
+  const customerFirstName =
+    value && typeof value.customerFirstName === "string" ? value.customerFirstName.trim() : null;
+
+  return { ok: true, reason: null, cards, customerFirstName };
+}
+
+/**
+ * Fetch all PEPCO dashboard projects via authenticated list API (single attempt).
+ *
+ * @param {import("playwright").Page} page
+ * @param {{ logger?: (m: string) => void, bearerToken?: string | null, skipFetchLog?: boolean }} [opts]
+ */
+async function fetchPepcoApplicationsListFromApi(page, opts = {}) {
+  const logger = opts.logger;
+  const bearerToken = opts.bearerToken != null ? String(opts.bearerToken).trim() : "";
+  const authorizationAttached = Boolean(bearerToken);
+
+  if (!opts.skipFetchLog) {
+    logStep(logger, "Fetching PEPCO applications list");
+  }
+
+  if (!bearerToken) {
+    logStep(logger, "PEPCO applications list skipped (no bearer token)");
+    return {
+      ok: false,
+      cards: [],
+      customerFirstName: null,
+      authorizationAttached: false,
+      reason: "no_bearer_token",
+      httpStatus: 0,
+    };
+  }
+
+  const url = `${PEPCO_EUAPI_BASE}/applications`;
+  try {
+    const res = await page.request.get(url, {
+      headers: buildPepcoApiHeaders({ bearerToken }),
+      timeout: 90_000,
+    });
+    const contentType = res.headers()["content-type"] || res.headers()["Content-Type"] || "";
+    const text = await res.text().catch(() => "");
+    const httpStatus = res.status();
+
+    /** @type {unknown} */
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = null;
+    }
+
+    if (!res.ok() || !body || typeof body !== "object") {
+      const detail = buildPepcoApiErrorMessage({
+        endpoint: url,
+        httpStatus,
+        contentType,
+        responseText: text,
+        body,
+        diagnostics: await collectPepcoPageDiagnostics(page),
+        authorizationAttached,
+      });
+      logStep(logger, `PEPCO applications list API failed: ${detail}`);
+      return {
+        ok: false,
+        cards: [],
+        customerFirstName: null,
+        authorizationAttached,
+        reason: "http_or_non_json",
+        httpStatus,
+      };
+    }
+
+    const parsed = parsePepcoApplicationsListResponse(body);
+    if (!parsed.ok) {
+      logStep(logger, `PEPCO applications list API returned invalid payload (${parsed.reason})`);
+      return {
+        ok: false,
+        cards: [],
+        customerFirstName: null,
+        authorizationAttached,
+        reason: parsed.reason,
+        httpStatus,
+      };
+    }
+
+    logStep(
+      logger,
+      `Discovered ${parsed.cards.length} PEPCO project${parsed.cards.length === 1 ? "" : "s"}`,
+    );
+    return {
+      ok: true,
+      cards: parsed.cards,
+      customerFirstName: parsed.customerFirstName,
+      authorizationAttached,
+      reason: null,
+      httpStatus,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300);
+    logStep(logger, `PEPCO applications list API request failed: ${msg}`);
+    return {
+      ok: false,
+      cards: [],
+      customerFirstName: null,
+      authorizationAttached,
+      reason: "request_error",
+      httpStatus: 0,
+    };
+  }
+}
+
+/**
+ * @deprecated Prefer fetchPepcoApplicationsListFromApi — kept for legacy callers.
  * @param {import("playwright").Page} page
  * @param {{ logger?: (m: string) => void, skipFetchLog?: boolean, bearerToken?: string | null }} [opts]
  */
 async function listPepcoApplicationsFromApi(page, opts = {}) {
-  const logger = opts.logger;
-  const bearerToken = opts.bearerToken != null ? String(opts.bearerToken).trim() : "";
-  if (!opts.skipFetchLog) {
-    logStep(logger, "Fetching PEPCO dashboard applications from API fallback");
-  }
-  try {
-    const body = await pepcoApiGetJson(page.request, "/applications", { page, bearerToken });
-    const value =
-      body &&
-      typeof body === "object" &&
-      body !== null &&
-      "value" in body &&
-      Array.isArray(/** @type {{ value?: unknown }} */ (body).value)
-        ? /** @type {unknown[]} */ (/** @type {{ value: unknown[] }} */ (body).value)
-        : [];
-
-    /** @type {Array<{ applicationUuid: string, jobId?: string | null, projectName?: string | null }>} */
-    const out = [];
-    for (const row of value) {
-      if (!row || typeof row !== "object") continue;
-      const r = /** @type {Record<string, unknown>} */ (row);
-      const uuid =
-        typeof r.applicationUuid === "string"
-          ? r.applicationUuid
-          : typeof r.id === "string"
-            ? r.id
-            : typeof r.applicationId === "string"
-              ? r.applicationId
-              : null;
-      if (!uuid) continue;
-      out.push({
-        applicationUuid: uuid,
-        jobId: typeof r.jobId === "string" ? r.jobId : null,
-        projectName: typeof r.projectName === "string" ? r.projectName : null,
-      });
-    }
-    logStep(logger, `Found ${out.length} application(s)`);
-    return out;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300);
-    logStep(
-      logger,
-      `Generic PEPCO applications list API unavailable (${msg}). Use dashboard capture or pass application_uuids.`,
-    );
-    return [];
-  }
+  const out = await fetchPepcoApplicationsListFromApi(page, opts);
+  if (!out.ok) return [];
+  return out.cards.map((row) => ({
+    applicationUuid: String(row.applicationId || ""),
+    jobId: typeof row.jobId === "string" ? row.jobId : null,
+    projectName: typeof row.title === "string" ? row.title : null,
+  }));
 }
 
 /**
@@ -1201,6 +1355,9 @@ module.exports = {
   isPlausiblePepcoBearerToken,
   findPepcoBearerTokenInValue,
   scrapePepcoApplicationDetails,
+  normalizePepcoDashboardCardFromApiRow,
+  parsePepcoApplicationsListResponse,
+  fetchPepcoApplicationsListFromApi,
   listPepcoApplicationsFromApi,
   waitForPepcoDashboardLanding,
   waitForPepcoApplicationApiReady,

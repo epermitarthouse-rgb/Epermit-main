@@ -226,6 +226,11 @@ export interface UciPepcoDashboardCardMeta {
   status?: string | null;
   lastUpdated?: string | null;
   dateSubmitted?: string | null;
+  lastUpdatedDateTime?: string | null;
+  submittedDateTime?: string | null;
+  actionRequired?: boolean;
+  draft?: boolean;
+  source?: "api" | "dom" | string;
   jobId?: string | null;
   applicationId?: string;
   overviewUrl?: string;

@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { SESSION_IDLE_TIMEOUT_MS } = require("../../../sessions/session-ttl.js");
 
-/** @typedef {{ sessionId: string, coordinationId: string, userId: string, browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page, createdAt: number, updatedAt: number, status: string, continueAction: string | null, captureApplicationIds: boolean, ttlHandle?: ReturnType<typeof setTimeout> }} PepcoAwaitingSession */
+/** @typedef {{ sessionId: string, coordinationId: string, userId: string, browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page, createdAt: number, updatedAt: number, status: string, continueAction: string | null, captureApplicationIds: boolean, applicationUuids?: string[], downloadDocuments?: boolean, ttlHandle?: ReturnType<typeof setTimeout> }} PepcoAwaitingSession */
 
 /** @type {Map<string, PepcoAwaitingSession>} */
 const sessions = new Map();
@@ -69,11 +69,16 @@ function pruneStaleSessions(now = Date.now()) {
  *   sessionStatus?: string;
  *   continueAction?: string | null;
  *   captureApplicationIds?: boolean;
+ *   applicationUuids?: string[];
+ *   downloadDocuments?: boolean;
  * }} opts
  */
 function registerAwaitingMfaSession(opts) {
   pruneStaleSessions();
   const sessionId = generateSessionId();
+  const applicationUuids = Array.isArray(opts.applicationUuids)
+    ? [...new Set(opts.applicationUuids.map((u) => String(u).trim()).filter(Boolean))]
+    : undefined;
   /** @type {PepcoAwaitingSession} */
   const record = {
     sessionId,
@@ -87,6 +92,9 @@ function registerAwaitingMfaSession(opts) {
     status: opts.sessionStatus != null ? String(opts.sessionStatus) : "awaiting_mfa",
     continueAction: opts.continueAction != null ? String(opts.continueAction) : null,
     captureApplicationIds: opts.captureApplicationIds === true,
+    applicationUuids,
+    downloadDocuments:
+      typeof opts.downloadDocuments === "boolean" ? opts.downloadDocuments : undefined,
     ttlHandle: undefined,
   };
   sessions.set(sessionId, record);

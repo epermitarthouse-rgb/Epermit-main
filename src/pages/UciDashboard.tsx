@@ -282,6 +282,52 @@ export default function UciDashboard() {
   );
   const [pepcoAppDetailResumeBusy, setPepcoAppDetailResumeBusy] = useState(false);
   const [pepcoDownloadDocuments, setPepcoDownloadDocuments] = useState(false);
+  const [pepcoRowScrapeBusyId, setPepcoRowScrapeBusyId] = useState<string | null>(null);
+  const [pepcoRowScrapeStatus, setPepcoRowScrapeStatus] = useState<
+    Record<string, { status: "ok" | "error"; message?: string }>
+  >({});
+  const [pepcoPendingAppDetailUuid, setPepcoPendingAppDetailUuid] = useState<string | null>(null);
+  const pepcoPendingAppDetailUuidRef = useRef<string | null>(null);
+  const [pepcoPendingAppDetailDownloadDocuments, setPepcoPendingAppDetailDownloadDocuments] =
+    useState<boolean | null>(null);
+  const pepcoPendingAppDetailDownloadDocumentsRef = useRef<boolean | null>(null);
+
+  const resolvePendingRowDownloadDocuments = (): boolean => {
+    if (pepcoPendingAppDetailDownloadDocumentsRef.current === true) return true;
+    if (pepcoPendingAppDetailDownloadDocumentsRef.current === false) return false;
+    if (pepcoPendingAppDetailDownloadDocuments === true) return true;
+    if (pepcoPendingAppDetailDownloadDocuments === false) return false;
+    return pepcoDownloadDocuments === true;
+  };
+
+  const resolvePendingRowApplicationUuid = (): string | null => {
+    const fromRef = pepcoPendingAppDetailUuidRef.current?.trim();
+    if (fromRef) return fromRef;
+    const fromState = pepcoPendingAppDetailUuid?.trim();
+    return fromState || null;
+  };
+
+  const setPendingAppDetailRunOptions = (applicationUuid: string, downloadDocuments: boolean) => {
+    pepcoPendingAppDetailUuidRef.current = applicationUuid;
+    pepcoPendingAppDetailDownloadDocumentsRef.current = downloadDocuments;
+    setPepcoPendingAppDetailUuid(applicationUuid);
+    setPepcoPendingAppDetailDownloadDocuments(downloadDocuments);
+  };
+
+  const clearPendingAppDetailRunOptions = () => {
+    pepcoPendingAppDetailUuidRef.current = null;
+    pepcoPendingAppDetailDownloadDocumentsRef.current = null;
+    setPepcoPendingAppDetailUuid(null);
+    setPepcoPendingAppDetailDownloadDocuments(null);
+  };
+
+  const logPepcoRowScrapeRequest = (applicationUuid: string, downloadDocuments: boolean) => {
+    if (!import.meta.env.DEV) return;
+    console.log("[uci-pepco] row detail scrape request", {
+      applicationUuid,
+      download_documents: downloadDocuments,
+    });
+  };
 
   const appendPepcoAppDetailProgress = (line: string) => {
     setPepcoAppDetailProgress((prev) => [...prev, line]);
@@ -352,6 +398,7 @@ export default function UciDashboard() {
     setPepcoAppDetailMsg(null);
     setPepcoAppDetailProgress([]);
     setPepcoAppDetailPendingSessionId(null);
+    clearPendingAppDetailRunOptions();
     try {
       const d = await getCoordinationDetail(id);
       setDetail(d);
@@ -470,12 +517,26 @@ export default function UciDashboard() {
         : typeof nestedObj?.application_ids_found === "number"
           ? nestedObj.application_ids_found
           : 0;
+    const discoverySource =
+      typeof m.pepco_dashboard_discovery_source === "string"
+        ? m.pepco_dashboard_discovery_source
+        : typeof nestedObj?.source === "string"
+          ? nestedObj.source
+          : null;
+    const listApiWarning =
+      typeof m.pepco_dashboard_list_api_warning === "string"
+        ? m.pepco_dashboard_list_api_warning
+        : typeof nestedObj?.list_api_warning === "string"
+          ? nestedObj.list_api_warning
+          : null;
 
     return {
       status,
       lastAt,
       cardsFound,
       applicationIdsFound,
+      discoverySource,
+      listApiWarning,
       cards,
     };
   }, [detailRecord?.metadata]);
@@ -497,6 +558,19 @@ export default function UciDashboard() {
 
   const hasPepcoApplicationDetails =
     (pepcoApplicationDetailDiscovery?.applications?.length ?? 0) > 0;
+
+  const pepcoCardLastUpdated = (c: UciPepcoDashboardCardMeta): string | null =>
+    c.lastUpdatedDateTime ?? c.lastUpdated ?? null;
+
+  const pepcoCardSubmitted = (c: UciPepcoDashboardCardMeta): string | null =>
+    c.submittedDateTime ?? c.dateSubmitted ?? null;
+
+  const pepcoCardHasDetail = (applicationId: string | undefined): boolean => {
+    if (!applicationId) return false;
+    return (pepcoApplicationDetailDiscovery?.applications ?? []).some(
+      (a) => a.applicationUuid === applicationId,
+    );
+  };
 
   useEffect(() => {
     if (!detailOpen || !detailId || !isPepcoCoordination) return;
@@ -814,6 +888,7 @@ export default function UciDashboard() {
     } else if (out.status === "completed" || out.status === "partial") {
       setPepcoAppDetailPendingSessionId(null);
       setPepcoAppDetailMfaSessionId(null);
+      clearPendingAppDetailRunOptions();
       setPepcoCodeModalOpen(false);
       const count =
         "applications_scraped" in out && typeof out.applications_scraped === "number"
@@ -825,10 +900,18 @@ export default function UciDashboard() {
           : `PEPCO application detail scrape ${out.status}.`,
       );
       setPepcoAppDetailMsg(`Status: ${out.status}`);
+      if (pepcoPendingAppDetailUuid) {
+        setPepcoRowScrapeStatus((prev) => ({
+          ...prev,
+          [pepcoPendingAppDetailUuid]: { status: "ok" },
+        }));
+      }
     } else if (out.status === "failed") {
-      if (!preserveRecoverableAppDetailSession(out)) {
+      const recoverable = preserveRecoverableAppDetailSession(out);
+      if (!recoverable) {
         setPepcoAppDetailPendingSessionId(null);
         setPepcoAppDetailMfaSessionId(null);
+        clearPendingAppDetailRunOptions();
       }
       const failMsg =
         "message" in out && out.message
@@ -836,12 +919,21 @@ export default function UciDashboard() {
           : "Application detail scrape failed";
       toast.error(failMsg);
       setPepcoAppDetailMsg(failMsg);
+      if (pepcoPendingAppDetailUuid && !recoverable) {
+        setPepcoRowScrapeStatus((prev) => ({
+          ...prev,
+          [pepcoPendingAppDetailUuid]: { status: "error", message: failMsg },
+        }));
+      }
     }
   };
 
-  const handlePepcoApplicationDetailScrape = async () => {
-    if (!detailId) return;
+  const handlePepcoRowDetailScrape = async (applicationId: string) => {
+    if (!detailId || !applicationId.trim()) return;
+    const uuid = applicationId.trim();
+    const downloadDocumentsForRun = pepcoDownloadDocuments === true;
     if (
+      pepcoRowScrapeBusyId === uuid ||
       pepcoAppDetailBusy ||
       pepcoAppDetailResumeBusy ||
       pepcoCodeSubmitBusy ||
@@ -853,6 +945,14 @@ export default function UciDashboard() {
       );
       return;
     }
+    if (import.meta.env.DEV) {
+      console.log("[PEPCO row scrape]", {
+        applicationId: uuid,
+        checkboxState: pepcoDownloadDocuments,
+      });
+    }
+    setPepcoRowScrapeBusyId(uuid);
+    setPendingAppDetailRunOptions(uuid, downloadDocumentsForRun);
     setPepcoAppDetailBusy(true);
     setPepcoAppDetailMsg(null);
     setPepcoAppDetailPendingSessionId(null);
@@ -864,9 +964,20 @@ export default function UciDashboard() {
       const out = await postPepcoApplicationDetailDiscovery(detailId, {
         headed: true,
         auto_email_mfa: pepcoAutoEmailMfa,
-        download_documents: pepcoDownloadDocuments,
+        download_documents: downloadDocumentsForRun,
+        application_uuids: [uuid],
       });
       await applyAppDetailResponse(out);
+      if (out.status === "completed" || out.status === "partial") {
+        setPepcoRowScrapeStatus((prev) => ({ ...prev, [uuid]: { status: "ok" } }));
+      } else if (out.status === "failed") {
+        const failMsg =
+          "message" in out && out.message ? out.message : "Application detail scrape failed";
+        setPepcoRowScrapeStatus((prev) => ({
+          ...prev,
+          [uuid]: { status: "error", message: failMsg },
+        }));
+      }
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
       await refreshCoordination();
@@ -875,19 +986,28 @@ export default function UciDashboard() {
       appendPepcoAppDetailProgress(`Failed: ${msg}`);
       toast.error(msg);
       setPepcoAppDetailMsg(msg);
+      setPepcoRowScrapeStatus((prev) => ({
+        ...prev,
+        [uuid]: { status: "error", message: msg },
+      }));
     } finally {
       setPepcoAppDetailBusy(false);
+      setPepcoRowScrapeBusyId(null);
     }
   };
 
   const handlePepcoApplicationDetailResume = async () => {
     if (!detailId || !pepcoAppDetailPendingSessionId) return;
+    const downloadDocuments = resolvePendingRowDownloadDocuments();
+    const applicationUuid = resolvePendingRowApplicationUuid();
+    logPepcoRowScrapeRequest(applicationUuid ?? "(unknown)", downloadDocuments);
     setPepcoAppDetailResumeBusy(true);
     appendPepcoAppDetailProgress("Resuming PEPCO application detail scrape");
     try {
       const out = await resumePepcoApplicationDetailDiscovery(detailId, {
         session_id: pepcoAppDetailPendingSessionId,
-        download_documents: pepcoDownloadDocuments,
+        download_documents: downloadDocuments,
+        application_uuids: applicationUuid ? [applicationUuid] : undefined,
       });
       await applyAppDetailResponse(out);
       const d = await getCoordinationDetail(detailId);
@@ -914,11 +1034,20 @@ export default function UciDashboard() {
     setPepcoCodeSubmitBusy(true);
     setPepcoCodeModalError(null);
     appendPepcoAppDetailProgress("Submitting PEPCO verification code");
+    const downloadDocuments = resolvePendingRowDownloadDocuments();
+    const applicationUuid = resolvePendingRowApplicationUuid();
+    if (!applicationUuid) {
+      setPepcoCodeModalError("Missing selected project for this scrape. Start Scrape Details again.");
+      setPepcoCodeSubmitBusy(false);
+      return;
+    }
+    logPepcoRowScrapeRequest(applicationUuid, downloadDocuments);
     try {
       const out = await resumePepcoApplicationDetailDiscovery(detailId, {
         session_id: pepcoAppDetailMfaSessionId,
         code,
-        download_documents: pepcoDownloadDocuments,
+        download_documents: downloadDocuments,
+        application_uuids: [applicationUuid],
       });
       if (pepcoCodeInputRef.current) pepcoCodeInputRef.current.value = "";
 
@@ -1414,11 +1543,11 @@ export default function UciDashboard() {
                   <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
 
                   <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
-                    1. Dashboard cards discovery (read-only)
+                    1. Dashboard project discovery (read-only)
                   </p>
                   <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
-                    Extracts dashboard cards after login/MFA. Optional second pass clicks each card only to read the
-                    application ID from the URL (no overview data). Reuses the MFA options above.
+                    After login/MFA, fetches all PEPCO projects from the authenticated applications list API.
+                    DOM card extraction is used only when the list API or GetSession token is unavailable.
                   </p>
 
                   <div className="mb-3 space-y-1 text-xs leading-snug">
@@ -1446,7 +1575,18 @@ export default function UciDashboard() {
                           {pepcoDashboardFromMetadata.applicationIdsFound === 1 ? "" : "s"}
                         </>
                       ) : null}
+                      {pepcoDashboardFromMetadata?.discoverySource ? (
+                        <>
+                          {" "}
+                          · source {pepcoDashboardFromMetadata.discoverySource}
+                        </>
+                      ) : null}
                     </p>
+                    {pepcoDashboardFromMetadata?.listApiWarning ? (
+                      <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
+                        {pepcoDashboardFromMetadata.listApiWarning}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -1469,93 +1609,22 @@ export default function UciDashboard() {
                       ) : null}
                       Discover PEPCO Dashboard
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      disabled={
-                        pepcoDashboardBusy ||
-                        pepcoDiscoveryBusy ||
-                        pepcoResumeBusy ||
-                        detailLoading
-                      }
-                      aria-busy={pepcoDashboardBusy}
-                      onClick={() => void handlePepcoDashboardDiscover(true)}
-                    >
-                      Discover + Capture Application IDs
-                    </Button>
                   </div>
                   {pepcoDashboardMsg ? (
                     <p className={cn("mt-2 text-xs leading-snug", uciMutedClass)}>{pepcoDashboardMsg}</p>
                   ) : null}
 
-                  {pepcoDashboardFromMetadata && pepcoDashboardFromMetadata.cards.length > 0 ? (
-                    <div className="mt-4 overflow-x-auto rounded-md border border-cream-sunken/60 dark:border-teal/25">
-                      <Table className="min-w-[480px] text-xs">
-                        <TableHeader className={uciTableHeaderRowClass}>
-                          <TableRow className="border-cream-sunken/40 dark:border-teal/15">
-                            <TableHead className={uciTableHeadClass}>Title</TableHead>
-                            <TableHead className={uciTableHeadClass}>Address</TableHead>
-                            <TableHead className={uciTableHeadClass}>Status</TableHead>
-                            <TableHead className={uciTableHeadClass}>Job ID</TableHead>
-                            <TableHead className={uciTableHeadClass}>Application ID</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {pepcoDashboardFromMetadata.cards.map((c, idx) => (
-                            <TableRow
-                              key={`${String(c.jobId ?? "")}-${String(c.applicationId ?? "")}-${idx}`}
-                              className="border-cream-sunken/35 dark:border-teal/12"
-                            >
-                              <TableCell className={uciTableCellClass}>{c.title ?? "—"}</TableCell>
-                              <TableCell className={uciTableCellClass}>{c.address ?? "—"}</TableCell>
-                              <TableCell className={uciTableCellClass}>{c.status ?? "—"}</TableCell>
-                              <TableCell className={cn(uciTableCellClass, "font-mono text-[11px]")}>
-                                {c.jobId ?? "—"}
-                              </TableCell>
-                              <TableCell className={cn(uciTableCellClass, "max-w-[200px] break-all font-mono text-[11px]")}>
-                                {c.applicationId
-                                  ? c.applicationId
-                                  : c.applicationIdError
-                                    ? `— (${c.applicationIdError})`
-                                    : "—"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : null}
-
-                  <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
-
-                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
-                    2. Application detail scrape (read-only API)
-                  </p>
-                  <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
-                    Separate from dashboard cards. Fetches overview, status history, messages, and document
-                    metadata via PEPCO .euapi endpoints after login/MFA.
-                  </p>
-
-                  {hasPepcoDashboardCards && !hasPepcoApplicationDetails ? (
-                    <p className={cn("mb-3 rounded-md border border-cream-sunken/60 px-3 py-2 text-xs", uciMutedClass)}>
-                      Dashboard cards found. Application details have not been scraped yet.
-                    </p>
-                  ) : null}
-
-                  <div className="mb-3 flex items-start gap-2">
+                  <div className="mb-3 mt-3 flex items-start gap-2">
                     <Checkbox
                       id={`pepco-download-docs-${detailId ?? "row"}`}
                       checked={pepcoDownloadDocuments}
-                      onCheckedChange={(c) => setPepcoDownloadDocuments(Boolean(c))}
+                      onCheckedChange={(checked) => setPepcoDownloadDocuments(checked === true)}
                       disabled={
-                        pepcoAppDetailBusy ||
-                        pepcoAppDetailResumeBusy ||
                         pepcoDashboardBusy ||
                         pepcoDiscoveryBusy ||
                         pepcoResumeBusy ||
-                        detailLoading
+                        detailLoading ||
+                        Boolean(pepcoRowScrapeBusyId)
                       }
                       className={cn(
                         "mt-1 shrink-0 border-gold/50 dark:border-cream/35",
@@ -1570,37 +1639,113 @@ export default function UciDashboard() {
                         Download PEPCO documents
                       </Label>
                       <p className={cn("text-[11px] leading-snug", uciMutedClass)}>
-                        Saves files to the scraper host debug folder only. Leave unchecked unless you need local
-                        copies.
+                        When checked, Scrape Details saves every listed document to the scraper host. When
+                        unchecked, documents are listed only.
                       </p>
                     </div>
                   </div>
 
+                  {pepcoDashboardFromMetadata && pepcoDashboardFromMetadata.cards.length > 0 ? (
+                    <div className="mt-4 overflow-x-auto rounded-md border border-cream-sunken/60 dark:border-teal/25">
+                      <Table className="min-w-[720px] text-xs">
+                        <TableHeader className={uciTableHeaderRowClass}>
+                          <TableRow className="border-cream-sunken/40 dark:border-teal/15">
+                            <TableHead className={uciTableHeadClass}>Project</TableHead>
+                            <TableHead className={uciTableHeadClass}>Address</TableHead>
+                            <TableHead className={uciTableHeadClass}>Status</TableHead>
+                            <TableHead className={uciTableHeadClass}>Last updated</TableHead>
+                            <TableHead className={uciTableHeadClass}>Date submitted</TableHead>
+                            <TableHead className={uciTableHeadClass}>Job ID</TableHead>
+                            <TableHead className={uciTableHeadClass}>Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pepcoDashboardFromMetadata.cards.map((c, idx) => {
+                            const appId = c.applicationId?.trim() || "";
+                            const rowBusy = pepcoRowScrapeBusyId === appId;
+                            const rowStatus = appId ? pepcoRowScrapeStatus[appId] : undefined;
+                            const hasDetail = pepcoCardHasDetail(appId);
+                            const scrapeDisabled =
+                              !appId ||
+                              rowBusy ||
+                              pepcoAppDetailBusy ||
+                              pepcoAppDetailResumeBusy ||
+                              pepcoCodeSubmitBusy ||
+                              pepcoCodeModalOpen ||
+                              Boolean(pepcoAppDetailPendingSessionId) ||
+                              pepcoDashboardBusy ||
+                              pepcoDiscoveryBusy ||
+                              pepcoResumeBusy ||
+                              detailLoading;
+
+                            return (
+                              <TableRow
+                                key={`${String(c.jobId ?? "")}-${String(c.applicationId ?? "")}-${idx}`}
+                                className="border-cream-sunken/35 dark:border-teal/12"
+                              >
+                                <TableCell className={uciTableCellClass}>{c.title ?? "—"}</TableCell>
+                                <TableCell className={uciTableCellClass}>{c.address ?? "—"}</TableCell>
+                                <TableCell className={uciTableCellClass}>{c.status ?? "—"}</TableCell>
+                                <TableCell className={cn(uciTableCellClass, "tabular-nums")}>
+                                  {formatWhen(pepcoCardLastUpdated(c))}
+                                </TableCell>
+                                <TableCell className={cn(uciTableCellClass, "tabular-nums")}>
+                                  {formatWhen(pepcoCardSubmitted(c))}
+                                </TableCell>
+                                <TableCell className={cn(uciTableCellClass, "font-mono text-[11px]")}>
+                                  {c.jobId ?? "—"}
+                                </TableCell>
+                                <TableCell className={uciTableCellClass}>
+                                  <div className="flex flex-col gap-1">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 px-2 text-[11px]"
+                                      disabled={scrapeDisabled}
+                                      aria-busy={rowBusy}
+                                      onClick={() => void handlePepcoRowDetailScrape(appId)}
+                                    >
+                                      {rowBusy ? (
+                                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                      ) : null}
+                                      {hasDetail ? "Refresh Details" : "Scrape Details"}
+                                    </Button>
+                                    {rowStatus?.status === "error" && rowStatus.message ? (
+                                      <span className="text-[10px] text-destructive">{rowStatus.message}</span>
+                                    ) : rowStatus?.status === "ok" ? (
+                                      <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                                        Details saved
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : null}
+
+                  <hr className="my-4 border-cream-sunken/60 dark:border-teal/25" />
+
+                  <p className={cn("mb-2 text-sm font-semibold", uciManualFormTextClass)}>
+                    2. Application detail scrape (read-only API)
+                  </p>
+                  <p className={cn("mb-3 text-[11px] leading-snug", uciMutedClass)}>
+                    Use Scrape Details on a dashboard row to fetch overview, status history, messages, and document
+                    metadata for that project only. Check Download PEPCO documents above the table before scraping.
+                    Previously scraped projects are preserved when you scrape another row.
+                  </p>
+
+                  {hasPepcoDashboardCards && !hasPepcoApplicationDetails ? (
+                    <p className={cn("mb-3 rounded-md border border-cream-sunken/60 px-3 py-2 text-xs", uciMutedClass)}>
+                      Dashboard cards found. Application details have not been scraped yet.
+                    </p>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      disabled={
-                        pepcoAppDetailBusy ||
-                        pepcoAppDetailResumeBusy ||
-                        pepcoCodeSubmitBusy ||
-                        pepcoCodeModalOpen ||
-                        Boolean(pepcoAppDetailPendingSessionId) ||
-                        pepcoDashboardBusy ||
-                        pepcoDiscoveryBusy ||
-                        pepcoResumeBusy ||
-                        detailLoading
-                      }
-                      aria-busy={pepcoAppDetailBusy}
-                      onClick={() => void handlePepcoApplicationDetailScrape()}
-                    >
-                      {pepcoAppDetailBusy ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Scrape PEPCO Application Details
-                    </Button>
                     <Button
                       type="button"
                       variant="outline"

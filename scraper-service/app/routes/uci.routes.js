@@ -459,7 +459,8 @@ function createUciRouter(opts) {
         body.session_id != null && String(body.session_id).trim()
           ? String(body.session_id).trim()
           : "";
-      const download_documents = body.download_documents === true;
+      const download_documents =
+        typeof body.download_documents === "boolean" ? body.download_documents : undefined;
       const application_uuids = Array.isArray(body.application_uuids)
         ? body.application_uuids.map((x) => String(x))
         : undefined;

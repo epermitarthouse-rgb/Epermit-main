@@ -14,6 +14,11 @@ const {
   extractPepcoDashboardCards,
   capturePepcoApplicationIds,
 } = require("../../../scrapers/pepco/dashboard-discovery.js");
+const {
+  getPepcoBearerTokenViaSessionApi,
+  fetchPepcoApplicationsListFromApi,
+  waitForPepcoDashboardLanding,
+} = require("../../../scrapers/pepco/application-detail-discovery.js");
 const { getCoordinationRecordById } = require("./uci-records.service.js");
 const { requireProjectAccess } = require("./uci-access.service.js");
 const {
@@ -96,6 +101,12 @@ async function persistPepcoDashboardDiscovery(supabase, coordinationId, projectI
   metadata.pepco_dashboard_discovery_status = nested.status;
   metadata.pepco_dashboard_cards_found = nested.cards_found;
   metadata.pepco_dashboard_application_ids_found = nested.application_ids_found;
+  if (typeof envelope.list_api_warning === "string" && envelope.list_api_warning.trim()) {
+    metadata.pepco_dashboard_list_api_warning = String(envelope.list_api_warning).trim();
+  }
+  if (typeof envelope.source === "string" && envelope.source.trim()) {
+    metadata.pepco_dashboard_discovery_source = String(envelope.source).trim();
+  }
 
   /** @type {Record<string, unknown>} */
   const update = { metadata, last_error: lastError };
@@ -109,30 +120,93 @@ async function persistPepcoDashboardDiscovery(supabase, coordinationId, projectI
   if (upErr) console.error("[uci-pepco-dashboard] coordination update failed:", upErr.message);
 }
 
+const LIST_API_DOM_FALLBACK_WARNING =
+  "PEPCO project list API was unavailable; dashboard results may be incomplete.";
+
 /**
  * @param {import("playwright").Page} page
  * @param {boolean} captureApplicationIds
  * @returns {Promise<Record<string, unknown>>}
  */
 async function runPepcoDashboardExtractionPipeline(page, captureApplicationIds) {
-  const dashExtract = await extractPepcoDashboardCards(page, {
-    logger: (m) => console.log(`[uci-pepco-dashboard] ${m}`),
-  });
+  const log = (m) => console.log(`[uci-pepco-dashboard] ${m}`);
+
+  await waitForPepcoDashboardLanding(page, { logger: log });
+
+  const tokenOut = await getPepcoBearerTokenViaSessionApi(page, log);
+  const bearerToken = tokenOut?.token ? String(tokenOut.token).trim() : "";
+
+  if (bearerToken) {
+    const apiOut = await fetchPepcoApplicationsListFromApi(page, {
+      bearerToken,
+      logger: log,
+    });
+
+    if (apiOut.ok && Array.isArray(apiOut.cards)) {
+      const cards = apiOut.cards;
+      const applicationIdsFound = cards.filter((c) => {
+        if (!c || typeof c !== "object") return false;
+        const id = /** @type {{ applicationId?: unknown }} */ (c).applicationId;
+        return typeof id === "string" && id.trim().length > 0;
+      }).length;
+
+      return {
+        status: "completed",
+        checkpoint: "dashboard_applications_list_extracted",
+        source: "api",
+        currentUrl: page.url(),
+        cards_found: cards.length,
+        application_ids_found: applicationIdsFound,
+        cards,
+        customerFirstName:
+          typeof apiOut.customerFirstName === "string" ? apiOut.customerFirstName : null,
+      };
+    }
+
+    log(
+      `List API unavailable; using DOM fallback (authorizationAttached=${apiOut.authorizationAttached === true}, httpStatus=${apiOut.httpStatus || 0})`,
+    );
+  } else {
+    log("GetSession token unavailable; using DOM fallback");
+  }
+  const dashExtract = await extractPepcoDashboardCards(page, { logger: log });
 
   /** @type {Record<string, unknown>} */
   let envelope =
     typeof dashExtract === "object" && dashExtract !== null
-      ? { ...dashExtract }
-      : { status: "failed", message: "Extract returned invalid payload", cards: [], cards_found: 0 };
+      ? {
+          ...dashExtract,
+          source: "dom",
+          list_api_warning: LIST_API_DOM_FALLBACK_WARNING,
+        }
+      : {
+          status: "failed",
+          message: "Extract returned invalid payload",
+          cards: [],
+          cards_found: 0,
+          source: "dom",
+          list_api_warning: LIST_API_DOM_FALLBACK_WARNING,
+        };
+
+  const cardsNeedingIds =
+    Array.isArray(envelope.cards) &&
+    envelope.cards.some((c) => {
+      if (!c || typeof c !== "object") return true;
+      const id = /** @type {{ applicationId?: unknown }} */ (c).applicationId;
+      return !(typeof id === "string" && id.trim());
+    });
 
   if (
     envelope.status === "completed" &&
     captureApplicationIds &&
+    cardsNeedingIds &&
     Array.isArray(dashExtract.cards)
   ) {
     envelope = await capturePepcoApplicationIds(page, dashExtract.cards, {
-      logger: (m) => console.log(`[uci-pepco-dashboard] ${m}`),
+      logger: log,
     });
+    envelope.source = "dom";
+    envelope.list_api_warning = LIST_API_DOM_FALLBACK_WARNING;
   }
 
   return envelope;

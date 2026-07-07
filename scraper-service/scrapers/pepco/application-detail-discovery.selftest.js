@@ -6,6 +6,7 @@ const {
   parseMessagesResponse,
   parseDocumentsResponse,
   parsePepcoGetSessionToken,
+  parsePepcoApplicationsListResponse,
   isPlausiblePepcoBearerToken,
   findPepcoBearerTokenInValue,
   buildPepcoApiHeaders,
@@ -185,6 +186,52 @@ function run() {
 
   assert(parsePepcoGetSessionToken({ username: "u", token: null }) === null, "reject null token");
   assert(parsePepcoGetSessionToken({ username: null, token: "t" }) === null, "reject missing username");
+
+  const listBody = {
+    isSuccess: true,
+    value: {
+      data: [
+        {
+          applicationId: "uuid-0064620",
+          jobId: "PEPCO-NB-0064620",
+          projectName: "Wonder - Tenant Fit Out",
+          projectAddress: "10432 Campus Way S",
+          status: "Contract Sent",
+          actionRequired: true,
+          lastUpdatedDateTime: "2026-06-17T14:27:40.7344615+00:00",
+          submittedDateTime: "2026-01-10T12:00:00+00:00",
+          draft: false,
+        },
+        {
+          applicationId: "uuid-0000347",
+          jobId: "PEPCO-NB-0000347",
+          projectName: "Project B",
+          projectAddress: "123 Main St",
+          status: "In Technical Review",
+          actionRequired: false,
+          lastUpdatedDateTime: "2026-05-01T10:00:00+00:00",
+          submittedDateTime: "2025-12-01T08:00:00+00:00",
+          draft: false,
+        },
+      ],
+      customerFirstName: "Philip",
+    },
+  };
+  const listParsed = parsePepcoApplicationsListResponse(listBody);
+  assert(listParsed.ok === true, "list ok");
+  assert(listParsed.cards.length === 2, "list card count");
+  assert(listParsed.cards[0].applicationId === "uuid-0064620", "list applicationId");
+  assert(listParsed.cards[0].jobId === "PEPCO-NB-0064620", "list jobId");
+  assert(listParsed.cards[0].title === "Wonder - Tenant Fit Out", "list title");
+  assert(listParsed.cards[0].actionRequired === true, "list actionRequired");
+  assert(listParsed.customerFirstName === "Philip", "customerFirstName");
+
+  const legacyWrongShape = parsePepcoApplicationsListResponse({
+    isSuccess: true,
+    value: [{ applicationId: "legacy-array" }],
+  });
+  assert(legacyWrongShape.ok === false, "reject value-as-array legacy shape");
+  assert(legacyWrongShape.reason === "missing_value_data_array", "legacy shape reason");
 
   console.log("pepco application-detail parsing selftest: OK");
 }

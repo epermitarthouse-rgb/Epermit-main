@@ -58,6 +58,82 @@ function makeProgressLogger(progress, push) {
 }
 
 /**
+ * @param {unknown} bodyUuids
+ * @param {unknown} downloadDocumentsOpt
+ */
+function buildAppDetailRunOptions(bodyUuids, downloadDocumentsOpt) {
+  const applicationUuids = Array.isArray(bodyUuids)
+    ? [...new Set(bodyUuids.map((u) => String(u).trim()).filter(Boolean))]
+    : [];
+  const downloadDocuments = downloadDocumentsOpt === true;
+  return { applicationUuids, downloadDocuments };
+}
+
+/**
+ * @param {{ applicationUuids?: string[], downloadDocuments?: boolean } | null | undefined} rec
+ * @param {unknown} bodyUuids
+ * @param {unknown} bodyDownloadDocumentsOpt
+ * @param {(msg: string) => void} log
+ */
+function resolveAppDetailResumeOptions(rec, bodyUuids, bodyDownloadDocumentsOpt, log) {
+  const hasBodyUuids = Array.isArray(bodyUuids);
+  const applicationUuids = hasBodyUuids
+    ? [...new Set(bodyUuids.map((u) => String(u).trim()).filter(Boolean))]
+    : Array.isArray(rec?.applicationUuids)
+      ? [...rec.applicationUuids]
+      : [];
+
+  /** @type {boolean} */
+  let downloadDocuments;
+  if (typeof bodyDownloadDocumentsOpt === "boolean") {
+    downloadDocuments = bodyDownloadDocumentsOpt;
+  } else if (typeof rec?.downloadDocuments === "boolean") {
+    downloadDocuments = rec.downloadDocuments;
+  } else {
+    downloadDocuments = false;
+  }
+
+  log(
+    `resuming app-detail options: uuidCount=${applicationUuids.length} downloadDocuments=${downloadDocuments}`,
+  );
+  return { applicationUuids, downloadDocuments };
+}
+
+/**
+ * @param {{
+ *   coordinationId: string;
+ *   userId: string;
+ *   browser: import("playwright").Browser;
+ *   context: import("playwright").BrowserContext;
+ *   page: import("playwright").Page;
+ *   sessionStatus?: string;
+ *   continueAction?: string | null;
+ *   captureApplicationIds?: boolean;
+ *   bodyUuids?: string[];
+ *   downloadDocumentsOpt?: unknown;
+ *   log: (msg: string) => void;
+ * }} opts
+ */
+function registerAppDetailAwaitingMfaSession(opts) {
+  const runOptions = buildAppDetailRunOptions(opts.bodyUuids, opts.downloadDocumentsOpt);
+  opts.log(
+    `stored app-detail resume options: uuidCount=${runOptions.applicationUuids.length} downloadDocuments=${runOptions.downloadDocuments}`,
+  );
+  return registerAwaitingMfaSession({
+    coordinationId: opts.coordinationId,
+    userId: opts.userId,
+    browser: opts.browser,
+    context: opts.context,
+    page: opts.page,
+    sessionStatus: opts.sessionStatus,
+    continueAction: opts.continueAction,
+    captureApplicationIds: opts.captureApplicationIds,
+    applicationUuids: runOptions.applicationUuids,
+    downloadDocuments: runOptions.downloadDocuments,
+  });
+}
+
+/**
  * Resolve application UUIDs from request body or stored dashboard metadata (no network).
  *
  * @param {Record<string, unknown>} coordRecord
@@ -65,12 +141,10 @@ function makeProgressLogger(progress, push) {
  * @param {(msg: string) => void} log
  */
 function resolveApplicationUuidsFromSources(coordRecord, bodyUuids, log) {
-  const explicit = Array.isArray(bodyUuids)
-    ? bodyUuids.map((u) => String(u).trim()).filter(Boolean)
-    : [];
-  if (explicit.length > 0) {
+  if (Array.isArray(bodyUuids)) {
+    const explicit = bodyUuids.map((u) => String(u).trim()).filter(Boolean);
     log(
-      `Using ${explicit.length} application UUID${explicit.length === 1 ? "" : "s"} from request body`,
+      `Using ${explicit.length} application UUID${explicit.length === 1 ? "" : "s"} from request body/session`,
     );
     return [...new Set(explicit)];
   }
@@ -160,6 +234,29 @@ function pickOverviewProjectName(overview) {
 }
 
 /**
+ * @param {Array<Record<string, unknown>>} existingApps
+ * @param {Array<Record<string, unknown>>} incomingApps
+ */
+function mergeApplicationDetailsByUuid(existingApps, incomingApps) {
+  /** @type {Map<string, Record<string, unknown>>} */
+  const map = new Map();
+
+  for (const app of existingApps) {
+    if (!app || typeof app !== "object") continue;
+    const id = String(app.applicationUuid || "").trim();
+    if (id) map.set(id, app);
+  }
+
+  for (const app of incomingApps) {
+    if (!app || typeof app !== "object") continue;
+    const id = String(app.applicationUuid || "").trim();
+    if (id) map.set(id, app);
+  }
+
+  return Array.from(map.values());
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} coordinationId
  * @param {string} projectId
@@ -192,17 +289,31 @@ async function persistPepcoApplicationDetailDiscovery(
       ? /** @type {Record<string, unknown>} */ (row.metadata)
       : {};
 
+  const prevDiscovery = prev.pepco_application_detail_discovery;
+  const prevDiscoveryObj =
+    prevDiscovery && typeof prevDiscovery === "object" && !Array.isArray(prevDiscovery)
+      ? /** @type {{ applications?: unknown }} */ (prevDiscovery)
+      : null;
+  const prevApps = Array.isArray(prevDiscoveryObj?.applications)
+    ? /** @type {Array<Record<string, unknown>>} */ (prevDiscoveryObj.applications)
+    : [];
+
+  const mergedApplications = mergeApplicationDetailsByUuid(prevApps, applications);
+
   const metadata = { ...prev };
   metadata.pepco_application_detail_discovery = {
     lastStatus,
     lastScrapedAt: now,
-    applications,
+    applications: mergedApplications,
   };
 
   const primary =
     applications.find((a) => String(a.scrapeStatus || "") === "completed") ||
     applications.find((a) => String(a.scrapeStatus || "") === "partial") ||
-    applications[0] ||
+    applications[applications.length - 1] ||
+    mergedApplications.find((a) => String(a.scrapeStatus || "") === "completed") ||
+    mergedApplications.find((a) => String(a.scrapeStatus || "") === "partial") ||
+    mergedApplications[0] ||
     null;
 
   if (primary) {
@@ -329,6 +440,8 @@ async function runApplicationDetailScrapeOnPage(opts) {
 
   if (downloadDocuments) {
     log("Document downloads enabled for this run");
+  } else {
+    log("Documents will be listed only");
   }
 
   const applications = await scrapeAllApplicationDetails(page, uuids, {
@@ -563,6 +676,10 @@ async function runPepcoApplicationDetailDiscovery(opts) {
   } = opts;
 
   const downloadDocuments = downloadDocumentsOpt === true;
+  const initialRunOptions = buildAppDetailRunOptions(bodyUuids, downloadDocumentsOpt);
+  log(
+    `app-detail options: uuidCount=${initialRunOptions.applicationUuids.length} downloadDocuments=${initialRunOptions.downloadDocuments}`,
+  );
 
   const coordinationIdTrim = String(coordinationId || "").trim();
   if (!coordinationIdTrim) {
@@ -708,7 +825,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
       const mfaReason = String(result.reason || "");
 
       if (mfaReason === "mfa_contact_method_selection_required") {
-        const sess = registerAwaitingMfaSession({
+        const sess = registerAppDetailAwaitingMfaSession({
           coordinationId: coordinationIdTrim,
           userId: user.id,
           browser,
@@ -717,6 +834,9 @@ async function runPepcoApplicationDetailDiscovery(opts) {
           sessionStatus: "awaiting_contact_method",
           continueAction: CONTINUE_ACTION,
           captureApplicationIds: false,
+          bodyUuids,
+          downloadDocumentsOpt,
+          log,
         });
         browser = null;
 
@@ -741,7 +861,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
         mfaReason === "mfa_email_code" || mfaReason === "mfa_email_code_input_required";
 
       if (emailCodeMfa) {
-        const sess = registerAwaitingMfaSession({
+        const sess = registerAppDetailAwaitingMfaSession({
           coordinationId: coordinationIdTrim,
           userId: user.id,
           browser,
@@ -750,6 +870,9 @@ async function runPepcoApplicationDetailDiscovery(opts) {
           sessionStatus: "awaiting_code_input",
           continueAction: CONTINUE_ACTION,
           captureApplicationIds: false,
+          bodyUuids,
+          downloadDocumentsOpt,
+          log,
         });
         browser = null;
 
@@ -768,7 +891,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
         };
       }
 
-      const sess = registerAwaitingMfaSession({
+      const sess = registerAppDetailAwaitingMfaSession({
         coordinationId: coordinationIdTrim,
         userId: user.id,
         browser,
@@ -777,6 +900,9 @@ async function runPepcoApplicationDetailDiscovery(opts) {
         sessionStatus: "awaiting_mfa",
         continueAction: CONTINUE_ACTION,
         captureApplicationIds: false,
+        bodyUuids,
+        downloadDocumentsOpt,
+        log,
       });
       browser = null;
 
@@ -838,6 +964,8 @@ async function runPepcoApplicationDetailDiscovery(opts) {
 
     if (downloadDocuments) {
       log("Document downloads enabled for this run");
+    } else {
+      log("Documents will be listed only");
     }
 
     await waitForPepcoDashboardLanding(page, { logger: log });
@@ -978,6 +1106,13 @@ async function resumePepcoApplicationDetailDiscovery(opts) {
     };
   }
 
+  const resolved = resolveAppDetailResumeOptions(
+    rec,
+    opts.application_uuids,
+    opts.download_documents,
+    log,
+  );
+
   return continueAppDetailAfterMfa({
     supabase: opts.supabase,
     coordinationIdTrim,
@@ -985,8 +1120,8 @@ async function resumePepcoApplicationDetailDiscovery(opts) {
     coordRecord: /** @type {Record<string, unknown>} */ (coordRecord),
     page: rec.page,
     sid,
-    applicationUuidsBody: opts.application_uuids,
-    downloadDocuments: opts.download_documents === true,
+    applicationUuidsBody: resolved.applicationUuids,
+    downloadDocuments: resolved.downloadDocuments,
     log,
     progress,
     introReadinessLog: "Checking PEPCO application API readiness before scrape",
@@ -1149,6 +1284,13 @@ async function submitPepcoCodeAndContinueApplicationDetailDiscovery(opts) {
     };
   }
 
+  const resolved = resolveAppDetailResumeOptions(
+    rec,
+    opts.application_uuids,
+    opts.download_documents,
+    log,
+  );
+
   return continueAppDetailAfterMfa({
     supabase: opts.supabase,
     coordinationIdTrim,
@@ -1156,8 +1298,8 @@ async function submitPepcoCodeAndContinueApplicationDetailDiscovery(opts) {
     coordRecord: /** @type {Record<string, unknown>} */ (coordRecord),
     page: rec.page,
     sid,
-    applicationUuidsBody: opts.application_uuids,
-    downloadDocuments: opts.download_documents === true,
+    applicationUuidsBody: resolved.applicationUuids,
+    downloadDocuments: resolved.downloadDocuments,
     log,
     progress,
   });
@@ -1168,4 +1310,7 @@ module.exports = {
   resumePepcoApplicationDetailDiscovery,
   submitPepcoCodeAndContinueApplicationDetailDiscovery,
   persistPepcoApplicationDetailDiscovery,
+  mergeApplicationDetailsByUuid,
+  buildAppDetailRunOptions,
+  resolveAppDetailResumeOptions,
 };
