@@ -1,11 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { 
-  ArrowLeft, 
-  Rocket, 
-  MapPin, 
-  FileCheck, 
-  BarChart3, 
-  Users, 
+import {
+  Rocket,
+  MapPin,
+  FileCheck,
+  BarChart3,
+  Users,
   Bell,
   CheckCircle2
 } from "lucide-react";
@@ -59,7 +57,7 @@ const itemVariants = {
   show: { opacity: 1, y: 0 },
 };
 
-export function FeaturesStep({ onComplete, onBack }: FeaturesStepProps) {
+export function FeaturesStep({ onComplete: _onComplete, onBack: _onBack }: FeaturesStepProps) {
   return (
     <div className="space-y-6">
       <div className="text-center mb-6">
@@ -97,17 +95,6 @@ export function FeaturesStep({ onComplete, onBack }: FeaturesStepProps) {
           </motion.div>
         ))}
       </motion.div>
-
-      <div className="flex items-center justify-between pt-4">
-        <Button variant="outline" onClick={onBack} className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </Button>
-        <Button onClick={onComplete} className="gap-2 bg-primary hover:bg-primary/90">
-          <Rocket className="w-4 h-4" />
-          Get Started
-        </Button>
-      </div>
     </div>
   );
 }
