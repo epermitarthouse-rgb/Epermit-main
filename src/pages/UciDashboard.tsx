@@ -40,9 +40,12 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import {
+  formatUciUserError,
   getCoordinationDetail,
   initProjectCoordination,
+  isUciSessionExpiredError,
   listProjectCoordination,
   listUciProviders,
   postPepcoDashboardDiscovery,
@@ -53,6 +56,7 @@ import {
   submitPepcoMfaCode,
   transitionCoordination,
   triggerCoordinationSync,
+  UCI_SESSION_EXPIRED_MESSAGE,
 } from "@/lib/uciApi";
 import { getMicrosoftMailboxStatus } from "@/lib/microsoftMailboxApi";
 import { toast } from "sonner";
@@ -258,6 +262,7 @@ const uciManualFormTextClass = "text-foreground dark:text-foreground";
 
 export default function UciDashboard() {
   const { projects, loading: projectsLoading } = useProjects();
+  const { user, session, loading: authLoading } = useAuth();
 
   const [providers, setProviders] = useState<UtilityProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
@@ -379,6 +384,7 @@ export default function UciDashboard() {
   };
 
   const loadProviders = useCallback(async () => {
+    if (authLoading || !user || !session) return;
     setProvidersLoading(true);
     try {
       const res = await listUciProviders();
@@ -391,17 +397,23 @@ export default function UciDashboard() {
         return next;
       });
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to load providers");
+      toast.error(formatUciUserError(e, "Failed to load providers"));
     } finally {
       setProvidersLoading(false);
     }
-  }, []);
+  }, [authLoading, user, session]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      setProvidersLoading(false);
+      return;
+    }
     void loadProviders();
-  }, [loadProviders]);
+  }, [authLoading, user, session, loadProviders]);
 
   const refreshCoordination = useCallback(async () => {
+    if (authLoading || !user || !session) return;
     if (!projectId) {
       setRecords([]);
       return;
@@ -411,16 +423,17 @@ export default function UciDashboard() {
       const res = await listProjectCoordination(projectId);
       setRecords(res.records ?? []);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to load coordination");
+      toast.error(formatUciUserError(e, "Failed to load coordination"));
       setRecords([]);
     } finally {
       setRecordsLoading(false);
     }
-  }, [projectId]);
+  }, [authLoading, user, session, projectId]);
 
   useEffect(() => {
+    if (authLoading || !user || !session) return;
     void refreshCoordination();
-  }, [refreshCoordination]);
+  }, [authLoading, user, session, refreshCoordination]);
 
   /**
    * Project/tenant safety: when the active PermitPilot project changes, any
@@ -957,11 +970,13 @@ export default function UciDashboard() {
         toast.error(msg);
       });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Submit code failed";
+      const msg = formatUciUserError(e, "Submit code failed");
       setPepcoCodeModalTarget("dashboard");
       setPepcoDashboardMfaSessionId(sessionId);
-      reopenPepcoMfaModalWithError(msg);
-      toast.error(msg);
+      reopenPepcoMfaModalWithError(
+        isUciSessionExpiredError(e) ? UCI_SESSION_EXPIRED_MESSAGE : msg,
+      );
+      toast.error(isUciSessionExpiredError(e) ? UCI_SESSION_EXPIRED_MESSAGE : msg);
     } finally {
       pepcoMfaSubmitInFlightRef.current = false;
       setPepcoCodeSubmitBusy(false);
@@ -1242,15 +1257,17 @@ export default function UciDashboard() {
         toast.error(msg);
       });
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error && e.message
-          ? e.message
-          : "PEPCO verification code was rejected or expired. Request a new code and try again.";
+      const msg = formatUciUserError(
+        e,
+        "PEPCO verification code was rejected or expired. Request a new code and try again.",
+      );
       setPepcoCodeModalTarget("application_detail");
       setPepcoAppDetailMfaSessionId(sessionId);
       setPepcoAppDetailPendingSessionId(sessionId);
-      reopenPepcoMfaModalWithError(msg);
-      toast.error(msg);
+      reopenPepcoMfaModalWithError(
+        isUciSessionExpiredError(e) ? UCI_SESSION_EXPIRED_MESSAGE : msg,
+      );
+      toast.error(isUciSessionExpiredError(e) ? UCI_SESSION_EXPIRED_MESSAGE : msg);
     } finally {
       pepcoMfaSubmitInFlightRef.current = false;
       setPepcoCodeSubmitBusy(false);

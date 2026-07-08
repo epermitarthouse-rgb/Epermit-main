@@ -16,13 +16,61 @@ import type {
   UciTransitionResponse,
 } from "@/types/uci";
 
-async function getBearerHeader(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error("Not authenticated");
-  return { Authorization: `Bearer ${token}` };
+export const UCI_SESSION_EXPIRED_MESSAGE =
+  "Your PermitPilot session has expired. Please sign in again.";
+
+const TOKEN_REFRESH_LEAD_SECONDS = 60;
+
+/** Thrown when PermitPilot auth cannot be refreshed for UCI API calls. */
+export class UciSessionExpiredError extends Error {
+  constructor(message = UCI_SESSION_EXPIRED_MESSAGE) {
+    super(message);
+    this.name = "UciSessionExpiredError";
+  }
+}
+
+export function isUciSessionExpiredError(err: unknown): boolean {
+  return err instanceof UciSessionExpiredError;
+}
+
+/** Map API/auth failures to user-safe UCI messages (never raw INVALID_JWT text). */
+export function formatUciUserError(err: unknown, fallback: string): string {
+  if (isUciSessionExpiredError(err)) return UCI_SESSION_EXPIRED_MESSAGE;
+  if (err instanceof Error) {
+    if (err.message === "Invalid or expired authentication token") {
+      return UCI_SESSION_EXPIRED_MESSAGE;
+    }
+    if (err.message === "Not authenticated") {
+      return UCI_SESSION_EXPIRED_MESSAGE;
+    }
+    if (err.message.trim()) return err.message;
+  }
+  return fallback;
+}
+
+/** @returns Unix seconds or null when expiry cannot be determined safely. */
+export function decodeAccessTokenExpiry(accessToken: string): number | null {
+  try {
+    const parts = accessToken.split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { exp?: unknown };
+    return typeof payload.exp === "number" && Number.isFinite(payload.exp)
+      ? payload.exp
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isAccessTokenExpiredOrExpiringSoon(
+  expiresAtSec: number | null | undefined,
+  leadSeconds = TOKEN_REFRESH_LEAD_SECONDS,
+): boolean {
+  if (expiresAtSec == null || !Number.isFinite(expiresAtSec)) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return expiresAtSec <= nowSec + leadSeconds;
 }
 
 async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
@@ -35,169 +83,279 @@ async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
-export async function listUciProviders(): Promise<UciProvidersResponse> {
+function isInvalidJwtResponse(status: number, body: Record<string, unknown>): boolean {
+  return (
+    status === 401 &&
+    (body.error === "INVALID_JWT" ||
+      body.message === "Invalid or expired authentication token")
+  );
+}
+
+function mapUciHttpError(
+  status: number,
+  body: Record<string, unknown>,
+  fallback: string,
+): Error {
+  if (
+    status === 401 &&
+    (isInvalidJwtResponse(status, body) ||
+      body.error === "UNAUTHENTICATED" ||
+      body.message === "Authentication required")
+  ) {
+    return new UciSessionExpiredError();
+  }
+  return new Error(String(body.message || body.error || fallback));
+}
+
+type UciFetchDiagnostics = {
+  endpoint: string;
+  tokenExpiry: number | null;
+  refreshAttempted: boolean;
+  retryAttempted: boolean;
+  finalStatus: number;
+  mfaSensitive?: boolean;
+};
+
+function logUciFetchDiagnostics(diag: UciFetchDiagnostics): void {
+  if (!import.meta.env.DEV) return;
+  console.info("[uci-api]", {
+    endpoint: diag.endpoint,
+    tokenExpiry: diag.tokenExpiry,
+    refreshAttempted: diag.refreshAttempted,
+    retryAttempted: diag.retryAttempted,
+    finalStatus: diag.finalStatus,
+  });
+}
+
+async function refreshSupabaseAccessToken(): Promise<string> {
+  const { data, error } = await supabase.auth.refreshSession();
+  const token = data.session?.access_token;
+  if (error || !token) {
+    throw new UciSessionExpiredError();
+  }
+  return token;
+}
+
+/**
+ * Resolve a valid Supabase access token, proactively refreshing when expired
+ * or expiring within {@link TOKEN_REFRESH_LEAD_SECONDS}.
+ */
+export async function getValidUciAccessToken(): Promise<{
+  token: string;
+  expiry: number | null;
+  refreshAttempted: boolean;
+}> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Not authenticated");
+  }
+
+  const expiry =
+    typeof session.expires_at === "number" && Number.isFinite(session.expires_at)
+      ? session.expires_at
+      : decodeAccessTokenExpiry(session.access_token);
+
+  if (isAccessTokenExpiredOrExpiringSoon(expiry)) {
+    const token = await refreshSupabaseAccessToken();
+    return {
+      token,
+      expiry: decodeAccessTokenExpiry(token),
+      refreshAttempted: true,
+    };
+  }
+
+  return {
+    token: session.access_token,
+    expiry,
+    refreshAttempted: false,
+  };
+}
+
+type UciAuthenticatedFetchOptions = {
+  /** Revalidate token immediately before sensitive MFA/resume calls. */
+  mfaSensitive?: boolean;
+};
+
+/**
+ * Perform an authenticated UCI HTTP request with proactive refresh and a single
+ * INVALID_JWT retry after refreshSession().
+ */
+export async function uciAuthenticatedFetch(
+  path: string,
+  init: RequestInit & { headers?: Record<string, string> } = {},
+  options: UciAuthenticatedFetchOptions = {},
+): Promise<Response> {
   const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
-  const res = await fetch(`${base}/api/uci/providers`, { headers });
+  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+
+  let refreshAttempted = false;
+  let retryAttempted = false;
+
+  const runOnce = async (token: string) => {
+    const headers: Record<string, string> = {
+      ...(init.headers as Record<string, string> | undefined),
+      Authorization: `Bearer ${token}`,
+    };
+    return fetch(url, { ...init, headers });
+  };
+
+  let tokenState = await getValidUciAccessToken();
+  refreshAttempted = tokenState.refreshAttempted;
+
+  let res = await runOnce(tokenState.token);
+
+  if (res.status === 401 && !retryAttempted) {
+    const body = await parseJsonSafe(res.clone());
+    if (isInvalidJwtResponse(res.status, body)) {
+      retryAttempted = true;
+      refreshAttempted = true;
+      try {
+        const refreshedToken = await refreshSupabaseAccessToken();
+        tokenState = {
+          token: refreshedToken,
+          expiry: decodeAccessTokenExpiry(refreshedToken),
+          refreshAttempted: true,
+        };
+        res = await runOnce(refreshedToken);
+      } catch {
+        logUciFetchDiagnostics({
+          endpoint: path,
+          tokenExpiry: tokenState.expiry,
+          refreshAttempted,
+          retryAttempted,
+          finalStatus: 401,
+        });
+        throw new UciSessionExpiredError();
+      }
+    }
+  }
+
+  logUciFetchDiagnostics({
+    endpoint: path,
+    tokenExpiry: tokenState.expiry,
+    refreshAttempted,
+    retryAttempted,
+    finalStatus: res.status,
+    ...(options.mfaSensitive ? { mfaSensitive: true } : {}),
+  });
+
+  return res;
+}
+
+async function uciFetchJson<T>(
+  path: string,
+  init: RequestInit & { headers?: Record<string, string> } = {},
+  errorFallback: string,
+  options?: UciAuthenticatedFetchOptions,
+): Promise<T> {
+  const res = await uciAuthenticatedFetch(path, init, options);
   if (!res.ok) {
     const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to load providers (${res.status})`),
-    );
+    throw mapUciHttpError(res.status, err, errorFallback);
   }
-  return (await res.json()) as UciProvidersResponse;
+  return (await res.json()) as T;
+}
+
+export async function listUciProviders(): Promise<UciProvidersResponse> {
+  return uciFetchJson<UciProvidersResponse>(
+    "/api/uci/providers",
+    {},
+    "Failed to load providers",
+  );
 }
 
 export async function listProjectCoordination(
   projectId: string,
 ): Promise<UciProjectCoordinationResponse> {
-  const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
-  const res = await fetch(
-    `${base}/api/uci/projects/${encodeURIComponent(projectId)}/coordination`,
-    { headers },
+  return uciFetchJson<UciProjectCoordinationResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/coordination`,
+    {},
+    "Failed to load coordination",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to load coordination (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciProjectCoordinationResponse;
 }
 
 export async function initProjectCoordination(
   projectId: string,
   providers: string[],
 ): Promise<UciInitResponse> {
-  const base = getScraperBaseUrl();
-  const headers = { ...(await getBearerHeader()), "Content-Type": "application/json" };
-  const res = await fetch(
-    `${base}/api/uci/projects/${encodeURIComponent(projectId)}/coordination/init`,
+  return uciFetchJson<UciInitResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/coordination/init`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ providers }),
     },
+    "Failed to initialize coordination",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to initialize coordination (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciInitResponse;
 }
 
 export async function getCoordinationDetail(
   coordinationId: string,
 ): Promise<UciRecordDetailResponse> {
-  const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}`,
-    { headers },
+  return uciFetchJson<UciRecordDetailResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}`,
+    {},
+    "Failed to load coordination detail",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to load coordination detail (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciRecordDetailResponse;
 }
 
 export async function transitionCoordination(
   coordinationId: string,
   payload: { to_stage: number; to_state: LifecycleState; reason?: string },
 ): Promise<UciTransitionResponse> {
-  const base = getScraperBaseUrl();
-  const headers = { ...(await getBearerHeader()), "Content-Type": "application/json" };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/transition`,
+  return uciFetchJson<UciTransitionResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/transition`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
+    "Failed to update stage",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to update stage (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciTransitionResponse;
 }
 
 export async function listCoordinationApplications(
   coordinationId: string,
 ): Promise<UciApplicationsListResponse> {
-  const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/applications`,
-    { headers },
+  return uciFetchJson<UciApplicationsListResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/applications`,
+    {},
+    "Failed to load applications",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to load applications (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciApplicationsListResponse;
 }
 
 export async function postPepcoDiscovery(
   coordinationId: string,
   body?: { credential_id?: string; headed?: boolean; auto_email_mfa?: boolean },
 ): Promise<UciDiscoveryResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco`,
+  return uciFetchJson<UciDiscoveryResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
     },
+    "PEPCO discovery failed",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `PEPCO discovery failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciDiscoveryResponse;
 }
 
 export async function resumePepcoDiscovery(
   coordinationId: string,
   body: { session_id: string },
 ): Promise<UciDiscoveryResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/resume`,
+  return uciFetchJson<UciDiscoveryResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/resume`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     },
+    "PEPCO discovery resume failed",
+    { mfaSensitive: true },
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `PEPCO discovery resume failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciDiscoveryResponse;
 }
 
 export async function postPepcoDashboardDiscovery(
@@ -209,98 +367,60 @@ export async function postPepcoDashboardDiscovery(
     capture_application_ids?: boolean;
   },
 ): Promise<UciPepcoDashboardDiscoveryResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/dashboard`,
+  return uciFetchJson<UciPepcoDashboardDiscoveryResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/dashboard`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
     },
+    "PEPCO dashboard discovery failed",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `PEPCO dashboard discovery failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciPepcoDashboardDiscoveryResponse;
 }
 
 export async function triggerCoordinationSync(
   coordinationId: string,
   body?: { provider_slug?: string },
 ): Promise<UciPortalSyncResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/sync`,
+  return uciFetchJson<UciPortalSyncResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/sync`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
     },
+    "Coordination sync failed",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Coordination sync failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciPortalSyncResponse;
 }
 
 export async function listCoordinationCommunications(
   coordinationId: string,
   params?: { limit?: number; offset?: number },
 ): Promise<UciCommunicationsListResponse> {
-  const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
   const qs = new URLSearchParams();
   if (params?.limit != null) qs.set("limit", String(params.limit));
   if (params?.offset != null) qs.set("offset", String(params.offset));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/communications${suffix}`,
-    { headers },
+  return uciFetchJson<UciCommunicationsListResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/communications${suffix}`,
+    {},
+    "Failed to load communications",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to load communications (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciCommunicationsListResponse;
 }
 
 export async function listCoordinationMilestones(
   coordinationId: string,
   params?: { limit?: number; offset?: number },
 ): Promise<UciMilestonesListResponse> {
-  const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
   const qs = new URLSearchParams();
   if (params?.limit != null) qs.set("limit", String(params.limit));
   if (params?.offset != null) qs.set("offset", String(params.offset));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/milestones${suffix}`,
-    { headers },
+  return uciFetchJson<UciMilestonesListResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/milestones${suffix}`,
+    {},
+    "Failed to load milestones",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `Failed to load milestones (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciMilestonesListResponse;
 }
 
 export async function postPepcoApplicationDetailDiscovery(
@@ -313,26 +433,15 @@ export async function postPepcoApplicationDetailDiscovery(
     download_documents?: boolean;
   },
 ): Promise<UciPepcoApplicationDetailDiscoveryResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details`,
+  return uciFetchJson<UciPepcoApplicationDetailDiscoveryResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
     },
+    "PEPCO application detail discovery failed",
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `PEPCO application detail discovery failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciPepcoApplicationDetailDiscoveryResponse;
 }
 
 export async function resumePepcoApplicationDetailDiscovery(
@@ -344,26 +453,16 @@ export async function resumePepcoApplicationDetailDiscovery(
     download_documents?: boolean;
   },
 ): Promise<UciPepcoApplicationDetailDiscoveryResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/resume`,
+  return uciFetchJson<UciPepcoApplicationDetailDiscoveryResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/resume`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     },
+    "PEPCO application detail resume failed",
+    { mfaSensitive: true },
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `PEPCO application detail resume failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciPepcoApplicationDetailDiscoveryResponse;
 }
 
 /** Build the authenticated inline-view URL for a scraped PEPCO PDF document. */
@@ -381,7 +480,8 @@ export type PepcoDocumentViewFailureReason =
   | "empty_file"
   | "not_pdf"
   | "popup_blocked"
-  | "copy_unavailable";
+  | "copy_unavailable"
+  | "session_expired";
 
 export const PEPCO_DOCUMENT_COPY_UNAVAILABLE_MESSAGE =
   "The stored document copy is no longer available. Refresh project details to save it again.";
@@ -399,6 +499,9 @@ export function pepcoDocumentViewErrorMessage(result: PepcoDocumentViewResult): 
   if (result.reason === "copy_unavailable") {
     return PEPCO_DOCUMENT_COPY_UNAVAILABLE_MESSAGE;
   }
+  if (result.reason === "session_expired") {
+    return UCI_SESSION_EXPIRED_MESSAGE;
+  }
   return "The PEPCO document could not be opened for viewing.";
 }
 
@@ -406,10 +509,17 @@ export function pepcoDocumentDownloadErrorMessage(
   httpStatus: number,
   body: Record<string, unknown>,
 ): string {
+  if (httpStatus === 401 && isInvalidJwtResponse(httpStatus, body)) {
+    return UCI_SESSION_EXPIRED_MESSAGE;
+  }
   if (httpStatus === 410 && body.error === "DOCUMENT_COPY_UNAVAILABLE") {
     return String(body.message || PEPCO_DOCUMENT_COPY_UNAVAILABLE_MESSAGE);
   }
-  return String(body.message || body.error || `HTTP ${httpStatus}`);
+  const raw = String(body.message || body.error || `HTTP ${httpStatus}`);
+  if (raw === "Invalid or expired authentication token") {
+    return UCI_SESSION_EXPIRED_MESSAGE;
+  }
+  return raw;
 }
 
 /**
@@ -428,18 +538,16 @@ export async function openPepcoApplicationDocumentView(
   }
 
   try {
-    const headers = await getBearerHeader();
-    const url = buildPepcoApplicationDocumentViewUrl(
-      coordinationId,
-      applicationUuid,
-      documentIndex,
-    );
-    const res = await fetch(url, { headers });
+    const path = `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/${encodeURIComponent(applicationUuid)}/documents/${documentIndex}/view`;
+    const res = await uciAuthenticatedFetch(path, {});
     if (!res.ok) {
       previewWindow.close();
       const err = await parseJsonSafe(res);
       if (res.status === 410 && err.error === "DOCUMENT_COPY_UNAVAILABLE") {
         return { ok: false, reason: "copy_unavailable" };
+      }
+      if (res.status === 401 && isInvalidJwtResponse(res.status, err)) {
+        return { ok: false, reason: "session_expired" };
       }
       return { ok: false, reason: "api_error" };
     }
@@ -461,11 +569,14 @@ export async function openPepcoApplicationDocumentView(
     previewWindow.location.href = objectUrl;
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     return { ok: true };
-  } catch {
+  } catch (err) {
     try {
       previewWindow.close();
     } catch {
       // Ignore close failures on an already-closed preview tab.
+    }
+    if (isUciSessionExpiredError(err)) {
+      return { ok: false, reason: "session_expired" };
     }
     return { ok: false, reason: "api_error" };
   }
@@ -478,10 +589,8 @@ export async function downloadPepcoApplicationDocument(
   documentIndex: number,
   suggestedFileName?: string | null,
 ): Promise<void> {
-  const base = getScraperBaseUrl();
-  const headers = await getBearerHeader();
-  const url = `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/${encodeURIComponent(applicationUuid)}/documents/${documentIndex}/download`;
-  const res = await fetch(url, { headers });
+  const path = `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/application-details/${encodeURIComponent(applicationUuid)}/documents/${documentIndex}/download`;
+  const res = await uciAuthenticatedFetch(path, {});
   if (!res.ok) {
     const err = await parseJsonSafe(res);
     throw new Error(pepcoDocumentDownloadErrorMessage(res.status, err));
@@ -516,24 +625,14 @@ export async function submitPepcoMfaCode(
     capture_application_ids?: boolean;
   },
 ): Promise<UciPepcoDashboardDiscoveryResponse> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await getBearerHeader()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(
-    `${base}/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/submit-code`,
+  return uciFetchJson<UciPepcoDashboardDiscoveryResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/discovery/pepco/submit-code`,
     {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     },
+    "PEPCO submit code failed",
+    { mfaSensitive: true },
   );
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(
-      String(err.message || err.error || `PEPCO submit code failed (${res.status})`),
-    );
-  }
-  return (await res.json()) as UciPepcoDashboardDiscoveryResponse;
 }
