@@ -380,7 +380,11 @@ export type PepcoDocumentViewFailureReason =
   | "api_error"
   | "empty_file"
   | "not_pdf"
-  | "popup_blocked";
+  | "popup_blocked"
+  | "copy_unavailable";
+
+export const PEPCO_DOCUMENT_COPY_UNAVAILABLE_MESSAGE =
+  "The stored document copy is no longer available. Refresh project details to save it again.";
 
 export type PepcoDocumentViewResult =
   | { ok: true }
@@ -392,7 +396,20 @@ export function pepcoDocumentViewErrorMessage(result: PepcoDocumentViewResult): 
   if (result.reason === "popup_blocked") {
     return "Your browser blocked the preview tab. Allow pop-ups for PermitPilot and try again.";
   }
+  if (result.reason === "copy_unavailable") {
+    return PEPCO_DOCUMENT_COPY_UNAVAILABLE_MESSAGE;
+  }
   return "The PEPCO document could not be opened for viewing.";
+}
+
+export function pepcoDocumentDownloadErrorMessage(
+  httpStatus: number,
+  body: Record<string, unknown>,
+): string {
+  if (httpStatus === 410 && body.error === "DOCUMENT_COPY_UNAVAILABLE") {
+    return String(body.message || PEPCO_DOCUMENT_COPY_UNAVAILABLE_MESSAGE);
+  }
+  return String(body.message || body.error || `HTTP ${httpStatus}`);
 }
 
 /**
@@ -420,6 +437,10 @@ export async function openPepcoApplicationDocumentView(
     const res = await fetch(url, { headers });
     if (!res.ok) {
       previewWindow.close();
+      const err = await parseJsonSafe(res);
+      if (res.status === 410 && err.error === "DOCUMENT_COPY_UNAVAILABLE") {
+        return { ok: false, reason: "copy_unavailable" };
+      }
       return { ok: false, reason: "api_error" };
     }
 
@@ -463,8 +484,7 @@ export async function downloadPepcoApplicationDocument(
   const res = await fetch(url, { headers });
   if (!res.ok) {
     const err = await parseJsonSafe(res);
-    const detail = String(err.message || err.error || `HTTP ${res.status}`);
-    throw new Error(detail);
+    throw new Error(pepcoDocumentDownloadErrorMessage(res.status, err));
   }
   const blob = await res.blob();
   if (!blob.size) {

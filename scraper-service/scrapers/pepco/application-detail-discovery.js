@@ -7,8 +7,14 @@
 
 const path = require("path");
 const fs = require("fs");
+const {
+  uploadBufferToSupabaseStorage,
+  contentTypeFromStoragePath,
+  sanitizeStorageErrorForLog,
+} = require("../../shared/supabase-storage-upload.js");
 
 const SCRAPER_SERVICE_ROOT = path.join(__dirname, "..", "..");
+const PEPCO_DOCUMENTS_STORAGE_BUCKET = "project-documents";
 const PEPCO_EUAPI_BASE = "https://secure.pepco.com/.euapi/nbp";
 const PEPCO_GET_SESSION_URL =
   "https://secure.pepco.com/api/Services/MyAccountService.svc/GetSession";
@@ -475,7 +481,7 @@ function resolvePepcoStoredDocumentPath(opts) {
     applicationUuid: opts.applicationUuid,
   });
   const root = path.resolve(getPepcoDocStorageRoot());
-  const safeName = path.basename(fileName.replace(/[/\\?%*:|"<>]/g, "_"));
+  const safeName = sanitizePepcoFileName(fileName);
   const resolved = path.resolve(dir, safeName);
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
     return null;
@@ -484,6 +490,52 @@ function resolvePepcoStoredDocumentPath(opts) {
     return null;
   }
   return resolved;
+}
+
+/**
+ * @param {string | undefined | null} value
+ */
+function sanitizePepcoStorageSegment(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+/**
+ * @param {string | undefined | null} fileName
+ */
+function sanitizePepcoFileName(fileName) {
+  return path
+    .basename(String(fileName || "").replace(/[/\\?%*:|"<>]/g, "_"))
+    .replace(/\s+/g, "_");
+}
+
+/**
+ * Build the durable Supabase Storage key for a PEPCO document.
+ *
+ * @param {{
+ *   projectId: string;
+ *   coordinationId: string;
+ *   applicationUuid: string;
+ *   fileName: string;
+ * }} opts
+ * @returns {string | null}
+ */
+function buildPepcoSupabaseStoragePath(opts) {
+  const projectId = sanitizePepcoStorageSegment(opts.projectId);
+  const coordinationId = sanitizePepcoStorageSegment(opts.coordinationId);
+  const applicationUuid = sanitizePepcoStorageSegment(opts.applicationUuid);
+  const safeFileName = sanitizePepcoFileName(opts.fileName);
+  if (!projectId || !coordinationId || !applicationUuid || !safeFileName) return null;
+  return [
+    "uci",
+    "unconfigured",
+    projectId,
+    coordinationId,
+    "pepco",
+    applicationUuid,
+    safeFileName,
+  ].join("/");
 }
 
 /**
@@ -668,7 +720,13 @@ function parseDocumentsResponse(documentsBody) {
  * @param {import("playwright").APIRequestContext} requestCtx
  * @param {string} applicationUuid
  * @param {Array<{ documentName?: string | null }>} documents
- * @param {{ coordinationId?: string, logger?: (m: string) => void, bearerToken?: string | null }} opts
+ * @param {{
+ *   coordinationId?: string;
+ *   projectId?: string;
+ *   supabase?: import("@supabase/supabase-js").SupabaseClient;
+ *   logger?: (m: string) => void;
+ *   bearerToken?: string | null;
+ * }} opts
  */
 async function downloadPepcoDocuments(requestCtx, applicationUuid, documents, opts = {}) {
   const logger = opts.logger;
@@ -717,18 +775,74 @@ async function downloadPepcoDocuments(requestCtx, applicationUuid, documents, op
         coordinationId: opts.coordinationId,
         applicationUuid,
       });
-      const localPath = path.join(dir, fileName.replace(/[/\\?%*:|"<>]/g, "_"));
+      const safeFileName = sanitizePepcoFileName(fileName);
+      const localPath = path.join(dir, safeFileName);
       await fs.promises.writeFile(localPath, buffer);
 
-      downloadedFiles.push({
+      /** @type {Record<string, unknown>} */
+      const fileEntry = {
         documentName,
-        fileName,
+        fileName: safeFileName,
         status: "saved",
         sizeBytes: buffer.length,
         localPath,
         contentDisposition,
         detectedPdf: isPdf,
+      };
+
+      const projectId = String(opts.projectId || "").trim();
+      const coordinationId = String(opts.coordinationId || "").trim();
+      const supabase = opts.supabase;
+      const storagePath = buildPepcoSupabaseStoragePath({
+        projectId,
+        coordinationId,
+        applicationUuid,
+        fileName: safeFileName,
       });
+
+      if (supabase && storagePath) {
+        const contentType = isPdf ? "application/pdf" : contentTypeFromStoragePath(safeFileName);
+        const uploadResult = await uploadBufferToSupabaseStorage({
+          supabase,
+          bucket: PEPCO_DOCUMENTS_STORAGE_BUCKET,
+          storagePath,
+          body: buffer,
+          contentType,
+          upsert: true,
+        });
+
+        if (uploadResult.ok) {
+          fileEntry.storageBucket = uploadResult.bucket;
+          fileEntry.storagePath = uploadResult.storagePath;
+          fileEntry.storageStatus = "stored";
+          fileEntry.storageUploadedAt = new Date().toISOString();
+          fileEntry.contentType = uploadResult.contentType;
+          logStep(
+            logger,
+            `Stored document ${documentName} in Supabase (${uploadResult.size} bytes)`,
+          );
+        } else {
+          fileEntry.storageStatus = "failed";
+          fileEntry.storageError = sanitizeStorageErrorForLog(uploadResult.errorMessage);
+          console.warn("[pepco-docs] Supabase upload failed", {
+            coordinationId,
+            applicationUuid,
+            fileName: safeFileName,
+            errorCode: uploadResult.errorCode,
+            errorMessage: fileEntry.storageError,
+          });
+        }
+      } else if (supabase) {
+        fileEntry.storageStatus = "failed";
+        fileEntry.storageError = "invalid_storage_path";
+        console.warn("[pepco-docs] Supabase upload skipped (invalid storage path)", {
+          coordinationId,
+          applicationUuid,
+          fileName: safeFileName,
+        });
+      }
+
+      downloadedFiles.push(fileEntry);
       logStep(logger, `Saved document ${documentName} (${buffer.length} bytes)`);
     } catch (e) {
       const msg = e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500);
@@ -1180,6 +1294,8 @@ async function listPepcoApplicationsFromApi(page, opts = {}) {
  *   logger?: (m: string) => void;
  *   downloadDocuments?: boolean;
  *   coordinationId?: string;
+ *   projectId?: string;
+ *   supabase?: import("@supabase/supabase-js").SupabaseClient;
  *   bearerToken?: string | null;
  * }} [options]
  */
@@ -1289,11 +1405,18 @@ async function scrapePepcoApplicationDetails(page, applicationUuid, options = {}
 
   if (downloadDocuments && Array.isArray(documents) && documents.length > 0) {
     try {
-      const dl = await downloadPepcoDocuments(page.request, uuid, /** @type {Array<{ documentName?: string | null }>} */ (documents), {
-        coordinationId: options.coordinationId,
-        logger,
-        bearerToken,
-      });
+      const dl = await downloadPepcoDocuments(
+        page.request,
+        uuid,
+        /** @type {Array<{ documentName?: string | null }>} */ (documents),
+        {
+          coordinationId: options.coordinationId,
+          projectId: options.projectId,
+          supabase: options.supabase,
+          logger,
+          bearerToken,
+        },
+      );
       downloadedFiles = dl.downloadedFiles;
       downloadSectionErrors.push(...dl.downloadErrors);
     } catch (e) {
@@ -1343,8 +1466,13 @@ async function scrapePepcoApplicationDetails(page, applicationUuid, options = {}
 }
 
 module.exports = {
+  PEPCO_DOCUMENTS_STORAGE_BUCKET,
   getPepcoDocStorageRoot,
   resolvePepcoStoredDocumentPath,
+  sanitizePepcoFileName,
+  sanitizePepcoStorageSegment,
+  buildPepcoSupabaseStoragePath,
+  downloadPepcoDocuments,
   PEPCO_EUAPI_BASE,
   PEPCO_GET_SESSION_URL,
   PEPCO_API_HEADERS,

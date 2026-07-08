@@ -37,6 +37,8 @@ import {
   listElectricServiceLoads,
   normalizePepcoAppDetailProgress,
   parsePepcoMessageBodySegments,
+  pepcoDocumentActionsEnabled,
+  resolvePepcoDocumentCopyStatus,
   sortMessagesNewestFirst,
   sortStatusChangesNewestFirst,
 } from "@/lib/pepcoApplicationDetailUi";
@@ -629,8 +631,12 @@ function DocumentsTab({
         documentIndex,
         suggestedFileName,
       );
-    } catch {
-      toast.error("The PEPCO document could not be downloaded.");
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message.includes("no longer available")
+          ? err.message
+          : "The PEPCO document could not be downloaded.";
+      toast.error(message);
     } finally {
       setDownloadingKey(null);
     }
@@ -668,14 +674,16 @@ function DocumentsTab({
             <TableBody>
               {documents.map((doc, idx) => {
                 const dl = findDownloadForDocument(doc, downloaded);
-                const isDownloaded = dl?.status === "saved";
+                const copyStatus = resolvePepcoDocumentCopyStatus(doc, downloaded);
+                const actionsEnabled = pepcoDocumentActionsEnabled(copyStatus);
                 const docName = doc.documentName ?? "—";
                 const downloadKey = `${app.applicationUuid}-${idx}`;
                 const busy = downloadingKey === downloadKey;
                 const viewing = viewingKey === downloadKey;
                 const fileLabel = dl?.fileName ?? doc.documentName ?? "";
-                const isPdf = /\.pdf$/i.test(fileLabel);
-                const canView = isDownloaded && isPdf;
+                const isPdf = dl?.detectedPdf === true || /\.pdf$/i.test(fileLabel);
+                const canView = actionsEnabled && isPdf;
+                const showSize = copyStatus === "stored" || copyStatus === "local_only" || copyStatus === "storage_failed";
                 return (
                   <TableRow key={`${doc.documentName ?? idx}`} className={idx % 2 === 1 ? "bg-muted/20" : undefined}>
                     <TableCell className={cn(tableCellClass, "max-w-[320px] align-top")}>
@@ -691,7 +699,7 @@ function DocumentsTab({
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      {isDownloaded ? (
+                      {showSize ? (
                         <p className={cn("mt-1 text-[11px]", mutedClass)}>{formatFileSize(dl?.sizeBytes)}</p>
                       ) : null}
                     </TableCell>
@@ -702,16 +710,20 @@ function DocumentsTab({
                       {formatWhen(doc.documentUploadDateTime ?? null)}
                     </TableCell>
                     <TableCell className={cn(tableCellClass, "align-top")}>
-                      {isDownloaded ? (
-                        <Badge variant="ai">Downloaded</Badge>
-                      ) : dl?.status === "failed" ? (
+                      {copyStatus === "stored" ? (
+                        <Badge variant="ai">Stored</Badge>
+                      ) : copyStatus === "local_only" ? (
+                        <Badge variant="outline">Downloaded locally</Badge>
+                      ) : copyStatus === "storage_failed" ? (
+                        <Badge variant="destructive">Storage failed</Badge>
+                      ) : copyStatus === "failed" ? (
                         <Badge variant="destructive">Failed</Badge>
                       ) : (
                         <Badge variant="secondary">Listed only</Badge>
                       )}
                     </TableCell>
                     <TableCell className={cn(tableCellClass, "align-top")}>
-                      {isDownloaded ? (
+                      {actionsEnabled ? (
                         <div className="flex flex-wrap gap-1.5">
                           {canView ? (
                             <Button
@@ -749,9 +761,16 @@ function DocumentsTab({
                           </Button>
                         </div>
                       ) : (
-                        <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" disabled>
-                          Not downloaded
-                        </Button>
+                        <div className="space-y-1">
+                          <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" disabled>
+                            Not downloaded
+                          </Button>
+                          {copyStatus === "listed_only" ? (
+                            <p className={cn("text-[10px] leading-snug", mutedClass)}>
+                              Run a project scrape with document download enabled.
+                            </p>
+                          ) : null}
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>

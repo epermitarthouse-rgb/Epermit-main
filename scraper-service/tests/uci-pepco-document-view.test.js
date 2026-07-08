@@ -23,6 +23,7 @@ const APP_UUID = "app-view-test-uuid";
 const PROJECT_ID = "project-view-test";
 const USER_ALLOWED = "user-allowed";
 const USER_DENIED = "user-denied";
+const STORED_PDF_PATH = `uci/unconfigured/${PROJECT_ID}/${COORD_ID}/pepco/${APP_UUID}/plan.pdf`;
 
 /** @type {Record<string, unknown>} */
 const pepcoRecord = {
@@ -56,11 +57,13 @@ const pepcoRecord = {
 };
 
 /**
- * @param {{ record?: Record<string, unknown> | null, hasAccess?: boolean }} opts
+ * @param {{ record?: Record<string, unknown> | null, hasAccess?: boolean, storagePdf?: Buffer | null }} opts
  */
 function makeSupabaseMock(opts = {}) {
   const record = "record" in opts ? opts.record : pepcoRecord;
   const hasAccess = opts.hasAccess !== false;
+  const storagePdf = opts.storagePdf ?? null;
+
   return {
     auth: {
       getUser: async (token) => {
@@ -84,6 +87,22 @@ function makeSupabaseMock(opts = {}) {
           };
         },
       };
+    },
+    storage: {
+      from(bucket) {
+        assert.equal(bucket, "project-documents");
+        return {
+          download: async (storagePath) => {
+            if (storagePdf && storagePath === STORED_PDF_PATH) {
+              return {
+                data: new Blob([storagePdf], { type: "application/pdf" }),
+                error: null,
+              };
+            }
+            return { data: null, error: { message: "not_found" } };
+          },
+        };
+      },
     },
     async rpc(name, args) {
       if (name === "has_project_access") {
@@ -352,16 +371,16 @@ describe("PEPCO document HTTP routes", () => {
     }
   });
 
-  it("view route returns 404 when the file is missing on disk", async () => {
+  it("view route returns 410 when the file is missing on disk and no Supabase copy exists", async () => {
     if (pdfPath && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
     try {
       const res = await fetch(
         `${baseUrl}/api/uci/coordination/${COORD_ID}/discovery/pepco/application-details/${APP_UUID}/documents/0/view`,
         { headers: { Authorization: "Bearer test-token" } },
       );
-      assert.equal(res.status, 404);
+      assert.equal(res.status, 410);
       const json = await res.json();
-      assert.equal(json.error, "DOCUMENT_FILE_MISSING");
+      assert.equal(json.error, "DOCUMENT_COPY_UNAVAILABLE");
       assert.ok(!JSON.stringify(json).includes("debug"));
     } finally {
       if (pdfPath) {
@@ -405,5 +424,119 @@ describe("PEPCO document HTTP routes", () => {
     assert.equal(res.status, 401);
     const json = await res.json();
     assert.equal(json.error, "UNAUTHENTICATED");
+  });
+});
+
+describe("PEPCO document Supabase-backed HTTP routes", () => {
+  /** @type {http.Server | null} */
+  let server = null;
+  /** @type {string} */
+  let baseUrl = "";
+  const storagePdf = Buffer.from("%PDF-1.4 supabase-backed");
+
+  /** @type {Record<string, unknown>} */
+  const storedRecord = {
+    id: COORD_ID,
+    project_id: PROJECT_ID,
+    utility_providers: { slug: "pepco" },
+    metadata: {
+      pepco_application_detail_discovery: {
+        applications: [
+          {
+            applicationUuid: APP_UUID,
+            documents: [{ documentName: "plan.pdf" }],
+            downloadedFiles: [
+              {
+                documentName: "plan.pdf",
+                fileName: "plan.pdf",
+                status: "saved",
+                detectedPdf: true,
+                storageStatus: "stored",
+                storageBucket: "project-documents",
+                storagePath: STORED_PDF_PATH,
+                contentType: "application/pdf",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  };
+
+  before(async () => {
+    const supabase = makeSupabaseMock({ record: storedRecord, storagePdf });
+    const app = express();
+    app.use("/api/uci", createUciRouter({ supabase }));
+
+    server = http.createServer(app);
+    await new Promise((resolve) => server.listen(0, resolve));
+    const addr = server.address();
+    assert.ok(addr && typeof addr === "object");
+    baseUrl = `http://127.0.0.1:${addr.port}`;
+  });
+
+  after(async () => {
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close((err) => (err ? reject(err) : resolve()));
+      });
+    }
+  });
+
+  it("view route streams from Supabase without a local file", async () => {
+    const localPath = resolvePepcoStoredDocumentPath({
+      coordinationId: COORD_ID,
+      applicationUuid: APP_UUID,
+      fileName: "plan.pdf",
+    });
+    assert.ok(localPath);
+    if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+
+    const res = await fetch(
+      `${baseUrl}/api/uci/coordination/${COORD_ID}/discovery/pepco/application-details/${APP_UUID}/documents/0/view`,
+      { headers: { Authorization: "Bearer test-token" } },
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "application/pdf");
+    const body = await res.text();
+    assert.ok(body.startsWith("%PDF"));
+    assert.ok(!body.includes("debug"));
+  });
+
+  it("download route streams from Supabase without a local file", async () => {
+    const res = await fetch(
+      `${baseUrl}/api/uci/coordination/${COORD_ID}/discovery/pepco/application-details/${APP_UUID}/documents/0/download`,
+      { headers: { Authorization: "Bearer test-token" } },
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-disposition"), 'attachment; filename="plan.pdf"');
+    const body = await res.text();
+    assert.ok(body.startsWith("%PDF"));
+  });
+
+  it("returns 410 when Supabase object is missing and no local fallback exists", async () => {
+    const supabase = makeSupabaseMock({ record: storedRecord, storagePdf: null });
+    const app = express();
+    app.use("/api/uci", createUciRouter({ supabase }));
+
+    const missingServer = http.createServer(app);
+    await new Promise((resolve) => missingServer.listen(0, resolve));
+    const addr = missingServer.address();
+    assert.ok(addr && typeof addr === "object");
+    const missingUrl = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const res = await fetch(
+        `${missingUrl}/api/uci/coordination/${COORD_ID}/discovery/pepco/application-details/${APP_UUID}/documents/0/view`,
+        { headers: { Authorization: "Bearer test-token" } },
+      );
+      assert.equal(res.status, 410);
+      const json = await res.json();
+      assert.equal(json.error, "DOCUMENT_COPY_UNAVAILABLE");
+    } finally {
+      await new Promise((resolve, reject) => {
+        missingServer.close((err) => (err ? reject(err) : resolve()));
+      });
+    }
   });
 });

@@ -384,7 +384,7 @@ async function persistPepcoApplicationDetailDiscovery(
 /**
  * @param {import("playwright").Page} page
  * @param {string[]} uuids
- * @param {{ downloadDocuments?: boolean, coordinationId?: string, log: (m: string) => void }} opts
+ * @param {{ downloadDocuments?: boolean, coordinationId?: string, projectId?: string, supabase?: import("@supabase/supabase-js").SupabaseClient, log: (m: string) => void, bearerToken?: string }} opts
  */
 async function scrapeAllApplicationDetails(page, uuids, opts) {
   /** @type {Array<Record<string, unknown>>} */
@@ -398,6 +398,8 @@ async function scrapeAllApplicationDetails(page, uuids, opts) {
       logger: opts.log,
       downloadDocuments: opts.downloadDocuments === true,
       coordinationId: opts.coordinationId,
+      projectId: opts.projectId,
+      supabase: opts.supabase,
       bearerToken: opts.bearerToken,
     });
     applications.push(detail);
@@ -486,6 +488,8 @@ async function runApplicationDetailScrapeOnPage(opts) {
   const applications = await scrapeAllApplicationDetails(page, uuids, {
     downloadDocuments,
     coordinationId: coordinationIdTrim,
+    projectId,
+    supabase,
     log,
     bearerToken,
   });
@@ -1034,6 +1038,8 @@ async function runPepcoApplicationDetailDiscovery(opts) {
     const applications = await scrapeAllApplicationDetails(page, uuids, {
       downloadDocuments,
       coordinationId: coordinationIdTrim,
+      projectId,
+      supabase,
       log,
       bearerToken: tokenOut.token,
     });

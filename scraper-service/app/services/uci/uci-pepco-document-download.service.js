@@ -10,6 +10,7 @@ const {
   getPepcoDocStorageRoot,
   resolvePepcoStoredDocumentPath,
 } = require("../../../scrapers/pepco/application-detail-discovery.js");
+const { downloadFromSupabaseStorage } = require("../../../shared/supabase-storage-upload.js");
 
 /**
  * Remove absolute filesystem paths from PEPCO download metadata before API responses.
@@ -74,7 +75,7 @@ function sanitizeCoordinationDetailBundleForApi(detail) {
 }
 
 /**
- * Resolve a downloaded PEPCO document on disk for authorized streaming.
+ * Resolve a downloaded PEPCO document for authorized streaming.
  *
  * @param {{
  *   supabase: import("@supabase/supabase-js").SupabaseClient;
@@ -83,6 +84,16 @@ function sanitizeCoordinationDetailBundleForApi(detail) {
  *   applicationUuid: string;
  *   documentIndex: number;
  * }} opts
+ * @returns {Promise<{
+ *   source: "supabase" | "local";
+ *   filename: string;
+ *   downloadName: string;
+ *   contentType: string;
+ *   isPdf: boolean;
+ *   storageBucket: string | null;
+ *   storagePath: string | null;
+ *   localFilePath: string | null;
+ * }>}
  */
 async function resolvePepcoDownloadedDocumentFile(opts) {
   const coordinationId = String(opts.coordinationId || "").trim();
@@ -179,48 +190,76 @@ async function resolvePepcoDownloadedDocumentFile(opts) {
     throw err;
   }
 
-  const savedRec = /** @type {{ fileName?: unknown, documentName?: unknown, detectedPdf?: unknown }} */ (
-    saved
-  );
+  const savedRec = /** @type {{
+    fileName?: unknown;
+    documentName?: unknown;
+    detectedPdf?: unknown;
+    contentType?: unknown;
+    storageStatus?: unknown;
+    storageBucket?: unknown;
+    storagePath?: unknown;
+  }} */ (saved);
   const fileName = String(savedRec.fileName || savedRec.documentName || documentName).trim();
+  const isPdf = savedRec.detectedPdf === true || /\.pdf$/i.test(fileName);
+  const downloadName = path.basename(fileName);
+  const defaultContentType = isPdf ? "application/pdf" : "application/octet-stream";
+  const savedContentType =
+    typeof savedRec.contentType === "string" && savedRec.contentType.trim()
+      ? savedRec.contentType.trim()
+      : defaultContentType;
+
+  const storageStatus = String(savedRec.storageStatus || "");
+  const storageBucket = String(savedRec.storageBucket || "").trim();
+  const storagePath = String(savedRec.storagePath || "").trim();
+
+  if (storageStatus === "stored" && storageBucket && storagePath) {
+    return {
+      source: "supabase",
+      filename: downloadName,
+      downloadName,
+      contentType: savedContentType,
+      isPdf,
+      storageBucket,
+      storagePath,
+      localFilePath: null,
+    };
+  }
+
   const resolvedPath = resolvePepcoStoredDocumentPath({
     coordinationId,
     applicationUuid,
     fileName,
   });
 
-  if (!resolvedPath) {
-    const err = new Error("Download path could not be resolved safely");
-    err.statusCode = 404;
-    err.code = "DOCUMENT_PATH_INVALID";
-    throw err;
+  if (resolvedPath) {
+    const root = path.resolve(getPepcoDocStorageRoot());
+    const normalized = path.resolve(resolvedPath);
+    if (
+      normalized.startsWith(root + path.sep) &&
+      fs.existsSync(normalized) &&
+      fs.statSync(normalized).isFile()
+    ) {
+      const localContentType =
+        isPdf && !/pdf/i.test(savedContentType) ? "application/pdf" : savedContentType;
+      return {
+        source: "local",
+        filename: downloadName,
+        downloadName,
+        contentType: localContentType,
+        isPdf,
+        storageBucket: null,
+        storagePath: null,
+        localFilePath: normalized,
+      };
+    }
   }
 
-  const root = path.resolve(getPepcoDocStorageRoot());
-  const normalized = path.resolve(resolvedPath);
-  if (!normalized.startsWith(root + path.sep)) {
-    const err = new Error("Download path is outside the allowed PEPCO document root");
-    err.statusCode = 403;
-    err.code = "DOCUMENT_PATH_FORBIDDEN";
-    throw err;
-  }
-
-  if (!fs.existsSync(normalized) || !fs.statSync(normalized).isFile()) {
-    const err = new Error("Downloaded file is no longer available on the server");
-    err.statusCode = 404;
-    err.code = "DOCUMENT_FILE_MISSING";
-    throw err;
-  }
-
-  const isPdf = savedRec.detectedPdf === true || /\.pdf$/i.test(fileName);
-  const contentType = isPdf ? "application/pdf" : "application/octet-stream";
-
-  return {
-    filePath: normalized,
-    downloadName: path.basename(fileName),
-    contentType,
-    isPdf,
-  };
+  const err = new Error(
+    "The stored document copy is no longer available. Refresh project details to save it again.",
+  );
+  err.statusCode = 410;
+  err.code = "DOCUMENT_COPY_UNAVAILABLE";
+  throw err;
 }
 
 /**
@@ -299,7 +338,29 @@ async function streamPepcoDocumentForRequest(opts) {
 
     opts.res.setHeader("Content-Type", headers.contentType);
     opts.res.setHeader("Content-Disposition", headers.contentDisposition);
-    opts.res.sendFile(fileOut.filePath, (sendErr) => {
+
+    if (fileOut.source === "supabase") {
+      const downloadResult = await downloadFromSupabaseStorage({
+        supabase: opts.supabase,
+        bucket: String(fileOut.storageBucket),
+        storagePath: String(fileOut.storagePath),
+      });
+
+      if (!downloadResult.ok || !downloadResult.data) {
+        const err = new Error(
+          "The stored document copy is no longer available. Refresh project details to save it again.",
+        );
+        err.statusCode = 410;
+        err.code = "DOCUMENT_COPY_UNAVAILABLE";
+        throw err;
+      }
+
+      const buffer = Buffer.from(await downloadResult.data.arrayBuffer());
+      opts.res.send(buffer);
+      return;
+    }
+
+    opts.res.sendFile(/** @type {string} */ (fileOut.localFilePath), (sendErr) => {
       if (sendErr) {
         console.error(`[uci-pepco-app-detail] document ${opts.logLabel} sendFile failed`, {
           coordinationId,

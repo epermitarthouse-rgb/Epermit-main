@@ -153,8 +153,14 @@ export function parsePepcoDownloadedFiles(raw: unknown): PepcoDownloadedFile[] {
       fileName: str(r.fileName),
       status: str(r.status),
       sizeBytes: num(r.sizeBytes),
+      storageBucket: str(r.storageBucket),
       storagePath,
+      storageStatus: str(r.storageStatus),
+      storageUploadedAt: str(r.storageUploadedAt),
+      storageError: str(r.storageError),
+      contentType: str(r.contentType),
       contentDisposition: str(r.contentDisposition),
+      detectedPdf: r.detectedPdf === true ? true : r.detectedPdf === false ? false : null,
       error: str(r.error),
     };
   });
@@ -432,6 +438,35 @@ export function findDownloadForDocument(
   return downloaded.find(
     (f) => f.documentName === doc.documentName || f.fileName === doc.documentName,
   );
+}
+
+export type PepcoDocumentCopyStatus =
+  | "stored"
+  | "local_only"
+  | "storage_failed"
+  | "failed"
+  | "listed_only";
+
+/**
+ * Derive UI document copy status from scraped download metadata.
+ * Persistent success requires storageStatus === "stored".
+ */
+export function resolvePepcoDocumentCopyStatus(
+  doc: PepcoDocument,
+  downloaded: PepcoDownloadedFile[] | undefined,
+): PepcoDocumentCopyStatus {
+  const dl = findDownloadForDocument(doc, downloaded);
+  if (!dl) return "listed_only";
+  if (dl.status === "failed") return "failed";
+  if (dl.storageStatus === "stored") return "stored";
+  if (dl.storageStatus === "failed" && dl.status === "saved") return "storage_failed";
+  if (dl.status === "saved") return "local_only";
+  return "listed_only";
+}
+
+/** Whether View/Download actions should be offered for this document copy. */
+export function pepcoDocumentActionsEnabled(status: PepcoDocumentCopyStatus): boolean {
+  return status === "stored" || status === "local_only" || status === "storage_failed";
 }
 
 export function formatFileSize(bytes: number | null | undefined): string {

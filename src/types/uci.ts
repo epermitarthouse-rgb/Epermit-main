@@ -381,8 +381,14 @@ export interface PepcoDownloadedFile {
   status?: string | null;
   sizeBytes?: number | null;
   localPath?: string | null;
+  storageBucket?: string | null;
   storagePath?: string | null;
+  storageStatus?: string | null;
+  storageUploadedAt?: string | null;
+  storageError?: string | null;
+  contentType?: string | null;
   contentDisposition?: string | null;
+  detectedPdf?: boolean | null;
   error?: string | null;
 }
 

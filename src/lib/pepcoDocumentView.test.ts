@@ -17,4 +17,10 @@ describe("pepcoDocumentViewErrorMessage", () => {
       "Your browser blocked the preview tab. Allow pop-ups for PermitPilot and try again.",
     );
   });
+
+  it("returns the refresh message when the stored copy is unavailable", () => {
+    expect(pepcoDocumentViewErrorMessage({ ok: false, reason: "copy_unavailable" })).toBe(
+      "The stored document copy is no longer available. Refresh project details to save it again.",
+    );
+  });
 });
