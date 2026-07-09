@@ -44,7 +44,23 @@ import { supabase } from "@/lib/supabase";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import { exportComplianceReportPDF } from "@/lib/complianceReportPDF";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
-import { takeComplianceFiles } from "@/lib/complianceUploadLimits";
+import {
+  COMPLIANCE_MAX_BATCH_FILES,
+  mergeComplianceFiles,
+} from "@/lib/complianceUploadLimits";
+import {
+  batchProgressPercent,
+  countCompletedBatchFiles,
+  countFailedBatchFiles,
+  canRemoveBatchFile,
+  createComplianceBatchFileId,
+  formatBatchProgressLabel,
+  processComplianceBatch,
+  type ComplianceBatchAnalysisResult,
+  type ComplianceBatchFile,
+  type ComplianceBatchFileStatus,
+  type ComplianceBatchProgress,
+} from "@/lib/complianceBatchProcessor";
 import { cn } from "@/lib/utils";
 import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -67,18 +83,7 @@ interface ComplianceIssue {
   codeType?: "ibc" | "local";
 }
 
-interface AnalysisResult {
-  issues: ComplianceIssue[];
-  summary: {
-    totalIssues: number;
-    critical: number;
-    warnings: number;
-    advisory: number;
-    overallScore: number;
-  };
-  jurisdictionNotes: string;
-  codeType: "ibc" | "local" | "combined";
-}
+type AnalysisResult = ComplianceBatchAnalysisResult;
 
 interface IssueResponse {
   status: "accepted" | "modified" | "rejected";
@@ -86,11 +91,27 @@ interface IssueResponse {
   modifiedResponse?: string;
 }
 
-interface UploadedFile {
-  file: File;
+interface UploadedFile extends ComplianceBatchFile {
   preview: string | null;
-  discipline: DocumentDiscipline;
 }
+
+const batchStatusLabels: Record<ComplianceBatchFileStatus, string> = {
+  pending: "Pending",
+  preparing: "Preparing",
+  uploading: "Uploading",
+  analyzing: "Analyzing",
+  completed: "Completed",
+  failed: "Failed",
+};
+
+const batchStatusColors: Record<ComplianceBatchFileStatus, string> = {
+  pending: "bg-muted text-muted-foreground",
+  preparing: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  uploading: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  analyzing: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  completed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  failed: "bg-destructive/15 text-destructive",
+};
 
 // Jurisdictions with local amendments
 const JURISDICTIONS_WITH_AMENDMENTS = [
@@ -182,10 +203,29 @@ export function AIComplianceAnalyzer() {
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [ibcResult, setIbcResult] = useState<AnalysisResult | null>(null);
-  const [localResult, setLocalResult] = useState<AnalysisResult | null>(null);
-  const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<ComplianceBatchProgress | null>(null);
+  const [loadedExistingResults, setLoadedExistingResults] = useState<{
+    documentId: string;
+    fileName: string;
+    ibcResult: AnalysisResult | null;
+    localResult: AnalysisResult | null;
+  } | null>(null);
+  const [activeResultFileId, setActiveResultFileId] = useState<string | null>(null);
+  const completedBatchFiles = useMemo(
+    () => files.filter((f) => f.status === "completed"),
+    [files],
+  );
+
+  const activeResultFile = useMemo(() => {
+    if (activeResultFileId) {
+      return completedBatchFiles.find((f) => f.id === activeResultFileId) ?? completedBatchFiles[0] ?? null;
+    }
+    return completedBatchFiles[0] ?? null;
+  }, [activeResultFileId, completedBatchFiles]);
+
+  const ibcResult = activeResultFile?.ibcResult ?? loadedExistingResults?.ibcResult ?? null;
+  const localResult = activeResultFile?.localResult ?? loadedExistingResults?.localResult ?? null;
+  const currentDocumentId = activeResultFile?.documentId ?? loadedExistingResults?.documentId ?? null;
   const [responses, setResponses] = useState<Record<string, IssueResponse>>({});
   const [selectedIssue, setSelectedIssue] = useState<ComplianceIssue | null>(null);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
@@ -325,24 +365,34 @@ export function AIComplianceAnalyzer() {
         };
       };
 
+      let loadedIbc: AnalysisResult | null = null;
+      let loadedLocal: AnalysisResult | null = null;
+
       if (ibcIssues.length > 0 || ibcMeta) {
-        setIbcResult({
+        loadedIbc = {
           issues: ibcIssues,
           summary: buildSummary(ibcIssues, ibcMeta),
           jurisdictionNotes: ibcMeta?.jurisdictionNotes || "",
           codeType: "ibc",
-        });
+        };
       }
       if (localIssues.length > 0 || localMeta) {
-        setLocalResult({
+        loadedLocal = {
           issues: localIssues,
           summary: buildSummary(localIssues, localMeta),
           jurisdictionNotes: localMeta?.jurisdictionNotes || "",
           codeType: "local",
-        });
+        };
       }
 
-      setCurrentDocumentId(selectedDocumentId);
+      const doc = documentsWithAnalysis.find((d) => d.id === selectedDocumentId);
+      setLoadedExistingResults({
+        documentId: selectedDocumentId,
+        fileName: doc?.file_name ?? "Loaded document",
+        ibcResult: loadedIbc,
+        localResult: loadedLocal,
+      });
+      setActiveResultFileId(null);
       setActiveResultTab(ibcIssues.length > 0 ? "ibc" : "local");
       toast.success("Loaded previous analysis");
     } catch (err) {
@@ -351,7 +401,7 @@ export function AIComplianceAnalyzer() {
     } finally {
       setLoadingExisting(false);
     }
-  }, [selectedDocumentId, selectedProjectId, user]);
+  }, [selectedDocumentId, selectedProjectId, user, documentsWithAnalysis]);
 
   // Recently used tracking
   const { recentItems: recentJurisdictions, addRecentItem: addRecentJurisdiction } = useRecentlyUsed(
@@ -369,8 +419,8 @@ export function AIComplianceAnalyzer() {
       if (newProject) {
         setSelectedProjectId(newProject.id);
         setSelectedDocumentId(null);
-        setIbcResult(null);
-        setLocalResult(null);
+        setLoadedExistingResults(null);
+        setActiveResultFileId(null);
         setShowNewProjectInput(false);
         setNewProjectName("");
       }
@@ -657,48 +707,55 @@ export function AIComplianceAnalyzer() {
     }
   }, []);
 
-  const processFiles = useCallback((fileList: FileList | File[]) => {
-    const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
-    const { accepted, rejectedCount } = takeComplianceFiles(Array.from(fileList));
-
-    if (rejectedCount > 0) {
-      toast.info("AI Compliance analyzes one drawing at a time. Only the first file was kept.");
-    }
-
-    for (const file of accepted) {
-      if (!validTypes.includes(file.type)) {
-        toast.error(`${file.name}: Invalid file type. Use PNG, JPEG, or PDF.`);
-        continue;
-      }
-
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        toast.error(`${file.name}: File exceeds ${MAX_FILE_SIZE_MB}MB limit`);
-        continue;
-      }
-
-      if (file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setFiles([
-            {
-              file,
-              preview: e.target?.result as string,
-              discipline: "general",
-            },
-          ]);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setFiles([
-          {
-            file,
-            preview: null,
-            discipline: "general",
-          },
-        ]);
-      }
-    }
+  const appendBatchFile = useCallback((file: File, preview: string | null) => {
+    setFiles((prev) => [
+      ...prev,
+      {
+        id: createComplianceBatchFileId(),
+        file,
+        preview,
+        discipline: "general",
+        status: "pending",
+      },
+    ]);
   }, []);
+
+  const processFiles = useCallback(
+    (fileList: FileList | File[]) => {
+      const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
+      const incoming = Array.from(fileList);
+      const { accepted, rejectedCount } = mergeComplianceFiles(files.length, incoming);
+
+      if (rejectedCount > 0) {
+        toast.error(
+          `Batch limit is ${COMPLIANCE_MAX_BATCH_FILES} files. ${rejectedCount} file(s) were not added.`,
+        );
+      }
+
+      for (const file of accepted) {
+        if (!validTypes.includes(file.type)) {
+          toast.error(`${file.name}: Invalid file type. Use PNG, JPEG, or PDF.`);
+          continue;
+        }
+
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+          toast.error(`${file.name}: File exceeds ${MAX_FILE_SIZE_MB}MB limit`);
+          continue;
+        }
+
+        if (file.type.startsWith("image/")) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            appendBatchFile(file, e.target?.result as string);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          appendBatchFile(file, null);
+        }
+      }
+    },
+    [appendBatchFile, files.length],
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -722,12 +779,18 @@ export function AIComplianceAnalyzer() {
     [processFiles],
   );
 
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+  const removeFile = (id: string) => {
+    setFiles((prev) => {
+      const target = prev.find((f) => f.id === id);
+      if (!target || !canRemoveBatchFile(target.status)) {
+        return prev;
+      }
+      return prev.filter((f) => f.id !== id);
+    });
   };
 
-  const updateFileDiscipline = (index: number, discipline: DocumentDiscipline) => {
-    setFiles((prev) => prev.map((f, i) => (i === index ? { ...f, discipline } : f)));
+  const updateFileDiscipline = (id: string, discipline: DocumentDiscipline) => {
+    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, discipline } : f)));
   };
 
   /** Save AI analysis results to document_annotations */
@@ -786,213 +849,199 @@ export function AIComplianceAnalyzer() {
     [user, jurisdiction, projectType, codeYear]
   );
 
-  const analyzeDrawings = async () => {
-    if (files.length === 0) {
-      toast.error("Please upload at least one drawing");
-      return;
-    }
-
-    if (selectedProjectId && !user) {
-      toast.error("You must be logged in to save analysis to a project");
-      return;
-    }
-
-    setAnalyzing(true);
-    setProgress(0);
-    setIbcResult(null);
-    setLocalResult(null);
-    setResponses({});
-    setCurrentDocumentId(null);
-
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => Math.min(prev + Math.random() * 10, 85));
-    }, 500);
-
-    try {
-      const file = files[0].file;
-      // Client-side PDF rasterization: convert PDF to image so upload + API only ever receive images (fixes 400 on deployed envs)
-      const fileToUse =
-        file.type === "application/pdf"
-          ? await pdfFirstPageToImageFile(file)
-          : file;
-
-      let documentId: string | null = null;
-      const projectId = selectedProjectId;
-
-      // Step 1: Upload the (possibly converted) image to storage — never send raw PDF
-      if (projectId && user) {
-        const newDoc = await uploadDocument({
-          file: fileToUse,
-          document_type: "permit_drawing",
-          description: `AI compliance analysis - ${jurisdiction} ${projectType}`,
-        });
-        if (!newDoc) {
-          throw new Error("Failed to upload document to project");
-        }
-        documentId = newDoc.id;
-        setCurrentDocumentId(documentId);
-        await fetchDocuments();
+  const requestDrawingAnalysis = useCallback(
+    async (opts: {
+      imageBase64: string;
+      imageType: string;
+      codeType: "ibc" | "local" | "both";
+      disciplines: DocumentDiscipline[];
+    }): Promise<unknown> => {
+      const {
+        data: { session: authSession },
+      } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (authSession?.access_token) {
+        headers.Authorization = `Bearer ${authSession.access_token}`;
       }
-
-      // Step 2: Get image base64 for Vision API (fileToUse is always an image)
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          const base64Data = result.split(",")[1];
-          resolve(base64Data ?? "");
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(fileToUse);
+      const API_BASE_URL = getScraperBaseUrl();
+      const response = await fetch(`${API_BASE_URL}/api/analyze-drawing`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          imageBase64: opts.imageBase64,
+          imageType: opts.imageType,
+          jurisdiction: jurisdiction === "general" ? null : jurisdiction,
+          projectType,
+          codeYear,
+          codeType: opts.codeType,
+          disciplines: opts.disciplines,
+        }),
       });
-      const imageType = fileToUse.type;
 
-      /** Normalize API response so summary and issues are always defined (avoids runtime errors) */
-      const normalizeResult = (raw: unknown, codeType: "ibc" | "local"): AnalysisResult => {
-        const d = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-        const issues = Array.isArray(d.issues) ? (d.issues as ComplianceIssue[]) : [];
-        const sum = d.summary && typeof d.summary === "object" ? (d.summary as AnalysisResult["summary"]) : null;
-        const critical = issues.filter((i) => i.severity === "critical").length;
-        const warnings = issues.filter((i) => i.severity === "warning").length;
-        const advisory = issues.filter((i) => i.severity === "advisory").length;
-        const summary = sum ?? {
-          totalIssues: issues.length,
-          critical,
-          warnings,
-          advisory,
-          overallScore: issues.length === 0 ? 100 : Math.max(0, 100 - critical * 15 - warnings * 5 - advisory * 2),
-        };
-        return {
-          issues,
-          summary,
-          jurisdictionNotes: typeof d.jurisdictionNotes === "string" ? d.jurisdictionNotes : "",
-          codeType,
-        };
-      };
+      let data: { error?: string };
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(`Analysis service returned an invalid response (HTTP ${response.status})`);
+      }
 
-      const requestAnalysis = async (
-        codeType: "ibc" | "local" | "both",
-      ): Promise<unknown> => {
-        const { data: { session: authSession } } = await supabase.auth.getSession();
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (authSession?.access_token) {
-          headers["Authorization"] = `Bearer ${authSession.access_token}`;
-        }
-        const API_BASE_URL = getScraperBaseUrl();
-        const response = await fetch(`${API_BASE_URL}/api/analyze-drawing`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            imageBase64: base64,
-            imageType,
-            jurisdiction: jurisdiction === "general" ? null : jurisdiction,
-            projectType,
-            codeYear,
-            codeType,
-            disciplines: [files[0]?.discipline ?? "general"],
-          }),
+      if (!response.ok) {
+        throw new Error(data?.error || `Analysis failed (HTTP ${response.status})`);
+      }
+
+      if (data && typeof data === "object" && "error" in data && data.error) {
+        throw new Error(typeof data.error === "string" ? data.error : "Analysis failed");
+      }
+
+      return data;
+    },
+    [jurisdiction, projectType, codeYear],
+  );
+
+  const runBatchAnalysis = useCallback(
+    async (onlyFailed = false) => {
+      const pendingOrFailed = onlyFailed
+        ? files.filter((f) => f.status === "failed")
+        : files.filter((f) => f.status === "pending");
+
+      if (pendingOrFailed.length === 0) {
+        toast.info(onlyFailed ? "No failed files to retry" : "No files ready to analyze");
+        return;
+      }
+
+      if (selectedProjectId && !user) {
+        toast.error("You must be logged in to save analysis to a project");
+        return;
+      }
+
+      setAnalyzing(true);
+      setBatchProgress({ total: pendingOrFailed.length, completed: 0, currentIndex: 1 });
+      if (!onlyFailed) {
+        setLoadedExistingResults(null);
+        setResponses({});
+        setActiveResultFileId(null);
+      }
+
+      try {
+        const latestFiles = await new Promise<UploadedFile[]>((resolve) => {
+          setFiles((current) => {
+            resolve(current);
+            return current;
+          });
         });
 
-        let data;
-        try {
-          data = await response.json();
-        } catch {
-          throw new Error(`Analysis service returned an invalid response (HTTP ${response.status})`);
-        }
+        const { succeeded, failed } = await processComplianceBatch({
+          files: latestFiles,
+          onlyFailed,
+          analysisMode,
+          hasLocalAmendments,
+          jurisdiction,
+          projectType,
+          codeYear,
+          projectId: selectedProjectId,
+          canPersist: Boolean(selectedProjectId && user),
+          uploadDocument: async (opts) => {
+            const doc = await uploadDocument(opts);
+            if (doc) await fetchDocuments();
+            return doc;
+          },
+          pdfFirstPageToImageFile,
+          requestAnalysis: requestDrawingAnalysis,
+          saveAnalysisToDb: saveAnalysisToDb,
+          onFileUpdate: (id, patch) => {
+            setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+          },
+          onProgress: setBatchProgress,
+        });
 
-        if (!response.ok) {
-          throw new Error(data?.error || `Analysis failed (HTTP ${response.status})`);
-        }
-
-        if (data && typeof data === "object" && "error" in data && data.error) {
-          throw new Error(typeof data.error === "string" ? data.error : "Analysis failed");
-        }
-
-        return data;
-      };
-
-      const runAnalysis = async (codeType: "ibc" | "local"): Promise<AnalysisResult> =>
-        normalizeResult(await requestAnalysis(codeType), codeType);
-
-      const runBothAnalysis = async (): Promise<{ ibc: AnalysisResult; local: AnalysisResult }> => {
-        const data = await requestAnalysis("both");
-        const payload = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-        return {
-          ibc: normalizeResult(payload.ibc, "ibc"),
-          local: normalizeResult(payload.local, "local"),
-        };
-      };
-
-      let ibcData: AnalysisResult | null = null;
-      let localData: AnalysisResult | null = null;
-
-      if (analysisMode === "both" && hasLocalAmendments) {
-        const both = await runBothAnalysis();
-        ibcData = both.ibc;
-        localData = both.local;
-        setIbcResult(ibcData);
-        setLocalResult(localData);
-        toast.success(
-          `Analysis complete: ${ibcData.summary.totalIssues} IBC issues, ${localData.summary.totalIssues} local issues`,
+        const completed = countCompletedBatchFiles(
+          await new Promise<UploadedFile[]>((resolve) => {
+            setFiles((current) => {
+              resolve(current);
+              return current;
+            });
+          }),
         );
-      } else if (analysisMode === "local" && hasLocalAmendments) {
-        localData = await runAnalysis("local");
-        setLocalResult(localData);
-        setActiveResultTab("local");
-        toast.success(`Analysis complete: ${localData.summary.totalIssues} local code issues found`);
-      } else {
-        ibcData = await runAnalysis("ibc");
-        setIbcResult(ibcData);
-        setActiveResultTab("ibc");
-        toast.success(`Analysis complete: ${ibcData.summary.totalIssues} IBC issues found`);
+
+        if (completed > 0) {
+          setActiveResultFileId((prev) => prev ?? pendingOrFailed[0]?.id ?? null);
+          setAnalysisSavedAt(Date.now());
+        }
+
+        if (failed === 0) {
+          toast.success(`Batch complete: ${succeeded} file(s) analyzed`);
+        } else if (succeeded > 0) {
+          toast.warning(`Batch finished: ${succeeded} succeeded, ${failed} failed`);
+        } else {
+          toast.error(`Batch failed: all ${failed} file(s) failed`);
+        }
+      } catch (err) {
+        console.error("Batch analysis error:", err);
+        toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
+      } finally {
+        setAnalyzing(false);
       }
+    },
+    [
+      analysisMode,
+      codeYear,
+      fetchDocuments,
+      files,
+      hasLocalAmendments,
+      jurisdiction,
+      projectType,
+      requestDrawingAnalysis,
+      saveAnalysisToDb,
+      selectedProjectId,
+      uploadDocument,
+      user,
+    ],
+  );
 
-      // Step 2: Save results to document_annotations
-      if (documentId && projectId && user) {
-        if (ibcData) await saveAnalysisToDb(ibcData, documentId, projectId);
-        if (localData) await saveAnalysisToDb(localData, documentId, projectId);
-        setAnalysisSavedAt(Date.now());
-        toast.success("Analysis saved to database");
-      }
+  const analyzeDrawings = () => runBatchAnalysis(false);
+  const retryFailedFiles = () => runBatchAnalysis(true);
 
-      clearInterval(progressInterval);
-      setProgress(100);
-    } catch (err) {
-      console.error("Error:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
-    } finally {
-      clearInterval(progressInterval);
-      setAnalyzing(false);
-    }
-  };
+  const issueResponseKey = (fileId: string, issueId: string) => `${fileId}:${issueId}`;
 
-  const handleAccept = (issue: ComplianceIssue) => {
+  const handleAccept = (fileId: string, issue: ComplianceIssue) => {
     setResponses((prev) => ({
       ...prev,
-      [issue.id]: { status: "accepted", originalFix: issue.suggestedFix },
+      [issueResponseKey(fileId, issue.id)]: { status: "accepted", originalFix: issue.suggestedFix },
     }));
     toast.success("Fix accepted");
   };
 
-  const handleReject = (issue: ComplianceIssue) => {
+  const handleReject = (fileId: string, issue: ComplianceIssue) => {
     setResponses((prev) => ({
       ...prev,
-      [issue.id]: { status: "rejected", originalFix: issue.suggestedFix },
+      [issueResponseKey(fileId, issue.id)]: { status: "rejected", originalFix: issue.suggestedFix },
     }));
     toast.info("Issue marked as not applicable");
   };
 
-  const handleModify = (issue: ComplianceIssue) => {
+  const handleModify = (fileId: string, issue: ComplianceIssue) => {
     setSelectedIssue(issue);
     setModifiedText(issue.suggestedFix);
     setModifyDialogOpen(true);
+    setActiveResultFileId(fileId);
   };
 
   const saveModification = () => {
-    if (selectedIssue) {
+    if (selectedIssue && activeResultFile) {
       setResponses((prev) => ({
         ...prev,
-        [selectedIssue.id]: {
+        [issueResponseKey(activeResultFile.id, selectedIssue.id)]: {
+          status: "modified",
+          originalFix: selectedIssue.suggestedFix,
+          modifiedResponse: modifiedText,
+        },
+      }));
+      setModifyDialogOpen(false);
+      toast.success("Response modified");
+    } else if (selectedIssue && loadedExistingResults) {
+      setResponses((prev) => ({
+        ...prev,
+        [issueResponseKey(loadedExistingResults.documentId, selectedIssue.id)]: {
           status: "modified",
           originalFix: selectedIssue.suggestedFix,
           modifiedResponse: modifiedText,
@@ -1001,6 +1050,132 @@ export function AIComplianceAnalyzer() {
       setModifyDialogOpen(false);
       toast.success("Response modified");
     }
+  };
+
+  const resultGroups = useMemo(() => {
+    const groups = completedBatchFiles.map((f) => ({
+      id: f.id,
+      fileName: f.file.name,
+      ibcResult: f.ibcResult ?? null,
+      localResult: f.localResult ?? null,
+    }));
+    if (loadedExistingResults) {
+      groups.unshift({
+        id: loadedExistingResults.documentId,
+        fileName: loadedExistingResults.fileName,
+        ibcResult: loadedExistingResults.ibcResult,
+        localResult: loadedExistingResults.localResult,
+      });
+    }
+    return groups;
+  }, [completedBatchFiles, loadedExistingResults]);
+
+  const [fileResultTabs, setFileResultTabs] = useState<Record<string, "ibc" | "local">>({});
+
+  const renderFileResultGroup = (group: {
+    id: string;
+    fileName: string;
+    ibcResult: AnalysisResult | null;
+    localResult: AnalysisResult | null;
+  }) => {
+    const tab = fileResultTabs[group.id] ?? (group.ibcResult ? "ibc" : "local");
+    const groupResult =
+      (tab === "local" ? group.localResult : group.ibcResult) ?? group.localResult ?? group.ibcResult;
+    if (!groupResult) return null;
+
+    const groupIssues = groupResult.issues ?? [];
+    const resolvedInGroup = groupIssues.filter((issue) => responses[issueResponseKey(group.id, issue.id)]).length;
+
+    return (
+      <div key={group.id} className="space-y-6">
+        {group.ibcResult && group.localResult && (
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setFileResultTabs((prev) => ({ ...prev, [group.id]: v as "ibc" | "local" }))}
+          >
+            <div className={cn(DATA_INTELLIGENCE_PANEL, "p-2")}>
+              <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent p-0 h-auto shadow-none border-0">
+                <TabsTrigger value="ibc" className="flex items-center gap-2">
+                  <Scale className="h-4 w-4" />
+                  General IBC ({group.ibcResult.summary.totalIssues} issues)
+                </TabsTrigger>
+                <TabsTrigger value="local" className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Local Amendments ({group.localResult.summary.totalIssues} issues)
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </Tabs>
+        )}
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
+            <CardContent className="pt-6 text-center">
+              <div className={`text-4xl font-bold ${getScoreColor(groupResult.summary.overallScore ?? 0)}`}>
+                {groupResult.summary.overallScore ?? 0}%
+              </div>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Compliance Score</p>
+            </CardContent>
+          </Card>
+          <Card className={DATA_INTELLIGENCE_PANEL}>
+            <CardContent className="pt-6 text-center">
+              <div className="text-4xl font-bold text-foreground dark:text-ink-primary-dark">
+                {groupResult.summary.totalIssues ?? 0}
+              </div>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Total Issues</p>
+            </CardContent>
+          </Card>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-destructive")}>
+            <CardContent className="pt-6 text-center">
+              <div className="text-4xl font-bold text-destructive">{groupResult.summary.critical ?? 0}</div>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Critical</p>
+            </CardContent>
+          </Card>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
+            <CardContent className="pt-6 text-center">
+              <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{groupResult.summary.warnings ?? 0}</div>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Warnings</p>
+            </CardContent>
+          </Card>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
+            <CardContent className="pt-6 text-center">
+              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{groupResult.summary.advisory ?? 0}</div>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Advisory</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {groupIssues.length > 0 && (
+          <Card className={DATA_INTELLIGENCE_PANEL}>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-foreground dark:text-ink-primary-dark">Resolution Progress</span>
+                <span className="text-sm text-muted-foreground dark:text-ink-secondary-dark">
+                  {resolvedInGroup} / {groupIssues.length} resolved
+                </span>
+              </div>
+              <Progress value={(resolvedInGroup / groupIssues.length) * 100} className="h-2" />
+            </CardContent>
+          </Card>
+        )}
+
+        {groupResult.jurisdictionNotes && (
+          <Card className={cn(EDITORIAL_FORM_CARD, "border-teal/25 shadow-cream")}>
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-teal mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium mb-1 text-ink-primary-light">Jurisdiction Notes</p>
+                  <p className="text-sm text-ink-secondary-light">{groupResult.jurisdictionNotes}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {renderIssuesList(group.id, groupResult, group.fileName)}
+      </div>
+    );
   };
 
   const currentResult = (activeResultTab === "local" ? localResult : ibcResult) ?? localResult ?? ibcResult;
@@ -1049,7 +1224,10 @@ export function AIComplianceAnalyzer() {
         issues: result.issues,
         responses,
         jurisdictionNotes: result.jurisdictionNotes ?? "",
-        projectName: files[0]?.file?.name?.replace(/\.[^/.]+$/, "") || "Compliance Analysis",
+        projectName:
+          activeResultFile?.file.name?.replace(/\.[^/.]+$/, "") ||
+          loadedExistingResults?.fileName?.replace(/\.[^/.]+$/, "") ||
+          "Compliance Analysis",
       });
       toast.success("PDF report exported");
     } catch (err) {
@@ -1064,8 +1242,11 @@ export function AIComplianceAnalyzer() {
     return "text-destructive";
   };
 
-  const resolvedCount = Object.keys(responses).length;
-  const totalIssues = currentResult?.summary.totalIssues || 0;
+  const failedFileCount = countFailedBatchFiles(files);
+  const batchProgressValue = batchProgress ? batchProgressPercent(batchProgress) : 0;
+  const batchProgressLabel = batchProgress ? formatBatchProgressLabel(batchProgress) : "";
+  const hasAnyResults =
+    completedBatchFiles.length > 0 || loadedExistingResults !== null;
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -1073,24 +1254,25 @@ export function AIComplianceAnalyzer() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const renderIssuesList = (result: AnalysisResult) => {
+  const renderIssuesList = (fileId: string, result: AnalysisResult, fileName: string) => {
     const issues = result?.issues ?? [];
     const summary = result?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 0 };
     const filteredIssues = (tab: string) =>
       issues.filter((issue) => tab === "all" || issue.severity === tab);
 
-    const resolvedInResult = issues.filter((issue) => responses[issue.id]).length;
+    const resolvedInResult = issues.filter((issue) => responses[issueResponseKey(fileId, issue.id)]).length;
     const progressPercent = issues.length > 0 ? (resolvedInResult / issues.length) * 100 : 0;
 
     return (
       <Card className={cn(DATA_INTELLIGENCE_PANEL, "overflow-hidden shadow-lg")}>
         {/* Header with progress */}
         <CardHeader className="pb-4 border-b border-border/40 bg-muted/20 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-obsidian-sunken/35">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2 text-xl text-foreground dark:text-ink-primary-dark">
-                <AlertTriangle className="h-5 w-5 text-teal" />
-                Compliance Findings
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Source file</p>
+              <CardTitle className="flex items-center gap-2 text-lg text-foreground dark:text-ink-primary-dark">
+                <File className="h-4 w-4 text-teal shrink-0" />
+                <span className="truncate">{fileName}</span>
               </CardTitle>
               <CardDescription className="mt-1 text-muted-foreground dark:text-ink-secondary-dark">
                 Review each finding and take action on suggested fixes
@@ -1169,7 +1351,7 @@ export function AIComplianceAnalyzer() {
                       filteredIssues(tab).map((issue, index) => {
                         const config = severityConfig[issue.severity];
                         const Icon = config.icon;
-                        const response = responses[issue.id];
+                        const response = responses[issueResponseKey(fileId, issue.id)];
 
                         return (
                           <motion.div
@@ -1258,7 +1440,7 @@ export function AIComplianceAnalyzer() {
                                     <Button
                                       size="sm"
                                       variant="gold"
-                                      onClick={() => handleAccept(issue)}
+                                      onClick={() => handleAccept(fileId, issue)}
                                       className="gap-1.5"
                                     >
                                       <Check className="h-3.5 w-3.5" />
@@ -1267,7 +1449,7 @@ export function AIComplianceAnalyzer() {
                                     <Button
                                       size="sm"
                                       variant="outlineGold"
-                                      onClick={() => handleModify(issue)}
+                                      onClick={() => handleModify(fileId, issue)}
                                       className="gap-1.5"
                                     >
                                       <Edit className="h-3.5 w-3.5" />
@@ -1276,7 +1458,7 @@ export function AIComplianceAnalyzer() {
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      onClick={() => handleReject(issue)}
+                                      onClick={() => handleReject(fileId, issue)}
                                       className="gap-1.5 text-ink-secondary-dark hover:text-ink-primary-dark"
                                     >
                                       <X className="h-3.5 w-3.5" />
@@ -1330,8 +1512,8 @@ export function AIComplianceAnalyzer() {
                 setShowNewProjectInput(false);
                 setSelectedProjectId(v === "__none__" ? null : v);
                 setSelectedDocumentId(null);
-                setIbcResult(null);
-                setLocalResult(null);
+                setLoadedExistingResults(null);
+                setActiveResultFileId(null);
               }}
             >
               <SelectTrigger data-testid="select-project">
@@ -1544,22 +1726,25 @@ export function AIComplianceAnalyzer() {
               id="drawing-upload"
               className="hidden"
               accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+              multiple
               onChange={handleFileChange}
             />
 
             {files.length > 0 ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {files.map((f, index) => (
-                    <div key={index} className="relative rounded-lg border border-cream-sunken bg-cream-raised p-3 shadow-inner">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground"
-                        onClick={() => removeFile(index)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
+                  {files.map((f) => (
+                    <div key={f.id} className="relative rounded-lg border border-cream-sunken bg-cream-raised p-3 shadow-inner">
+                      {f.status === "pending" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground"
+                          onClick={() => removeFile(f.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
 
                       {f.preview ? (
                         <img src={f.preview} alt={f.file.name} className="h-20 w-full object-cover rounded mb-2" />
@@ -1572,9 +1757,19 @@ export function AIComplianceAnalyzer() {
                       <p className="text-xs font-medium truncate">{f.file.name}</p>
                       <p className="text-xs text-muted-foreground">{formatFileSize(f.file.size)}</p>
 
+                      <Badge className={cn("mt-2 text-[10px]", batchStatusColors[f.status])}>
+                        {f.status === "analyzing" && <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />}
+                        {batchStatusLabels[f.status]}
+                      </Badge>
+
+                      {f.error && (
+                        <p className="text-[10px] text-destructive mt-1 line-clamp-2">{f.error}</p>
+                      )}
+
                       <Select
                         value={f.discipline}
-                        onValueChange={(v) => updateFileDiscipline(index, v as DocumentDiscipline)}
+                        onValueChange={(v) => updateFileDiscipline(f.id, v as DocumentDiscipline)}
+                        disabled={f.status !== "pending"}
                       >
                         <SelectTrigger className="h-7 mt-2 text-xs">
                           <SelectValue placeholder="Discipline" />
@@ -1591,15 +1786,20 @@ export function AIComplianceAnalyzer() {
                   ))}
                 </div>
 
-                <div className="flex items-center justify-center gap-4 pt-2 border-t">
-                  <p className="text-sm text-muted-foreground">1 drawing selected</p>
-                  <Button
-                    variant="outlineGold"
-                    size="sm"
-                    onClick={() => document.getElementById("drawing-upload")?.click()}
-                  >
-                    Replace Drawing
-                  </Button>
+                <div className="flex flex-wrap items-center justify-center gap-4 pt-2 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    {files.length} of {COMPLIANCE_MAX_BATCH_FILES} drawing{files.length === 1 ? "" : "s"} selected
+                  </p>
+                  {files.length < COMPLIANCE_MAX_BATCH_FILES && (
+                    <Button
+                      variant="outlineGold"
+                      size="sm"
+                      onClick={() => document.getElementById("drawing-upload")?.click()}
+                      disabled={analyzing}
+                    >
+                      Add More Drawings
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1609,10 +1809,10 @@ export function AIComplianceAnalyzer() {
                     <FileImage className="h-12 w-12 text-gold-deep/75" />
                     <Upload className="h-12 w-12 text-teal" />
                   </div>
-                  <p className="text-lg font-medium text-ink-primary-light">Drop one drawing here or click to browse</p>
+                  <p className="text-lg font-medium text-ink-primary-light">Drop drawings here or click to browse</p>
                   <p className="text-sm text-ink-secondary-light">
-                    One drawing at a time. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB).
-                    PDFs analyze page 1 only.
+                    Up to {COMPLIANCE_MAX_BATCH_FILES} drawings per batch. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
+                    PDFs currently analyze page 1 only.
                   </p>
                 </div>
               </label>
@@ -1620,12 +1820,18 @@ export function AIComplianceAnalyzer() {
           </div>
 
           {/* Analyze Button */}
-          <div className="flex justify-center gap-4">
-            <Button variant="gold" size="lg" onClick={analyzeDrawings} disabled={files.length === 0 || analyzing} className="px-8">
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button
+              variant="gold"
+              size="lg"
+              onClick={analyzeDrawings}
+              disabled={files.filter((f) => f.status === "pending").length === 0 || analyzing}
+              className="px-8"
+            >
               {analyzing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Analyzing...
+                  {batchProgressLabel || "Analyzing..."}
                 </>
               ) : (
                 <>
@@ -1634,6 +1840,11 @@ export function AIComplianceAnalyzer() {
                 </>
               )}
             </Button>
+            {failedFileCount > 0 && !analyzing && (
+              <Button variant="outlineGold" size="lg" onClick={retryFailedFiles}>
+                Retry failed files ({failedFileCount})
+              </Button>
+            )}
             {currentResult && (
               <>
                 <Button variant="outlineGold" size="lg" onClick={exportReportPDF}>
@@ -1650,16 +1861,17 @@ export function AIComplianceAnalyzer() {
 
           {/* Progress Bar */}
           <AnimatePresence>
-            {analyzing && (
+            {analyzing && batchProgress && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-2"
               >
-                <Progress value={progress} className="h-2" />
+                <Progress value={batchProgressValue} className="h-2" />
                 <p className="text-sm text-center text-ink-secondary-light">
-                  AI is analyzing your drawings for code compliance issues...
+                  {batchProgressLabel}
+                  {batchProgress.currentFileName ? ` — ${batchProgress.currentFileName}` : ""}
                 </p>
               </motion.div>
             )}
@@ -1669,108 +1881,14 @@ export function AIComplianceAnalyzer() {
 
       {/* Results */}
       <AnimatePresence>
-        {(ibcResult || localResult) && (
+        {hasAnyResults && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
+            className="space-y-10"
           >
-            {/* Code Type Tabs - Only show if both results exist */}
-            {ibcResult && localResult && (
-              <Tabs value={activeResultTab} onValueChange={(v) => setActiveResultTab(v as "ibc" | "local")}>
-                <div className={cn(DATA_INTELLIGENCE_PANEL, "p-2 mb-2")}>
-                  <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent p-0 h-auto shadow-none border-0">
-                  <TabsTrigger value="ibc" className="flex items-center gap-2 text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:text-ink-secondary-dark dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-ink-primary-dark">
-                    <Scale className="h-4 w-4" />
-                    General IBC ({ibcResult.summary.totalIssues} issues)
-                  </TabsTrigger>
-                  <TabsTrigger value="local" className="flex items-center gap-2 text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:text-ink-secondary-dark dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-ink-primary-dark">
-                    <MapPin className="h-4 w-4" />
-                    Local Amendments ({localResult.summary.totalIssues} issues)
-                  </TabsTrigger>
-                </TabsList>
-                </div>
-              </Tabs>
-            )}
-
-            {currentResult && (
-              <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <Card
-                    className={cn(
-                      DATA_INTELLIGENCE_PANEL,
-                      "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30",
-                    )}
-                  >
-                    <CardContent className="pt-6 text-center">
-                      <div className={`text-4xl font-bold ${getScoreColor(currentResult.summary.overallScore ?? 0)}`}>
-                        {currentResult.summary.overallScore ?? 0}%
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Compliance Score</p>
-                    </CardContent>
-                  </Card>
-                  <Card className={DATA_INTELLIGENCE_PANEL}>
-                    <CardContent className="pt-6 text-center">
-                      <div className="text-4xl font-bold text-foreground dark:text-ink-primary-dark">{currentResult.summary.totalIssues ?? 0}</div>
-                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Total Issues</p>
-                    </CardContent>
-                  </Card>
-                  <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-destructive")}>
-                    <CardContent className="pt-6 text-center">
-                      <div className="text-4xl font-bold text-destructive">{currentResult.summary.critical ?? 0}</div>
-                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Critical</p>
-                    </CardContent>
-                  </Card>
-                  <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
-                    <CardContent className="pt-6 text-center">
-                      <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{currentResult.summary.warnings ?? 0}</div>
-                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Warnings</p>
-                    </CardContent>
-                  </Card>
-                  <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
-                    <CardContent className="pt-6 text-center">
-                      <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{currentResult.summary.advisory ?? 0}</div>
-                      <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Advisory</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Resolution Progress */}
-                {totalIssues > 0 && (
-                  <Card className={DATA_INTELLIGENCE_PANEL}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-foreground dark:text-ink-primary-dark">Resolution Progress</span>
-                        <span className="text-sm text-muted-foreground dark:text-ink-secondary-dark">
-                          {resolvedCount} / {totalIssues} resolved
-                        </span>
-                      </div>
-                      <Progress value={(resolvedCount / totalIssues) * 100} className="h-2" />
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Jurisdiction Notes */}
-                {currentResult.jurisdictionNotes && (
-                  <Card className={cn(EDITORIAL_FORM_CARD, "border-teal/25 shadow-cream")}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-start gap-3">
-                        <Info className="h-5 w-5 text-teal mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-medium mb-1 text-ink-primary-light">Jurisdiction Notes</p>
-                          <p className="text-sm text-ink-secondary-light">{currentResult.jurisdictionNotes}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Issues List */}
-                {renderIssuesList(currentResult)}
-              </>
-            )}
+            {resultGroups.map((group) => renderFileResultGroup(group))}
           </motion.div>
         )}
       </AnimatePresence>

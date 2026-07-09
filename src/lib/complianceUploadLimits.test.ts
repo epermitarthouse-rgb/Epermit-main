@@ -1,26 +1,36 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { COMPLIANCE_MAX_DRAWING_FILES, takeComplianceFiles } from "./complianceUploadLimits.ts";
+import {
+  COMPLIANCE_MAX_BATCH_FILES,
+  mergeComplianceFiles,
+} from "./complianceUploadLimits.ts";
 
 describe("complianceUploadLimits", () => {
-  it("allows only one drawing file", () => {
-    assert.equal(COMPLIANCE_MAX_DRAWING_FILES, 1);
+  it("allows eight drawings per batch", () => {
+    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 8);
   });
 
-  it("keeps the first file when multiple are provided", () => {
+  it("appends up to the remaining batch capacity", () => {
+    const files = Array.from({ length: 3 }, (_, i) => ({ name: `a${i}.pdf` } as File));
+    const { accepted, rejectedCount } = mergeComplianceFiles(0, files);
+    assert.equal(accepted.length, 3);
+    assert.equal(rejectedCount, 0);
+  });
+
+  it("reports rejected files when batch is full", () => {
     const files = [
       { name: "a.pdf" } as File,
       { name: "b.pdf" } as File,
       { name: "c.pdf" } as File,
     ];
-    const { accepted, rejectedCount } = takeComplianceFiles(files);
+    const { accepted, rejectedCount } = mergeComplianceFiles(7, files);
     assert.equal(accepted.length, 1);
     assert.equal(accepted[0].name, "a.pdf");
     assert.equal(rejectedCount, 2);
   });
 
   it("returns empty when no files are provided", () => {
-    const { accepted, rejectedCount } = takeComplianceFiles([]);
+    const { accepted, rejectedCount } = mergeComplianceFiles(0, []);
     assert.deepEqual(accepted, []);
     assert.equal(rejectedCount, 0);
   });
