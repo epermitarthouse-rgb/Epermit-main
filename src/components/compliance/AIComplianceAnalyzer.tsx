@@ -44,6 +44,7 @@ import { supabase } from "@/lib/supabase";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import { exportComplianceReportPDF } from "@/lib/complianceReportPDF";
 import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
+import { takeComplianceFiles } from "@/lib/complianceUploadLimits";
 import { cn } from "@/lib/utils";
 import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -658,9 +659,13 @@ export function AIComplianceAnalyzer() {
 
   const processFiles = useCallback((fileList: FileList | File[]) => {
     const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
-    const filesArray = Array.from(fileList);
+    const { accepted, rejectedCount } = takeComplianceFiles(Array.from(fileList));
 
-    for (const file of filesArray) {
+    if (rejectedCount > 0) {
+      toast.info("AI Compliance analyzes one drawing at a time. Only the first file was kept.");
+    }
+
+    for (const file of accepted) {
       if (!validTypes.includes(file.type)) {
         toast.error(`${file.name}: Invalid file type. Use PNG, JPEG, or PDF.`);
         continue;
@@ -671,12 +676,10 @@ export function AIComplianceAnalyzer() {
         continue;
       }
 
-      // Create preview for images
       if (file.type.startsWith("image/")) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          setFiles((prev) => [
-            ...prev,
+          setFiles([
             {
               file,
               preview: e.target?.result as string,
@@ -686,8 +689,7 @@ export function AIComplianceAnalyzer() {
         };
         reader.readAsDataURL(file);
       } else {
-        setFiles((prev) => [
-          ...prev,
+        setFiles([
           {
             file,
             preview: null,
@@ -868,7 +870,9 @@ export function AIComplianceAnalyzer() {
         };
       };
 
-      const runAnalysis = async (codeType: "ibc" | "local"): Promise<AnalysisResult> => {
+      const requestAnalysis = async (
+        codeType: "ibc" | "local" | "both",
+      ): Promise<unknown> => {
         const { data: { session: authSession } } = await supabase.auth.getSession();
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (authSession?.access_token) {
@@ -885,7 +889,7 @@ export function AIComplianceAnalyzer() {
             projectType,
             codeYear,
             codeType,
-            disciplines: files.map((f) => f.discipline),
+            disciplines: [files[0]?.discipline ?? "general"],
           }),
         });
 
@@ -904,14 +908,28 @@ export function AIComplianceAnalyzer() {
           throw new Error(typeof data.error === "string" ? data.error : "Analysis failed");
         }
 
-        return normalizeResult(data, codeType);
+        return data;
+      };
+
+      const runAnalysis = async (codeType: "ibc" | "local"): Promise<AnalysisResult> =>
+        normalizeResult(await requestAnalysis(codeType), codeType);
+
+      const runBothAnalysis = async (): Promise<{ ibc: AnalysisResult; local: AnalysisResult }> => {
+        const data = await requestAnalysis("both");
+        const payload = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+        return {
+          ibc: normalizeResult(payload.ibc, "ibc"),
+          local: normalizeResult(payload.local, "local"),
+        };
       };
 
       let ibcData: AnalysisResult | null = null;
       let localData: AnalysisResult | null = null;
 
       if (analysisMode === "both" && hasLocalAmendments) {
-        [ibcData, localData] = await Promise.all([runAnalysis("ibc"), runAnalysis("local")]);
+        const both = await runBothAnalysis();
+        ibcData = both.ibc;
+        localData = both.local;
         setIbcResult(ibcData);
         setLocalResult(localData);
         toast.success(
@@ -1527,7 +1545,6 @@ export function AIComplianceAnalyzer() {
               className="hidden"
               accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
               onChange={handleFileChange}
-              multiple
             />
 
             {files.length > 0 ? (
@@ -1575,15 +1592,13 @@ export function AIComplianceAnalyzer() {
                 </div>
 
                 <div className="flex items-center justify-center gap-4 pt-2 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    {files.length} file{files.length !== 1 ? "s" : ""} selected
-                  </p>
+                  <p className="text-sm text-muted-foreground">1 drawing selected</p>
                   <Button
                     variant="outlineGold"
                     size="sm"
                     onClick={() => document.getElementById("drawing-upload")?.click()}
                   >
-                    Add More Files
+                    Replace Drawing
                   </Button>
                 </div>
               </div>
@@ -1594,9 +1609,10 @@ export function AIComplianceAnalyzer() {
                     <FileImage className="h-12 w-12 text-gold-deep/75" />
                     <Upload className="h-12 w-12 text-teal" />
                   </div>
-                  <p className="text-lg font-medium text-ink-primary-light">Drop your drawings here or click to browse</p>
+                  <p className="text-lg font-medium text-ink-primary-light">Drop one drawing here or click to browse</p>
                   <p className="text-sm text-ink-secondary-light">
-                    Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB per file)
+                    One drawing at a time. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB).
+                    PDFs analyze page 1 only.
                   </p>
                 </div>
               </label>

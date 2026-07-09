@@ -597,6 +597,8 @@ async function performLogin(page, username, password, dashboardUrl) {
 }
 
 // ─── Analyze Drawing (AI Compliance) endpoint ──────────────────────────────
+const { analyzeDrawingWithOpenAI } = require("./services/compliance/analyze-drawing.service.js");
+
 app.post("/api/analyze-drawing", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -619,147 +621,29 @@ app.post("/api/analyze-drawing", async (req, res) => {
     const OpenAI = require("openai").default || require("openai");
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, disciplines } = req.body;
+    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: "Image data is required" });
     }
 
-    const jurisdictionAmendments = {
-      'dc': `WASHINGTON D.C. BUILDING CODE AMENDMENTS (12A DCMR):\nThe District of Columbia adopts the IBC with the following key amendments:\n\nEGRESS & EXITS:\n- 12A DCMR 1004.5: Occupant load calculations for assembly spaces require additional 15% capacity factor\n- 12A DCMR 1006.3: Exit access travel distance reduced to 200 ft (unsprinklered) and 250 ft (sprinklered) for B occupancy\n- 12A DCMR 1017.2: Corridor width minimum 48" for all occupancies (stricter than IBC 44")\n\nFIRE SAFETY:\n- 12A DCMR 903.2.1: Automatic sprinkler systems required in all new buildings over 5,000 sq ft\n- 12A DCMR 903.2.9: Group R-2 occupancies require NFPA 13R systems minimum (no 13D allowed in D.C.)\n- 12A DCMR 907.2: Fire alarm systems required in buildings over 3 stories (not 4 as in IBC)\n\nACCESSIBILITY (D.C. Human Rights Act compliance):\n- 12A DCMR 1103.2.2: 10% of dwelling units in multi-family must be Type A units (IBC requires 2%)\n- 12A DCMR 1107.6: All primary entrances must be accessible (no exemptions for grade changes)\n- 12A DCMR 1109.2: D.C. requires grab bars at all water closets in public restrooms\n\nSTRUCTURAL:\n- 12A DCMR 1604.5: Snow load minimum 30 psf (higher than standard IBC for region)\n- 12A DCMR 1609.3: Wind design per ASCE 7 with 115 mph basic wind speed minimum\n\nHISTORIC PRESERVATION (unique to D.C.):\n- 12A DCMR 3412: Historic buildings within Historic Districts require HPRB approval\n- Work in L'Enfant Plan zones requires additional Historic Preservation Review Board compliance\n\nENERGY:\n- D.C. Green Building Act: Buildings over 10,000 sq ft must meet LEED certification or equivalent\n- 12A DCMR C402: Envelope requirements 10% more stringent than IECC`,
-      'new-york': `NEW YORK CITY BUILDING CODE (NYC BC):\nNYC has its own building code separate from IBC with significant differences:\n\nEGRESS & EXITS:\n- NYC BC 1003.2: Minimum corridor width 44" but 60" in Group I-2 (hospitals)\n- NYC BC 1005.1: Egress capacity factors differ - 0.2" per occupant for stairs (IBC is 0.3")\n- NYC BC 1009.3: Stair width minimum 44" (IBC allows 36" in some cases)\n- NYC BC 1020.1: Exit access travel distance 200 ft max (sprinklered), 150 ft (unsprinklered)\n\nFIRE SAFETY:\n- NYC BC 903.2: Sprinklers required in ALL new buildings regardless of size (stricter than IBC)\n- NYC BC 907.2.1: Fire alarm required in buildings over 75 ft in height\n- NYC BC 3002.4: Standpipe systems required in buildings over 4 stories\n- Local Law 5/73: Retroactive fire safety requirements for existing high-rise buildings\n\nACCESSIBILITY:\n- NYC BC 1107: 5% of dwelling units must be Type A accessible (stricter than IBC 2%)\n- NYC BC 1109.2.1: At least one accessible entrance per 200 ft of street frontage\n- Local Law 58: Enhanced accessibility for places of public accommodation`,
-      'california': `CALIFORNIA BUILDING CODE (CBC - Title 24):\nCalifornia adopts IBC with extensive amendments:\n\nACCESSIBILITY (Most Restrictive in U.S.):\n- CBC 11B-206.2.1: Accessible routes required from ALL parking spaces\n- CBC 11B-403.5.1: Corridor width minimum 48" clear (IBC allows 44")\n- CBC 11B-404.2.4: Maneuvering clearances at doors more restrictive than ADA\n- CBC 11B-603: Toilet room clearances require 60" turning space\n\nSEISMIC (VERY CRITICAL):\n- CBC 1613: California-specific seismic design requirements beyond IBC\n- CBC 1616: Site-specific ground motion procedures required for many buildings\n- Hospital (OSHPD) buildings have additional seismic requirements\n\nENERGY (Title 24 Part 6):\n- Most stringent energy code in U.S.\n- Solar-ready requirements for new construction\n- Cool roof requirements in climate zones 10-15`,
-      'florida': `FLORIDA BUILDING CODE (FBC):\nFlorida adopts IBC with hurricane and high-velocity wind zone amendments:\n\nWIND DESIGN (CRITICAL):\n- FBC 1609: High-Velocity Hurricane Zone (HVHZ) requirements for Miami-Dade and Broward\n- Wind speeds up to 180 mph in HVHZ areas\n- Impact-resistant glazing or shutters required in coastal high-hazard areas\n\nFLOOD REQUIREMENTS:\n- FBC 3109: Coastal construction requirements\n- Buildings in V-zones must be elevated above base flood elevation\n- Breakaway walls required below design flood elevation`,
-      'chicago': `CHICAGO BUILDING CODE (CBC):\nChicago has its own comprehensive building code separate from IBC:\n\nEGRESS:\n- Chicago BC 13-160: Corridor widths minimum 44", 66" for schools\n- Chicago BC 13-160-140: Exit stair requirements differ from IBC\n\nFIRE SAFETY:\n- Chicago BC 15-16: Sprinkler requirements for buildings over 80 ft\n- High-Rise Fire Safety Ordinance: Additional requirements for buildings over 80 ft`
-    };
-
-    const jurisdictionKey = jurisdiction?.toLowerCase().replace(/\s+/g, '-') || 'general';
-    const jurisdictionContext = jurisdictionAmendments[jurisdictionKey] || '';
-    const jurisdictionCitation = jurisdictionKey === 'dc' ? '12A DCMR'
-      : jurisdictionKey === 'new-york' ? 'NYC BC'
-      : jurisdictionKey === 'california' ? 'CBC'
-      : jurisdictionKey === 'florida' ? 'FBC'
-      : jurisdictionKey === 'chicago' ? 'Chicago BC'
-      : 'IBC';
-
-    const systemPrompt = `You are an expert building code compliance analyst with deep knowledge of:
-- International Building Code (IBC) 2018, 2021, 2024
-- International Residential Code (IRC) 2018, 2021, 2024
-- NFPA 101 Life Safety Code
-- ADA Accessibility Guidelines
-- State and local amendments including NYC BC, California CBC, Florida FBC, Chicago BC, and D.C. 12A DCMR
-
-${jurisdictionContext}
-
-Analyze the provided architectural drawing/floor plan for code compliance issues.
-
-For each issue found, provide:
-1. Category (Egress, Fire Safety, Accessibility, Structural, MEP, Zoning, Life Safety)
-2. Clear title describing the issue
-3. Detailed description of the violation
-4. Severity level (critical, warning, or advisory)
-5. Specific code reference (e.g., "${jurisdictionCitation} Section 1005.1")
-6. Location in the drawing (e.g., "Main corridor, north exit")
-7. Suggested fix to resolve the issue
-
-Consider the jurisdiction: ${jurisdiction || 'General IBC'} and project type: ${projectType || 'Commercial'}.
-Use code year: ${codeYear || '2021'}.
-${jurisdictionContext ? `IMPORTANT: Apply ${jurisdictionCitation} amendments which may be MORE RESTRICTIVE than base IBC. Always cite ${jurisdictionCitation} sections when jurisdiction-specific requirements apply.` : ''}
-
-Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
-
-You MUST respond with a valid JSON object in exactly this format:
-{
-  "issues": [
-    {
-      "id": "issue-1",
-      "category": "Egress|Fire Safety|Accessibility|Structural|MEP|Zoning|Life Safety",
-      "title": "Brief issue title",
-      "description": "Detailed description of the violation",
-      "severity": "critical|warning|advisory",
-      "codeReference": "Specific code section reference",
-      "codeYear": "${codeYear || '2021'}",
-      "location": "Location in the drawing",
-      "suggestedFix": "Recommended fix for the issue"
-    }
-  ],
-  "jurisdictionNotes": "Notes about jurisdiction-specific requirements",
-  "overallScore": 85
-}`;
-
-    const userPrompt = `Analyze this architectural drawing for building code compliance issues. 
-Look for violations related to:
-- Egress requirements (corridor widths, exit distances, door swings)
-- Fire separation and rated assemblies
-- Accessibility (ADA compliance, clearances, ramp slopes)
-- Occupancy load calculations
-- Stairway and handrail requirements
-- Emergency lighting and signage
-- Structural concerns visible in the plans
-
-Provide a comprehensive analysis with specific code citations. Return ONLY valid JSON.`;
-
-    console.log("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userPrompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${imageType};base64,${imageBase64}`,
-                detail: "high"
-              }
-            }
-          ]
-        }
-      ],
-      max_tokens: 4096,
-      response_format: { type: "json_object" }
+    const outcome = await analyzeDrawingWithOpenAI({
+      openai,
+      imageBase64,
+      imageType,
+      jurisdiction,
+      projectType,
+      codeYear,
+      codeType,
+      logInfo: console.log,
+      logError: console.error,
     });
 
-    const content = response.choices?.[0]?.message?.content;
-    if (!content) {
-      console.error("[analyze-drawing] No content in OpenAI response");
-      return res.status(500).json({ error: "No response from AI model" });
+    if (!outcome.ok) {
+      return res.status(outcome.status).json({ error: outcome.error });
     }
 
-    let analysisData;
-    try {
-      analysisData = JSON.parse(content);
-    } catch (parseError) {
-      console.error("[analyze-drawing] Failed to parse OpenAI response:", content.substring(0, 500));
-      return res.status(500).json({ error: "Invalid JSON response from AI model" });
-    }
-
-    const issues = analysisData.issues || [];
-    const critical = issues.filter(i => i.severity === "critical").length;
-    const warnings = issues.filter(i => i.severity === "warning").length;
-    const advisory = issues.filter(i => i.severity === "advisory").length;
-
-    const result = {
-      issues: issues.map((issue, index) => ({
-        ...issue,
-        id: issue.id || `issue-${index + 1}`,
-        codeYear: issue.codeYear || codeYear || "2021"
-      })),
-      summary: {
-        totalIssues: issues.length,
-        critical,
-        warnings,
-        advisory,
-        overallScore: analysisData.overallScore || Math.max(0, 100 - (critical * 20) - (warnings * 10) - (advisory * 3))
-      },
-      jurisdictionNotes: analysisData.jurisdictionNotes || ""
-    };
-
-    console.log(`[analyze-drawing] Analysis complete: ${result.summary.totalIssues} issues found`);
-    res.json(result);
+    res.status(outcome.status).json(outcome.result);
   } catch (err) {
     console.error("[analyze-drawing] Error:", err.message);
     const safeMessage = err.message?.includes("API") || err.message?.includes("key") || err.message?.includes("token")

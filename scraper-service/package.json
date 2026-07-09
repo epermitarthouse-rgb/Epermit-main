@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "node --test tests/arlington-orchestration.test.js tests/arlington-durability-validation.test.js tests/arlington-lease-concurrency.test.js tests/arlington-claim-rpc.test.js tests/arlington-worker-lifecycle.test.js tests/arlington-enqueue-dedup.test.js tests/arlington-dispatch.test.js tests/arlington-cancel.test.js tests/arlington-verify-completion.test.js tests/arlington-project-information.test.js tests/arlington-durable-progress-streaming.test.js",
+    "test": "node --test tests/arlington-orchestration.test.js tests/arlington-durability-validation.test.js tests/arlington-lease-concurrency.test.js tests/arlington-claim-rpc.test.js tests/arlington-worker-lifecycle.test.js tests/arlington-enqueue-dedup.test.js tests/arlington-dispatch.test.js tests/arlington-cancel.test.js tests/arlington-verify-completion.test.js tests/arlington-project-information.test.js tests/arlington-durable-progress-streaming.test.js tests/analyze-drawing.test.js",
     "start": "node server.js",
     "install-browsers": "npx playwright install chromium --with-deps",
     "postinstall": "npx playwright install chromium --with-deps"
