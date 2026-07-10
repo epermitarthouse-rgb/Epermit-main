@@ -262,7 +262,7 @@ const uciManualFormTextClass = "text-foreground dark:text-foreground";
 
 export default function UciDashboard() {
   const { projects, loading: projectsLoading } = useProjects();
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [providers, setProviders] = useState<UtilityProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
@@ -384,7 +384,7 @@ export default function UciDashboard() {
   };
 
   const loadProviders = useCallback(async () => {
-    if (authLoading || !user || !session) return;
+    if (authLoading || !user?.id) return;
     setProvidersLoading(true);
     try {
       const res = await listUciProviders();
@@ -401,19 +401,19 @@ export default function UciDashboard() {
     } finally {
       setProvidersLoading(false);
     }
-  }, [authLoading, user, session]);
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) {
+    if (!user?.id) {
       setProvidersLoading(false);
       return;
     }
     void loadProviders();
-  }, [authLoading, user, session, loadProviders]);
+  }, [authLoading, user?.id, loadProviders]);
 
   const refreshCoordination = useCallback(async () => {
-    if (authLoading || !user || !session) return;
+    if (authLoading || !user?.id) return;
     if (!projectId) {
       setRecords([]);
       return;
@@ -428,12 +428,12 @@ export default function UciDashboard() {
     } finally {
       setRecordsLoading(false);
     }
-  }, [authLoading, user, session, projectId]);
+  }, [authLoading, user?.id, projectId]);
 
   useEffect(() => {
-    if (authLoading || !user || !session) return;
+    if (authLoading || !user?.id) return;
     void refreshCoordination();
-  }, [authLoading, user, session, refreshCoordination]);
+  }, [authLoading, user?.id, refreshCoordination]);
 
   /**
    * Project/tenant safety: when the active PermitPilot project changes, any

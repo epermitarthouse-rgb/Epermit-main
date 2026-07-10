@@ -19,8 +19,6 @@ import type {
 export const UCI_SESSION_EXPIRED_MESSAGE =
   "Your PermitPilot session has expired. Please sign in again.";
 
-const TOKEN_REFRESH_LEAD_SECONDS = 60;
-
 /** Thrown when PermitPilot auth cannot be refreshed for UCI API calls. */
 export class UciSessionExpiredError extends Error {
   constructor(message = UCI_SESSION_EXPIRED_MESSAGE) {
@@ -66,7 +64,7 @@ export function decodeAccessTokenExpiry(accessToken: string): number | null {
 
 export function isAccessTokenExpiredOrExpiringSoon(
   expiresAtSec: number | null | undefined,
-  leadSeconds = TOKEN_REFRESH_LEAD_SECONDS,
+  leadSeconds = 60,
 ): boolean {
   if (expiresAtSec == null || !Number.isFinite(expiresAtSec)) return false;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -117,7 +115,7 @@ type UciFetchDiagnostics = {
 };
 
 function logUciFetchDiagnostics(diag: UciFetchDiagnostics): void {
-  if (!import.meta.env.DEV) return;
+  if (!import.meta.env?.DEV) return;
   console.info("[uci-api]", {
     endpoint: diag.endpoint,
     tokenExpiry: diag.tokenExpiry,
@@ -127,27 +125,62 @@ function logUciFetchDiagnostics(diag: UciFetchDiagnostics): void {
   });
 }
 
-async function refreshSupabaseAccessToken(): Promise<string> {
-  const { data, error } = await supabase.auth.refreshSession();
-  const token = data.session?.access_token;
-  if (error || !token) {
-    throw new UciSessionExpiredError();
+type UciAuthSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
+type UciAuthRefreshResult = Awaited<ReturnType<typeof supabase.auth.refreshSession>>;
+
+type UciAuthDeps = {
+  getSession: () => Promise<UciAuthSessionResult>;
+  refreshSession: () => Promise<UciAuthRefreshResult>;
+};
+
+const defaultAuthDeps: UciAuthDeps = {
+  getSession: () => supabase.auth.getSession(),
+  refreshSession: () => supabase.auth.refreshSession(),
+};
+
+let authDepsOverride: Partial<UciAuthDeps> | null = null;
+let scraperBaseUrlOverride: string | null = null;
+
+function getUciRequestBaseUrl(): string {
+  return scraperBaseUrlOverride ?? getScraperBaseUrl();
+}
+
+function getAuthDeps(): UciAuthDeps {
+  return { ...defaultAuthDeps, ...authDepsOverride };
+}
+
+/** Shared in-flight refresh — only one refreshSession() at a time across UCI callers. */
+let refreshInFlight: Promise<string> | null = null;
+
+function coordinatedRefreshSession(): Promise<string> {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const { data, error } = await getAuthDeps().refreshSession();
+        const token = data.session?.access_token;
+        if (error || !token) {
+          throw new UciSessionExpiredError();
+        }
+        return token;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
   }
-  return token;
+  return refreshInFlight;
 }
 
 /**
- * Resolve a valid Supabase access token, proactively refreshing when expired
- * or expiring within {@link TOKEN_REFRESH_LEAD_SECONDS}.
+ * Resolve the current Supabase access token from the shared client session.
+ * Supabase autoRefreshToken remains the primary refresh authority.
  */
 export async function getValidUciAccessToken(): Promise<{
   token: string;
   expiry: number | null;
-  refreshAttempted: boolean;
 }> {
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await getAuthDeps().getSession();
 
   if (!session?.access_token) {
     throw new Error("Not authenticated");
@@ -158,19 +191,9 @@ export async function getValidUciAccessToken(): Promise<{
       ? session.expires_at
       : decodeAccessTokenExpiry(session.access_token);
 
-  if (isAccessTokenExpiredOrExpiringSoon(expiry)) {
-    const token = await refreshSupabaseAccessToken();
-    return {
-      token,
-      expiry: decodeAccessTokenExpiry(token),
-      refreshAttempted: true,
-    };
-  }
-
   return {
     token: session.access_token,
     expiry,
-    refreshAttempted: false,
   };
 }
 
@@ -180,15 +203,15 @@ type UciAuthenticatedFetchOptions = {
 };
 
 /**
- * Perform an authenticated UCI HTTP request with proactive refresh and a single
- * INVALID_JWT retry after refreshSession().
+ * Perform an authenticated UCI HTTP request using the current session token.
+ * On confirmed 401 INVALID_JWT only, performs one coordinated refresh and retries once.
  */
 export async function uciAuthenticatedFetch(
   path: string,
   init: RequestInit & { headers?: Record<string, string> } = {},
   options: UciAuthenticatedFetchOptions = {},
 ): Promise<Response> {
-  const base = getScraperBaseUrl();
+  const base = getUciRequestBaseUrl();
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
 
   let refreshAttempted = false;
@@ -203,7 +226,6 @@ export async function uciAuthenticatedFetch(
   };
 
   let tokenState = await getValidUciAccessToken();
-  refreshAttempted = tokenState.refreshAttempted;
 
   let res = await runOnce(tokenState.token);
 
@@ -213,14 +235,13 @@ export async function uciAuthenticatedFetch(
       retryAttempted = true;
       refreshAttempted = true;
       try {
-        const refreshedToken = await refreshSupabaseAccessToken();
+        const refreshedToken = await coordinatedRefreshSession();
         tokenState = {
           token: refreshedToken,
           expiry: decodeAccessTokenExpiry(refreshedToken),
-          refreshAttempted: true,
         };
         res = await runOnce(refreshedToken);
-      } catch {
+      } catch (err) {
         logUciFetchDiagnostics({
           endpoint: path,
           tokenExpiry: tokenState.expiry,
@@ -228,6 +249,7 @@ export async function uciAuthenticatedFetch(
           retryAttempted,
           finalStatus: 401,
         });
+        if (err instanceof UciSessionExpiredError) throw err;
         throw new UciSessionExpiredError();
       }
     }
@@ -244,6 +266,19 @@ export async function uciAuthenticatedFetch(
 
   return res;
 }
+
+/** @internal Regression-test hooks only — do not use in application code. */
+export const __uciApiTestHooks = {
+  setAuthDepsOverride(deps: Partial<UciAuthDeps> | null) {
+    authDepsOverride = deps;
+  },
+  setScraperBaseUrlOverride(url: string | null) {
+    scraperBaseUrlOverride = url;
+  },
+  resetRefreshInFlight() {
+    refreshInFlight = null;
+  },
+};
 
 async function uciFetchJson<T>(
   path: string,
