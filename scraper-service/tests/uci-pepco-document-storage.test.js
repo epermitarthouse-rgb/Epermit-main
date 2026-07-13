@@ -171,22 +171,74 @@ describe("PEPCO Supabase document storage", () => {
     assert.ok(fs.existsSync(localPath));
   });
 
-  it("upserts the same storage object on duplicate refresh", async () => {
-    const pdfBody = Buffer.from("%PDF-1.4 upsert");
-    const { supabase, uploads } = makeSupabaseStorageMock();
+  it("does not write local files in production mode", async () => {
+    const priorNodeEnv = process.env.NODE_ENV;
+    const priorPersist = process.env.UCI_PERSIST_LOCAL_DOCUMENTS;
+    process.env.NODE_ENV = "production";
+    process.env.UCI_PERSIST_LOCAL_DOCUMENTS = "false";
 
-    await downloadPepcoDocuments(makeMockRequest(pdfBody), applicationUuid, [{ documentName: "plan.pdf" }], {
-      coordinationId,
-      projectId,
-      supabase,
-    });
-    await downloadPepcoDocuments(makeMockRequest(pdfBody), applicationUuid, [{ documentName: "plan.pdf" }], {
-      coordinationId,
-      projectId,
-      supabase,
-    });
+    try {
+      const pdfBody = Buffer.from("%PDF-1.4 prod-no-local");
+      const { supabase } = makeSupabaseStorageMock();
 
-    assert.equal(uploads.length, 2);
-    assert.equal(uploads[0].storagePath, uploads[1].storagePath);
+      const result = await downloadPepcoDocuments(
+        makeMockRequest(pdfBody),
+        applicationUuid,
+        [{ documentName: "plan.pdf" }],
+        {
+          coordinationId,
+          projectId,
+          supabase,
+        },
+      );
+
+      const file = result.downloadedFiles[0];
+      assert.equal(file.status, "saved");
+      assert.equal(file.storageStatus, "stored");
+      assert.equal(file.localPath, undefined);
+
+      const localPath = resolvePepcoStoredDocumentPath({
+        coordinationId,
+        applicationUuid,
+        fileName: String(file.fileName),
+      });
+      assert.ok(localPath);
+      assert.equal(fs.existsSync(localPath), false);
+    } finally {
+      if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = priorNodeEnv;
+      if (priorPersist === undefined) delete process.env.UCI_PERSIST_LOCAL_DOCUMENTS;
+      else process.env.UCI_PERSIST_LOCAL_DOCUMENTS = priorPersist;
+    }
+  });
+
+  it("reports already_exists on duplicate content refresh", async () => {
+    const pdfBody = Buffer.from("%PDF-1.4 upsert-same");
+    const { supabase } = makeSupabaseStorageMock();
+    const { computeContentHash } = require("../app/services/uci/uci-document-storage.service.js");
+    const hash = computeContentHash(pdfBody);
+
+    const first = await downloadPepcoDocuments(
+      makeMockRequest(pdfBody),
+      applicationUuid,
+      [{ documentName: "plan.pdf", documentUploadDateTime: "2026-01-01T00:00:00Z" }],
+      { coordinationId, projectId, supabase },
+    );
+
+    const second = await downloadPepcoDocuments(
+      makeMockRequest(pdfBody),
+      applicationUuid,
+      [{ documentName: "plan.pdf", documentUploadDateTime: "2026-01-01T00:00:00Z" }],
+      {
+        coordinationId,
+        projectId,
+        supabase,
+        existingDownloadedFiles: first.downloadedFiles,
+      },
+    );
+
+    assert.equal(first.downloadedFiles[0].storageAction, "uploaded");
+    assert.equal(second.downloadedFiles[0].storageAction, "already_exists");
+    assert.equal(second.downloadedFiles[0].contentHash, hash);
   });
 });

@@ -9,6 +9,7 @@ const { upsertPortalApplications } = require("./uci-portal-application-sync.serv
 const { upsertPortalCommunications } = require("./uci-communication-sync.service.js");
 const { upsertPortalStatusEvents } = require("./uci-milestone-sync.service.js");
 const { emptyCountBucket } = require("./uci-sync-utils.js");
+const { processLifecycleMappingAfterSync } = require("./uci-lifecycle-mapping.service.js");
 
 /**
  * @param {unknown} metadata
@@ -136,11 +137,49 @@ async function runPortalSync(supabase, opts) {
     ...milestoneResult.errors,
   );
 
+  let lifecycle = {
+    status: "not_run",
+    evaluated_count: 0,
+    applied_count: 0,
+    blocked_count: 0,
+    auto_apply_enabled: false,
+    proposals: [],
+    errors: [],
+  };
+
+  try {
+    lifecycle = await processLifecycleMappingAfterSync(supabase, {
+      coordinationRecordId: tenantContext.coordinationRecordId,
+      projectId: tenantContext.projectId,
+      providerSlug: adapterContext.providerSlug,
+      adapter,
+      rawApplications,
+      normalizedApplications,
+      coordinationRecord: tenantContext.coordinationRecord,
+    });
+  } catch (lifecycleErr) {
+    const message =
+      lifecycleErr instanceof Error
+        ? lifecycleErr.message.slice(0, 500)
+        : String(lifecycleErr).slice(0, 500);
+    lifecycle = {
+      status: "failed",
+      evaluated_count: 0,
+      applied_count: 0,
+      blocked_count: 0,
+      auto_apply_enabled: process.env.UCI_AUTO_STAGE_TRANSITIONS === "true",
+      proposals: [],
+      errors: [message],
+    };
+    warnings.push(`Lifecycle mapping failed: ${message}`);
+  }
+
   const summary = {
     providerSlug: adapterContext.providerSlug,
     applications: applicationResult.counts,
     communications: communicationResult.counts,
     milestones: milestoneResult.counts,
+    lifecycle,
     warnings,
     errors,
     syncedAt,
@@ -162,6 +201,7 @@ async function runPortalSync(supabase, opts) {
         applications: summary.applications,
         communications: summary.communications,
         milestones: summary.milestones,
+        lifecycle: summary.lifecycle,
         warning_count: warnings.length,
         error_count: errors.length,
       },

@@ -19,7 +19,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { PepcoApplicationDetailDiscovery } from "@/types/uci";
+import type { PepcoApplicationDetailDiscovery, UciNormalizedSyncResult } from "@/types/uci";
+import { normalizedSyncDrawerMessage } from "@/lib/uciNormalizedSync";
 import { ChevronDown, ChevronRight, Info, Loader2, RefreshCw } from "lucide-react";
 import { PepcoApplicationDetailProgressLog } from "@/components/uci/PepcoApplicationDetailsPanel";
 
@@ -62,6 +63,7 @@ export type PepcoPortalHeaderSectionProps = {
   pepcoAppDetailMsg: string | null;
   pepcoDashboardFromMetadata: PepcoDashboardMetadata | null;
   pepcoApplicationDetailDiscovery: PepcoApplicationDetailDiscovery | null;
+  pepcoLastNormalizedSync: UciNormalizedSyncResult | null;
   hasPepcoDashboardCards: boolean;
   hasPepcoApplicationDetails: boolean;
   onLoginCheck: () => void;
@@ -98,7 +100,7 @@ function connectionBadgeVariant(
  * verification required, failed). The idle/ready state has no callout —
  * the compact instruction row below covers that case without duplication.
  */
-function buildOperationSummary(props: PepcoPortalHeaderSectionProps): OperationSummary | null {
+export function buildOperationSummary(props: PepcoPortalHeaderSectionProps): OperationSummary | null {
   const anyBusy =
     props.pepcoDiscoveryBusy ||
     props.pepcoResumeBusy ||
@@ -131,6 +133,18 @@ function buildOperationSummary(props: PepcoPortalHeaderSectionProps): OperationS
 
   if (failMsg) {
     return { label: "Failed", detail: failMsg, tone: "destructive" };
+  }
+
+  if (
+    props.pepcoLastNormalizedSync &&
+    (props.pepcoLastNormalizedSync.status === "partial" ||
+      props.pepcoLastNormalizedSync.status === "failed")
+  ) {
+    return {
+      label: "System sync issue",
+      detail: normalizedSyncDrawerMessage(props.pepcoLastNormalizedSync),
+      tone: "warning",
+    };
   }
 
   return null;
@@ -274,6 +288,21 @@ export function PepcoPortalHeaderSection(props: PepcoPortalHeaderSectionProps) {
           Details.
         </p>
       )}
+
+      {!operationSummary && props.pepcoLastNormalizedSync?.status === "success" ? (
+        <div
+          className={cn(
+            "mt-2 rounded-md border px-3 py-1.5 text-xs",
+            operationSummaryToneClass("success"),
+          )}
+          aria-live="polite"
+        >
+          <p className="font-semibold">System data synced</p>
+          <p className="mt-0.5 leading-snug opacity-90">
+            {normalizedSyncDrawerMessage(props.pepcoLastNormalizedSync)}
+          </p>
+        </div>
+      ) : null}
 
       {props.pepcoDashboardFromMetadata?.listApiWarning ? (
         <p className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-foreground">

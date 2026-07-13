@@ -34,6 +34,11 @@ const {
   pickPepcoMfaCoordinationMeta,
 } = require("./uci-pepco-discovery.service.js");
 const { runPortalSyncFromPepcoApplications } = require("./uci-portal-sync.service.js");
+const { emptyCountBucket } = require("./uci-sync-utils.js");
+const {
+  buildDocumentStorageApiResult,
+  sanitizeDownloadedFilesForPersistence,
+} = require("./uci-document-storage.service.js");
 
 const CONTINUE_ACTION = "discover_application_details";
 
@@ -112,6 +117,7 @@ function resolveAppDetailResumeOptions(rec, bodyUuids, bodyDownloadDocumentsOpt,
  *   captureApplicationIds?: boolean;
  *   bodyUuids?: string[];
  *   downloadDocumentsOpt?: unknown;
+ *   portalSyncJobId?: string;
  *   log: (msg: string) => void;
  * }} opts
  */
@@ -131,6 +137,7 @@ function registerAppDetailAwaitingMfaSession(opts) {
     captureApplicationIds: opts.captureApplicationIds,
     applicationUuids: runOptions.applicationUuids,
     downloadDocuments: runOptions.downloadDocuments,
+    portalSyncJobId: opts.portalSyncJobId,
   });
 }
 
@@ -243,10 +250,117 @@ function isNormalizedPortalSyncEnabled() {
 }
 
 /**
+ * @param {unknown} counts
+ * @returns {{ discovered: number, inserted: number, updated: number, skipped: number, failed: number }}
+ */
+function cloneSyncCountBucket(counts) {
+  const b = counts && typeof counts === "object" ? /** @type {Record<string, unknown>} */ (counts) : {};
+  return {
+    discovered: Number(b.discovered) || 0,
+    inserted: Number(b.inserted) || 0,
+    updated: Number(b.updated) || 0,
+    skipped: Number(b.skipped) || 0,
+    failed: Number(b.failed) || 0,
+  };
+}
+
+/**
+ * @param {unknown} errors
+ * @returns {string[]}
+ */
+function sanitizeSyncErrorsForApi(errors) {
+  if (!Array.isArray(errors)) return [];
+  return errors
+    .slice(0, 5)
+    .map((e) => String(e).trim().slice(0, 500))
+    .filter(Boolean);
+}
+
+/**
+ * @param {unknown} summary
+ * @returns {"success" | "partial" | "failed"}
+ */
+function deriveNormalizedSyncStatusFromSummary(summary) {
+  if (!summary || typeof summary !== "object") return "failed";
+
+  const apps = cloneSyncCountBucket(/** @type {{ applications?: unknown }} */ (summary).applications);
+  const comms = cloneSyncCountBucket(
+    /** @type {{ communications?: unknown }} */ (summary).communications,
+  );
+  const milestones = cloneSyncCountBucket(
+    /** @type {{ milestones?: unknown }} */ (summary).milestones,
+  );
+  const errors = sanitizeSyncErrorsForApi(/** @type {{ errors?: unknown }} */ (summary).errors);
+
+  const totalFailed = apps.failed + comms.failed + milestones.failed;
+  const totalMutations =
+    apps.inserted +
+    apps.updated +
+    comms.inserted +
+    comms.updated +
+    milestones.inserted +
+    milestones.updated;
+
+  if (errors.length === 0 && totalFailed === 0) return "success";
+  if (totalMutations > 0 || apps.skipped + comms.skipped + milestones.skipped > 0) {
+    return "partial";
+  }
+  return "failed";
+}
+
+/**
+ * @param {{
+ *   status: "success" | "partial" | "failed" | "not_run";
+ *   reason?: string | null;
+ *   applications?: ReturnType<typeof cloneSyncCountBucket>;
+ *   communications?: ReturnType<typeof cloneSyncCountBucket>;
+ *   milestones?: ReturnType<typeof cloneSyncCountBucket>;
+ *   errors?: string[];
+ *   synced_at?: string | null;
+ * }} payload
+ */
+function buildNormalizedSyncApiResult(payload) {
+  const empty = emptyCountBucket();
+  return {
+    status: payload.status,
+    reason: payload.reason ?? null,
+    applications: payload.applications ?? empty,
+    communications: payload.communications ?? empty,
+    milestones: payload.milestones ?? empty,
+    errors: payload.errors ?? [],
+    synced_at: payload.synced_at ?? null,
+  };
+}
+
+/**
+ * @param {unknown} summary
+ * @returns {ReturnType<typeof buildNormalizedSyncApiResult>}
+ */
+function buildNormalizedSyncApiResultFromSummary(summary) {
+  if (!summary || typeof summary !== "object") {
+    return buildNormalizedSyncApiResult({
+      status: "failed",
+      errors: ["Normalized sync did not return a summary."],
+    });
+  }
+
+  const s = /** @type {Record<string, unknown>} */ (summary);
+  return buildNormalizedSyncApiResult({
+    status: deriveNormalizedSyncStatusFromSummary(summary),
+    applications: cloneSyncCountBucket(s.applications),
+    communications: cloneSyncCountBucket(s.communications),
+    milestones: cloneSyncCountBucket(s.milestones),
+    errors: sanitizeSyncErrorsForApi(s.errors),
+    synced_at: typeof s.syncedAt === "string" ? s.syncedAt : null,
+  });
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} coordinationId
  * @param {string} projectId
  * @param {Array<Record<string, unknown>>} applications
+ * @returns {Promise<ReturnType<typeof buildNormalizedSyncApiResult>>}
  */
 async function maybeRunNormalizedPortalSyncAfterPersist(
   supabase,
@@ -254,20 +368,38 @@ async function maybeRunNormalizedPortalSyncAfterPersist(
   projectId,
   applications,
 ) {
-  if (!isNormalizedPortalSyncEnabled()) return;
+  if (!isNormalizedPortalSyncEnabled()) {
+    return buildNormalizedSyncApiResult({
+      status: "not_run",
+      reason: "disabled",
+    });
+  }
+
+  if (!Array.isArray(applications) || applications.length === 0) {
+    return buildNormalizedSyncApiResult({
+      status: "not_run",
+      reason: "no_applications",
+    });
+  }
 
   try {
-    await runPortalSyncFromPepcoApplications(supabase, {
+    const summary = await runPortalSyncFromPepcoApplications(supabase, {
       coordinationRecordId: coordinationId,
       projectId,
       applications,
       providerSlug: "pepco",
     });
+    return buildNormalizedSyncApiResultFromSummary(summary);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("[uci-pepco-app-detail] normalized portal sync failed", {
       coordinationId,
       provider: "pepco",
-      message: err instanceof Error ? err.message : String(err),
+      message,
+    });
+    return buildNormalizedSyncApiResult({
+      status: "failed",
+      errors: sanitizeSyncErrorsForApi([message]),
     });
   }
 }
@@ -289,10 +421,60 @@ function mergeApplicationDetailsByUuid(existingApps, incomingApps) {
   for (const app of incomingApps) {
     if (!app || typeof app !== "object") continue;
     const id = String(app.applicationUuid || "").trim();
-    if (id) map.set(id, app);
+    if (id) {
+      const copy = { ...app };
+      if (Array.isArray(copy.downloadedFiles)) {
+        copy.downloadedFiles = sanitizeDownloadedFilesForPersistence(
+          /** @type {Array<Record<string, unknown>>} */ (copy.downloadedFiles),
+        );
+      }
+      map.set(id, copy);
+    }
   }
 
   return Array.from(map.values());
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} coordinationId
+ * @param {string} projectId
+ * @returns {Promise<Map<string, Record<string, unknown>>>}
+ */
+async function loadExistingPepcoAppsByUuid(supabase, coordinationId, projectId) {
+  /** @type {Map<string, Record<string, unknown>>} */
+  const map = new Map();
+
+  const { data: row, error } = await supabase
+    .from("coordination_records")
+    .select("metadata")
+    .eq("id", coordinationId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (error || !row || typeof row.metadata !== "object" || row.metadata === null) {
+    return map;
+  }
+
+  const discovery = /** @type {{ pepco_application_detail_discovery?: unknown }} */ (row.metadata)
+    .pepco_application_detail_discovery;
+  const apps =
+    discovery &&
+    typeof discovery === "object" &&
+    !Array.isArray(discovery) &&
+    Array.isArray(/** @type {{ applications?: unknown[] }} */ (discovery).applications)
+      ? /** @type {Array<Record<string, unknown>>} */ (
+          /** @type {{ applications: unknown[] }} */ (discovery).applications
+        )
+      : [];
+
+  for (const app of apps) {
+    if (!app || typeof app !== "object") continue;
+    const id = String(app.applicationUuid || "").trim();
+    if (id) map.set(id, app);
+  }
+
+  return map;
 }
 
 /**
@@ -390,10 +572,25 @@ async function scrapeAllApplicationDetails(page, uuids, opts) {
   /** @type {Array<Record<string, unknown>>} */
   const applications = [];
 
+  /** @type {Map<string, Record<string, unknown>>} */
+  let existingAppsByUuid = new Map();
+  if (opts.supabase && opts.coordinationId && opts.projectId) {
+    existingAppsByUuid = await loadExistingPepcoAppsByUuid(
+      opts.supabase,
+      String(opts.coordinationId),
+      String(opts.projectId),
+    );
+  }
+
   for (let i = 0; i < uuids.length; i++) {
     const uuid = uuids[i];
     const jobHint = uuid;
     opts.log(`Fetching overview for ${jobHint} (${i + 1}/${uuids.length})`);
+    const priorApp = existingAppsByUuid.get(uuid);
+    const priorDownloads = Array.isArray(priorApp?.downloadedFiles)
+      ? /** @type {Array<Record<string, unknown>>} */ (priorApp.downloadedFiles)
+      : [];
+
     const detail = await scrapePepcoApplicationDetails(page, uuid, {
       logger: opts.log,
       downloadDocuments: opts.downloadDocuments === true,
@@ -401,6 +598,7 @@ async function scrapeAllApplicationDetails(page, uuids, opts) {
       projectId: opts.projectId,
       supabase: opts.supabase,
       bearerToken: opts.bearerToken,
+      existingDownloadedFiles: priorDownloads,
     });
     applications.push(detail);
   }
@@ -504,12 +702,14 @@ async function runApplicationDetailScrapeOnPage(opts) {
     lastStatus,
   );
 
-  await maybeRunNormalizedPortalSyncAfterPersist(
+  const normalized_sync = await maybeRunNormalizedPortalSyncAfterPersist(
     supabase,
     coordinationIdTrim,
     projectId,
     applications,
   );
+
+  const document_storage = buildDocumentStorageApiResult(applications);
 
   log(`Completed (${lastStatus}) — scraped ${applications.length} application(s)`);
 
@@ -518,6 +718,8 @@ async function runApplicationDetailScrapeOnPage(opts) {
     checkpoint: "application_details_scraped",
     applications_scraped: applications.length,
     applications,
+    normalized_sync,
+    document_storage,
     progress,
   };
 }
@@ -705,6 +907,7 @@ async function continueAppDetailAfterMfa(opts) {
  *   autoEmailMfa?: boolean;
  *   application_uuids?: string[];
  *   download_documents?: boolean;
+ *   portalSyncJobId?: string;
  * }} opts
  */
 async function runPepcoApplicationDetailDiscovery(opts) {
@@ -723,6 +926,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
     autoEmailMfa,
     application_uuids: bodyUuids,
     download_documents: downloadDocumentsOpt,
+    portalSyncJobId,
   } = opts;
 
   const downloadDocuments = downloadDocumentsOpt === true;
@@ -886,6 +1090,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
           captureApplicationIds: false,
           bodyUuids,
           downloadDocumentsOpt,
+          portalSyncJobId,
           log,
         });
         browser = null;
@@ -922,6 +1127,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
           captureApplicationIds: false,
           bodyUuids,
           downloadDocumentsOpt,
+          portalSyncJobId,
           log,
         });
         browser = null;
@@ -952,6 +1158,7 @@ async function runPepcoApplicationDetailDiscovery(opts) {
         captureApplicationIds: false,
         bodyUuids,
         downloadDocumentsOpt,
+        portalSyncJobId,
         log,
       });
       browser = null;
@@ -1058,12 +1265,14 @@ async function runPepcoApplicationDetailDiscovery(opts) {
       lastStatus,
     );
 
-    await maybeRunNormalizedPortalSyncAfterPersist(
+    const normalized_sync = await maybeRunNormalizedPortalSyncAfterPersist(
       supabase,
       coordinationIdTrim,
       projectId,
       applications,
     );
+
+    const document_storage = buildDocumentStorageApiResult(applications);
 
     await patchCoordinationAfterDiscovery(supabase, coordinationIdTrim, projectId, "completed", null, {
       pepco_discovery_session_status: "completed",
@@ -1077,6 +1286,8 @@ async function runPepcoApplicationDetailDiscovery(opts) {
       checkpoint: "application_details_scraped",
       applications_scraped: applications.length,
       applications,
+      normalized_sync,
+      document_storage,
       progress,
     };
   } catch (e) {
@@ -1370,6 +1581,9 @@ module.exports = {
   submitPepcoCodeAndContinueApplicationDetailDiscovery,
   persistPepcoApplicationDetailDiscovery,
   maybeRunNormalizedPortalSyncAfterPersist,
+  buildNormalizedSyncApiResult,
+  buildNormalizedSyncApiResultFromSummary,
+  deriveNormalizedSyncStatusFromSummary,
   mergeApplicationDetailsByUuid,
   buildAppDetailRunOptions,
   resolveAppDetailResumeOptions,

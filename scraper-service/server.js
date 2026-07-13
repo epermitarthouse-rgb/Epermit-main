@@ -9,7 +9,7 @@ const {
 const { sessions, cleanupSession } = require("./app/session/in-memory-store.js");
 
 const app = createSharedHttpApp({ scraperServiceRoot: __dirname });
-const { PORT, arlingtonWorker } = registerExecutionRoutes(app);
+const { PORT, arlingtonWorker, uciWorker } = registerExecutionRoutes(app);
 
 // ─── Shutdown ────────────────────────────────────────────────────────────────
 process.on("SIGINT", () => {
@@ -19,6 +19,10 @@ process.on("SIGINT", () => {
       "[SCRAPER SERVER] Stopping background Arlington durable worker (unrelated to PEPCO/UCI scrape sessions)",
     );
     arlingtonWorker.stop();
+  }
+  if (uciWorker && typeof uciWorker.stop === "function") {
+    console.log("[SCRAPER SERVER] Stopping background UCI durable portal sync worker");
+    uciWorker.stop();
   }
   for (const sid of Object.keys(sessions)) cleanupSession(sid, "sigint");
   process.exit(0);
@@ -70,6 +74,11 @@ async function startServer() {
     if (arlingtonWorker?.workerId) {
       console.log(
         `[SCRAPER SERVER] Background Arlington durable worker active workerId=${arlingtonWorker.workerId} (polls scrape_jobs; not PEPCO/UCI)`,
+      );
+    }
+    if (uciWorker?.workerId) {
+      console.log(
+        `[SCRAPER SERVER] Background UCI durable portal sync worker active workerId=${uciWorker.workerId}`,
       );
     }
     console.log(`

@@ -34,10 +34,7 @@ function sanitizePepcoMetadataForApi(metadata) {
     for (const file of app.downloadedFiles) {
       if (file && typeof file === "object") {
         delete file.localPath;
-        const sp = file.storagePath;
-        if (typeof sp === "string" && (path.isAbsolute(sp) || sp.includes(".."))) {
-          delete file.storagePath;
-        }
+        delete file.storagePath;
       }
     }
   }

@@ -1,6 +1,6 @@
 # UCI Compliance Checklist
 
-**Living audit matrix against CET-2026-UCI-BACKEND-001**
+**Living audit matrix against CET-2026-UCI-BACKEND-001** — cross-reference `UCI_DELIVERY_ROADMAP.md` §17 for non-blocking gaps not listed here row-by-row.
 
 Pre-filled from codebase gap analysis and PEPCO implementation review.  
 **Active roadmap:** `UCI_DELIVERY_ROADMAP.md`
@@ -28,7 +28,7 @@ Re-audit before marking any item ✅ Pass.
 |---|-------------|--------|------------------|
 | 1.1 | UCI separate module | ⚠️ Partial | `/api/uci`, `/uci` UI; distinct from county scrapers |
 | 1.2 | Not county scraper | ⚠️ Partial | PEPCO under `scrapers/pepco/`; utility_providers table |
-| 1.3 | Full lifecycle support | ⚠️ Partial | Stages 1–10 in DB; automation missing |
+| 1.3 | Full lifecycle support | ⚠️ Partial | Stages 1–10 in DB; PEPCO portal proposals + flag-gated auto-apply (D1C) |
 | 1.4 | Human in loop | ⚠️ Partial | Manual transitions; no submit/review flow yet |
 | 1.5 | Routine work automated | ⚠️ Partial | PEPCO read-only sync only |
 | 1.6 | Strategic decisions human | ⚠️ Partial | No auto-submit; no classifier auto-advance |
@@ -49,8 +49,8 @@ Re-audit before marking any item ✅ Pass.
 | 2.6 | No duplicate runtime | ✅ Pass | No second queue system |
 | 2.7 | Stateless agents | ❌ Missing | No agents |
 | 2.8 | State in Postgres | ⚠️ Partial | Lifecycle yes; PEPCO data in metadata |
-| 2.9 | Queue not source of truth | ⚠️ Partial | No durable UCI jobs |
-| 2.10 | Object storage | ❌ Missing | `debug/pepco-docs` only |
+| 2.9 | Queue not source of truth | ⚠️ Partial | Durable `uci_portal_sync` jobs on `scrape_jobs` when flag enabled |
+| 2.10 | Object storage | ⚠️ Partial | D1B — Supabase `project-documents`; production local disk disabled |
 | 2.11 | Playwright infra reused | ✅ Pass | `playwright-launch-for-scraper.js` |
 | 2.12 | Outbound email | ❌ Missing | |
 | 2.13 | Inbound email pattern | ❌ Missing | |
@@ -117,8 +117,8 @@ Re-audit before marking any item ✅ Pass.
 | # | Requirement | Status |
 |---|-------------|--------|
 | 5.2.1–5.2.6 | All six states | ✅ Pass | DB + API validation |
-| 5.2.7 | Explicit transitions | ⚠️ Partial | Manual + init only |
-| 5.2.8 | agent/user/cron triggers | ⚠️ Partial | user + system init |
+| 5.2.7 | Explicit transitions | ⚠️ Partial | Manual + portal lifecycle proposals; auto-apply behind flag |
+| 5.2.8 | agent/user/cron triggers | ⚠️ Partial | user + system init + system lifecycle mapping (flag-gated) |
 | 5.2.9 | Reason captured | ⚠️ Partial | Required for manual UI |
 | 5.2.10 | Manual correction | ✅ Pass | POST transition |
 
@@ -126,13 +126,13 @@ Re-audit before marking any item ✅ Pass.
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| 1 Provider Mapping | ❌ Missing | Manual init only |
-| 2 Load Profile | ❌ Missing | |
-| 3 Application Prep | ❌ Missing | |
-| 4 Submission | ❌ Missing | |
-| 5 Acknowledgment | ❌ Missing | Column exists |
-| 6 COS/Design Review | ❌ Missing | |
-| 7 CIAC/Cost | ❌ Missing | |
+| 1 Provider Mapping | ⚠️ Partial | D2.0 human-assisted setup; auto mapping missing |
+| 2 Load Profile | ⚠️ Partial | D2.1 missing-input inventory; `load_summary` agent_draft |
+| 3 Application Prep | ⚠️ Partial | D3 foundation; PEPCO template manifest; review workflow |
+| 4 Submission | ⚠️ Partial | PEPCO Submitted status proposal (stage 4); requires submission evidence |
+| 5 Acknowledgment | ⚠️ Partial | Initiated status proposal; column exists |
+| 6 COS/Design Review | ⚠️ Partial | PEPCO In Design / In Technical Review proposals |
+| 7 CIAC/Cost | ⚠️ Partial | PEPCO Contract Sent / payment proposals |
 | 8 Equipment | ❌ Missing | |
 | 9 Pre-Energization | ❌ Missing | |
 | 10 Energization/Closeout | ❌ Missing | |
@@ -171,11 +171,11 @@ Re-audit before marking any item ✅ Pass.
 | Table | Schema exists | Operational writes | RLS |
 |-------|---------------|-------------------|-----|
 | coordination_stage_transitions | ✅ Pass | ⚠️ Partial (manual/init) | ⚠️ Partial |
-| coordination_applications | ✅ Pass | ❌ Missing | ⚠️ Partial |
-| coordination_communications | ✅ Pass | ❌ Missing | ⚠️ Partial |
-| coordination_costs | ✅ Pass | ❌ Missing | ⚠️ Partial |
-| coordination_equipment | ✅ Pass | ❌ Missing | ⚠️ Partial |
-| coordination_milestones | ✅ Pass | ❌ Missing | ⚠️ Partial |
+| coordination_applications | ✅ Pass | ⚠️ Partial (D1A portal_sync) | ⚠️ Partial |
+| coordination_communications | ✅ Pass | ⚠️ Partial (D1A portal_sync) | ⚠️ Partial |
+| coordination_costs | ✅ Pass | ⚠️ Partial (D7 upsert) | ⚠️ Partial |
+| coordination_equipment | ✅ Pass | ⚠️ Partial (D8 create/check-in) | ⚠️ Partial |
+| coordination_milestones | ✅ Pass | ⚠️ Partial (D1A portal_sync) | ⚠️ Partial |
 
 ---
 
@@ -183,18 +183,18 @@ Re-audit before marking any item ✅ Pass.
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| A1 Provider Mapper | ❌ Missing | Manual init ≠ agent |
-| A2 Load Profile | ❌ Missing | |
-| A3 Application Builder | ❌ Missing | |
-| A4 Submission | ❌ Missing | PEPCO scrape ≠ submit |
-| A5 Communication Parser | ❌ Missing | Messages in metadata only |
-| A6 COS Analyst | ❌ Missing | |
+| A1 Provider Mapper | ⚠️ Partial | D2.0 human-assisted ≠ full Agent 1 |
+| A2 Load Profile | ⚠️ Partial | D2.1 foundation; no numeric templates |
+| A3 Application Builder | ⚠️ Partial | D3 foundation; no worksheet generation |
+| A4 Submission | ⚠️ Partial | D4 foundation; PEPCO portal adapter blocked |
+| A5 Communication Parser | ⚠️ Partial | D5 portal-sync keyword classifier; no inbound email |
+| A6 COS Analyst | ⚠️ Partial | D6 discrepancy analysis foundation |
 | A7 Easement/ROW | 🚫 Deferred | |
-| A8 CIAC/Cost | ❌ Missing | |
-| A9 Equipment | ❌ Missing | |
+| A8 CIAC/Cost | ⚠️ Partial | D7 manual cost CRUD; no QuickBooks |
+| A9 Equipment | ⚠️ Partial | D8 CRUD + check-in; no cron |
 | A10 Inspection Release | 🚫 Deferred | |
-| A11 Meter Set | ❌ Missing | |
-| A12 Energization/Closeout | ❌ Missing | |
+| A11 Meter Set | ⚠️ Partial | D9 checklist + milestone |
+| A12 Energization/Closeout | ⚠️ Partial | D10 closeout checklist metadata |
 
 *(Per-agent requirement rows A1.1–A12.12 inherit agent-level status unless noted in re-audit.)*
 
@@ -218,15 +218,15 @@ Re-audit before marking any item ✅ Pass.
 | API.1 | List coordination | ✅ Pass |
 | API.2 | Get coordination detail | ✅ Pass |
 | API.3 | Manual transition | ✅ Pass |
-| API.4 | Communication log | ❌ Missing | embedded recent only |
-| API.5 | Trigger draft | ❌ Missing |
-| API.6 | Review application | ❌ Missing |
-| API.7 | Submit application | ❌ Missing |
-| API.8 | Portfolio view | ❌ Missing |
+| API.4 | Communication log | ⚠️ Partial | D1A list + D5 classify |
+| API.5 | Trigger draft | ⚠️ Partial | D3 `POST .../applications` |
+| API.6 | Review application | ✅ Pass | D3 |
+| API.7 | Submit application | ⚠️ Partial | D4; PEPCO 501 |
+| API.8 | Portfolio view | ⚠️ Partial | D11 API only |
 | API.9 | Provider directory | ⚠️ Partial | global not tenant |
 | API.10 | Escalate | ❌ Missing |
-| API.11 | Needs attention | ❌ Missing |
-| API.12 | Reclassify | ❌ Missing |
+| API.11 | Needs attention | ✅ Pass | D5 |
+| API.12 | Reclassify | ✅ Pass | D5 |
 | API.13 | Auth required | ✅ Pass |
 | API.14 | Tenant enforced | ❌ Missing |
 | API.15 | API audit logging | ❌ Missing |
@@ -239,7 +239,7 @@ Re-audit before marking any item ✅ Pass.
 
 | Event | Status |
 |-------|--------|
-| E1–E16 all `uci.*` events | ❌ Missing |
+| E1–E16 all `uci.*` events | ⚠️ Partial | In-memory buffer; D5 classify/reclassify only |
 | E17–E19 payload/bus integration | ❌ Missing |
 
 ---
@@ -296,8 +296,8 @@ Re-audit before marking any item ✅ Pass.
 | # | Requirement | Status |
 |---|-------------|--------|
 | 16.1 | Basic dashboards | ⚠️ Partial | `/uci` basic |
-| 16.2 | Portfolio API | ❌ Missing |
-| 16.3–16.8 | Rollups/risks/queue | ❌ Missing |
+| 16.2 | Portfolio API | ⚠️ Partial | D11 `portfolio_view` |
+| 16.3–16.8 | Rollups/risks/queue | ⚠️ Partial | Stage summary + needs_attention count |
 | 16.9–16.10 | Quarterly/McDonald's config | ❌ Missing |
 | 16.11 | Tenant-scoped dashboard | ❌ Missing |
 
@@ -307,11 +307,11 @@ Re-audit before marking any item ✅ Pass.
 
 | Area | Status |
 |------|--------|
-| T1 unit tests | 🧪 Needs Test | PEPCO parse/session only |
+| T1 unit tests | ⚠️ Partial | 159 UCI backend tests |
 | T2 integration | ❌ Missing |
 | T3 security cross-tenant | ❌ Missing |
 | T4 portal mock | ❌ Missing |
-| T5 classifier | ❌ Missing |
+| T5 classifier | ⚠️ Partial | D5 keyword foundation; no validation set |
 
 ---
 
@@ -339,9 +339,9 @@ Re-audit before marking any item ✅ Pass.
 |-----------|--------|
 | Schema + RLS + seed | ⚠️ Partial |
 | Cross-tenant CI | ❌ Missing |
-| Agents 1–4, 8–9, 11–12 | ❌ Missing |
-| Agents 5–6 | ❌ Missing |
-| Portfolio + observability | ❌ Missing |
+| Agents 1–4, 8–9, 11–12 | ⚠️ Partial | Foundations D2–D4, D7–D10; D2.2/D4 PEPCO blocked |
+| Agents 5–6 | ⚠️ Partial | D5–D6 foundations |
+| Portfolio + observability | ⚠️ Partial | D11 API + D12 in-memory events |
 | UAT | ❌ Missing |
 
 ---
@@ -363,7 +363,7 @@ Re-audit before marking any item ✅ Pass.
 | # | Acceptance | Status |
 |---|------------|--------|
 | C1 | Project with UCI scope | ⚠️ Partial |
-| C2 | Identify providers | ⚠️ Partial | manual |
+| C2 | Identify providers | ⚠️ Partial | D2.0 human-assisted guided init |
 | C3 | Load summary | ❌ Missing |
 | C4 | Draft package | ❌ Missing |
 | C5 | Human review before submit | ❌ Missing |

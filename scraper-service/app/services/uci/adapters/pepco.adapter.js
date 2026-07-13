@@ -280,6 +280,119 @@ function normalizeStatusEvents(raw, context) {
   return out;
 }
 
+/**
+ * Conservative PEPCO portal status → UCI lifecycle mapping (D1C).
+ * Provider-specific rules live only in this adapter.
+ *
+ * @param {string | null | undefined} portalStatus
+ * @param {import("./utility-adapter.types.js").LifecycleMappingContext} context
+ * @returns {import("./utility-adapter.types.js").LifecycleProposal | null}
+ */
+function mapPortalStatusToLifecycle(portalStatus, context) {
+  const status = String(portalStatus || context.portal_status || "").trim();
+  if (!status) return null;
+
+  const normalized = status.toLowerCase();
+  const actionRequired = context.action_required === true;
+  const hasSubmissionEvidence =
+    Boolean(context.portal_submitted_at) ||
+    submissionConfirmedInRaw(context.raw);
+
+  /** @type {Record<string, Omit<import("./utility-adapter.types.js").LifecycleProposal, "source_status">> & { requiresSubmission?: boolean }>} */
+  const table = {
+    submitted: {
+      proposed_stage: 4,
+      proposed_state: "AWAITING_UTILITY",
+      confidence: "high",
+      reason: "PEPCO status Submitted maps to utility acknowledgment (stage 4).",
+      automatic_transition_allowed: true,
+      requiresSubmission: true,
+    },
+    "in technical review": {
+      proposed_stage: 6,
+      proposed_state: "AWAITING_UTILITY",
+      confidence: "medium",
+      reason: "PEPCO In Technical Review maps to COS/design review (stage 6).",
+      automatic_transition_allowed: true,
+    },
+    "more information required": {
+      proposed_stage: 6,
+      proposed_state: "BLOCKED",
+      confidence: "high",
+      reason: "PEPCO More Information Required indicates a blocked design review.",
+      automatic_transition_allowed: true,
+    },
+    "in design": {
+      proposed_stage: 6,
+      proposed_state: "AWAITING_UTILITY",
+      confidence: "medium",
+      reason: "PEPCO In Design maps to COS/design review (stage 6).",
+      automatic_transition_allowed: true,
+    },
+    "contract sent": {
+      proposed_stage: 7,
+      proposed_state: actionRequired ? "BLOCKED" : "AWAITING_UTILITY",
+      confidence: "high",
+      reason: actionRequired
+        ? "PEPCO Contract Sent with action required maps to blocked CIAC/cost stage."
+        : "PEPCO Contract Sent maps to CIAC/cost coordination (stage 7).",
+      automatic_transition_allowed: true,
+    },
+    "pending payment": {
+      proposed_stage: 7,
+      proposed_state: actionRequired ? "BLOCKED" : "AWAITING_UTILITY",
+      confidence: "medium",
+      reason: "PEPCO payment-related status maps to CIAC/cost stage.",
+      automatic_transition_allowed: true,
+    },
+    initiated: {
+      proposed_stage: 5,
+      proposed_state: "AWAITING_UTILITY",
+      confidence: "low",
+      reason: "PEPCO Initiated status suggests post-submission utility processing.",
+      automatic_transition_allowed: true,
+      requiresSubmission: true,
+    },
+  };
+
+  const rule = table[normalized];
+  if (!rule) return null;
+
+  if (rule.requiresSubmission && !hasSubmissionEvidence) {
+    return {
+      proposed_stage: rule.proposed_stage,
+      proposed_state: rule.proposed_state,
+      confidence: "low",
+      reason: `${rule.reason} Submission confirmation not yet observed — proposal only.`,
+      source_status: status,
+      automatic_transition_allowed: false,
+    };
+  }
+
+  return {
+    proposed_stage: rule.proposed_stage,
+    proposed_state: rule.proposed_state,
+    confidence: rule.confidence,
+    reason: rule.reason,
+    source_status: status,
+    automatic_transition_allowed: rule.automatic_transition_allowed,
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+function submissionConfirmedInRaw(raw) {
+  if (!raw || typeof raw !== "object") return false;
+  const changes = Array.isArray(/** @type {{ statusChanges?: unknown }} */ (raw).statusChanges)
+    ? /** @type {Array<{ statusName?: unknown }>} */ (
+        /** @type {{ statusChanges: unknown[] }} */ (raw).statusChanges
+      )
+    : [];
+  return changes.some((row) => String(row?.statusName ?? "").trim().toLowerCase() === "submitted");
+}
+
 /** @type {import("./utility-adapter.types.js").UtilityAdapter} */
 const pepcoAdapter = {
   providerSlug: "pepco",
@@ -288,10 +401,13 @@ const pepcoAdapter = {
   normalizeStatusEvents,
   getExternalApplicationId,
   getExternalJobId,
+  mapPortalStatusToLifecycle,
 };
 
 module.exports = {
   pepcoAdapter,
   needsHumanAttentionFromText,
   ATTENTION_KEYWORDS,
+  mapPortalStatusToLifecycle,
+  submissionConfirmedInRaw,
 };

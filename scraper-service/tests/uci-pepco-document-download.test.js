@@ -12,7 +12,7 @@ const {
 } = require("../scrapers/pepco/application-detail-discovery.js");
 
 describe("PEPCO document download safety", () => {
-  it("strips localPath and absolute storagePath from API metadata", () => {
+  it("strips localPath and storagePath from API metadata", () => {
     const metadata = {
       pepco_application_detail_discovery: {
         applications: [

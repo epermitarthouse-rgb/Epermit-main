@@ -116,12 +116,29 @@ Original plan implied portal automation "not enabled." Code now has PEPCO read-o
 - Dashboard discovery (list API + DOM)
 - Application detail scrape (overview, status, messages, documents)
 - MFA code modal + Microsoft Graph auto-fetch
-- Document download to debug folder
+- Document download to Supabase `project-documents` (D1B) + optional dev local copy
+- Normalized portal sync (D1A) — applications, communications, milestones
+- `document_storage` reporting on scrape responses
 - Metadata persistence
 
 ### BGE
 
 **Not started.** Remains a future utility adapter unless client reprioritizes.
+
+---
+
+## Post-Sprint Delivery — D1A + D1B (2026-07)
+
+| Milestone | Status | Key deliverables |
+|-----------|--------|------------------|
+| D1A — Normalized read-only | **Complete** | Adapters, `POST .../sync`, child table writes, `normalized_sync` visibility |
+| D1B — Document storage | **Complete** | `uci-document-storage.service.js`; Supabase production path; idempotency; `document_storage` API field |
+| D1C — Lifecycle mapping | **Complete** | `uci-lifecycle-mapping.service.js`; PEPCO adapter mapping; proposals + audit; UI visibility |
+| D1D — Durable jobs | **Complete** | `uci_portal_sync` jobs, worker, sync-runs API, MFA job link |
+| D2.0 — Human-assisted provider setup | **Complete** | `uci-provider-setup.service.js`; guided init UI; mapping metadata on coordination records |
+| D2.1 — Load profile foundation | **Complete** (scoped) | `uci-load-profile.service.js`; `POST .../load-profile/analyze`; no-guess `load_summary`; drawer UI |
+| D3 — Application preparation | **Complete** (scoped) | `uci-application-builder.service.js`; PEPCO template; review workflow; `ApplicationPrepSection` |
+| D4 — Submission foundation | **Partial** | `uci-application-submit.service.js`; email_intent path; PEPCO adapter blocked (501) |
 
 ---
 
@@ -150,9 +167,25 @@ Steps 8–12 (draft, review, submit, confirmation, lifecycle from submission) �
 | Credential encryption | Partial (no dedicated UCI CI suite) |
 | Auth / project access | Partial (manual verification) |
 | PEPCO discovery | Partial (unit tests for parsing/session only) |
-| Submission idempotency | N/A — no submission |
+| D1A normalized sync | ✅ (unit + route tests) |
+| D1B document storage | ✅ (`uci-document-storage.service.test.js`, PEPCO document tests) |
+| D1C lifecycle mapping | ✅ (`uci-lifecycle-mapping.test.js`) |
+| D1D durable portal sync jobs | ✅ (`uci-durable-jobs.test.js`) |
+| D2.0 human-assisted provider setup | ✅ (`uci-provider-setup.test.js`) |
+| D2.1 load profile foundation | ✅ (`uci-load-profile.test.js`, `uciLoadProfile.test.ts`) |
+| D3 application preparation | ✅ (`uci-application-builder.test.js`, `uciApplicationPrep.test.ts`) |
+| D4 submission foundation | ✅ (`uci-application-submit.test.js`) — PEPCO portal adapter not implemented |
+| D5 communication classifier | ✅ (`uci-communication-classifier.test.js`) — keyword only |
+| D6–D12 foundations | ✅ (`uci-d6-d12-foundation.test.js`) |
+| Submission idempotency | ⚠️ Partial | `submitted_at` gate on D4 submit |
 | Cross-tenant | ❌ |
 | County scraper regression | Not UCI-specific |
+
+---
+
+## Non-Blocking Backlog Process
+
+From 2026-07-14, every UCI milestone maintains a persistent non-blocking backlog in `UCI_DELIVERY_ROADMAP.md` §17. Post–D5–D12 review: 56 active backlog items, 3 client-deferred tracked, 2 resolved (NB-DOC-001, NB-DOC-002).
 
 ---
 
@@ -189,4 +222,4 @@ From original execution plan — still apply:
 
 ---
 
-*For forward planning, use `UCI_DELIVERY_ROADMAP.md` milestones D1–D12.*
+*For forward planning, use `UCI_DELIVERY_ROADMAP.md` milestones D1–D13 and §17 non-blocking backlog.*

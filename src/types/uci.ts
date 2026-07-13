@@ -203,6 +203,101 @@ export interface UciInitResponse {
   records: CoordinationRecord[];
 }
 
+export type UciProviderSetupAddressSource = "structured" | "portal_data_location" | "none";
+
+export interface UciProviderSetupAddress {
+  source: UciProviderSetupAddressSource;
+  parts: Record<string, string | null> | null;
+  formatted: string | null;
+  complete: boolean;
+  fallback_used?: boolean;
+  fallback_note?: string;
+}
+
+export interface UciProviderSetupCatalogItem {
+  id: string;
+  slug: string;
+  name: string;
+  utility_type: string;
+  automation_status: string;
+  already_initialized: boolean;
+  suggested: boolean;
+}
+
+export interface UciProviderSetupResponse {
+  project_id: string;
+  mapping_method: "human_assisted";
+  territory_matching_available: false;
+  territory_matching_message: string;
+  address: UciProviderSetupAddress;
+  guidance_steps: string[];
+  providers: UciProviderSetupCatalogItem[];
+  utility_types_in_catalog: string[];
+  auto_selection_enabled: false;
+}
+
+export interface UciProviderSetupConfirmation {
+  confirmed: true;
+  address_source_acknowledged?: UciProviderSetupAddressSource;
+  unresolved_utility_types?: string[];
+}
+
+export interface UciProviderMappingMetadata {
+  method: "human_assisted";
+  confirmed_by_user_id: string;
+  confirmed_at: string;
+  address_source: UciProviderSetupAddressSource;
+  address_snapshot: {
+    formatted: string | null;
+    complete: boolean;
+    fallback_used: boolean;
+    parts: Record<string, string | null> | null;
+  } | null;
+  selected_provider_slugs: string[];
+  unresolved_utility_types: string[];
+  territory_matching_available: false;
+  provider_slug?: string;
+}
+
+export interface UciLoadProfileAnalyzeResponse {
+  coordination_record_id: string;
+  project_id: string;
+  analysis_status: "preliminary" | "missing_inputs" | "blocked";
+  load_summary: Record<string, unknown>;
+  application: CoordinationApplication;
+  stage_unchanged: boolean;
+  current_stage: number;
+  current_stage_state: LifecycleState;
+}
+
+export interface UciApplicationPackageBuildResponse {
+  coordination_record_id: string;
+  project_id: string;
+  package_status: "blocked" | "incomplete" | "ready_for_review";
+  missing_documents: string[];
+  missing_fields: string[];
+  application: CoordinationApplication;
+  stage_unchanged: boolean;
+  current_stage: number;
+  current_stage_state: LifecycleState;
+}
+
+export interface UciApplicationReviewResponse {
+  application: CoordinationApplication;
+  review_status: DraftStatus;
+  reviewed_at: string;
+  reviewed_by: string;
+}
+
+export interface UciApplicationSubmitResponse {
+  application: CoordinationApplication;
+  submission_method: string;
+  submission_metadata: Record<string, unknown>;
+  coordination_record: CoordinationRecord;
+  transitions: CoordinationTransition[];
+  portal_adapter_used: boolean;
+}
+
 export interface UciRecordDetailResponse {
   record: CoordinationRecord;
   transitions: CoordinationTransition[];
@@ -235,6 +330,7 @@ export interface UciPortalSyncResponse {
   applications: UciEntityCountBucket;
   communications: UciEntityCountBucket;
   milestones: UciEntityCountBucket;
+  lifecycle?: UciLifecycleMappingResult;
   warnings: string[];
   errors: string[];
   syncedAt?: string;
@@ -419,6 +515,59 @@ export interface PepcoApplicationDetailDiscovery {
   applications?: PepcoApplicationDetail[];
 }
 
+export type UciNormalizedSyncStatus = "success" | "partial" | "failed" | "not_run";
+
+export interface UciNormalizedSyncCountBucket {
+  discovered: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface UciNormalizedSyncResult {
+  status: UciNormalizedSyncStatus;
+  reason?: string | null;
+  applications: UciNormalizedSyncCountBucket;
+  communications: UciNormalizedSyncCountBucket;
+  milestones: UciNormalizedSyncCountBucket;
+  errors: string[];
+  synced_at?: string | null;
+}
+
+export interface UciLifecycleProposalRow {
+  external_application_id: string;
+  provider_slug: string;
+  source_status: string;
+  proposed_stage: number;
+  proposed_state: LifecycleState;
+  confidence: string;
+  reason: string;
+  automatic_transition_allowed: boolean;
+  blocked_reason: string | null;
+  applied: boolean;
+  applied_at: string | null;
+}
+
+export interface UciLifecycleProposalsPayload {
+  last_evaluated_at: string;
+  auto_apply_enabled: boolean;
+  proposals: UciLifecycleProposalRow[];
+  applied_transition_id: string | null;
+}
+
+export type UciLifecycleMappingStatus = "not_run" | "proposed" | "applied" | "partial" | "failed";
+
+export interface UciLifecycleMappingResult {
+  status: UciLifecycleMappingStatus;
+  evaluated_count: number;
+  applied_count: number;
+  blocked_count: number;
+  auto_apply_enabled: boolean;
+  proposals: UciLifecycleProposalRow[];
+  errors: string[];
+}
+
 export interface UciPepcoApplicationDetailSnapshot extends PepcoApplicationDetail {}
 
 /** POST /api/uci/coordination/:id/discovery/pepco/application-details */
@@ -429,6 +578,7 @@ export type UciPepcoApplicationDetailDiscoveryResponse =
       checkpoint?: string;
       applications_scraped?: number;
       applications?: UciPepcoApplicationDetailSnapshot[];
+      normalized_sync?: UciNormalizedSyncResult;
       progress?: string[];
       error_code?: string;
       message?: string;

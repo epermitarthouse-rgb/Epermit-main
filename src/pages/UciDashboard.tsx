@@ -42,8 +42,12 @@ import { Input } from "@/components/ui/input";
 import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  analyzeCoordinationLoadProfile,
+  buildCoordinationApplicationPackage,
+  classifyCoordinationCommunications,
   formatUciUserError,
   getCoordinationDetail,
+  getProjectProviderSetup,
   initProjectCoordination,
   isUciSessionExpiredError,
   listProjectCoordination,
@@ -53,6 +57,8 @@ import {
   postPepcoApplicationDetailDiscovery,
   resumePepcoApplicationDetailDiscovery,
   resumePepcoDiscovery,
+  reviewCoordinationApplication,
+  submitCoordinationApplication,
   submitPepcoMfaCode,
   transitionCoordination,
   triggerCoordinationSync,
@@ -64,6 +70,7 @@ import {
   ChevronRight,
   Info,
   Loader2,
+  MapPin,
   RadioTower,
   RefreshCw,
   Eye,
@@ -90,9 +97,40 @@ import type {
   LifecycleState,
   UciPepcoApplicationDetailDiscoveryResponse,
   UciPepcoDashboardCardMeta,
+  UciNormalizedSyncResult,
+  UciProviderSetupResponse,
   UtilityProvider,
   UciRecordDetailResponse,
 } from "@/types/uci";
+import {
+  normalizedSyncDrawerMessage,
+  notifyNormalizedSyncResult,
+  portalSyncResponseToNormalizedResult,
+} from "@/lib/uciNormalizedSync";
+import {
+  getLifecycleProposalsFromMetadata,
+  selectDisplayLifecycleProposal,
+} from "@/lib/uciLifecycleProposals";
+import {
+  formatLoadProfileAnalysisStatus,
+  getLoadProfileDraftApplication,
+  getVerifiedCalculatedValues,
+  loadProfileStatusTone,
+  parseLoadProfileSummary,
+} from "@/lib/uciLoadProfile";
+import {
+  applicationPackageStatusTone,
+  canSubmitApplication,
+  formatApplicationPackageStatus,
+  formatDraftStatus,
+  getApplicationPackageDraftApplication,
+  parseApplicationPackageMetadata,
+  parsePackageDocuments,
+} from "@/lib/uciApplicationPrep";
+import {
+  classificationNeedsAttention,
+  formatCommunicationClassification,
+} from "@/lib/uciCommunicationClassifier";
 
 const LIFECYCLE_OPTIONS: LifecycleState[] = [
   "NOT_STARTED",
@@ -271,6 +309,10 @@ export default function UciDashboard() {
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [initPick, setInitPick] = useState<Record<string, boolean>>({});
   const [initting, setInitting] = useState(false);
+  const [providerSetup, setProviderSetup] = useState<UciProviderSetupResponse | null>(null);
+  const [providerSetupLoading, setProviderSetupLoading] = useState(false);
+  const [providerSetupConfirmed, setProviderSetupConfirmed] = useState(false);
+  const [unresolvedUtilityTypes, setUnresolvedUtilityTypes] = useState<string[]>([]);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -281,7 +323,16 @@ export default function UciDashboard() {
   const [toState, setToState] = useState<LifecycleState>("IN_PROGRESS");
   const [reason, setReason] = useState("");
   const [transitionSaving, setTransitionSaving] = useState(false);
+  const [loadProfileBusy, setLoadProfileBusy] = useState(false);
+  const [applicationPrepBusy, setApplicationPrepBusy] = useState(false);
+  const [applicationReviewBusy, setApplicationReviewBusy] = useState(false);
+  const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
+  const [applicationSubmitBusy, setApplicationSubmitBusy] = useState(false);
+  const [classifyCommsBusy, setClassifyCommsBusy] = useState(false);
   const [normalizedSyncBusy, setNormalizedSyncBusy] = useState(false);
+  const [pepcoLastNormalizedSync, setPepcoLastNormalizedSync] = useState<UciNormalizedSyncResult | null>(
+    null,
+  );
 
   const [pepcoDiscoveryBusy, setPepcoDiscoveryBusy] = useState(false);
   const [pepcoDiscoveryMsg, setPepcoDiscoveryMsg] = useState<string | null>(null);
@@ -435,6 +486,32 @@ export default function UciDashboard() {
     void refreshCoordination();
   }, [authLoading, user?.id, refreshCoordination]);
 
+  const loadProviderSetup = useCallback(async () => {
+    if (authLoading || !user?.id || !projectId) {
+      setProviderSetup(null);
+      setProviderSetupConfirmed(false);
+      setUnresolvedUtilityTypes([]);
+      return;
+    }
+    setProviderSetupLoading(true);
+    try {
+      const setup = await getProjectProviderSetup(projectId);
+      setProviderSetup(setup);
+      setProviderSetupConfirmed(false);
+      setUnresolvedUtilityTypes([]);
+    } catch (e: unknown) {
+      setProviderSetup(null);
+      toast.error(formatUciUserError(e, "Failed to load provider setup guidance"));
+    } finally {
+      setProviderSetupLoading(false);
+    }
+  }, [authLoading, user?.id, projectId]);
+
+  useEffect(() => {
+    if (authLoading || !user?.id) return;
+    void loadProviderSetup();
+  }, [authLoading, user?.id, loadProviderSetup]);
+
   /**
    * Project/tenant safety: when the active PermitPilot project changes, any
    * open coordination detail (and its PEPCO selection/progress state) may
@@ -456,6 +533,7 @@ export default function UciDashboard() {
     setPepcoAppDetailMfaSessionId(null);
     setPepcoCodeModalOpen(false);
     clearPendingAppDetailRunOptions();
+    setPepcoLastNormalizedSync(null);
   }, [projectId]);
 
   const selectedProject = useMemo(
@@ -482,6 +560,7 @@ export default function UciDashboard() {
     setPepcoSelectedProjectKey(null);
     setPepcoRowScrapeStatus({});
     clearPendingAppDetailRunOptions();
+    setPepcoLastNormalizedSync(null);
     try {
       const d = await getCoordinationDetail(id);
       setDetail(d);
@@ -492,6 +571,92 @@ export default function UciDashboard() {
       setDetail(null);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleLoadProfileAnalyze = async () => {
+    if (!detailId) return;
+    setLoadProfileBusy(true);
+    try {
+      await analyzeCoordinationLoadProfile(detailId);
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      toast.success("Load profile analysis saved — review missing inputs before relying on any values");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Load profile analysis failed"));
+    } finally {
+      setLoadProfileBusy(false);
+    }
+  };
+
+  const handleApplicationPackageBuild = async () => {
+    if (!detailId) return;
+    setApplicationPrepBusy(true);
+    try {
+      await buildCoordinationApplicationPackage(detailId);
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      toast.success("Application package draft saved — review missing documents before submission");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Application package build failed"));
+    } finally {
+      setApplicationPrepBusy(false);
+    }
+  };
+
+  const handleApplicationReview = async (status: "reviewed" | "needs_changes") => {
+    const packageApp = getApplicationPackageDraftApplication(detail?.applications);
+    if (!packageApp) return;
+    setApplicationReviewBusy(true);
+    try {
+      await reviewCoordinationApplication(packageApp.id, {
+        status,
+        notes: applicationReviewNotes.trim() || undefined,
+      });
+      const d = await getCoordinationDetail(detailId!);
+      setDetail(d);
+      toast.success(status === "reviewed" ? "Application marked reviewed" : "Changes requested");
+      if (status === "needs_changes") {
+        setApplicationReviewNotes("");
+      }
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Application review failed"));
+    } finally {
+      setApplicationReviewBusy(false);
+    }
+  };
+
+  const handleApplicationSubmit = async () => {
+    const packageApp = getApplicationPackageDraftApplication(detail?.applications);
+    if (!packageApp) return;
+    setApplicationSubmitBusy(true);
+    try {
+      await submitCoordinationApplication(packageApp.id);
+      const d = await getCoordinationDetail(detailId!);
+      setDetail(d);
+      await refreshCoordination();
+      toast.success("Submission recorded — await utility confirmation");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Application submission failed"));
+    } finally {
+      setApplicationSubmitBusy(false);
+    }
+  };
+
+  const handleClassifyCommunications = async () => {
+    if (!detailId) return;
+    setClassifyCommsBusy(true);
+    try {
+      const result = await classifyCoordinationCommunications(detailId);
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      toast.success(
+        `Classified ${result.classified_count} communication(s) — ${result.skipped_count} skipped`,
+      );
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Communication classification failed"));
+    } finally {
+      setClassifyCommsBusy(false);
     }
   };
 
@@ -524,12 +689,15 @@ export default function UciDashboard() {
     setNormalizedSyncBusy(true);
     try {
       const summary = await triggerCoordinationSync(detailId);
+      const normalizedResult = portalSyncResponseToNormalizedResult(summary);
+      setPepcoLastNormalizedSync(normalizedResult);
       toast.success(
         `Normalized sync complete — apps +${summary.applications.inserted}/${summary.applications.updated}, comms +${summary.communications.inserted}, events +${summary.milestones.inserted}`,
       );
       if (summary.warnings.length) {
         toast.message(summary.warnings[0]);
       }
+      notifyNormalizedSyncResult(normalizedResult, toast);
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
     } catch (e: unknown) {
@@ -544,6 +712,10 @@ export default function UciDashboard() {
       toast.error("Select a project first");
       return;
     }
+    if (!providerSetupConfirmed) {
+      toast.error("Confirm your provider selections before initializing");
+      return;
+    }
     const slugs = providers
       .filter((p) => initPick[p.slug])
       .map((p) => p.slug);
@@ -553,17 +725,42 @@ export default function UciDashboard() {
     }
     setInitting(true);
     try {
-      const out = await initProjectCoordination(projectId, slugs);
+      const out = await initProjectCoordination(projectId, slugs, {
+        confirmed: true,
+        address_source_acknowledged: providerSetup?.address.source,
+        unresolved_utility_types: unresolvedUtilityTypes,
+      });
       toast.success(
         `Created ${out.created?.length ?? 0} record(s); ${out.already_existed?.length ?? 0} already existed`,
       );
       setRecords(out.records ?? []);
+      await loadProviderSetup();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Initialize failed");
     } finally {
       setInitting(false);
     }
   };
+
+  const toggleUnresolvedUtilityType = (utilityType: string, checked: boolean) => {
+    const normalized = utilityType.trim().toLowerCase();
+    if (!normalized) return;
+    setUnresolvedUtilityTypes((prev) => {
+      if (checked) return prev.includes(normalized) ? prev : [...prev, normalized];
+      return prev.filter((entry) => entry !== normalized);
+    });
+  };
+
+  const uncoveredUtilityTypes = useMemo(() => {
+    const selectedTypes = new Set(
+      providers
+        .filter((provider) => initPick[provider.slug])
+        .map((provider) => provider.utility_type.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const catalogTypes = providerSetup?.utility_types_in_catalog ?? [];
+    return catalogTypes.filter((utilityType) => !selectedTypes.has(utilityType));
+  }, [providers, initPick, providerSetup?.utility_types_in_catalog]);
 
   const toggleAllInit = (value: boolean) => {
     setInitPick((prev) => {
@@ -654,6 +851,22 @@ export default function UciDashboard() {
         : null;
     return parsePepcoApplicationDetailDiscovery(m);
   }, [detailRecord?.metadata]);
+
+  const lifecycleProposalsPayload = useMemo(() => {
+    const m =
+      detailRecord?.metadata &&
+      typeof detailRecord.metadata === "object" &&
+      detailRecord.metadata !== null &&
+      !Array.isArray(detailRecord.metadata)
+        ? (detailRecord.metadata as Record<string, unknown>)
+        : null;
+    return getLifecycleProposalsFromMetadata(m);
+  }, [detailRecord?.metadata]);
+
+  const displayLifecycleProposal = useMemo(
+    () => selectDisplayLifecycleProposal(lifecycleProposalsPayload),
+    [lifecycleProposalsPayload],
+  );
 
   const hasPepcoDashboardCards =
     (pepcoDashboardFromMetadata?.cards.length ?? 0) > 0 ||
@@ -1070,7 +1283,15 @@ export default function UciDashboard() {
           ? `PEPCO application detail scrape ${out.status} (${count} application${count === 1 ? "" : "s"}).`
           : `PEPCO application detail scrape ${out.status}.`,
       );
-      setPepcoAppDetailMsg(`Status: ${out.status}`);
+      if ("normalized_sync" in out && out.normalized_sync) {
+        setPepcoLastNormalizedSync(out.normalized_sync);
+        notifyNormalizedSyncResult(out.normalized_sync, toast);
+      }
+      const syncMsg =
+        "normalized_sync" in out && out.normalized_sync
+          ? normalizedSyncDrawerMessage(out.normalized_sync)
+          : null;
+      setPepcoAppDetailMsg(syncMsg ?? `Status: ${out.status}`);
       if (pepcoPendingAppDetailUuid) {
         setPepcoRowScrapeStatus((prev) => ({
           ...prev,
@@ -1307,12 +1528,13 @@ export default function UciDashboard() {
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-teal" />
             <div className="text-ink-primary-light">
               <p className="font-medium text-ink-primary-light">
-                Foundation mode: portal discovery and submission automation are not enabled yet.
+                PEPCO read-only portal sync is available. Application submission and automated
+                lifecycle agents are not yet enabled.
               </p>
               <ul className={cn("mt-1 list-disc pl-5 text-xs", uciMutedClass)}>
-                <li>Portal automation: Not started</li>
-                <li>Submission automation: Not enabled</li>
-                <li>Manual coordination tracking is available</li>
+                <li>PEPCO portal discovery and refresh: available (read-only)</li>
+                <li>Application submission automation: not enabled</li>
+                <li>Manual coordination tracking: available</li>
               </ul>
             </div>
           </div>
@@ -1417,11 +1639,52 @@ export default function UciDashboard() {
             <CardHeader>
               <CardTitle className={uciSectionTitleClass}>Initialize coordination</CardTitle>
               <CardDescription className={cn(uciMutedClass, "opacity-100")}>
-                Create utility coordination rows for the selected project. Safe to re-run: existing
-                provider rows are not duplicated.
+                Guided human-assisted provider setup — no automatic territory matching. Safe to
+                re-run: existing provider rows are not duplicated.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!projectId ? (
+                <p className={cn("text-sm", uciMutedClass)}>
+                  Select a project above to review address context and confirm providers.
+                </p>
+              ) : providerSetupLoading ? (
+                <div className="flex items-center gap-2 text-sm text-ink-secondary-light">
+                  <Loader2 className="h-4 w-4 animate-spin text-teal" />
+                  Loading provider setup guidance…
+                </div>
+              ) : providerSetup ? (
+                <div className="space-y-4 rounded-xl border border-amber-200/80 bg-amber-50/70 p-4 dark:border-amber-500/30 dark:bg-amber-950/20">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+                    <div className="space-y-2 text-sm">
+                      <p className="font-medium text-ink-primary-light dark:text-foreground">
+                        {providerSetup.territory_matching_message}
+                      </p>
+                      <ol className={cn("list-decimal space-y-1 pl-5 text-xs", uciMutedClass)}>
+                        {providerSetup.guidance_steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-cream-sunken/90 bg-cream/80 px-3 py-2.5 text-sm dark:border-teal/25 dark:bg-obsidian/50">
+                    <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-light">
+                      Project address ({providerSetup.address.source.replace(/_/g, " ")})
+                    </p>
+                    <p className="mt-1 font-medium text-ink-primary-light dark:text-foreground">
+                      {providerSetup.address.formatted || "No project address on file"}
+                    </p>
+                    {providerSetup.address.fallback_note ? (
+                      <p className={cn("mt-1 text-xs", uciMutedClass)}>
+                        {providerSetup.address.fallback_note}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => toggleAllInit(true)}>
                   Select all
@@ -1433,6 +1696,7 @@ export default function UciDashboard() {
               <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {providers.map((p) => {
                   const checked = Boolean(initPick[p.slug]);
+                  const setupItem = providerSetup?.providers.find((item) => item.slug === p.slug);
                   return (
                   <label
                     key={p.id}
@@ -1459,14 +1723,68 @@ export default function UciDashboard() {
                         "dark:data-[state=checked]:border-teal-soft dark:data-[state=checked]:bg-teal",
                       )}
                     />
-                    <span className="truncate font-medium !text-ink-primary-light dark:!text-foreground">{p.name}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium !text-ink-primary-light dark:!text-foreground">
+                        {p.name}
+                      </span>
+                      {setupItem?.already_initialized ? (
+                        <span className={cn("block text-xs", uciMutedClass)}>Already initialized</span>
+                      ) : null}
+                    </span>
                   </label>
                   );
                 })}
               </div>
+
+              {projectId && uncoveredUtilityTypes.length > 0 ? (
+                <div className="space-y-2 rounded-lg border border-cream-sunken/90 bg-cream/50 p-3 dark:border-teal/25 dark:bg-obsidian/40">
+                  <Label className="text-ink-primary-light">
+                    Utility types without a selected provider (optional)
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {uncoveredUtilityTypes.map((utilityType) => {
+                      const marked = unresolvedUtilityTypes.includes(utilityType);
+                      return (
+                        <label
+                          key={utilityType}
+                          className="flex cursor-pointer items-center gap-2 rounded-md border border-cream-sunken/90 px-2.5 py-1.5 text-xs dark:border-teal/25"
+                        >
+                          <Checkbox
+                            checked={marked}
+                            onCheckedChange={(checked) =>
+                              toggleUnresolvedUtilityType(utilityType, Boolean(checked))
+                            }
+                          />
+                          <span className="capitalize">{utilityType}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-teal/25 bg-teal/[0.04] px-3 py-3 text-sm dark:border-teal/35 dark:bg-teal/[0.08]">
+                <Checkbox
+                  checked={providerSetupConfirmed}
+                  disabled={!projectId || providerSetupLoading}
+                  onCheckedChange={(checked) => setProviderSetupConfirmed(Boolean(checked))}
+                  className="mt-0.5 shrink-0"
+                />
+                <span className="text-ink-primary-light dark:text-foreground">
+                  I confirm these provider selections for this project. Automatic territory matching
+                  is unavailable; my choices are based on project knowledge.
+                </span>
+              </label>
+
               <Button
                 className="bg-teal hover:bg-teal/90 text-white"
-                disabled={!projectId || initting || providers.length === 0}
+                disabled={
+                  !projectId ||
+                  initting ||
+                  providers.length === 0 ||
+                  providerSetupLoading ||
+                  !providerSetupConfirmed
+                }
                 onClick={() => void handleInit()}
               >
                 {initting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -1690,6 +2008,7 @@ export default function UciDashboard() {
                     pepcoAppDetailMsg={pepcoAppDetailMsg}
                     pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
                     pepcoApplicationDetailDiscovery={pepcoApplicationDetailDiscovery}
+                    pepcoLastNormalizedSync={pepcoLastNormalizedSync}
                     hasPepcoDashboardCards={hasPepcoDashboardCards}
                     hasPepcoApplicationDetails={hasPepcoApplicationDetails}
                     onLoginCheck={() => void handlePepcoDiscovery()}
@@ -1795,8 +2114,38 @@ export default function UciDashboard() {
                 </div>
               ) : null}
 
+              <LoadProfileSection
+                applications={(detail.applications ?? []) as CoordinationApplication[]}
+                equipment={detail.equipment ?? []}
+                utilityType={detailRecord.utility_type}
+                formatWhen={formatWhen}
+                mutedClass={uciMutedClass}
+                sectionTitleClass={uciSheetSectionTitleClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                busy={loadProfileBusy}
+                onAnalyze={() => void handleLoadProfileAnalyze()}
+              />
+
+              <ApplicationPrepSection
+                applications={(detail.applications ?? []) as CoordinationApplication[]}
+                formatWhen={formatWhen}
+                mutedClass={uciMutedClass}
+                sectionTitleClass={uciSheetSectionTitleClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                prepBusy={applicationPrepBusy}
+                reviewBusy={applicationReviewBusy}
+                submitBusy={applicationSubmitBusy}
+                reviewNotes={applicationReviewNotes}
+                onReviewNotesChange={setApplicationReviewNotes}
+                onBuild={() => void handleApplicationPackageBuild()}
+                onReview={(status) => void handleApplicationReview(status)}
+                onSubmit={() => void handleApplicationSubmit()}
+              />
+
               <LifecycleSection
                 transitions={detail.transitions ?? []}
+                lifecycleProposals={lifecycleProposalsPayload}
+                displayLifecycleProposal={displayLifecycleProposal}
                 formatWhen={formatWhen}
                 mutedClass={uciMutedClass}
                 sectionTitleClass={uciSheetSectionTitleClass}
@@ -1865,7 +2214,22 @@ export default function UciDashboard() {
 
                   <Card className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
-                      <CardTitle className={uciDrawerChildCardTitleClass}>Communications</CardTitle>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <CardTitle className={uciDrawerChildCardTitleClass}>Communications</CardTitle>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={uciToolbarOutlineButtonClass}
+                          disabled={classifyCommsBusy}
+                          onClick={() => void handleClassifyCommunications()}
+                        >
+                          {classifyCommsBusy ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : null}
+                          Classify messages
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent className="px-4 py-4">
                       {(detail.communications_recent ?? []).length === 0 ? (
@@ -1877,7 +2241,18 @@ export default function UciDashboard() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="outline">{comm.direction || "—"}</Badge>
                                 <Badge variant="secondary">{comm.channel || "message"}</Badge>
-                                {comm.needs_human_attention ? (
+                                {comm.classification ? (
+                                  <Badge variant="outline" className="capitalize text-[10px]">
+                                    {formatCommunicationClassification(comm.classification)}
+                                  </Badge>
+                                ) : null}
+                                {classificationNeedsAttention(
+                                  comm.classification,
+                                  comm.classification_confidence != null
+                                    ? Number(comm.classification_confidence)
+                                    : null,
+                                  comm.needs_human_attention,
+                                ) ? (
                                   <Badge variant="destructive">Needs attention</Badge>
                                 ) : null}
                               </div>
@@ -2166,7 +2541,23 @@ function CommunicationPreviewRow({
 
   return (
     <div className={uciSystemDataRowClass}>
-      <p className="font-medium text-foreground">{comm.raw_subject || "(no subject)"}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-medium text-foreground">{comm.raw_subject || "(no subject)"}</p>
+        {comm.classification ? (
+          <Badge variant="outline" className="text-[10px] capitalize">
+            {formatCommunicationClassification(comm.classification)}
+          </Badge>
+        ) : null}
+        {classificationNeedsAttention(
+          comm.classification,
+          comm.classification_confidence != null ? Number(comm.classification_confidence) : null,
+          comm.needs_human_attention,
+        ) ? (
+          <Badge variant="destructive" className="text-[10px]">
+            Needs attention
+          </Badge>
+        ) : null}
+      </div>
       <p className={cn("mt-0.5 text-[11px] tabular-nums", mutedClass)}>
         {formatWhen(comm.message_timestamp || comm.created_at)}
       </p>
@@ -2345,6 +2736,417 @@ function PepcoSystemDataSection({
 }
 
 /**
+ * Read-only D2.1 load profile panel — preliminary analysis only, not final engineering.
+ */
+function LoadProfileSection({
+  applications,
+  equipment,
+  utilityType,
+  formatWhen,
+  mutedClass,
+  sectionTitleClass,
+  toolbarOutlineButtonClass,
+  busy,
+  onAnalyze,
+}: {
+  applications: CoordinationApplication[];
+  equipment: UciRecordDetailResponse["equipment"];
+  utilityType: string | null | undefined;
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  sectionTitleClass: string;
+  toolbarOutlineButtonClass: string;
+  busy: boolean;
+  onAnalyze: () => void;
+}) {
+  const draftApp = getLoadProfileDraftApplication(applications);
+  const summary = parseLoadProfileSummary(draftApp?.load_summary);
+  const tone = loadProfileStatusTone(summary?.analysis_status);
+  const verifiedValues = getVerifiedCalculatedValues(summary);
+
+  const statusBadgeVariant =
+    tone === "blocked"
+      ? "destructive"
+      : tone === "warning"
+        ? "destructive"
+        : tone === "info"
+          ? "secondary"
+          : "outline";
+
+  return (
+    <Card className={uciDrawerChildCardClass}>
+      <CardHeader className={uciDrawerChildCardHeaderClass}>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle className={uciDrawerChildCardTitleClass}>Load profile</CardTitle>
+            <CardDescription className={cn("text-[11px]", mutedClass)}>
+              Preliminary Agent 2 analysis — not final engineering. Human review required.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={toolbarOutlineButtonClass}
+            disabled={busy}
+            onClick={onAnalyze}
+          >
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {summary ? "Re-analyze" : "Analyze load profile"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="px-4 py-4 space-y-3">
+        {!summary ? (
+          <p className={uciDrawerChildEmptyClass}>
+            No load profile analysis yet. Run analysis to inventory project inputs and list missing
+            utility-specific data for {utilityType || "this utility"}.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={statusBadgeVariant}>
+                {formatLoadProfileAnalysisStatus(summary.analysis_status)}
+              </Badge>
+              <Badge variant="outline" className="capitalize">
+                {summary.utility_type || utilityType || "utility"}
+              </Badge>
+              {summary.requires_human_review ? (
+                <Badge variant="mutedLight">Human review required</Badge>
+              ) : null}
+            </div>
+
+            {summary.analysis_status === "blocked" ? (
+              <p className={cn("text-sm text-destructive", mutedClass)}>
+                Analysis is blocked until provider and utility context are valid.
+              </p>
+            ) : null}
+
+            {summary.analysis_status === "missing_inputs" ? (
+              <p className={cn("text-sm text-amber-800 dark:text-amber-200", mutedClass)}>
+                Missing inputs must be supplied before any engineering load values can be verified.
+              </p>
+            ) : null}
+
+            {summary.analysis_status === "preliminary" ? (
+              <p className={cn("text-sm", mutedClass)}>
+                Preliminary inventory complete. Values shown are not stamped engineering calculations.
+              </p>
+            ) : null}
+
+            <div>
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Inputs found ({summary.inputs_used.length})
+              </p>
+              {summary.inputs_used.length === 0 ? (
+                <p className={cn("mt-1 text-sm", mutedClass)}>None</p>
+              ) : (
+                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
+                  {summary.inputs_used.map((input) => (
+                    <li key={`${input.key}-${input.source}`}>
+                      <span className="font-medium text-foreground">{input.key}</span>
+                      <span className="text-xs"> · {input.source}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Missing inputs ({summary.missing_inputs.length})
+              </p>
+              {summary.missing_inputs.length === 0 ? (
+                <p className={cn("mt-1 text-sm", mutedClass)}>None flagged</p>
+              ) : (
+                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
+                  {summary.missing_inputs.map((item) => (
+                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {summary.needs_verification.length > 0 ? (
+              <div>
+                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                  Verification required
+                </p>
+                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
+                  {summary.needs_verification.map((item) => (
+                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div>
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Template / assumptions
+              </p>
+              <p className={cn("mt-1 text-sm", mutedClass)}>
+                Template: {summary.assumptions.template_id || "none (D2.1 — no verified registry)"}
+              </p>
+              {summary.assumptions.notes.map((note) => (
+                <p key={note} className={cn("mt-1 text-xs", mutedClass)}>
+                  {note}
+                </p>
+              ))}
+            </div>
+
+            {equipment.length > 0 ? (
+              <p className={cn("text-xs", mutedClass)}>
+                {equipment.length} equipment record(s) on file for this coordination row.
+              </p>
+            ) : null}
+
+            {verifiedValues.length > 0 ? (
+              <div>
+                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                  Verified numeric values
+                </p>
+                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
+                  {verifiedValues.map((entry) => (
+                    <li key={entry.key}>
+                      {entry.key}: {String(entry.value)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className={cn("text-xs", mutedClass)}>
+                No verified engineering numeric values — calculated_values is empty by design in D2.1.
+              </p>
+            )}
+
+            <p className={cn("text-xs tabular-nums", mutedClass)}>
+              Generated {formatWhen(summary.generated_at)}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Read-only D3 application preparation panel — human review required before D4 submit.
+ */
+function ApplicationPrepSection({
+  applications,
+  formatWhen,
+  mutedClass,
+  sectionTitleClass,
+  toolbarOutlineButtonClass,
+  prepBusy,
+  reviewBusy,
+  submitBusy,
+  reviewNotes,
+  onReviewNotesChange,
+  onBuild,
+  onReview,
+  onSubmit,
+}: {
+  applications: CoordinationApplication[];
+  formatWhen: (iso: string | null | undefined) => string;
+  mutedClass: string;
+  sectionTitleClass: string;
+  toolbarOutlineButtonClass: string;
+  prepBusy: boolean;
+  reviewBusy: boolean;
+  submitBusy: boolean;
+  reviewNotes: string;
+  onReviewNotesChange: (value: string) => void;
+  onBuild: () => void;
+  onReview: (status: "reviewed" | "needs_changes") => void;
+  onSubmit: () => void;
+}) {
+  const loadProfileDraft = getLoadProfileDraftApplication(applications);
+  const packageApp = getApplicationPackageDraftApplication(applications);
+  const packageMeta = parseApplicationPackageMetadata(packageApp);
+  const packageDocs = parsePackageDocuments(packageApp?.package_documents);
+  const tone = applicationPackageStatusTone(packageMeta?.package_status);
+  const submitReady = canSubmitApplication(packageApp?.draft_status);
+
+  const statusBadgeVariant =
+    tone === "blocked"
+      ? "destructive"
+      : tone === "warning"
+        ? "destructive"
+        : tone === "info"
+          ? "secondary"
+          : "outline";
+
+  return (
+    <Card className={uciDrawerChildCardClass}>
+      <CardHeader className={uciDrawerChildCardHeaderClass}>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle className={uciDrawerChildCardTitleClass}>Application preparation</CardTitle>
+            <CardDescription className={cn("text-[11px]", mutedClass)}>
+              Agent 3 package draft — human review required. Submission is disabled until reviewed (D4).
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={toolbarOutlineButtonClass}
+            disabled={prepBusy || !loadProfileDraft}
+            onClick={onBuild}
+          >
+            {prepBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {packageApp ? "Rebuild package" : "Prepare application draft"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="px-4 py-4 space-y-3">
+        {!loadProfileDraft ? (
+          <p className={uciDrawerChildEmptyClass}>
+            Run load profile analysis first — D3 depends on the D2.1 load_summary draft.
+          </p>
+        ) : !packageApp ? (
+          <p className={uciDrawerChildEmptyClass}>
+            No application package yet. Prepare a draft to inventory required documents and fields from
+            the PEPCO template manifest.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={statusBadgeVariant}>
+                {formatApplicationPackageStatus(packageMeta?.package_status)}
+              </Badge>
+              <Badge variant="outline">{formatDraftStatus(packageApp.draft_status)}</Badge>
+              {packageMeta?.requires_human_review ? (
+                <Badge variant="mutedLight">Human review required</Badge>
+              ) : null}
+            </div>
+
+            {packageMeta?.package_status === "incomplete" ? (
+              <p className={cn("text-sm text-amber-800 dark:text-amber-200", mutedClass)}>
+                Package is incomplete — missing documents or verified load data. Review gaps before
+                submission.
+              </p>
+            ) : null}
+
+            <div>
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Package documents ({packageDocs.length})
+              </p>
+              <ul className={cn("mt-1 space-y-1 text-sm", mutedClass)}>
+                {packageDocs.map((doc) => (
+                  <li key={doc.key} className="flex flex-wrap items-center gap-2">
+                    <Badge variant={doc.status === "attached" ? "secondary" : "outline"}>
+                      {doc.status === "attached" ? "Attached" : "Missing"}
+                    </Badge>
+                    <span className="font-medium text-foreground">{doc.label || doc.key}</span>
+                    {doc.file_name ? <span className="text-xs">({doc.file_name})</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {(packageMeta?.missing_documents?.length ?? 0) > 0 ? (
+              <div>
+                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                  Missing documents
+                </p>
+                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
+                  {packageMeta?.missing_documents?.map((item) => (
+                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {(packageMeta?.missing_fields?.length ?? 0) > 0 ? (
+              <div>
+                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                  Missing fields
+                </p>
+                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
+                  {packageMeta?.missing_fields?.map((item) => (
+                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <p className={cn("text-xs", mutedClass)}>
+              Load profile status: {packageMeta?.load_profile_analysis_status || "unknown"}
+            </p>
+
+            <div className="space-y-2 rounded-md border border-border/60 p-3">
+              <Label htmlFor="application-review-notes" className="text-xs">
+                Review notes (optional)
+              </Label>
+              <Textarea
+                id="application-review-notes"
+                value={reviewNotes}
+                onChange={(e) => onReviewNotesChange(e.target.value)}
+                rows={2}
+                className="text-sm"
+                placeholder="Document review comments for the team"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={reviewBusy || packageApp.draft_status === "reviewed"}
+                  onClick={() => onReview("reviewed")}
+                >
+                  {reviewBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Mark reviewed
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className={toolbarOutlineButtonClass}
+                  disabled={reviewBusy}
+                  onClick={() => onReview("needs_changes")}
+                >
+                  Request changes
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="default"
+                  disabled={!submitReady || submitBusy || packageApp.draft_status === "submitted"}
+                  onClick={onSubmit}
+                >
+                  {submitBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Submit to utility
+                </Button>
+              </div>
+              {!submitReady ? (
+                <p className={cn("text-xs", mutedClass)}>
+                  Portal submission stays disabled until draft status is reviewed.
+                </p>
+              ) : packageApp.draft_status === "submitted" ? (
+                <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
+                  Submitted — PEPCO portal automation returns not-implemented; non-PEPCO uses email intent.
+                </p>
+              ) : (
+                <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
+                  Reviewed — submit records email intent (non-PEPCO) or reports PEPCO adapter gap.
+                </p>
+              )}
+            </div>
+
+            <p className={cn("text-xs tabular-nums", mutedClass)}>
+              Package built {formatWhen(packageApp.updated_at)}
+              {packageApp.reviewed_at ? ` · Reviewed ${formatWhen(packageApp.reviewed_at)}` : ""}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Compact lifecycle timeline plus the manual stage-update form; collapsed by
  * default to keep the main workflow uncluttered. When opened, the transition
  * summary is shown directly; the manual update form stays nested under its
@@ -2353,6 +3155,8 @@ function PepcoSystemDataSection({
  */
 function LifecycleSection({
   transitions,
+  lifecycleProposals,
+  displayLifecycleProposal,
   formatWhen,
   mutedClass,
   sectionTitleClass,
@@ -2375,6 +3179,8 @@ function LifecycleSection({
     reason: string | null;
     created_at: string;
   }>;
+  lifecycleProposals: ReturnType<typeof getLifecycleProposalsFromMetadata>;
+  displayLifecycleProposal: ReturnType<typeof selectDisplayLifecycleProposal>;
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
   sectionTitleClass: string;
@@ -2409,6 +3215,45 @@ function LifecycleSection({
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-3">
+        {displayLifecycleProposal ? (
+          <div
+            className={cn(
+              "rounded-md border px-3 py-2 text-xs",
+              displayLifecycleProposal.blocked_reason
+                ? "border-amber-500/40 bg-amber-500/5 text-foreground"
+                : displayLifecycleProposal.applied
+                  ? "border-border/50 bg-muted/15 text-muted-foreground"
+                  : "border-teal/40 bg-cream-raised/40 text-foreground dark:bg-obsidian/35",
+            )}
+          >
+            <p className="font-medium">
+              Portal lifecycle suggestion
+              {displayLifecycleProposal.applied ? " (applied)" : ""}
+            </p>
+            <p className={cn("mt-0.5", mutedClass)}>
+              Stage {displayLifecycleProposal.proposed_stage} ·{" "}
+              {formatLifecycleState(displayLifecycleProposal.proposed_state)} ·{" "}
+              {displayLifecycleProposal.source_status}
+            </p>
+            <p className={cn("mt-0.5", mutedClass)}>
+              {displayLifecycleProposal.reason}
+              {displayLifecycleProposal.blocked_reason
+                ? ` · Blocked: ${displayLifecycleProposal.blocked_reason}`
+                : ""}
+              {lifecycleProposals?.last_evaluated_at
+                ? ` · ${formatWhen(lifecycleProposals.last_evaluated_at)}`
+                : ""}
+            </p>
+            {lifecycleProposals?.auto_apply_enabled ? (
+              <p className={cn("mt-0.5 italic", mutedClass)}>Auto-apply enabled on server.</p>
+            ) : (
+              <p className={cn("mt-0.5 italic", mutedClass)}>
+                Proposal only — set UCI_AUTO_STAGE_TRANSITIONS=true to auto-apply.
+              </p>
+            )}
+          </div>
+        ) : null}
+
         <div className="space-y-1.5">
           {transitions.length === 0 ? (
             <p className="text-sm font-medium text-ink-primary-light/90 dark:text-foreground/90">

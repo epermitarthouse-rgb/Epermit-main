@@ -85,6 +85,7 @@ const arlingtonDurableJob = require("../lib/arlington-durable-job.js");
 const arlingtonJobStore = require("../lib/arlington-job-store.js");
 const arlingtonOrchestration = require("../lib/arlington-orchestration.js");
 const { startArlingtonDurableWorkerLoop } = require("../lib/arlington-durable-worker-loop.js");
+const { startUciDurableWorkerLoop } = require("./services/uci/uci-durable-worker-loop.js");
 const { mirrorSessionProgress } = require("../lib/session-progress.js");
 
 function publishScrapeOrchestration(session, opts = {}) {
@@ -12541,7 +12542,10 @@ app.post("/api/filing/reauth", async (req, res) => {
   }
 });
 
-  return { PORT, runPlaywrightStartupDiagnostics, arlingtonWorker: startArlingtonDurableWorkerLoop({
+  return {
+    PORT,
+    runPlaywrightStartupDiagnostics,
+    arlingtonWorker: startArlingtonDurableWorkerLoop({
     supabase,
     sessions,
     rearmSessionIdleTimeout,
@@ -12549,7 +12553,9 @@ app.post("/api/filing/reauth", async (req, res) => {
     hashPortalData,
     uploadToSupabaseStorage,
     sanitizeStorageKey,
-  }) };
+  }),
+    uciWorker: startUciDurableWorkerLoop({ supabase }),
+  };
 }
 
 module.exports = {

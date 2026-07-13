@@ -1,0 +1,62 @@
+{
+  "version": "d3-pepco-electric-v1",
+  "provider_slug": "pepco",
+  "utility_type": "electric",
+  "application_type": "new_service",
+  "effective_date": "2026-07-14",
+  "description": "PEPCO electric new-service package manifest (D3 foundation). Document keys and field mappings only — no default engineering values.",
+  "required_documents": [
+    {
+      "key": "site_plan",
+      "label": "Site plan",
+      "aliases": ["site_plan", "civil_plan", "site", "plot_plan"]
+    },
+    {
+      "key": "single_line_diagram",
+      "label": "Single-line diagram",
+      "aliases": ["single_line", "single_line_diagram", "electrical_single_line", "one_line"]
+    },
+    {
+      "key": "equipment_cut_sheets",
+      "label": "Equipment cut sheets",
+      "aliases": ["cut_sheet", "equipment_cut_sheet", "equipment_spec", "equipment_specs"]
+    },
+    {
+      "key": "letter_of_authorization",
+      "label": "Letter of authorization",
+      "aliases": ["loa", "letter_of_authorization", "authorization_letter"]
+    }
+  ],
+  "required_fields": [
+    {
+      "key": "project_address",
+      "label": "Project address",
+      "source": "project.address",
+      "required": true
+    },
+    {
+      "key": "project_type",
+      "label": "Project type",
+      "source": "project.project_type",
+      "required": true
+    },
+    {
+      "key": "project_description",
+      "label": "Project description",
+      "source": "project.description",
+      "required": false
+    },
+    {
+      "key": "connected_load_data",
+      "label": "Connected load data",
+      "source": "load_summary.calculated_values",
+      "required": true,
+      "note": "Requires verified engineering values from load profile — not inferred in D2.1/D3"
+    }
+  ],
+  "notes": [
+    "D3 foundation manifest — structural package assembly only",
+    "No McDonald's/QSR numeric template constants",
+    "Load calculation worksheet generation deferred until verified templates exist"
+  ]
+}

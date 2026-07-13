@@ -54,6 +54,25 @@
  */
 
 /**
+ * @typedef {object} LifecycleMappingContext
+ * @property {boolean} [action_required]
+ * @property {string | null} [portal_submitted_at]
+ * @property {string | null} [portal_milestone]
+ * @property {string | null} [portal_status]
+ * @property {unknown} [raw]
+ */
+
+/**
+ * @typedef {object} LifecycleProposal
+ * @property {number} proposed_stage
+ * @property {string} proposed_state
+ * @property {"high" | "medium" | "low"} confidence
+ * @property {string} reason
+ * @property {string} source_status
+ * @property {boolean} automatic_transition_allowed
+ */
+
+/**
  * @typedef {object} UtilityAdapter
  * @property {string} providerSlug
  * @property {(raw: unknown, context: AdapterContext) => NormalizedApplication | null} normalizeApplication
@@ -61,6 +80,7 @@
  * @property {(raw: unknown, context: AdapterContext) => NormalizedStatusEvent[]} normalizeStatusEvents
  * @property {(raw: unknown) => string | null} getExternalApplicationId
  * @property {(raw: unknown) => string | null} getExternalJobId
+ * @property {(portalStatus: string | null | undefined, context: LifecycleMappingContext) => LifecycleProposal | null} [mapPortalStatusToLifecycle]
  */
 
 module.exports = {};

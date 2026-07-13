@@ -82,10 +82,16 @@ PEPCO-specific status mappings (e.g. "In Design" → stage 6) live **only** in `
 | PEPCO dashboard | `uci-pepco-dashboard-discovery.service.js` | List API + DOM fallback |
 | PEPCO app detail | `uci-pepco-application-detail-discovery.service.js` | UUID-specific API scrape |
 | PEPCO routes | `/api/uci/coordination/:id/discovery/pepco/*` | Provider-coupled URLs |
-| MFA sessions | `uci-pepco-session-store.js` | **In-memory** — not durable |
+| MFA sessions | `uci-pepco-session-store.js` | In-memory with TTL; optional `portalSyncJobId` link to durable job |
+| Durable portal sync | `uci-durable-worker-loop.js` + `scrape_jobs` (`job_type=uci_portal_sync`) | Background worker when `UCI_DURABLE_JOBS_ENABLED=true`; sync API fallback when false |
 | Data persistence | `coordination_records.metadata` | `pepco_dashboard_discovery`, `pepco_application_detail_discovery` |
-| Documents | `debug/pepco-docs/` on scraper host | Not Supabase storage |
-| Child tables | Read-only in detail bundle | No application/comms/cost writes |
+| Documents | `uci-document-storage.service.js` → Supabase `project-documents` bucket; dev local optional (`UCI_PERSIST_LOCAL_DOCUMENTS`) | Not linked to `project_documents` table |
+| Child tables | D1A portal_sync writes applications/comms/milestones | Costs/equipment still unread |
+| Lifecycle mapping | `uci-lifecycle-mapping.service.js` after portal sync | PEPCO status → stage proposals in `metadata.uci_lifecycle_proposals`; optional system apply via `UCI_AUTO_STAGE_TRANSITIONS` |
+| Human-assisted provider setup | `uci-provider-setup.service.js` + `GET .../provider-setup` | Guided init; structured address first, `portal_data.location` fallback; `metadata.uci_provider_mapping`; no auto territory matching |
+| Load profile foundation (D2.1) | `uci-load-profile.service.js` + `POST .../load-profile/analyze` | Missing-input inventory; `load_summary` on `agent_draft`; no-guess engineering rule |
+| Application preparation (D3) | `uci-application-builder.service.js` + template registry | PEPCO manifest; package draft; review workflow |
+| Submission foundation (D4) | `uci-application-submit.service.js` + `POST .../applications/:id/submit` | Email intent fallback; PEPCO portal submit blocked |
 
 **Migration strategy:** Wrap existing PEPCO services behind `pepco.adapter.js` and `uci-portal-sync.service.js` without immediate file relocation.
 
@@ -130,6 +136,7 @@ Optional `needs_changes` exists in migration CHECK constraint. Do **not** add `a
 ### Metadata compatibility strategy
 
 - **Retain** `coordination_records.metadata` PEPCO keys for backward compatibility.
+- **Add** `coordination_records.metadata.uci_provider_mapping` for human-assisted provider setup (D2.0) — method, confirmed user/time, address source, selected slugs, unresolved utility types.
 - **Add** normalized rows in child tables via sync orchestrator (D1).
 - Raw portal snapshots may remain in `metadata` or `agent_processed_metadata` for troubleshooting.
 - API responses sanitize `localPath` and absolute storage paths (`uci-pepco-document-download.service.js` pattern).
@@ -159,22 +166,25 @@ Optional `needs_changes` exists in migration CHECK constraint. Do **not** add `a
 
 ## 7. Document Storage Strategy
 
-### Present
+### Present (D1B — production hardened)
 
-- PEPCO PDFs: `scraper-service/debug/pepco-docs/{coordinationId}/{applicationUuid}/`
-- Download via authenticated API streaming from local disk.
-- Not linked to `project_documents` or Supabase buckets.
+- **Service:** `uci-document-storage.service.js` centralizes upload, idempotency, and metadata shaping.
+- **Bucket:** Supabase `project-documents` (private).
+- **Path:** `uci/unconfigured/{projectId}/{coordinationRecordId}/{providerSlug}/{externalApplicationId}/{safeFilename}`
+- **Metadata:** `coordination_records.metadata.pepco_application_detail_discovery.applications[].downloadedFiles` — stores `storageBucket`, `storageStatus`, `contentHash`, `idempotencyKey`, `storageAction`; **no `localPath` or `storagePath` in persisted/API metadata**.
+- **Production:** `NODE_ENV=production` disables durable local copies; Supabase is source of truth. Override with `UCI_PERSIST_LOCAL_DOCUMENTS=true` for dev/test.
+- **Download:** `uci-pepco-document-download.service.js` — prefers Supabase; falls back to legacy local file for old records; authenticated server streaming (no signed URL exposure).
+- **Scrape reporting:** `document_storage` object on application-detail scrape responses (`uploaded_count`, `existing_count`, `failed_count`, `errors`).
+- **Not used:** `project_documents` rows (schema lacks coordination linkage; metadata model sufficient for pilot).
 
-### Target (D1)
+### Target refinements (post-D1B)
 
 ```
 uci/{tenantId}/{projectId}/{coordinationRecordId}/{providerSlug}/{externalApplicationId}/{safeFilename}
 ```
 
-- Backend: Supabase Storage (or existing project document bucket pattern).
-- Metadata: bucket, path, checksum, content type, ingestion status.
-- Local disk only behind development flag.
-- Authorized download route; no path exposure in API JSON.
+- Replace `unconfigured` namespace when `projects.tenant_id` exists.
+- Optional link to `project_documents` if portfolio UI requires unified document list.
 
 ---
 
@@ -182,20 +192,18 @@ uci/{tenantId}/{projectId}/{coordinationRecordId}/{providerSlug}/{externalApplic
 
 ### Present
 
-- Synchronous HTTP → in-process Playwright for PEPCO flows.
-- MFA resume: in-memory `uci-pepco-session-store.js` with TTL.
+- Synchronous HTTP → in-process Playwright for PEPCO flows (unchanged).
+- MFA resume: in-memory `uci-pepco-session-store.js` with TTL; optional `portalSyncJobId` on session + `pepco_mfa_session_id` on job metadata when linked.
 - `disposeSessionsForCoordinationAndUser` prevents duplicate sessions per user/coordination.
-- Progress returned in HTTP response `progress[]` array — no SSE.
+- **D1D:** `uci_portal_sync` jobs on shared `scrape_jobs` / `scrape_events` with background worker when `UCI_DURABLE_JOBS_ENABLED=true`.
+- **Fallback:** `POST /coordination/:id/sync` runs synchronous `runPortalSync` when flag is off (default).
+- Progress: Realtime-capable `scrape_jobs` + `scrape_events` for durable runs; sync summary in HTTP response for synchronous path.
 
-### Target (D1)
+### Target refinements (post-D1D)
 
-- Job type: `uci_portal_sync`
-- States: `queued`, `running`, `awaiting_human`, `completed`, `failed`, `cancelled`
-- Idempotency key, lease/heartbeat, capped retry backoff.
-- MFA resume persisted in job record (not only in-memory).
-- Feature flag: `UCI_DURABLE_JOBS_ENABLED` — engineering extension; integrate with existing `scrape_jobs` pattern where compatible.
-
-**Do not claim durable jobs exist until implemented.**
+- Persist MFA browser state in job row (today: session id link only).
+- Frontend `useUciSyncJob` hook for sync-runs polling (today: API only).
+- Durable PEPCO discovery as separate job phases (today: sync job runs normalized `runPortalSync` only).
 
 ---
 
@@ -248,6 +256,7 @@ Payload must include: `tenant_id`, `coordination_record_id`, relevant entity IDs
 | QuickBooks invoice | `coordination_costs.id` as RequestId |
 | Stage transitions | Explicit audit row per change (duplicates are visible, not silent) |
 | PEPCO metadata merge | `mergeApplicationDetailsByUuid` — per-UUID merge |
+| Portal document storage | provider + externalApplicationId + documentName (+ upload timestamp) → `idempotencyKey`; storage path upsert; `contentHash` detects `already_exists` vs `updated` |
 
 ---
 
@@ -257,9 +266,12 @@ Documented as reasonable additions requiring no client conflict:
 
 - `UCI_AUTO_STAGE_TRANSITIONS` feature flag for lifecycle mapping
 - `UCI_DURABLE_JOBS_ENABLED` feature flag for job migration
+- `GET /api/uci/projects/:projectId/provider-setup` — human-assisted setup guidance (D2.0)
+- `POST /api/uci/coordination/:id/load-profile/analyze` — D2.1 preliminary load profile (no-guess)
 - `GET /api/uci/coordination/:id/sync-runs` — sync history endpoint
 - Deterministic attention flags on portal messages before AI classifier (D1)
 - Optional `external_application_id` columns on `coordination_applications` (D1 migration)
+- Non-blocking gap backlog maintained in `UCI_DELIVERY_ROADMAP.md` §17; closure milestone **D13**
 
 ---
 

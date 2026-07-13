@@ -6,11 +6,17 @@ import type {
   UciCommunicationsListResponse,
   UciDiscoveryResponse,
   UciInitResponse,
+  UciLoadProfileAnalyzeResponse,
+  UciApplicationPackageBuildResponse,
+  UciApplicationReviewResponse,
+  UciApplicationSubmitResponse,
   UciMilestonesListResponse,
   UciPepcoDashboardDiscoveryResponse,
   UciPepcoApplicationDetailDiscoveryResponse,
   UciPortalSyncResponse,
   UciProjectCoordinationResponse,
+  UciProviderSetupConfirmation,
+  UciProviderSetupResponse,
   UciProvidersResponse,
   UciRecordDetailResponse,
   UciTransitionResponse,
@@ -312,18 +318,93 @@ export async function listProjectCoordination(
   );
 }
 
+export async function getProjectProviderSetup(
+  projectId: string,
+): Promise<UciProviderSetupResponse> {
+  return uciFetchJson<UciProviderSetupResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/provider-setup`,
+    {},
+    "Failed to load provider setup guidance",
+  );
+}
+
 export async function initProjectCoordination(
   projectId: string,
   providers: string[],
+  providerSetup?: UciProviderSetupConfirmation,
 ): Promise<UciInitResponse> {
   return uciFetchJson<UciInitResponse>(
     `/api/uci/projects/${encodeURIComponent(projectId)}/coordination/init`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ providers }),
+      body: JSON.stringify({
+        providers,
+        ...(providerSetup ? { provider_setup: providerSetup } : {}),
+      }),
     },
     "Failed to initialize coordination",
+  );
+}
+
+export async function analyzeCoordinationLoadProfile(
+  coordinationId: string,
+): Promise<UciLoadProfileAnalyzeResponse> {
+  return uciFetchJson<UciLoadProfileAnalyzeResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/analyze`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Load profile analysis failed",
+  );
+}
+
+export async function buildCoordinationApplicationPackage(
+  coordinationId: string,
+): Promise<UciApplicationPackageBuildResponse> {
+  return uciFetchJson<UciApplicationPackageBuildResponse>(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/applications`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Application package build failed",
+  );
+}
+
+export async function reviewCoordinationApplication(
+  applicationId: string,
+  payload: { status: "reviewed" | "needs_changes"; notes?: string },
+): Promise<UciApplicationReviewResponse> {
+  return uciFetchJson<UciApplicationReviewResponse>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/review`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Application review failed",
+  );
+}
+
+export async function submitCoordinationApplication(
+  applicationId: string,
+): Promise<UciApplicationSubmitResponse> {
+  return uciFetchJson<UciApplicationSubmitResponse>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/submit`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Application submission failed",
+  );
+}
+
+export async function classifyCoordinationCommunications(
+  coordinationId: string,
+): Promise<{
+  coordination_record_id: string;
+  project_id: string;
+  classified_count: number;
+  skipped_count: number;
+  classifier_version: string;
+}> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/communications/classify`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Communication classification failed",
   );
 }
 

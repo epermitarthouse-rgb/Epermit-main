@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { SESSION_IDLE_TIMEOUT_MS } = require("../../../sessions/session-ttl.js");
 
-/** @typedef {{ sessionId: string, coordinationId: string, userId: string, browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page, createdAt: number, updatedAt: number, status: string, continueAction: string | null, captureApplicationIds: boolean, applicationUuids?: string[], downloadDocuments?: boolean, ttlHandle?: ReturnType<typeof setTimeout> }} PepcoAwaitingSession */
+/** @typedef {{ sessionId: string, coordinationId: string, userId: string, browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page, createdAt: number, updatedAt: number, status: string, continueAction: string | null, captureApplicationIds: boolean, applicationUuids?: string[], downloadDocuments?: boolean, portalSyncJobId?: string, ttlHandle?: ReturnType<typeof setTimeout> }} PepcoAwaitingSession */
 
 /** @type {Map<string, PepcoAwaitingSession>} */
 const sessions = new Map();
@@ -71,6 +71,7 @@ function pruneStaleSessions(now = Date.now()) {
  *   captureApplicationIds?: boolean;
  *   applicationUuids?: string[];
  *   downloadDocuments?: boolean;
+ *   portalSyncJobId?: string;
  * }} opts
  */
 function registerAwaitingMfaSession(opts) {
@@ -95,6 +96,8 @@ function registerAwaitingMfaSession(opts) {
     applicationUuids,
     downloadDocuments:
       typeof opts.downloadDocuments === "boolean" ? opts.downloadDocuments : undefined,
+    portalSyncJobId:
+      opts.portalSyncJobId != null ? String(opts.portalSyncJobId).trim() : undefined,
     ttlHandle: undefined,
   };
   sessions.set(sessionId, record);

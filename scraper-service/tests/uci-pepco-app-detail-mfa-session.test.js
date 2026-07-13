@@ -1,12 +1,27 @@
 "use strict";
 
-const { describe, it } = require("node:test");
+const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const {
   buildAppDetailRunOptions,
   resolveAppDetailResumeOptions,
 } = require("../app/services/uci/uci-pepco-application-detail-discovery.service.js");
-const { registerAwaitingMfaSession } = require("../app/services/uci/uci-pepco-session-store.js");
+const {
+  registerAwaitingMfaSession,
+  revokeAwaitingPepcoSession,
+} = require("../app/services/uci/uci-pepco-session-store.js");
+
+/** @type {string[]} */
+const registeredSessionIds = [];
+
+afterEach(async () => {
+  while (registeredSessionIds.length) {
+    const sessionId = registeredSessionIds.pop();
+    if (sessionId) {
+      await revokeAwaitingPepcoSession(sessionId, "test_cleanup");
+    }
+  }
+});
 
 describe("PEPCO app-detail MFA session resume options", () => {
   it("builds initial run options from request body", () => {
@@ -81,5 +96,6 @@ describe("PEPCO app-detail MFA session resume options", () => {
 
     assert.equal(session.applicationUuids?.[0], "uuid-aspen");
     assert.equal(session.downloadDocuments, true);
+    registeredSessionIds.push(session.sessionId);
   });
 });

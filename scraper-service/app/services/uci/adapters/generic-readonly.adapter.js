@@ -23,6 +23,10 @@ const genericReadonlyAdapter = {
   getExternalJobId() {
     return null;
   },
+
+  mapPortalStatusToLifecycle() {
+    return null;
+  },
 };
 
 module.exports = {

@@ -176,15 +176,36 @@ async function getCoordinationDetailBundle(supabase, coordinationRecordId, proje
 }
 
 /**
+ * @param {Record<string, unknown>} existingMetadata
+ * @param {Record<string, unknown>} mappingMetadata
+ * @param {string} providerSlug
+ */
+function mergeProviderMappingMetadata(existingMetadata, mappingMetadata, providerSlug) {
+  const base =
+    existingMetadata && typeof existingMetadata === "object" && !Array.isArray(existingMetadata)
+      ? { ...existingMetadata }
+      : {};
+
+  return {
+    ...base,
+    uci_provider_mapping: {
+      ...mappingMetadata,
+      provider_slug: String(providerSlug).toLowerCase(),
+    },
+  };
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} p
  * @param {string} p.projectId
  * @param {string} p.userId
  * @param {Array<Record<string, unknown>>} p.resolvedProviders
+ * @param {Record<string, unknown> | null | undefined} [p.providerSetupMetadata]
  * @returns {Promise<{ created: Array<Record<string, unknown>>, existing: Array<Record<string, unknown>>, records: Array<Record<string, unknown>> }>}
  */
 async function initCoordinationForProviders(supabase, p) {
-  const { projectId, userId, resolvedProviders } = p;
+  const { projectId, userId, resolvedProviders, providerSetupMetadata } = p;
 
   if (!resolvedProviders.length) {
     const err = new Error("No valid providers supplied");
@@ -223,6 +244,7 @@ async function initCoordinationForProviders(supabase, p) {
       continue;
     }
 
+    const providerSlug = String(provider.slug ?? "").toLowerCase();
     const insertRow = {
       project_id: projectId,
       user_id: userId,
@@ -231,7 +253,10 @@ async function initCoordinationForProviders(supabase, p) {
       scope_description: "",
       current_stage: 1,
       current_stage_state: "NOT_STARTED",
-      metadata: {},
+      metadata:
+        providerSetupMetadata && providerSlug
+          ? mergeProviderMappingMetadata({}, providerSetupMetadata, providerSlug)
+          : {},
     };
 
     const { data: inserted, error: insErr } = await supabase
@@ -260,7 +285,7 @@ async function initCoordinationForProviders(supabase, p) {
       triggered_by_type: "system",
       triggered_by_id: null,
       reason: "Initialization",
-      metadata: {},
+      metadata: providerSetupMetadata ? { uci_provider_mapping: providerSetupMetadata } : {},
     });
 
     if (trErr) {
@@ -278,9 +303,46 @@ async function initCoordinationForProviders(supabase, p) {
 
   const createdIdSet = new Set(created.map((c) => String(c.id)));
   const requestedSet = new Set(resolvedProviders.map((p) => String(p.id)));
+  const providerSlugById = new Map(
+    resolvedProviders.map((provider) => [
+      String(provider.id),
+      String(provider.slug ?? "").toLowerCase(),
+    ]),
+  );
 
   /** Enriched coordination rows tied to requested provider ids only */
   const impacted = records.filter((r) => requestedSet.has(String(r.utility_provider_id)));
+
+  if (providerSetupMetadata) {
+    for (const record of impacted) {
+      const providerSlug = providerSlugById.get(String(record.utility_provider_id)) || "";
+      if (!providerSlug) continue;
+
+      const nextMetadata = mergeProviderMappingMetadata(
+        record.metadata,
+        providerSetupMetadata,
+        providerSlug,
+      );
+
+      const { error: metaErr } = await supabase
+        .from("coordination_records")
+        .update({ metadata: nextMetadata })
+        .eq("id", record.id);
+
+      if (metaErr) {
+        throw Object.assign(
+          new Error(metaErr.message || "Failed to persist provider mapping metadata"),
+          {
+            cause: metaErr,
+            statusCode: 500,
+            code: "COORDINATION_METADATA_UPDATE_FAILED",
+          },
+        );
+      }
+
+      record.metadata = nextMetadata;
+    }
+  }
 
   return {
     created: impacted.filter((r) => createdIdSet.has(String(r.id))),
@@ -294,4 +356,5 @@ module.exports = {
   getCoordinationRecordById,
   getCoordinationDetailBundle,
   initCoordinationForProviders,
+  mergeProviderMappingMetadata,
 };
