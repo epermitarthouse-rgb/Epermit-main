@@ -17,6 +17,32 @@ UCI is a **parallel agent track** within PermitPilot, distinct from:
 
 UCI deals with **utility providers** (electric, gas, water/sewer, telecom), not municipal permitting authorities.
 
+### Jurisdiction vs utility coordination
+
+| Concept | Role in UCI |
+|---------|-------------|
+| **Permit jurisdiction** | Municipal/county permit authority — Accela, ProjectDox, county scrapers supply project context |
+| **Utility coordination** | Separate lifecycle per confirmed utility provider serving the project site |
+| **UCI entry** | Every project from every supported PermitPilot jurisdiction **can** enter UCI |
+| **Data reuse** | Jurisdiction scrapers provide address, plans, specs, equipment docs, permit docs, contacts, dates — **do not rescrape all jurisdictions for UCI** unless required data is missing or stale |
+| **Multi-provider** | A project may have multiple utility providers; **each confirmed provider gets its own `coordination_record`** |
+| **Adapter scope** | A provider-specific adapter runs **only** when that provider serves the project — **do not assume PEPCO or any utility supports every jurisdiction** |
+
+**Target flow:**
+
+```text
+Jurisdiction scraper → PermitPilot project + project_documents
+        │
+        ▼
+UCI provider confirmation (D2.0 human-assisted; D2.2 auto when verified)
+        │
+        ├──► coordination_record (provider A) → adapter A or manual/email fallback
+        ├──► coordination_record (provider B) → adapter B or manual/email fallback
+        └──► coordination_record (provider N) → generic-readonly + email fallback
+```
+
+**PEPCO scope:** PEPCO electric is the **first fully automated provider workflow** (read sync today; portal submit target in D4). UCI remains available for projects from all supported jurisdictions; PEPCO automation applies **only** to PEPCO coordination records. Other utilities use shared lifecycle, manual actions, and email fallback until their adapters exist.
+
 **Entry points today:**
 
 - API: `POST/GET /api/uci/*` — `scraper-service/app/register-execution-routes.js`
@@ -95,6 +121,29 @@ PEPCO-specific status mappings (e.g. "In Design" → stage 6) live **only** in `
 
 **Migration strategy:** Wrap existing PEPCO services behind `pepco.adapter.js` and `uci-portal-sync.service.js` without immediate file relocation.
 
+### PermitPilot data reuse (UCI consumers)
+
+Reuse existing PermitPilot project and document data. Do not invent values; record missing inputs in `missing_inputs` / `needs_verification`.
+
+| Source | Path / table | UCI consumer | Wired today | Reliability | Fallback when missing |
+|--------|--------------|--------------|-------------|-------------|----------------------|
+| Project address | `projects.address`, `city`, `state`, `zip_code`, `jurisdiction` | D2.0 provider setup, D2.1 load profile, D3 application builder | ✅ | High when structured fields populated | `projects.portal_data.location` (read-only fallback in D2.0); `missing_inputs` in D2.1/D3 |
+| Project name | `projects.name` | D3 application package manifest | ✅ | High | Template field marked missing |
+| Project type | `projects.project_type` | D2.1 load profile inventory | ✅ | Medium | Listed in `missing_inputs` |
+| Description | `projects.description` | D2.1 load profile inventory | ✅ | Medium | Optional; not used for numeric inference |
+| Square footage | `projects.square_footage` | D2.1 inventory only — **not** for kW/amps/voltage/phase/meter/BTU/GPM/DFU/service size | ✅ | Medium | Omitted from `calculated_values`; never inferred |
+| Deadlines | `projects.deadline` | D2.1 load profile | ✅ | Medium | `construction_schedule` in `missing_inputs` |
+| Project contacts | `projects` client fields (`client_name`, `client_email` via billing); `reviewer_contacts` JSONB on related tables | D3/D4 submission context (partial) | ⚠️ partial | Medium | Manual entry in application review; not fully wired to UCI child tables |
+| Plans | `project_documents` (`document_type` plan-related) | D2.1 inventory, D3 required-doc matching | ✅ | Medium — metadata only, no content parse | `uploaded_specifications_or_plans` missing |
+| Specifications | `project_documents` (spec-related types) | D2.1 inventory, D3 required-doc matching | ✅ | Medium — metadata only | Same as plans |
+| Equipment schedules | `project_documents` + `coordination_equipment` | D2.1 inventory, D8 tracking | ⚠️ partial | Low until equipment rows exist | `equipment_schedule` in `missing_inputs` |
+| Permit documents | `project_documents` (permit-related) | D3 attachment manifest | ✅ | Medium — filename/type only | Required-doc gaps surfaced in package review |
+| Portal scrape context | `projects.portal_data` (jurisdiction scraper output) | D2.0 address fallback; not primary UCI source | ⚠️ partial | Varies by jurisdiction | Structured `projects.*` fields preferred |
+| Jurisdiction scraper files | `scrape_file_results`, `portal_data.tabs.files` | Indirect — may populate `project_documents` | ⚠️ partial | Varies | Manual upload to `project_documents` |
+| PEPCO portal sync | `coordination_applications`, `coordination_communications`, `coordination_milestones` via D1A | D1–D6 normalized reads | ✅ (PEPCO only) | High for synced PEPCO records | Manual/email fallback utilities |
+
+**Square-footage rule (D2.1):** `square_footage` may appear in `inputsUsed` but must **never** populate `calculated_values` or engineering numerics. Numeric values require explicit project data, verified equipment data, or approved versioned templates (McDonald's/QSR templates remain **external data**).
+
 ---
 
 ## 4. Target Code Paths (D1+)
@@ -145,20 +194,33 @@ Optional `needs_changes` exists in migration CHECK constraint. Do **not** add `a
 
 ## 6. Tenant and RLS Strategy
 
-### Present implementation
+### Present implementation (organization → project → team → UCI) — updated 2026-07-15 (NB-D1-001)
 
-- RLS via `has_project_access(auth.uid(), project_id)` on all coordination tables.
-- `tenant_id` on `coordination_records` is **nullable and never written**.
-- Child tables use `project_id` only — no `tenant_id`.
-- `utility_providers` is a **global catalog** (authenticated read-all).
-- API layer: service-role Supabase client + explicit `requireProjectAccess` on every route.
+**Ownership source selected:** `projects.user_id` (owner) + `project_team_members` (owner/admin/editor/viewer) via `has_project_access` / `has_project_editor_access`. **No** `organizations`, `tenants`, or `projects.tenant_id` table/column exists.
 
-### Target state (client spec §6)
+```text
+auth.users
+  → projects.user_id (owner)
+  → project_team_members (role: owner | admin | editor | viewer)
+  → has_project_access (SELECT) / has_project_editor_access (mutations)
+  → coordination_records + child tables (project_id FK)
+```
 
-- `tenant_id` propagated from `projects.tenant_id` onto coordination records and child tables.
-- Tenant-aware RLS as **additional boundary** alongside project access.
-- `utility_providers` tenant-scoped per client requirements.
-- Cross-tenant security tests in CI (blocking).
+- RLS: SELECT via `has_project_access`; INSERT/UPDATE/DELETE via `has_project_editor_access` (migration `20260715120000_uci_rls_editor_hardening.sql`).
+- Backend: service-role client + `requireProjectAccess({ write: true })` on all UCI mutation routes.
+- `tenant_id` columns on UCI tables remain **nullable and unwritten** until approved tenancy schema exists.
+- Storage: `uci/unconfigured/{projectId}/...` unchanged — NB-D1B-001 remains open.
+- Platform `user_roles.admin` does **not** bypass UCI routes; global admin is separate from project access.
+- **No demo-account isolation** in schema today.
+
+### Target state (client spec §6 — blocked on architecture decision)
+
+- Discover organization/tenant field on `projects` (or approved tenancy table) in current schema.
+- Propagate `tenant_id` from project onto coordination records and child tables.
+- Tenant-aware RLS as **additional boundary** alongside `has_project_access`.
+- `utility_providers` tenant-scoped per client requirements when tenancy decision approved.
+- Demo-account isolation and cross-tenant CI tests (blocking for production multi-tenant).
+- Replace `unconfigured` storage path segment when ownership data is available.
 
 **Do not claim tenant isolation is complete until target state is implemented and tested.**
 
@@ -207,7 +269,67 @@ uci/{tenantId}/{projectId}/{coordinationRecordId}/{providerSlug}/{externalApplic
 
 ---
 
-## 9. Event Contracts (Target — D12)
+## 9. Email Workflow (D4/D5 — planning direction)
+
+Reuse the existing **Commun-ET permitting mailbox** — do not introduce another email provider unless the existing mailbox cannot support the workflow.
+
+| Direction | Detail |
+|-----------|--------|
+| Preferred transport | **Microsoft Graph** when mailbox is Microsoft 365 (`microsoft_mailbox_connections` table exists; encrypted tokens) |
+| Scope | Inbound + outbound; attachment capture; threading preservation |
+| Matching keys | Provider, utility reference, project address, subject, sender |
+| Uncertain matches | Require human review — never auto-link silently |
+| Audit | Preserve full message history on `coordination_communications` |
+| Status today | Portal-sync classifier only; inbound webhook **not implemented** (external access: mailbox permissions + security design) |
+
+Outbound utility submission email (D4 `email_intent` path) shares this mailbox direction once SMTP/Graph send is wired.
+
+---
+
+## 10. QuickBooks Reuse (D7 — planning direction)
+
+QuickBooks is **already connected** in the PermitPilot billing module. UCI must **not** build a second integration.
+
+| Rule | Detail |
+|------|--------|
+| Reuse | `scraper-service/app/services/quickbooks/` — OAuth (`qb-oauth.service.js`), API (`qb-api.service.js`), token store, invoice trigger patterns |
+| Persist first | Always write `coordination_costs` before any accounting action |
+| No auto-post | Do not automatically create accounting entries |
+| Reviewed actions | Explicit human-triggered: draft vendor bill, draft client invoice, or both |
+| Idempotency | Store QuickBooks IDs, sync status, errors, and idempotency references on cost rows; prevent duplicates (mirror `qb_invoice_id_m*` pattern on projects) |
+| Status today | UCI has manual cost CRUD only; QB bridge **not wired** (implement now under D7) |
+
+---
+
+## 11. Completion Definitions (D4, D10, compliance)
+
+### Submission complete (Agent 4)
+
+Submission is complete **only when all** of the following are true:
+
+1. Application was **actually submitted** (portal or sent email — not draft/review intent alone)
+2. Required attachments were included
+3. Confirmation or ticket number captured
+4. Submission evidence stored (fields, attachment list, actor, timestamp)
+5. Idempotency enforced — no duplicate live submits
+
+`email_intent` metadata recording alone is **not** submission complete. Application review or creation alone is **not** submission complete.
+
+### Coordination complete (Agent 12)
+
+Coordination is complete **only when all** of the following are true:
+
+1. Service energized
+2. Final meter set
+3. Commissioning verified
+4. Costs closed
+5. Closeout documents archived
+
+Utility approval, application review, or application creation alone does **not** mean coordination is complete.
+
+---
+
+## 12. Event Contracts (Target — D12)
 
 Emit on existing PermitPilot event bus (VERIFY implementation before wiring):
 
@@ -230,7 +352,7 @@ Payload must include: `tenant_id`, `coordination_record_id`, relevant entity IDs
 
 ---
 
-## 10. Security Rules
+## 13. Security Rules
 
 | Rule | Present | Target |
 |------|---------|--------|
@@ -245,7 +367,7 @@ Payload must include: `tenant_id`, `coordination_record_id`, relevant entity IDs
 
 ---
 
-## 11. Idempotency Rules
+## 14. Idempotency Rules
 
 | Operation | Key / check |
 |-----------|-------------|
@@ -260,7 +382,7 @@ Payload must include: `tenant_id`, `coordination_record_id`, relevant entity IDs
 
 ---
 
-## 12. Engineering Extensions (Not in Client Spec)
+## 15. Engineering Extensions (Not in Client Spec)
 
 Documented as reasonable additions requiring no client conflict:
 
@@ -275,7 +397,7 @@ Documented as reasonable additions requiring no client conflict:
 
 ---
 
-## 13. Deferred per Client Spec
+## 16. Deferred per Client Spec
 
 | Item | Client reference |
 |------|------------------|

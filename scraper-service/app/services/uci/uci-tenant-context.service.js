@@ -10,6 +10,8 @@ const { getCoordinationRecordById } = require("./uci-records.service.js");
  *   coordinationRecordId: string;
  *   tenantId: null;
  *   tenantSource: "unconfigured";
+ *   tenantNamespace: "unconfigured";
+ *   ownershipSource: "project_team";
  *   coordinationRecord: Record<string, unknown>;
  * }>}
  */
@@ -27,6 +29,8 @@ async function loadTenantContextForCoordination(supabase, coordinationRecordId) 
     coordinationRecordId: String(record.id),
     tenantId: null,
     tenantSource: "unconfigured",
+    tenantNamespace: "unconfigured",
+    ownershipSource: "project_team",
     coordinationRecord: record,
   };
 }

@@ -88,6 +88,20 @@ function listRecentUciEvents(limit = 50) {
   return recentEvents.slice(0, n);
 }
 
+/**
+ * Project-scoped event list — filters in-memory buffer by payload.project_id.
+ * @param {string} projectId
+ * @param {number} [limit]
+ */
+function listRecentUciEventsForProject(projectId, limit = 50) {
+  const pid = String(projectId || "").trim();
+  if (!pid) return [];
+  const n = Math.min(Math.max(Number(limit) || 50, 1), MAX_EVENTS);
+  return recentEvents
+    .filter((e) => String(e.payload?.project_id ?? "") === pid)
+    .slice(0, n);
+}
+
 function clearRecentUciEventsForTests() {
   recentEvents.length = 0;
 }
@@ -95,6 +109,7 @@ function clearRecentUciEventsForTests() {
 module.exports = {
   emitUciEvent,
   listRecentUciEvents,
+  listRecentUciEventsForProject,
   clearRecentUciEventsForTests,
   MAX_PERSISTED_EVENTS,
 };

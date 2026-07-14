@@ -187,7 +187,57 @@ Steps 8–12 (draft, review, submit, confirmation, lifecycle from submission) �
 
 ## Non-Blocking Backlog Process
 
-From 2026-07-14, every UCI milestone maintains a persistent non-blocking backlog in `UCI_DELIVERY_ROADMAP.md` §17. Post–D5–D12 review: 56 active backlog items, 3 client-deferred tracked, 2 resolved (NB-DOC-001, NB-DOC-002).
+From 2026-07-14, every UCI milestone maintains a persistent non-blocking backlog in `UCI_DELIVERY_ROADMAP.md` §17. Post–D5–D12 review: 56 active backlog items; D13 hardening closed 15 items (2026-07-15).
+
+---
+
+## NB-D1-001 Tenant/RLS Hardening (2026-07-15)
+
+**Status:** **partial** — project/team isolation hardened; full tenant propagation **blocked**.
+
+| Deliverable | Result |
+|-------------|--------|
+| Ownership audit | No org/tenant table; `projects.user_id` + `project_team_members` is sole source |
+| `tenant_id` propagation | **Not implemented** — no reliable org field on `projects` |
+| RLS hardening | `20260715120000_uci_rls_editor_hardening.sql` — viewer read-only, editor mutations |
+| Route authorization | All POST UCI routes use `write: true`; `/events/recent` requires `project_id` |
+| Storage namespace | `unconfigured` retained (NB-D1B-001 open) |
+| Tests | `uci-access-hardening.test.js`, `uci-d13-tenant-rls-hardening.test.js` — 185 UCI backend tests pass |
+| Production security gate | **Not met** — cross-tenant + demo isolation + tenant propagation remain |
+
+**Architecture decision still required:** approved tenancy model (`projects.tenant_id` or `organizations` + membership) before NB-D1-001 can close.
+
+---
+
+## Decision Reconciliation Doc Pass (2026-07-15)
+
+**No new plan, roadmap, phase name, or competing planning structure was created.**
+
+Authoritative decisions from product/architecture review were merged into the **existing** milestone structure (D1–D13) and §17 backlog.
+
+### Sections updated
+
+| Document | Sections |
+|----------|----------|
+| `UCI_DELIVERY_ROADMAP.md` | §2 baseline; D2.0/D2.1/D2.2 jurisdiction+provider model; D4 PEPCO dry-run; D5 email; D7 QB reuse; D8–D10 operational baselines; D13 tenant/security; §14 completion definitions; §16 remaining order; §17 Class column |
+| `UCI_ARCHITECTURE.md` | §1 jurisdiction vs utility; §3 data reuse table; §6 org/project/team model; §9 email; §10 QuickBooks; §11 completion definitions |
+| `UCI_COMPLIANCE_CHECKLIST.md` | §0 readiness labels; §2a jurisdiction reuse; §2.12–2.14 email/QB; §5 completion; §13 portal; §17 tests; §24 acceptance |
+| `README.md` | Status summary, next target, blockers |
+| `UCI_EXECUTION_HISTORY.md` | This section |
+
+### Backlog IDs updated (Class column + dependency text)
+
+NB-D1-001, NB-D1B-001, NB-D2-001, NB-D2-002, NB-D2-007, NB-D2-008, NB-D3-005, NB-D4-001, NB-D4-002, NB-D4-003, NB-D5-001, NB-D5-004, NB-D6-001, NB-D7-001, NB-D10-001, NB-D10-002, NB-D11-004, NB-D12-003, NB-PROV-001, NB-TEST-001, NB-TEST-002, NB-OPS-001 — plus resolved NB-DOC-003.
+
+### Remains external / architecture / live verification
+
+| Category | Items |
+|----------|-------|
+| **External data** | NB-D2-001, NB-D2-002, NB-D2-007, NB-D2-008, NB-D2-010, NB-D3-002, NB-D11-004 |
+| **External access** | NB-D4-001, NB-D4-002, NB-D5-001, NB-D5-004, NB-PROV-001 |
+| **Architecture work** | NB-D1-001, NB-D1B-001, NB-D1D-003, NB-D12-002, NB-TEST-002, NB-OPS-001 |
+| **Live verification** | NB-D4-003, NB-D12-003, NB-TEST-001 |
+| **Implement now** (next code) | **NB-D1-001** (D13 tenant/RLS) per §16 remaining order |
 
 ---
 

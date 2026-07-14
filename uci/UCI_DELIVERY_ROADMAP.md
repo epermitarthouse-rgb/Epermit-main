@@ -56,12 +56,12 @@ Engineering extensions are labeled explicitly and do not override client require
 
 | Capability | Status |
 |------------|--------|
-| Full Agent 1 auto territory mapping | **blocked** (D2.2) | No verified `service_territory` / geocoding |
-| PEPCO portal live submit | **blocked** (D4) | `501 SUBMIT_ADAPTER_NOT_IMPLEMENTED` |
-| BGE automation | missing |
-| Tenant propagation + tenant RLS | missing |
-| Inbound email webhook | missing | D5 portal-sync classifier only |
-| QuickBooks CIAC integration | missing | D7 manual cost rows only |
+| Full Agent 1 auto territory mapping | **blocked** (D2.2) | No verified `service_territory` / geocoding; ZIP/county/jurisdiction inference prohibited |
+| PEPCO portal live submit | **blocked** (D4) | `501 SUBMIT_ADAPTER_NOT_IMPLEMENTED`; dry-run path not yet built |
+| BGE automation | missing | Manual/email fallback until adapter exists |
+| Tenant propagation + tenant RLS | **partial** | Project/team editor hardening shipped (NB-D1-001); no `projects.tenant_id` — architecture decision required |
+| Inbound email webhook | missing | D5 — reuse Commun-ET mailbox; Graph preferred; external access |
+| QuickBooks UCI actions | missing | D7 — reuse billing module OAuth; no second integration |
 | Escalate API | missing | D12 partial |
 | P50/P90 ML prediction | deferred | Client Phase 5 |
 
@@ -222,18 +222,32 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 | Field | Content |
 |-------|---------|
-| **Objective** | Agents 1–2: auto provider mapping + structured load schedules |
+| **Objective** | Agents 1–2: provider confirmation + structured load schedules |
 | **Client requirements** | Agent 1 §4.1; Agent 2 §4.2; McDonald's prototype templates |
 | **Dependencies** | D1 tenant + provider directory hardening |
 | **Current status** | **partial** — D2.0 + D2.1 complete (scoped); D2.2 full Agent 1 auto mapping **blocked** (no territory data/geocoding); D3 foundation complete (scoped) |
+
+#### Jurisdiction and provider model (decision 2026-07-15)
+
+- **Every project** from every supported PermitPilot jurisdiction **can enter UCI**.
+- Jurisdiction scrapers supply project context, address, plans, specs, equipment docs, permit docs, contacts, dates — **do not rescrape all jurisdictions for UCI** unless data is missing or stale.
+- **Utility coordination is separate** from municipal permit jurisdiction.
+- A project may have **multiple utility providers**; each confirmed provider gets **its own `coordination_record`**.
+- Provider adapters run **only** for confirmed providers serving the project — **do not assume PEPCO serves every jurisdiction**.
 
 #### D2 sub-phase status
 
 | Sub-phase | Status | Evidence |
 |-----------|--------|----------|
-| **D2.0** — Human-assisted provider setup | **implemented** | `uci-provider-setup.service.js`; `GET .../provider-setup`; guided init UI; `metadata.uci_provider_mapping` |
+| **D2.0** — Human-assisted provider setup | **implemented** | `uci-provider-setup.service.js`; `GET .../provider-setup`; guided init UI; `metadata.uci_provider_mapping`; **current safe fallback** |
 | **D2.1** — Load profile foundation (Agent 2) | **implemented** (scoped) | `uci-load-profile.service.js`; `POST .../load-profile/analyze`; `load_summary` on `agent_draft`; no-guess rule; drawer UI |
-| **D2.2** — Auto territory mapping (full Agent 1) | **deferred** | No geocoding vendor; no verified `service_territory` rules |
+| **D2.2** — Auto territory mapping (full Agent 1) | **deferred** | **External data:** verified `service_territory` rules + geocoding vendor; **must not** infer providers from ZIP, county, or permit jurisdiction without verified rules |
+
+**Provider workflow rules:**
+- Human-assisted confirmation remains the **current safe fallback** (D2.0).
+- Full automatic territory mapping stays under **D2.2** only.
+- Providers **without portal adapters** continue through manual or email-assisted workflows (D4 `email_intent`).
+- PEPCO is the first fully automated provider; other utilities use shared lifecycle until adapters exist.
 
 **Database:** Tenant-scoped `utility_providers`; `service_territory`; SLA fields operational.
 
@@ -243,13 +257,13 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 **Frontend:** D2.0 guided provider setup; D2.1 read-only Load Profile drawer with Analyze/Re-analyze.
 
-**No-guess engineering rule (D2.1):** `calculated_values` empty unless explicit user data, verified equipment, or approved in-repo templates. Square footage alone does not produce load numbers.
+**No-guess engineering rule (D2.1):** `calculated_values` empty unless explicit user data, verified equipment, or approved in-repo templates. **Square footage alone must not produce** kW, amperage, voltage, phase, meter count, BTU/h, GPM, DFU, or service size. Missing data appears in `missing_inputs` and `needs_verification`. Verified McDonald's/QSR templates remain **external data** (NB-D2-007).
 
 **Acceptance (D2.1 scoped):** Per-utility missing-input inventory; idempotent agent_draft upsert; portal_sync untouched; stage unchanged when inputs missing.
 
-**Acceptance (D2.2 / full Agent 1):** Auto mapping from verified territory data; blocked/ambiguous states.
+**Acceptance (D2.2 / full Agent 1):** Auto mapping from **verified** territory data only; blocked/ambiguous states; no ZIP/county/jurisdiction guessing.
 
-**Exclusions:** Guessed engineering values; McDonald's templates until verified in repo; LLM document parsing; geocoding; BGE automation.
+**Exclusions:** Guessed engineering values; McDonald's templates until verified in repo; LLM document parsing; geocoding without vendor; BGE automation; inferring providers without verified rules.
 
 **Engineering extensions:** `coordination_records.metadata.uci_provider_mapping`; `load_summary` version `d2.1-v1`.
 
@@ -289,15 +303,29 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Dependencies** | D3 reviewed application |
 | **Current status** | **partial** — API + email_intent path; PEPCO portal adapter not implemented |
 
+**PEPCO scope:** PEPCO automation applies **only** to PEPCO coordination records. UCI is available for all jurisdictions; other utilities use `email_intent` until adapters exist.
+
+**Target PEPCO portal behavior (D4 — not yet built):**
+- Reuse existing Playwright/session infrastructure (`scrapers/pepco/`, `uci-pepco-session-store.js`)
+- **Human review required** before final submission (`draft_status=reviewed` gate — already enforced)
+- Support **dry-run** or **stop-before-final-submit** mode for development/staging
+- Persist: submitted fields, attachment list, actor, timestamp, confirmation/ticket number, submission evidence
+- Enforce idempotency (`submitted_at IS NULL` gate — partial today)
+- **Do not submit real applications** during development without safe live access
+
+**Submission complete definition:** Actual submit + attachments + confirmation/ticket + evidence + actor/timestamp. `email_intent` alone is **not** complete. See `UCI_ARCHITECTURE.md` §11.
+
 **Backend:** `uci-application-submit.service.js`; safety gates (`reviewed`, idempotency via `submitted_at`).
 
 **API:** `POST /applications/:id/submit` — JWT + project access.
 
 **Behavior:** Non-PEPCO providers record `email_intent` submission and advance stages 4→5. PEPCO returns `501 SUBMIT_ADAPTER_NOT_IMPLEMENTED`.
 
+**Blockers (unchanged):** Live form mapping + verified test access — **external access** + **live verification**.
+
 **Acceptance (scoped):** Review gate enforced; duplicate submit blocked; stage transitions on email_intent success.
 
-**Exclusions:** Live PEPCO portal form submit; outbound email delivery; BGE adapter.
+**Exclusions:** Live PEPCO portal form submit (blocked); outbound email delivery (D5/D4 email); BGE adapter.
 
 ---
 
@@ -309,6 +337,14 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Client requirements** | Agent 5 §4.5; inbound email §5.3; needs-attention API |
 | **Dependencies** | D1 normalized `coordination_communications` |
 | **Current status** | **partial** (scoped) — portal-sync classifier foundation; no inbound email |
+
+**Email workflow direction (decision 2026-07-15):**
+- Reuse existing **Commun-ET permitting mailbox** — no alternate provider unless mailbox cannot support workflow
+- Prefer **Microsoft Graph** when mailbox is M365 (`microsoft_mailbox_connections`)
+- Inbound + outbound; attachment capture; threading preservation
+- Match on: provider, utility reference, project address, subject, sender
+- Uncertain matches → human review; full audit history on `coordination_communications`
+- **External access:** mailbox permissions + inbound webhook security design (NB-D5-001)
 
 **Backend:** `uci-communication-categories.js` (11 client categories); `uci-communication-classifier.service.js` (deterministic keyword classifier, no AI); `emitUciEvent` on classify/reclassify.
 
@@ -348,15 +384,23 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Objective** | Agent 8 — cost tracking + QuickBooks |
 | **Client requirements** | Agent 8 §4.8; QB §5.7 |
 | **Dependencies** | D1 |
-| **Current status** | **partial** (scoped) — manual cost CRUD; no QuickBooks |
+| **Current status** | **partial** (scoped) — manual cost CRUD; QuickBooks UCI bridge not wired |
+
+**QuickBooks direction (decision 2026-07-15):**
+- **Reuse** existing billing integration — `scraper-service/app/services/quickbooks/` (OAuth, API, token store, invoice trigger patterns)
+- **Do not** build a second QuickBooks integration
+- Always persist `coordination_costs` first
+- **No automatic** accounting entries
+- Explicit reviewed actions: draft vendor bill, draft client invoice, or both
+- Store QB IDs, sync status, errors, idempotency references; prevent duplicates
 
 **Backend:** `uci-costs.service.js` — list + upsert `coordination_costs`.
 
 **API:** `GET /coordination/:id/costs`; `POST /coordination/:id/costs`.
 
-**Acceptance (scoped):** Cost rows persisted with `cost_type`; estimate/actual/variance fields supported in schema; no QB sync.
+**Acceptance (scoped):** Cost rows persisted with `cost_type`; estimate/actual/variance fields supported in schema; no QB sync yet.
 
-**Exclusions:** QuickBooks OAuth, invoice idempotency, variance alerts, stage-7 auto-advance.
+**Exclusions:** Automatic QB posting; variance alerts; stage-7 auto-advance until reviewed actions exist.
 
 ---
 
@@ -368,6 +412,8 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Client requirements** | Agent 9 §4.9 |
 | **Dependencies** | D1 |
 | **Current status** | **partial** (scoped) — CRUD + check-in; no cron |
+
+**Operational baseline (checklist fields):** equipment type, order status, vendor, ETA, latest check-in, delay risk, owner, notes.
 
 **Backend:** `uci-equipment.service.js` — list, create, check-in with ETA history in metadata.
 
@@ -388,6 +434,8 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Dependencies** | D1 milestones table |
 | **Current status** | **partial** (scoped) — checklist + milestone row |
 
+**Operational baseline (checklist fields):** utility approval, inspection release, site readiness, equipment installed, payment complete, meter date, confirmation/reference.
+
 **Backend:** `uci-meter-set.service.js` — 48h checklist in metadata; upserts `meter_set_scheduled` milestone.
 
 **API:** `POST /coordination/:id/meter-set/prepare` — JWT + project access; `stage_unchanged: true`.
@@ -406,6 +454,10 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Client requirements** | Agent 12 §4.12 |
 | **Dependencies** | D7–D9 artifacts (optional for foundation) |
 | **Current status** | **partial** (scoped) — closeout checklist in metadata |
+
+**Operational baseline (checklist fields):** service energized, final meter confirmed, commissioning complete, costs closed, final documents archived, closeout package generated.
+
+**Coordination complete definition:** Service energized + final meter set + commissioning verified + costs closed + closeout documents archived. Utility approval or application review alone is **not** coordination complete. See `UCI_ARCHITECTURE.md` §11.
 
 **Backend:** `uci-closeout.service.js` — checklist in `metadata.uci_closeout_package`.
 
@@ -464,11 +516,18 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Dependencies** | Feature milestones D1–D12 substantially complete |
 | **Current status** | **partial** — Priority 1 frontend workflows wired; integration tests added; §17 backlog partially closed (2026-07-15) |
 
-**Scope (from backlog):** Partial implementations; deferred hardening; UI gaps (lifecycle accept/reject, sync-run polling, mapping metadata display); audit gaps (metadata-only storage, stale-proposal checksums); test gaps (E2E smoke, cross-tenant, route integration); documentation drift; provider adapter coverage beyond PEPCO; operational reliability (MFA restart, durable worker browser phases, tenant paths).
+**Tenant and security (architecture work — no migration in doc pass):**
+- Use existing **organization/project/project-team** structure as starting point: `projects` → `project_team_members` → `has_project_access` → UCI child records
+- Target: discover tenant/org field in schema; propagate to UCI children; tenant + project access enforcement; demo-account isolation
+- Cross-project tests: partial (`uci-d13-routes-integration.test.js`)
+- Cross-tenant tests: blocked until real `tenant_id` field operational
+- Replace `unconfigured` storage path when ownership data available
+
+**Scope (from backlog):** Partial implementations; deferred hardening; UI gaps; audit gaps; test gaps; documentation drift; provider adapter coverage beyond PEPCO; operational reliability (MFA restart, durable worker browser phases, tenant paths); live verification gates.
 
 **Exclusions:** Agent 7 (Easement/ROW), Agent 10 (Inspection Release), ML energization prediction, full Closeout Knowledge Graph — remain client-deferred unless scope changes.
 
-**Acceptance:** All §17 backlog items either resolved with evidence or explicitly re-deferred with client approval; no silent partial→complete relabeling.
+**Acceptance:** All §17 backlog items either resolved with evidence or explicitly classified with blocker evidence; no silent partial→complete relabeling.
 
 ---
 
@@ -570,7 +629,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 | Layer | Requirement | Current |
 |-------|-------------|---------|
-| Unit | Per agent + sync services | D1A–D1D + D2.0 + D2.1 + D3 + D4 + D5 + D6–D12 + D13 tests (171 UCI tests) |
+| Unit | Per agent + sync services | D1A–D1D + D2.0 + D2.1 + D3 + D4 + D5 + D6–D12 + D13 + NB-D1-001 tests (185 UCI tests) |
 | Integration | Critical paths §16 | ⚠️ Partial | `uci-d13-routes-integration.test.js` — project-boundary HTTP tests |
 | Security | Cross-tenant CI blocking | ❌ |
 | Portal mock | Per priority utility | ❌ (PEPCO list parse only) |
@@ -587,10 +646,10 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 |------|-----------------|--------|
 | Credential encryption | any portal automation | ✅ |
 | JWT + project access on all routes | any UCI API | ✅ |
-| Tenant propagation + RLS tests | pilot multi-tenant demo | ❌ |
+| Editor write gate on UCI mutations | D13 pilot | ⚠️ Partial | RLS + route `write: true` (NB-D1-001) |
+| Tenant propagation + cross-tenant RLS tests | pilot multi-tenant demo | ❌ | Cross-project + editor/viewer tests only |
 | No secrets in logs | every release | partial |
-| Submission idempotency | D4 production | ❌ |
-| Cross-tenant CI failure blocks deploy | D1 complete | ❌ |
+| Submission idempotency | D4 production | ⚠️ Partial | `submitted_at` gate; PEPCO dry-run not built |
 
 ---
 
@@ -600,11 +659,27 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 |------|-----------|
 | D1 complete | PEPCO read-only pilot on normalized data + storage |
 | D3 complete | Internal application draft demo |
-| D4 complete | Controlled PEPCO submit in staging |
+| D4 complete | Controlled PEPCO submit in staging (**dry-run first**) |
 | D5–D6 complete | Communication + COS pilot |
 | D7–D10 complete | Full lifecycle pilot per client Phase 1 agents |
 | D11 complete | McDonald's portfolio reporting |
 | D12 complete | Production operations readiness |
+| D13 complete | Tenant isolation proven; §17 backlog closed or classified |
+
+### Pilot critical path (McDonald's — existing milestones only)
+
+```text
+Project (any supported jurisdiction) + jurisdiction data reuse
+  → D2.0 human provider confirmation (one record per provider)
+  → D2.1 load profile review (no-guess)
+  → D3 application package + human review
+  → D4 submission (PEPCO dry-run → live when access verified; others email)
+  → D1A portal sync + D5 comms classify
+  → D6 COS → D7 costs (+ QB reviewed actions) → D8–D10 operational checklists
+  → D11 portfolio summary → D12 events/alerts → D13 tenant hardening
+```
+
+**Production-readiness gates (honest):** tenant RLS (D13) + cross-tenant tests + live PEPCO smoke (NB-TEST-001) + inbound email (D5) + submission evidence (D4) + alerts/runbooks (D12) + staging UAT.
 
 ---
 
@@ -612,23 +687,35 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 Per client spec and §18 of merged plan — module complete only when:
 
-- Utility providers identified automatically (Agent 1)
-- Load schedules structured and reviewable (Agent 2)
+- Utility providers identified (Agent 1 — D2.0 human-assisted minimum; D2.2 auto when verified data available)
+- Load schedules structured and reviewable (Agent 2) — no guessed numerics
 - Applications prepared from templates (Agent 3)
 - Human review mandatory before submission
-- Submission captures confirmation/ticket (Agent 4)
+- **Submission complete** per definition: actual submit + attachments + confirmation + evidence + actor/timestamp (Agent 4)
 - Communications classified and threaded (Agent 5)
 - COS/design analyzed (Agent 6)
-- Costs/CIAC tracked with QB (Agent 8)
+- Costs/CIAC tracked with QB reviewed actions (Agent 8) — reuse billing QuickBooks
 - Equipment ETAs monitored (Agent 9)
 - Meter set coordinated (Agent 11)
-- Energization/closeout documented (Agent 12)
+- **Coordination complete** per definition: energized + final meter + commissioning + costs closed + closeout archived (Agent 12)
 - Lifecycle stages update with audit history
-- **Tenant isolation proven** (not complete today)
-- **Portal jobs durable** (not complete today)
-- **Documents stored securely** (not complete today)
+- **Tenant isolation proven** (not complete today — architecture work under D13)
+- **Portal jobs durable** (D1D implemented; MFA restart partial)
+- **Documents stored securely** (D1B implemented; tenant path pending)
 - Portfolio reporting available
 - All required agents tested; runbooks exist
+
+**Completion distinctions (audit labels):**
+
+| Label | Meaning |
+|-------|---------|
+| Foundation implemented | Service/API/schema exists |
+| End-to-end workflow | UI + API + persistence wired for pilot path |
+| Tested locally | Unit/integration tests pass |
+| Live verified | Confirmed against real portal/mailbox/QB |
+| Staging-ready | Safe dry-run or controlled environment |
+| Production-ready | Tenant isolation, alerts, runbooks, live gates pass |
+| Blocked by external dependency | Requires data, access, credentials, or tenancy decision |
 
 ---
 
@@ -673,7 +760,21 @@ See `UCI_EXECUTION_HISTORY.md` for Sprint 1–6 completion vs plan.
 15. ~~D10 — Closeout foundation~~ **done** (scoped)
 16. ~~D11 — Portfolio view API~~ **done** (scoped — no UI)
 17. ~~D12 — Events foundation~~ **done** (scoped — in-memory buffer)
-18. **D13** — Hardening and deferred-gap closure (§17 backlog) — **partial** (backlog reviewed)
+18. **D13** — Hardening and deferred-gap closure (§17 backlog) — **partial** (frontend workflows + doc reconciliation 2026-07-15)
+
+### Remaining execution order (updated 2026-07-15)
+
+Priority follows existing milestone numbers — no new phases:
+
+1. **D13** — Tenant and RLS hardening (architecture work)
+2. **D4** — PEPCO submission dry-run + evidence capture (external access + live verification)
+3. **D5/D4** — Email foundation via Commun-ET mailbox / Microsoft Graph (external access)
+4. **D7** — QuickBooks UCI reviewed actions (implement now — reuse billing module)
+5. **D2.1** — Verified load-template ingestion (external data — McDonald's/QSR)
+6. **D1D/D13** — Durable PEPCO browser/MFA hardening
+7. **D6** — COS document content parsing
+8. **D12/D13** — Alerts, runbooks, live verification gates
+9. Staging and UAT
 
 ---
 
@@ -685,72 +786,74 @@ See `UCI_EXECUTION_HISTORY.md` for Sprint 1–6 completion vs plan.
 1. **Before:** Read this table; escalate to blocker only if the current milestone cannot ship safely without the item.
 2. **After:** Add newly discovered gaps; update status; mark resolved items — do not remove rows.
 
-**Status labels:** `partial` | `incomplete` | `deferred` | `hardening` | `documentation drift`
+**Status labels:** `partial` | `incomplete` | `deferred` | `hardening` | `documentation drift` | `blocked`
+
+**Dependency class:** `implement now` | `external data` | `external access` | `architecture work` | `live verification`
 
 **Risk:** `low` | `medium` | `high` (security/tenant/data-loss exposure)
 
 ### Active backlog
 
-| ID | Area | Item | Status | Why non-blocking | Target milestone | Risk | Evidence | Added | Resolved |
-|----|------|------|--------|------------------|------------------|------|----------|-------|----------|
-| NB-D1C-001 | D1C Lifecycle UI | Lifecycle proposal Accept/Reject UI + API | resolved | Accept/reject with checksum | D13 | low | `uci-lifecycle-proposal-actions.service.js`, `LifecycleProposalActions` | 2026-07-08 | 2026-07-15 |
-| NB-D1C-002 | D1C Audit | Proposal-only mode stored in `metadata` not dedicated audit table | partial | Proposals persisted and readable; system apply writes transition when flag on | D13 | low | `coordination_records.metadata.uci_lifecycle_proposals` | 2026-07-08 | — |
-| NB-D1C-003 | D1C Audit | Stale-proposal checksum on manual apply/reject | resolved | `proposal_checksum` validated on apply/reject | D13 | low | `uci-lifecycle-proposal-actions.service.js` | 2026-07-08 | 2026-07-15 |
-| NB-D1C-004 | D1C Mapping | PEPCO lifecycle mapping covers only a limited status set | partial | Unknown statuses safely return null; core PEPCO statuses mapped | D13 / D6 | medium | `pepco.adapter.js` `mapPortalStatusToLifecycle` | 2026-07-08 | — |
-| NB-D1C-005 | D1C Mapping | Stages 8–10 not mapped from portal status | incomplete | Pre-energization/energization not in read-only pilot path | D9 / D10 | low | `pepco.adapter.js` | 2026-07-08 | — |
-| NB-D1D-001 | D1D Worker | Durable worker runs normalized sync only, not full PEPCO browser phases | partial | `runPortalSync` path works; discovery remains on dedicated routes | D1D hardening / D13 | medium | `uci-durable-worker-executor.js`, `uci-portal-sync.service.js` | 2026-07-14 | — |
-| NB-D1D-002 | D1D Frontend | Frontend sync-run polling + sessionStorage recovery | partial | `SyncRunsPanel`, `useSyncRunPolling`, durable sync job tracking | D13 | low | `UciD13WorkflowPanels.tsx`, `uciApi.ts` | 2026-07-14 | 2026-07-15 |
-| NB-D1D-003 | D1D MFA | MFA browser state not fully restart-restorable after worker/process restart | partial | In-memory session store with TTL; documented limitation | D13 | medium | `uci-pepco-session-store.js` — no durable MFA store | 2026-07-14 | — |
-| NB-D1-001 | D1 Tenant | Tenant isolation not complete (`tenant_id` never written; global providers) | incomplete | Project-scoped RLS + `has_project_access` sufficient for single-project pilot | D1 tenant hardening | high | `uci-access.service.js`, `coordination_records.tenant_id`, `utility_providers` | 2026-07-08 | — |
-| NB-D1B-001 | D1B Storage | Storage paths use `unconfigured` tenant namespace | partial | Documents stored in private bucket with idempotency; tenant path migration pending | D1 tenant hardening | medium | `uci-document-storage.service.js` path builder | 2026-07-08 | — |
-| NB-D2-001 | D2 Agent 1 | Full auto territory mapping blocked on verified service-territory data | deferred | D2.0/D2.1 use human-confirmed providers | D2.2 | medium | No `service_territory` rules; `utility_providers.service_territory` unused | 2026-07-14 | — |
-| NB-D2-002 | D2 Address | Address normalization and geocoding incomplete | incomplete | D2.1 uses structured address inventory only | D2.2 | medium | `uci-provider-setup.service.js`, `uci-load-profile.service.js` | 2026-07-14 | — |
-| NB-D2-003 | D2.0 UI | Provider mapping metadata display in UI | resolved | Table badge + drawer `ProviderMappingBanner` | D13 | low | `UciD13WorkflowPanels.tsx`, records table | 2026-07-14 | 2026-07-15 |
-| NB-D2-004 | D2.0 API | Init API still accepts requests without `provider_setup` confirmation | hardening | Backward compatibility for API clients; UI enforces confirm gate | D13 | low | `POST .../coordination/init` in `uci.routes.js` | 2026-07-14 | — |
-| NB-D2-005 | D2.0 Audit | No dedicated provider-mapping audit table (metadata only) | partial | Mapping stored on records + init transition metadata | D13 | low | `uci-records.service.js`, `coordination_stage_transitions.metadata` | 2026-07-14 | — |
-| NB-D2-006 | D2.0 Tests | Provider-setup routes lack HTTP integration tests | partial | Project-boundary tests in `uci-d13-routes-integration.test.js` | D13 | low | D13 integration suite | 2026-07-14 | 2026-07-15 |
-| NB-D2-007 | D2.1 Templates | McDonald's / QSR load template registry missing | incomplete | D2.1 intentionally omits guessed numeric templates | D2.2 / D13 | medium | No template files under `uci/` or `scraper-service` | 2026-07-14 | — |
-| NB-D2-008 | D2.1 Agent 2 | No numeric engineering values in `calculated_values` (by design) | incomplete | No-guess rule; awaits verified inputs or templates | D2.2+ / D13 | low | `uci-load-profile.service.js` `calculated_values: {}` | 2026-07-14 | — |
-| NB-D2-009 | D2.1 Equipment | Equipment ingestion UI for coordination rows | partial | Equipment create/check-in UI wired | D13 | low | `CostsEquipmentWorkflowPanel` | 2026-07-14 | 2026-07-15 |
-| NB-D2-010 | D2.1 Docs | Document content parsing for load extraction deferred | deferred | D2.1 lists `project_documents` types only; no LLM | D13 | low | `uci-load-profile.service.js` | 2026-07-14 | — |
-| NB-D2-011 | D2.1 Lifecycle | Stage 2 not auto-advanced; no load-profile approval workflow | incomplete | D2.1 read-only analysis; stage unchanged when inputs missing | D13 / D3 | low | No `recordSystemTransition` in load profile service | 2026-07-14 | — |
-| NB-D2-012 | D2.1 Tests | Load-profile route lacks HTTP integration tests | partial | D13 route integration covers auth/project gates | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
-| NB-D3-001 | D3 Templates | Only PEPCO electric manifest; no gas/water/telecom templates | incomplete | D3 scoped to PEPCO first per roadmap | D13 / adapters | medium | `uci/application-templates/pepco/` only | 2026-07-14 | — |
-| NB-D3-002 | D3 Agent 3 | No load calculation worksheet generation | incomplete | Awaits verified numeric templates (NB-D2-007) | D13 | low | `uci-application-builder.service.js` | 2026-07-14 | — |
-| NB-D3-003 | D3 Lifecycle | Stage 3 not auto-advanced on package build/review | incomplete | Intentional; manual transitions remain | D13 | low | `stage_unchanged: true` in builder | 2026-07-14 | — |
-| NB-D3-004 | D3 Tests | Application routes lack HTTP integration tests | partial | Lifecycle/cost routes covered in D13 integration suite | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
-| NB-D3-005 | D3 UI | Submit button disabled (D4 dependency) | partial | Enabled when reviewed; PEPCO returns adapter gap | D4 | low | `ApplicationPrepSection` | 2026-07-14 | — |
-| NB-D4-001 | D4 PEPCO | PEPCO portal submission adapter not implemented | blocked | No Playwright form-submit path in repo | D4 | high | `uci-application-submit.service.js` returns 501 | 2026-07-14 | — |
-| NB-D4-002 | D4 Email | Outbound utility email not sent automatically | incomplete | email_intent records metadata only | D13 | medium | No SMTP/send integration in UCI | 2026-07-14 | — |
-| NB-D4-003 | D4 Confirm | No utility ticket/confirmation capture for portal submit | incomplete | Awaits PEPCO adapter | D4 | medium | `utility_ticket_number` null on email_intent | 2026-07-14 | — |
-| NB-D5-001 | D5 Email | Inbound email webhook not implemented | incomplete | Portal-sync classifier covers first safe version | D13 | medium | No `POST /webhooks/uci/email-inbound` route | 2026-07-14 | — |
-| NB-D5-002 | D5 Classifier | Keyword classifier only; no ≥85% validation set | incomplete | Deterministic foundation per audit; AI deferred | D13 | low | `uci-communication-classifier.service.js` | 2026-07-14 | — |
-| NB-D5-003 | D5 UI | Human reclassify UI in communications drawer | resolved | `CommunicationReclassifyRow` per message | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D5-004 | D5 Threading | Email + portal threading not unified | incomplete | Portal messages only; no inbound email | D13 | low | `coordination_communications` portal_sync source | 2026-07-14 | — |
-| NB-D6-001 | D6 Parsing | No COS/design document content parsing | incomplete | Discrepancy report from metadata + classified comms | D13 | medium | `uci-cos-analyst.service.js` | 2026-07-14 | — |
-| NB-D6-002 | D6 Lifecycle | Stage 6 not auto-advanced on COS analysis | incomplete | `stage_unchanged: true` by design | D13 | low | `uci-cos-analyst.service.js` | 2026-07-14 | — |
-| NB-D6-003 | D6 UI | COS analysis section in coordination drawer | resolved | `CosAnalysisPanel` with analyze trigger | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D7-001 | D7 QuickBooks | QuickBooks OAuth and invoice sync not implemented | incomplete | Manual cost CRUD sufficient for foundation | D13 | medium | `uci-costs.service.js` — no QB client | 2026-07-14 | — |
-| NB-D7-002 | D7 UI | Cost entry UI in coordination drawer | resolved | `CostsEquipmentWorkflowPanel` cost form | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D8-001 | D8 Cron | Weekly equipment ETA check-in cron not scheduled | incomplete | Manual check-in API exists | D13 | medium | No worker/cron for equipment | 2026-07-14 | — |
-| NB-D8-002 | D8 Alerts | >2-week ETA slip alerts not implemented | incomplete | ETA history in check-in metadata only | D13 | low | `uci-equipment.service.js` | 2026-07-14 | — |
-| NB-D8-003 | D8 UI | Equipment create/check-in UI | resolved | `CostsEquipmentWorkflowPanel` equipment section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D9-001 | D9 Escalation | Failed meter set escalation not implemented | incomplete | Checklist + milestone foundation only | D13 | low | `uci-meter-set.service.js` | 2026-07-14 | — |
-| NB-D9-002 | D9 UI | Meter-set prepare UI | resolved | `MeterSetCloseoutPanel` meter section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D10-001 | D10 PDF | Closeout PDF not generated in project documents | incomplete | Checklist metadata only | D13 | medium | `uci-closeout.service.js` | 2026-07-14 | — |
-| NB-D10-002 | D10 Rollup | Project stage-10 rollup when all records complete | incomplete | No auto rollup | D13 | low | `uci-closeout.service.js` | 2026-07-14 | — |
-| NB-D10-003 | D10 UI | Closeout prepare UI | resolved | `MeterSetCloseoutPanel` closeout section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D11-001 | D11 P50/P90 | Heuristic energization dates not computed | incomplete | Stage summary only | D13 / client Phase 5 | medium | `uci-portfolio.service.js` | 2026-07-14 | — |
-| NB-D11-002 | D11 Reporting | Quarterly export templates not implemented | incomplete | API rollup only | D13 | low | No export endpoints | 2026-07-14 | — |
-| NB-D11-003 | D11 UI | Portfolio view in frontend | partial | Project-level `PortfolioSummarySection` (not dedicated page) | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
-| NB-D11-004 | D11 Tenant | McDonald's tenant config requires client input | deferred | Client Phase 3 explicit input | Client Phase 3 | — | Roadmap §D11 | 2026-07-14 | — |
-| NB-D12-001 | D12 Escalate | `POST /coordination/:id/escalate` not implemented | incomplete | Events foundation only | D13 | low | No escalate route | 2026-07-14 | — |
-| NB-D12-002 | D12 Bus | Event bus — in-memory + metadata mirror | partial | `emitUciEvent` mirrors to `metadata.uci_recent_events` when coordination/project in payload | D13 | low | `uci-events.service.js` | 2026-07-08 | 2026-07-15 |
-| NB-D12-003 | D12 Alerts | P0/P1/P2 alerts and runbooks not documented | incomplete | No alerting pipeline | D13 | medium | Roadmap §D12 | 2026-07-14 | — |
-| NB-PROV-001 | Providers | BGE and other non-PEPCO portal adapters not implemented | deferred | PEPCO is first adapter; client lists BGE as future | Future adapter | low | No BGE under `scrapers/` or `adapters/` | 2026-07-08 | — |
-| NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | Unit/route tests pass (171 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
-| NB-TEST-002 | Testing | Cross-tenant UCI security tests missing | partial | Project-boundary HTTP tests in D13 suite; not tenant model | D1 / D13 | high | `uci-d13-routes-integration.test.js` | 2026-07-08 | 2026-07-15 |
-| NB-OPS-001 | D12 Ops | Event bus `uci.*` events — in-memory only, partial catalog | partial | `emitUciEvent` on D5 classify/reclassify; no external bus | D13 | low | `uci-events.service.js`, `GET /events/recent` | 2026-07-08 | — |
+| ID | Area | Item | Status | Class | Why non-blocking | Target milestone | Risk | Evidence | Added | Resolved |
+|----|------|------|--------|-------|------------------|------------------|------|----------|-------|----------|
+| NB-D1C-001 | D1C Lifecycle UI | Lifecycle proposal Accept/Reject UI + API | resolved | implement now | Accept/reject with checksum | D13 | low | `uci-lifecycle-proposal-actions.service.js`, `LifecycleProposalActions` | 2026-07-08 | 2026-07-15 |
+| NB-D1C-002 | D1C Audit | Proposal-only mode stored in `metadata` not dedicated audit table | partial | implement now | Proposals persisted and readable; system apply writes transition when flag on | D13 | low | `coordination_records.metadata.uci_lifecycle_proposals` | 2026-07-08 | — |
+| NB-D1C-003 | D1C Audit | Stale-proposal checksum on manual apply/reject | resolved | implement now | `proposal_checksum` validated on apply/reject | D13 | low | `uci-lifecycle-proposal-actions.service.js` | 2026-07-08 | 2026-07-15 |
+| NB-D1C-004 | D1C Mapping | PEPCO lifecycle mapping covers only a limited status set | partial | implement now | Unknown statuses safely return null; core PEPCO statuses mapped | D13 / D6 | medium | `pepco.adapter.js` `mapPortalStatusToLifecycle` | 2026-07-08 | — |
+| NB-D1C-005 | D1C Mapping | Stages 8–10 not mapped from portal status | incomplete | implement now | Pre-energization/energization not in read-only pilot path | D9 / D10 | low | `pepco.adapter.js` | 2026-07-08 | — |
+| NB-D1D-001 | D1D Worker | Durable worker runs normalized sync only, not full PEPCO browser phases | partial | implement now | `runPortalSync` path works; discovery remains on dedicated routes | D1D / D13 | medium | `uci-durable-worker-executor.js`, `uci-portal-sync.service.js` | 2026-07-14 | — |
+| NB-D1D-002 | D1D Frontend | Frontend sync-run polling + sessionStorage recovery | partial | implement now | `SyncRunsPanel`, `useSyncRunPolling`, durable sync job tracking | D13 | low | `UciD13WorkflowPanels.tsx`, `uciApi.ts` | 2026-07-14 | 2026-07-15 |
+| NB-D1D-003 | D1D MFA | MFA browser state not fully restart-restorable after worker/process restart | partial | architecture work | In-memory session store with TTL; documented limitation | D13 | medium | `uci-pepco-session-store.js` — no durable MFA store | 2026-07-14 | — |
+| NB-D1-001 | D1 Tenant | Tenant isolation not complete (`tenant_id` never written; global providers) | partial | architecture work | Project/team RLS + editor write gate + route hardening shipped 2026-07-15; full tenant propagation blocked — no org field on `projects` | D13 | high | `uci-access.service.js`, `20260715120000_uci_rls_editor_hardening.sql`, `uci-d13-tenant-rls-hardening.test.js` | 2026-07-08 | 2026-07-15 |
+| NB-D1B-001 | D1B Storage | Storage paths use `unconfigured` tenant namespace | partial | architecture work | No org/tenant on projects — `unconfigured` retained; legacy paths compatible | D13 | medium | `uci-document-storage.service.js` path builder | 2026-07-08 | — |
+| NB-D2-001 | D2 Agent 1 | Full auto territory mapping blocked on verified service-territory data | deferred | external data | D2.0 human-confirmed fallback; no ZIP/county/jurisdiction inference | D2.2 | medium | No verified `service_territory` rules; column unused | 2026-07-14 | — |
+| NB-D2-002 | D2 Address | Address normalization and geocoding incomplete | incomplete | external data | D2.1 uses structured address inventory only | D2.2 | medium | `uci-provider-setup.service.js`, `uci-load-profile.service.js` | 2026-07-14 | — |
+| NB-D2-003 | D2.0 UI | Provider mapping metadata display in UI | resolved | implement now | Table badge + drawer `ProviderMappingBanner` | D13 | low | `UciD13WorkflowPanels.tsx`, records table | 2026-07-14 | 2026-07-15 |
+| NB-D2-004 | D2.0 API | Init API still accepts requests without `provider_setup` confirmation | hardening | implement now | Backward compatibility for API clients; UI enforces confirm gate | D13 | low | `POST .../coordination/init` in `uci.routes.js` | 2026-07-14 | — |
+| NB-D2-005 | D2.0 Audit | No dedicated provider-mapping audit table (metadata only) | partial | implement now | Mapping stored on records + init transition metadata | D13 | low | `uci-records.service.js`, `coordination_stage_transitions.metadata` | 2026-07-14 | — |
+| NB-D2-006 | D2.0 Tests | Provider-setup routes lack HTTP integration tests | partial | implement now | Project-boundary tests in `uci-d13-routes-integration.test.js` | D13 | low | D13 integration suite | 2026-07-14 | 2026-07-15 |
+| NB-D2-007 | D2.1 Templates | McDonald's / QSR load template registry missing | incomplete | external data | D2.1 intentionally omits guessed numeric templates | D2.1 | medium | No template files under `uci/` or `scraper-service` | 2026-07-14 | — |
+| NB-D2-008 | D2.1 Agent 2 | No numeric engineering values in `calculated_values` (by design) | incomplete | external data | No-guess rule; awaits verified inputs or templates (NB-D2-007) | D2.1 | low | `uci-load-profile.service.js` `calculated_values: {}` | 2026-07-14 | — |
+| NB-D2-009 | D2.1 Equipment | Equipment ingestion UI for coordination rows | partial | implement now | Equipment create/check-in UI wired | D13 | low | `CostsEquipmentWorkflowPanel` | 2026-07-14 | 2026-07-15 |
+| NB-D2-010 | D2.1 Docs | Document content parsing for load extraction deferred | deferred | external data | D2.1 lists `project_documents` types only; no LLM | D13 | low | `uci-load-profile.service.js` | 2026-07-14 | — |
+| NB-D2-011 | D2.1 Lifecycle | Stage 2 not auto-advanced; no load-profile approval workflow | incomplete | implement now | D2.1 read-only analysis; stage unchanged when inputs missing | D13 / D3 | low | No `recordSystemTransition` in load profile service | 2026-07-14 | — |
+| NB-D2-012 | D2.1 Tests | Load-profile route lacks HTTP integration tests | partial | implement now | D13 route integration covers auth/project gates | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
+| NB-D3-001 | D3 Templates | Only PEPCO electric manifest; no gas/water/telecom templates | incomplete | implement now | D3 scoped to PEPCO first; other utilities use manual/email | D13 / adapters | medium | `uci/application-templates/pepco/` only | 2026-07-14 | — |
+| NB-D3-002 | D3 Agent 3 | No load calculation worksheet generation | incomplete | external data | Awaits verified numeric templates (NB-D2-007) | D13 | low | `uci-application-builder.service.js` | 2026-07-14 | — |
+| NB-D3-003 | D3 Lifecycle | Stage 3 not auto-advanced on package build/review | incomplete | implement now | Intentional; manual transitions remain | D13 | low | `stage_unchanged: true` in builder | 2026-07-14 | — |
+| NB-D3-004 | D3 Tests | Application routes lack HTTP integration tests | partial | implement now | Lifecycle/cost routes covered in D13 integration suite | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
+| NB-D3-005 | D3 UI | Submit enabled when reviewed; PEPCO adapter gap surfaces on submit | partial | external access | PEPCO returns 501; non-PEPCO uses email_intent | D4 | low | `ApplicationPrepSection` | 2026-07-14 | — |
+| NB-D4-001 | D4 PEPCO | PEPCO portal submission adapter + dry-run not implemented | blocked | external access | No Playwright form-submit/dry-run path; needs live form mapping | D4 | high | `uci-application-submit.service.js` returns 501 | 2026-07-14 | — |
+| NB-D4-002 | D4 Email | Outbound utility email not sent via Commun-ET mailbox | incomplete | external access | email_intent records metadata only; reuse Graph/mailbox | D5 / D4 | medium | No Graph/SMTP send in UCI; `microsoft_mailbox_connections` exists | 2026-07-14 | — |
+| NB-D4-003 | D4 Confirm | No utility ticket/confirmation capture for portal submit | incomplete | live verification | Submission-complete definition requires ticket + evidence | D4 | medium | `utility_ticket_number` null on email_intent | 2026-07-14 | — |
+| NB-D5-001 | D5 Email | Inbound email webhook not implemented | incomplete | external access | Portal-sync classifier covers first safe version; reuse Commun-ET mailbox | D5 | medium | No `POST /webhooks/uci/email-inbound` route | 2026-07-14 | — |
+| NB-D5-002 | D5 Classifier | Keyword classifier only; no ≥85% validation set | incomplete | implement now | Deterministic foundation per audit; AI deferred | D13 | low | `uci-communication-classifier.service.js` | 2026-07-14 | — |
+| NB-D5-003 | D5 UI | Human reclassify UI in communications drawer | resolved | implement now | `CommunicationReclassifyRow` per message | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D5-004 | D5 Threading | Email + portal threading not unified | incomplete | external access | Portal messages only; awaits inbound email (NB-D5-001) | D5 | low | `coordination_communications` portal_sync source | 2026-07-14 | — |
+| NB-D6-001 | D6 Parsing | No COS/design document content parsing | incomplete | implement now | Discrepancy report from metadata + classified comms only today | D6 | medium | `uci-cos-analyst.service.js` | 2026-07-14 | — |
+| NB-D6-002 | D6 Lifecycle | Stage 6 not auto-advanced on COS analysis | incomplete | implement now | `stage_unchanged: true` by design | D13 | low | `uci-cos-analyst.service.js` | 2026-07-14 | — |
+| NB-D6-003 | D6 UI | COS analysis section in coordination drawer | resolved | implement now | `CosAnalysisPanel` with analyze trigger | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D7-001 | D7 QuickBooks | UCI reviewed QB actions not wired (billing module exists) | incomplete | implement now | Reuse `scraper-service/app/services/quickbooks/`; persist costs first | D7 | medium | `uci-costs.service.js` — no UCI→QB bridge; `qb-invoice-trigger.service.js` in billing | 2026-07-14 | — |
+| NB-D7-002 | D7 UI | Cost entry UI in coordination drawer | resolved | implement now | `CostsEquipmentWorkflowPanel` cost form | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D8-001 | D8 Cron | Weekly equipment ETA check-in cron not scheduled | incomplete | implement now | Manual check-in API exists | D8 | medium | No worker/cron for equipment | 2026-07-14 | — |
+| NB-D8-002 | D8 Alerts | >2-week ETA slip alerts not implemented | incomplete | implement now | ETA history in check-in metadata only | D8 | low | `uci-equipment.service.js` | 2026-07-14 | — |
+| NB-D8-003 | D8 UI | Equipment create/check-in UI | resolved | implement now | `CostsEquipmentWorkflowPanel` equipment section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D9-001 | D9 Escalation | Failed meter set escalation not implemented | incomplete | implement now | Checklist + milestone foundation only | D9 | low | `uci-meter-set.service.js` | 2026-07-14 | — |
+| NB-D9-002 | D9 UI | Meter-set prepare UI | resolved | implement now | `MeterSetCloseoutPanel` meter section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D10-001 | D10 PDF | Closeout PDF not generated in project documents | incomplete | implement now | Checklist metadata only; coordination-complete needs archived docs | D10 | medium | `uci-closeout.service.js` | 2026-07-14 | — |
+| NB-D10-002 | D10 Rollup | Project stage-10 rollup when all records coordination-complete | incomplete | implement now | No auto rollup; coordination-complete definition in architecture | D10 | low | `uci-closeout.service.js` | 2026-07-14 | — |
+| NB-D10-003 | D10 UI | Closeout prepare UI | resolved | implement now | `MeterSetCloseoutPanel` closeout section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D11-001 | D11 P50/P90 | Heuristic energization dates not computed | incomplete | implement now | Stage summary only | D11 | medium | `uci-portfolio.service.js` | 2026-07-14 | — |
+| NB-D11-002 | D11 Reporting | Quarterly export templates not implemented | incomplete | implement now | API rollup only | D11 | low | No export endpoints | 2026-07-14 | — |
+| NB-D11-003 | D11 UI | Portfolio view in frontend | partial | implement now | Project-level `PortfolioSummarySection` (not dedicated page) | D11 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
+| NB-D11-004 | D11 Tenant | McDonald's tenant config requires client input | deferred | external data | Client Phase 3 explicit input | D11 | — | Roadmap §D11 | 2026-07-14 | — |
+| NB-D12-001 | D12 Escalate | `POST /coordination/:id/escalate` not implemented | incomplete | implement now | Events foundation only | D12 | low | No escalate route | 2026-07-14 | — |
+| NB-D12-002 | D12 Bus | Event bus — in-memory + metadata mirror | partial | architecture work | `emitUciEvent` mirrors to `metadata.uci_recent_events` when coordination/project in payload | D13 | low | `uci-events.service.js` | 2026-07-08 | 2026-07-15 |
+| NB-D12-003 | D12 Alerts | P0/P1/P2 alerts and runbooks not documented | incomplete | live verification | No alerting pipeline | D12 / D13 | medium | Roadmap §D12 | 2026-07-14 | — |
+| NB-PROV-001 | Providers | BGE and other non-PEPCO portal adapters not implemented | deferred | external access | PEPCO first; others use manual/email until adapters | Future adapter | low | No BGE under `scrapers/` or `adapters/` | 2026-07-08 | — |
+| NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | live verification | Unit/route tests pass (171 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
+| NB-TEST-002 | Testing | Cross-tenant UCI security tests missing | partial | architecture work | Cross-project + viewer/editor denial tests added; cross-tenant blocked until tenant field on `projects` | D13 | high | `uci-d13-tenant-rls-hardening.test.js`, `uci-access-hardening.test.js` | 2026-07-08 | 2026-07-15 |
+| NB-OPS-001 | D12 Ops | Event bus `uci.*` events — in-memory only, partial catalog | partial | architecture work | `emitUciEvent` on D5 classify/reclassify; no external bus | D13 | low | `uci-events.service.js`, `GET /events/recent` | 2026-07-08 | — |
 
 ### Client-deferred (not D13 unless scope changes)
 
@@ -768,8 +871,9 @@ These remain in §7 **Deferred Agents and Features** — track here for visibili
 |----|------|------|----------|-----------|----------|
 | NB-DOC-001 | Docs | README status summary lagged D2.0 / backlog | 2026-07-14 | D2.0 doc pass | `uci/README.md` §Non-Blocking Backlog, §Current Project Status |
 | NB-DOC-002 | Docs | Roadmap lagged D5–D12 implementation | 2026-07-14 | D13 doc pass | `UCI_DELIVERY_ROADMAP.md` §6, §8–11, §17 |
+| NB-DOC-003 | Docs | Architecture decisions reconciled into existing roadmap (no new plan) | 2026-07-15 | D13 doc pass | `UCI_ARCHITECTURE.md`, `UCI_DELIVERY_ROADMAP.md` §D2/D4/D5/D7/D8–D13, §17 Class column |
 
-**Last backlog review:** 2026-07-15 (D13 hardening batch). **Open items:** 40 active + 3 client-deferred tracked; **15 resolved/partial-closed** this batch.
+**Last backlog review:** 2026-07-15 (NB-D1-001 tenant/RLS hardening). **Open items:** 37 active + 3 client-deferred; NB-D1-001 partial-closed; NB-TEST-002 improved.
 
 ---
 

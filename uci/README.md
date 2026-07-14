@@ -65,7 +65,20 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 
 ## Current Project Status Summary
 
-*As of documentation merge — based on codebase audit, not live PEPCO verification.*
+*As of 2026-07-15 decision reconciliation — based on codebase audit, not live PEPCO verification.*
+
+**Milestone status:** D1A–D1D, D2.0, D2.1, D3 foundations **implemented** (scoped); D4–D12 foundations **partial**; D13 hardening **partial** (frontend workflows + route tests); D2.2 and D4 PEPCO submit **blocked**.
+
+**Next implementation target:** **NB-D4-001** — D4 PEPCO submission dry-run (NB-D1-001 project/team hardening partial-closed 2026-07-15).
+
+**Main external blockers:**
+- Approved tenancy architecture decision (`projects.tenant_id` or organizations table) — blocks NB-D1-001 close
+- PEPCO live form mapping + safe portal access (D4)
+- Commun-ET mailbox permissions + inbound webhook design (D5)
+- McDonald's/QSR load templates (D2.1)
+- Approved tenancy architecture decision (D13)
+
+**Backlog:** [`UCI_DELIVERY_ROADMAP.md` §17](./UCI_DELIVERY_ROADMAP.md#17-non-blocking-incomplete-and-deferred-items) — 38 active + 3 client-deferred; dependency **Class** column added 2026-07-15.
 
 ### What exists (partial or implemented)
 
@@ -80,7 +93,7 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 | Submission foundation (D4) | **partial** | `uci-application-submit.service.js`; email_intent; PEPCO portal blocked |
 | Communication classifier (D5) | **partial** | `uci-communication-classifier.service.js`; portal-sync keyword classifier; classify UI |
 | COS analyst (D6) | **partial** | `uci-cos-analyst.service.js`; discrepancy analysis API |
-| Costs foundation (D7) | **partial** | `uci-costs.service.js`; manual cost CRUD; no QuickBooks |
+| Costs foundation (D7) | **partial** | `uci-costs.service.js`; manual cost CRUD + UI; QB reuse planned (billing module connected) |
 | Equipment foundation (D8) | **partial** | `uci-equipment.service.js`; CRUD + check-in |
 | Meter set foundation (D9) | **partial** | `uci-meter-set.service.js`; checklist + milestone |
 | Closeout foundation (D10) | **partial** | `uci-closeout.service.js`; checklist metadata |
@@ -105,16 +118,21 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 | UCI agents 1–12 as workers | **partial** | D2.0/D2.1/D3/D4/D5–D10 foundations; D2.2 auto mapping blocked; D4 PEPCO submit blocked |
 | Portal submission automation | **partial** | email_intent only; PEPCO portal blocked |
 | BGE portal automation | **missing** |
-| Tenant propagation + tenant-aware RLS | **missing** (target in D1) |
+| Tenant propagation + tenant-aware RLS | **partial** | Editor write gate + RLS migration; `tenant_id` not propagated (no org source) |
 | Durable UCI jobs | **implemented** (D1D) | `uci_portal_sync` on shared `scrape_jobs`; flag-gated |
 | Production document storage | **implemented** (D1B) | Supabase `project-documents`; local dev-only |
 | Event bus (`uci.*` events) | **partial** | In-memory ring buffer; D5 classify/reclassify emit |
 | Communication classifier (Agent 5) | **partial** | Portal-sync keyword classifier; no inbound email |
 | Portfolio view, escalate APIs | **partial** | `portfolio_view` + drawer summary; escalate missing |
 | D13 agent workflow UI | **partial** | COS/costs/equipment/meter/closeout/reclassify/sync-runs wired in drawer |
-| Cross-tenant UCI security tests | **missing** |
+| Cross-tenant UCI security tests | **missing** | Cross-project + viewer/editor tests added; cross-tenant blocked |
+| Jurisdiction → UCI data reuse | **partial** | All jurisdictions may enter UCI; reuse `projects` + `project_documents`; see `UCI_ARCHITECTURE.md` §3 |
+| Email workflow (Commun-ET mailbox) | **missing** | Direction documented; Graph preferred; inbound webhook blocked |
+| QuickBooks UCI actions | **missing** | Reuse billing `scraper-service/app/services/quickbooks/` — no second integration |
 
 ### PEPCO is the first adapter, not the architecture
+
+PEPCO electric is the **first fully automated provider workflow** (read sync today; portal submit in D4). UCI is available for projects from **all supported jurisdictions**; PEPCO automation applies **only** to PEPCO coordination records. Other utilities use shared lifecycle, manual actions, and email fallback until adapters exist.
 
 PEPCO-specific code lives at:
 
@@ -150,7 +168,7 @@ The **target architecture** is utility-neutral shared services plus provider ada
 
 ## Next Steps for Implementers
 
-1. Read `UCI_DELIVERY_ROADMAP.md` — D1A–D1D, **D2.0**, **D2.1**, **D3** complete (scoped); **D4** partial; **D2.2 blocked**; review **§17 backlog** before starting the next milestone.
-2. Next delivery work: **D4 PEPCO submit adapter**, **D5** communications, or parallel **D7–D10** per client Phase 1 calendar.
-3. Check `UCI_COMPLIANCE_CHECKLIST.md` before marking any item complete.
+1. Read `UCI_DELIVERY_ROADMAP.md` — §16 **remaining execution order** and **§17 backlog** (with Class column).
+2. Next code target: **D4 / NB-D4-001** PEPCO dry-run; tenancy schema decision required to close **NB-D1-001**.
+3. Check `UCI_COMPLIANCE_CHECKLIST.md` — use readiness labels (foundation / E2E / live verified / production-ready).
 4. Do not treat `uci_execution_sprints_and_phases.md` or `UCI_All_Implementation_Phases.md` as active roadmaps.

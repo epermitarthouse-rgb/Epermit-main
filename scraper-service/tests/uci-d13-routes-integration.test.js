@@ -187,6 +187,11 @@ function makeSupabase(opts = {}) {
         if (args._project_id === PROJECT_B && args._user_id === USER_OK) return { data: false, error: null };
         return { data: true, error: null };
       }
+      if (name === "has_project_editor_access") {
+        if (!hasAccess || args._user_id === USER_DENIED) return { data: false, error: null };
+        if (args._project_id === PROJECT_B && args._user_id === USER_OK) return { data: false, error: null };
+        return { data: true, error: null };
+      }
       return { data: null, error: null };
     },
   };

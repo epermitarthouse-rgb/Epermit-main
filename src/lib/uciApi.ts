@@ -944,10 +944,11 @@ export async function getProjectPortfolioView(
 }
 
 export async function listRecentUciEvents(
+  projectId: string,
   limit = 25,
 ): Promise<UciRecentEventsResponse> {
   return uciFetchJson(
-    `/api/uci/events/recent?limit=${encodeURIComponent(String(limit))}`,
+    `/api/uci/events/recent?project_id=${encodeURIComponent(projectId)}&limit=${encodeURIComponent(String(limit))}`,
     {},
     "Failed to load recent UCI events",
   );

@@ -4,6 +4,7 @@ const { Router } = require("express");
 const {
   requireAuthenticatedUser,
   requireProjectAccess,
+  assertCoordinationBelongsToProject,
   sanitizeUciError,
 } = require("../services/uci/uci-access.service.js");
 const {
@@ -62,7 +63,7 @@ const {
 const { prepareMeterSetChecklist } = require("../services/uci/uci-meter-set.service.js");
 const { prepareCloseoutPackage } = require("../services/uci/uci-closeout.service.js");
 const { getProjectPortfolioView } = require("../services/uci/uci-portfolio.service.js");
-const { listRecentUciEvents } = require("../services/uci/uci-events.service.js");
+const { listRecentUciEventsForProject } = require("../services/uci/uci-events.service.js");
 const {
   applyLifecycleProposal,
   rejectLifecycleProposal,
@@ -195,7 +196,7 @@ function createUciRouter(opts) {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.params.projectId || "").trim();
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
 
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const providers = body.providers;
@@ -323,6 +324,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(record.project_id),
+        write: true,
       });
 
       const { record: updated, transition } = await recordUserTransition(
@@ -370,7 +372,7 @@ function createUciRouter(opts) {
       }
 
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
 
       const result = await applyLifecycleProposal(supabase, {
         coordinationRecordId: coordinationId,
@@ -412,7 +414,7 @@ function createUciRouter(opts) {
       }
 
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
 
       const result = await rejectLifecycleProposal(supabase, {
         coordinationRecordId: coordinationId,
@@ -447,6 +449,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(record.project_id),
+        write: true,
       });
 
       const result = await runLoadProfileAnalysis(supabase, {
@@ -507,6 +510,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(record.project_id),
+        write: true,
       });
 
       const result = await runApplicationPackageBuild(supabase, {
@@ -541,6 +545,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(appRow.project_id),
+        write: true,
       });
 
       const result = await reviewApplicationPackage(supabase, {
@@ -573,6 +578,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(appRow.project_id),
+        write: true,
       });
 
       const result = await submitApplicationPackage(supabase, {
@@ -601,7 +607,7 @@ function createUciRouter(opts) {
       }
 
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
 
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const providerSlug =
@@ -711,7 +717,7 @@ function createUciRouter(opts) {
       }
 
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
 
       const cancelled = await cancelPortalSyncRun(supabase, {
         jobId,
@@ -781,7 +787,7 @@ function createUciRouter(opts) {
       }
 
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
 
       const result = await classifyCoordinationCommunications(supabase, {
         coordinationRecordId: coordinationId,
@@ -811,6 +817,12 @@ function createUciRouter(opts) {
       const coordinationId = req.query.coordination_id
         ? String(req.query.coordination_id).trim()
         : undefined;
+
+      await assertCoordinationBelongsToProject({
+        supabase,
+        projectId,
+        coordinationRecordId: coordinationId,
+      });
 
       const result = await listNeedsAttentionCommunications(supabase, {
         projectId,
@@ -846,6 +858,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(comm.project_id),
+        write: true,
       });
 
       const result = await reclassifyCommunication(supabase, {
@@ -1256,6 +1269,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(record.project_id),
+        write: true,
       });
       const result = await runCosDiscrepancyAnalysis(supabase, {
         coordinationRecordId: coordinationId,
@@ -1301,7 +1315,7 @@ function createUciRouter(opts) {
         throw err;
       }
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const result = await upsertCostRecord(supabase, {
         coordinationRecordId: coordinationId,
@@ -1348,7 +1362,7 @@ function createUciRouter(opts) {
         throw err;
       }
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const result = await createEquipmentRecord(supabase, {
         coordinationRecordId: coordinationId,
@@ -1382,6 +1396,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(row.project_id),
+        write: true,
       });
       const result = await recordEquipmentCheckIn(supabase, {
         equipmentId,
@@ -1411,6 +1426,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(record.project_id),
+        write: true,
       });
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const result = await prepareMeterSetChecklist(supabase, {
@@ -1440,6 +1456,7 @@ function createUciRouter(opts) {
         supabase,
         userId: user.id,
         projectId: String(record.project_id),
+        write: true,
       });
       const result = await prepareCloseoutPackage(supabase, {
         coordinationRecordId: coordinationId,
@@ -1467,9 +1484,17 @@ function createUciRouter(opts) {
 
   router.get("/events/recent", async (req, res) => {
     try {
-      await requireAuthenticatedUser(req, supabase);
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.query.project_id ?? "").trim();
+      if (!projectId) {
+        const err = new Error("project_id query parameter is required");
+        err.statusCode = 400;
+        err.code = "PROJECT_ID_REQUIRED";
+        throw err;
+      }
+      await requireProjectAccess({ supabase, userId: user.id, projectId });
       const limit = req.query.limit != null ? Number(req.query.limit) : 50;
-      res.json({ events: listRecentUciEvents(limit) });
+      res.json({ events: listRecentUciEventsForProject(projectId, limit) });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

@@ -20,20 +20,48 @@ Re-audit before marking any item ✅ Pass.
 | 🔍 Verify | Needs codebase or live confirmation |
 | 🧪 Needs Test | Built but not properly tested |
 
+**Readiness distinctions (use alongside Status):**
+
+| Label | Meaning |
+|-------|---------|
+| Foundation implemented | Service/API/schema exists in repo |
+| End-to-end wired | UI + API + persistence for pilot path |
+| Tested locally | Unit/integration tests pass |
+| Live verified | Confirmed against real portal/mailbox/QB |
+| Staging-ready | Safe dry-run or controlled environment |
+| Production-ready | Tenant isolation, alerts, runbooks, live gates pass |
+| Blocked by external dependency | Requires data, access, credentials, or tenancy decision |
+
 ---
 
 # 1. Product Vision / Scope Alignment
 
 | # | Requirement | Status | Evidence / notes |
 |---|-------------|--------|------------------|
-| 1.1 | UCI separate module | ⚠️ Partial | `/api/uci`, `/uci` UI; distinct from county scrapers |
-| 1.2 | Not county scraper | ⚠️ Partial | PEPCO under `scrapers/pepco/`; utility_providers table |
+| 1.1 | UCI separate module | ⚠️ Partial | `/api/uci`, `/uci` UI; distinct from county scrapers — **foundation implemented** |
+| 1.2 | Not county scraper | ⚠️ Partial | Utility coordination separate from municipal jurisdiction; jurisdiction scrapers feed project data only |
 | 1.3 | Full lifecycle support | ⚠️ Partial | Stages 1–10 in DB; PEPCO portal proposals + flag-gated auto-apply (D1C) |
-| 1.4 | Human in loop | ⚠️ Partial | Manual transitions; no submit/review flow yet |
-| 1.5 | Routine work automated | ⚠️ Partial | PEPCO read-only sync only |
-| 1.6 | Strategic decisions human | ⚠️ Partial | No auto-submit; no classifier auto-advance |
-| 1.7 | Integrates PermitPilot | ⚠️ Partial | Auth, projects, credentials, Playwright reused |
-| 1.8 | McDonald's pilot alignment | 🔍 Verify | Roadmap maps D1–D12 to client phases |
+| 1.4 | Human in loop | ⚠️ Partial | Manual transitions; review before submit enforced — **end-to-end wired** for review |
+| 1.5 | Routine work automated | ⚠️ Partial | PEPCO read-only sync only; PEPCO submit **blocked** |
+| 1.6 | Strategic decisions human | ⚠️ Partial | No auto-submit; D2.0 human provider confirmation; uncertain email matches require review |
+| 1.7 | Integrates PermitPilot | ⚠️ Partial | Auth, projects, `project_documents`, credentials, Playwright reused — see `UCI_ARCHITECTURE.md` data reuse table |
+| 1.8 | McDonald's pilot alignment | ⚠️ Partial | Roadmap maps D1–D13 to client phases; all jurisdictions may enter UCI |
+
+---
+
+# 2a. Jurisdiction Data Reuse (decision 2026-07-15)
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| 2a.1 | All supported jurisdictions may enter UCI | ⚠️ Partial | Project-scoped; no jurisdiction gate in UCI init |
+| 2a.2 | Reuse project address fields | ⚠️ Partial | D2.0/D2.1/D3 wired — **end-to-end wired** for inventory |
+| 2a.3 | Reuse project_documents (plans/specs/permit) | ⚠️ Partial | Metadata inventory only; no content parse |
+| 2a.4 | Reuse jurisdiction scraper output without rescrape | ⚠️ Partial | `portal_data` fallback address; primary `projects.*` fields |
+| 2a.5 | One coordination record per confirmed provider | ⚠️ Partial | Init creates per-provider records — **foundation implemented** |
+| 2a.6 | No square-footage numeric inference | ✅ Pass | `uci-load-profile.service.js` FORBIDDEN_INFERRED_KEYS — **tested locally** |
+| 2a.7 | McDonald's/QSR templates | ❌ Missing | **external data** — NB-D2-007 |
+
+Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 
 ---
 
@@ -52,9 +80,9 @@ Re-audit before marking any item ✅ Pass.
 | 2.9 | Queue not source of truth | ⚠️ Partial | Durable `uci_portal_sync` jobs on `scrape_jobs` when flag enabled |
 | 2.10 | Object storage | ⚠️ Partial | D1B — Supabase `project-documents`; production local disk disabled |
 | 2.11 | Playwright infra reused | ✅ Pass | `playwright-launch-for-scraper.js` |
-| 2.12 | Outbound email | ❌ Missing | |
-| 2.13 | Inbound email pattern | ❌ Missing | |
-| 2.14 | QuickBooks reuse | ❌ Missing | QB exists elsewhere, not UCI |
+| 2.12 | Outbound email | ❌ Missing | Direction: Commun-ET mailbox + Microsoft Graph — **blocked by external access** |
+| 2.13 | Inbound email pattern | ❌ Missing | Reuse permitting mailbox; webhook not built — **blocked by external access** |
+| 2.14 | QuickBooks reuse | ⚠️ Partial | Billing module connected (`scraper-service/app/services/quickbooks/`); UCI bridge not wired — **implement now** under D7 |
 | 2.15 | Observability reuse | ⚠️ Partial | Console logs only |
 
 ---
@@ -63,13 +91,13 @@ Re-audit before marking any item ✅ Pass.
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 3.1 | `tenant_id` on all tables | ❌ Missing | Nullable on records only; absent on children |
-| 3.2 | RLS on all tables | ⚠️ Partial | Enabled; project-scoped not tenant-scoped |
+| 3.1 | `tenant_id` on all tables | ❌ Missing | Columns exist; not written — blocked on `projects` tenancy field |
+| 3.2 | RLS on all tables | ⚠️ Partial | SELECT: `has_project_access`; mutations: `has_project_editor_access` (NB-D1-001) |
 | 3.3 | RLS matches spec pattern | ❌ Missing | Uses `has_project_access`, not `app.current_tenant_id` |
-| 3.4 | Tenant A cannot read B | ❌ Missing | No cross-tenant tests |
-| 3.5 | Tenant A cannot write B | ❌ Missing | |
+| 3.4 | Tenant A cannot read B | ❌ Missing | Cross-project denied; cross-tenant N/A until tenant field |
+| 3.5 | Tenant A cannot write B | ❌ Missing | Viewer write denied via editor RLS + route gate |
 | 3.6 | McDonald's isolation | ❌ Missing | |
-| 3.7 | APIs enforce tenant | ⚠️ Partial | Project access only |
+| 3.7 | APIs enforce tenant | ⚠️ Partial | Project + editor write enforcement on all UCI mutation routes |
 | 3.8 | Agents enforce tenant | ❌ Missing | |
 | 3.9 | Prompts tenant-safe | ❌ Missing | No LLM agents |
 | 3.10 | Credentials not in UI | ✅ Pass | Status only in Settings |
@@ -107,8 +135,8 @@ Re-audit before marking any item ✅ Pass.
 |---|-------------|--------|
 | 5.1.1 | Stages 1–10 | ✅ Pass | DB CHECK 1–10 |
 | 5.1.2 | Stage names | ⚠️ Partial | Numbers only in UI |
-| 5.1.3 | Completion meaning | ❌ Missing | No agent completion logic |
-| 5.1.4 | Multiple records/project | ⚠️ Partial | One per provider default scope |
+| 5.1.3 | Completion meaning | ⚠️ Partial | Submission-complete and coordination-complete definitions in `UCI_ARCHITECTURE.md` §11; not enforced in code |
+| 5.1.4 | Multiple records/project | ⚠️ Partial | One coordination record per confirmed provider — **foundation implemented** |
 | 5.1.5 | Multiple scopes/utility | ⚠️ Partial | `scope_description` unique constraint |
 | 5.1.6 | Flexible milestones | ❌ Missing | Table stub |
 
@@ -126,16 +154,16 @@ Re-audit before marking any item ✅ Pass.
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| 1 Provider Mapping | ⚠️ Partial | D2.0 human-assisted setup; auto mapping missing |
-| 2 Load Profile | ⚠️ Partial | D2.1 missing-input inventory; `load_summary` agent_draft |
-| 3 Application Prep | ⚠️ Partial | D3 foundation; PEPCO template manifest; review workflow |
-| 4 Submission | ⚠️ Partial | PEPCO Submitted status proposal (stage 4); requires submission evidence |
+| 1 Provider Mapping | ⚠️ Partial | D2.0 human-assisted (**current safe fallback**); D2.2 auto blocked — no ZIP/county inference |
+| 2 Load Profile | ⚠️ Partial | D2.1 missing-input inventory; no-guess rule; square footage never produces numerics |
+| 3 Application Prep | ⚠️ Partial | D3 foundation; PEPCO template manifest; review workflow — **end-to-end wired** |
+| 4 Submission | ⚠️ Partial | email_intent path; PEPCO 501; submission-complete not met — **blocked by external access** |
 | 5 Acknowledgment | ⚠️ Partial | Initiated status proposal; column exists |
 | 6 COS/Design Review | ⚠️ Partial | PEPCO In Design / In Technical Review proposals |
 | 7 CIAC/Cost | ⚠️ Partial | PEPCO Contract Sent / payment proposals |
-| 8 Equipment | ❌ Missing | |
-| 9 Pre-Energization | ❌ Missing | |
-| 10 Energization/Closeout | ❌ Missing | |
+| 8 Equipment | ⚠️ Partial | D8 CRUD + check-in UI — **end-to-end wired** |
+| 9 Pre-Energization | ⚠️ Partial | D9 meter-set checklist UI — **end-to-end wired** (foundation) |
+| 10 Energization/Closeout | ⚠️ Partial | D10 closeout checklist; coordination-complete not auto-detected |
 
 ---
 
@@ -190,7 +218,7 @@ Re-audit before marking any item ✅ Pass.
 | A5 Communication Parser | ⚠️ Partial | D5 portal-sync keyword classifier; no inbound email |
 | A6 COS Analyst | ⚠️ Partial | D6 discrepancy analysis foundation |
 | A7 Easement/ROW | 🚫 Deferred | |
-| A8 CIAC/Cost | ⚠️ Partial | D7 manual cost CRUD; no QuickBooks |
+| A8 CIAC/Cost | ⚠️ Partial | D7 manual cost CRUD + UI; QB reviewed actions planned — reuse billing OAuth |
 | A9 Equipment | ⚠️ Partial | D8 CRUD + check-in; no cron |
 | A10 Inspection Release | 🚫 Deferred | |
 | A11 Meter Set | ⚠️ Partial | D9 checklist + milestone |
@@ -261,9 +289,9 @@ Re-audit before marking any item ✅ Pass.
 | 13.2 | Per-utility versioned scripts | ⚠️ Partial | PEPCO only; not `uci/portals/` layout |
 | 13.3–13.4 | Credentials secure | ✅ Pass |
 | 13.5 | Login per utility | ⚠️ Partial | PEPCO only |
-| 13.6 | Submission flow | ❌ Missing |
-| 13.7–13.9 | Idempotency/confirmation/artifacts | ❌ Missing / ⚠️ Partial |
-| 13.10–13.16 | Retry/fallback/tests/safe mode | ⚠️ Partial | MFA resume; limited tests |
+| 13.6 | Submission flow | ❌ Missing | PEPCO dry-run + evidence capture planned; live submit **blocked** |
+| 13.7–13.9 | Idempotency/confirmation/artifacts | ⚠️ Partial | `submitted_at` gate partial; confirmation capture missing |
+| 13.10–13.16 | Retry/fallback/tests/safe mode | ⚠️ Partial | MFA resume; dry-run mode not built; **live verification** pending |
 
 ## Priority Utility Coverage
 
@@ -287,7 +315,7 @@ Re-audit before marking any item ✅ Pass.
 | Area | Status |
 |------|--------|
 | Anthropic integration (14.1–14.12) | ❌ Missing |
-| QuickBooks UCI (15.1–15.11) | ❌ Missing |
+| QuickBooks UCI (15.1–15.11) | ⚠️ Partial | Billing QB connected; UCI must reuse — no second integration; reviewed actions not wired |
 
 ---
 
@@ -307,9 +335,9 @@ Re-audit before marking any item ✅ Pass.
 
 | Area | Status |
 |------|--------|
-| T1 unit tests | ⚠️ Partial | 159 UCI backend tests |
-| T2 integration | ❌ Missing |
-| T3 security cross-tenant | ❌ Missing |
+| T1 unit tests | ⚠️ Partial | 171 UCI backend tests — **tested locally** |
+| T2 integration | ⚠️ Partial | `uci-d13-routes-integration.test.js` — project boundary only |
+| T3 security cross-tenant | ❌ Missing | Cross-project + viewer/editor tests added (185 backend); cross-tenant blocked |
 | T4 portal mock | ❌ Missing |
 | T5 classifier | ⚠️ Partial | D5 keyword foundation; no validation set |
 
@@ -364,18 +392,17 @@ Re-audit before marking any item ✅ Pass.
 |---|------------|--------|
 | C1 | Project with UCI scope | ⚠️ Partial |
 | C2 | Identify providers | ⚠️ Partial | D2.0 human-assisted guided init |
-| C3 | Load summary | ❌ Missing |
-| C4 | Draft package | ❌ Missing |
-| C5 | Human review before submit | ❌ Missing |
-| C6 | Submit portal/email | ❌ Missing |
-| C7 | Acknowledgment tracking | ❌ Missing |
-| C8 | Parse communication | ❌ Missing |
-| C9 | COS analysis | ❌ Missing |
-| C10 | CIAC/cost | ❌ Missing |
-| C11 | Equipment ETA | ❌ Missing |
-| C12 | Meter set | ❌ Missing |
-| C13 | Closeout | ❌ Missing |
-| C14 | Portfolio dashboard | ❌ Missing |
+| C3 | Load summary | ⚠️ Partial | D2.1 `load_summary` agent_draft; no numeric templates |
+| C4 | Draft package | ⚠️ Partial | D3 foundation — **end-to-end wired** |
+| C5 | Human review before submit | ⚠️ Partial | Review gate enforced — **tested locally** |
+| C6 | Submit portal/email | ⚠️ Partial | email_intent only; not submission-complete |
+| C8 | Parse communication | ⚠️ Partial | D5 portal-sync classifier + reclassify UI |
+| C9 | COS analysis | ⚠️ Partial | D6 discrepancy + drawer panel |
+| C10 | CIAC/cost | ⚠️ Partial | D7 cost CRUD + UI |
+| C11 | Equipment ETA | ⚠️ Partial | D8 CRUD + check-in UI |
+| C12 | Meter set | ⚠️ Partial | D9 checklist + UI |
+| C13 | Closeout | ⚠️ Partial | D10 checklist + UI; not coordination-complete |
+| C14 | Portfolio dashboard | ⚠️ Partial | D11 API + summary section |
 | C15 | Tenant-safe | ❌ Missing |
 | C16 | Idempotent agents | ❌ Missing |
 | C17 | Portal debug artifacts | ⚠️ Partial |
@@ -397,8 +424,8 @@ Re-audit before marking any item ✅ Pass.
 | Real portal test submissions | 🔍 Verify |
 | Stage changes without audit | No — transitions logged |
 | Classifier auto-advance | N/A |
-| QB duplicate invoice | N/A |
-| Deferred scope claimed done | **Risk** — UI empty sections look like features |
+| QB duplicate invoice | ⚠️ Partial | Billing has idempotency; UCI QB bridge not wired |
+| Deferred scope claimed done | **Risk** — mitigated | §17 Class column + completion definitions distinguish partial vs complete |
 
 ---
 
