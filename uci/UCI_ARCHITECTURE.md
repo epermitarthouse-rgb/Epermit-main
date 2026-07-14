@@ -213,7 +213,18 @@ auth.users
 - Platform `user_roles.admin` does **not** bypass UCI routes; global admin is separate from project access.
 - **No demo-account isolation** in schema today.
 
-### Target state (client spec §6 — blocked on architecture decision)
+### Project team invitation lifecycle (Row 2 — 2026-07-15)
+
+Production workflow (no manual SQL):
+
+1. Project owner/admin invites by email from **Projects → project → Team tab**.
+2. `create_project_team_invitation` RPC (SECURITY DEFINER) enforces `has_project_admin_access`, normalizes email, rejects existing members, stores **SHA-256 token hash** (raw token returned once).
+3. `send-project-team-invitation` edge function sends Resend email with `/invite/:token` link; returns `email_sent: false` honestly if Resend unavailable.
+4. Recipient signs in with **matching email**, accepts via `accept_project_team_invitation` RPC (atomic `FOR UPDATE` + `project_team_members` insert + status `accepted`).
+5. Editor role grants UCI write via `has_project_editor_access`; viewer is read-only.
+
+Security: unguessable 32-byte tokens, 7-day expiry, revoked/declined/accepted invites cannot be reused, resend rotates token with 5-minute cooldown.
+
 
 - Discover organization/tenant field on `projects` (or approved tenancy table) in current schema.
 - Propagate `tenant_id` from project onto coordination records and child tables.

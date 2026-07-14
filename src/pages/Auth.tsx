@@ -61,7 +61,20 @@ export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
+  type AuthLocationState = {
+    from?: { pathname: string };
+    inviteEmail?: string;
+    authView?: 'login' | 'signup';
+  };
+
+  const locationState = (location.state as AuthLocationState) || {};
+  const from = locationState.from?.pathname || "/dashboard";
+
+  useEffect(() => {
+    if (locationState.authView === 'signup') {
+      setActiveView('signup');
+    }
+  }, [locationState.authView]);
 
   useEffect(() => {
     if (user) {
@@ -86,6 +99,12 @@ export default function Auth() {
       phone: "",
     },
   });
+
+  useEffect(() => {
+    if (locationState.inviteEmail && activeView === 'signup') {
+      signupForm.setValue('email', locationState.inviteEmail);
+    }
+  }, [locationState.inviteEmail, activeView, signupForm]);
 
   const handleLogin = async (data: LoginFormData) => {
     setIsLoading(true);

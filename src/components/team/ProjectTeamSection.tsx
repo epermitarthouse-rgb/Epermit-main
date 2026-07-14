@@ -21,8 +21,10 @@ export function ProjectTeamSection({ projectId, projectOwnerId }: ProjectTeamSec
     isAdmin,
     inviteMember,
     cancelInvitation,
+    resendInvitation,
     updateMemberRole,
     removeMember,
+    resendCooldownMs,
   } = useProjectTeam(projectId);
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -65,6 +67,8 @@ export function ProjectTeamSection({ projectId, projectOwnerId }: ProjectTeamSec
           onUpdateRole={updateMemberRole}
           onRemoveMember={removeMember}
           onCancelInvitation={cancelInvitation}
+          onResendInvitation={resendInvitation}
+          resendCooldownMs={resendCooldownMs}
         />
       )}
 

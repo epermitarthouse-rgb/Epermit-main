@@ -33,7 +33,7 @@ const FEATURES = [
   {
     icon: Users,
     title: "Team Collaboration",
-    description: "Invite team members and share projects with clients via secure links",
+    description: "Invite team members from each project's Team tab and share read-only links with clients",
   },
   {
     icon: Bell,

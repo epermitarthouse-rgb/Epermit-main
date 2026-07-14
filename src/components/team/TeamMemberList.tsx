@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -30,13 +30,17 @@ import {
   User,
   MoreVertical,
   UserMinus,
-  Shield,
   Clock,
   X,
   Crown,
+  RefreshCw,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { TeamMember, ProjectInvitation, TeamRole, TEAM_ROLE_LABELS, TEAM_ROLE_OPTIONS } from '@/types/team';
+import {
+  canResendInvitation,
+  resendCooldownRemainingMs,
+} from '@/lib/projectTeamInvitationLogic';
 
 interface TeamMemberListProps {
   members: TeamMember[];
@@ -47,6 +51,8 @@ interface TeamMemberListProps {
   onUpdateRole: (memberId: string, role: TeamRole) => Promise<boolean>;
   onRemoveMember: (memberId: string) => Promise<boolean>;
   onCancelInvitation: (invitationId: string) => Promise<boolean>;
+  onResendInvitation?: (invitationId: string) => Promise<boolean>;
+  resendCooldownMs?: number;
 }
 
 export function TeamMemberList({
@@ -58,10 +64,19 @@ export function TeamMemberList({
   onUpdateRole,
   onRemoveMember,
   onCancelInvitation,
+  onResendInvitation,
+  resendCooldownMs = 5 * 60 * 1000,
 }: TeamMemberListProps) {
   const [removeMember, setRemoveMember] = useState<TeamMember | null>(null);
   const [cancelInvite, setCancelInvite] = useState<ProjectInvitation | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [, setCooldownTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setCooldownTick((t) => t + 1), 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getInitials = (name: string | null | undefined): string => {
     if (!name) return '?';
@@ -88,6 +103,16 @@ export function TeamMemberList({
     setRemoving(false);
     setCancelInvite(null);
   };
+
+  const handleResend = async (invitation: ProjectInvitation) => {
+    if (!onResendInvitation) return;
+    setResendingId(invitation.id);
+    await onResendInvitation(invitation.id);
+    setResendingId(null);
+  };
+
+  const pendingInvites = invitations.filter((i) => i.status === 'pending');
+  const inactiveInvites = invitations.filter((i) => i.status !== 'pending');
 
   const getRoleBadgeVariant = (role: TeamRole) => {
     switch (role) {
@@ -191,14 +216,20 @@ export function TeamMemberList({
         })}
 
         {/* Pending Invitations */}
-        {invitations.length > 0 && (
+        {pendingInvites.length > 0 && (
           <>
             <div className="pt-4 pb-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Pending Invitations
               </p>
             </div>
-            {invitations.map((invitation) => (
+            {pendingInvites.map((invitation) => {
+              const canResend = canResendInvitation(invitation.last_sent_at, new Date(), resendCooldownMs);
+              const cooldownMin = Math.ceil(
+                resendCooldownRemainingMs(invitation.last_sent_at, new Date(), resendCooldownMs) / 60_000,
+              );
+
+              return (
               <div
                 key={invitation.id}
                 className="flex items-center gap-3 py-3 px-2 hover:bg-muted/50 rounded-lg transition-colors border border-dashed"
@@ -213,6 +244,10 @@ export function TeamMemberList({
                   <p className="font-medium truncate">{invitation.email}</p>
                   <p className="text-xs text-muted-foreground">
                     Expires {format(new Date(invitation.expires_at), 'MMM d, yyyy')}
+                    {invitation.last_sent_at && (
+                      <> · Sent {format(new Date(invitation.last_sent_at), 'MMM d')}</>
+                    )}
+                    {!invitation.last_sent_at && <> · Email not sent yet</>}
                   </p>
                 </div>
 
@@ -221,21 +256,60 @@ export function TeamMemberList({
                 </Badge>
 
                 {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setCancelInvite(invitation)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {onResendInvitation && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title={canResend ? 'Resend invitation' : `Wait ${cooldownMin} min`}
+                        disabled={!canResend || resendingId === invitation.id}
+                        onClick={() => handleResend(invitation)}
+                      >
+                        <RefreshCw className={`h-4 w-4 ${resendingId === invitation.id ? 'animate-spin' : ''}`} />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCancelInvite(invitation)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
+              </div>
+            );
+            })}
+          </>
+        )}
+
+        {inactiveInvites.length > 0 && isAdmin && (
+          <>
+            <div className="pt-4 pb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Recent Invitations
+              </p>
+            </div>
+            {inactiveInvites.map((invitation) => (
+              <div
+                key={invitation.id}
+                className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-70"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{invitation.email}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{invitation.status}</p>
+                </div>
+                <Badge variant="outline" className="shrink-0 text-xs">
+                  {TEAM_ROLE_LABELS[invitation.role]}
+                </Badge>
               </div>
             ))}
           </>
         )}
 
-        {members.length === 0 && invitations.length === 0 && (
+        {members.length === 0 && pendingInvites.length === 0 && (
           <div className="text-center py-6 text-muted-foreground">
             <User className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No team members yet</p>

@@ -121,7 +121,7 @@ const faqData: FAQItem[] = [
   },
   {
     question: "Can I invite team members to my account?",
-    answer: "Yes, Professional and Enterprise plans support team collaboration. You can invite team members, assign roles, and manage permissions from your account settings. Team members can share projects and collaborate in real-time.",
+    answer: "Yes. Open Projects, select a project, and go to the Team tab. Project owners and admins can invite members by email, assign roles (Admin, Editor, or Viewer), resend or cancel pending invitations, and change roles for existing members.",
     category: "account",
   },
   {

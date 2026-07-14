@@ -854,6 +854,12 @@ Priority follows existing milestone numbers — no new phases:
 | NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | live verification | Unit/route tests pass (171 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
 | NB-TEST-002 | Testing | Cross-tenant UCI security tests missing | partial | architecture work | Cross-project + viewer/editor denial tests added; cross-tenant blocked until tenant field on `projects` | D13 | high | `uci-d13-tenant-rls-hardening.test.js`, `uci-access-hardening.test.js` | 2026-07-08 | 2026-07-15 |
 | NB-OPS-001 | D12 Ops | Event bus `uci.*` events — in-memory only, partial catalog | partial | architecture work | `emitUciEvent` on D5 classify/reclassify; no external bus | D13 | low | `uci-events.service.js`, `GET /events/recent` | 2026-07-08 | — |
+| NB-TEAM-001 | Team | Invitation acceptance flow missing | resolved | implement now | `/invite/:token`, `accept_project_team_invitation` RPC, `InviteAccept.tsx` | Row 2 | medium | `20260715130000_project_team_invitation_flow.sql`, `InviteAccept.tsx` | 2026-07-15 | 2026-07-15 |
+| NB-TEAM-002 | Team | Invite did not send email | resolved | implement now | `send-project-team-invitation` edge function via Resend; truthful partial result when unavailable | Row 2 | low | `supabase/functions/send-project-team-invitation/index.ts` | 2026-07-15 | 2026-07-15 |
+| NB-TEAM-003 | Team | No direct add-existing-user path (invite-only for new members) | partial | implement now | Invite+accept creates membership; admins can promote existing members via role dropdown | Row 2 | low | `useProjectTeam.ts` | 2026-07-15 | — |
+| NB-TEAM-004 | Team | `inviteMember` duplicate check queried current user not invitee | resolved | implement now | `create_project_team_invitation` RPC checks `auth.users` + `project_team_members` | Row 2 | low | `20260715130000_project_team_invitation_flow.sql` | 2026-07-15 | 2026-07-15 |
+| NB-TEAM-005 | Team | FAQ said account settings for team management | resolved | implement now | FAQ + onboarding point to Projects → Team tab | Row 2 | low | `FAQ.tsx`, `FeaturesStep.tsx` | 2026-07-15 | 2026-07-15 |
+| NB-TEAM-006 | Team | UCI editor access not explained in team invite UX | resolved | implement now | Editor role description mentions UCI coordination write access | Row 2 | low | `types/team.ts` TEAM_ROLE_DESCRIPTIONS | 2026-07-15 | 2026-07-15 |
 
 ### Client-deferred (not D13 unless scope changes)
 
@@ -873,7 +879,7 @@ These remain in §7 **Deferred Agents and Features** — track here for visibili
 | NB-DOC-002 | Docs | Roadmap lagged D5–D12 implementation | 2026-07-14 | D13 doc pass | `UCI_DELIVERY_ROADMAP.md` §6, §8–11, §17 |
 | NB-DOC-003 | Docs | Architecture decisions reconciled into existing roadmap (no new plan) | 2026-07-15 | D13 doc pass | `UCI_ARCHITECTURE.md`, `UCI_DELIVERY_ROADMAP.md` §D2/D4/D5/D7/D8–D13, §17 Class column |
 
-**Last backlog review:** 2026-07-15 (NB-D1-001 tenant/RLS hardening). **Open items:** 37 active + 3 client-deferred; NB-D1-001 partial-closed; NB-TEST-002 improved.
+**Last backlog review:** 2026-07-15 (NB-TEAM-001–006 project invitation flow). **Open items:** 35 active + 3 client-deferred; NB-TEAM-003 partial (invite-only for new users by design).
 
 ---
 

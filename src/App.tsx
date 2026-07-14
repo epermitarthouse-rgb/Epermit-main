@@ -27,6 +27,7 @@ import NotFound from "./pages/NotFound";
 
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
+import InviteAcceptPage from "./pages/InviteAccept";
 import Analytics from "./pages/Analytics";
 import AdminPanel from "./pages/AdminPanel";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
@@ -115,6 +116,7 @@ const App = () => (
                 <Route path="/install" element={<Install />} />
                 <Route path="/portal/:token" element={<ClientPortal />} />
                 <Route path="/embed/:token" element={<EmbedWidget />} />
+                <Route path="/invite/:token" element={<InviteAcceptPage />} />
 
                 <Route element={<ProtectedLayoutRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />
