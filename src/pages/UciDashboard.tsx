@@ -43,18 +43,28 @@ import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import {
   analyzeCoordinationLoadProfile,
+  applyLifecycleProposal,
+  analyzeCoordinationCos,
   buildCoordinationApplicationPackage,
+  checkInCoordinationEquipment,
   classifyCoordinationCommunications,
+  createCoordinationEquipment,
   formatUciUserError,
   getCoordinationDetail,
+  getProjectPortfolioView,
   getProjectProviderSetup,
   initProjectCoordination,
   isUciSessionExpiredError,
+  listCoordinationSyncRuns,
   listProjectCoordination,
   listUciProviders,
   postPepcoDashboardDiscovery,
   postPepcoDiscovery,
   postPepcoApplicationDetailDiscovery,
+  prepareCloseout,
+  prepareMeterSet,
+  rejectLifecycleProposal,
+  reclassifyCommunication,
   resumePepcoApplicationDetailDiscovery,
   resumePepcoDiscovery,
   reviewCoordinationApplication,
@@ -62,7 +72,9 @@ import {
   submitPepcoMfaCode,
   transitionCoordination,
   triggerCoordinationSync,
+  upsertCoordinationCost,
   UCI_SESSION_EXPIRED_MESSAGE,
+  UCI_SYNC_RUN_STORAGE_PREFIX,
 } from "@/lib/uciApi";
 import { getMicrosoftMailboxStatus } from "@/lib/microsoftMailboxApi";
 import { toast } from "sonner";
@@ -101,6 +113,9 @@ import type {
   UciProviderSetupResponse,
   UtilityProvider,
   UciRecordDetailResponse,
+  UciPortfolioViewResponse,
+  UciPortalSyncRun,
+  UciPortalSyncResponse,
 } from "@/types/uci";
 import {
   normalizedSyncDrawerMessage,
@@ -110,7 +125,20 @@ import {
 import {
   getLifecycleProposalsFromMetadata,
   selectDisplayLifecycleProposal,
+  computeLifecycleProposalChecksum,
+  getProviderMappingFromMetadata,
 } from "@/lib/uciLifecycleProposals";
+import {
+  CommunicationReclassifyRow,
+  CosAnalysisPanel,
+  CostsEquipmentWorkflowPanel,
+  LifecycleProposalActions,
+  MeterSetCloseoutPanel,
+  PortfolioSummarySection,
+  ProviderMappingBanner,
+  SyncRunsPanel,
+  useSyncRunPolling,
+} from "@/components/uci/UciD13WorkflowPanels";
 import {
   formatLoadProfileAnalysisStatus,
   getLoadProfileDraftApplication,
@@ -329,6 +357,16 @@ export default function UciDashboard() {
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
   const [applicationSubmitBusy, setApplicationSubmitBusy] = useState(false);
   const [classifyCommsBusy, setClassifyCommsBusy] = useState(false);
+  const [reclassifyCommId, setReclassifyCommId] = useState<string | null>(null);
+  const [lifecycleProposalBusy, setLifecycleProposalBusy] = useState(false);
+  const [cosBusy, setCosBusy] = useState(false);
+  const [cosError, setCosError] = useState<string | null>(null);
+  const [agentOpsBusy, setAgentOpsBusy] = useState(false);
+  const [agentOpsError, setAgentOpsError] = useState<string | null>(null);
+  const [meterSetBusy, setMeterSetBusy] = useState(false);
+  const [closeoutBusy, setCloseoutBusy] = useState(false);
+  const [portfolio, setPortfolio] = useState<UciPortfolioViewResponse | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [normalizedSyncBusy, setNormalizedSyncBusy] = useState(false);
   const [pepcoLastNormalizedSync, setPepcoLastNormalizedSync] = useState<UciNormalizedSyncResult | null>(
     null,
@@ -689,6 +727,16 @@ export default function UciDashboard() {
     setNormalizedSyncBusy(true);
     try {
       const summary = await triggerCoordinationSync(detailId);
+      const durable = summary as UciPortalSyncResponse & {
+        mode?: string;
+        job?: { id?: string };
+      };
+      if (durable.mode === "durable" && durable.job?.id) {
+        sessionStorage.setItem(`${UCI_SYNC_RUN_STORAGE_PREFIX}${detailId}`, String(durable.job.id));
+        toast.message("Portal sync queued — tracking durable job status.");
+        await syncRunsRefresh();
+        return;
+      }
       const normalizedResult = portalSyncResponseToNormalizedResult(summary);
       setPepcoLastNormalizedSync(normalizedResult);
       toast.success(
@@ -701,9 +749,183 @@ export default function UciDashboard() {
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Normalized sync failed");
+      toast.error(formatUciUserError(e, "Normalized sync failed"));
     } finally {
       setNormalizedSyncBusy(false);
+    }
+  };
+
+  const reloadDetail = async () => {
+    if (!detailId) return;
+    const d = await getCoordinationDetail(detailId);
+    setDetail(d);
+    await refreshCoordination();
+  };
+
+  const handleApplyLifecycleProposal = async () => {
+    if (!detailId || !displayLifecycleProposal || !lifecycleProposalsPayload?.last_evaluated_at) return;
+    setLifecycleProposalBusy(true);
+    try {
+      const checksum = await computeLifecycleProposalChecksum(
+        displayLifecycleProposal,
+        lifecycleProposalsPayload.last_evaluated_at,
+      );
+      await applyLifecycleProposal(detailId, {
+        external_application_id: displayLifecycleProposal.external_application_id,
+        proposal_checksum: checksum,
+      });
+      toast.success("Lifecycle proposal applied");
+      await reloadDetail();
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to apply lifecycle proposal"));
+    } finally {
+      setLifecycleProposalBusy(false);
+    }
+  };
+
+  const handleRejectLifecycleProposal = async () => {
+    if (!detailId || !displayLifecycleProposal || !lifecycleProposalsPayload?.last_evaluated_at) return;
+    setLifecycleProposalBusy(true);
+    try {
+      const checksum = await computeLifecycleProposalChecksum(
+        displayLifecycleProposal,
+        lifecycleProposalsPayload.last_evaluated_at,
+      );
+      await rejectLifecycleProposal(detailId, {
+        external_application_id: displayLifecycleProposal.external_application_id,
+        proposal_checksum: checksum,
+        reason: "Rejected from UCI dashboard",
+      });
+      toast.message("Lifecycle proposal rejected");
+      await reloadDetail();
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to reject lifecycle proposal"));
+    } finally {
+      setLifecycleProposalBusy(false);
+    }
+  };
+
+  const handleCosAnalyze = async () => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await analyzeCoordinationCos(detailId);
+      toast.success("COS analysis complete");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS analysis failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleSaveCost = async (payload: {
+    cost_type: string;
+    estimated_amount?: string;
+    actual_amount?: string;
+  }) => {
+    if (!detailId) return;
+    setAgentOpsBusy(true);
+    setAgentOpsError(null);
+    try {
+      await upsertCoordinationCost(detailId, payload);
+      toast.success("Cost saved");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "Failed to save cost");
+      setAgentOpsError(msg);
+      toast.error(msg);
+    } finally {
+      setAgentOpsBusy(false);
+    }
+  };
+
+  const handleCreateEquipment = async (payload: {
+    equipment_type: string;
+    initial_eta?: string;
+  }) => {
+    if (!detailId) return;
+    setAgentOpsBusy(true);
+    setAgentOpsError(null);
+    try {
+      await createCoordinationEquipment(detailId, payload);
+      toast.success("Equipment added");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "Failed to add equipment");
+      setAgentOpsError(msg);
+      toast.error(msg);
+    } finally {
+      setAgentOpsBusy(false);
+    }
+  };
+
+  const handleCheckInEquipment = async (
+    equipmentId: string,
+    payload: { current_eta?: string },
+  ) => {
+    setAgentOpsBusy(true);
+    setAgentOpsError(null);
+    try {
+      const result = await checkInCoordinationEquipment(equipmentId, payload);
+      toast.success(result.slip_alert ? "Check-in recorded — ETA slip >2 weeks" : "Check-in recorded");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "Equipment check-in failed");
+      setAgentOpsError(msg);
+      toast.error(msg);
+    } finally {
+      setAgentOpsBusy(false);
+    }
+  };
+
+  const handlePrepareMeterSet = async (scheduledDate?: string) => {
+    if (!detailId) return;
+    setMeterSetBusy(true);
+    setAgentOpsError(null);
+    try {
+      await prepareMeterSet(detailId, scheduledDate ? { scheduled_date: scheduledDate } : undefined);
+      toast.success("Meter set checklist prepared");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "Meter set preparation failed");
+      setAgentOpsError(msg);
+      toast.error(msg);
+    } finally {
+      setMeterSetBusy(false);
+    }
+  };
+
+  const handlePrepareCloseout = async () => {
+    if (!detailId) return;
+    setCloseoutBusy(true);
+    setAgentOpsError(null);
+    try {
+      await prepareCloseout(detailId);
+      toast.success("Closeout checklist prepared");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "Closeout preparation failed");
+      setAgentOpsError(msg);
+      toast.error(msg);
+    } finally {
+      setCloseoutBusy(false);
+    }
+  };
+
+  const handleReclassifyCommunication = async (communicationId: string, classification: string) => {
+    setReclassifyCommId(communicationId);
+    try {
+      await reclassifyCommunication(communicationId, { classification });
+      toast.success("Communication reclassified");
+      await reloadDetail();
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Reclassification failed"));
+    } finally {
+      setReclassifyCommId(null);
     }
   };
 
@@ -867,6 +1089,45 @@ export default function UciDashboard() {
     () => selectDisplayLifecycleProposal(lifecycleProposalsPayload),
     [lifecycleProposalsPayload],
   );
+
+  const providerMappingMetadata = useMemo(
+    () => getProviderMappingFromMetadata(detailRecord?.metadata ?? null),
+    [detailRecord?.metadata],
+  );
+
+  const syncRunPollFn = useCallback(async (coordinationId: string) => {
+    const result = await listCoordinationSyncRuns(coordinationId, { limit: 8 });
+    return { runs: result.runs, activeRun: result.activeRun };
+  }, []);
+
+  const { runs: syncRuns, activeRun: activeSyncRun, loading: syncRunsLoading, refresh: syncRunsRefresh } =
+    useSyncRunPolling(detailId, syncRunPollFn, () => {
+      if (detailId) {
+        void getCoordinationDetail(detailId).then(setDetail);
+      }
+    });
+
+  useEffect(() => {
+    if (!projectId) {
+      setPortfolio(null);
+      return;
+    }
+    let cancelled = false;
+    setPortfolioLoading(true);
+    void getProjectPortfolioView(projectId)
+      .then((view) => {
+        if (!cancelled) setPortfolio(view);
+      })
+      .catch(() => {
+        if (!cancelled) setPortfolio(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPortfolioLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, records.length]);
 
   const hasPepcoDashboardCards =
     (pepcoDashboardFromMetadata?.cards.length ?? 0) > 0 ||
@@ -1793,6 +2054,13 @@ export default function UciDashboard() {
             </CardContent>
           </Card>
 
+          <PortfolioSummarySection
+            portfolio={portfolio}
+            loading={portfolioLoading}
+            mutedClass={uciMutedClass}
+            sectionTitleClass={uciSectionTitleClass}
+          />
+
           {/* Records table */}
           <Card
             className={cn(EDITORIAL_FORM_CARD, "text-ink-primary-light border-teal/30 shadow-sm dark:border-teal/35")}
@@ -1856,7 +2124,14 @@ export default function UciDashboard() {
                             className="border-cream-sunken/35 bg-cream/30 transition-colors hover:bg-gold-soft/14 dark:border-teal/12 dark:bg-obsidian-raised/45 dark:hover:bg-teal/6"
                           >
                             <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
-                              {prov?.name ?? "—"}
+                              <div className="space-y-1">
+                                <span>{prov?.name ?? "—"}</span>
+                                {getProviderMappingFromMetadata(r.metadata)?.confirmed_at ? (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    Mapping confirmed
+                                  </Badge>
+                                ) : null}
+                              </div>
                             </TableCell>
                             <TableCell className={uciTableCellClass}>
                               {prov?.utility_type ?? r.utility_type ?? "—"}
@@ -2146,6 +2421,9 @@ export default function UciDashboard() {
                 transitions={detail.transitions ?? []}
                 lifecycleProposals={lifecycleProposalsPayload}
                 displayLifecycleProposal={displayLifecycleProposal}
+                lifecycleProposalBusy={lifecycleProposalBusy}
+                onApplyLifecycleProposal={() => void handleApplyLifecycleProposal()}
+                onRejectLifecycleProposal={() => void handleRejectLifecycleProposal()}
                 formatWhen={formatWhen}
                 mutedClass={uciMutedClass}
                 sectionTitleClass={uciSheetSectionTitleClass}
@@ -2158,6 +2436,36 @@ export default function UciDashboard() {
                 onReasonChange={setReason}
                 transitionSaving={transitionSaving}
                 onSubmitTransition={() => void handleTransition()}
+              />
+
+              {detailId ? (
+                <SyncRunsPanel
+                  coordinationId={detailId}
+                  runs={syncRuns}
+                  activeRun={activeSyncRun}
+                  loading={syncRunsLoading}
+                  onRefresh={() => void syncRunsRefresh()}
+                  mutedClass={uciMutedClass}
+                  sectionTitleClass={uciSheetSectionTitleClass}
+                  toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                  formatWhen={formatWhen}
+                />
+              ) : null}
+
+              {providerMappingMetadata ? (
+                <ProviderMappingBanner mapping={providerMappingMetadata} mutedClass={uciMutedClass} />
+              ) : null}
+
+              <CosAnalysisPanel
+                coordinationId={detailId ?? ""}
+                metadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
+                busy={cosBusy}
+                error={cosError}
+                onAnalyze={() => void handleCosAnalyze()}
+                mutedClass={uciMutedClass}
+                sectionTitleClass={uciSheetSectionTitleClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                formatWhen={formatWhen}
               />
 
               {!isPepcoCoordination ? (
@@ -2267,6 +2575,15 @@ export default function UciDashboard() {
                                 {comm.sender ? ` · ${comm.sender}` : ""}
                                 {comm.recipient ? ` → ${comm.recipient}` : ""}
                               </p>
+                              <CommunicationReclassifyRow
+                                comm={comm}
+                                busy={reclassifyCommId === comm.id}
+                                onReclassify={(id, classification) =>
+                                  void handleReclassifyCommunication(id, classification)
+                                }
+                                mutedClass={uciMutedClass}
+                                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                              />
                             </div>
                           ))}
                         </div>
@@ -2313,14 +2630,31 @@ export default function UciDashboard() {
                 </>
               ) : null}
 
-              <CostsEquipmentSection
-                costs={(detail.costs ?? []) as unknown[]}
-                equipment={(detail.equipment ?? []) as unknown[]}
-                childCardClass={uciDrawerChildCardClass}
-                childCardHeaderClass={uciDrawerChildCardHeaderClass}
-                childCardTitleClass={uciDrawerChildCardTitleClass}
-                childCountClass={uciDrawerChildCountClass}
+              <CostsEquipmentWorkflowPanel
+                costs={(detail.costs ?? []) as import("@/types/uci").CoordinationCost[]}
+                equipment={(detail.equipment ?? []) as import("@/types/uci").CoordinationEquipment[]}
+                busy={agentOpsBusy}
+                error={agentOpsError}
+                onSaveCost={(payload) => void handleSaveCost(payload)}
+                onCreateEquipment={(payload) => void handleCreateEquipment(payload)}
+                onCheckInEquipment={(id, payload) => void handleCheckInEquipment(id, payload)}
                 mutedClass={uciMutedClass}
+                sectionTitleClass={uciSheetSectionTitleClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                formatWhen={formatWhen}
+              />
+
+              <MeterSetCloseoutPanel
+                recordMetadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
+                meterBusy={meterSetBusy}
+                closeoutBusy={closeoutBusy}
+                error={agentOpsError}
+                onPrepareMeterSet={(date) => void handlePrepareMeterSet(date)}
+                onPrepareCloseout={() => void handlePrepareCloseout()}
+                mutedClass={uciMutedClass}
+                sectionTitleClass={uciSheetSectionTitleClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                formatWhen={formatWhen}
               />
             </div>
           ) : (
@@ -3157,6 +3491,9 @@ function LifecycleSection({
   transitions,
   lifecycleProposals,
   displayLifecycleProposal,
+  lifecycleProposalBusy,
+  onApplyLifecycleProposal,
+  onRejectLifecycleProposal,
   formatWhen,
   mutedClass,
   sectionTitleClass,
@@ -3181,6 +3518,9 @@ function LifecycleSection({
   }>;
   lifecycleProposals: ReturnType<typeof getLifecycleProposalsFromMetadata>;
   displayLifecycleProposal: ReturnType<typeof selectDisplayLifecycleProposal>;
+  lifecycleProposalBusy: boolean;
+  onApplyLifecycleProposal: () => void;
+  onRejectLifecycleProposal: () => void;
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
   sectionTitleClass: string;
@@ -3251,6 +3591,17 @@ function LifecycleSection({
                 Proposal only — set UCI_AUTO_STAGE_TRANSITIONS=true to auto-apply.
               </p>
             )}
+            {displayLifecycleProposal && lifecycleProposals ? (
+              <LifecycleProposalActions
+                proposal={displayLifecycleProposal}
+                lifecycleProposals={lifecycleProposals}
+                busy={lifecycleProposalBusy}
+                onApply={onApplyLifecycleProposal}
+                onReject={onRejectLifecycleProposal}
+                formatLifecycleState={formatLifecycleState}
+                mutedClass={mutedClass}
+              />
+            ) : null}
           </div>
         ) : null}
 

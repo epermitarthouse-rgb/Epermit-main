@@ -177,6 +177,8 @@ Steps 8–12 (draft, review, submit, confirmation, lifecycle from submission) �
 | D4 submission foundation | ✅ (`uci-application-submit.test.js`) — PEPCO portal adapter not implemented |
 | D5 communication classifier | ✅ (`uci-communication-classifier.test.js`) — keyword only |
 | D6–D12 foundations | ✅ (`uci-d6-d12-foundation.test.js`) |
+| D13 lifecycle proposal actions | ✅ (`uci-lifecycle-proposal-actions.test.js`) |
+| D13 route integration (project boundary) | ✅ (`uci-d13-routes-integration.test.js`) |
 | Submission idempotency | ⚠️ Partial | `submitted_at` gate on D4 submit |
 | Cross-tenant | ❌ |
 | County scraper regression | Not UCI-specific |

@@ -1,4 +1,4 @@
-import type { LifecycleState, UciLifecycleProposalRow, UciLifecycleProposalsPayload } from "@/types/uci";
+import type { LifecycleState, UciLifecycleProposalRow, UciLifecycleProposalsPayload, UciProviderMappingMetadata } from "@/types/uci";
 
 const LIFECYCLE_STATES = new Set<LifecycleState>([
   "NOT_STARTED",
@@ -57,11 +57,60 @@ export function selectDisplayLifecycleProposal(
   payload: UciLifecycleProposalsPayload | null,
 ): UciLifecycleProposalRow | null {
   if (!payload?.proposals.length) return null;
-  const unblocked = payload.proposals.filter((row) => !row.blocked_reason && !row.applied);
+  const unblocked = payload.proposals.filter(
+    (row) => !row.blocked_reason && !row.applied && !(row as { rejected?: boolean }).rejected,
+  );
   const pool = unblocked.length ? unblocked : payload.proposals;
   return pool.reduce<UciLifecycleProposalRow | null>((best, row) => {
     if (!best) return row;
     if (row.proposed_stage > best.proposed_stage) return row;
     return best;
   }, null);
+}
+
+/** Mirrors backend checksum for stale-proposal protection (D13). */
+export async function computeLifecycleProposalChecksum(
+  proposal: UciLifecycleProposalRow,
+  lastEvaluatedAt: string,
+): Promise<string> {
+  const raw = [
+    String(lastEvaluatedAt || ""),
+    String(proposal.external_application_id || ""),
+    String(proposal.proposed_stage || ""),
+    String(proposal.proposed_state || ""),
+    String(proposal.source_status || ""),
+  ].join("|");
+  const bytes = new TextEncoder().encode(raw);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return hex.slice(0, 16);
+}
+
+export function getProviderMappingFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): UciProviderMappingMetadata | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const raw = metadata.uci_provider_mapping;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const rec = raw as Record<string, unknown>;
+  return {
+    method: "human_assisted",
+    confirmed_by_user_id: String(rec.confirmed_by_user_id || ""),
+    confirmed_at: String(rec.confirmed_at || ""),
+    address_source: (rec.address_source as UciProviderMappingMetadata["address_source"]) || "none",
+    address_snapshot:
+      rec.address_snapshot && typeof rec.address_snapshot === "object"
+        ? (rec.address_snapshot as UciProviderMappingMetadata["address_snapshot"])
+        : null,
+    selected_provider_slugs: Array.isArray(rec.selected_provider_slugs)
+      ? rec.selected_provider_slugs.map(String)
+      : [],
+    unresolved_utility_types: Array.isArray(rec.unresolved_utility_types)
+      ? rec.unresolved_utility_types.map(String)
+      : [],
+    territory_matching_available: false,
+    provider_slug: rec.provider_slug != null ? String(rec.provider_slug) : undefined,
+  };
 }

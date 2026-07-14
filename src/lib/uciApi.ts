@@ -3,23 +3,32 @@ import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import type {
   LifecycleState,
   UciApplicationsListResponse,
+  UciCloseoutPrepareResponse,
   UciCommunicationsListResponse,
+  UciCosAnalysisResponse,
   UciDiscoveryResponse,
   UciInitResponse,
+  UciLifecycleProposalActionResponse,
   UciLoadProfileAnalyzeResponse,
   UciApplicationPackageBuildResponse,
   UciApplicationReviewResponse,
   UciApplicationSubmitResponse,
+  UciMeterSetPrepareResponse,
   UciMilestonesListResponse,
   UciPepcoDashboardDiscoveryResponse,
   UciPepcoApplicationDetailDiscoveryResponse,
   UciPortalSyncResponse,
+  UciPortalSyncRunsResponse,
+  UciPortfolioViewResponse,
   UciProjectCoordinationResponse,
   UciProviderSetupConfirmation,
   UciProviderSetupResponse,
   UciProvidersResponse,
+  UciRecentEventsResponse,
   UciRecordDetailResponse,
   UciTransitionResponse,
+  CoordinationCost,
+  CoordinationEquipment,
 } from "@/types/uci";
 
 export const UCI_SESSION_EXPIRED_MESSAGE =
@@ -752,3 +761,196 @@ export async function submitPepcoMfaCode(
     { mfaSensitive: true },
   );
 }
+
+export async function applyLifecycleProposal(
+  coordinationId: string,
+  payload: { external_application_id: string; proposal_checksum: string },
+): Promise<UciLifecycleProposalActionResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/lifecycle-proposals/apply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to apply lifecycle proposal",
+  );
+}
+
+export async function rejectLifecycleProposal(
+  coordinationId: string,
+  payload: { external_application_id: string; proposal_checksum: string; reason?: string },
+): Promise<UciLifecycleProposalActionResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/lifecycle-proposals/reject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to reject lifecycle proposal",
+  );
+}
+
+export async function listCoordinationSyncRuns(
+  coordinationId: string,
+  params?: { provider_slug?: string; limit?: number },
+): Promise<UciPortalSyncRunsResponse> {
+  const qs = new URLSearchParams();
+  if (params?.provider_slug) qs.set("provider_slug", params.provider_slug);
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/sync-runs${suffix}`,
+    {},
+    "Failed to load sync runs",
+  );
+}
+
+export async function getCoordinationSyncRun(
+  coordinationId: string,
+  jobId: string,
+): Promise<{ run: UciPortalSyncRunsResponse["runs"][number] }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/sync-runs/${encodeURIComponent(jobId)}`,
+    {},
+    "Failed to load sync run",
+  );
+}
+
+export async function reclassifyCommunication(
+  communicationId: string,
+  payload: { classification: string; notes?: string },
+): Promise<{ communication: unknown; classification: string }> {
+  return uciFetchJson(
+    `/api/uci/communications/${encodeURIComponent(communicationId)}/reclassify`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to reclassify communication",
+  );
+}
+
+export async function analyzeCoordinationCos(
+  coordinationId: string,
+): Promise<UciCosAnalysisResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/analyze`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "COS analysis failed",
+  );
+}
+
+export async function listCoordinationCosts(
+  coordinationId: string,
+): Promise<{ costs: CoordinationCost[] }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/costs`,
+    {},
+    "Failed to load costs",
+  );
+}
+
+export async function upsertCoordinationCost(
+  coordinationId: string,
+  cost: Partial<CoordinationCost> & { cost_type: string },
+): Promise<{ cost: CoordinationCost; created: boolean }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/costs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cost),
+    },
+    "Failed to save cost",
+  );
+}
+
+export async function listCoordinationEquipment(
+  coordinationId: string,
+): Promise<{ equipment: CoordinationEquipment[] }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/equipment`,
+    {},
+    "Failed to load equipment",
+  );
+}
+
+export async function createCoordinationEquipment(
+  coordinationId: string,
+  equipment: Partial<CoordinationEquipment> & { equipment_type: string },
+): Promise<{ equipment: CoordinationEquipment }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/equipment`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(equipment),
+    },
+    "Failed to create equipment",
+  );
+}
+
+export async function checkInCoordinationEquipment(
+  equipmentId: string,
+  payload: { current_eta?: string; status?: string },
+): Promise<{ equipment: CoordinationEquipment; slip_alert?: boolean }> {
+  return uciFetchJson(
+    `/api/uci/equipment/${encodeURIComponent(equipmentId)}/check-in`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Equipment check-in failed",
+  );
+}
+
+export async function prepareMeterSet(
+  coordinationId: string,
+  payload?: { scheduled_date?: string },
+): Promise<UciMeterSetPrepareResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/meter-set/prepare`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Meter set preparation failed",
+  );
+}
+
+export async function prepareCloseout(
+  coordinationId: string,
+): Promise<UciCloseoutPrepareResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/prepare`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Closeout preparation failed",
+  );
+}
+
+export async function getProjectPortfolioView(
+  projectId: string,
+): Promise<UciPortfolioViewResponse> {
+  return uciFetchJson(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/portfolio_view`,
+    {},
+    "Failed to load portfolio view",
+  );
+}
+
+export async function listRecentUciEvents(
+  limit = 25,
+): Promise<UciRecentEventsResponse> {
+  return uciFetchJson(
+    `/api/uci/events/recent?limit=${encodeURIComponent(String(limit))}`,
+    {},
+    "Failed to load recent UCI events",
+  );
+}
+
+export const UCI_SYNC_RUN_STORAGE_PREFIX = "uci-active-sync-run:";

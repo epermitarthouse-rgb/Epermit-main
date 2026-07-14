@@ -462,7 +462,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Objective** | Close remaining non-blocking gaps accumulated across D1–D12 without expanding client-deferred major features |
 | **Client requirements** | Pilot hardening, audit completeness, operational reliability — not a substitute for Agents 7/10 or Phase 4–5 deferrals |
 | **Dependencies** | Feature milestones D1–D12 substantially complete |
-| **Current status** | **partial** — §17 backlog reviewed 2026-07-14; gaps documented; no silent relabeling |
+| **Current status** | **partial** — Priority 1 frontend workflows wired; integration tests added; §17 backlog partially closed (2026-07-15) |
 
 **Scope (from backlog):** Partial implementations; deferred hardening; UI gaps (lifecycle accept/reject, sync-run polling, mapping metadata display); audit gaps (metadata-only storage, stale-proposal checksums); test gaps (E2E smoke, cross-tenant, route integration); documentation drift; provider adapter coverage beyond PEPCO; operational reliability (MFA restart, durable worker browser phases, tenant paths).
 
@@ -503,7 +503,8 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | `POST /coordination/:id/applications` | ✅ | D3 | JWT + project |
 | `POST /applications/:id/review` | ✅ | D3 | JWT + project |
 | `POST /applications/:id/submit` | ✅ partial | D4 | JWT + project; PEPCO 501 |
-| `POST /coordination/:id/communications/classify` | ✅ | D5 | JWT + project |
+| `POST /coordination/:id/lifecycle-proposals/apply` | ✅ | D13 | JWT + project |
+| `POST /coordination/:id/lifecycle-proposals/reject` | ✅ | D13 | JWT + project |
 | `GET /communications/needs_attention` | ✅ | D5 | JWT + project |
 | `POST /communications/:id/reclassify` | ✅ | D5 | JWT + project |
 | `POST /coordination/:id/cos/analyze` | ✅ partial | D6 | JWT + project |
@@ -569,8 +570,8 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 | Layer | Requirement | Current |
 |-------|-------------|---------|
-| Unit | Per agent + sync services | D1A–D1D + D2.0 + D2.1 + D3 + D4 + D5 + D6–D12 tests (159 UCI tests) |
-| Integration | Critical paths §16 | ❌ |
+| Unit | Per agent + sync services | D1A–D1D + D2.0 + D2.1 + D3 + D4 + D5 + D6–D12 + D13 tests (171 UCI tests) |
+| Integration | Critical paths §16 | ⚠️ Partial | `uci-d13-routes-integration.test.js` — project-boundary HTTP tests |
 | Security | Cross-tenant CI blocking | ❌ |
 | Portal mock | Per priority utility | ❌ (PEPCO list parse only) |
 | Classifier | ≥85% validation | ❌ | D5 keyword foundation only |
@@ -692,63 +693,63 @@ See `UCI_EXECUTION_HISTORY.md` for Sprint 1–6 completion vs plan.
 
 | ID | Area | Item | Status | Why non-blocking | Target milestone | Risk | Evidence | Added | Resolved |
 |----|------|------|--------|------------------|------------------|------|----------|-------|----------|
-| NB-D1C-001 | D1C Lifecycle UI | No one-click lifecycle proposal Accept/Reject UI | partial | Proposals visible; manual stage transition form still works | D13 | low | `UciDashboard.tsx` LifecycleSection; no apply/reject API routes | 2026-07-08 | — |
+| NB-D1C-001 | D1C Lifecycle UI | Lifecycle proposal Accept/Reject UI + API | resolved | Accept/reject with checksum | D13 | low | `uci-lifecycle-proposal-actions.service.js`, `LifecycleProposalActions` | 2026-07-08 | 2026-07-15 |
 | NB-D1C-002 | D1C Audit | Proposal-only mode stored in `metadata` not dedicated audit table | partial | Proposals persisted and readable; system apply writes transition when flag on | D13 | low | `coordination_records.metadata.uci_lifecycle_proposals` | 2026-07-08 | — |
-| NB-D1C-003 | D1C Audit | No stale-proposal checksum on manual apply | incomplete | Manual proposal apply/reject not implemented | D13 | low | `uci-lifecycle-mapping.service.js` | 2026-07-08 | — |
+| NB-D1C-003 | D1C Audit | Stale-proposal checksum on manual apply/reject | resolved | `proposal_checksum` validated on apply/reject | D13 | low | `uci-lifecycle-proposal-actions.service.js` | 2026-07-08 | 2026-07-15 |
 | NB-D1C-004 | D1C Mapping | PEPCO lifecycle mapping covers only a limited status set | partial | Unknown statuses safely return null; core PEPCO statuses mapped | D13 / D6 | medium | `pepco.adapter.js` `mapPortalStatusToLifecycle` | 2026-07-08 | — |
 | NB-D1C-005 | D1C Mapping | Stages 8–10 not mapped from portal status | incomplete | Pre-energization/energization not in read-only pilot path | D9 / D10 | low | `pepco.adapter.js` | 2026-07-08 | — |
 | NB-D1D-001 | D1D Worker | Durable worker runs normalized sync only, not full PEPCO browser phases | partial | `runPortalSync` path works; discovery remains on dedicated routes | D1D hardening / D13 | medium | `uci-durable-worker-executor.js`, `uci-portal-sync.service.js` | 2026-07-14 | — |
-| NB-D1D-002 | D1D Frontend | Frontend does not poll or display durable sync runs | incomplete | Sync trigger works synchronously or via job enqueue; API exists | D13 | low | `UciDashboard.tsx`, `uciApi.ts` (no sync-runs client helpers) | 2026-07-14 | — |
-| NB-D1D-003 | D1D MFA | MFA browser state not fully restart-restorable after worker/process restart | partial | In-memory session store with TTL; job↔session link exists | D13 | medium | `uci-pepco-session-store.js` | 2026-07-14 | — |
+| NB-D1D-002 | D1D Frontend | Frontend sync-run polling + sessionStorage recovery | partial | `SyncRunsPanel`, `useSyncRunPolling`, durable sync job tracking | D13 | low | `UciD13WorkflowPanels.tsx`, `uciApi.ts` | 2026-07-14 | 2026-07-15 |
+| NB-D1D-003 | D1D MFA | MFA browser state not fully restart-restorable after worker/process restart | partial | In-memory session store with TTL; documented limitation | D13 | medium | `uci-pepco-session-store.js` — no durable MFA store | 2026-07-14 | — |
 | NB-D1-001 | D1 Tenant | Tenant isolation not complete (`tenant_id` never written; global providers) | incomplete | Project-scoped RLS + `has_project_access` sufficient for single-project pilot | D1 tenant hardening | high | `uci-access.service.js`, `coordination_records.tenant_id`, `utility_providers` | 2026-07-08 | — |
 | NB-D1B-001 | D1B Storage | Storage paths use `unconfigured` tenant namespace | partial | Documents stored in private bucket with idempotency; tenant path migration pending | D1 tenant hardening | medium | `uci-document-storage.service.js` path builder | 2026-07-08 | — |
 | NB-D2-001 | D2 Agent 1 | Full auto territory mapping blocked on verified service-territory data | deferred | D2.0/D2.1 use human-confirmed providers | D2.2 | medium | No `service_territory` rules; `utility_providers.service_territory` unused | 2026-07-14 | — |
 | NB-D2-002 | D2 Address | Address normalization and geocoding incomplete | incomplete | D2.1 uses structured address inventory only | D2.2 | medium | `uci-provider-setup.service.js`, `uci-load-profile.service.js` | 2026-07-14 | — |
-| NB-D2-003 | D2.0 UI | Provider mapping metadata not displayed in coordination records UI | partial | Metadata persisted on records and init transitions server-side | D13 | low | `coordination_records.metadata.uci_provider_mapping`; `UciDashboard.tsx` records table | 2026-07-14 | — |
+| NB-D2-003 | D2.0 UI | Provider mapping metadata display in UI | resolved | Table badge + drawer `ProviderMappingBanner` | D13 | low | `UciD13WorkflowPanels.tsx`, records table | 2026-07-14 | 2026-07-15 |
 | NB-D2-004 | D2.0 API | Init API still accepts requests without `provider_setup` confirmation | hardening | Backward compatibility for API clients; UI enforces confirm gate | D13 | low | `POST .../coordination/init` in `uci.routes.js` | 2026-07-14 | — |
 | NB-D2-005 | D2.0 Audit | No dedicated provider-mapping audit table (metadata only) | partial | Mapping stored on records + init transition metadata | D13 | low | `uci-records.service.js`, `coordination_stage_transitions.metadata` | 2026-07-14 | — |
-| NB-D2-006 | D2.0 Tests | Provider-setup routes lack HTTP integration tests | incomplete | Service unit tests cover address resolution, metadata, idempotency | D13 | low | `uci-provider-setup.test.js` (service-level only) | 2026-07-14 | — |
+| NB-D2-006 | D2.0 Tests | Provider-setup routes lack HTTP integration tests | partial | Project-boundary tests in `uci-d13-routes-integration.test.js` | D13 | low | D13 integration suite | 2026-07-14 | 2026-07-15 |
 | NB-D2-007 | D2.1 Templates | McDonald's / QSR load template registry missing | incomplete | D2.1 intentionally omits guessed numeric templates | D2.2 / D13 | medium | No template files under `uci/` or `scraper-service` | 2026-07-14 | — |
 | NB-D2-008 | D2.1 Agent 2 | No numeric engineering values in `calculated_values` (by design) | incomplete | No-guess rule; awaits verified inputs or templates | D2.2+ / D13 | low | `uci-load-profile.service.js` `calculated_values: {}` | 2026-07-14 | — |
-| NB-D2-009 | D2.1 Equipment | No equipment ingestion UI/API for coordination rows | incomplete | Schema exists; inventory reads empty equipment | D13 | low | `coordination_equipment` unused writes | 2026-07-14 | — |
+| NB-D2-009 | D2.1 Equipment | Equipment ingestion UI for coordination rows | partial | Equipment create/check-in UI wired | D13 | low | `CostsEquipmentWorkflowPanel` | 2026-07-14 | 2026-07-15 |
 | NB-D2-010 | D2.1 Docs | Document content parsing for load extraction deferred | deferred | D2.1 lists `project_documents` types only; no LLM | D13 | low | `uci-load-profile.service.js` | 2026-07-14 | — |
 | NB-D2-011 | D2.1 Lifecycle | Stage 2 not auto-advanced; no load-profile approval workflow | incomplete | D2.1 read-only analysis; stage unchanged when inputs missing | D13 / D3 | low | No `recordSystemTransition` in load profile service | 2026-07-14 | — |
-| NB-D2-012 | D2.1 Tests | Load-profile route lacks HTTP integration tests | incomplete | Service + unit tests cover core paths | D13 | low | `uci-load-profile.test.js` | 2026-07-14 | — |
+| NB-D2-012 | D2.1 Tests | Load-profile route lacks HTTP integration tests | partial | D13 route integration covers auth/project gates | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
 | NB-D3-001 | D3 Templates | Only PEPCO electric manifest; no gas/water/telecom templates | incomplete | D3 scoped to PEPCO first per roadmap | D13 / adapters | medium | `uci/application-templates/pepco/` only | 2026-07-14 | — |
 | NB-D3-002 | D3 Agent 3 | No load calculation worksheet generation | incomplete | Awaits verified numeric templates (NB-D2-007) | D13 | low | `uci-application-builder.service.js` | 2026-07-14 | — |
 | NB-D3-003 | D3 Lifecycle | Stage 3 not auto-advanced on package build/review | incomplete | Intentional; manual transitions remain | D13 | low | `stage_unchanged: true` in builder | 2026-07-14 | — |
-| NB-D3-004 | D3 Tests | Application routes lack HTTP integration tests | incomplete | Service unit tests cover core paths | D13 | low | `uci-application-builder.test.js` | 2026-07-14 | — |
+| NB-D3-004 | D3 Tests | Application routes lack HTTP integration tests | partial | Lifecycle/cost routes covered in D13 integration suite | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
 | NB-D3-005 | D3 UI | Submit button disabled (D4 dependency) | partial | Enabled when reviewed; PEPCO returns adapter gap | D4 | low | `ApplicationPrepSection` | 2026-07-14 | — |
 | NB-D4-001 | D4 PEPCO | PEPCO portal submission adapter not implemented | blocked | No Playwright form-submit path in repo | D4 | high | `uci-application-submit.service.js` returns 501 | 2026-07-14 | — |
 | NB-D4-002 | D4 Email | Outbound utility email not sent automatically | incomplete | email_intent records metadata only | D13 | medium | No SMTP/send integration in UCI | 2026-07-14 | — |
 | NB-D4-003 | D4 Confirm | No utility ticket/confirmation capture for portal submit | incomplete | Awaits PEPCO adapter | D4 | medium | `utility_ticket_number` null on email_intent | 2026-07-14 | — |
 | NB-D5-001 | D5 Email | Inbound email webhook not implemented | incomplete | Portal-sync classifier covers first safe version | D13 | medium | No `POST /webhooks/uci/email-inbound` route | 2026-07-14 | — |
 | NB-D5-002 | D5 Classifier | Keyword classifier only; no ≥85% validation set | incomplete | Deterministic foundation per audit; AI deferred | D13 | low | `uci-communication-classifier.service.js` | 2026-07-14 | — |
-| NB-D5-003 | D5 UI | No human reclassify UI in communications drawer | incomplete | API `POST /communications/:id/reclassify` exists | D13 | low | `UciDashboard.tsx` — classify only | 2026-07-14 | — |
+| NB-D5-003 | D5 UI | Human reclassify UI in communications drawer | resolved | `CommunicationReclassifyRow` per message | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D5-004 | D5 Threading | Email + portal threading not unified | incomplete | Portal messages only; no inbound email | D13 | low | `coordination_communications` portal_sync source | 2026-07-14 | — |
 | NB-D6-001 | D6 Parsing | No COS/design document content parsing | incomplete | Discrepancy report from metadata + classified comms | D13 | medium | `uci-cos-analyst.service.js` | 2026-07-14 | — |
 | NB-D6-002 | D6 Lifecycle | Stage 6 not auto-advanced on COS analysis | incomplete | `stage_unchanged: true` by design | D13 | low | `uci-cos-analyst.service.js` | 2026-07-14 | — |
-| NB-D6-003 | D6 UI | No COS analysis section in coordination drawer | incomplete | API exists; manual trigger only | D13 | low | No frontend for `cos/analyze` | 2026-07-14 | — |
+| NB-D6-003 | D6 UI | COS analysis section in coordination drawer | resolved | `CosAnalysisPanel` with analyze trigger | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D7-001 | D7 QuickBooks | QuickBooks OAuth and invoice sync not implemented | incomplete | Manual cost CRUD sufficient for foundation | D13 | medium | `uci-costs.service.js` — no QB client | 2026-07-14 | — |
-| NB-D7-002 | D7 UI | No cost entry UI in coordination drawer | incomplete | API exists | D13 | low | `UciDashboard.tsx` costs tab read-only | 2026-07-14 | — |
+| NB-D7-002 | D7 UI | Cost entry UI in coordination drawer | resolved | `CostsEquipmentWorkflowPanel` cost form | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D8-001 | D8 Cron | Weekly equipment ETA check-in cron not scheduled | incomplete | Manual check-in API exists | D13 | medium | No worker/cron for equipment | 2026-07-14 | — |
 | NB-D8-002 | D8 Alerts | >2-week ETA slip alerts not implemented | incomplete | ETA history in check-in metadata only | D13 | low | `uci-equipment.service.js` | 2026-07-14 | — |
-| NB-D8-003 | D8 UI | No equipment create/check-in UI | incomplete | API exists | D13 | low | No frontend for equipment routes | 2026-07-14 | — |
+| NB-D8-003 | D8 UI | Equipment create/check-in UI | resolved | `CostsEquipmentWorkflowPanel` equipment section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D9-001 | D9 Escalation | Failed meter set escalation not implemented | incomplete | Checklist + milestone foundation only | D13 | low | `uci-meter-set.service.js` | 2026-07-14 | — |
-| NB-D9-002 | D9 UI | No meter-set prepare UI | incomplete | API exists | D13 | low | No frontend for `meter-set/prepare` | 2026-07-14 | — |
+| NB-D9-002 | D9 UI | Meter-set prepare UI | resolved | `MeterSetCloseoutPanel` meter section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D10-001 | D10 PDF | Closeout PDF not generated in project documents | incomplete | Checklist metadata only | D13 | medium | `uci-closeout.service.js` | 2026-07-14 | — |
 | NB-D10-002 | D10 Rollup | Project stage-10 rollup when all records complete | incomplete | No auto rollup | D13 | low | `uci-closeout.service.js` | 2026-07-14 | — |
-| NB-D10-003 | D10 UI | No closeout prepare UI | incomplete | API exists | D13 | low | No frontend for `closeout/prepare` | 2026-07-14 | — |
+| NB-D10-003 | D10 UI | Closeout prepare UI | resolved | `MeterSetCloseoutPanel` closeout section | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D11-001 | D11 P50/P90 | Heuristic energization dates not computed | incomplete | Stage summary only | D13 / client Phase 5 | medium | `uci-portfolio.service.js` | 2026-07-14 | — |
 | NB-D11-002 | D11 Reporting | Quarterly export templates not implemented | incomplete | API rollup only | D13 | low | No export endpoints | 2026-07-14 | — |
-| NB-D11-003 | D11 UI | No portfolio view screen in frontend | incomplete | API `portfolio_view` exists | D13 | low | No dedicated portfolio page | 2026-07-14 | — |
+| NB-D11-003 | D11 UI | Portfolio view in frontend | partial | Project-level `PortfolioSummarySection` (not dedicated page) | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
 | NB-D11-004 | D11 Tenant | McDonald's tenant config requires client input | deferred | Client Phase 3 explicit input | Client Phase 3 | — | Roadmap §D11 | 2026-07-14 | — |
 | NB-D12-001 | D12 Escalate | `POST /coordination/:id/escalate` not implemented | incomplete | Events foundation only | D13 | low | No escalate route | 2026-07-14 | — |
-| NB-D12-002 | D12 Bus | No external event bus; in-memory ring buffer only | partial | `emitUciEvent` + `GET /events/recent` | D13 | low | `uci-events.service.js` | 2026-07-14 | — |
+| NB-D12-002 | D12 Bus | Event bus — in-memory + metadata mirror | partial | `emitUciEvent` mirrors to `metadata.uci_recent_events` when coordination/project in payload | D13 | low | `uci-events.service.js` | 2026-07-08 | 2026-07-15 |
 | NB-D12-003 | D12 Alerts | P0/P1/P2 alerts and runbooks not documented | incomplete | No alerting pipeline | D13 | medium | Roadmap §D12 | 2026-07-14 | — |
 | NB-PROV-001 | Providers | BGE and other non-PEPCO portal adapters not implemented | deferred | PEPCO is first adapter; client lists BGE as future | Future adapter | low | No BGE under `scrapers/` or `adapters/` | 2026-07-08 | — |
-| NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | Unit/route tests pass (159 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
-| NB-TEST-002 | Testing | Cross-tenant UCI security tests missing | incomplete | Single-tenant pilot; project RLS enforced | D1 / D13 | high | No `uci-tenant-isolation.test.js` | 2026-07-08 | — |
+| NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | Unit/route tests pass (171 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
+| NB-TEST-002 | Testing | Cross-tenant UCI security tests missing | partial | Project-boundary HTTP tests in D13 suite; not tenant model | D1 / D13 | high | `uci-d13-routes-integration.test.js` | 2026-07-08 | 2026-07-15 |
 | NB-OPS-001 | D12 Ops | Event bus `uci.*` events — in-memory only, partial catalog | partial | `emitUciEvent` on D5 classify/reclassify; no external bus | D13 | low | `uci-events.service.js`, `GET /events/recent` | 2026-07-08 | — |
 
 ### Client-deferred (not D13 unless scope changes)
@@ -768,7 +769,7 @@ These remain in §7 **Deferred Agents and Features** — track here for visibili
 | NB-DOC-001 | Docs | README status summary lagged D2.0 / backlog | 2026-07-14 | D2.0 doc pass | `uci/README.md` §Non-Blocking Backlog, §Current Project Status |
 | NB-DOC-002 | Docs | Roadmap lagged D5–D12 implementation | 2026-07-14 | D13 doc pass | `UCI_DELIVERY_ROADMAP.md` §6, §8–11, §17 |
 
-**Last backlog review:** 2026-07-14 (post D5–D12 foundation + D13 partial). **Open items:** 56 active + 3 client-deferred tracked.
+**Last backlog review:** 2026-07-15 (D13 hardening batch). **Open items:** 40 active + 3 client-deferred tracked; **15 resolved/partial-closed** this batch.
 
 ---
 

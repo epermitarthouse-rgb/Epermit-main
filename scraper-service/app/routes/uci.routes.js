@@ -63,6 +63,10 @@ const { prepareMeterSetChecklist } = require("../services/uci/uci-meter-set.serv
 const { prepareCloseoutPackage } = require("../services/uci/uci-closeout.service.js");
 const { getProjectPortfolioView } = require("../services/uci/uci-portfolio.service.js");
 const { listRecentUciEvents } = require("../services/uci/uci-events.service.js");
+const {
+  applyLifecycleProposal,
+  rejectLifecycleProposal,
+} = require("../services/uci/uci-lifecycle-proposal-actions.service.js");
 const { runPepcoDiscoveryLoginOnly, resumePepcoDiscoveryAfterMfa } = require("../services/uci/uci-pepco-discovery.service.js");
 const {
   runPepcoDashboardDiscovery,
@@ -336,6 +340,90 @@ function createUciRouter(opts) {
         coordination: updated,
         transition,
       });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/lifecycle-proposals/apply", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const externalApplicationId = String(body.external_application_id ?? "").trim();
+      const proposalChecksum = String(body.proposal_checksum ?? "").trim();
+
+      if (!externalApplicationId || !proposalChecksum) {
+        const err = new Error("external_application_id and proposal_checksum are required");
+        err.statusCode = 400;
+        err.code = "INVALID_BODY";
+        throw err;
+      }
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      const projectId = String(record.project_id);
+      await requireProjectAccess({ supabase, userId: user.id, projectId });
+
+      const result = await applyLifecycleProposal(supabase, {
+        coordinationRecordId: coordinationId,
+        projectId,
+        userId: user.id,
+        externalApplicationId,
+        proposalChecksum,
+      });
+
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/lifecycle-proposals/reject", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const externalApplicationId = String(body.external_application_id ?? "").trim();
+      const proposalChecksum = String(body.proposal_checksum ?? "").trim();
+      const reason = body.reason != null ? String(body.reason) : undefined;
+
+      if (!externalApplicationId || !proposalChecksum) {
+        const err = new Error("external_application_id and proposal_checksum are required");
+        err.statusCode = 400;
+        err.code = "INVALID_BODY";
+        throw err;
+      }
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      const projectId = String(record.project_id);
+      await requireProjectAccess({ supabase, userId: user.id, projectId });
+
+      const result = await rejectLifecycleProposal(supabase, {
+        coordinationRecordId: coordinationId,
+        projectId,
+        userId: user.id,
+        externalApplicationId,
+        proposalChecksum,
+        reason,
+      });
+
+      res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

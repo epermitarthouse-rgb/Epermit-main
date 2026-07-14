@@ -547,6 +547,9 @@ export interface UciLifecycleProposalRow {
   blocked_reason: string | null;
   applied: boolean;
   applied_at: string | null;
+  rejected?: boolean;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
 }
 
 export interface UciLifecycleProposalsPayload {
@@ -607,3 +610,88 @@ export type UciPepcoDashboardDiscoveryResponse =
       cards_found?: number;
       cards?: unknown[];
     };
+
+export interface UciPortalSyncRun {
+  id: string;
+  jobType: string;
+  coordinationRecordId: string;
+  projectId: string;
+  providerSlug: string | null;
+  status: string;
+  phase: string | null;
+  currentStage: string | null;
+  currentUserMessage: string | null;
+  progressCurrent: number | null;
+  progressTotal: number | null;
+  errorCode: string | null;
+  errorUserMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  lastSyncSummary: Record<string, unknown> | null;
+}
+
+export interface UciPortalSyncRunsResponse {
+  runs: UciPortalSyncRun[];
+  activeRun: UciPortalSyncRun | null;
+  durableJobsEnabled: boolean;
+}
+
+export interface UciPortfolioViewResponse {
+  project_id: string;
+  coordination_record_count: number;
+  needs_attention_communication_count: number;
+  stage_summary: Record<string, number>;
+  records: Array<{
+    id: string;
+    utility_type: string | null;
+    current_stage: number;
+    current_stage_state: LifecycleState;
+    needs_attention_count: number;
+    updated_at: string;
+  }>;
+}
+
+export interface UciCosAnalysisResponse {
+  coordination_record_id: string;
+  project_id: string;
+  analysis: Record<string, unknown>;
+  stage_unchanged: boolean;
+}
+
+export interface UciMeterSetPrepareResponse {
+  coordination_record_id: string;
+  project_id: string;
+  checklist: Record<string, unknown>;
+  milestone: CoordinationMilestone;
+  stage_unchanged: boolean;
+}
+
+export interface UciCloseoutPrepareResponse {
+  coordination_record_id: string;
+  project_id: string;
+  closeout_package: Record<string, unknown>;
+  stage_unchanged: boolean;
+}
+
+export interface UciLifecycleProposalActionResponse {
+  coordination_record_id: string;
+  project_id: string;
+  external_application_id: string;
+  proposal_checksum: string;
+  transition?: CoordinationTransition;
+  coordination?: CoordinationRecord;
+  lifecycle_proposals: UciLifecycleProposalsPayload;
+}
+
+export interface UciRecentEvent {
+  name: string;
+  payload: Record<string, unknown>;
+  emitted_at: string;
+}
+
+export interface UciRecentEventsResponse {
+  events: UciRecentEvent[];
+}

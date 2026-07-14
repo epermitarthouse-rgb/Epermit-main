@@ -134,11 +134,16 @@ async function classifyCoordinationCommunications(supabase, params) {
       });
     }
     classified.push(updated);
-    emitUciEvent("uci.communication.classified", {
-      communication_id: updated.id,
-      coordination_record_id: coordinationRecordId,
-      classification: patch.classification,
-    });
+    emitUciEvent(
+      "uci.communication.classified",
+      {
+        communication_id: updated.id,
+        coordination_record_id: coordinationRecordId,
+        project_id: projectId,
+        classification: patch.classification,
+      },
+      { supabase },
+    );
   }
 
   return {
@@ -271,10 +276,16 @@ async function reclassifyCommunication(supabase, params) {
     });
   }
 
-  emitUciEvent("uci.communication.reclassified", {
-    communication_id: communicationId,
-    classification,
-  });
+  emitUciEvent(
+    "uci.communication.reclassified",
+    {
+      communication_id: communicationId,
+      coordination_record_id: row.coordination_record_id,
+      project_id: row.project_id,
+      classification,
+    },
+    { supabase },
+  );
 
   return {
     communication: data,

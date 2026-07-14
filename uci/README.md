@@ -110,7 +110,8 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 | Production document storage | **implemented** (D1B) | Supabase `project-documents`; local dev-only |
 | Event bus (`uci.*` events) | **partial** | In-memory ring buffer; D5 classify/reclassify emit |
 | Communication classifier (Agent 5) | **partial** | Portal-sync keyword classifier; no inbound email |
-| Portfolio view, escalate APIs | **partial** | `portfolio_view` + `needs_attention` implemented; escalate missing |
+| Portfolio view, escalate APIs | **partial** | `portfolio_view` + drawer summary; escalate missing |
+| D13 agent workflow UI | **partial** | COS/costs/equipment/meter/closeout/reclassify/sync-runs wired in drawer |
 | Cross-tenant UCI security tests | **missing** |
 
 ### PEPCO is the first adapter, not the architecture
