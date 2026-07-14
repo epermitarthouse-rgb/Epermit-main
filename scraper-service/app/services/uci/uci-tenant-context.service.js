@@ -1,6 +1,10 @@
 "use strict";
 
 const { getCoordinationRecordById } = require("./uci-records.service.js");
+const { getProjectTenantId } = require("./uci-access.service.js");
+
+const DEMO_TENANT_ID = "00000000-0000-4000-8000-000000000001";
+const UCI_TENANT_NAMESPACE_UNCONFIGURED = "unconfigured";
 
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
@@ -8,9 +12,10 @@ const { getCoordinationRecordById } = require("./uci-records.service.js");
  * @returns {Promise<{
  *   projectId: string;
  *   coordinationRecordId: string;
- *   tenantId: null;
- *   tenantSource: "unconfigured";
- *   tenantNamespace: "unconfigured";
+ *   tenantId: string | null;
+ *   tenantSource: "project" | "unconfigured";
+ *   tenantNamespace: string;
+ *   isDemoTenant: boolean;
  *   ownershipSource: "project_team";
  *   coordinationRecord: Record<string, unknown>;
  * }>}
@@ -24,14 +29,47 @@ async function loadTenantContextForCoordination(supabase, coordinationRecordId) 
     throw err;
   }
 
+  const projectId = String(record.project_id);
+  let tenantId =
+    record.tenant_id != null ? String(record.tenant_id) : null;
+
+  if (!tenantId) {
+    const project = await getProjectTenantId(supabase, projectId);
+    tenantId = project?.tenant_id ? String(project.tenant_id) : null;
+  }
+
+  const tenantNamespace = tenantId || UCI_TENANT_NAMESPACE_UNCONFIGURED;
+
   return {
-    projectId: String(record.project_id),
+    projectId,
     coordinationRecordId: String(record.id),
-    tenantId: null,
-    tenantSource: "unconfigured",
-    tenantNamespace: "unconfigured",
+    tenantId,
+    tenantSource: tenantId ? "project" : "unconfigured",
+    tenantNamespace,
+    isDemoTenant: tenantId === DEMO_TENANT_ID,
     ownershipSource: "project_team",
     coordinationRecord: record,
+  };
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} projectId
+ * @returns {Promise<{
+ *   projectId: string;
+ *   tenantId: string | null;
+ *   tenantNamespace: string;
+ *   isDemoTenant: boolean;
+ * }>}
+ */
+async function loadTenantContextForProject(supabase, projectId) {
+  const project = await getProjectTenantId(supabase, projectId);
+  const tenantId = project?.tenant_id ? String(project.tenant_id) : null;
+  return {
+    projectId,
+    tenantId,
+    tenantNamespace: tenantId || UCI_TENANT_NAMESPACE_UNCONFIGURED,
+    isDemoTenant: tenantId === DEMO_TENANT_ID,
   };
 }
 
@@ -53,6 +91,9 @@ function resolveProviderSlugFromRecord(coordinationRecord) {
 }
 
 module.exports = {
+  DEMO_TENANT_ID,
+  UCI_TENANT_NAMESPACE_UNCONFIGURED,
   loadTenantContextForCoordination,
+  loadTenantContextForProject,
   resolveProviderSlugFromRecord,
 };

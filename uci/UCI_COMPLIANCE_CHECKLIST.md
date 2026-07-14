@@ -91,14 +91,14 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 3.1 | `tenant_id` on all tables | ❌ Missing | Columns exist; not written — blocked on `projects` tenancy field |
-| 3.2 | RLS on all tables | ⚠️ Partial | SELECT: `has_project_access`; mutations: `has_project_editor_access` (NB-D1-001) |
-| 3.3 | RLS matches spec pattern | ❌ Missing | Uses `has_project_access`, not `app.current_tenant_id` |
-| 3.4 | Tenant A cannot read B | ❌ Missing | Cross-project denied; cross-tenant N/A until tenant field |
-| 3.5 | Tenant A cannot write B | ❌ Missing | Viewer write denied via editor RLS + route gate |
-| 3.6 | McDonald's isolation | ❌ Missing | |
-| 3.7 | APIs enforce tenant | ⚠️ Partial | Project + editor write enforcement on all UCI mutation routes |
-| 3.8 | Agents enforce tenant | ❌ Missing | |
+| 3.1 | `tenant_id` on all tables | ⚠️ Staged | Migrations add + backfill; triggers propagate on insert — apply in production pending |
+| 3.2 | RLS on all tables | ⚠️ Staged | Tenant + project composite policies in `20260715140400` |
+| 3.3 | RLS matches spec pattern | ⚠️ Partial | Uses `can_access_tenant` + `has_project_access`, not JWT `app.current_tenant_id` |
+| 3.4 | Tenant A cannot read B | ✅ Pass (tests) | `uci-cross-tenant-security.test.js` — live RLS after migration apply |
+| 3.5 | Tenant A cannot write B | ✅ Pass (tests) | Route + RLS + editor gate; cross-tenant insert rejected by triggers |
+| 3.6 | McDonald's isolation | ⚠️ Deferred | Requires client Phase 3 config (NB-D11-004); not auto-modeled |
+| 3.7 | APIs enforce tenant | ✅ Pass | `requireTenantProjectAccess` on all UCI routes |
+| 3.8 | Agents enforce tenant | ⚠️ Partial | Sync services pass `tenantId` from context; DB triggers as backstop |
 | 3.9 | Prompts tenant-safe | ❌ Missing | No LLM agents |
 | 3.10 | Credentials not in UI | ✅ Pass | Status only in Settings |
 | 3.11 | No secrets in code | 🔍 Verify | |

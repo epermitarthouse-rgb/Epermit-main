@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { TenantContextBadge } from '@/components/uci/TenantContextBadge';
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,12 +111,13 @@ import type {
   UciPepcoDashboardCardMeta,
   UciNormalizedSyncResult,
   UciProviderSetupResponse,
-  UtilityProvider,
   UciRecordDetailResponse,
   UciPortfolioViewResponse,
   UciPortalSyncRun,
   UciPortalSyncResponse,
+  UtilityProvider,
 } from "@/types/uci";
+import { PERMITPILOT_DEMO_TENANT_ID } from "@/types/uci";
 import {
   normalizedSyncDrawerMessage,
   notifyNormalizedSyncResult,
@@ -332,6 +333,7 @@ export default function UciDashboard() {
 
   const [providers, setProviders] = useState<UtilityProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
+  const [tenantScopeId, setTenantScopeId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [records, setRecords] = useState<CoordinationRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
@@ -476,8 +478,9 @@ export default function UciDashboard() {
     if (authLoading || !user?.id) return;
     setProvidersLoading(true);
     try {
-      const res = await listUciProviders();
+      const res = await listUciProviders(projectId ?? undefined);
       setProviders(res.providers ?? []);
+      setTenantScopeId(res.tenant_id ?? null);
       setInitPick((prev) => {
         const next: Record<string, boolean> = { ...prev };
         for (const p of res.providers ?? []) {
@@ -490,7 +493,7 @@ export default function UciDashboard() {
     } finally {
       setProvidersLoading(false);
     }
-  }, [authLoading, user?.id]);
+  }, [authLoading, user?.id, projectId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -1855,10 +1858,16 @@ export default function UciDashboard() {
             <CardHeader>
               <CardTitle className={uciSectionTitleClass}>Project</CardTitle>
               <CardDescription className={cn(uciMutedClass, "opacity-100")}>
-                Coordination records are scoped per project (owner or team access).
+                Coordination records are scoped per tenant and project (owner or team access).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {tenantScopeId ? (
+                <TenantContextBadge
+                  isDemo={tenantScopeId === PERMITPILOT_DEMO_TENANT_ID}
+                  tenantName={selectedProject?.name ?? 'Workspace'}
+                />
+              ) : null}
               <div className="grid max-w-md gap-2">
                 <Label className="text-ink-primary-light">Selected project</Label>
                 <Select

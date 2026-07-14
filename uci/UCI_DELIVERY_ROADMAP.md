@@ -59,7 +59,7 @@ Engineering extensions are labeled explicitly and do not override client require
 | Full Agent 1 auto territory mapping | **blocked** (D2.2) | No verified `service_territory` / geocoding; ZIP/county/jurisdiction inference prohibited |
 | PEPCO portal live submit | **blocked** (D4) | `501 SUBMIT_ADAPTER_NOT_IMPLEMENTED`; dry-run path not yet built |
 | BGE automation | missing | Manual/email fallback until adapter exists |
-| Tenant propagation + tenant RLS | **partial** | Project/team editor hardening shipped (NB-D1-001); no `projects.tenant_id` — architecture decision required |
+| Tenant propagation + tenant RLS | **implemented** (code + migrations staged) | Row 2: `tenants`, `tenant_memberships`, `projects.tenant_id`, propagation triggers, tenant RLS — **not applied in production** |
 | Inbound email webhook | missing | D5 — reuse Commun-ET mailbox; Graph preferred; external access |
 | QuickBooks UCI actions | missing | D7 — reuse billing module OAuth; no second integration |
 | Escalate API | missing | D12 partial |
@@ -766,7 +766,7 @@ See `UCI_EXECUTION_HISTORY.md` for Sprint 1–6 completion vs plan.
 
 Priority follows existing milestone numbers — no new phases:
 
-1. **D13** — Tenant and RLS hardening (architecture work)
+1. ~~**D13 / Row 2** — Tenant and RLS hardening~~ **code complete** — apply migrations `20260715140000`–`20260715140400` in staging/production
 2. **D4** — PEPCO submission dry-run + evidence capture (external access + live verification)
 3. **D5/D4** — Email foundation via Commun-ET mailbox / Microsoft Graph (external access)
 4. **D7** — QuickBooks UCI reviewed actions (implement now — reuse billing module)
@@ -804,8 +804,8 @@ Priority follows existing milestone numbers — no new phases:
 | NB-D1D-001 | D1D Worker | Durable worker runs normalized sync only, not full PEPCO browser phases | partial | implement now | `runPortalSync` path works; discovery remains on dedicated routes | D1D / D13 | medium | `uci-durable-worker-executor.js`, `uci-portal-sync.service.js` | 2026-07-14 | — |
 | NB-D1D-002 | D1D Frontend | Frontend sync-run polling + sessionStorage recovery | partial | implement now | `SyncRunsPanel`, `useSyncRunPolling`, durable sync job tracking | D13 | low | `UciD13WorkflowPanels.tsx`, `uciApi.ts` | 2026-07-14 | 2026-07-15 |
 | NB-D1D-003 | D1D MFA | MFA browser state not fully restart-restorable after worker/process restart | partial | architecture work | In-memory session store with TTL; documented limitation | D13 | medium | `uci-pepco-session-store.js` — no durable MFA store | 2026-07-14 | — |
-| NB-D1-001 | D1 Tenant | Tenant isolation not complete (`tenant_id` never written; global providers) | partial | architecture work | Project/team RLS + editor write gate + route hardening shipped 2026-07-15; full tenant propagation blocked — no org field on `projects` | D13 | high | `uci-access.service.js`, `20260715120000_uci_rls_editor_hardening.sql`, `uci-d13-tenant-rls-hardening.test.js` | 2026-07-08 | 2026-07-15 |
-| NB-D1B-001 | D1B Storage | Storage paths use `unconfigured` tenant namespace | partial | architecture work | No org/tenant on projects — `unconfigured` retained; legacy paths compatible | D13 | medium | `uci-document-storage.service.js` path builder | 2026-07-08 | — |
+| NB-D1-001 | D1 Tenant | Tenant isolation — tenants, memberships, propagation, RLS | resolved | architecture work | Row 2 code + staged migrations; production gate requires migration apply + live RLS verification | D13 / Row 2 | high | `20260715140000`–`20260715140400`, `uci-access.service.js`, `uci-cross-tenant-security.test.js` | 2026-07-08 | 2026-07-15 |
+| NB-D1B-001 | D1B Storage | Tenant-based storage namespace for new uploads | resolved | architecture work | New paths `uci/{tenantId}/...`; legacy `unconfigured` readable; tenant derived from project | D13 / Row 2 | medium | `uci-document-storage.service.js` | 2026-07-08 | 2026-07-15 |
 | NB-D2-001 | D2 Agent 1 | Full auto territory mapping blocked on verified service-territory data | deferred | external data | D2.0 human-confirmed fallback; no ZIP/county/jurisdiction inference | D2.2 | medium | No verified `service_territory` rules; column unused | 2026-07-14 | — |
 | NB-D2-002 | D2 Address | Address normalization and geocoding incomplete | incomplete | external data | D2.1 uses structured address inventory only | D2.2 | medium | `uci-provider-setup.service.js`, `uci-load-profile.service.js` | 2026-07-14 | — |
 | NB-D2-003 | D2.0 UI | Provider mapping metadata display in UI | resolved | implement now | Table badge + drawer `ProviderMappingBanner` | D13 | low | `UciD13WorkflowPanels.tsx`, records table | 2026-07-14 | 2026-07-15 |
@@ -852,7 +852,7 @@ Priority follows existing milestone numbers — no new phases:
 | NB-D12-003 | D12 Alerts | P0/P1/P2 alerts and runbooks not documented | incomplete | live verification | No alerting pipeline | D12 / D13 | medium | Roadmap §D12 | 2026-07-14 | — |
 | NB-PROV-001 | Providers | BGE and other non-PEPCO portal adapters not implemented | deferred | external access | PEPCO first; others use manual/email until adapters | Future adapter | low | No BGE under `scrapers/` or `adapters/` | 2026-07-08 | — |
 | NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | live verification | Unit/route tests pass (171 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
-| NB-TEST-002 | Testing | Cross-tenant UCI security tests missing | partial | architecture work | Cross-project + viewer/editor denial tests added; cross-tenant blocked until tenant field on `projects` | D13 | high | `uci-d13-tenant-rls-hardening.test.js`, `uci-access-hardening.test.js` | 2026-07-08 | 2026-07-15 |
+| NB-TEST-002 | Testing | Cross-tenant UCI security tests | resolved | architecture work | Dedicated `uci-cross-tenant-security.test.js` — tenant A/B, demo isolation, route denial, storage namespace | D13 / Row 2 | high | `uci-cross-tenant-security.test.js`, `uci-d13-tenant-rls-hardening.test.js` | 2026-07-08 | 2026-07-15 |
 | NB-OPS-001 | D12 Ops | Event bus `uci.*` events — in-memory only, partial catalog | partial | architecture work | `emitUciEvent` on D5 classify/reclassify; no external bus | D13 | low | `uci-events.service.js`, `GET /events/recent` | 2026-07-08 | — |
 | NB-TEAM-001 | Team | Invitation acceptance flow missing | resolved | implement now | `/invite/:token`, `accept_project_team_invitation` RPC, `InviteAccept.tsx` | Row 2 | medium | `20260715130000_project_team_invitation_flow.sql`, `InviteAccept.tsx` | 2026-07-15 | 2026-07-15 |
 | NB-TEAM-002 | Team | Invite did not send email | resolved | implement now | `send-project-team-invitation` edge function via Resend; truthful partial result when unavailable | Row 2 | low | `supabase/functions/send-project-team-invitation/index.ts` | 2026-07-15 | 2026-07-15 |

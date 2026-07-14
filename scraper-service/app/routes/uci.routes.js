@@ -11,6 +11,8 @@ const {
   listActiveProvidersForApi,
   getActiveProvidersBySlugs,
 } = require("../services/uci/uci-providers.service.js");
+const { listActiveProvidersForTenant } = require("../services/uci/uci-providers-tenant.service.js");
+const { getProjectTenantId } = require("../services/uci/uci-access.service.js");
 const {
   listCoordinationRecordsByProject,
   getCoordinationRecordById,
@@ -153,11 +155,22 @@ function createUciRouter(opts) {
   const { supabase } = opts;
   const router = Router();
 
-  router.get("/providers", async (_req, res) => {
+  router.get("/providers", async (req, res) => {
     try {
-      await requireAuthenticatedUser(_req, supabase);
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.query.projectId || "").trim();
+      if (projectId) {
+        await requireProjectAccess({ supabase, userId: user.id, projectId });
+        const project = await getProjectTenantId(supabase, projectId);
+        const providers = await listActiveProvidersForTenant(
+          supabase,
+          project?.tenant_id ? String(project.tenant_id) : null,
+        );
+        res.json({ providers, tenant_id: project?.tenant_id ?? null });
+        return;
+      }
       const providers = await listActiveProvidersForApi(supabase);
-      res.json({ providers });
+      res.json({ providers, tenant_id: null });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

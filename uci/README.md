@@ -67,16 +67,15 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 
 *As of 2026-07-15 decision reconciliation — based on codebase audit, not live PEPCO verification.*
 
-**Milestone status:** D1A–D1D, D2.0, D2.1, D3 foundations **implemented** (scoped); D4–D12 foundations **partial**; D13 hardening **partial** (frontend workflows + route tests); D2.2 and D4 PEPCO submit **blocked**.
+**Milestone status:** D1A–D1D, D2.0, D2.1, D3 foundations **implemented** (scoped); D4–D12 foundations **partial**; D13 / Row 2 tenant security **code complete** (migrations staged); D2.2 and D4 PEPCO submit **blocked**.
 
-**Next implementation target:** **NB-D4-001** — D4 PEPCO submission dry-run (NB-D1-001 project/team hardening partial-closed 2026-07-15).
+**Next implementation target:** **NB-D4-001** — D4 PEPCO submission dry-run (Row 2 tenant/RLS code complete 2026-07-15).
 
 **Main external blockers:**
-- Approved tenancy architecture decision (`projects.tenant_id` or organizations table) — blocks NB-D1-001 close
+- Row 2 migration apply + live RLS verification in staging/production
 - PEPCO live form mapping + safe portal access (D4)
 - Commun-ET mailbox permissions + inbound webhook design (D5)
 - McDonald's/QSR load templates (D2.1)
-- Approved tenancy architecture decision (D13)
 
 **Backlog:** [`UCI_DELIVERY_ROADMAP.md` §17](./UCI_DELIVERY_ROADMAP.md#17-non-blocking-incomplete-and-deferred-items) — 38 active + 3 client-deferred; dependency **Class** column added 2026-07-15.
 
@@ -169,6 +168,6 @@ The **target architecture** is utility-neutral shared services plus provider ada
 ## Next Steps for Implementers
 
 1. Read `UCI_DELIVERY_ROADMAP.md` — §16 **remaining execution order** and **§17 backlog** (with Class column).
-2. Next code target: **D4 / NB-D4-001** PEPCO dry-run; tenancy schema decision required to close **NB-D1-001**.
+2. Next code target: **D4 / NB-D4-001** PEPCO dry-run; apply Row 2 migrations before production tenant claim.
 3. Check `UCI_COMPLIANCE_CHECKLIST.md` — use readiness labels (foundation / E2E / live verified / production-ready).
 4. Do not treat `uci_execution_sprints_and_phases.md` or `UCI_All_Implementation_Phases.md` as active roadmaps.

@@ -57,6 +57,7 @@ function sanitizeUciFileName(fileName) {
  *   externalApplicationId: string;
  *   fileName: string;
  *   tenantNamespace?: string;
+ *   tenantId?: string;
  * }} opts
  * @returns {string | null}
  */
@@ -181,6 +182,33 @@ function sanitizeDownloadedFilesForPersistence(files) {
  *   error?: string;
  * }>}
  */
+/**
+ * Derive storage namespace from project — never trust client-supplied tenant IDs alone.
+ * @param {import("@supabase/supabase-js").SupabaseClient | undefined} supabase
+ * @param {string | undefined} projectId
+ * @param {string | undefined} explicitNamespace
+ * @returns {Promise<string>}
+ */
+async function resolveTenantNamespaceForProject(supabase, projectId, explicitNamespace) {
+  if (explicitNamespace && explicitNamespace !== UCI_TENANT_NAMESPACE_UNCONFIGURED) {
+    return sanitizeUciStorageSegment(explicitNamespace) || UCI_TENANT_NAMESPACE_UNCONFIGURED;
+  }
+  if (!supabase || !projectId || typeof supabase.from !== "function") {
+    return UCI_TENANT_NAMESPACE_UNCONFIGURED;
+  }
+  try {
+    const { data } = await supabase
+      .from("projects")
+      .select("tenant_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    const tenantId = data?.tenant_id ? String(data.tenant_id) : null;
+    return tenantId ? sanitizeUciStorageSegment(tenantId) : UCI_TENANT_NAMESPACE_UNCONFIGURED;
+  } catch {
+    return UCI_TENANT_NAMESPACE_UNCONFIGURED;
+  }
+}
+
 async function storeUciPortalDocument(opts) {
   const buffer = Buffer.isBuffer(opts.buffer) ? opts.buffer : Buffer.from(opts.buffer);
   const safeFileName = sanitizeUciFileName(opts.fileName || opts.documentName);
@@ -213,15 +241,22 @@ async function storeUciPortalDocument(opts) {
     downloadedAt: new Date().toISOString(),
   };
 
+  const supabase = opts.supabase;
+  const tenantNamespace = await resolveTenantNamespaceForProject(
+    supabase,
+    opts.projectId,
+    opts.tenantNamespace || opts.tenantId,
+  );
+
   const storagePath = buildUciStoragePath({
     projectId: opts.projectId,
     coordinationRecordId: opts.coordinationRecordId,
     providerSlug: opts.providerSlug,
     externalApplicationId: opts.externalApplicationId,
     fileName: safeFileName,
+    tenantNamespace,
   });
 
-  const supabase = opts.supabase;
   let storageAction = "skipped";
 
   if (supabase && storagePath) {
@@ -401,6 +436,20 @@ function buildDocumentStorageApiResult(applications) {
   return summarizeDocumentStorageFromApplications(applications);
 }
 
+/**
+ * Parse tenant segment from a UCI storage path. Returns null for legacy unconfigured paths.
+ * @param {string} storagePath
+ * @returns {{ tenantNamespace: string, projectId: string } | null}
+ */
+function parseUciStoragePathTenant(storagePath) {
+  const parts = String(storagePath || "").split("/");
+  if (parts.length < 4 || parts[0] !== "uci") return null;
+  return {
+    tenantNamespace: parts[1],
+    projectId: parts[2],
+  };
+}
+
 module.exports = {
   UCI_DOCUMENTS_STORAGE_BUCKET,
   UCI_TENANT_NAMESPACE_UNCONFIGURED,
@@ -408,11 +457,13 @@ module.exports = {
   sanitizeUciStorageSegment,
   sanitizeUciFileName,
   buildUciStoragePath,
+  parseUciStoragePathTenant,
   computeContentHash,
   buildDocumentIdempotencyKey,
   findExistingDownloadedFile,
   sanitizeFileEntryForPersistence,
   sanitizeDownloadedFilesForPersistence,
+  resolveTenantNamespaceForProject,
   storeUciPortalDocument,
   summarizeDocumentStorageFromApplications,
   buildDocumentStorageApiResult,

@@ -189,8 +189,11 @@ export interface CoordinationCommunication {
   created_at: string;
 }
 
+export const PERMITPILOT_DEMO_TENANT_ID = '00000000-0000-4000-8000-000000000001';
+
 export interface UciProvidersResponse {
   providers: UtilityProvider[];
+  tenant_id?: string | null;
 }
 
 export interface UciProjectCoordinationResponse {

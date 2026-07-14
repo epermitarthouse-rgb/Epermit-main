@@ -7,9 +7,98 @@ const { getCoordinationRecordById } = require("./uci-records.service.js");
  * Uses Supabase service-role client only for `.auth.getUser(jwt)` and DB checks —
  * callers must enforce project ownership / team membership explicitly.
  *
- * Ownership model (NB-D1-001): projects.user_id + project_team_members via has_project_access.
- * No organization/tenant table exists on projects — tenant_id propagation blocked until schema decision.
+ * Ownership model (Row 2): tenants + tenant_memberships + projects.tenant_id +
+ * project_team_members via has_tenant_project_access / has_uci_row_* RPCs.
  */
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} projectId
+ * @returns {Promise<{ tenant_id: string | null } | null>}
+ */
+async function getProjectTenantId(supabase, projectId) {
+  try {
+    const { data, error } = await supabase
+      .from("projects")
+      .select("tenant_id")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (error) {
+      return null;
+    }
+
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {object} p
+ * @param {import("@supabase/supabase-js").SupabaseClient} p.supabase
+ * @param {string} p.userId
+ * @param {string} p.tenantId
+ * @returns {Promise<boolean>}
+ */
+async function assertTenantAccess({ supabase, userId, tenantId }) {
+  if (!tenantId) return true;
+
+  const { data, error } = await supabase.rpc("can_access_tenant", {
+    _user_id: userId,
+    _tenant_id: tenantId,
+  });
+
+  if (error) {
+    const rpcErr = new Error(
+      `Tenant access check failed: ${error.message || "rpc_error"}`,
+    );
+    rpcErr.code = "TENANT_ACCESS_RPC_ERROR";
+    throw rpcErr;
+  }
+
+  return Boolean(data);
+}
+
+/**
+ * @throws {Error & { statusCode?: number, code?: string }}
+ */
+async function requireTenantAccess({ supabase, userId, tenantId }) {
+  if (!tenantId) return;
+  const ok = await assertTenantAccess({ supabase, userId, tenantId });
+  if (!ok) {
+    const err = new Error("Forbidden: no access to this tenant");
+    err.statusCode = 403;
+    err.code = "TENANT_ACCESS_DENIED";
+    throw err;
+  }
+}
+
+/**
+ * @param {object} p
+ * @param {import("@supabase/supabase-js").SupabaseClient} p.supabase
+ * @param {string} p.userId
+ * @param {string} p.projectId
+ * @param {boolean} [p.write]
+ */
+async function requireTenantProjectAccess({ supabase, userId, projectId, write = false }) {
+  const project = await getProjectTenantId(supabase, projectId);
+  if (project?.tenant_id) {
+    await requireTenantAccess({ supabase, userId, tenantId: project.tenant_id });
+  }
+
+  if (write) {
+    await requireProjectEditorAccess({ supabase, userId, projectId });
+  } else {
+    const ok = await assertProjectAccess({ supabase, userId, projectId });
+    if (!ok) {
+      const err = new Error("Forbidden: no access to this project");
+      err.statusCode = 403;
+      err.code = "PROJECT_ACCESS_DENIED";
+      throw err;
+    }
+  }
+}
 
 /**
  * @typedef {{ id: string, email?: string }} SupabaseAuthUserLike
@@ -163,19 +252,7 @@ async function requireProjectEditorAccess({ supabase, userId, projectId }) {
  * @throws {Error & { statusCode?: number, code?: string }}
  */
 async function requireProjectAccess({ supabase, userId, projectId, write = false }) {
-  if (write) {
-    await requireProjectEditorAccess({ supabase, userId, projectId });
-    return;
-  }
-  const ok = await assertProjectAccess({ supabase, userId, projectId });
-  if (!ok) {
-    const err = new Error("Forbidden: no access to this project");
-    /** @type {Error & { statusCode?: number, code?: string }} */
-    const e = err;
-    e.statusCode = 403;
-    e.code = "PROJECT_ACCESS_DENIED";
-    throw err;
-  }
+  await requireTenantProjectAccess({ supabase, userId, projectId, write });
 }
 
 /**
@@ -201,12 +278,25 @@ async function requireCoordinationRecordAccess({
     throw err;
   }
 
-  await requireProjectAccess({
+  await requireTenantProjectAccess({
     supabase,
     userId,
     projectId: String(record.project_id),
     write,
   });
+
+  if (record.tenant_id) {
+    const project = await getProjectTenantId(supabase, String(record.project_id));
+    if (
+      project?.tenant_id &&
+      String(record.tenant_id) !== String(project.tenant_id)
+    ) {
+      const err = new Error("Coordination record not found");
+      err.statusCode = 404;
+      err.code = "NOT_FOUND";
+      throw err;
+    }
+  }
 
   return record;
 }
@@ -247,6 +337,19 @@ async function assertCoordinationBelongsToProject({
     err.statusCode = 404;
     err.code = "NOT_FOUND";
     throw err;
+  }
+
+  if (record.tenant_id) {
+    const project = await getProjectTenantId(supabase, projectId);
+    if (
+      project?.tenant_id &&
+      String(record.tenant_id) !== String(project.tenant_id)
+    ) {
+      const err = new Error("Coordination record not found");
+      err.statusCode = 404;
+      err.code = "NOT_FOUND";
+      throw err;
+    }
   }
 }
 
@@ -315,6 +418,23 @@ function sanitizeUciError(error) {
   };
 }
 
+function assertEntityTenantMatch({
+  expectedTenantId,
+  actualTenantId,
+  entityLabel = "Record",
+}) {
+  if (
+    expectedTenantId &&
+    actualTenantId &&
+    String(expectedTenantId) !== String(actualTenantId)
+  ) {
+    const err = new Error(`${entityLabel} not found`);
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+}
+
 module.exports = {
   getAuthenticatedUser,
   requireAuthenticatedUser,
@@ -322,8 +442,13 @@ module.exports = {
   assertProjectEditorAccess,
   requireProjectAccess,
   requireProjectEditorAccess,
+  requireTenantProjectAccess,
+  requireTenantAccess,
+  getProjectTenantId,
+  assertTenantAccess,
   requireCoordinationRecordAccess,
   assertEntityProjectMatch,
+  assertEntityTenantMatch,
   assertCoordinationBelongsToProject,
   getProjectForUciAccess,
   sanitizeUciError,

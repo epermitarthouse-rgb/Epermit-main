@@ -105,3 +105,6 @@ verify_jwt = false
 
 [functions.export-response-package]
 verify_jwt = false
+
+[functions.send-project-team-invitation]
+verify_jwt = false

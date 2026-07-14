@@ -75,6 +75,19 @@ function makeSupabaseMock(opts = {}) {
       },
     },
     from(table) {
+      if (table === "projects") {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => ({ data: { tenant_id: null }, error: null }),
+                };
+              },
+            };
+          },
+        };
+      }
       assert.equal(table, "coordination_records");
       return {
         select() {

@@ -193,19 +193,20 @@ From 2026-07-14, every UCI milestone maintains a persistent non-blocking backlog
 
 ## NB-D1-001 Tenant/RLS Hardening (2026-07-15)
 
-**Status:** **partial** — project/team isolation hardened; full tenant propagation **blocked**.
+**Status:** **resolved (code)** — Row 2 multi-tenant security implemented; **migrations not applied in production**.
 
 | Deliverable | Result |
 |-------------|--------|
-| Ownership audit | No org/tenant table; `projects.user_id` + `project_team_members` is sole source |
-| `tenant_id` propagation | **Not implemented** — no reliable org field on `projects` |
-| RLS hardening | `20260715120000_uci_rls_editor_hardening.sql` — viewer read-only, editor mutations |
-| Route authorization | All POST UCI routes use `write: true`; `/events/recent` requires `project_id` |
-| Storage namespace | `unconfigured` retained (NB-D1B-001 open) |
-| Tests | `uci-access-hardening.test.js`, `uci-d13-tenant-rls-hardening.test.js` — 185 UCI backend tests pass |
-| Production security gate | **Not met** — cross-tenant + demo isolation + tenant propagation remain |
+| Ownership audit | No pre-existing org table; canonical model = new `tenants` + `tenant_memberships` |
+| `tenant_id` propagation | Staged migrations + DB triggers derive tenant from `projects`; backfill one tenant per owner |
+| RLS hardening | `20260715140400_row2_tenant_rls_hardening.sql` — tenant + project composite access on all UCI tables |
+| Route authorization | `requireTenantProjectAccess` on all UCI routes; providers scoped by `projectId` |
+| Storage namespace | New uploads: `uci/{tenantId}/{projectId}/...`; legacy `unconfigured` paths remain readable |
+| Demo isolation | `permitpilot-demo` tenant; `can_access_tenant` blocks demo↔production crossover |
+| Tests | 197 UCI backend tests pass incl. `uci-cross-tenant-security.test.js` |
+| Production security gate | **Pending migration apply** — code and tests ready; live RLS verification after rollout |
 
-**Architecture decision still required:** approved tenancy model (`projects.tenant_id` or `organizations` + membership) before NB-D1-001 can close.
+**Rollout:** Apply `20260715130000` (team invites, if needed) then `20260715140000` → `20260715140400` in order.
 
 ---
 
@@ -235,9 +236,9 @@ NB-D1-001, NB-D1B-001, NB-D2-001, NB-D2-002, NB-D2-007, NB-D2-008, NB-D3-005, NB
 |----------|-------|
 | **External data** | NB-D2-001, NB-D2-002, NB-D2-007, NB-D2-008, NB-D2-010, NB-D3-002, NB-D11-004 |
 | **External access** | NB-D4-001, NB-D4-002, NB-D5-001, NB-D5-004, NB-PROV-001 |
-| **Architecture work** | NB-D1-001, NB-D1B-001, NB-D1D-003, NB-D12-002, NB-TEST-002, NB-OPS-001 |
-| **Live verification** | NB-D4-003, NB-D12-003, NB-TEST-001 |
-| **Implement now** (next code) | **NB-D1-001** (D13 tenant/RLS) per §16 remaining order |
+| **Architecture work** | NB-D1D-003, NB-D12-002, NB-OPS-001 |
+| **Live verification** | NB-D4-003, NB-D12-003, NB-TEST-001, Row 2 migration apply + live RLS |
+| **Implement now** (next code) | **NB-D4-001** (D4 PEPCO dry-run) per §16 remaining order |
 
 ---
 

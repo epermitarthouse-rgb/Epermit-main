@@ -194,24 +194,25 @@ Optional `needs_changes` exists in migration CHECK constraint. Do **not** add `a
 
 ## 6. Tenant and RLS Strategy
 
-### Present implementation (organization → project → team → UCI) — updated 2026-07-15 (NB-D1-001)
+### Present implementation (tenant → project → team → UCI) — updated 2026-07-15 (Row 2)
 
-**Ownership source selected:** `projects.user_id` (owner) + `project_team_members` (owner/admin/editor/viewer) via `has_project_access` / `has_project_editor_access`. **No** `organizations`, `tenants`, or `projects.tenant_id` table/column exists.
+**Canonical tenant model:** `tenants` + `tenant_memberships` + `projects.tenant_id`. No pre-existing organization table was found; billing/QB remain user-scoped.
 
 ```text
-auth.users
-  → projects.user_id (owner)
-  → project_team_members (role: owner | admin | editor | viewer)
-  → has_project_access (SELECT) / has_project_editor_access (mutations)
-  → coordination_records + child tables (project_id FK)
+tenants (is_demo for demo workspace)
+  → tenant_memberships (owner | admin | member | viewer)
+  → projects.tenant_id
+  → projects.user_id (owner) + project_team_members (owner/admin/editor/viewer)
+  → has_tenant_project_access + has_uci_row_access (RLS)
+  → coordination_records.tenant_id + child tables (triggers propagate)
 ```
 
-- RLS: SELECT via `has_project_access`; INSERT/UPDATE/DELETE via `has_project_editor_access` (migration `20260715120000_uci_rls_editor_hardening.sql`).
-- Backend: service-role client + `requireProjectAccess({ write: true })` on all UCI mutation routes.
-- `tenant_id` columns on UCI tables remain **nullable and unwritten** until approved tenancy schema exists.
-- Storage: `uci/unconfigured/{projectId}/...` unchanged — NB-D1B-001 remains open.
-- Platform `user_roles.admin` does **not** bypass UCI routes; global admin is separate from project access.
-- **No demo-account isolation** in schema today.
+- RLS: tenant membership **and** project access required for UCI rows (`20260715140400_row2_tenant_rls_hardening.sql`).
+- Backend: `requireTenantProjectAccess` wraps all `/api/uci/*` routes; tenant ID never accepted from client body.
+- `utility_providers`: global templates (`is_global_template=true`) + tenant-owned copies via `copy_utility_provider_template_for_tenant`.
+- Storage: new uploads `uci/{tenantId}/{projectId}/{coordinationRecordId}/{providerSlug}/{applicationId}/{filename}`; legacy `uci/unconfigured/...` remains readable.
+- Demo: dedicated `permitpilot-demo` tenant (`00000000-0000-4000-8000-000000000001`); `can_access_tenant` enforces demo↔production isolation.
+- Platform `user_roles.admin` does **not** bypass UCI routes.
 
 ### Project team invitation lifecycle (Row 2 — 2026-07-15)
 
@@ -225,15 +226,13 @@ Production workflow (no manual SQL):
 
 Security: unguessable 32-byte tokens, 7-day expiry, revoked/declined/accepted invites cannot be reused, resend rotates token with 5-minute cooldown.
 
+### Rollout prerequisites (not yet applied in production)
 
-- Discover organization/tenant field on `projects` (or approved tenancy table) in current schema.
-- Propagate `tenant_id` from project onto coordination records and child tables.
-- Tenant-aware RLS as **additional boundary** alongside `has_project_access`.
-- `utility_providers` tenant-scoped per client requirements when tenancy decision approved.
-- Demo-account isolation and cross-tenant CI tests (blocking for production multi-tenant).
-- Replace `unconfigured` storage path segment when ownership data is available.
+- Migrations `20260715140000` through `20260715140400` must be applied before tenant RLS is live.
+- Backfill creates one tenant per `projects.user_id`; Commun-ET / McDonald's are **not** auto-split without explicit client config (NB-D11-004).
+- Optional: migrate legacy storage objects from `unconfigured` to tenant namespace via manual utility (not auto-run).
 
-**Do not claim tenant isolation is complete until target state is implemented and tested.**
+**Tenant isolation is code-complete and test-gated; production claim requires migration apply + live verification.**
 
 ---
 

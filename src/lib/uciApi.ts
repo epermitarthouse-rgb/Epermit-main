@@ -309,9 +309,12 @@ async function uciFetchJson<T>(
   return (await res.json()) as T;
 }
 
-export async function listUciProviders(): Promise<UciProvidersResponse> {
+export async function listUciProviders(projectId?: string): Promise<UciProvidersResponse> {
+  const query = projectId
+    ? `?projectId=${encodeURIComponent(projectId)}`
+    : "";
   return uciFetchJson<UciProvidersResponse>(
-    "/api/uci/providers",
+    `/api/uci/providers${query}`,
     {},
     "Failed to load providers",
   );
