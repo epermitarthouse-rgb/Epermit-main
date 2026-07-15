@@ -401,20 +401,29 @@ function sanitizeUciError(error) {
   const rawMessage =
     typeof err.message === "string" ? err.message : "Server error";
 
+  /** @type {Record<string, unknown>} */
+  const body = {
+    error:
+      typeof err.code === "string" && status !== 500
+        ? err.code
+        : status === 500
+          ? "INTERNAL_ERROR"
+          : typeof err.code === "string"
+            ? err.code
+            : "ERROR",
+    message:
+      status === 500 ? "An unexpected server error occurred." : rawMessage,
+  };
+
+  if (Array.isArray(/** @type {{ available_applications?: unknown }} */ (err).available_applications)) {
+    body.available_applications = /** @type {{ available_applications?: unknown }} */ (
+      err
+    ).available_applications;
+  }
+
   return {
     httpStatus: status,
-    body: {
-      error:
-        typeof err.code === "string" && status !== 500
-          ? err.code
-          : status === 500
-            ? "INTERNAL_ERROR"
-            : typeof err.code === "string"
-              ? err.code
-              : "ERROR",
-      message:
-        status === 500 ? "An unexpected server error occurred." : rawMessage,
-    },
+    body,
   };
 }
 

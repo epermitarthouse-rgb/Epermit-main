@@ -449,15 +449,38 @@ async function runLoadProfileAnalysis(supabase, params) {
   });
 
   const generatedAt = new Date().toISOString();
-  const loadSummary = buildLoadSummary({
-    utilityType,
-    generatedAt,
-    inputsUsed: inventory.inputsUsed,
-    missingInputs: inventory.missingInputs,
-    needsVerification,
-    sourceDocuments: inventory.sourceDocuments,
-    userId,
-  });
+  const existing = await findAgentDraftApplication(supabase, coordinationRecordId, projectId);
+  const prevSummary =
+    existing?.load_summary &&
+    typeof existing.load_summary === "object" &&
+    !Array.isArray(existing.load_summary)
+      ? /** @type {Record<string, unknown>} */ (existing.load_summary)
+      : {};
+
+  const loadSummary = {
+    ...buildLoadSummary({
+      utilityType,
+      generatedAt,
+      inputsUsed: inventory.inputsUsed,
+      missingInputs: inventory.missingInputs,
+      needsVerification,
+      sourceDocuments: inventory.sourceDocuments,
+      userId,
+    }),
+    candidate_values: Array.isArray(prevSummary.candidate_values) ? prevSummary.candidate_values : [],
+    verified_values:
+      prevSummary.verified_values &&
+      typeof prevSummary.verified_values === "object" &&
+      !Array.isArray(prevSummary.verified_values)
+        ? prevSummary.verified_values
+        : {},
+    load_extraction:
+      prevSummary.load_extraction &&
+      typeof prevSummary.load_extraction === "object" &&
+      !Array.isArray(prevSummary.load_extraction)
+        ? prevSummary.load_extraction
+        : null,
+  };
 
   const embedded = record.utility_providers;
   const providerSlug = Array.isArray(embedded)
@@ -493,7 +516,6 @@ async function runLoadProfileAnalysis(supabase, params) {
     },
   };
 
-  const existing = await findAgentDraftApplication(supabase, coordinationRecordId, projectId);
   /** @type {Record<string, unknown>} */
   let application;
 

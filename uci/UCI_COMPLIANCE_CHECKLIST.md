@@ -154,10 +154,10 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| 1 Provider Mapping | ⚠️ Partial | D2.0 human-assisted (**current safe fallback**); D2.2 auto blocked — no ZIP/county inference |
+| 1 Provider Mapping | ⚠️ Partial | D2.0 human-confirmed **pilot-complete**; jurisdiction scrapers supply address context only; D2.2 auto blocked |
 | 2 Load Profile | ⚠️ Partial | D2.1 missing-input inventory; no-guess rule; square footage never produces numerics |
 | 3 Application Prep | ⚠️ Partial | D3 foundation; PEPCO template manifest; review workflow — **end-to-end wired** |
-| 4 Submission | ⚠️ Partial | email_intent path; PEPCO 501; submission-complete not met — **blocked by external access** |
+| 4 Submission | ⚠️ Partial | PEPCO dry-run adapter; email Graph send; live submit gated — **live portal verify pending** |
 | 5 Acknowledgment | ⚠️ Partial | Initiated status proposal; column exists |
 | 6 COS/Design Review | ⚠️ Partial | PEPCO In Design / In Technical Review proposals |
 | 7 CIAC/Cost | ⚠️ Partial | PEPCO Contract Sent / payment proposals |
@@ -174,14 +174,14 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 | # | Field | Status |
 |---|-------|--------|
 | 6.1.1 | id | ✅ Pass |
-| 6.1.2 | tenant_id | ❌ Missing | Global catalog |
+| 6.1.2 | tenant_id | ⚠️ Partial | Row 2: global templates (`tenant_id` NULL) + tenant-owned copies |
 | 6.1.3 | name | ✅ Pass |
 | 6.1.4 | utility_type | ✅ Pass |
 | 6.1.5 | ownership_type | ⚠️ Partial | Column nullable |
 | 6.1.6 | service_territory | ⚠️ Partial | Column exists, unused |
-| 6.1.7–6.1.12 | portal/SLA/active | ⚠️ Partial | Seeded; SLAs not operational |
-| 6.1.13 | indexes | ⚠️ Partial | slug unique; no tenant index |
-| 6.1.14 | RLS tenant | ❌ Missing | Read-all authenticated |
+| 6.1.7–6.1.12 | portal/SLA/active | ⚠️ Partial | Row 3: `primary_portal_type`, `portal_credentials_ref` staged; PEPCO `portal_url` verified; SLAs default only |
+| 6.1.13 | indexes | ⚠️ Partial | slug unique; Row 2 tenant indexes on `utility_providers` |
+| 6.1.14 | RLS tenant | ⚠️ Partial | Row 2: global templates readable + tenant-scoped providers |
 
 ## 6.2 `coordination_records`
 
@@ -211,10 +211,10 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| A1 Provider Mapper | ⚠️ Partial | D2.0 human-assisted ≠ full Agent 1 |
+| A1 Provider Mapper | ⚠️ Partial | D2.0 human-confirmed pilot path complete; full Agent 1 auto mapping deferred |
 | A2 Load Profile | ⚠️ Partial | D2.1 foundation; no numeric templates |
 | A3 Application Builder | ⚠️ Partial | D3 foundation; no worksheet generation |
-| A4 Submission | ⚠️ Partial | D4 foundation; PEPCO portal adapter blocked |
+| A4 Submission | ⚠️ Partial | D4 adapter + dry-run; live PEPCO verify pending |
 | A5 Communication Parser | ⚠️ Partial | D5 portal-sync keyword classifier; no inbound email |
 | A6 COS Analyst | ⚠️ Partial | D6 discrepancy analysis foundation |
 | A7 Easement/ROW | 🚫 Deferred | |
@@ -249,7 +249,7 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 | API.4 | Communication log | ⚠️ Partial | D1A list + D5 classify |
 | API.5 | Trigger draft | ⚠️ Partial | D3 `POST .../applications` |
 | API.6 | Review application | ✅ Pass | D3 |
-| API.7 | Submit application | ⚠️ Partial | D4; PEPCO 501 |
+| API.7 | Submit application | ⚠️ Partial | D4; PEPCO dry-run default; live gated |
 | API.8 | Portfolio view | ⚠️ Partial | D11 API only |
 | API.9 | Provider directory | ⚠️ Partial | global not tenant |
 | API.10 | Escalate | ❌ Missing |
@@ -289,7 +289,7 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 | 13.2 | Per-utility versioned scripts | ⚠️ Partial | PEPCO only; not `uci/portals/` layout |
 | 13.3–13.4 | Credentials secure | ✅ Pass |
 | 13.5 | Login per utility | ⚠️ Partial | PEPCO only |
-| 13.6 | Submission flow | ❌ Missing | PEPCO dry-run + evidence capture planned; live submit **blocked** |
+| 13.6 | Submission flow | ⚠️ Partial | PEPCO dry-run + evidence capture implemented; live submit operator-verify pending |
 | 13.7–13.9 | Idempotency/confirmation/artifacts | ⚠️ Partial | `submitted_at` gate partial; confirmation capture missing |
 | 13.10–13.16 | Retry/fallback/tests/safe mode | ⚠️ Partial | MFA resume; dry-run mode not built; **live verification** pending |
 
@@ -335,9 +335,9 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 
 | Area | Status |
 |------|--------|
-| T1 unit tests | ⚠️ Partial | 171 UCI backend tests — **tested locally** |
+| T1 unit tests | ⚠️ Partial | 237 UCI backend tests — **tested locally** |
 | T2 integration | ⚠️ Partial | `uci-d13-routes-integration.test.js` — project boundary only |
-| T3 security cross-tenant | ❌ Missing | Cross-project + viewer/editor tests added (185 backend); cross-tenant blocked |
+| T3 security cross-tenant | ✅ Pass | Row 4: `uci-cross-tenant-security.test.js` + `npm run test:uci:security` CI workflow |
 | T4 portal mock | ❌ Missing |
 | T5 classifier | ⚠️ Partial | D5 keyword foundation; no validation set |
 
@@ -391,11 +391,11 @@ Full field matrix: `UCI_ARCHITECTURE.md` §3 PermitPilot data reuse table.
 | # | Acceptance | Status |
 |---|------------|--------|
 | C1 | Project with UCI scope | ⚠️ Partial |
-| C2 | Identify providers | ⚠️ Partial | D2.0 human-assisted guided init |
+| C2 | Identify providers | ⚠️ Partial | D2.0 human-confirmed guided init (required confirmation); not auto-identified |
 | C3 | Load summary | ⚠️ Partial | D2.1 `load_summary` agent_draft; no numeric templates |
 | C4 | Draft package | ⚠️ Partial | D3 foundation — **end-to-end wired** |
 | C5 | Human review before submit | ⚠️ Partial | Review gate enforced — **tested locally** |
-| C6 | Submit portal/email | ⚠️ Partial | email_intent only; not submission-complete |
+| C6 | Submit portal/email | ⚠️ Partial | PEPCO dry-run; email on confirmed send; not submission-complete until live verify |
 | C8 | Parse communication | ⚠️ Partial | D5 portal-sync classifier + reclassify UI |
 | C9 | COS analysis | ⚠️ Partial | D6 discrepancy + drawer panel |
 | C10 | CIAC/cost | ⚠️ Partial | D7 cost CRUD + UI |

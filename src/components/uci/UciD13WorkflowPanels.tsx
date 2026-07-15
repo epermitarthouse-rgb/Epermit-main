@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,7 +103,7 @@ export function PortfolioSummarySection({
             </div>
             <div>
               <p className="font-medium">
-                {Object.entries(portfolio.stage_summary)
+                {Object.entries(portfolio.stage_summary ?? {})
                   .filter(([, count]) => count > 0)
                   .map(([stage, count]) => `S${stage}:${count}`)
                   .join(" · ") || "—"}
@@ -551,33 +551,77 @@ export function useSyncRunPolling(
   const [runs, setRuns] = useState<UciPortalSyncRun[]>([]);
   const [activeRun, setActiveRun] = useState<UciPortalSyncRun | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const failCountRef = useRef(0);
+  const inFlightRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (!coordinationId) return;
+    if (!coordinationId || inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     try {
       const result = await pollFn(coordinationId);
+      failCountRef.current = 0;
+      setPollError(null);
       setRuns(result.runs);
       setActiveRun(result.activeRun);
       const terminal = ["completed", "failed", "cancelled"].includes(
         String(result.activeRun?.status || "").toLowerCase(),
       );
       if (terminal) onTerminal?.();
+    } catch (e: unknown) {
+      failCountRef.current += 1;
+      setPollError(e instanceof Error ? e.message : "Failed to load sync runs");
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }, [coordinationId, pollFn, onTerminal]);
 
   useEffect(() => {
-    if (!coordinationId) return;
+    if (!coordinationId) {
+      setRuns([]);
+      setActiveRun(null);
+      setPollError(null);
+      failCountRef.current = 0;
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId = 0;
+    let delayMs = 4000;
+
+    const schedule = () => {
+      if (cancelled) return;
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        void refresh().finally(() => {
+          if (cancelled) return;
+          if (failCountRef.current > 0) {
+            delayMs = Math.min(delayMs * 2, 60000);
+          } else {
+            delayMs = 4000;
+          }
+          schedule();
+        });
+      }, delayMs);
+    };
+
     void refresh();
     const storedJobId = sessionStorage.getItem(`uci-active-sync-run:${coordinationId}`);
-    if (!storedJobId) return;
-    const interval = window.setInterval(() => void refresh(), 4000);
-    return () => window.clearInterval(interval);
+    if (storedJobId) {
+      schedule();
+    }
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      failCountRef.current = 0;
+      inFlightRef.current = false;
+    };
   }, [coordinationId, refresh]);
 
-  return { runs, activeRun, loading, refresh };
+  return { runs, activeRun, loading, pollError, refresh };
 }
 
 export function getRecordProviderMapping(

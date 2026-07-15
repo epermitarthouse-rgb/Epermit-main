@@ -22,6 +22,10 @@ const {
   arlingtonProjectInformationUnityTextExtractionIsValid,
   ARLINGTON_PROJECT_INFORMATION_UNITY_FRAME_NOT_FOUND,
 } = require("./lib/arlington-project-information.js");
+const {
+  applyScrapeCanonicalAddressToPortalData,
+  preservePermitPilotMetaOnPortalMerge,
+} = require("./app/services/project-address.service.js");
 
 function getAccelaDebugDir() {
   const dir = path.join(__dirname, "debug");
@@ -26445,8 +26449,8 @@ async function scrapeAccelaRecord(
       let existingRow = null;
       const selectFields =
         page._isBaltimore || page._isFairfax
-          ? "id, portal_data_hash, portal_data, permit_number, user_id"
-          : "id, portal_data_hash, portal_data";
+          ? "id, portal_data_hash, portal_data, permit_number, user_id, address, jurisdiction"
+          : "id, portal_data_hash, portal_data, address, jurisdiction";
 
       if (page._isBaltimore || page._isFairfax) {
         const tenantLabel = page._isBaltimore ? "Baltimore" : "Fairfax";
@@ -26601,12 +26605,29 @@ async function scrapeAccelaRecord(
             `  📌 ${tenantLabel}: full portal_data replace (attachments rows = this scrape only, no merge) projects.id=${existingRow.id}`,
           );
         }
+        const payloadWithMeta = preservePermitPilotMetaOnPortalMerge(
+          existingRow.portal_data,
+          portalPayloadForDb,
+        );
+        const canonicalApply = applyScrapeCanonicalAddressToPortalData(
+          {
+            address: existingRow.address,
+            jurisdiction: existingRow.jurisdiction,
+            portal_data: existingRow.portal_data,
+          },
+          payloadWithMeta,
+          {
+            sourcePortal: payloadWithMeta.portalType || portalPayloadForDb.portalType || null,
+            scrapedAt: new Date().toISOString(),
+          },
+        );
         const updatePayload = {
           portal_status: header.record_status || "Scraped",
           last_checked_at: new Date().toISOString(),
-          portal_data: portalPayloadForDb,
+          portal_data: canonicalApply.portalData,
           portal_data_hash: newHash,
           permit_number: permitNumber,
+          ...(canonicalApply.projectPatch || {}),
         };
 
         const { data, error } = await supabase
@@ -26630,6 +26651,14 @@ async function scrapeAccelaRecord(
             `${tenantLabel} scrape: missing projects row (should have been loaded by id)`,
           );
         }
+        const canonicalApply = applyScrapeCanonicalAddressToPortalData(
+          null,
+          portalPayloadForDb,
+          {
+            sourcePortal: portalPayloadForDb.portalType || null,
+            scrapedAt: new Date().toISOString(),
+          },
+        );
         const { data: created, error: createError } = await supabase
           .from("projects")
           .insert({
@@ -26637,12 +26666,16 @@ async function scrapeAccelaRecord(
             name: header.record_number || permitNumber,
             permit_number: permitNumber,
             description: header.record_type || "",
-            address: portalPayloadForDb.location || "",
+            address:
+              canonicalApply.projectPatch?.address ||
+              canonicalApply.portalData.location ||
+              portalPayloadForDb.location ||
+              "",
             jurisdiction: portalPayloadForDb.jurisdiction || "Unknown",
             status: "draft",
             portal_status: header.record_status || "Unknown",
             last_checked_at: new Date().toISOString(),
-            portal_data: portalPayloadForDb,
+            portal_data: canonicalApply.portalData,
             portal_data_hash: newHash,
           })
           .select("id, portal_data");

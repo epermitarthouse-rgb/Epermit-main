@@ -3,6 +3,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  buildProviderSetupAddressContext,
   resolveProjectAddressForProviderSetup,
   buildHumanAssistedMappingMetadata,
   parseProviderSetupConfirmation,
@@ -17,8 +18,8 @@ const {
 } = require("../app/services/uci/uci-records.service.js");
 
 describe("UCI D2.0 human-assisted provider setup", () => {
-  it("prefers structured project address over portal_data.location", () => {
-    const address = resolveProjectAddressForProviderSetup({
+  it("uses structured address when street address is present", () => {
+    const ctx = buildProviderSetupAddressContext({
       address: "123 Main St",
       city: "Washington",
       state: "DC",
@@ -27,14 +28,15 @@ describe("UCI D2.0 human-assisted provider setup", () => {
       portal_data: { location: "Fallback Sheridan Rd" },
     });
 
-    assert.equal(address.source, "structured");
-    assert.equal(address.formatted, "123 Main St, Washington, DC, 20001");
-    assert.equal(address.complete, true);
-    assert.equal(address.fallback_used, false);
+    assert.equal(ctx.recommended_address_source, "structured");
+    assert.equal(ctx.address.source, "structured");
+    assert.equal(ctx.address.formatted, "123 Main St, Washington, DC, 20001");
+    assert.equal(ctx.address.complete, true);
+    assert.equal(ctx.address_mismatch, true);
   });
 
-  it("uses portal_data.location only when structured fields are empty", () => {
-    const address = resolveProjectAddressForProviderSetup({
+  it("uses portal_data.location when structured street is empty", () => {
+    const ctx = buildProviderSetupAddressContext({
       address: null,
       city: null,
       state: null,
@@ -42,26 +44,83 @@ describe("UCI D2.0 human-assisted provider setup", () => {
       portal_data: { location: "Sheridan Rd NW, Washington DC" },
     });
 
-    assert.equal(address.source, "portal_data_location");
-    assert.equal(address.formatted, "Sheridan Rd NW, Washington DC");
-    assert.equal(address.fallback_used, true);
-    assert.match(String(address.fallback_note || ""), /portal_data\.location/i);
+    assert.equal(ctx.recommended_address_source, "portal_data_location");
+    assert.equal(ctx.canonical_source, "jurisdiction_scrape");
+    assert.equal(ctx.address.source, "portal_data_location");
+    assert.equal(ctx.address.formatted, "Sheridan Rd NW, Washington DC");
+    assert.equal(ctx.address.fallback_used, false);
+  });
+
+  it("does not prefer jurisdiction-only structured fields over scraped location", () => {
+    const ctx = buildProviderSetupAddressContext({
+      address: "",
+      city: "",
+      jurisdiction: "Washington DC",
+      portal_data: { location: "Sheridan Rd NW, Washington DC" },
+    });
+
+    assert.equal(ctx.recommended_address_source, "portal_data_location");
+    assert.equal(ctx.canonical_source, "jurisdiction_scrape");
+    assert.equal(ctx.address.source, "portal_data_location");
   });
 
   it("returns none when no address sources exist", () => {
-    const address = resolveProjectAddressForProviderSetup({
+    const ctx = buildProviderSetupAddressContext({
       address: "",
       city: "",
       portal_data: {},
     });
 
-    assert.equal(address.source, "none");
-    assert.equal(address.formatted, null);
-    assert.equal(address.complete, false);
+    assert.equal(ctx.recommended_address_source, "none");
+    assert.equal(ctx.address.formatted, null);
   });
 
-  it("builds human-assisted mapping metadata without territory matching", () => {
+  it("reads portal_data.location from JSON-string portal_data blobs", () => {
+    const ctx = buildProviderSetupAddressContext({
+      address: "",
+      portal_data: JSON.stringify({ location: "Sheridan Rd NW, Washington DC" }),
+    });
+    assert.equal(ctx.recommended_address_source, "portal_data_location");
+    assert.equal(ctx.address.formatted, "Sheridan Rd NW, Washington DC");
+  });
+
+  it("resolveApplicationPackageAddress honors coordination-record acknowledged source", () => {
+    const {
+      resolveApplicationPackageAddress,
+    } = require("../app/services/uci/uci-provider-setup.service.js");
+    const resolution = resolveApplicationPackageAddress(
+      {
+        address: "100 Old Main St",
+        city: "Washington",
+        state: "DC",
+        portal_data: { location: "200 Sheridan Rd NW, Washington DC" },
+      },
+      {
+        metadata: {
+          uci_provider_mapping: {
+            address_source_acknowledged: "portal_data_location",
+          },
+        },
+      },
+    );
+    assert.equal(resolution.address.formatted, "200 Sheridan Rd NW, Washington DC");
+    assert.equal(resolution.address_source, "portal_data_location");
+    assert.equal(resolution.address_mismatch, true);
+    assert.equal(resolution.address_review_required, false);
+  });
+
+  it("legacy resolveProjectAddressForProviderSetup matches recommended source", () => {
     const address = resolveProjectAddressForProviderSetup({
+      address: "123 Main St",
+      city: "Washington",
+      state: "DC",
+      portal_data: { location: "Different" },
+    });
+    assert.equal(address.source, "structured");
+  });
+
+  it("builds human-assisted mapping metadata with confirmed flag", () => {
+    const ctx = buildProviderSetupAddressContext({
       address: "1 Demo Way",
       city: "Baltimore",
       state: "MD",
@@ -70,43 +129,54 @@ describe("UCI D2.0 human-assisted provider setup", () => {
     const metadata = buildHumanAssistedMappingMetadata({
       userId: "user-1",
       confirmedAt: "2026-07-14T12:00:00.000Z",
-      address,
+      address: ctx.address,
       selectedProviderSlugs: ["pepco"],
       unresolvedUtilityTypes: ["gas"],
+      addressSourceAcknowledged: "structured",
+      addressMismatch: false,
     });
 
     assert.equal(metadata.method, PROVIDER_SETUP_METHOD);
+    assert.equal(metadata.confirmed, true);
     assert.equal(metadata.confirmed_by_user_id, "user-1");
-    assert.equal(metadata.address_source, "structured");
+    assert.equal(metadata.address_source_acknowledged, "structured");
     assert.deepEqual(metadata.selected_provider_slugs, ["pepco"]);
     assert.deepEqual(metadata.unresolved_utility_types, ["gas"]);
     assert.equal(metadata.territory_matching_available, false);
   });
 
-  it("requires provider_setup.confirmed=true", () => {
-    const address = resolveProjectAddressForProviderSetup({ address: "1 Demo Way" });
+  it("requires provider_setup object", () => {
+    const ctx = buildProviderSetupAddressContext({ address: "1 Demo Way" });
     assert.throws(
-      () => parseProviderSetupConfirmation({ confirmed: false }, address),
+      () => parseProviderSetupConfirmation(null, ctx),
+      (err) => err.code === "PROVIDER_SETUP_REQUIRED",
+    );
+  });
+
+  it("requires provider_setup.confirmed=true", () => {
+    const ctx = buildProviderSetupAddressContext({ address: "1 Demo Way" });
+    assert.throws(
+      () =>
+        parseProviderSetupConfirmation(
+          { confirmed: false, address_source_acknowledged: "structured" },
+          ctx,
+        ),
       (err) => err.code === "INVALID_BODY",
     );
   });
 
-  it("validates address_source_acknowledged when supplied", () => {
-    const address = resolveProjectAddressForProviderSetup({
+  it("requires address_source_acknowledged", () => {
+    const ctx = buildProviderSetupAddressContext({
       portal_data: { location: "Fallback only" },
     });
     assert.throws(
-      () =>
-        parseProviderSetupConfirmation(
-          { confirmed: true, address_source_acknowledged: "structured" },
-          address,
-        ),
+      () => parseProviderSetupConfirmation({ confirmed: true }, ctx),
       (err) => err.code === "INVALID_BODY",
     );
 
     const parsed = parseProviderSetupConfirmation(
       { confirmed: true, address_source_acknowledged: "portal_data_location" },
-      address,
+      ctx,
     );
     assert.deepEqual(parsed.unresolvedUtilityTypes, []);
   });
@@ -137,6 +207,7 @@ describe("UCI D2.0 human-assisted provider setup", () => {
     assert.equal(context.territory_matching_message, TERRITORY_MATCHING_UNAVAILABLE_MESSAGE);
     assert.equal(context.providers[0].suggested, false);
     assert.equal(context.providers[0].already_initialized, false);
+    assert.ok(Array.isArray(context.available_address_sources));
   });
 
   it("marks already initialized providers without auto-selecting them", () => {
@@ -162,6 +233,7 @@ describe("UCI D2.0 human-assisted provider setup", () => {
       { pepco_dashboard_discovery_status: "ok" },
       {
         method: PROVIDER_SETUP_METHOD,
+        confirmed: true,
         confirmed_by_user_id: "user-1",
         confirmed_at: "2026-07-14T12:00:00.000Z",
         selected_provider_slugs: ["pepco"],
@@ -267,6 +339,24 @@ function createInitMockSupabase(tables) {
 }
 
 describe("UCI D2.0 initCoordinationForProviders metadata", () => {
+  it("requires provider setup metadata", async () => {
+    const supabase = createInitMockSupabase({
+      coordination_records: [],
+      coordination_stage_transitions: [],
+    });
+
+    await assert.rejects(
+      () =>
+        initCoordinationForProviders(supabase, {
+          projectId: "proj-1",
+          userId: "user-1",
+          resolvedProviders: [{ id: "prov-1", slug: "pepco", utility_type: "electric" }],
+          providerSetupMetadata: null,
+        }),
+      (err) => err.code === "PROVIDER_SETUP_REQUIRED",
+    );
+  });
+
   it("persists mapping metadata on new records and init transitions", async () => {
     const tables = {
       coordination_records: [],
@@ -275,9 +365,11 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
     const supabase = createInitMockSupabase(tables);
     const mappingMetadata = {
       method: PROVIDER_SETUP_METHOD,
+      confirmed: true,
       confirmed_by_user_id: "user-1",
       confirmed_at: "2026-07-14T12:00:00.000Z",
       address_source: "structured",
+      address_source_acknowledged: "structured",
       selected_provider_slugs: ["pepco"],
       unresolved_utility_types: [],
       territory_matching_available: false,
@@ -286,16 +378,14 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
     const result = await initCoordinationForProviders(supabase, {
       projectId: "proj-1",
       userId: "user-1",
-      resolvedProviders: [
-        { id: "prov-1", slug: "pepco", utility_type: "electric" },
-      ],
+      resolvedProviders: [{ id: "prov-1", slug: "pepco", utility_type: "electric" }],
       providerSetupMetadata: mappingMetadata,
     });
 
     assert.equal(result.created.length, 1);
     const record = tables.coordination_records[0];
     assert.equal(record.metadata.uci_provider_mapping.provider_slug, "pepco");
-    assert.equal(record.metadata.uci_provider_mapping.method, PROVIDER_SETUP_METHOD);
+    assert.equal(record.metadata.uci_provider_mapping.confirmed, true);
 
     const transition = tables.coordination_stage_transitions[0];
     assert.equal(transition.metadata.uci_provider_mapping.method, PROVIDER_SETUP_METHOD);
@@ -317,9 +407,11 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
     const supabase = createInitMockSupabase(tables);
     const mappingMetadata = {
       method: PROVIDER_SETUP_METHOD,
+      confirmed: true,
       confirmed_by_user_id: "user-1",
       confirmed_at: "2026-07-14T12:30:00.000Z",
       address_source: "none",
+      address_source_acknowledged: "none",
       selected_provider_slugs: ["pepco"],
       unresolved_utility_types: ["gas"],
       territory_matching_available: false,
@@ -328,15 +420,12 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
     const result = await initCoordinationForProviders(supabase, {
       projectId: "proj-1",
       userId: "user-1",
-      resolvedProviders: [
-        { id: "prov-1", slug: "pepco", utility_type: "electric" },
-      ],
+      resolvedProviders: [{ id: "prov-1", slug: "pepco", utility_type: "electric" }],
       providerSetupMetadata: mappingMetadata,
     });
 
     assert.equal(result.created.length, 0);
     assert.equal(result.already_existed.length, 1);
-    assert.equal(tables.coordination_records.length, 1);
     assert.equal(
       tables.coordination_records[0].metadata.uci_provider_mapping.confirmed_at,
       "2026-07-14T12:30:00.000Z",

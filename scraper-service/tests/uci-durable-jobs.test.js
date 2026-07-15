@@ -13,6 +13,7 @@ const {
 const {
   runPortalSyncWithMode,
   mapJobToSyncRunResponse,
+  listPortalSyncRuns,
 } = require("../app/services/uci/uci-portal-sync-job.service.js");
 const { executeUciPortalSyncWorkerCycle } = require("../app/services/uci/uci-durable-worker-executor.js");
 
@@ -243,5 +244,45 @@ describe("UCI D1D job response mapping", () => {
     assert.equal(mapped.jobType, UCI_PORTAL_SYNC_JOB_TYPE);
     assert.equal(mapped.providerSlug, "pepco");
     assert.equal(mapped.status, "queued");
+  });
+
+  it("returns empty sync runs when UCI job columns are unavailable", async () => {
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          or() {
+            return this;
+          },
+          order() {
+            return this;
+          },
+          limit() {
+            return this;
+          },
+          then(resolve) {
+            return Promise.resolve({
+              data: null,
+              error: { code: "42703", message: 'column scrape_jobs.job_type does not exist' },
+              count: null,
+            }).then(resolve);
+          },
+        };
+      },
+    };
+
+    const result = await listPortalSyncRuns(supabase, {
+      coordinationRecordId: "coord-1",
+      projectId: "proj-1",
+      limit: 8,
+    });
+    assert.deepEqual(result.runs, []);
+    assert.equal(result.total, 0);
+    assert.equal(result.schema_unavailable, true);
   });
 });

@@ -49,9 +49,9 @@
     {
       "key": "connected_load_data",
       "label": "Connected load data",
-      "source": "load_summary.calculated_values",
+      "source": "load_summary.verified_values",
       "required": true,
-      "note": "Requires verified engineering values from load profile — not inferred in D2.1/D3"
+      "note": "Requires human-approved verified values from load profile Row 6 workflow — not inferred"
     }
   ],
   "notes": [

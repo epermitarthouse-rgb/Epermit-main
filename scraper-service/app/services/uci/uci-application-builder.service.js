@@ -3,8 +3,12 @@
 const fs = require("fs");
 const path = require("path");
 const { getCoordinationRecordById } = require("./uci-records.service.js");
-const { resolveProjectAddressForProviderSetup } = require("./uci-provider-setup.service.js");
+const { resolveApplicationPackageAddress } = require("./uci-provider-setup.service.js");
 const { LOAD_PROFILE_IDEMPOTENCY_KEY } = require("./uci-load-profile.service.js");
+
+function getLoadCandidateHelpers() {
+  return require("./uci-load-candidate.service.js");
+}
 
 const APPLICATION_PACKAGE_VERSION = "d3-v1";
 const APPLICATION_PACKAGE_IDEMPOTENCY_KEY = "agent_3_application_package:d3-v1";
@@ -194,14 +198,19 @@ function matchRequiredDocuments(documents, requiredDocuments) {
  * @param {Record<string, unknown>} project
  * @param {Record<string, unknown> | null} loadSummary
  * @param {Array<Record<string, unknown>>} requiredFields
+ * @param {Record<string, unknown> | null | undefined} [coordinationRecord]
  */
-function evaluateRequiredFields(project, loadSummary, requiredFields) {
-  /** @type {Array<{ key: string, label: string, status: string, value?: unknown, source?: string, note?: string }>} */
+function evaluateRequiredFields(project, loadSummary, requiredFields, coordinationRecord, options = {}) {
+  /** @type {Array<{ key: string, label: string, status: string, value?: unknown, source?: string, note?: string, address_source?: string }>} */
   const fieldResults = [];
   /** @type {string[]} */
   const missingFields = [];
 
-  const address = resolveProjectAddressForProviderSetup(project);
+  const addressResolution = resolveApplicationPackageAddress(project, coordinationRecord, {
+    externalApplicationId: options.externalApplicationId,
+    utilityApplicationAddress: options.utilityApplicationAddress,
+  });
+  const address = addressResolution.address;
 
   for (const field of requiredFields) {
     const key = String(field.key ?? "");
@@ -222,7 +231,12 @@ function evaluateRequiredFields(project, loadSummary, requiredFields) {
     } else if (source === "project.description") {
       value = project.description ?? null;
       present = Boolean(value);
-    } else if (source === "load_summary.calculated_values") {
+    } else if (
+      source === "load_summary.calculated_values" ||
+      source === "load_summary.verified_values"
+    ) {
+      const { getVerifiedValuesForPackage, isConnectedLoadDataSatisfied } = getLoadCandidateHelpers();
+      const verified = getVerifiedValuesForPackage(loadSummary);
       const calculated =
         loadSummary &&
         typeof loadSummary === "object" &&
@@ -232,25 +246,46 @@ function evaluateRequiredFields(project, loadSummary, requiredFields) {
         !Array.isArray(loadSummary.calculated_values)
           ? /** @type {Record<string, unknown>} */ (loadSummary.calculated_values)
           : {};
-      const keys = Object.keys(calculated).filter((k) => {
+      const calculatedKeys = Object.keys(calculated).filter((k) => {
         const v = calculated[k];
         return v != null && v !== "";
       });
-      value = keys.length ? calculated : null;
-      present = keys.length > 0;
+
+      if (key === "connected_load_data") {
+        present = isConnectedLoadDataSatisfied(loadSummary);
+        value = present ? verified : null;
+      } else {
+        const keys = Object.keys(verified).length ? Object.keys(verified) : calculatedKeys;
+        value = keys.length ? (Object.keys(verified).length ? verified : calculated) : null;
+        present = keys.length > 0;
+      }
     } else {
       value = null;
       present = false;
     }
 
     const status = present ? "present" : required ? "missing" : "optional_missing";
-    fieldResults.push({ key, label, status, value, source, note });
+    const fieldEntry = { key, label, status, value, source, note };
+    if (source === "project.address") {
+      fieldEntry.address_source = addressResolution.address_source_acknowledged
+        ? addressResolution.address.source
+        : addressResolution.canonical_address_source ?? addressResolution.address.source;
+    }
+    fieldResults.push(fieldEntry);
     if (required && !present) {
       missingFields.push(key);
     }
   }
 
-  return { fieldResults, missingFields };
+  if (addressResolution.address_review_required) {
+    missingFields.push("project_address_review");
+  }
+
+  return {
+    fieldResults,
+    missingFields,
+    addressResolution,
+  };
 }
 
 /**
@@ -259,12 +294,18 @@ function evaluateRequiredFields(project, loadSummary, requiredFields) {
  * @param {string[]} params.missingFields
  * @param {Record<string, unknown> | null} params.loadSummary
  * @param {boolean} params.hasLoadProfileDraft
+ * @param {boolean} [params.addressReviewRequired]
  */
 function resolvePackageStatus(params) {
-  const { missingDocuments, missingFields, loadSummary, hasLoadProfileDraft } = params;
+  const { missingDocuments, missingFields, loadSummary, hasLoadProfileDraft, addressReviewRequired } =
+    params;
 
   if (!hasLoadProfileDraft) {
     return "blocked";
+  }
+
+  if (addressReviewRequired) {
+    return "incomplete";
   }
 
   const loadStatus =
@@ -316,7 +357,7 @@ async function findApplicationPackageDraft(supabase, coordinationRecordId, proje
  * @param {string} params.userId
  */
 async function runApplicationPackageBuild(supabase, params) {
-  const { coordinationRecordId, userId } = params;
+  const { coordinationRecordId, userId, externalApplicationId } = params;
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -416,18 +457,42 @@ async function runApplicationPackageBuild(supabase, params) {
     ? /** @type {Array<Record<string, unknown>>} */ (template.required_fields)
     : [];
 
-  const docMatch = matchRequiredDocuments(documents, requiredDocuments);
-  const fieldEval = evaluateRequiredFields(project, loadSummary, requiredFields);
+  const existingPackageDraft = await findApplicationPackageDraft(
+    supabase,
+    coordinationRecordId,
+    projectId,
+  );
+  const existingPackageDocuments = Array.isArray(existingPackageDraft?.package_documents)
+    ? /** @type {Array<Record<string, unknown>>} */ (existingPackageDraft.package_documents)
+    : [];
+
+  const { resolvePackageDocumentSlots, extractPepcoPortalFiles } = require("./uci-package-document-bridge.service.js");
+  const docMatch = resolvePackageDocumentSlots({
+    requiredDocuments,
+    projectDocuments: documents,
+    existingPackageDocuments,
+    pepcoPortalFiles: extractPepcoPortalFiles(record),
+    accessContext: {
+      projectId,
+      coordinationRecordId,
+      tenantId: record.tenant_id != null ? String(record.tenant_id) : null,
+    },
+  });
+  const fieldEval = evaluateRequiredFields(project, loadSummary, requiredFields, record, {
+    externalApplicationId,
+  });
   const packageStatus = resolvePackageStatus({
     missingDocuments: docMatch.missingDocuments,
     missingFields: fieldEval.missingFields,
     loadSummary,
     hasLoadProfileDraft: Boolean(loadProfileDraft),
+    addressReviewRequired: fieldEval.addressResolution.address_review_required,
   });
 
   const generatedAt = new Date().toISOString();
   const templateVersion = String(template.version ?? "unknown");
 
+  const addressResolution = fieldEval.addressResolution;
   const agentDraftMetadata = {
     application_package: {
       version: APPLICATION_PACKAGE_VERSION,
@@ -438,6 +503,19 @@ async function runApplicationPackageBuild(supabase, params) {
       missing_documents: docMatch.missingDocuments,
       missing_fields: fieldEval.missingFields,
       field_results: fieldEval.fieldResults,
+      project_address: {
+        formatted: addressResolution.address.formatted,
+        source: addressResolution.address.source,
+        complete: addressResolution.address.complete,
+        fallback_used: Boolean(addressResolution.address.fallback_used),
+        parts: addressResolution.address.parts ?? null,
+        selection_reason: addressResolution.address_selection_reason ?? null,
+        external_application_id: externalApplicationId ? String(externalApplicationId) : null,
+      },
+      address_source_acknowledged: addressResolution.address_source_acknowledged,
+      address_mismatch: addressResolution.address_mismatch,
+      mismatch_warning: addressResolution.mismatch_warning,
+      address_review_required: addressResolution.address_review_required,
       load_profile_application_id: loadProfileDraft.id,
       load_profile_version:
         loadSummary && typeof loadSummary.version === "string" ? loadSummary.version : null,
@@ -445,6 +523,15 @@ async function runApplicationPackageBuild(supabase, params) {
         loadSummary && typeof loadSummary.analysis_status === "string"
           ? loadSummary.analysis_status
           : null,
+      verified_load_snapshot:
+        loadSummary &&
+        typeof loadSummary === "object" &&
+        loadSummary.verified_values &&
+        typeof loadSummary.verified_values === "object" &&
+        !Array.isArray(loadSummary.verified_values)
+          ? loadSummary.verified_values
+          : {},
+      connected_load_satisfied: getLoadCandidateHelpers().isConnectedLoadDataSatisfied(loadSummary),
       built_at: generatedAt,
       built_by_user_id: userId,
       generated_by: GENERATED_BY,
@@ -474,7 +561,7 @@ async function runApplicationPackageBuild(supabase, params) {
     },
   };
 
-  const existing = await findApplicationPackageDraft(supabase, coordinationRecordId, projectId);
+  const existing = existingPackageDraft;
   /** @type {Record<string, unknown>} */
   let application;
 

@@ -67,9 +67,9 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 
 *As of 2026-07-15 decision reconciliation — based on codebase audit, not live PEPCO verification.*
 
-**Milestone status:** D1A–D1D, D2.0, D2.1, D3 foundations **implemented** (scoped); D4–D12 foundations **partial**; D13 / Row 2 tenant security **code complete** (migrations staged); D2.2 and D4 PEPCO submit **blocked**.
+**Milestone status:** D1A–D1D, D2.0, D2.1, D3 foundations **implemented** (scoped); **D4 submission adapter + dry-run implemented** (scoped); D5–D12 foundations **partial**; D13 / Row 2 tenant security **code complete** (migrations staged); D2.2 blocked; D4 live PEPCO verify **pending operator**.
 
-**Next implementation target:** **NB-D4-001** — D4 PEPCO submission dry-run (Row 2 tenant/RLS code complete 2026-07-15).
+**Next implementation target:** **Operator live PEPCO dry-run** — validate `submission-field-mappings.json` selectors against production portal HTML before enabling `UCI_PEPCO_LIVE_SUBMISSION_ENABLED`.
 
 **Main external blockers:**
 - Row 2 migration apply + live RLS verification in staging/production
@@ -88,8 +88,8 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 | Manual coordination init | **partial** | User selects providers; D2.0 human-assisted setup with mapping metadata |
 | Human-assisted provider setup (D2.0) | **implemented** | `uci-provider-setup.service.js`; guided init UI; `metadata.uci_provider_mapping` |
 | Load profile foundation (D2.1) | **partial** | `uci-load-profile.service.js`; missing-input inventory; `load_summary` agent_draft; no numeric templates |
-| Application preparation (D3) | **partial** | `uci-application-builder.service.js`; PEPCO template; review workflow |
-| Submission foundation (D4) | **partial** | `uci-application-submit.service.js`; email_intent; PEPCO portal blocked |
+| Application preparation (D3) | **partial** | `uci-application-builder.service.js`; PEPCO template; review workflow; **PEPCO document bridge** reuses UCI storage with human-confirmed slot mapping (`uci-package-document-bridge.service.js`) — filename/metadata suggestions only; connected load extraction remains Row 6 |
+| Submission foundation (D4) | **partial** (scoped) | PEPCO adapter + dry-run; email Graph send; live submit gated (`UCI_PEPCO_LIVE_SUBMISSION_ENABLED=false`) |
 | Communication classifier (D5) | **partial** | `uci-communication-classifier.service.js`; portal-sync keyword classifier; classify UI |
 | COS analyst (D6) | **partial** | `uci-cos-analyst.service.js`; discrepancy analysis API |
 | Costs foundation (D7) | **partial** | `uci-costs.service.js`; manual cost CRUD + UI; QB reuse planned (billing module connected) |
@@ -117,14 +117,14 @@ Review this section **before and after every UCI milestone**. End-of-project gap
 | UCI agents 1–12 as workers | **partial** | D2.0/D2.1/D3/D4/D5–D10 foundations; D2.2 auto mapping blocked; D4 PEPCO submit blocked |
 | Portal submission automation | **partial** | email_intent only; PEPCO portal blocked |
 | BGE portal automation | **missing** |
-| Tenant propagation + tenant-aware RLS | **partial** | Editor write gate + RLS migration; `tenant_id` not propagated (no org source) |
+| Tenant propagation + tenant-aware RLS | **implemented** | Row 2 + Row 4 cross-tenant tests; migrations applied |
 | Durable UCI jobs | **implemented** (D1D) | `uci_portal_sync` on shared `scrape_jobs`; flag-gated |
 | Production document storage | **implemented** (D1B) | Supabase `project-documents`; local dev-only |
 | Event bus (`uci.*` events) | **partial** | In-memory ring buffer; D5 classify/reclassify emit |
 | Communication classifier (Agent 5) | **partial** | Portal-sync keyword classifier; no inbound email |
 | Portfolio view, escalate APIs | **partial** | `portfolio_view` + drawer summary; escalate missing |
 | D13 agent workflow UI | **partial** | COS/costs/equipment/meter/closeout/reclassify/sync-runs wired in drawer |
-| Cross-tenant UCI security tests | **missing** | Cross-project + viewer/editor tests added; cross-tenant blocked |
+| Cross-tenant UCI security tests | **implemented** (Row 4) | `uci-cross-tenant-security.test.js` — all UCI endpoints + CI gate |
 | Jurisdiction → UCI data reuse | **partial** | All jurisdictions may enter UCI; reuse `projects` + `project_documents`; see `UCI_ARCHITECTURE.md` §3 |
 | Email workflow (Commun-ET mailbox) | **missing** | Direction documented; Graph preferred; inbound webhook blocked |
 | QuickBooks UCI actions | **missing** | Reuse billing `scraper-service/app/services/quickbooks/` — no second integration |

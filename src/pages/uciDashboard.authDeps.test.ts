@@ -50,4 +50,13 @@ describe("UciDashboard auth dependency regression", () => {
     assert.match(coordinationBlock, /!user\?\.id/);
     assert.match(coordinationBlock, /!projectId/);
   });
+
+  it("imports EditorialPageHeader so initial /uci render does not throw ReferenceError", () => {
+    assert.match(dashboardSource, /<EditorialPageHeader\b/);
+    assert.match(
+      dashboardSource,
+      /import\s*\{[^}]*\bEditorialPageHeader\b[^}]*\}\s*from\s*["']@\/components\/layout\/EditorialPageHeader["']/,
+      "EditorialPageHeader is rendered but must be imported — otherwise /uci blanks on first paint",
+    );
+  });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TenantContextBadge } from '@/components/uci/TenantContextBadge';
+import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,18 +44,24 @@ import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import {
   analyzeCoordinationLoadProfile,
+  addCoordinationManualVerifiedValue,
   applyLifecycleProposal,
   analyzeCoordinationCos,
   buildCoordinationApplicationPackage,
   checkInCoordinationEquipment,
   classifyCoordinationCommunications,
+  confirmApplicationPackageDocumentMapping,
   createCoordinationEquipment,
+  extractCoordinationLoadCandidates,
+  importCoordinationDocumentFindings,
+  formatLoadCandidateExtractionError,
   formatUciUserError,
   getCoordinationDetail,
   getProjectPortfolioView,
   getProjectProviderSetup,
   initProjectCoordination,
   isUciSessionExpiredError,
+  listApplicationPackageDocumentCandidates,
   listCoordinationSyncRuns,
   listProjectCoordination,
   listUciProviders,
@@ -64,7 +71,9 @@ import {
   prepareCloseout,
   prepareMeterSet,
   rejectLifecycleProposal,
+  removeApplicationPackageDocumentMapping,
   reclassifyCommunication,
+  resolveCoordinationLoadCandidate,
   resumePepcoApplicationDetailDiscovery,
   resumePepcoDiscovery,
   reviewCoordinationApplication,
@@ -110,6 +119,7 @@ import type {
   UciPepcoApplicationDetailDiscoveryResponse,
   UciPepcoDashboardCardMeta,
   UciNormalizedSyncResult,
+  UciProviderSetupAddressSource,
   UciProviderSetupResponse,
   UciRecordDetailResponse,
   UciPortfolioViewResponse,
@@ -140,21 +150,23 @@ import {
   SyncRunsPanel,
   useSyncRunPolling,
 } from "@/components/uci/UciD13WorkflowPanels";
+import { LoadProfileWorkspace } from "@/components/uci/LoadProfileWorkspace";
+import { UciDocumentCoveragePanel } from "@/components/uci/UciDocumentCoveragePanel";
 import {
-  formatLoadProfileAnalysisStatus,
   getLoadProfileDraftApplication,
-  getVerifiedCalculatedValues,
-  loadProfileStatusTone,
-  parseLoadProfileSummary,
 } from "@/lib/uciLoadProfile";
 import {
   applicationPackageStatusTone,
   canSubmitApplication,
   formatApplicationPackageStatus,
   formatDraftStatus,
+  formatPackageDocumentSource,
+  formatSuggestionConfidence,
   getApplicationPackageDraftApplication,
   parseApplicationPackageMetadata,
   parsePackageDocuments,
+  type UciPackageDocumentCandidate,
+  type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
 import {
   classificationNeedsAttention,
@@ -342,6 +354,8 @@ export default function UciDashboard() {
   const [providerSetup, setProviderSetup] = useState<UciProviderSetupResponse | null>(null);
   const [providerSetupLoading, setProviderSetupLoading] = useState(false);
   const [providerSetupConfirmed, setProviderSetupConfirmed] = useState(false);
+  const [addressSourceAcknowledged, setAddressSourceAcknowledged] =
+    useState<UciProviderSetupAddressSource | null>(null);
   const [unresolvedUtilityTypes, setUnresolvedUtilityTypes] = useState<string[]>([]);
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -354,6 +368,10 @@ export default function UciDashboard() {
   const [reason, setReason] = useState("");
   const [transitionSaving, setTransitionSaving] = useState(false);
   const [loadProfileBusy, setLoadProfileBusy] = useState(false);
+  const [loadCandidateBusy, setLoadCandidateBusy] = useState(false);
+  const [importFindingsBusy, setImportFindingsBusy] = useState(false);
+  const [loadCandidateResolveBusy, setLoadCandidateResolveBusy] = useState<string | null>(null);
+  const [manualVerifyBusy, setManualVerifyBusy] = useState(false);
   const [applicationPrepBusy, setApplicationPrepBusy] = useState(false);
   const [applicationReviewBusy, setApplicationReviewBusy] = useState(false);
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
@@ -531,6 +549,7 @@ export default function UciDashboard() {
     if (authLoading || !user?.id || !projectId) {
       setProviderSetup(null);
       setProviderSetupConfirmed(false);
+      setAddressSourceAcknowledged(null);
       setUnresolvedUtilityTypes([]);
       return;
     }
@@ -539,9 +558,11 @@ export default function UciDashboard() {
       const setup = await getProjectProviderSetup(projectId);
       setProviderSetup(setup);
       setProviderSetupConfirmed(false);
+      setAddressSourceAcknowledged(setup.recommended_address_source);
       setUnresolvedUtilityTypes([]);
     } catch (e: unknown) {
       setProviderSetup(null);
+      setAddressSourceAcknowledged(null);
       toast.error(formatUciUserError(e, "Failed to load provider setup guidance"));
     } finally {
       setProviderSetupLoading(false);
@@ -630,11 +651,112 @@ export default function UciDashboard() {
     }
   };
 
-  const handleApplicationPackageBuild = async () => {
+  const handleLoadCandidateExtract = async (externalApplicationId: string, refresh = false) => {
+    if (!detailId || !externalApplicationId) return;
+    setLoadCandidateBusy(true);
+    try {
+      const result = await extractCoordinationLoadCandidates(detailId, {
+        external_application_id: externalApplicationId,
+        refresh,
+      });
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      if (result.extraction_status === "partial") {
+        const failedCount = result.failed_documents?.length ?? result.documents_failed ?? 0;
+        toast.warning(
+          `Partial extraction — ${result.candidates_produced ?? result.candidates.length} candidate(s); ${failedCount} source issue(s)`,
+        );
+      } else {
+        toast.success("Connected load candidates extracted — review evidence before approving");
+      }
+    } catch (e: unknown) {
+      toast.error(formatLoadCandidateExtractionError(e, "Connected load extraction failed"));
+    } finally {
+      setLoadCandidateBusy(false);
+    }
+  };
+
+  const handleImportDocumentFindings = async (externalApplicationId: string, refresh = false) => {
+    if (!detailId || !externalApplicationId) return;
+    setImportFindingsBusy(true);
+    try {
+      const result = await importCoordinationDocumentFindings(detailId, {
+        external_application_id: externalApplicationId,
+        refresh,
+      });
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      if (result.status === "partial") {
+        toast.warning(
+          `Partial import — ${result.candidates_created} created, ${result.findings_skipped} skipped, ${result.failed_findings.length} failed`,
+        );
+      } else {
+        toast.success(
+          `Imported ${result.candidates_created} candidate(s) from document findings — review in queue`,
+        );
+      }
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Document findings import failed"));
+    } finally {
+      setImportFindingsBusy(false);
+    }
+  };
+
+  const handleLoadCandidateResolve = async (
+    candidateId: string,
+    action: "approve" | "edit_approve" | "reject" | "keep_unresolved",
+    opts?: { edited_value?: string; edited_unit?: string; review_note?: string },
+  ) => {
+    if (!detailId) return;
+    setLoadCandidateResolveBusy(candidateId);
+    try {
+      await resolveCoordinationLoadCandidate(detailId, {
+        candidate_id: candidateId,
+        action,
+        ...opts,
+      });
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      toast.success(
+        action === "approve" || action === "edit_approve"
+          ? "Value approved into verified load profile"
+          : action === "reject"
+            ? "Candidate rejected"
+            : "Candidate left unresolved",
+      );
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to resolve candidate"));
+    } finally {
+      setLoadCandidateResolveBusy(null);
+    }
+  };
+
+  const handleManualVerifiedValue = async (
+    payload: import("@/lib/uciLoadProfileWorkspace").ManualVerifiedInputPayload & {
+      review_note: string;
+    },
+  ) => {
+    if (!detailId) return;
+    setManualVerifyBusy(true);
+    try {
+      await addCoordinationManualVerifiedValue(detailId, payload);
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      toast.success("Manual verified input saved");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to save manual verified input"));
+    } finally {
+      setManualVerifyBusy(false);
+    }
+  };
+
+  const handleApplicationPackageBuild = async (externalApplicationId?: string | null) => {
     if (!detailId) return;
     setApplicationPrepBusy(true);
     try {
-      await buildCoordinationApplicationPackage(detailId);
+      await buildCoordinationApplicationPackage(detailId, {
+        external_application_id: externalApplicationId || undefined,
+      });
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
       toast.success("Application package draft saved — review missing documents before submission");
@@ -672,11 +794,20 @@ export default function UciDashboard() {
     if (!packageApp) return;
     setApplicationSubmitBusy(true);
     try {
-      await submitCoordinationApplication(packageApp.id);
+      const result = await submitCoordinationApplication(packageApp.id);
       const d = await getCoordinationDetail(detailId!);
       setDetail(d);
       await refreshCoordination();
-      toast.success("Submission recorded — await utility confirmation");
+      if (result.status === "human_required" || result.dry_run) {
+        toast.info(
+          result.message ||
+            "PEPCO dry-run complete — review fields and attachments before any live submission.",
+        );
+      } else if (result.status === "confirmed") {
+        toast.success("Submission confirmed — await utility acknowledgment");
+      } else {
+        toast.success("Submission recorded — await utility confirmation");
+      }
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Application submission failed"));
     } finally {
@@ -941,6 +1072,10 @@ export default function UciDashboard() {
       toast.error("Confirm your provider selections before initializing");
       return;
     }
+    if (!addressSourceAcknowledged) {
+      toast.error("Acknowledge the project address source before initializing");
+      return;
+    }
     const slugs = providers
       .filter((p) => initPick[p.slug])
       .map((p) => p.slug);
@@ -952,7 +1087,7 @@ export default function UciDashboard() {
     try {
       const out = await initProjectCoordination(projectId, slugs, {
         confirmed: true,
-        address_source_acknowledged: providerSetup?.address.source,
+        address_source_acknowledged: addressSourceAcknowledged,
         unresolved_utility_types: unresolvedUtilityTypes,
       });
       toast.success(
@@ -1153,6 +1288,29 @@ export default function UciDashboard() {
     () => pepcoMergedProjects.find((p) => p.key === pepcoSelectedProjectKey) ?? null,
     [pepcoMergedProjects, pepcoSelectedProjectKey],
   );
+
+  const resolvePortalDocumentIndex = useCallback(
+    (fileName: string): number | null => {
+      const docs = selectedPepcoProject?.app?.documents ?? [];
+      const normalized = fileName.trim().toLowerCase();
+      const idx = docs.findIndex((d) => {
+        const name = String(d.documentName ?? "").trim().toLowerCase();
+        return name === normalized || normalized.includes(name) || name.includes(normalized);
+      });
+      return idx >= 0 ? idx : null;
+    },
+    [selectedPepcoProject?.app?.documents],
+  );
+
+  const loadProfilePackageContext = useMemo(() => {
+    const packageApp = getApplicationPackageDraftApplication(detail?.applications);
+    const packageMeta = parseApplicationPackageMetadata(packageApp);
+    return {
+      packageStatus: packageMeta?.package_status ?? null,
+      hasProjectAddress: Boolean(packageMeta?.project_address?.formatted),
+      packageDocumentsComplete: (packageMeta?.missing_documents?.length ?? 0) === 0,
+    };
+  }, [detail?.applications]);
 
   /** Auto-select the default project and drop selections that no longer exist. */
   useEffect(() => {
@@ -1932,25 +2090,83 @@ export default function UciDashboard() {
                         {providerSetup.territory_matching_message}
                       </p>
                       <ol className={cn("list-decimal space-y-1 pl-5 text-xs", uciMutedClass)}>
-                        {providerSetup.guidance_steps.map((step) => (
+                        {(providerSetup.guidance_steps ?? []).map((step) => (
                           <li key={step}>{step}</li>
                         ))}
                       </ol>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-cream-sunken/90 bg-cream/80 px-3 py-2.5 text-sm dark:border-teal/25 dark:bg-obsidian/50">
-                    <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-light">
-                      Project address ({providerSetup.address.source.replace(/_/g, " ")})
-                    </p>
-                    <p className="mt-1 font-medium text-ink-primary-light dark:text-foreground">
-                      {providerSetup.address.formatted || "No project address on file"}
-                    </p>
-                    {providerSetup.address.fallback_note ? (
-                      <p className={cn("mt-1 text-xs", uciMutedClass)}>
-                        {providerSetup.address.fallback_note}
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-cream-sunken/90 bg-cream/80 px-3 py-2.5 text-sm dark:border-teal/25 dark:bg-obsidian/50">
+                      <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-light">
+                        Structured project address
+                      </p>
+                      <p className="mt-1 font-medium text-ink-primary-light dark:text-foreground">
+                        {providerSetup.structured?.formatted || "No structured address on file"}
+                      </p>
+                    </div>
+
+                    {providerSetup.scraped_location ? (
+                      <div className="rounded-lg border border-cream-sunken/90 bg-cream/80 px-3 py-2.5 text-sm dark:border-teal/25 dark:bg-obsidian/50">
+                        <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-light">
+                          Latest scraped portal location
+                        </p>
+                        <p className="mt-1 font-medium text-ink-primary-light dark:text-foreground">
+                          {providerSetup.scraped_location.formatted}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {providerSetup.address_mismatch && providerSetup.mismatch_warning ? (
+                      <p className="rounded-md border border-amber-300/80 bg-amber-100/80 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
+                        {providerSetup.mismatch_warning}
                       </p>
                     ) : null}
+
+                    {providerSetup.address_mismatch ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-ink-secondary-light">
+                          Address to confirm for provider mapping
+                        </p>
+                        {(providerSetup.available_address_sources ?? [])
+                          .filter((source) => source !== "none")
+                          .map((source) => (
+                            <label
+                              key={source}
+                              className="flex cursor-pointer items-start gap-2 rounded-md border border-cream-sunken/90 px-2.5 py-2 text-xs dark:border-teal/25"
+                            >
+                              <input
+                                type="radio"
+                                name="uci-address-source"
+                                className="mt-0.5"
+                                checked={addressSourceAcknowledged === source}
+                                onChange={() => setAddressSourceAcknowledged(source)}
+                              />
+                              <span>
+                                <span className="block font-medium capitalize">
+                                  {source.replace(/_/g, " ")}
+                                </span>
+                                <span className={uciMutedClass}>
+                                  {source === "structured"
+                                    ? providerSetup.structured?.formatted
+                                    : providerSetup.scraped_location?.formatted}
+                                </span>
+                              </span>
+                            </label>
+                          ))}
+                      </div>
+                    ) : (
+                      <p className={cn("text-xs", uciMutedClass)}>
+                        Confirming address source:{" "}
+                        <span className="font-medium text-ink-primary-light dark:text-foreground">
+                          {(providerSetup.recommended_address_source ?? "structured").replace(/_/g, " ")}
+                        </span>
+                        {providerSetup.address.formatted
+                          ? ` — ${providerSetup.address.formatted}`
+                          : ""}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : null}
@@ -2053,7 +2269,9 @@ export default function UciDashboard() {
                   initting ||
                   providers.length === 0 ||
                   providerSetupLoading ||
-                  !providerSetupConfirmed
+                  !providerSetupConfirmed ||
+                  !addressSourceAcknowledged ||
+                  !Object.values(initPick).some(Boolean)
                 }
                 onClick={() => void handleInit()}
               >
@@ -2398,19 +2616,48 @@ export default function UciDashboard() {
                 </div>
               ) : null}
 
-              <LoadProfileSection
+              <UciDocumentCoveragePanel
+                coordinationId={detailId ?? ""}
+                externalApplicationId={selectedPepcoProject?.applicationId ?? null}
+                externalApplicationTitle={selectedPepcoProject?.title ?? null}
+                mutedClass={uciMutedClass}
+                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                resolvePortalDocumentIndex={resolvePortalDocumentIndex}
+              />
+
+              <LoadProfileWorkspace
                 applications={(detail.applications ?? []) as CoordinationApplication[]}
-                equipment={detail.equipment ?? []}
                 utilityType={detailRecord.utility_type}
+                selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
+                selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
                 formatWhen={formatWhen}
                 mutedClass={uciMutedClass}
-                sectionTitleClass={uciSheetSectionTitleClass}
                 toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                busy={loadProfileBusy}
+                analyzeBusy={loadProfileBusy}
+                candidateBusy={loadCandidateBusy}
+                candidateResolveBusy={loadCandidateResolveBusy}
+                manualVerifyBusy={manualVerifyBusy}
+                importFindingsBusy={importFindingsBusy}
+                packageStatus={loadProfilePackageContext.packageStatus}
+                hasProjectAddress={loadProfilePackageContext.hasProjectAddress}
+                packageDocumentsComplete={loadProfilePackageContext.packageDocumentsComplete}
                 onAnalyze={() => void handleLoadProfileAnalyze()}
+                onExtractCandidates={(refresh) =>
+                  void handleLoadCandidateExtract(selectedPepcoProject?.applicationId ?? "", refresh)
+                }
+                onImportDocumentFindings={(refresh) =>
+                  void handleImportDocumentFindings(selectedPepcoProject?.applicationId ?? "", refresh)
+                }
+                onResolveCandidate={(candidateId, action, opts) =>
+                  void handleLoadCandidateResolve(candidateId, action, opts)
+                }
+                onManualVerify={(payload) => void handleManualVerifiedValue(payload)}
               />
 
               <ApplicationPrepSection
+                coordinationId={detailId ?? ""}
+                selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
+                selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
                 applications={(detail.applications ?? []) as CoordinationApplication[]}
                 formatWhen={formatWhen}
                 mutedClass={uciMutedClass}
@@ -2421,9 +2668,16 @@ export default function UciDashboard() {
                 submitBusy={applicationSubmitBusy}
                 reviewNotes={applicationReviewNotes}
                 onReviewNotesChange={setApplicationReviewNotes}
-                onBuild={() => void handleApplicationPackageBuild()}
+                onBuild={(externalApplicationId) =>
+                  void handleApplicationPackageBuild(externalApplicationId)
+                }
                 onReview={(status) => void handleApplicationReview(status)}
                 onSubmit={() => void handleApplicationSubmit()}
+                onRefreshDetail={async () => {
+                  if (!detailId) return;
+                  const d = await getCoordinationDetail(detailId);
+                  setDetail(d);
+                }}
               />
 
               <LifecycleSection
@@ -3079,203 +3333,12 @@ function PepcoSystemDataSection({
 }
 
 /**
- * Read-only D2.1 load profile panel — preliminary analysis only, not final engineering.
- */
-function LoadProfileSection({
-  applications,
-  equipment,
-  utilityType,
-  formatWhen,
-  mutedClass,
-  sectionTitleClass,
-  toolbarOutlineButtonClass,
-  busy,
-  onAnalyze,
-}: {
-  applications: CoordinationApplication[];
-  equipment: UciRecordDetailResponse["equipment"];
-  utilityType: string | null | undefined;
-  formatWhen: (iso: string | null | undefined) => string;
-  mutedClass: string;
-  sectionTitleClass: string;
-  toolbarOutlineButtonClass: string;
-  busy: boolean;
-  onAnalyze: () => void;
-}) {
-  const draftApp = getLoadProfileDraftApplication(applications);
-  const summary = parseLoadProfileSummary(draftApp?.load_summary);
-  const tone = loadProfileStatusTone(summary?.analysis_status);
-  const verifiedValues = getVerifiedCalculatedValues(summary);
-
-  const statusBadgeVariant =
-    tone === "blocked"
-      ? "destructive"
-      : tone === "warning"
-        ? "destructive"
-        : tone === "info"
-          ? "secondary"
-          : "outline";
-
-  return (
-    <Card className={uciDrawerChildCardClass}>
-      <CardHeader className={uciDrawerChildCardHeaderClass}>
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <CardTitle className={uciDrawerChildCardTitleClass}>Load profile</CardTitle>
-            <CardDescription className={cn("text-[11px]", mutedClass)}>
-              Preliminary Agent 2 analysis — not final engineering. Human review required.
-            </CardDescription>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className={toolbarOutlineButtonClass}
-            disabled={busy}
-            onClick={onAnalyze}
-          >
-            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {summary ? "Re-analyze" : "Analyze load profile"}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="px-4 py-4 space-y-3">
-        {!summary ? (
-          <p className={uciDrawerChildEmptyClass}>
-            No load profile analysis yet. Run analysis to inventory project inputs and list missing
-            utility-specific data for {utilityType || "this utility"}.
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={statusBadgeVariant}>
-                {formatLoadProfileAnalysisStatus(summary.analysis_status)}
-              </Badge>
-              <Badge variant="outline" className="capitalize">
-                {summary.utility_type || utilityType || "utility"}
-              </Badge>
-              {summary.requires_human_review ? (
-                <Badge variant="mutedLight">Human review required</Badge>
-              ) : null}
-            </div>
-
-            {summary.analysis_status === "blocked" ? (
-              <p className={cn("text-sm text-destructive", mutedClass)}>
-                Analysis is blocked until provider and utility context are valid.
-              </p>
-            ) : null}
-
-            {summary.analysis_status === "missing_inputs" ? (
-              <p className={cn("text-sm text-amber-800 dark:text-amber-200", mutedClass)}>
-                Missing inputs must be supplied before any engineering load values can be verified.
-              </p>
-            ) : null}
-
-            {summary.analysis_status === "preliminary" ? (
-              <p className={cn("text-sm", mutedClass)}>
-                Preliminary inventory complete. Values shown are not stamped engineering calculations.
-              </p>
-            ) : null}
-
-            <div>
-              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
-                Inputs found ({summary.inputs_used.length})
-              </p>
-              {summary.inputs_used.length === 0 ? (
-                <p className={cn("mt-1 text-sm", mutedClass)}>None</p>
-              ) : (
-                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
-                  {summary.inputs_used.map((input) => (
-                    <li key={`${input.key}-${input.source}`}>
-                      <span className="font-medium text-foreground">{input.key}</span>
-                      <span className="text-xs"> · {input.source}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
-                Missing inputs ({summary.missing_inputs.length})
-              </p>
-              {summary.missing_inputs.length === 0 ? (
-                <p className={cn("mt-1 text-sm", mutedClass)}>None flagged</p>
-              ) : (
-                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
-                  {summary.missing_inputs.map((item) => (
-                    <li key={item}>{item.replace(/_/g, " ")}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {summary.needs_verification.length > 0 ? (
-              <div>
-                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
-                  Verification required
-                </p>
-                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
-                  {summary.needs_verification.map((item) => (
-                    <li key={item}>{item.replace(/_/g, " ")}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <div>
-              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
-                Template / assumptions
-              </p>
-              <p className={cn("mt-1 text-sm", mutedClass)}>
-                Template: {summary.assumptions.template_id || "none (D2.1 — no verified registry)"}
-              </p>
-              {summary.assumptions.notes.map((note) => (
-                <p key={note} className={cn("mt-1 text-xs", mutedClass)}>
-                  {note}
-                </p>
-              ))}
-            </div>
-
-            {equipment.length > 0 ? (
-              <p className={cn("text-xs", mutedClass)}>
-                {equipment.length} equipment record(s) on file for this coordination row.
-              </p>
-            ) : null}
-
-            {verifiedValues.length > 0 ? (
-              <div>
-                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
-                  Verified numeric values
-                </p>
-                <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
-                  {verifiedValues.map((entry) => (
-                    <li key={entry.key}>
-                      {entry.key}: {String(entry.value)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className={cn("text-xs", mutedClass)}>
-                No verified engineering numeric values — calculated_values is empty by design in D2.1.
-              </p>
-            )}
-
-            <p className={cn("text-xs tabular-nums", mutedClass)}>
-              Generated {formatWhen(summary.generated_at)}
-            </p>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * Read-only D3 application preparation panel — human review required before D4 submit.
+ * D3 application preparation — human-confirmed document mapping and package review.
  */
 function ApplicationPrepSection({
+  coordinationId,
+  selectedPepcoApplicationId,
+  selectedPepcoApplicationTitle,
   applications,
   formatWhen,
   mutedClass,
@@ -3289,7 +3352,11 @@ function ApplicationPrepSection({
   onBuild,
   onReview,
   onSubmit,
+  onRefreshDetail,
 }: {
+  coordinationId: string;
+  selectedPepcoApplicationId: string | null;
+  selectedPepcoApplicationTitle?: string | null;
   applications: CoordinationApplication[];
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
@@ -3300,9 +3367,10 @@ function ApplicationPrepSection({
   submitBusy: boolean;
   reviewNotes: string;
   onReviewNotesChange: (value: string) => void;
-  onBuild: () => void;
+  onBuild: (externalApplicationId?: string | null) => void;
   onReview: (status: "reviewed" | "needs_changes") => void;
   onSubmit: () => void;
+  onRefreshDetail: () => Promise<void>;
 }) {
   const loadProfileDraft = getLoadProfileDraftApplication(applications);
   const packageApp = getApplicationPackageDraftApplication(applications);
@@ -3310,6 +3378,134 @@ function ApplicationPrepSection({
   const packageDocs = parsePackageDocuments(packageApp?.package_documents);
   const tone = applicationPackageStatusTone(packageMeta?.package_status);
   const submitReady = canSubmitApplication(packageApp?.draft_status);
+
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [candidatesError, setCandidatesError] = useState<string | null>(null);
+  const [candidatesScopeError, setCandidatesScopeError] = useState<string | null>(null);
+  const [candidatesPayload, setCandidatesPayload] =
+    useState<UciPackageDocumentCandidatesResponse | null>(null);
+  const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
+  const [selectedCandidateBySlot, setSelectedCandidateBySlot] = useState<
+    Record<string, string>
+  >({});
+
+  useEffect(() => {
+    setSelectedCandidateBySlot({});
+  }, [selectedPepcoApplicationId]);
+
+  useEffect(() => {
+    if (!candidatesPayload) return;
+    const validCandidateIds = new Set(
+      candidatesPayload.candidates.map((candidate) => candidate.candidate_id),
+    );
+    setSelectedCandidateBySlot((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [slotKey, candidateId] of Object.entries(prev)) {
+        if (candidateId && !validCandidateIds.has(candidateId)) {
+          next[slotKey] = "";
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [candidatesPayload]);
+
+  const loadCandidates = useCallback(async () => {
+    if (!coordinationId || !packageApp) {
+      setCandidatesPayload(null);
+      return;
+    }
+    if (!selectedPepcoApplicationId) {
+      setCandidatesPayload(null);
+      setCandidatesError(null);
+      setCandidatesScopeError(
+        "Select a PEPCO portal project above before mapping package documents.",
+      );
+      return;
+    }
+    setCandidatesLoading(true);
+    setCandidatesError(null);
+    setCandidatesScopeError(null);
+    try {
+      const payload = await listApplicationPackageDocumentCandidates(coordinationId, {
+        external_application_id: selectedPepcoApplicationId,
+      });
+      setCandidatesPayload(payload);
+    } catch (e: unknown) {
+      const message = formatUciUserError(e, "Failed to load document candidates");
+      setCandidatesError(message);
+      setCandidatesPayload(null);
+    } finally {
+      setCandidatesLoading(false);
+    }
+  }, [coordinationId, packageApp?.id, selectedPepcoApplicationId]);
+
+  useEffect(() => {
+    void loadCandidates();
+  }, [loadCandidates, packageApp?.package_documents, packageApp?.id]);
+
+  const handleConfirmMapping = async (slotKey: string) => {
+    if (!packageApp) return;
+    const candidateId = selectedCandidateBySlot[slotKey];
+    if (!candidateId) {
+      toast.error("Select a suggested document before confirming");
+      return;
+    }
+    setMappingBusySlot(slotKey);
+    try {
+      await confirmApplicationPackageDocumentMapping(packageApp.id, {
+        slot_key: slotKey,
+        candidate_id: candidateId,
+        external_application_id: selectedPepcoApplicationId || undefined,
+      });
+      setSelectedCandidateBySlot((prev) => {
+        const next = { ...prev };
+        delete next[slotKey];
+        return next;
+      });
+      await onRefreshDetail();
+      await loadCandidates();
+      toast.success("Document mapping confirmed — slot marked attached after human review");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to confirm document mapping"));
+    } finally {
+      setMappingBusySlot(null);
+    }
+  };
+
+  const handleRemoveMapping = async (slotKey: string) => {
+    if (!packageApp) return;
+    setMappingBusySlot(slotKey);
+    try {
+      await removeApplicationPackageDocumentMapping(packageApp.id, { slot_key: slotKey });
+      await onRefreshDetail();
+      await loadCandidates();
+      toast.success("Document mapping removed");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to remove document mapping"));
+    } finally {
+      setMappingBusySlot(null);
+    }
+  };
+
+  const slotCandidates = useCallback(
+    (slotKey: string): UciPackageDocumentCandidate[] => {
+      if (!candidatesPayload) return [];
+      const suggested = candidatesPayload.suggestions_by_slot[slotKey] ?? [];
+      const other = candidatesPayload.candidates.filter(
+        (c) => c.suggested_package_slot !== slotKey,
+      );
+      const merged = [...suggested];
+      for (const candidate of other) {
+        if (!merged.some((m) => m.candidate_id === candidate.candidate_id)) {
+          merged.push(candidate);
+        }
+      }
+      return merged;
+    },
+    [candidatesPayload],
+  );
 
   const statusBadgeVariant =
     tone === "blocked"
@@ -3327,7 +3523,8 @@ function ApplicationPrepSection({
           <div>
             <CardTitle className={uciDrawerChildCardTitleClass}>Application preparation</CardTitle>
             <CardDescription className={cn("text-[11px]", mutedClass)}>
-              Agent 3 package draft — human review required. Submission is disabled until reviewed (D4).
+              Agent 3 package draft — confirm PEPCO or uploaded documents per required slot. Filename
+              suggestions are not verified attachments.
             </CardDescription>
           </div>
           <Button
@@ -3335,8 +3532,8 @@ function ApplicationPrepSection({
             variant="outline"
             size="sm"
             className={toolbarOutlineButtonClass}
-            disabled={prepBusy || !loadProfileDraft}
-            onClick={onBuild}
+            disabled={prepBusy || !loadProfileDraft || !selectedPepcoApplicationId}
+            onClick={() => onBuild(selectedPepcoApplicationId)}
           >
             {prepBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {packageApp ? "Rebuild package" : "Prepare application draft"}
@@ -3372,6 +3569,172 @@ function ApplicationPrepSection({
               </p>
             ) : null}
 
+            <div className="space-y-3 rounded-md border border-border/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                  Document mapping (human confirmation required)
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  disabled={candidatesLoading}
+                  onClick={() => void loadCandidates()}
+                >
+                  {candidatesLoading ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1 h-3 w-3" />
+                  )}
+                  Refresh candidates
+                </Button>
+              </div>
+
+              {candidatesScopeError ? (
+                <p className={cn("text-xs text-amber-800 dark:text-amber-200", mutedClass)}>
+                  {candidatesScopeError}
+                </p>
+              ) : null}
+
+              {candidatesError ? (
+                <p className={cn("text-xs text-destructive", mutedClass)}>{candidatesError}</p>
+              ) : null}
+
+              {packageDocs.map((slot) => {
+                const slotKey = slot.key;
+                const attached = slot.status === "attached";
+                const candidates = slotCandidates(slotKey);
+                const suggested = candidatesPayload?.suggestions_by_slot[slotKey] ?? [];
+                const slotSelection = selectedCandidateBySlot[slotKey] ?? "";
+
+                return (
+                  <div
+                    key={slotKey}
+                    className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={attached ? "secondary" : "outline"}>
+                        {attached ? "Attached" : "Missing"}
+                      </Badge>
+                      <span className="text-sm font-medium text-foreground">
+                        {slot.label || slotKey.replace(/_/g, " ")}
+                      </span>
+                    </div>
+
+                    {attached ? (
+                      <div className={cn("space-y-1 text-xs", mutedClass)}>
+                        <p>
+                          Confirmed: <span className="text-foreground">{slot.file_name}</span>
+                        </p>
+                        <p>
+                          Source: {formatPackageDocumentSource(slot.source)}
+                          {slot.user_confirmed ? " — human confirmed" : ""}
+                        </p>
+                        {slot.confirmed_at ? (
+                          <p>Confirmed {formatWhen(slot.confirmed_at)}</p>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={cn("mt-1", toolbarOutlineButtonClass)}
+                          disabled={mappingBusySlot === slotKey}
+                          onClick={() => void handleRemoveMapping(slotKey)}
+                        >
+                          {mappingBusySlot === slotKey ? (
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                          ) : null}
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {suggested.length > 0 ? (
+                          <div className={cn("space-y-1 text-xs", mutedClass)}>
+                            <p className="font-medium text-foreground">Suggested (not verified)</p>
+                            {suggested.map((candidate) => (
+                              <p key={candidate.candidate_id}>
+                                {candidate.file_name} —{" "}
+                                {formatSuggestionConfidence(candidate.confidence)}
+                                {candidate.suggestion_reason ? ` — ${candidate.suggestion_reason}` : ""}
+                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className={cn("text-xs", mutedClass)}>
+                            No filename/metadata suggestion for this slot.
+                          </p>
+                        )}
+
+                        {candidates.length > 0 ? (
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div className="min-w-[12rem] flex-1">
+                              <Label
+                                htmlFor={`doc-candidate-${slotKey}`}
+                                className="text-xs text-muted-foreground"
+                              >
+                                Choose document
+                              </Label>
+                              <Select
+                                value={slotSelection || undefined}
+                                onValueChange={(value) =>
+                                  setSelectedCandidateBySlot((prev) => ({
+                                    ...prev,
+                                    [slotKey]: value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger
+                                  id={`doc-candidate-${slotKey}`}
+                                  className="mt-1 h-8 text-xs"
+                                >
+                                  <SelectValue placeholder="Select a document" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {candidates.map((candidate) => (
+                                    <SelectItem
+                                      key={candidate.candidate_id}
+                                      value={candidate.candidate_id}
+                                    >
+                                      {candidate.file_name} (
+                                      {formatPackageDocumentSource(
+                                        candidate.source_type === "pepco_portal"
+                                          ? "pepco_portal"
+                                          : "project_documents",
+                                      )}
+                                      )
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={mappingBusySlot === slotKey || !slotSelection}
+                              onClick={() => void handleConfirmMapping(slotKey)}
+                            >
+                              {mappingBusySlot === slotKey ? (
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              ) : null}
+                              Confirm
+                            </Button>
+                          </div>
+                        ) : candidatesLoading ? (
+                          <p className={cn("text-xs", mutedClass)}>Loading candidates…</p>
+                        ) : (
+                          <p className={cn("text-xs", mutedClass)}>
+                            No PEPCO or uploaded candidates available for this slot.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             <div>
               <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                 Package documents ({packageDocs.length})
@@ -3384,6 +3747,11 @@ function ApplicationPrepSection({
                     </Badge>
                     <span className="font-medium text-foreground">{doc.label || doc.key}</span>
                     {doc.file_name ? <span className="text-xs">({doc.file_name})</span> : null}
+                    {doc.source ? (
+                      <span className="text-xs">
+                        [{formatPackageDocumentSource(doc.source)}]
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -3402,6 +3770,44 @@ function ApplicationPrepSection({
               </div>
             ) : null}
 
+            {!selectedPepcoApplicationId ? (
+              <p className={cn("text-xs text-amber-800 dark:text-amber-200", mutedClass)}>
+                Select a PEPCO portal project above before rebuilding the application package.
+              </p>
+            ) : null}
+
+            <div className="space-y-1 rounded-md border border-border/50 bg-muted/10 p-3">
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Project address
+              </p>
+              {packageMeta?.project_address?.formatted ? (
+                <p className="text-sm text-foreground">{packageMeta.project_address.formatted}</p>
+              ) : (
+                <p className={cn("text-sm", mutedClass)}>
+                  No resolved project address in the current package snapshot.
+                </p>
+              )}
+              <p className={cn("text-xs", mutedClass)}>
+                Source: {packageMeta?.project_address?.source?.replace(/_/g, " ") ?? "none"}
+                {packageMeta?.project_address?.fallback_used ? " (fallback)" : ""}
+              </p>
+              {selectedPepcoApplicationTitle ? (
+                <p className={cn("text-xs", mutedClass)}>
+                  Selected PEPCO application: {selectedPepcoApplicationTitle}
+                </p>
+              ) : null}
+              {packageMeta?.address_review_required ? (
+                <p className={cn("text-xs font-medium text-amber-800 dark:text-amber-200", mutedClass)}>
+                  Human address confirmation required before submission.
+                </p>
+              ) : null}
+              {packageMeta?.address_mismatch && packageMeta?.mismatch_warning ? (
+                <p className={cn("text-xs font-medium text-amber-800 dark:text-amber-200", mutedClass)}>
+                  {packageMeta.mismatch_warning}
+                </p>
+              ) : null}
+            </div>
+
             {(packageMeta?.missing_fields?.length ?? 0) > 0 ? (
               <div>
                 <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
@@ -3409,7 +3815,11 @@ function ApplicationPrepSection({
                 </p>
                 <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-sm", mutedClass)}>
                   {packageMeta?.missing_fields?.map((item) => (
-                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                    <li key={item}>
+                      {item === "project_address_review"
+                        ? "Project address source review required (structured vs scraped mismatch)"
+                        : item.replace(/_/g, " ")}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -3469,11 +3879,12 @@ function ApplicationPrepSection({
                 </p>
               ) : packageApp.draft_status === "submitted" ? (
                 <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
-                  Submitted — PEPCO portal automation returns not-implemented; non-PEPCO uses email intent.
+                  Submitted — confirmation captured. Await utility acknowledgment.
                 </p>
               ) : (
                 <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
-                  Reviewed — submit records email intent (non-PEPCO) or reports PEPCO adapter gap.
+                  Reviewed — submit runs PEPCO validation dry-run (no live portal submit by default) or
+                  sends email for other utilities when mailbox is connected.
                 </p>
               )}
             </div>

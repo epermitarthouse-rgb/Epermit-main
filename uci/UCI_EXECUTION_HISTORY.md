@@ -67,7 +67,7 @@ This document condenses `uci_execution_sprints_and_phases.md` with honest comple
 
 ### Provider seed
 
-- 10 priority utilities in `utility_providers` → **Done** (`automation_status: placeholder`)
+- 10 priority utilities in `utility_providers` → **Done** (slug/name/utility_type); Row 3 metadata (`primary_portal_type`, `portal_credentials_ref`, PEPCO `portal_url`) staged in `20260715150000_row3_provider_directory_metadata.sql` — **not applied**; `service_territory` / multi-utility-type still deferred
 
 ---
 
@@ -135,10 +135,10 @@ Original plan implied portal automation "not enabled." Code now has PEPCO read-o
 | D1B — Document storage | **Complete** | `uci-document-storage.service.js`; Supabase production path; idempotency; `document_storage` API field |
 | D1C — Lifecycle mapping | **Complete** | `uci-lifecycle-mapping.service.js`; PEPCO adapter mapping; proposals + audit; UI visibility |
 | D1D — Durable jobs | **Complete** | `uci_portal_sync` jobs, worker, sync-runs API, MFA job link |
-| D2.0 — Human-assisted provider setup | **Complete** | `uci-provider-setup.service.js`; guided init UI; mapping metadata on coordination records |
+| D2.0 — Human-assisted provider setup | **Complete (pilot)** | Required `provider_setup` on init; tenant-scoped provider-setup; address mismatch acknowledgement |
 | D2.1 — Load profile foundation | **Complete** (scoped) | `uci-load-profile.service.js`; `POST .../load-profile/analyze`; no-guess `load_summary`; drawer UI |
 | D3 — Application preparation | **Complete** (scoped) | `uci-application-builder.service.js`; PEPCO template; review workflow; `ApplicationPrepSection` |
-| D4 — Submission foundation | **Partial** | `uci-application-submit.service.js`; email_intent path; PEPCO adapter blocked (501) |
+| D4 — Submission foundation | **Complete** (scoped) | PEPCO adapter + dry-run; email send; confirmation capture on live submit; `uci-pepco-submission.test.js` |
 
 ---
 
@@ -207,6 +207,22 @@ From 2026-07-14, every UCI milestone maintains a persistent non-blocking backlog
 | Production security gate | **Pending migration apply** — code and tests ready; live RLS verification after rollout |
 
 **Rollout:** Apply `20260715130000` (team invites, if needed) then `20260715140000` → `20260715140400` in order.
+
+---
+
+## Row 4 — Cross-tenant security tests (2026-07-15)
+
+**Status:** **Complete**
+
+| Deliverable | Result |
+|-------------|--------|
+| Endpoint audit | All `/api/uci/*` routes covered for Tenant A → Tenant B denial (read + write) |
+| Demo isolation | Production ↔ demo tenant crossover denied |
+| Provider scoping | Tenant B-only providers excluded from Tenant A project scope |
+| Storage isolation | `resolveTenantNamespaceForProject` + document download cross-tenant denial |
+| Team invitations | `projectTeamInvitationLogic.test.ts` — project/email boundary tests |
+| CI gate | `.github/workflows/uci-security-tests.yml` runs `npm run test:uci:security` on push/PR |
+| Test count | 74 security-suite tests + 12 invitation boundary tests; 237 total UCI backend tests |
 
 ---
 

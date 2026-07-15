@@ -46,9 +46,27 @@ export function isUciSessionExpiredError(err: unknown): boolean {
   return err instanceof UciSessionExpiredError;
 }
 
+/** Thrown when a UCI API returns a structured error body. */
+export class UciApiError extends Error {
+  readonly code: string;
+  readonly httpStatus: number;
+
+  constructor(message: string, params: { code?: string; httpStatus?: number } = {}) {
+    super(message);
+    this.name = "UciApiError";
+    this.code = String(params.code ?? "ERROR");
+    this.httpStatus = typeof params.httpStatus === "number" ? params.httpStatus : 500;
+  }
+}
+
+export function isUciApiError(err: unknown): err is UciApiError {
+  return err instanceof UciApiError;
+}
+
 /** Map API/auth failures to user-safe UCI messages (never raw INVALID_JWT text). */
 export function formatUciUserError(err: unknown, fallback: string): string {
   if (isUciSessionExpiredError(err)) return UCI_SESSION_EXPIRED_MESSAGE;
+  if (err instanceof UciApiError) return err.message;
   if (err instanceof Error) {
     if (err.message === "Invalid or expired authentication token") {
       return UCI_SESSION_EXPIRED_MESSAGE;
@@ -59,6 +77,43 @@ export function formatUciUserError(err: unknown, fallback: string): string {
     if (err.message.trim()) return err.message;
   }
   return fallback;
+}
+
+const DOCUMENT_PROCESSING_ERROR_MESSAGES: Record<string, string> = {
+  NO_DOWNLOADED_DOCUMENTS:
+    "No downloaded documents were found for the selected utility application.",
+  APPLICATION_NOT_FOUND: "The selected utility application could not be resolved.",
+  EXTERNAL_APPLICATION_REQUIRED: "Select a utility application before processing documents.",
+  PDF_PARSER_UNAVAILABLE:
+    "Document processing could not start because the backend PDF parser is unavailable.",
+  INTERNAL_ERROR: "An unexpected server error occurred.",
+};
+
+export function formatDocumentProcessingUserError(err: unknown, fallback: string): string {
+  if (isUciApiError(err)) {
+    const mapped = DOCUMENT_PROCESSING_ERROR_MESSAGES[err.code];
+    if (mapped) return mapped;
+    if (err.message.trim()) return err.message;
+  }
+  return formatUciUserError(err, fallback);
+}
+
+export function logDocumentProcessingErrorDev(err: unknown): void {
+  if (!import.meta.env?.DEV) return;
+  if (isUciApiError(err)) {
+    console.error("[uci-document-processing]", {
+      code: err.code,
+      httpStatus: err.httpStatus,
+      message: err.message,
+    });
+    return;
+  }
+  if (err && typeof err === "object") {
+    const rec = err as { stage?: string; code?: string; message?: string };
+    if (rec.code || rec.stage) {
+      console.error("[uci-document-processing]", rec);
+    }
+  }
 }
 
 /** @returns Unix seconds or null when expiry cannot be determined safely. */
@@ -117,7 +172,10 @@ function mapUciHttpError(
   ) {
     return new UciSessionExpiredError();
   }
-  return new Error(String(body.message || body.error || fallback));
+  return new UciApiError(String(body.message || body.error || fallback), {
+    code: typeof body.error === "string" ? body.error : undefined,
+    httpStatus: status,
+  });
 }
 
 type UciFetchDiagnostics = {
@@ -359,6 +417,18 @@ export async function initProjectCoordination(
   );
 }
 
+export function formatLoadCandidateExtractionError(err: unknown, fallback: string): string {
+  if (err && typeof err === "object") {
+    const rec = err as { stage?: string; document_name?: string | null; message?: string };
+    if (rec.stage) {
+      const doc = rec.document_name ? ` (${rec.document_name})` : "";
+      return `${rec.message || fallback} [${rec.stage}${doc}]`;
+    }
+    if (typeof rec.message === "string" && rec.message.trim()) return rec.message;
+  }
+  return formatUciUserError(err, fallback);
+}
+
 export async function analyzeCoordinationLoadProfile(
   coordinationId: string,
 ): Promise<UciLoadProfileAnalyzeResponse> {
@@ -369,13 +439,284 @@ export async function analyzeCoordinationLoadProfile(
   );
 }
 
+export async function importCoordinationDocumentFindings(
+  coordinationId: string,
+  params: { external_application_id: string; refresh?: boolean },
+): Promise<{
+  status: "complete" | "partial";
+  findings_considered: number;
+  findings_imported: number;
+  findings_skipped: number;
+  candidates_created: number;
+  candidates_reused: number;
+  candidates_superseded: number;
+  skipped_reasons: string[];
+  failed_findings: Array<{ finding_id: string | null; message: string }>;
+  connected_load_satisfied: boolean;
+}> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/import-document-findings`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Failed to import document findings",
+  );
+}
+
+export async function runCoordinationDocumentProcessing(
+  coordinationId: string,
+  params: { external_application_id: string; refresh?: boolean },
+): Promise<import("@/lib/uciDocumentProcessing").UciDocumentProcessingRunResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/document-processing/run`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Document processing failed",
+  );
+}
+
+export async function getCoordinationDocumentManifest(
+  coordinationId: string,
+  params: { external_application_id: string; include_findings?: boolean },
+): Promise<import("@/lib/uciDocumentProcessing").UciDocumentProcessingManifestResponse> {
+  const qs = new URLSearchParams();
+  qs.set("external_application_id", params.external_application_id);
+  if (params.include_findings) qs.set("include_findings", "true");
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/document-processing/manifest${suffix}`,
+    { method: "GET" },
+    "Failed to load document manifest",
+  );
+}
+
+export async function getCoordinationDocumentFallbackEstimate(
+  coordinationId: string,
+  params: { external_application_id: string; mode?: "all" | "vision" | "ocr" },
+): Promise<{
+  external_application_id: string;
+  mode: string;
+  total: number;
+  vision: number;
+  ocr: number;
+  provider_status: import("@/lib/uciDocumentProcessing").UciFallbackProviderStatus;
+  config: {
+    vision_enabled: boolean;
+    ocr_enabled: boolean;
+    vision_max_pages_per_run: number;
+    ocr_max_pages_per_run: number;
+  };
+}> {
+  const qs = new URLSearchParams();
+  qs.set("external_application_id", params.external_application_id);
+  if (params.mode) qs.set("mode", params.mode);
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/document-processing/fallback-estimate?${qs.toString()}`,
+    { method: "GET" },
+    "Failed to estimate fallback pages",
+  );
+}
+
+export async function runCoordinationDocumentFallback(
+  coordinationId: string,
+  params: {
+    external_application_id: string;
+    mode?: "all" | "vision" | "ocr";
+    document_id?: string;
+    page_numbers?: number[];
+  },
+): Promise<{
+  status: "complete" | "partial" | "failed";
+  pages_requested: number;
+  pages_processed: number;
+  pages_failed: number;
+  findings_created: number;
+  failed_pages: Array<{
+    document_name: string;
+    page_number: number;
+    method: string;
+    stage: string;
+    message: string;
+  }>;
+  provider_status: import("@/lib/uciDocumentProcessing").UciFallbackProviderStatus;
+  pages_remaining: number;
+}> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/document-processing/fallback-run`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Document fallback processing failed",
+  );
+}
+
+export async function extractCoordinationLoadCandidates(
+  coordinationId: string,
+  params: { external_application_id: string; refresh?: boolean },
+): Promise<import("@/lib/uciLoadProfile").UciLoadCandidateExtractionResponse> {
+  const res = await uciAuthenticatedFetch(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/extract-candidates`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+  );
+  const body = await parseJsonSafe(res);
+  if (!res.ok) {
+    if (body.error === "LOAD_CANDIDATE_EXTRACTION_FAILED") {
+      const err = new Error(
+        String(body.message || "Connected load extraction failed"),
+      ) as Error & { stage?: string; document_name?: string | null };
+      err.stage = body.stage != null ? String(body.stage) : "unknown";
+      err.document_name =
+        body.document_name != null ? String(body.document_name) : null;
+      throw err;
+    }
+    throw mapUciHttpError(res.status, body, "Connected load extraction failed");
+  }
+  return body as import("@/lib/uciLoadProfile").UciLoadCandidateExtractionResponse;
+}
+
+export async function listCoordinationLoadCandidates(
+  coordinationId: string,
+  params?: { external_application_id?: string },
+): Promise<import("@/lib/uciLoadProfile").UciLoadCandidatesListResponse> {
+  const qs = new URLSearchParams();
+  if (params?.external_application_id) {
+    qs.set("external_application_id", params.external_application_id);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/candidates${suffix}`,
+    {},
+    "Failed to load connected load candidates",
+  );
+}
+
+export async function resolveCoordinationLoadCandidate(
+  coordinationId: string,
+  payload: {
+    candidate_id: string;
+    action: "approve" | "edit_approve" | "reject" | "keep_unresolved";
+    edited_value?: string | number;
+    edited_unit?: string;
+    review_note?: string;
+  },
+): Promise<import("@/lib/uciLoadProfile").UciLoadCandidateResolveResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/candidates/resolve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to resolve connected load candidate",
+  );
+}
+
+export async function addCoordinationManualVerifiedValue(
+  coordinationId: string,
+  payload: import("@/lib/uciLoadProfileWorkspace").ManualVerifiedInputPayload & {
+    review_note: string;
+  },
+): Promise<import("@/lib/uciLoadProfile").UciLoadCandidateResolveResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/verified-values`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to add manual verified value",
+  );
+}
+
 export async function buildCoordinationApplicationPackage(
   coordinationId: string,
+  params?: { external_application_id?: string },
 ): Promise<UciApplicationPackageBuildResponse> {
+  const body: Record<string, string> = {};
+  if (params?.external_application_id) {
+    body.external_application_id = params.external_application_id;
+  }
   return uciFetchJson<UciApplicationPackageBuildResponse>(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/applications`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
     "Application package build failed",
+  );
+}
+
+export async function listApplicationPackageDocumentCandidates(
+  coordinationId: string,
+  params?: { external_application_id?: string },
+): Promise<import("@/lib/uciApplicationPrep").UciPackageDocumentCandidatesResponse> {
+  const qs = new URLSearchParams();
+  if (params?.external_application_id) {
+    qs.set("external_application_id", params.external_application_id);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/application-package/document-candidates${suffix}`,
+    {},
+    "Failed to load package document candidates",
+  );
+}
+
+export async function confirmApplicationPackageDocumentMapping(
+  applicationId: string,
+  payload: {
+    slot_key: string;
+    candidate_id: string;
+    external_application_id?: string;
+  },
+): Promise<{
+  application: unknown;
+  package_status: string;
+  missing_documents: string[];
+  missing_fields: string[];
+  package_documents: unknown[];
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/package-documents/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to confirm document mapping",
+  );
+}
+
+export async function removeApplicationPackageDocumentMapping(
+  applicationId: string,
+  payload: { slot_key: string },
+): Promise<{
+  application: unknown;
+  package_status: string;
+  missing_documents: string[];
+  missing_fields: string[];
+  package_documents: unknown[];
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/package-documents/remove`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to remove document mapping",
   );
 }
 
@@ -396,10 +737,19 @@ export async function reviewCoordinationApplication(
 
 export async function submitCoordinationApplication(
   applicationId: string,
+  options?: {
+    live_submission_confirmed?: boolean;
+    portal_populate?: boolean;
+    credential_id?: string;
+  },
 ): Promise<UciApplicationSubmitResponse> {
   return uciFetchJson<UciApplicationSubmitResponse>(
     `/api/uci/applications/${encodeURIComponent(applicationId)}/submit`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options ?? {}),
+    },
     "Application submission failed",
   );
 }

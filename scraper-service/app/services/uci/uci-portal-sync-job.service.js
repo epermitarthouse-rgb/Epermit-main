@@ -110,7 +110,22 @@ async function listPortalSyncRuns(supabase, opts) {
   }
 
   const { data, error, count } = await query;
-  if (error) throw error;
+  if (error) {
+    const message = String(error.message || "");
+    const missingUciJobSchema =
+      error.code === "42703" &&
+      /job_type|coordination_record_id/i.test(message);
+    if (missingUciJobSchema) {
+      return {
+        runs: [],
+        total: 0,
+        schema_unavailable: true,
+        schema_note:
+          "UCI portal sync job columns are not available. Apply migration 20260714120000_uci_durable_portal_sync_jobs.sql.",
+      };
+    }
+    throw error;
+  }
   const runs = Array.isArray(data) ? data.map(mapJobToSyncRunResponse) : [];
   return { runs, total: count ?? runs.length };
 }

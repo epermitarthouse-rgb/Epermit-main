@@ -786,9 +786,9 @@ This checklist is based on the **Utility Coordination Intelligence (UCI) Module 
 | Week/Phase | Document Requirement | Audit Question | Status |
 |---|---|---|---|
 | Week 1–2 | UCI schema migrated | tables + RLS + indexes exist |  |
-| Week 1–2 | Seed utility providers | 10 priority + East Coast relevant providers seeded |  |
-| Week 1–2 | Cross-tenant CI tests | security test blocks deployment |  |
-| Week 3–4 | Agent 1 built | provider mapper working |  |
+| Week 1–2 | Seed utility providers | 10 priority + East Coast relevant providers seeded | ⚠️ Partial — Row 3: 10 global templates seeded; Phase 5 metadata backfill staged (`20260715150000_row3_provider_directory_metadata.sql`); service territory / multi-utility-type deferred |
+| Week 1–2 | Cross-tenant CI tests | security test blocks deployment | ✅ Row 4 — `.github/workflows/uci-security-tests.yml` |
+| Week 3–4 | Agent 1 built | provider mapper working | ⚠️ Partial — D2.0 human-confirmed pilot-complete; D2.2 auto mapping deferred |
 | Week 3–4 | Agent 2 built | load profile analyzer working |  |
 | Week 3–4 | Agent 4 email path started | safe submission path |  |
 | Week 3–4 | PEPCO/BGE portal reference automation | login/submission reference implementation |  |

@@ -207,6 +207,13 @@ function mergeProviderMappingMetadata(existingMetadata, mappingMetadata, provide
 async function initCoordinationForProviders(supabase, p) {
   const { projectId, userId, resolvedProviders, providerSetupMetadata } = p;
 
+  if (!providerSetupMetadata || typeof providerSetupMetadata !== "object") {
+    const err = new Error("provider_setup confirmation metadata is required");
+    err.statusCode = 400;
+    err.code = "PROVIDER_SETUP_REQUIRED";
+    throw err;
+  }
+
   if (!resolvedProviders.length) {
     const err = new Error("No valid providers supplied");
     err.statusCode = 400;

@@ -1,0 +1,87 @@
+{
+  "version": "d4-pepco-electric-submit-v1",
+  "provider_slug": "pepco",
+  "utility_type": "electric",
+  "description": "PEPCO electric new-service portal submission field and attachment mappings (D4). Structural mappings only — values must come from reviewed application data.",
+  "application_types": {
+    "new_service": {
+      "portal_form_path": "/applications/new/electric",
+      "fields": [
+        {
+          "key": "project_address",
+          "label": "Project address",
+          "portal_key": "projectAddress",
+          "portal_selector": "#pepco-project-address",
+          "source": "project.address",
+          "required": true
+        },
+        {
+          "key": "project_type",
+          "label": "Project type",
+          "portal_key": "projectType",
+          "portal_selector": "#pepco-project-type",
+          "source": "project.project_type",
+          "required": true
+        },
+        {
+          "key": "project_description",
+          "label": "Project description",
+          "portal_key": "projectDescription",
+          "portal_selector": "#pepco-project-description",
+          "source": "project.description",
+          "required": false
+        },
+        {
+          "key": "connected_load_data",
+          "label": "Connected load data",
+          "portal_key": "connectedLoad",
+          "portal_selector": "#pepco-connected-load",
+          "source": "load_summary.verified_values",
+          "required": true,
+          "note": "Requires human-approved verified values — not inferred"
+        }
+      ],
+      "attachments": [
+        {
+          "key": "site_plan",
+          "label": "Site plan",
+          "portal_key": "sitePlan",
+          "portal_selector": "input[name='sitePlan']",
+          "package_document_key": "site_plan",
+          "required": true
+        },
+        {
+          "key": "single_line_diagram",
+          "label": "Single-line diagram",
+          "portal_key": "singleLineDiagram",
+          "portal_selector": "input[name='singleLineDiagram']",
+          "package_document_key": "single_line_diagram",
+          "required": true
+        },
+        {
+          "key": "equipment_cut_sheets",
+          "label": "Equipment cut sheets",
+          "portal_key": "equipmentCutSheets",
+          "portal_selector": "input[name='equipmentCutSheets']",
+          "package_document_key": "equipment_cut_sheets",
+          "required": true
+        },
+        {
+          "key": "letter_of_authorization",
+          "label": "Letter of authorization",
+          "portal_key": "letterOfAuthorization",
+          "portal_selector": "input[name='letterOfAuthorization']",
+          "package_document_key": "letter_of_authorization",
+          "required": true
+        }
+      ],
+      "submit_button_selector": "#pepco-final-submit",
+      "confirmation_ticket_selector": "#pepco-confirmation-ticket"
+    }
+  },
+  "notes": [
+    "D4 submission mappings — selectors target PEPCO portal form structure",
+    "Dry-run stops before submit_button_selector click unless live submission explicitly enabled",
+    "No default engineering numeric values"
+  ]
+}

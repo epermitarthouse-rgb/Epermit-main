@@ -30,7 +30,7 @@ Engineering extensions are labeled explicitly and do not override client require
 |------------|--------|----------|
 | `/api/uci` router + auth | implemented | `uci.routes.js`, `uci-access.service.js` |
 | Seven UCI tables + project RLS | implemented (schema) | `20260509120000_uci_foundation.sql` |
-| Human-assisted provider setup (D2.0) | partial | `uci-provider-setup.service.js`; guided init UI |
+| Human-assisted provider setup (D2.0) | **implemented** | `uci-provider-setup.service.js`; guided init UI; required `provider_setup` on init; address mismatch acknowledgement |
 | Load profile foundation (D2.1) | partial | `uci-load-profile.service.js`; missing-input inventory; no numeric templates |
 | Application preparation (D3) | partial | `uci-application-builder.service.js`; PEPCO template manifest; review workflow |
 | Manual provider init | partial | Superseded by D2.0 guided flow; legacy path without `provider_setup` |
@@ -41,7 +41,7 @@ Engineering extensions are labeled explicitly and do not override client require
 | PEPCO UI panel | partial | `PepcoApplicationDetailsPanel.tsx` |
 | Normalized applications/comms/milestones | partial | D1A sync services + `POST .../sync` |
 | PEPCO document storage (D1B) | partial+ | Supabase `project-documents`; production hardened |
-| 10 utility provider seed | implemented | global `utility_providers` |
+| 10 utility provider seed | partial | global templates + Row 3 metadata backfill staged (`20260715150000`) |
 | Encrypted portal credentials | implemented | Sprint 1 |
 
 ### Stub / UI only
@@ -225,7 +225,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Objective** | Agents 1–2: provider confirmation + structured load schedules |
 | **Client requirements** | Agent 1 §4.1; Agent 2 §4.2; McDonald's prototype templates |
 | **Dependencies** | D1 tenant + provider directory hardening |
-| **Current status** | **partial** — D2.0 + D2.1 complete (scoped); D2.2 full Agent 1 auto mapping **blocked** (no territory data/geocoding); D3 foundation complete (scoped) |
+| **Current status** | **partial** — D2.0 human-confirmed provider mapping **production-complete for pilot**; D2.2 full Agent 1 auto mapping **deferred** (no territory data/geocoding); D2.1 + D3 foundation complete (scoped) |
 
 #### Jurisdiction and provider model (decision 2026-07-15)
 
@@ -239,7 +239,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 | Sub-phase | Status | Evidence |
 |-----------|--------|----------|
-| **D2.0** — Human-assisted provider setup | **implemented** | `uci-provider-setup.service.js`; `GET .../provider-setup`; guided init UI; `metadata.uci_provider_mapping`; **current safe fallback** |
+| **D2.0** — Human-assisted provider setup | **implemented** | `uci-provider-setup.service.js`; `GET .../provider-setup` (tenant-scoped); **required** `provider_setup` on init; address mismatch acknowledgement; `metadata.uci_provider_mapping` |
 | **D2.1** — Load profile foundation (Agent 2) | **implemented** (scoped) | `uci-load-profile.service.js`; `POST .../load-profile/analyze`; `load_summary` on `agent_draft`; no-guess rule; drawer UI |
 | **D2.2** — Auto territory mapping (full Agent 1) | **deferred** | **External data:** verified `service_territory` rules + geocoding vendor; **must not** infer providers from ZIP, county, or permit jurisdiction without verified rules |
 
@@ -253,7 +253,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 **Backend:** D2.1 writes `coordination_applications.load_summary` (`record_source=agent_draft`). D2.2 provider mapper remains future.
 
-**API:** `GET /projects/:id/provider-setup`; `POST .../coordination/init` optional `provider_setup`; `POST /coordination/:id/load-profile/analyze`.
+**API:** `GET /projects/:id/provider-setup` (tenant-scoped providers); `POST .../coordination/init` **requires** `provider_setup.confirmed=true` and `address_source_acknowledged`; `POST /coordination/:id/load-profile/analyze`.
 
 **Frontend:** D2.0 guided provider setup; D2.1 read-only Load Profile drawer with Analyze/Re-analyze.
 
@@ -301,31 +301,32 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | **Objective** | Agent 4 — human-triggered portal/email submit + confirmation capture |
 | **Client requirements** | Agent 4 §4.4; idempotency; stages 4→5 transitions |
 | **Dependencies** | D3 reviewed application |
-| **Current status** | **partial** — API + email_intent path; PEPCO portal adapter not implemented |
+| **Current status** | **partial** (scoped) — PEPCO adapter + dry-run implemented; live portal submit gated; email send wired when mailbox connected |
 
-**PEPCO scope:** PEPCO automation applies **only** to PEPCO coordination records. UCI is available for all jurisdictions; other utilities use `email_intent` until adapters exist.
+**PEPCO scope:** PEPCO automation applies **only** to PEPCO coordination records. UCI is available for all jurisdictions; other utilities use outbound email when mailbox is connected.
 
-**Target PEPCO portal behavior (D4 — not yet built):**
-- Reuse existing Playwright/session infrastructure (`scrapers/pepco/`, `uci-pepco-session-store.js`)
-- **Human review required** before final submission (`draft_status=reviewed` gate — already enforced)
-- Support **dry-run** or **stop-before-final-submit** mode for development/staging
-- Persist: submitted fields, attachment list, actor, timestamp, confirmation/ticket number, submission evidence
-- Enforce idempotency (`submitted_at IS NULL` gate — partial today)
-- **Do not submit real applications** during development without safe live access
+**Implemented PEPCO portal behavior (D4 — Row 7):**
+- `uci-pepco-submission.service.js` + `scrapers/pepco/submit-flow.js` + `uci/application-templates/pepco/submission-field-mappings.json`
+- Reuses D1 PEPCO session/MFA infrastructure for future browser populate (`portal_populate=true`)
+- **Human review required** before submission (`draft_status=reviewed` gate — enforced)
+- **Default dry-run:** validation preview + optional mocked/synthetic populate; stops before final submit
+- **`UCI_PEPCO_LIVE_SUBMISSION_ENABLED=false` by default** — live submit requires env flag + `live_submission_confirmed=true` + `portal_populate=true`
+- Persists dry-run evidence metadata; on confirmed live submit: ticket, field snapshot, attachments, actor, timestamp, HTML/screenshot evidence
+- Enforce idempotency (`submitted_at IS NULL` + confirmed-submission metadata gate)
 
-**Submission complete definition:** Actual submit + attachments + confirmation/ticket + evidence + actor/timestamp. `email_intent` alone is **not** complete. See `UCI_ARCHITECTURE.md` §11.
+**Submission complete definition:** Actual submit + attachments + confirmation/ticket + evidence + actor/timestamp. Dry-run and `human_required` are **not** complete. See `UCI_ARCHITECTURE.md` §11.
 
-**Backend:** `uci-application-submit.service.js`; safety gates (`reviewed`, idempotency via `submitted_at`).
+**Backend:** `uci-application-submit.service.js`, `uci-pepco-submission.service.js`, `uci-email-submission.service.js`.
 
-**API:** `POST /applications/:id/submit` — JWT + project access.
+**API:** `POST /applications/:id/submit` — body: `{ portal_populate?, live_submission_confirmed?, credential_id? }`.
 
-**Behavior:** Non-PEPCO providers record `email_intent` submission and advance stages 4→5. PEPCO returns `501 SUBMIT_ADAPTER_NOT_IMPLEMENTED`.
+**Behavior:** PEPCO default → validation dry-run (`human_required`, lifecycle unchanged). Non-PEPCO → Graph `sendMail` when mailbox connected; lifecycle advances only on confirmed send.
 
-**Blockers (unchanged):** Live form mapping + verified test access — **external access** + **live verification**.
+**Blockers (remaining):** Live PEPCO portal form mapping verification against production portal HTML — **live verification** by operator.
 
-**Acceptance (scoped):** Review gate enforced; duplicate submit blocked; stage transitions on email_intent success.
+**Acceptance (scoped):** Review gate; dry-run preview; live flag off by default; duplicate submit blocked; lifecycle advances only after confirmed portal/email submission; 271 UCI tests pass.
 
-**Exclusions:** Live PEPCO portal form submit (blocked); outbound email delivery (D5/D4 email); BGE adapter.
+**Exclusions:** Operator live PEPCO dry-run against production portal (manual); BGE adapter; durable browser submit jobs.
 
 ---
 
@@ -520,6 +521,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 - Use existing **organization/project/project-team** structure as starting point: `projects` → `project_team_members` → `has_project_access` → UCI child records
 - Target: discover tenant/org field in schema; propagate to UCI children; tenant + project access enforcement; demo-account isolation
 - Cross-project tests: partial (`uci-d13-routes-integration.test.js`)
+- Cross-tenant tests: **complete** (Row 4 — `uci-cross-tenant-security.test.js`, CI-gated)
 - Cross-tenant tests: blocked until real `tenant_id` field operational
 - Replace `unconfigured` storage path when ownership data available
 
@@ -554,7 +556,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | `GET /projects/:id/coordination` | ✅ | baseline | JWT + project |
 | `GET /coordination/:id` | ✅ | baseline | JWT + project |
 | `POST /coordination/:id/transition` | ✅ | baseline | JWT + project |
-| `POST /projects/:id/coordination/init` | ✅ | D2.0 (optional `provider_setup`) | JWT + project |
+| `POST /projects/:id/coordination/init` | ✅ | D2.0 (required `provider_setup`) | JWT + project |
 | `POST /coordination/:id/load-profile/analyze` | ✅ | D2.1 | JWT + project |
 | `GET /projects/:id/provider-setup` | ✅ | D2.0 | JWT + project |
 | `GET /providers` | ✅ | baseline (not tenant-scoped) | JWT only |
@@ -610,10 +612,10 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 | Agent | Client pilot phase | Delivery milestone | Status | Notes |
 |-------|-------------------|-------------------|--------|-------|
-| 1 Provider Mapper | 1 | D2 | partial | D2.0 human-assisted only; auto mapping missing |
+| 1 Provider Mapper | 1 | D2 | partial | D2.0 human-confirmed **pilot-complete**; D2.2 auto mapping deferred |
 | 2 Load Profile | 1 | D2 | partial | D2.1 foundation; no numeric templates |
 | 3 Application Builder | 1 | D3 | partial | D3 foundation; PEPCO template manifest |
-| 4 Submission | 1 | D4 | partial | email_intent path; PEPCO portal blocked |
+| 4 Submission | 1 | D4 | partial | PEPCO dry-run adapter; email send; live gated |
 | 5 Communication Parser | 2 | D5 | partial | Portal-sync keyword classifier; no inbound email |
 | 6 COS Analyst | 2 | D6 | partial | Discrepancy analysis foundation |
 | 7 Easement/ROW | 4 | deferred | deferred | |
@@ -629,9 +631,9 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 
 | Layer | Requirement | Current |
 |-------|-------------|---------|
-| Unit | Per agent + sync services | D1A–D1D + D2.0 + D2.1 + D3 + D4 + D5 + D6–D12 + D13 + NB-D1-001 tests (185 UCI tests) |
+| Unit | Per agent + sync services | D1A–D1D + D2.0 + D2.1 + D3 + D4 + D5 + D6–D12 + D13 + Row 4 security (237 UCI tests) |
 | Integration | Critical paths §16 | ⚠️ Partial | `uci-d13-routes-integration.test.js` — project-boundary HTTP tests |
-| Security | Cross-tenant CI blocking | ❌ |
+| Security | Cross-tenant CI blocking | ✅ | `uci-cross-tenant-security.test.js` (Row 4) + `npm run test:uci:security` in `.github/workflows/uci-security-tests.yml` |
 | Portal mock | Per priority utility | ❌ (PEPCO list parse only) |
 | Classifier | ≥85% validation | ❌ | D5 keyword foundation only |
 | Live smoke | PEPCO read-only | **unclear** — needs manual verification |
@@ -647,7 +649,7 @@ D12 Operations/events/alerts ── cross-cutting; wire incrementally from D1
 | Credential encryption | any portal automation | ✅ |
 | JWT + project access on all routes | any UCI API | ✅ |
 | Editor write gate on UCI mutations | D13 pilot | ⚠️ Partial | RLS + route `write: true` (NB-D1-001) |
-| Tenant propagation + cross-tenant RLS tests | pilot multi-tenant demo | ❌ | Cross-project + editor/viewer tests only |
+| Tenant propagation + cross-tenant RLS tests | pilot multi-tenant demo | ✅ | Row 4: 74 security-suite tests; all UCI endpoints audited for cross-tenant denial |
 | No secrets in logs | every release | partial |
 | Submission idempotency | D4 production | ⚠️ Partial | `submitted_at` gate; PEPCO dry-run not built |
 
@@ -804,12 +806,12 @@ Priority follows existing milestone numbers — no new phases:
 | NB-D1D-001 | D1D Worker | Durable worker runs normalized sync only, not full PEPCO browser phases | partial | implement now | `runPortalSync` path works; discovery remains on dedicated routes | D1D / D13 | medium | `uci-durable-worker-executor.js`, `uci-portal-sync.service.js` | 2026-07-14 | — |
 | NB-D1D-002 | D1D Frontend | Frontend sync-run polling + sessionStorage recovery | partial | implement now | `SyncRunsPanel`, `useSyncRunPolling`, durable sync job tracking | D13 | low | `UciD13WorkflowPanels.tsx`, `uciApi.ts` | 2026-07-14 | 2026-07-15 |
 | NB-D1D-003 | D1D MFA | MFA browser state not fully restart-restorable after worker/process restart | partial | architecture work | In-memory session store with TTL; documented limitation | D13 | medium | `uci-pepco-session-store.js` — no durable MFA store | 2026-07-14 | — |
-| NB-D1-001 | D1 Tenant | Tenant isolation — tenants, memberships, propagation, RLS | resolved | architecture work | Row 2 code + staged migrations; production gate requires migration apply + live RLS verification | D13 / Row 2 | high | `20260715140000`–`20260715140400`, `uci-access.service.js`, `uci-cross-tenant-security.test.js` | 2026-07-08 | 2026-07-15 |
+| NB-D1-001 | D1 Tenant | Tenant isolation — tenants, memberships, propagation, RLS | resolved | architecture work | Row 2 migrations applied; Row 4 cross-tenant tests CI-gated | Row 2 / Row 4 | high | `20260715140000`–`20260715140400`, `uci-cross-tenant-security.test.js` | 2026-07-08 | 2026-07-15 |
 | NB-D1B-001 | D1B Storage | Tenant-based storage namespace for new uploads | resolved | architecture work | New paths `uci/{tenantId}/...`; legacy `unconfigured` readable; tenant derived from project | D13 / Row 2 | medium | `uci-document-storage.service.js` | 2026-07-08 | 2026-07-15 |
 | NB-D2-001 | D2 Agent 1 | Full auto territory mapping blocked on verified service-territory data | deferred | external data | D2.0 human-confirmed fallback; no ZIP/county/jurisdiction inference | D2.2 | medium | No verified `service_territory` rules; column unused | 2026-07-14 | — |
 | NB-D2-002 | D2 Address | Address normalization and geocoding incomplete | incomplete | external data | D2.1 uses structured address inventory only | D2.2 | medium | `uci-provider-setup.service.js`, `uci-load-profile.service.js` | 2026-07-14 | — |
 | NB-D2-003 | D2.0 UI | Provider mapping metadata display in UI | resolved | implement now | Table badge + drawer `ProviderMappingBanner` | D13 | low | `UciD13WorkflowPanels.tsx`, records table | 2026-07-14 | 2026-07-15 |
-| NB-D2-004 | D2.0 API | Init API still accepts requests without `provider_setup` confirmation | hardening | implement now | Backward compatibility for API clients; UI enforces confirm gate | D13 | low | `POST .../coordination/init` in `uci.routes.js` | 2026-07-14 | — |
+| NB-D2-004 | D2.0 API | Init API requires `provider_setup` confirmation | resolved | implement now | `POST .../coordination/init` rejects missing/false confirmation; tenant-scoped slug resolution | D2.0 | low | `uci.routes.js`, `uci-provider-init-hardening.test.js` | 2026-07-14 | 2026-07-15 |
 | NB-D2-005 | D2.0 Audit | No dedicated provider-mapping audit table (metadata only) | partial | implement now | Mapping stored on records + init transition metadata | D13 | low | `uci-records.service.js`, `coordination_stage_transitions.metadata` | 2026-07-14 | — |
 | NB-D2-006 | D2.0 Tests | Provider-setup routes lack HTTP integration tests | partial | implement now | Project-boundary tests in `uci-d13-routes-integration.test.js` | D13 | low | D13 integration suite | 2026-07-14 | 2026-07-15 |
 | NB-D2-007 | D2.1 Templates | McDonald's / QSR load template registry missing | incomplete | external data | D2.1 intentionally omits guessed numeric templates | D2.1 | medium | No template files under `uci/` or `scraper-service` | 2026-07-14 | — |
@@ -823,9 +825,9 @@ Priority follows existing milestone numbers — no new phases:
 | NB-D3-003 | D3 Lifecycle | Stage 3 not auto-advanced on package build/review | incomplete | implement now | Intentional; manual transitions remain | D13 | low | `stage_unchanged: true` in builder | 2026-07-14 | — |
 | NB-D3-004 | D3 Tests | Application routes lack HTTP integration tests | partial | implement now | Lifecycle/cost routes covered in D13 integration suite | D13 | low | `uci-d13-routes-integration.test.js` | 2026-07-14 | 2026-07-15 |
 | NB-D3-005 | D3 UI | Submit enabled when reviewed; PEPCO adapter gap surfaces on submit | partial | external access | PEPCO returns 501; non-PEPCO uses email_intent | D4 | low | `ApplicationPrepSection` | 2026-07-14 | — |
-| NB-D4-001 | D4 PEPCO | PEPCO portal submission adapter + dry-run not implemented | blocked | external access | No Playwright form-submit/dry-run path; needs live form mapping | D4 | high | `uci-application-submit.service.js` returns 501 | 2026-07-14 | — |
-| NB-D4-002 | D4 Email | Outbound utility email not sent via Commun-ET mailbox | incomplete | external access | email_intent records metadata only; reuse Graph/mailbox | D5 / D4 | medium | No Graph/SMTP send in UCI; `microsoft_mailbox_connections` exists | 2026-07-14 | — |
-| NB-D4-003 | D4 Confirm | No utility ticket/confirmation capture for portal submit | incomplete | live verification | Submission-complete definition requires ticket + evidence | D4 | medium | `utility_ticket_number` null on email_intent | 2026-07-14 | — |
+| NB-D4-001 | D4 PEPCO | PEPCO portal submission adapter + dry-run | partial | live verification | Adapter + mappings + dry-run shipped; production portal HTML verify pending | D4 | high | `uci-pepco-submission.service.js`, `submit-flow.js` | 2026-07-14 | 2026-07-15 |
+| NB-D4-002 | D4 Email | Outbound utility email via Graph sendMail | partial | external access | `uci-email-submission.service.js`; lifecycle on confirmed send only | D4 | medium | `microsoft-mailbox.service.js` Graph send | 2026-07-14 | 2026-07-15 |
+| NB-D4-003 | D4 Confirm | Utility ticket/confirmation capture for portal submit | partial | live verification | Captured on confirmed live submit; dry-run stores evidence metadata | D4 | medium | `utility_ticket_number` + `agent_draft_metadata.submission` | 2026-07-14 | 2026-07-15 |
 | NB-D5-001 | D5 Email | Inbound email webhook not implemented | incomplete | external access | Portal-sync classifier covers first safe version; reuse Commun-ET mailbox | D5 | medium | No `POST /webhooks/uci/email-inbound` route | 2026-07-14 | — |
 | NB-D5-002 | D5 Classifier | Keyword classifier only; no ≥85% validation set | incomplete | implement now | Deterministic foundation per audit; AI deferred | D13 | low | `uci-communication-classifier.service.js` | 2026-07-14 | — |
 | NB-D5-003 | D5 UI | Human reclassify UI in communications drawer | resolved | implement now | `CommunicationReclassifyRow` per message | D13 | low | `UciD13WorkflowPanels.tsx` | 2026-07-14 | 2026-07-15 |
@@ -852,7 +854,7 @@ Priority follows existing milestone numbers — no new phases:
 | NB-D12-003 | D12 Alerts | P0/P1/P2 alerts and runbooks not documented | incomplete | live verification | No alerting pipeline | D12 / D13 | medium | Roadmap §D12 | 2026-07-14 | — |
 | NB-PROV-001 | Providers | BGE and other non-PEPCO portal adapters not implemented | deferred | external access | PEPCO first; others use manual/email until adapters | Future adapter | low | No BGE under `scrapers/` or `adapters/` | 2026-07-08 | — |
 | NB-TEST-001 | Testing | Live PEPCO end-to-end smoke verification not CI-gated | incomplete | live verification | Unit/route tests pass (171 UCI tests); live portal requires credentials | D13 | medium | Manual verification; `uci-pepco-*` tests mock browser | 2026-07-08 | — |
-| NB-TEST-002 | Testing | Cross-tenant UCI security tests | resolved | architecture work | Dedicated `uci-cross-tenant-security.test.js` — tenant A/B, demo isolation, route denial, storage namespace | D13 / Row 2 | high | `uci-cross-tenant-security.test.js`, `uci-d13-tenant-rls-hardening.test.js` | 2026-07-08 | 2026-07-15 |
+| NB-TEST-002 | Testing | Cross-tenant UCI security tests | resolved | architecture work | Row 4 complete: endpoint matrix + demo isolation + CI gate `.github/workflows/uci-security-tests.yml` | Row 4 | high | `uci-cross-tenant-security.test.js`, `projectTeamInvitationLogic.test.ts` | 2026-07-08 | 2026-07-15 |
 | NB-OPS-001 | D12 Ops | Event bus `uci.*` events — in-memory only, partial catalog | partial | architecture work | `emitUciEvent` on D5 classify/reclassify; no external bus | D13 | low | `uci-events.service.js`, `GET /events/recent` | 2026-07-08 | — |
 | NB-TEAM-001 | Team | Invitation acceptance flow missing | resolved | implement now | `/invite/:token`, `accept_project_team_invitation` RPC, `InviteAccept.tsx` | Row 2 | medium | `20260715130000_project_team_invitation_flow.sql`, `InviteAccept.tsx` | 2026-07-15 | 2026-07-15 |
 | NB-TEAM-002 | Team | Invite did not send email | resolved | implement now | `send-project-team-invitation` edge function via Resend; truthful partial result when unavailable | Row 2 | low | `supabase/functions/send-project-team-invitation/index.ts` | 2026-07-15 | 2026-07-15 |

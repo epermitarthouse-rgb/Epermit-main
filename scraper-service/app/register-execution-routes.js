@@ -17,6 +17,10 @@ const { isScraperDebugArtifactsEnabled } = require("../artifacts/debug-artifacts
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 const {
+  applyScrapeCanonicalAddressToPortalData,
+  preservePermitPilotMetaOnPortalMerge,
+} = require("./services/project-address.service.js");
+const {
   accelaLogin: accelaScraperLogin,
   scrapeAccelaRecord,
   continueArlingtonPlanReviewDownloads,
@@ -2836,14 +2840,14 @@ async function syncPortalDataToSupabase(
       if (supabaseProjectId) {
         const { data: rows } = await supabase
           .from("projects")
-          .select("id, portal_data_hash, portal_data")
+          .select("id, portal_data_hash, portal_data, address, jurisdiction")
           .eq("id", supabaseProjectId);
         existingRow = rows && rows.length > 0 ? rows[0] : null;
       }
       if (!existingRow) {
         const { data: rows } = await supabase
           .from("projects")
-          .select("id, portal_data_hash, portal_data")
+          .select("id, portal_data_hash, portal_data, address, jurisdiction")
           .eq("permit_number", projectNum)
           .eq("user_id", userId);
         existingRow = rows && rows.length > 0 ? rows[0] : null;
@@ -2947,20 +2951,37 @@ async function syncPortalDataToSupabase(
           }
         }
         const mergedForDb = stripPortalSyncTransientFields(mergedData);
-        const mergedHash = hashPortalData(mergedForDb);
+        const mergedWithMeta = preservePermitPilotMetaOnPortalMerge(
+          existingRow.portal_data,
+          mergedForDb,
+        );
+        const canonicalApply = applyScrapeCanonicalAddressToPortalData(
+          {
+            address: existingRow.address,
+            jurisdiction: existingRow.jurisdiction,
+            portal_data: existingRow.portal_data,
+          },
+          mergedWithMeta,
+          {
+            sourcePortal: mergedWithMeta.portalType || currentData.portalType || null,
+            scrapedAt: new Date().toISOString(),
+          },
+        );
+        const mergedHash = hashPortalData(canonicalApply.portalData);
         actualProjectId = existingRow.id;
         const portalStatusResolved =
           currentData.portalFilesScrapeStatus === "in_progress"
             ? currentData.portalFilesScrapeLabel || "Partial"
             : currentData.dashboardStatus ||
-              mergedForDb.dashboardStatus ||
+              canonicalApply.portalData.dashboardStatus ||
               "Scraped";
         const updatePayload = {
           portal_status: portalStatusResolved,
           last_checked_at: new Date().toISOString(),
-          portal_data: mergedForDb,
+          portal_data: canonicalApply.portalData,
           portal_data_hash: mergedHash,
           permit_number: projectNum,
+          ...(canonicalApply.projectPatch || {}),
         };
 
         if (isMontgomeryPortalSubtypePayload(mergedForDb)) {
@@ -3009,6 +3030,15 @@ async function syncPortalDataToSupabase(
             ? currentData.portalFilesScrapeLabel || "Partial"
             : currentData.dashboardStatus || "Unknown";
         const insertPd = stripPortalSyncTransientFields(currentData);
+        const canonicalApply = applyScrapeCanonicalAddressToPortalData(
+          null,
+          insertPd,
+          {
+            sourcePortal: insertPd.portalType || currentData.portalType || null,
+            scrapedAt: new Date().toISOString(),
+          },
+        );
+        const insertHash = hashPortalData(canonicalApply.portalData);
         const { data: created, error: createError } = await supabase
           .from("projects")
           .insert({
@@ -3016,13 +3046,17 @@ async function syncPortalDataToSupabase(
             name: currentData.projectNum || projectNum,
             permit_number: projectNum,
             description: currentData.description || "",
-            address: currentData.location || "",
+            address:
+              canonicalApply.projectPatch?.address ||
+              canonicalApply.portalData.location ||
+              currentData.location ||
+              "",
             jurisdiction: currentData.jurisdiction || "Washington DC",
             status: "draft",
             portal_status: insertPortalStatus,
             last_checked_at: new Date().toISOString(),
-            portal_data: insertPd,
-            portal_data_hash: newHash,
+            portal_data: canonicalApply.portalData,
+            portal_data_hash: insertHash,
           })
           .select("id, portal_data");
         if (createError) {

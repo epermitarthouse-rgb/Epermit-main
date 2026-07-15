@@ -14,6 +14,7 @@ const {
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
 } = require("../app/services/uci/uci-application-builder.service.js");
 const { LOAD_PROFILE_IDEMPOTENCY_KEY } = require("../app/services/uci/uci-load-profile.service.js");
+const { PROVIDER_SETUP_METHOD } = require("../app/services/uci/uci-provider-setup.service.js");
 
 const BASE_PROJECT = {
   id: "proj-1",
@@ -120,6 +121,131 @@ describe("UCI D3 application builder service", () => {
     assert.ok(result.missingFields.includes("connected_load_data"));
     const loadField = result.fieldResults.find((f) => f.key === "connected_load_data");
     assert.equal(loadField?.value, null);
+  });
+
+  it("uses portal_data.location when structured street is empty", () => {
+    const template = loadTemplateManifest("pepco", "electric");
+    const required = /** @type {Array<Record<string, unknown>>} */ (template.required_fields);
+    const result = evaluateRequiredFields(
+      {
+        project_type: "tenant_improvement",
+        description: "QSR fit-out",
+        address: "",
+        portal_data: { location: "200 Sheridan Rd NW, Washington DC" },
+      },
+      LOAD_PROFILE_DRAFT.load_summary,
+      required,
+    );
+    const addressField = result.fieldResults.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "present");
+    assert.equal(addressField?.value, "200 Sheridan Rd NW, Washington DC");
+    assert.equal(addressField?.address_source, "jurisdiction_scrape");
+    assert.equal(result.missingFields.includes("project_address"), false);
+    assert.equal(result.addressResolution.canonical_address_source, "jurisdiction_scrape");
+    assert.equal(result.addressResolution.address_source, "portal_data_location");
+  });
+
+  it("parses JSON-string portal_data.location for application package address", () => {
+    const template = loadTemplateManifest("pepco", "electric");
+    const required = /** @type {Array<Record<string, unknown>>} */ (template.required_fields);
+    const result = evaluateRequiredFields(
+      {
+        project_type: "tenant_improvement",
+        address: "",
+        portal_data: JSON.stringify({ location: "Sheridan Rd NW, Washington DC" }),
+      },
+      LOAD_PROFILE_DRAFT.load_summary,
+      required,
+    );
+    const addressField = result.fieldResults.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "present");
+    assert.equal(addressField?.address_source, "jurisdiction_scrape");
+  });
+
+  it("uses acknowledged portal_data source when structured and scraped addresses differ", () => {
+    const template = loadTemplateManifest("pepco", "electric");
+    const required = /** @type {Array<Record<string, unknown>>} */ (template.required_fields);
+    const record = {
+      metadata: {
+        uci_provider_mapping: {
+          method: PROVIDER_SETUP_METHOD,
+          address_source_acknowledged: "portal_data_location",
+        },
+      },
+    };
+    const result = evaluateRequiredFields(
+      {
+        project_type: "tenant_improvement",
+        address: "100 Old Main St",
+        city: "Washington",
+        state: "DC",
+        portal_data: { location: "200 Sheridan Rd NW, Washington DC" },
+      },
+      LOAD_PROFILE_DRAFT.load_summary,
+      required,
+      record,
+    );
+    const addressField = result.fieldResults.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "present");
+    assert.equal(addressField?.value, "200 Sheridan Rd NW, Washington DC");
+    assert.equal(addressField?.address_source, "portal_data_location");
+    assert.equal(result.addressResolution.address_mismatch, true);
+    assert.equal(result.addressResolution.address_review_required, false);
+    assert.equal(result.missingFields.includes("project_address_review"), false);
+  });
+
+  it("requires address review when structured and scraped addresses differ without acknowledgement", () => {
+    const template = loadTemplateManifest("pepco", "electric");
+    const required = /** @type {Array<Record<string, unknown>>} */ (template.required_fields);
+    const result = evaluateRequiredFields(
+      {
+        project_type: "tenant_improvement",
+        address: "100 Old Main St",
+        city: "Washington",
+        state: "DC",
+        portal_data: { location: "200 Sheridan Rd NW, Washington DC" },
+      },
+      LOAD_PROFILE_DRAFT.load_summary,
+      required,
+    );
+    const addressField = result.fieldResults.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "present");
+    assert.equal(result.addressResolution.address_review_required, true);
+    assert.ok(result.missingFields.includes("project_address_review"));
+  });
+
+  it("marks project address missing when neither structured nor portal_data.location exists", () => {
+    const template = loadTemplateManifest("pepco", "electric");
+    const required = /** @type {Array<Record<string, unknown>>} */ (template.required_fields);
+    const result = evaluateRequiredFields(
+      { project_type: "tenant_improvement", address: "", portal_data: {} },
+      LOAD_PROFILE_DRAFT.load_summary,
+      required,
+    );
+    const addressField = result.fieldResults.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "missing");
+    assert.ok(result.missingFields.includes("project_address"));
+  });
+
+  it("treats equal structured and scraped addresses as present without review flag", () => {
+    const template = loadTemplateManifest("pepco", "electric");
+    const required = /** @type {Array<Record<string, unknown>>} */ (template.required_fields);
+    const result = evaluateRequiredFields(
+      {
+        project_type: "tenant_improvement",
+        address: "100 Main St",
+        city: "Washington",
+        state: "DC",
+        zip_code: "20001",
+        portal_data: { location: "100 Main St, Washington, DC, 20001" },
+      },
+      LOAD_PROFILE_DRAFT.load_summary,
+      required,
+    );
+    const addressField = result.fieldResults.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "present");
+    assert.equal(result.addressResolution.address_mismatch, false);
+    assert.equal(result.addressResolution.address_review_required, false);
   });
 
   it("resolves incomplete package when documents or load inputs missing", () => {
@@ -254,6 +380,102 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
     } finally {
       // no module patches
     }
+  });
+
+  it("rebuilt package resolves portal_data.location and stores address snapshot metadata", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          ...HUMAN_ASSISTED_RECORD,
+          metadata: {
+            uci_provider_mapping: {
+              method: PROVIDER_SETUP_METHOD,
+              address_source_acknowledged: "portal_data_location",
+            },
+          },
+        },
+      ],
+      projects: [
+        {
+          id: "proj-1",
+          project_type: "tenant_improvement",
+          description: "QSR fit-out",
+          address: "",
+          portal_data: { location: "200 Sheridan Rd NW, Washington DC" },
+        },
+      ],
+      project_documents: [
+        { id: "doc-1", project_id: "proj-1", document_type: "site_plan", file_name: "site.pdf" },
+      ],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT, coordination_record_id: "coord-1", project_id: "proj-1" },
+      ],
+    };
+
+    const supabase = createApplicationBuilderMockSupabase(tables);
+    const result = await runApplicationPackageBuild(supabase, {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+    });
+
+    const pkgMeta = result.application.agent_draft_metadata.application_package;
+    assert.equal(pkgMeta.project_address.formatted, "200 Sheridan Rd NW, Washington DC");
+    assert.equal(pkgMeta.project_address.source, "portal_data_location");
+    assert.equal(pkgMeta.address_source_acknowledged, "portal_data_location");
+    assert.equal(result.missing_fields.includes("project_address"), false);
+    const addressField = pkgMeta.field_results.find((f) => f.key === "project_address");
+    assert.equal(addressField?.status, "present");
+  });
+
+  it("uses selected PEPCO propertyAddress when canonical and jurisdiction sources are absent", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          ...HUMAN_ASSISTED_RECORD,
+          metadata: {
+            ...HUMAN_ASSISTED_RECORD.metadata,
+            pepco_application_detail_discovery: {
+              applications: [
+                {
+                  applicationUuid: "pepco-app-1",
+                  overview: { propertyAddress: "10432 Campus Way S, Upper Marlboro, MD" },
+                },
+                {
+                  applicationUuid: "pepco-app-2",
+                  overview: { propertyAddress: "999 Wrong App Rd" },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      projects: [
+        {
+          id: "proj-1",
+          project_type: "tenant_improvement",
+          description: "QSR fit-out",
+          address: "",
+          portal_data: { tabs: { info: {} } },
+        },
+      ],
+      project_documents: [],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT, coordination_record_id: "coord-1", project_id: "proj-1" },
+      ],
+    };
+
+    const supabase = createApplicationBuilderMockSupabase(tables);
+    const result = await runApplicationPackageBuild(supabase, {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+      externalApplicationId: "pepco-app-1",
+    });
+
+    const pkgMeta = result.application.agent_draft_metadata.application_package;
+    assert.equal(pkgMeta.project_address.formatted, "10432 Campus Way S, Upper Marlboro, MD");
+    assert.equal(pkgMeta.project_address.source, "utility_portal");
+    assert.equal(pkgMeta.project_address.external_application_id, "pepco-app-1");
+    assert.equal(result.missing_fields.includes("project_address"), false);
   });
 
   it("rejects build when load profile draft is missing", async () => {

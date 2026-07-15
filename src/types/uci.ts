@@ -206,7 +206,11 @@ export interface UciInitResponse {
   records: CoordinationRecord[];
 }
 
-export type UciProviderSetupAddressSource = "structured" | "portal_data_location" | "none";
+export type UciProviderSetupAddressSource =
+  | "structured"
+  | "portal_data_location"
+  | "utility_portal"
+  | "none";
 
 export interface UciProviderSetupAddress {
   source: UciProviderSetupAddressSource;
@@ -215,6 +219,30 @@ export interface UciProviderSetupAddress {
   complete: boolean;
   fallback_used?: boolean;
   fallback_note?: string;
+}
+
+export interface UciProviderSetupScrapedLocation {
+  formatted: string;
+  source: "portal_data_location";
+}
+
+export interface UciProviderSetupResponse {
+  project_id: string;
+  tenant_id?: string | null;
+  mapping_method: "human_assisted";
+  territory_matching_available: false;
+  territory_matching_message: string;
+  address: UciProviderSetupAddress;
+  structured: UciProviderSetupAddress;
+  scraped_location: UciProviderSetupScrapedLocation | null;
+  address_mismatch: boolean;
+  mismatch_warning: string | null;
+  available_address_sources: UciProviderSetupAddressSource[];
+  recommended_address_source: UciProviderSetupAddressSource;
+  guidance_steps: string[];
+  providers: UciProviderSetupCatalogItem[];
+  utility_types_in_catalog: string[];
+  auto_selection_enabled: false;
 }
 
 export interface UciProviderSetupCatalogItem {
@@ -227,29 +255,20 @@ export interface UciProviderSetupCatalogItem {
   suggested: boolean;
 }
 
-export interface UciProviderSetupResponse {
-  project_id: string;
-  mapping_method: "human_assisted";
-  territory_matching_available: false;
-  territory_matching_message: string;
-  address: UciProviderSetupAddress;
-  guidance_steps: string[];
-  providers: UciProviderSetupCatalogItem[];
-  utility_types_in_catalog: string[];
-  auto_selection_enabled: false;
-}
-
 export interface UciProviderSetupConfirmation {
   confirmed: true;
-  address_source_acknowledged?: UciProviderSetupAddressSource;
+  address_source_acknowledged: UciProviderSetupAddressSource;
   unresolved_utility_types?: string[];
 }
 
 export interface UciProviderMappingMetadata {
   method: "human_assisted";
+  confirmed: true;
   confirmed_by_user_id: string;
   confirmed_at: string;
   address_source: UciProviderSetupAddressSource;
+  address_source_acknowledged: UciProviderSetupAddressSource;
+  address_mismatch?: boolean;
   address_snapshot: {
     formatted: string | null;
     complete: boolean;
@@ -293,11 +312,23 @@ export interface UciApplicationReviewResponse {
 }
 
 export interface UciApplicationSubmitResponse {
+  status?: "confirmed" | "human_required" | "failed";
+  reason?: string;
+  dry_run?: boolean;
+  live_submission_enabled?: boolean;
+  lifecycle_advanced?: boolean;
+  fields_to_submit?: Array<Record<string, unknown>>;
+  attachments_to_submit?: Array<Record<string, unknown>>;
+  validation_errors?: Array<Record<string, unknown>>;
+  missing_fields?: string[];
+  missing_attachments?: string[];
+  utility_ticket_number?: string | null;
+  message?: string;
   application: CoordinationApplication;
   submission_method: string;
   submission_metadata: Record<string, unknown>;
-  coordination_record: CoordinationRecord;
-  transitions: CoordinationTransition[];
+  coordination_record?: CoordinationRecord;
+  transitions?: CoordinationTransition[];
   portal_adapter_used: boolean;
 }
 

@@ -1,12 +1,26 @@
 "use strict";
 
-const { describe, it } = require("node:test");
+const { describe, it, after } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("fs");
+const path = require("path");
+const { chromium } = require("playwright");
 const {
   validateSubmitEligibility,
   resolveSubmissionMethod,
   submitApplicationPackage,
+  submitViaPepcoPortal,
+  submitViaEmail,
 } = require("../app/services/uci/uci-application-submit.service.js");
+
+const FORM_FIXTURE = fs.readFileSync(
+  path.join(__dirname, "fixtures/pepco/submission-form.html"),
+  "utf8",
+);
+const CONFIRMATION_FIXTURE = fs.readFileSync(
+  path.join(__dirname, "fixtures/pepco/submission-confirmation.html"),
+  "utf8",
+);
 
 const REVIEWED_PACKAGE = {
   id: "app-pkg-1",
@@ -16,17 +30,132 @@ const REVIEWED_PACKAGE = {
   idempotency_key: "agent_3_application_package:d3-v1",
   draft_status: "reviewed",
   provider_slug: "bge",
+  application_type: "new_service",
   submitted_at: null,
+  package_documents: [
+    { key: "site_plan", status: "attached", file_name: "site.pdf", label: "Site plan" },
+  ],
+  load_summary: { calculated_values: { connected_kw: 80 } },
   agent_draft_metadata: {
     application_package: { package_status: "incomplete" },
   },
 };
 
+const REVIEWED_PEPCO_PACKAGE = {
+  ...REVIEWED_PACKAGE,
+  id: "app-pkg-pepco",
+  provider_slug: "pepco",
+  package_documents: [
+    {
+      key: "site_plan",
+      label: "Site plan",
+      status: "attached",
+      project_document_id: "doc-1",
+      file_name: "site.pdf",
+      document_type: "site_plan",
+    },
+    {
+      key: "single_line_diagram",
+      label: "Single-line diagram",
+      status: "attached",
+      project_document_id: "doc-2",
+      file_name: "single-line.pdf",
+      document_type: "single_line_diagram",
+    },
+    {
+      key: "equipment_cut_sheets",
+      label: "Equipment cut sheets",
+      status: "attached",
+      project_document_id: "doc-3",
+      file_name: "cuts.pdf",
+      document_type: "equipment_cut_sheet",
+    },
+    {
+      key: "letter_of_authorization",
+      label: "Letter of authorization",
+      status: "attached",
+      project_document_id: "doc-4",
+      file_name: "loa.pdf",
+      document_type: "letter_of_authorization",
+    },
+  ],
+  load_summary: {
+    calculated_values: {},
+    verified_values: {
+      connected_load_kw: {
+        field_key: "connected_load_kw",
+        value: 120,
+        unit: "kW",
+        method: "source_extracted_and_human_verified",
+        approved_by: "user-1",
+        approved_at: "2026-07-15T12:00:00.000Z",
+        source_document_name: "panel.pdf",
+        source_document_id: null,
+        source_storage_path: "p",
+        page_number: 1,
+        evidence_text: "connected load 120 KW",
+        extraction_method: "pdf_text",
+        edited: false,
+        review_note: null,
+        original_candidate_id: "c1",
+        source_content_hash: "hash",
+      },
+      service_voltage: {
+        field_key: "service_voltage",
+        value: 480,
+        unit: "V",
+        method: "source_extracted_and_human_verified",
+        approved_by: "user-1",
+        approved_at: "2026-07-15T12:00:00.000Z",
+        source_document_name: "panel.pdf",
+        source_document_id: null,
+        source_storage_path: "p",
+        page_number: 1,
+        evidence_text: "480 V",
+        extraction_method: "pdf_text",
+        edited: false,
+        review_note: null,
+        original_candidate_id: "c2",
+        source_content_hash: "hash",
+      },
+    },
+  },
+};
+
+const BASE_PROJECT = {
+  id: "proj-1",
+  name: "QSR Fit-out",
+  project_type: "tenant_improvement",
+  description: "Restaurant tenant improvement",
+  address: "100 Main St",
+  city: "Washington",
+  state: "DC",
+  zip_code: "20001",
+};
+
 describe("UCI D4 application submit service", () => {
+  const originalLiveFlag = process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED;
+
+  after(() => {
+    if (originalLiveFlag === undefined) {
+      delete process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED;
+    } else {
+      process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED = originalLiveFlag;
+    }
+  });
+
   it("requires reviewed agent draft package", () => {
     assert.equal(validateSubmitEligibility({ ...REVIEWED_PACKAGE, draft_status: "draft" }).ok, false);
     assert.equal(validateSubmitEligibility({ ...REVIEWED_PACKAGE, record_source: "portal_sync" }).ok, false);
     assert.equal(validateSubmitEligibility(REVIEWED_PACKAGE).ok, true);
+    assert.equal(
+      validateSubmitEligibility({
+        ...REVIEWED_PACKAGE,
+        draft_status: "submitted",
+        submitted_at: "2026-07-14T12:00:00.000Z",
+      }).code,
+      "ALREADY_SUBMITTED",
+    );
   });
 
   it("rejects already submitted applications", () => {
@@ -38,74 +167,291 @@ describe("UCI D4 application submit service", () => {
     assert.equal(result.code, "ALREADY_SUBMITTED");
   });
 
-  it("resolves PEPCO as portal and others as email_intent", () => {
+  it("resolves PEPCO as portal and others as email", () => {
     assert.equal(resolveSubmissionMethod("pepco"), "portal");
-    assert.equal(resolveSubmissionMethod("bge"), "email_intent");
+    assert.equal(resolveSubmissionMethod("bge"), "email");
   });
 
-  it("blocks PEPCO portal submit when adapter not implemented", async () => {
-    const tables = {
-      coordination_records: [
-        {
-          id: "coord-1",
-          project_id: "proj-1",
-          current_stage: 3,
-          current_stage_state: "IN_PROGRESS",
-        },
-      ],
-      coordination_applications: [{ ...REVIEWED_PACKAGE, provider_slug: "pepco" }],
-      coordination_stage_transitions: [],
-    };
+  it("returns PEPCO validation dry-run without advancing lifecycle", async () => {
+    delete process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED;
+    const tables = createSubmitTables();
+    const supabase = createSubmitMockSupabase(tables);
 
+    const result = await submitApplicationPackage(supabase, {
+      applicationId: "app-pkg-pepco",
+      userId: "user-1",
+    });
+
+    assert.equal(result.status, "human_required");
+    assert.equal(result.dry_run, true);
+    assert.equal(result.lifecycle_advanced, false);
+    assert.equal(result.submission_method, "portal");
+    assert.equal(tables.coordination_records[0].current_stage, 3);
+    assert.equal(tables.coordination_applications[0].draft_status, "reviewed");
+    assert.ok(result.fields_to_submit);
+    assert.ok(result.attachments_to_submit);
+  });
+
+  it("stops PEPCO portal populate before final submit on mocked page", async () => {
+    delete process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED;
+    const tables = createSubmitTables();
+    const supabase = createSubmitMockSupabase(tables);
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setContent(FORM_FIXTURE);
+
+    try {
+      const result = await submitApplicationPackage(supabase, {
+        applicationId: "app-pkg-pepco",
+        userId: "user-1",
+        options: { portal_populate: true },
+        deps: {
+          page,
+          uploadFn: async () => ({ ok: true }),
+        },
+      });
+      assert.equal(result.dry_run, true);
+      assert.equal(result.lifecycle_advanced, false);
+      assert.equal(result.submission_metadata.confirmation_status, "dry_run");
+      assert.ok(result.submission_metadata.portal_outcome?.evidence?.has_screenshot);
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it("rejects live PEPCO submission when live flag is off", async () => {
+    delete process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED;
+    const tables = createSubmitTables();
     const supabase = createSubmitMockSupabase(tables);
 
     await assert.rejects(
-      () => submitApplicationPackage(supabase, { applicationId: "app-pkg-1", userId: "user-1" }),
+      () =>
+        submitApplicationPackage(supabase, {
+          applicationId: "app-pkg-pepco",
+          userId: "user-1",
+          options: {
+            portal_populate: true,
+            live_submission_confirmed: true,
+          },
+        }),
       (err) => {
-        assert.equal(
-          /** @type {{ code?: string, statusCode?: number }} */ (err).code,
-          "SUBMIT_ADAPTER_NOT_IMPLEMENTED",
-        );
-        assert.equal(/** @type {{ statusCode?: number }} */ (err).statusCode, 501);
+        assert.equal(/** @type {{ code?: string }} */ (err).code, "LIVE_SUBMISSION_DISABLED");
         return true;
       },
     );
   });
 
-  it("records email_intent submission and advances stages for non-PEPCO", async () => {
-    const tables = {
-      coordination_records: [
+  it("captures PEPCO confirmation and advances lifecycle only after live submit", async () => {
+    process.env.UCI_PEPCO_LIVE_SUBMISSION_ENABLED = "true";
+    const tables = createSubmitTables();
+    const supabase = createSubmitMockSupabase(tables);
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    try {
+      await page.setContent(FORM_FIXTURE);
+      await page.evaluate(() => {
+        const btn = document.querySelector("#pepco-final-submit");
+        if (btn) {
+          btn.addEventListener("click", () => {
+            document.body.innerHTML = `
+              <span id="pepco-confirmation-ticket">PEPCO-TKT-LIVE-001</span>
+              <span id="pepco-application-reference">APP-LIVE-001</span>
+            `;
+          });
+        }
+      });
+
+      const result = await submitApplicationPackage(supabase, {
+        applicationId: "app-pkg-pepco",
+        userId: "user-1",
+        options: {
+          portal_populate: true,
+          live_submission_confirmed: true,
+        },
+        deps: {
+          page,
+          uploadFn: async () => ({ ok: true }),
+        },
+      });
+
+      assert.equal(result.status, "confirmed");
+      assert.equal(result.lifecycle_advanced, true);
+      assert.equal(result.utility_ticket_number, "PEPCO-TKT-LIVE-001");
+      const pepcoApp = tables.coordination_applications.find((a) => a.id === "app-pkg-pepco");
+      assert.equal(pepcoApp?.draft_status, "submitted");
+      assert.equal(tables.coordination_records[0].current_stage, 5);
+      assert.equal(tables.coordination_stage_transitions.length, 2);
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it("prevents duplicate PEPCO submission after confirmation", async () => {
+    const tables = createSubmitTables({
+      coordination_applications: [
         {
-          id: "coord-1",
-          project_id: "proj-1",
-          current_stage: 3,
-          current_stage_state: "IN_PROGRESS",
+          ...REVIEWED_PEPCO_PACKAGE,
+          submitted_at: "2026-07-15T12:00:00.000Z",
+          draft_status: "submitted",
         },
       ],
-      coordination_applications: [{ ...REVIEWED_PACKAGE }],
-      coordination_stage_transitions: [],
-    };
+    });
+    const supabase = createSubmitMockSupabase(tables);
 
+    await assert.rejects(
+      () =>
+        submitApplicationPackage(supabase, {
+          applicationId: "app-pkg-pepco",
+          userId: "user-1",
+        }),
+      (err) => {
+        assert.equal(/** @type {{ code?: string }} */ (err).code, "ALREADY_SUBMITTED");
+        return true;
+      },
+    );
+  });
+
+  it("sends email for non-PEPCO and advances lifecycle only on success", async () => {
+    const tables = createSubmitTables();
     const supabase = createSubmitMockSupabase(tables);
 
     const result = await submitApplicationPackage(supabase, {
       applicationId: "app-pkg-1",
       userId: "user-1",
+      deps: {
+        getAccessTokenFn: async () => "test-token",
+        sendMailFn: async () => ({ ok: true, message_id: "msg-123" }),
+      },
     });
 
-    assert.equal(result.submission_method, "email_intent");
+    assert.equal(result.status, "confirmed");
+    assert.equal(result.submission_method, "email");
+    assert.equal(result.lifecycle_advanced, true);
     assert.equal(result.application.draft_status, "submitted");
-    assert.equal(tables.coordination_records[0].current_stage, 5);
-    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
-    assert.equal(tables.coordination_stage_transitions.length, 2);
+    assert.equal(
+      /** @type {{ email?: { message_id?: string } }} */ (result.submission_metadata).email
+        ?.message_id,
+      "msg-123",
+    );
+  });
+
+  it("does not advance lifecycle when email delivery fails", async () => {
+    const tables = createSubmitTables();
+    const supabase = createSubmitMockSupabase(tables);
+
+    await assert.rejects(
+      () =>
+        submitApplicationPackage(supabase, {
+          applicationId: "app-pkg-1",
+          userId: "user-1",
+          deps: {
+            getAccessTokenFn: async () => "test-token",
+            sendMailFn: async () => ({ ok: false, error: "SMTP rejected" }),
+          },
+        }),
+      (err) => {
+        assert.equal(/** @type {{ code?: string }} */ (err).code, "EMAIL_SEND_FAILED");
+        return true;
+      },
+    );
+
+    assert.equal(tables.coordination_records[0].current_stage, 3);
+    assert.equal(tables.coordination_applications[0].draft_status, "reviewed");
+    assert.equal(tables.coordination_applications[0].submitted_at, null);
+  });
+
+  it("returns human_required when mailbox is not connected", async () => {
+    const tables = createSubmitTables();
+    const supabase = createSubmitMockSupabase(tables);
+
+    const result = await submitViaEmail(supabase, {
+      application: REVIEWED_PACKAGE,
+      project: BASE_PROJECT,
+      record: tables.coordination_records[0],
+      userId: "user-1",
+      deps: {
+        getAccessTokenFn: async () => {
+          throw new Error("not connected");
+        },
+      },
+    });
+
+    assert.equal(result.status, "human_required");
+    assert.equal(result.lifecycle_advanced, false);
+  });
+
+  it("allows email retry after failed delivery", async () => {
+    const tables = createSubmitTables({
+      coordination_applications: [
+        {
+          ...REVIEWED_PACKAGE,
+          agent_draft_metadata: {
+            application_package: { package_status: "incomplete" },
+            submission: {
+              confirmation_status: "failed",
+              failure_code: "EMAIL_SEND_FAILED",
+            },
+          },
+        },
+      ],
+    });
+    const supabase = createSubmitMockSupabase(tables);
+
+    const result = await submitApplicationPackage(supabase, {
+      applicationId: "app-pkg-1",
+      userId: "user-1",
+      deps: {
+        getAccessTokenFn: async () => "test-token",
+        sendMailFn: async () => ({ ok: true, message_id: "msg-retry-1" }),
+      },
+    });
+
+    assert.equal(result.status, "confirmed");
+    assert.equal(result.lifecycle_advanced, true);
   });
 });
+
+function createSubmitTables(overrides = {}) {
+  return {
+    coordination_records: overrides.coordination_records ?? [
+      {
+        id: "coord-1",
+        project_id: "proj-1",
+        current_stage: 3,
+        current_stage_state: "IN_PROGRESS",
+      },
+    ],
+    coordination_applications: overrides.coordination_applications ?? [
+      { ...REVIEWED_PACKAGE },
+      { ...REVIEWED_PEPCO_PACKAGE },
+    ],
+    projects: overrides.projects ?? [{ ...BASE_PROJECT }],
+    coordination_stage_transitions: overrides.coordination_stage_transitions ?? [],
+  };
+}
 
 /**
  * @param {Record<string, Array<Record<string, unknown>>>} tables
  */
 function createSubmitMockSupabase(tables) {
-  return {
+  const originalGetApplicationById = require("../app/services/uci/uci-application-builder.service.js")
+    .getApplicationById;
+  const originalGetRecord = require("../app/services/uci/uci-records.service.js")
+    .getCoordinationRecordById;
+
+  require("../app/services/uci/uci-application-builder.service.js").getApplicationById = async (
+    _supabase,
+    applicationId,
+  ) => {
+    const apps = tables.coordination_applications || [];
+    return apps.find((a) => String(a.id) === String(applicationId)) ?? null;
+  };
+
+  require("../app/services/uci/uci-records.service.js").getCoordinationRecordById = async () =>
+    tables.coordination_records[0];
+
+  const client = {
     from(table) {
       const store = tables[table] || (tables[table] = []);
       const filters = [];
@@ -153,5 +499,13 @@ function createSubmitMockSupabase(tables) {
 
       return api;
     },
+    restore() {
+      require("../app/services/uci/uci-application-builder.service.js").getApplicationById =
+        originalGetApplicationById;
+      require("../app/services/uci/uci-records.service.js").getCoordinationRecordById =
+        originalGetRecord;
+    },
   };
+
+  return client;
 }

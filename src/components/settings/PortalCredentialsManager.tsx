@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
  * `portal_credentials.jurisdiction` when a utility is selected.
  */
 const UCI_UTILITY_OPTIONS: { label: string; url: string }[] = [
-  { label: "PEPCO", url: "" },
+  { label: "PEPCO", url: "https://secure.pepco.com/service-installation-upgrades-portal/" },
   { label: "BGE", url: "" },
   { label: "Washington Gas", url: "" },
   { label: "Dominion Energy", url: "" },

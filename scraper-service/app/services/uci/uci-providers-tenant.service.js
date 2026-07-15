@@ -36,6 +36,39 @@ async function listActiveProvidersForTenant(supabase, tenantId) {
   return Array.isArray(data) ? data : [];
 }
 
+/**
+ * Resolve provider slugs visible to a tenant (global templates + tenant-owned).
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string | null | undefined} tenantId
+ * @param {string[]} slugs
+ * @returns {Promise<{ providers: Array<Record<string, unknown>>, missingSlugs: string[] }>}
+ */
+async function getActiveProvidersBySlugsForTenant(supabase, tenantId, slugs) {
+  const normalized = [
+    ...new Set(
+      slugs
+        .map((s) => String(s ?? "").trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (normalized.length === 0) {
+    return { providers: [], missingSlugs: [] };
+  }
+
+  const visible = await listActiveProvidersForTenant(supabase, tenantId);
+  const bySlug = new Map(
+    visible.map((row) => [String(row.slug).toLowerCase(), row]),
+  );
+  const providers = normalized
+    .map((slug) => bySlug.get(slug))
+    .filter(Boolean);
+  const missingSlugs = normalized.filter((slug) => !bySlug.has(slug));
+
+  return { providers, missingSlugs };
+}
+
 module.exports = {
   listActiveProvidersForTenant,
+  getActiveProvidersBySlugsForTenant,
 };
