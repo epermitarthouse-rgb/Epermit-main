@@ -1,6 +1,7 @@
 "use strict";
 
 const { buildCandidateRecord } = require("./uci-load-candidate.service.js");
+const { buildConciseEvidence, evidenceFingerprint } = require("./uci-one-line-extractor.service.js");
 
 /**
  * @param {string} text
@@ -49,9 +50,11 @@ function extractComcheckFindingsFromText(text, pageNumber, source) {
 
   const section = detectComcheckReportSection(pageText);
   const push = (record) => {
+    const evidence = String(record.evidence_text ?? "");
     out.push(
       buildCandidateRecord({
         ...record,
+        evidence_fingerprint: evidenceFingerprint(evidence),
         source_type: source.source_type,
         source_document_name: source.source_document_name,
         source_document_id: source.source_document_id,
@@ -60,6 +63,12 @@ function extractComcheckFindingsFromText(text, pageNumber, source) {
         page_number: pageNumber,
         extraction_method: source.extraction_method ?? "comcheck_pdf_text",
         external_application_id: source.external_application_id,
+        is_project_total: record.aggregation_role === "summary_total",
+        review_blocked_reason:
+          record.review_blocked_reason ??
+          (record.aggregation_role === "detail_component"
+            ? "Fixture/detail row — cannot double-count with summary totals"
+            : null),
       }),
     );
   };
@@ -80,7 +89,11 @@ function extractComcheckFindingsFromText(text, pageNumber, source) {
         entity_type: "load_category",
         entity_name: "Interior lighting",
         fact_type: "electric_load",
-        category: "load_category",
+        category: "lighting_totals",
+        aggregation_role: "summary_total",
+        utility_type: "electric",
+        energy_domain: "electric",
+        capacity_type: "connected_load",
         evidence_text: totalMatch[0],
         confidence: 0.9,
         requires_human_review: true,
@@ -117,7 +130,11 @@ function extractComcheckFindingsFromText(text, pageNumber, source) {
         entity_type: "load_category",
         entity_name: "Exterior lighting",
         fact_type: "electric_load",
-        category: "load_category",
+        category: "lighting_totals",
+        aggregation_role: "summary_total",
+        utility_type: "electric",
+        energy_domain: "electric",
+        capacity_type: "connected_load",
         evidence_text: totalMatch[0],
         confidence: 0.9,
         requires_human_review: true,
@@ -307,6 +324,7 @@ function extractLightingFixtureRows(pageText, pageNumber, push, scope) {
   const fixtureRegex = /([A-Z]\d+):\s*([A-Z]\d+):\s*LED:\s*(\w+)/gi;
   let match;
   while ((match = fixtureRegex.exec(pageText)) !== null) {
+    const idx = match.index ?? 0;
     push({
       field_key: "lighting_fixture_row",
       field_label: "Lighting fixture",
@@ -316,8 +334,12 @@ function extractLightingFixtureRows(pageText, pageNumber, push, scope) {
       entity_type: "fixture",
       entity_name: match[1],
       fact_type: "electric_load",
-      category: "load_category",
-      evidence_text: match[0],
+      category: "lighting_detail",
+      aggregation_role: "detail_component",
+      utility_type: "electric",
+      energy_domain: "electric",
+      capacity_type: "fixture_row",
+      evidence_text: buildConciseEvidence(pageText, idx, match[0].length) || match[0],
       confidence: 0.7,
       requires_human_review: true,
       fixture_scope: scope,
@@ -351,6 +373,8 @@ function extractHvacEquipmentRows(pageText, pageNumber, push) {
       const heatMatch = heatingSection[0].match(/Capacity\s*=\s*(\d+(?:\.\d+)?)\s*kBtu\/h/i);
       const fuelMatch = heatingSection[0].match(/\b(Gas|Electric)\b/i);
       if (heatMatch) {
+        const isGas = fuelMatch && /gas/i.test(fuelMatch[1]);
+        const headerIdx = block.search(new RegExp(equipmentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
         push({
           field_key: "hvac_heating_capacity_kbtuh",
           field_label: "Heating capacity",
@@ -359,14 +383,23 @@ function extractHvacEquipmentRows(pageText, pageNumber, push) {
           unit: "kBtu/h",
           entity_type: "hvac_equipment",
           entity_name: equipmentId,
-          fact_type: fuelMatch && /gas/i.test(fuelMatch[1]) ? "gas_load" : "thermal_capacity",
-          category: fuelMatch && /gas/i.test(fuelMatch[1]) ? "gas_load" : "thermal_capacity",
-          evidence_text: block.slice(0, 280).replace(/\s+/g, " ").trim(),
+          fact_type: isGas ? "gas_load" : "thermal_capacity",
+          category: isGas ? "hvac_gas_capacity" : "thermal_capacity",
+          utility_type: isGas ? "gas" : "electric",
+          energy_domain: "thermal",
+          capacity_type: "heating_capacity",
+          aggregation_role: "detail_component",
+          evidence_text:
+            buildConciseEvidence(block, Math.max(0, headerIdx), 80) ||
+            block.slice(0, 140).replace(/\s+/g, " ").trim(),
           confidence: 0.88,
           requires_human_review: true,
           equipment_quantity: quantity,
           equipment_zone: zoneType,
           heating_fuel: fuelMatch ? fuelMatch[1] : null,
+          review_blocked_reason: isGas
+            ? "Gas heating capacity — not electric connected load"
+            : "Thermal heating capacity — not electric connected load",
         });
       }
     }
@@ -374,6 +407,7 @@ function extractHvacEquipmentRows(pageText, pageNumber, push) {
     if (coolingSection) {
       const coolMatch = coolingSection[0].match(/Capacity\s*=\s*(\d+(?:\.\d+)?)\s*kBtu\/h/i);
       if (coolMatch) {
+        const coolIdx = coolingSection[0].search(/Capacity\s*=/i);
         push({
           field_key: "hvac_cooling_capacity_kbtuh",
           field_label: "Cooling thermal capacity",
@@ -383,13 +417,19 @@ function extractHvacEquipmentRows(pageText, pageNumber, push) {
           entity_type: "hvac_equipment",
           entity_name: equipmentId,
           fact_type: "thermal_capacity",
-          category: "thermal_capacity",
-          evidence_text: block.slice(0, 280).replace(/\s+/g, " ").trim(),
+          category: "hvac_thermal_cooling",
+          utility_type: "electric",
+          energy_domain: "thermal",
+          capacity_type: "cooling_capacity",
+          aggregation_role: "detail_component",
+          evidence_text:
+            buildConciseEvidence(coolingSection[0], Math.max(0, coolIdx), 60) ||
+            coolingSection[0].slice(0, 140).replace(/\s+/g, " ").trim(),
           confidence: 0.88,
           requires_human_review: true,
           equipment_quantity: quantity,
           equipment_zone: zoneType,
-          review_blocked_reason: "Thermal capacity — not electric connected load",
+          review_blocked_reason: "Thermal cooling capacity — not electric connected load",
         });
       }
     }
@@ -418,13 +458,26 @@ function extractHvacEquipmentRows(pageText, pageNumber, push) {
  * @param {Array<Record<string, unknown>>} candidates
  */
 function dedupeComcheckCandidates(candidates) {
-  const seen = new Set();
+  const seen = new Map();
   /** @type {Array<Record<string, unknown>>} */
   const out = [];
   for (const c of candidates) {
-    const key = [c.field_key, c.entity_name, c.page_number, c.raw_value].join("|");
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const key = [
+      c.field_key,
+      c.entity_name,
+      c.page_number,
+      c.normalized_value,
+      c.unit,
+      c.evidence_fingerprint ?? evidenceFingerprint(String(c.evidence_text ?? "")),
+    ].join("|");
+    const existing = seen.get(key);
+    if (existing) {
+      if ((c.confidence ?? 0) > (existing.confidence ?? 0)) {
+        Object.assign(existing, c);
+      }
+      continue;
+    }
+    seen.set(key, c);
     out.push(c);
   }
   return out;

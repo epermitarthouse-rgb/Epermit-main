@@ -185,8 +185,8 @@ describe("document processing API errors", () => {
 });
 
 describe("findings presentation", () => {
-  it("groups findings by category without duplicating cards per stage", async () => {
-    const { groupFindingsByCategory } = await import("@/lib/uciDocumentProcessing");
+  it("groups findings by engineering meaning without duplicating cards per stage", async () => {
+    const { groupFindingsByEngineeringMeaning } = await import("@/lib/uciDocumentProcessing");
     const findings = [
       {
         finding_id: "f1",
@@ -209,10 +209,30 @@ describe("findings presentation", () => {
         requires_human_review: true,
         source_document_name: "one-line.pdf",
       },
+      {
+        finding_id: "f2",
+        document_id: "d1",
+        document_role: ["one_line_diagram"],
+        uci_stages: ["agent_2_load_profile"],
+        field_key: "main_distribution_panel_rating",
+        field_label: "MDP rating",
+        category: "main_distribution_equipment",
+        raw_value: "800",
+        normalized_value: 800,
+        unit: "A",
+        entity_type: "main_distribution_panel",
+        entity_name: "MDP",
+        page_number: 1,
+        evidence_text: 'NEW PANELBOARD "MDP" 800A',
+        extraction_method: "one_line_pdf_text",
+        confidence: 0.85,
+        verification_status: "raw",
+        requires_human_review: true,
+        source_document_name: "one-line.pdf",
+      },
     ];
-    const groups = groupFindingsByCategory(findings);
-    const totalCards = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
-    expect(totalCards).toBe(1);
-    expect(groups.service_voltage).toBeDefined();
+    const groups = groupFindingsByEngineeringMeaning(findings);
+    expect(groups["Service entrance"]).toHaveLength(1);
+    expect(groups["Main distribution equipment"]).toHaveLength(1);
   });
 });

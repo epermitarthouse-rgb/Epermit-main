@@ -31,6 +31,16 @@ const {
   detectComcheckReportText,
   extractComcheckFindingsFromText,
 } = require("./uci-comcheck-parser.service.js");
+const {
+  detectPanelScheduleText,
+  extractPanelScheduleFindingsFromText,
+} = require("./uci-panel-schedule-parser.service.js");
+const {
+  detectEquipmentScheduleText,
+  extractEquipmentScheduleFindingsFromText,
+  assessEquipmentScheduleLayout,
+} = require("./uci-equipment-schedule-parser.service.js");
+const { evidenceFingerprint } = require("./uci-one-line-extractor.service.js");
 
 const DOCUMENT_PROCESSING_SCHEMA_VERSION = "row-doc-v1";
 const STALE_DOCUMENT_PROCESSING_SCHEMA_VERSIONS = new Set([]);
@@ -128,14 +138,31 @@ const AGENT_2_FIELD_KEYS = new Set([
   "panel_demand_load_kw",
   "panel_demand_load_kva",
   "service_amperage",
+  "service_entrance_amperage",
+  "requested_service_amperage",
+  "existing_service_amperage",
+  "main_distribution_panel_rating",
+  "panel_rating",
+  "disconnect_rating",
+  "switchboard_rating",
+  "breaker_rating",
   "service_voltage",
   "requested_voltage",
   "phase",
   "wire_configuration",
   "meter_count",
+  "meter_present",
+  "ct_cabinet_present",
   "service_configuration",
   "central_ac_count",
   "central_heat_count",
+  "lighting_interior_total_watts",
+  "lighting_exterior_total_watts",
+  "equipment_schedule_tag",
+  "equipment_schedule_voltage",
+  "equipment_schedule_phase",
+  "equipment_schedule_amperage",
+  "equipment_schedule_watts",
 ]);
 
 /** Agent 2 engineering categories beyond explicit field keys. */
@@ -144,6 +171,11 @@ const AGENT_2_CATEGORIES = new Set([
   "demand_load",
   "panel_load",
   "service_amperage",
+  "service_entrance",
+  "panel_rating",
+  "main_distribution_equipment",
+  "disconnect_rating",
+  "metering_equipment",
   "service_voltage",
   "phase",
   "wire_configuration",
@@ -151,9 +183,14 @@ const AGENT_2_CATEGORIES = new Set([
   "service_configuration",
   "equipment_load",
   "load_category",
+  "lighting_totals",
+  "lighting_detail",
   "thermal_capacity",
   "gas_load",
+  "hvac_gas_capacity",
+  "hvac_thermal_cooling",
   "equipment_evidence",
+  "equipment_schedule",
   "compliance_evidence",
 ]);
 
@@ -193,20 +230,35 @@ const FIELD_KEY_TO_CATEGORY = {
   panel_demand_load_kw: "panel_load",
   panel_demand_load_kva: "panel_load",
   service_amperage: "service_amperage",
+  service_entrance_amperage: "service_entrance",
+  requested_service_amperage: "service_entrance",
+  existing_service_amperage: "service_entrance",
+  main_distribution_panel_rating: "main_distribution_equipment",
+  panel_rating: "panel_rating",
+  disconnect_rating: "disconnect_rating",
+  switchboard_rating: "main_distribution_equipment",
+  breaker_rating: "panel_rating",
   service_voltage: "service_voltage",
   requested_voltage: "service_voltage",
   phase: "phase",
   wire_configuration: "wire_configuration",
   meter_count: "meter_count",
+  meter_present: "metering_equipment",
+  ct_cabinet_present: "metering_equipment",
   service_configuration: "service_configuration",
   central_ac_count: "equipment_load",
   central_heat_count: "equipment_load",
-  lighting_interior_total_watts: "load_category",
-  lighting_exterior_total_watts: "load_category",
-  lighting_fixture_row: "load_category",
-  hvac_heating_capacity_kbtuh: "gas_load",
-  hvac_cooling_capacity_kbtuh: "thermal_capacity",
+  lighting_interior_total_watts: "lighting_totals",
+  lighting_exterior_total_watts: "lighting_totals",
+  lighting_fixture_row: "lighting_detail",
+  hvac_heating_capacity_kbtuh: "hvac_gas_capacity",
+  hvac_cooling_capacity_kbtuh: "hvac_thermal_cooling",
   hvac_equipment_identifier: "equipment_evidence",
+  equipment_schedule_tag: "equipment_schedule",
+  equipment_schedule_voltage: "equipment_schedule",
+  equipment_schedule_phase: "equipment_schedule",
+  equipment_schedule_amperage: "equipment_schedule",
+  equipment_schedule_watts: "equipment_schedule",
   comcheck_energy_code: "compliance_evidence",
   comcheck_project_title: "compliance_evidence",
   comcheck_project_location: "compliance_evidence",
@@ -222,9 +274,19 @@ const FIELD_KEY_LABELS = {
   service_voltage: "Service voltage",
   requested_voltage: "Requested voltage",
   service_amperage: "Service amperage",
+  service_entrance_amperage: "Service entrance amperage",
+  requested_service_amperage: "Requested service amperage",
+  existing_service_amperage: "Existing service amperage",
+  main_distribution_panel_rating: "Main distribution panel rating",
+  panel_rating: "Panel rating",
+  disconnect_rating: "Disconnect rating",
+  switchboard_rating: "Switchboard rating",
+  breaker_rating: "Breaker rating",
   phase: "Phase",
   wire_configuration: "Wire configuration",
   meter_count: "Meter count",
+  meter_present: "Meter present",
+  ct_cabinet_present: "CT cabinet present",
   service_configuration: "Service configuration",
   connected_load_kw: "Connected load",
   connected_load_kva: "Connected load",
@@ -242,6 +304,11 @@ const FIELD_KEY_LABELS = {
   hvac_heating_capacity_kbtuh: "Heating capacity",
   hvac_cooling_capacity_kbtuh: "Cooling thermal capacity",
   hvac_equipment_identifier: "HVAC equipment",
+  equipment_schedule_tag: "Equipment tag",
+  equipment_schedule_voltage: "Equipment voltage",
+  equipment_schedule_phase: "Equipment phase",
+  equipment_schedule_amperage: "Equipment amperage",
+  equipment_schedule_watts: "Equipment watts",
   comcheck_energy_code: "Energy code",
   comcheck_project_title: "Project title",
   comcheck_project_location: "Project location",
@@ -254,6 +321,67 @@ const FIELD_KEY_LABELS = {
 };
 
 const LOW_TEXT_THRESHOLD = 50;
+
+/** Field keys that may be package-eligible after human review. */
+const PACKAGE_ELIGIBLE_FIELD_KEYS = new Set([
+  "connected_load_kw",
+  "connected_load_kva",
+  "demand_load_kw",
+  "demand_load_kva",
+  "service_entrance_amperage",
+  "requested_service_amperage",
+  "existing_service_amperage",
+  "service_voltage",
+  "requested_voltage",
+  "phase",
+  "wire_configuration",
+  "service_configuration",
+  "meter_count",
+  "lighting_interior_total_watts",
+  "lighting_exterior_total_watts",
+]);
+
+/**
+ * @param {Record<string, unknown>} candidate
+ */
+function resolveFindingPackageEligibility(candidate) {
+  const fieldKey = String(candidate.field_key ?? "");
+  if (fieldKey === "package_document_present") return false;
+  if (candidate.aggregation_role === "detail_component") return false;
+  if (candidate.entity_type === "unidentified" || candidate.entity_name === "unidentified") {
+    return false;
+  }
+  if (
+    [
+      "panel_rating",
+      "main_distribution_panel_rating",
+      "disconnect_rating",
+      "switchboard_rating",
+      "breaker_rating",
+      "meter_present",
+      "ct_cabinet_present",
+      "lighting_fixture_row",
+      "hvac_heating_capacity_kbtuh",
+      "hvac_cooling_capacity_kbtuh",
+      "equipment_schedule_tag",
+      "equipment_schedule_voltage",
+      "equipment_schedule_phase",
+      "equipment_schedule_amperage",
+      "equipment_schedule_watts",
+    ].includes(fieldKey)
+  ) {
+    return false;
+  }
+  if (candidate.review_blocked_reason && fieldKey === "meter_count") return false;
+  if (!PACKAGE_ELIGIBLE_FIELD_KEYS.has(fieldKey)) return false;
+  if (candidate.normalized_value == null || candidate.normalized_value === "") return false;
+  if (candidate.entity_type && !["project_service", "load_category", "meter_service"].includes(String(candidate.entity_type))) {
+    if (!["service_voltage", "phase", "wire_configuration", "service_configuration"].includes(fieldKey)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * @param {unknown} err
@@ -658,9 +786,16 @@ function candidateRecordToFinding(candidate, documentId, documentRoles) {
     entity_type: candidate.entity_type != null ? String(candidate.entity_type) : "",
     entity_name: candidate.entity_name != null ? String(candidate.entity_name) : null,
     page_number: candidate.page_number != null ? Number(candidate.page_number) : null,
-    evidence_text: String(candidate.evidence_text ?? "").slice(0, 2000),
+    evidence_text: String(candidate.evidence_text ?? "").slice(0, 500),
+    evidence_fingerprint:
+      candidate.evidence_fingerprint != null
+        ? String(candidate.evidence_fingerprint)
+        : evidenceFingerprint(String(candidate.evidence_text ?? "")),
     bounding_region: null,
     extraction_method: String(candidate.extraction_method ?? "pdf_text"),
+    contributing_methods: Array.isArray(candidate.contributing_methods)
+      ? candidate.contributing_methods.map(String)
+      : null,
     confidence: candidate.confidence != null ? Number(candidate.confidence) : null,
     verification_status: "raw",
     source_content_hash: String(candidate.source_content_hash ?? ""),
@@ -669,6 +804,12 @@ function candidateRecordToFinding(candidate, documentId, documentRoles) {
       candidate.requires_human_review != null ? Boolean(candidate.requires_human_review) : true,
     review_blocked_reason:
       candidate.review_blocked_reason != null ? String(candidate.review_blocked_reason) : null,
+    package_eligible: resolveFindingPackageEligibility(candidate),
+    aggregation_role:
+      candidate.aggregation_role != null ? String(candidate.aggregation_role) : null,
+    utility_type: candidate.utility_type != null ? String(candidate.utility_type) : null,
+    energy_domain: candidate.energy_domain != null ? String(candidate.energy_domain) : null,
+    capacity_type: candidate.capacity_type != null ? String(candidate.capacity_type) : null,
     source_document_name: String(candidate.source_document_name ?? ""),
     external_application_id:
       candidate.external_application_id != null ? String(candidate.external_application_id) : null,
@@ -720,7 +861,7 @@ function buildPackageDocumentPresenceFinding(documentRoles, source, documentId) 
  * @param {string[]} documentRoles
  * @param {Array<Record<string, unknown>>} findings
  */
-function evaluateDocumentFindingsExtraction(pages, documentRoles, findings) {
+function evaluateDocumentFindingsExtraction(pages, documentRoles, findings, opts = {}) {
   const hasNativeText = pages.some((p) => String(p.text ?? "").trim().length > 0);
   const highValue = documentRoles.some((r) => HIGH_VALUE_FINDINGS_ROLES.has(r));
   const engineeringFindings = findings.filter(
@@ -729,6 +870,16 @@ function evaluateDocumentFindingsExtraction(pages, documentRoles, findings) {
 
   if (engineeringFindings.length > 0) {
     return { status: "findings_created", warnings: [] };
+  }
+
+  if (opts.equipment_schedule_layout_unrecoverable && documentRoles.includes("equipment_schedule")) {
+    return {
+      status: "vision_required_for_structured_findings",
+      warnings: [
+        opts.equipment_schedule_layout_reason ||
+          "Equipment schedule layout could not be reconstructed from native text.",
+      ],
+    };
   }
 
   const visionPending = pages.some(
@@ -766,19 +917,40 @@ function evaluateDocumentFindingsExtraction(pages, documentRoles, findings) {
  * @param {Array<Record<string, unknown>>} findings
  */
 function deduplicateFindings(findings) {
-  const seen = new Set();
+  const seen = new Map();
   /** @type {Array<Record<string, unknown>>} */
   const out = [];
   for (const f of findings) {
+    const fingerprint =
+      f.evidence_fingerprint != null
+        ? String(f.evidence_fingerprint)
+        : evidenceFingerprint(String(f.evidence_text ?? ""));
     const key = [
       f.document_id,
       f.field_key,
+      f.entity_type,
       f.entity_name,
       f.page_number,
-      f.raw_value,
+      f.normalized_value,
+      f.unit,
+      fingerprint,
     ].join("|");
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const existing = seen.get(key);
+    if (existing) {
+      const methods = new Set([
+        ...(Array.isArray(existing.contributing_methods)
+          ? existing.contributing_methods
+          : [existing.extraction_method]),
+        f.extraction_method,
+      ]);
+      existing.contributing_methods = [...methods];
+      if ((f.confidence ?? 0) > (existing.confidence ?? 0)) {
+        existing.confidence = f.confidence;
+        existing.evidence_text = f.evidence_text;
+      }
+      continue;
+    }
+    seen.set(key, f);
     out.push(f);
   }
   return out;
@@ -794,7 +966,11 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
   /** @type {Array<Record<string, unknown>>} */
   const findings = [];
   const isOneLineRole = documentRoles.includes("one_line_diagram");
+  const isPanelScheduleRole = documentRoles.includes("panel_schedule");
   const isComcheckRole = documentRoles.includes("COMcheck");
+  const isEquipmentScheduleRole = documentRoles.includes("equipment_schedule");
+  let equipmentScheduleLayoutUnrecoverable = false;
+  let equipmentScheduleLayoutReason = null;
 
   for (const page of pages) {
     const pageNum = page.pageNumber;
@@ -804,11 +980,27 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
     /** @type {Array<Record<string, unknown>>} */
     let candidates = [];
 
-    if (isOneLineRole || detectOneLineDiagramText(text)) {
+    if (isPanelScheduleRole || detectPanelScheduleText(text)) {
+      candidates.push(...extractPanelScheduleFindingsFromText(text, pageNum, source));
+    }
+
+    if (
+      isOneLineRole ||
+      (!isPanelScheduleRole && detectOneLineDiagramText(text))
+    ) {
       candidates.push(...extractOneLineFindingsFromText(text, pageNum, source));
     }
     if (isComcheckRole || detectComcheckReportText(text)) {
       candidates.push(...extractComcheckFindingsFromText(text, pageNum, source));
+    }
+
+    if (isEquipmentScheduleRole || detectEquipmentScheduleText(text)) {
+      const equipmentResult = extractEquipmentScheduleFindingsFromText(text, pageNum, source);
+      candidates.push(...equipmentResult.findings);
+      if (!equipmentResult.layout.parseable) {
+        equipmentScheduleLayoutUnrecoverable = true;
+        equipmentScheduleLayoutReason = equipmentResult.layout.reason;
+      }
     }
 
     candidates.push(...extractCandidatesFromPdfText(text, pageNum, source));
@@ -818,6 +1010,14 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
       if (candidate.generic_specification_reference && candidate.normalized_value == null) {
         continue;
       }
+      if (
+        candidate.field_key === "service_amperage" &&
+        ["panel_rating", "main_distribution_panel_rating", "disconnect_rating"].some((k) =>
+          candidates.some((c) => c !== candidate && c.field_key === k),
+        )
+      ) {
+        continue;
+      }
       findings.push(candidateRecordToFinding(candidate, documentId, documentRoles));
     }
   }
@@ -825,7 +1025,14 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
   const presence = buildPackageDocumentPresenceFinding(documentRoles, source, documentId);
   if (presence) findings.push(presence);
 
-  return deduplicateFindings(findings);
+  const deduped = deduplicateFindings(findings);
+  return {
+    findings: deduped,
+    extractionMeta: {
+      equipment_schedule_layout_unrecoverable: equipmentScheduleLayoutUnrecoverable,
+      equipment_schedule_layout_reason: equipmentScheduleLayoutReason,
+    },
+  };
 }
 
 /**
@@ -1521,6 +1728,7 @@ async function runDocumentProcessing(supabase, params) {
 
     let pageResult;
     let docFindings = [];
+    let docExtractionMeta = {};
     try {
       pageResult = processDocumentPages(pages);
       const source = {
@@ -1532,8 +1740,10 @@ async function runDocumentProcessing(supabase, params) {
         external_application_id: extAppId,
       };
 
-      docFindings = extractBroadFindingsFromPages(pages, source, documentId, roles);
+      const extraction = extractBroadFindingsFromPages(pages, source, documentId, roles);
+      docFindings = extraction.findings;
       allFindings = allFindings.concat(docFindings);
+      docExtractionMeta = extraction.extractionMeta;
     } catch (err) {
       manifestDocuments.push(
         buildManifestEntry(doc, {
@@ -1561,7 +1771,11 @@ async function runDocumentProcessing(supabase, params) {
       continue;
     }
 
-    const findingsQuality = evaluateDocumentFindingsExtraction(pages, roles, docFindings);
+    const findingsQuality = evaluateDocumentFindingsExtraction(pages, roles, docFindings, {
+      equipment_schedule_layout_unrecoverable:
+        docExtractionMeta.equipment_schedule_layout_unrecoverable === true,
+      equipment_schedule_layout_reason: docExtractionMeta.equipment_schedule_layout_reason,
+    });
 
     manifestDocuments.push(
       buildManifestEntry(doc, {

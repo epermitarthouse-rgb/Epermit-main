@@ -32,7 +32,7 @@ import {
   formatPageCoverage,
   formatProcessingStatus,
   formatUciStage,
-  groupFindingsByCategory,
+  groupFindingsByEngineeringMeaning,
   countFallbackPages,
   hasSensitiveStorageFields,
   processingStatusTone,
@@ -256,7 +256,10 @@ export function UciDocumentCoveragePanel({
     if (!findingsDocId) return [];
     return all.filter((f) => f.document_id === findingsDocId);
   }, [manifest?.findings, findingsDocId]);
-  const findingsGroups = useMemo(() => groupFindingsByCategory(selectedFindings), [selectedFindings]);
+  const findingsGroups = useMemo(
+    () => groupFindingsByEngineeringMeaning(selectedFindings),
+    [selectedFindings],
+  );
 
   const runTone = runStatusTone(manifest?.run_status);
 
@@ -487,6 +490,11 @@ export function UciDocumentCoveragePanel({
                           <Badge variant="secondary" className="text-[10px]">
                             {formatExtractionMethodBadge(f.extraction_method)}
                           </Badge>
+                          {f.package_eligible ? (
+                            <Badge variant="default" className="text-[10px]">
+                              Package-eligible
+                            </Badge>
+                          ) : null}
                           {f.confidence != null ? (
                             <Badge variant="outline" className="text-[10px]">
                               {Math.round(f.confidence * 100)}% conf.

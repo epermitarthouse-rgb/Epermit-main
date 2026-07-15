@@ -131,7 +131,8 @@ export type FindingsExtractionStatus =
   | "no_supported_findings"
   | "extraction_incomplete"
   | "vision_required_for_structured_findings"
-  | "parser_failed";
+  | "parser_failed"
+  | "conflicts_require_review";
 
 export interface UciDocumentCoverageSummary {
   documents_discovered: number;
@@ -174,6 +175,11 @@ export interface UciDocumentFinding {
   verification_status: string;
   requires_human_review: boolean;
   review_blocked_reason?: string | null;
+  package_eligible?: boolean;
+  aggregation_role?: string | null;
+  utility_type?: string | null;
+  energy_domain?: string | null;
+  capacity_type?: string | null;
   source_document_name: string;
 }
 
@@ -397,7 +403,47 @@ export function formatFindingFieldLabel(finding: UciDocumentFinding): string {
 }
 
 export function formatFindingCategory(category: string): string {
-  return category.replace(/_/g, " ");
+  return CATEGORY_GROUP_LABELS[category] ?? category.replace(/_/g, " ");
+}
+
+const CATEGORY_GROUP_LABELS: Record<string, string> = {
+  service_entrance: "Service entrance",
+  main_distribution_equipment: "Main distribution equipment",
+  panel_rating: "Branch panels",
+  disconnect_rating: "Main distribution equipment",
+  metering_equipment: "Metering equipment",
+  lighting_totals: "Lighting totals",
+  lighting_detail: "Lighting detail rows",
+  hvac_gas_capacity: "HVAC gas capacity",
+  hvac_thermal_cooling: "HVAC thermal cooling capacity",
+  equipment_schedule: "Equipment schedule rows",
+  service_voltage: "Service entrance",
+  phase: "Service entrance",
+  wire_configuration: "Service entrance",
+  meter_count: "Metering equipment",
+  connected_load: "Supporting evidence",
+  demand_load: "Supporting evidence",
+  panel_load: "Branch panels",
+  compliance_evidence: "Supporting evidence",
+  equipment_evidence: "Supporting evidence",
+  package_document_evidence: "Supporting evidence",
+  service_configuration: "Supporting evidence",
+  service_amperage: "Service entrance",
+  load_category: "Supporting evidence",
+  thermal_capacity: "HVAC thermal cooling capacity",
+  gas_load: "HVAC gas capacity",
+};
+
+export function groupFindingsByEngineeringMeaning(
+  findings: UciDocumentFinding[],
+): Record<string, UciDocumentFinding[]> {
+  const groups: Record<string, UciDocumentFinding[]> = {};
+  for (const finding of findings) {
+    const key = formatFindingCategory(finding.category || "uncategorized");
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(finding);
+  }
+  return groups;
 }
 
 export function groupFindingsByCategory(

@@ -66,10 +66,14 @@ describe("uci-comcheck-parser", () => {
     );
     assert.ok(doas1Heat);
     assert.equal(doas1Heat.normalized_value, 190);
-    assert.equal(doas1Heat.category, "gas_load");
+    assert.equal(doas1Heat.category, "hvac_gas_capacity");
+    assert.equal(doas1Heat.utility_type, "gas");
+    assert.equal(doas1Heat.energy_domain, "thermal");
+    assert.equal(doas1Heat.capacity_type, "heating_capacity");
+    assert.equal(doas1Heat.aggregation_role, "detail_component");
     assert.ok(doas1Cool);
     assert.equal(doas1Cool.normalized_value, 156);
-    assert.equal(doas1Cool.category, "thermal_capacity");
+    assert.equal(doas1Cool.category, "hvac_thermal_cooling");
     assert.ok(doas1Cool.review_blocked_reason);
   });
 
@@ -78,6 +82,14 @@ describe("uci-comcheck-parser", () => {
     assert.ok(findings.some((f) => f.field_key === "comcheck_energy_code"));
     assert.ok(findings.some((f) => f.field_key === "comcheck_project_title"));
     assert.ok(findings.some((f) => f.field_key === "comcheck_report_date"));
+  });
+
+  it("tags lighting totals and fixture rows with aggregation roles", () => {
+    const findings = extractComcheckFindingsFromText(LIGHTING_PAGE, 3, source);
+    const total = findings.find((f) => f.field_key === "lighting_interior_total_watts");
+    const fixture = findings.find((f) => f.field_key === "lighting_fixture_row");
+    assert.equal(total?.aggregation_role, "summary_total");
+    assert.equal(fixture?.aggregation_role, "detail_component");
   });
 
   it("does not create engineering candidates from inspection checklist boilerplate", () => {

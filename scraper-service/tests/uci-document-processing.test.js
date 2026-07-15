@@ -717,7 +717,7 @@ describe("uci-document-processing.service", () => {
 
   it("extracts one-line service facts through broad findings builder", () => {
     const text = `NEW PANELBOARD "MDP" 800A, 120/208V, 3-PH M CT CABINET AND METER`;
-    const findings = extractBroadFindingsFromPages(
+    const { findings } = extractBroadFindingsFromPages(
       [{ pageNumber: 1, text }],
       {
         source_type: "pepco_portal_document",
@@ -729,7 +729,11 @@ describe("uci-document-processing.service", () => {
       ["one_line_diagram"],
     );
     assert.ok(findings.some((f) => f.field_key === "service_voltage" && f.raw_value === "120/208"));
-    assert.ok(findings.some((f) => f.field_key === "service_amperage"));
+    assert.ok(
+      findings.some((f) => f.field_key === "main_distribution_panel_rating" && f.entity_name === "MDP"),
+    );
+    assert.ok(findings.some((f) => f.field_key === "ct_cabinet_present"));
     assert.ok(findings.some((f) => f.uci_stages.includes("agent_2_load_profile")));
+    assert.ok(!findings.some((f) => f.field_key === "service_amperage"));
   });
 });

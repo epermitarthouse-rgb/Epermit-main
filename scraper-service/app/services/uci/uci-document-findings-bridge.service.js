@@ -101,6 +101,8 @@ function skipReasonForFinding(finding, externalApplicationId, record) {
     (fieldKey.endsWith("_kw") ||
       fieldKey.endsWith("_kva") ||
       fieldKey === "service_amperage" ||
+      fieldKey === "service_entrance_amperage" ||
+      fieldKey === "requested_service_amperage" ||
       fieldKey === "service_voltage" ||
       fieldKey === "requested_voltage") &&
     !unit
@@ -108,7 +110,7 @@ function skipReasonForFinding(finding, externalApplicationId, record) {
     return "missing_unit";
   }
 
-  if (unit && (fieldKey.endsWith("_kw") || fieldKey.endsWith("_kva") || fieldKey === "service_amperage")) {
+  if (unit && (fieldKey.endsWith("_kw") || fieldKey.endsWith("_kva") || fieldKey === "service_amperage" || fieldKey === "service_entrance_amperage")) {
     if (!fieldKeyMatchesUnit(fieldKey, unit)) return "field_unit_mismatch";
   }
 
@@ -116,7 +118,7 @@ function skipReasonForFinding(finding, externalApplicationId, record) {
   if (
     roles.includes("electrical_specification") &&
     !EXTRACTABLE_FIELD_KEYS.has(fieldKey) &&
-    !["service_voltage", "service_amperage", "phase", "meter_count", "wire_configuration", "service_configuration"].includes(
+    !["service_voltage", "service_amperage", "service_entrance_amperage", "requested_service_amperage", "phase", "meter_count", "wire_configuration", "service_configuration"].includes(
       fieldKey,
     )
   ) {

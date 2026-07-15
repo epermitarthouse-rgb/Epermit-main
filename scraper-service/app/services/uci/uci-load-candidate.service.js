@@ -96,6 +96,9 @@ const EXTRACTABLE_FIELD_KEYS = new Set([
   "central_ac_count",
   "central_heat_count",
   "service_amperage",
+  "service_entrance_amperage",
+  "requested_service_amperage",
+  "existing_service_amperage",
   "requested_voltage",
   "service_voltage",
   "phase",
@@ -290,6 +293,19 @@ function buildCandidateRecord(input) {
     category = null,
     review_blocked_reason = null,
     requires_human_review = true,
+    aggregation_role = null,
+    utility_type = null,
+    energy_domain = null,
+    capacity_type = null,
+    evidence_fingerprint = null,
+    contributing_methods = null,
+    equipment_description = null,
+    fixture_scope = null,
+    fixture_control = null,
+    equipment_quantity = null,
+    equipment_zone = null,
+    heating_fuel = null,
+    debug_rejected_amperage_matches = null,
   } = input;
 
   const fieldKey = String(field_key);
@@ -365,6 +381,19 @@ function buildCandidateRecord(input) {
     requires_human_review: Boolean(requires_human_review),
     can_satisfy_package: false,
     approval_blocked_reason: null,
+    aggregation_role: aggregation_role != null ? String(aggregation_role) : null,
+    utility_type: utility_type != null ? String(utility_type) : null,
+    energy_domain: energy_domain != null ? String(energy_domain) : null,
+    capacity_type: capacity_type != null ? String(capacity_type) : null,
+    evidence_fingerprint: evidence_fingerprint != null ? String(evidence_fingerprint) : null,
+    contributing_methods: Array.isArray(contributing_methods) ? contributing_methods : null,
+    equipment_description: equipment_description != null ? String(equipment_description) : null,
+    fixture_scope: fixture_scope != null ? String(fixture_scope) : null,
+    fixture_control: fixture_control != null ? String(fixture_control) : null,
+    equipment_quantity: equipment_quantity != null ? Number(equipment_quantity) : null,
+    equipment_zone: equipment_zone != null ? String(equipment_zone) : null,
+    heating_fuel: heating_fuel != null ? String(heating_fuel) : null,
+    debug_rejected_amperage_matches: debug_rejected_amperage_matches,
     created_at: new Date().toISOString(),
   };
 
@@ -442,7 +471,7 @@ function fieldKeyMatchesUnit(fieldKey, unit) {
   if (!u) return false;
   if (fieldKey.endsWith("_kw")) return u === "kW";
   if (fieldKey.endsWith("_kva")) return u === "kVA";
-  if (fieldKey === "service_amperage") return u === "A";
+  if (fieldKey === "service_amperage" || fieldKey === "service_entrance_amperage") return u === "A";
   if (fieldKey === "requested_voltage" || fieldKey === "service_voltage") return u === "V";
   if (fieldKey === "phase") return u === "phase";
   if (fieldKey.endsWith("_count")) return u === "count";
