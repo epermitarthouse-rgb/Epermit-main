@@ -86,7 +86,8 @@ describe("Maryland territory provider reconciliation", () => {
     const report = reconcileTerritoryProviderNames(["Totally Unknown Utility LLC"]);
     assert.equal(report.totals.resolved, 0);
     assert.equal(report.totals.unresolved, 1);
-    assert.equal(report.unresolved[0].reason, "no_matching_alias");
+    assert.equal(report.unresolved[0].classification, "new_canonical_required");
+    assert.equal(report.unresolved[0].reason, "distinct_unresolved_regulated_utility");
     assert.equal(report.unresolved[0].manual_confirmation_required, true);
   });
 

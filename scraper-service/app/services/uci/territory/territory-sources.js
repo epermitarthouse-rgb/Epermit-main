@@ -43,8 +43,40 @@ const DEFAULT_FOOTPRINT_STATES = [
  * footprint addresses (e.g. PEPCO tagged STATE=DC serves Maryland suburbs).
  */
 const CROSS_BORDER_SUPPLEMENTS = {
-  MD: [{ where: "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'", reason: "pepco_dc_serves_md_suburbs" }],
-  VA: [{ where: "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'", reason: "pepco_dc_serves_northern_va" }],
+  MD: [{
+    where: "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'",
+    reason: "pepco_dc_serves_md_suburbs",
+    source_state: "DC",
+    target_state: "MD",
+    source_legal_name: "POTOMAC ELECTRIC POWER CO",
+    canonical_provider_slug: "pepco",
+  }],
+  VA: [{
+    where: "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'",
+    reason: "pepco_dc_serves_northern_va",
+    source_state: "DC",
+    target_state: "VA",
+    source_legal_name: "POTOMAC ELECTRIC POWER CO",
+    canonical_provider_slug: "pepco",
+  }],
+  WV: [
+    {
+      where: "STATE = 'OH' AND NAME = 'APPALACHIAN POWER CO'",
+      reason: "appalachian_oh_tagged_serves_wv",
+      source_state: "OH",
+      target_state: "WV",
+      source_legal_name: "APPALACHIAN POWER CO",
+      canonical_provider_slug: "appalachian-power",
+    },
+    {
+      where: "STATE = 'OH' AND NAME = 'WHEELING POWER CO'",
+      reason: "wheeling_oh_tagged_serves_wv",
+      source_state: "OH",
+      target_state: "WV",
+      source_legal_name: "WHEELING POWER CO",
+      canonical_provider_slug: "wheeling-power",
+    },
+  ],
 };
 
 const EIA_QUERY_FIELDS = [

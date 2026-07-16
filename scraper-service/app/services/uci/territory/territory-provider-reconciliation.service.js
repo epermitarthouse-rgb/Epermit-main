@@ -2,20 +2,11 @@
 
 const { TERRITORY_UNSUPPORTED_EIA_NAMES } = require("../../../data/utility-provider-directory.catalog.js");
 const { reconcileEiaUtilityName } = require("./territory-eia-name-resolver.service.js");
-
-/**
- * @param {string} eiaLegalName
- */
-function isTerritoryUnsupportedManualName(eiaLegalName) {
-  const raw = String(eiaLegalName ?? "").trim();
-  if (!raw) return false;
-  const blocked = new Set(
-    (Array.isArray(TERRITORY_UNSUPPORTED_EIA_NAMES) ? TERRITORY_UNSUPPORTED_EIA_NAMES : []).map((name) =>
-      String(name).trim().toUpperCase(),
-    ),
-  );
-  return blocked.has(raw.toUpperCase());
-}
+const {
+  classifyTerritoryUtilityName,
+  isCooperativeOrMunicipalPattern,
+  isTerritoryUnsupportedManualName,
+} = require("./territory-unresolved-classifier.service.js");
 
 /**
  * Reconcile EIA legal names into reviewed territory reconciliation buckets.
@@ -63,12 +54,29 @@ function reconcileTerritoryProviderNames(eiaLegalNames, ctx = {}) {
         manual_confirmation_required: true,
       });
     } else {
-      unresolved.push({
-        ...result,
-        status: "unresolved",
-        manual_confirmation_required: true,
-        reason: result.reason ?? "no_matching_alias",
-      });
+      const classification = classifyTerritoryUtilityName(eiaLegalName, ctx);
+      if (classification.classification === "manual_only") {
+        unsupported_manual.push({
+          status: "unsupported_manual",
+          eia_legal_name: eiaLegalName,
+          reason: classification.reason,
+          classification: classification.classification,
+          provider_slug: null,
+          provider_id: null,
+          display_name: null,
+          manual_confirmation_required: true,
+          evidence_source: classification.evidence_source,
+        });
+      } else {
+        unresolved.push({
+          ...result,
+          status: "unresolved",
+          classification: classification.classification,
+          manual_confirmation_required: classification.manual_confirmation_required !== false,
+          reason: classification.reason ?? result.reason ?? "no_matching_alias",
+          evidence_source: classification.evidence_source ?? null,
+        });
+      }
     }
   }
 
@@ -89,5 +97,6 @@ function reconcileTerritoryProviderNames(eiaLegalNames, ctx = {}) {
 
 module.exports = {
   isTerritoryUnsupportedManualName,
+  isCooperativeOrMunicipalPattern,
   reconcileTerritoryProviderNames,
 };

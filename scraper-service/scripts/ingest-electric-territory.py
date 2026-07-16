@@ -44,8 +44,40 @@ DEFAULT_FOOTPRINT = [
 
 # Cross-border supplements for states where adjacent-state polygons serve footprint addresses.
 CROSS_BORDER_SUPPLEMENTS: dict[str, list[dict[str, str]]] = {
-    "MD": [{"where": "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'", "reason": "pepco_dc_serves_md_suburbs"}],
-    "VA": [{"where": "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'", "reason": "pepco_dc_serves_northern_va"}],
+    "MD": [{
+        "where": "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'",
+        "reason": "pepco_dc_serves_md_suburbs",
+        "source_state": "DC",
+        "target_state": "MD",
+        "source_legal_name": "POTOMAC ELECTRIC POWER CO",
+        "canonical_provider_slug": "pepco",
+    }],
+    "VA": [{
+        "where": "STATE = 'DC' AND NAME = 'POTOMAC ELECTRIC POWER CO'",
+        "reason": "pepco_dc_serves_northern_va",
+        "source_state": "DC",
+        "target_state": "VA",
+        "source_legal_name": "POTOMAC ELECTRIC POWER CO",
+        "canonical_provider_slug": "pepco",
+    }],
+    "WV": [
+        {
+            "where": "STATE = 'OH' AND NAME = 'APPALACHIAN POWER CO'",
+            "reason": "appalachian_oh_tagged_serves_wv",
+            "source_state": "OH",
+            "target_state": "WV",
+            "source_legal_name": "APPALACHIAN POWER CO",
+            "canonical_provider_slug": "appalachian-power",
+        },
+        {
+            "where": "STATE = 'OH' AND NAME = 'WHEELING POWER CO'",
+            "reason": "wheeling_oh_tagged_serves_wv",
+            "source_state": "OH",
+            "target_state": "WV",
+            "source_legal_name": "WHEELING POWER CO",
+            "canonical_provider_slug": "wheeling-power",
+        },
+    ],
 }
 
 OUT_FIELDS = "OBJECTID,NAME,STATE,TYPE,HOLDING_CO,CUSTOMERS,REGULATED,SOURCEDATE,SOURCE,YEAR"
@@ -209,27 +241,40 @@ def ingest_state(state: str, base_url: str, output_dir: Path, dry_run: bool) -> 
     geo_features = query_features(base_url, where, with_geometry=True)
 
     supplements = CROSS_BORDER_SUPPLEMENTS.get(state, [])
+    supplement_records: list[dict[str, Any]] = []
     for supplement in supplements:
         sup_where = supplement["where"]
         reason = supplement["reason"]
         sup_attrs = query_features(base_url, sup_where, with_geometry=False)
         sup_geo = query_features(base_url, sup_where, with_geometry=True)
+
+        def tag_supplement(feature: dict[str, Any]) -> None:
+            attrs = feature.get("attributes") if isinstance(feature.get("attributes"), dict) else {}
+            props = feature.setdefault("properties", {})
+            for key, value in attrs.items():
+                if key not in props:
+                    props[key] = value
+            props["_supplement_reason"] = reason
+
         for f in sup_attrs:
-            attrs = f.get("attributes") if isinstance(f.get("attributes"), dict) else {}
-            props = f.setdefault("properties", {})
-            for key, value in attrs.items():
-                if key not in props:
-                    props[key] = value
-            props["_supplement_reason"] = reason
+            tag_supplement(f)
         for f in sup_geo:
-            attrs = f.get("attributes") if isinstance(f.get("attributes"), dict) else {}
-            props = f.setdefault("properties", {})
-            for key, value in attrs.items():
-                if key not in props:
-                    props[key] = value
-            props["_supplement_reason"] = reason
+            tag_supplement(f)
         attr_features.extend(sup_attrs)
         geo_features.extend(sup_geo)
+
+        if sup_geo:
+            sample_props = sup_geo[0].get("properties", sup_geo[0].get("attributes", {}))
+            supplement_records.append({
+                "reason": reason,
+                "where": sup_where,
+                "source_state": supplement.get("source_state"),
+                "target_state": supplement.get("target_state", state),
+                "source_legal_name": supplement.get("source_legal_name"),
+                "canonical_provider_slug": supplement.get("canonical_provider_slug"),
+                "feature_count": len(sup_geo),
+                "source_object_id": sample_props.get("OBJECTID") if isinstance(sample_props, dict) else None,
+            })
 
     attr_features = dedupe_features(attr_features)
     geo_features = dedupe_features(geo_features)
@@ -252,6 +297,7 @@ def ingest_state(state: str, base_url: str, output_dir: Path, dry_run: bool) -> 
         "validation_errors": validation_errors,
         "utilities": [u.get("name") for u in utilities],
         "supplements_applied": [s.get("reason") for s in supplements],
+        "cross_border_supplements": supplement_records,
     }
 
     if dry_run:
@@ -360,6 +406,7 @@ def main() -> int:
                 "file_size_bytes": result.get("file_size_bytes"),
                 "file": f"territories_{state}.geojson",
                 "supplements_applied": result.get("supplements_applied", []),
+                "cross_border_supplements": result.get("cross_border_supplements", []),
             }
             utilities_by_state[state] = [
                 {

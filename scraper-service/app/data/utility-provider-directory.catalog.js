@@ -279,7 +279,13 @@ const UTILITY_PROVIDER_DIRECTORY = [
     ownership_type: "investor_owned",
     cet_relationship: true,
     portal_key: "pseg",
-    aliases: ["PSE&G", "PSEG", "Public Service Electric and Gas Co", "Public Service Electric & Gas Co"],
+    aliases: [
+      "PSE&G",
+      "PSEG",
+      "Public Service Electric and Gas Co",
+      "Public Service Electric & Gas Co",
+      "PUBLIC SERVICE ELEC & GAS CO",
+    ],
   },
   {
     slug: "pseg-long-island",
@@ -321,7 +327,12 @@ const UTILITY_PROVIDER_DIRECTORY = [
     ownership_type: "investor_owned",
     cet_relationship: true,
     portal_key: "con-edison",
-    aliases: ["Con Edison", "Consolidated Edison", "Consolidated Edison Co of New York"],
+    aliases: [
+      "Con Edison",
+      "Consolidated Edison",
+      "Consolidated Edison Co of New York",
+      "CONSOLIDATED EDISON CO-NY INC",
+    ],
   },
   {
     slug: "national-grid-ny",
@@ -403,7 +414,12 @@ const UTILITY_PROVIDER_DIRECTORY = [
     ownership_type: "investor_owned",
     cet_relationship: true,
     portal_key: "eversource",
-    aliases: ["Eversource", "Eversource Energy"],
+    aliases: [
+      "Eversource",
+      "Eversource Energy",
+      "NSTAR ELECTRIC COMPANY",
+      "NSTAR Electric Company",
+    ],
   },
   {
     slug: "united-illuminating",
@@ -431,7 +447,12 @@ const UTILITY_PROVIDER_DIRECTORY = [
     utility_type: "electric",
     ownership_type: "investor_owned",
     cet_relationship: true,
-    aliases: ["Duke Energy Progress", "Duke Energy Progress LLC", "Duke Energy Carolinas / Progress"],
+    aliases: [
+      "Duke Energy Progress",
+      "Duke Energy Progress LLC",
+      "Duke Energy Carolinas / Progress",
+      "DUKE ENERGY PROGRESS - (NC)",
+    ],
   },
   {
     slug: "duke-energy-florida",
@@ -562,6 +583,25 @@ const UTILITY_PROVIDER_DIRECTORY = [
     aliases: ["Mississippi Power", "Mississippi Power Co"],
   },
   {
+    slug: "rhode-island-energy",
+    display_name: "Rhode Island Energy",
+    canonical_name: "The Narragansett Electric Co",
+    utility_type: "electric",
+    ownership_type: "investor_owned",
+    cet_relationship: false,
+    aliases: [
+      "Rhode Island Energy",
+      "Rhode Island Energy (PPL)",
+      "THE NARRAGANSETT ELECTRIC CO",
+      "The Narragansett Electric Co",
+      "Narragansett Electric Company",
+    ],
+    alias_provenance: [
+      { alias: "Rhode Island Energy", source: "PPL operating brand since 2022-05-25 acquisition" },
+      { alias: "THE NARRAGANSETT ELECTRIC CO", source: "EIA-861 / HIFLD legal name" },
+    ],
+  },
+  {
     slug: "washington-gas",
     display_name: "Washington Gas",
     canonical_name: "Washington Gas Light Co",
@@ -604,6 +644,7 @@ const LEGACY_SLUG_DISPLAY_OVERRIDES = {
   pseg: "PSE&G",
   "con-edison": "Con Edison",
   eversource: "Eversource",
+  "rhode-island-energy": "Rhode Island Energy",
   fpl: "Florida Power & Light",
   "georgia-power": "Georgia Power",
 };
