@@ -1,0 +1,41 @@
+---
+description: Always deploy to GitHub and Railway when pushing this project
+alwaysApply: true
+---
+
+# Deploy to GitHub and Railway
+
+When the user asks to **commit**, **push**, or **deploy** for this project, always publish to **both** targets:
+
+1. **GitHub** — version control and source of truth
+2. **Railway** — production runtime (`Epermit-main` service)
+
+## Standard push sequence
+
+After a successful commit (when the user requested commit + push):
+
+```bash
+# 1. GitHub
+git push -u origin HEAD
+
+# 2. Railway (from repo root; linked service: Epermit-main)
+railway up -d -y -s Epermit-main
+```
+
+Run both unless the user explicitly says otherwise.
+
+## Project context
+
+- **GitHub remote:** `origin` → `epermitarthouse-rgb/Epermit-main`
+- **Railway project:** PermitPilot
+- **Railway service:** `Epermit-main`
+- **Production URL:** `https://epermit-main-production.up.railway.app`
+- Railway is also GitHub-connected (pushing to `main` can auto-deploy), but still run `railway up` explicitly so deploy intent is never ambiguous.
+
+## Rules
+
+- Do **not** treat a GitHub-only push as complete for this project.
+- Do **not** run destructive Railway commands (`down`, force redeploy of wrong service) unless explicitly requested.
+- Do **not** update git config or Railway credentials.
+- If `railway up` fails, report the error and confirm whether GitHub push succeeded.
+- If only pushing without a new commit, still run both commands when the user says "push".
