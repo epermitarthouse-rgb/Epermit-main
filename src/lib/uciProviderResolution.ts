@@ -83,6 +83,46 @@ export function isResolutionConfirmed(resolution: UciProviderResolutionResult | 
   return resolution?.status === "confirmed" || resolution?.status === "overridden";
 }
 
+const FAILED_RESOLUTION_STATUSES = new Set<UciProviderResolutionStatus>([
+  "not_found",
+  "geocoding_failed",
+  "territory_data_unavailable",
+  "ambiguous",
+]);
+
+/** Territory check returned an authoritative suggestion that the user can confirm. */
+export function isSuccessfulTerritorySuggestion(
+  resolution: UciProviderResolutionResult | null,
+): boolean {
+  if (!resolution?.suggested_provider_id) return false;
+  if (isResolutionConfirmed(resolution)) return false;
+  if (FAILED_RESOLUTION_STATUSES.has(resolution.status)) return false;
+  return (
+    resolution.status === "resolved" ||
+    resolution.status === "manual_confirmation_required" ||
+    Boolean(resolution.resolution_method && resolution.resolution_method !== "manual_selection")
+  );
+}
+
+export function getProviderConfirmationSectionCopy(
+  resolution: UciProviderResolutionResult | null,
+): { title: string; description: string; primaryCta: string } {
+  if (isSuccessfulTerritorySuggestion(resolution)) {
+    return {
+      title: "Confirm or override provider",
+      description:
+        "Review the suggested provider. Confirm it to continue, or choose another provider if you have verified information that differs from the territory result.",
+      primaryCta: "Confirm suggested provider",
+    };
+  }
+  return {
+    title: "Manual selection fallback",
+    description:
+      "Select and confirm the utility serving this project. No automatic provider is applied without authoritative territory evidence.",
+    primaryCta: "Confirm provider",
+  };
+}
+
 export function needsOverrideReason(
   resolution: UciProviderResolutionResult | null,
   selectedProviderId: string | null,

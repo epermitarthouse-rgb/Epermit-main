@@ -26,6 +26,8 @@ describe("uciProviderResolution helpers", () => {
   it("requires override reason when selected provider differs from suggestion", () => {
     assert.match(helperSource, /needsOverrideReason/);
     assert.match(helperSource, /suggested_provider_id !== selectedProviderId/);
+    assert.match(helperSource, /isSuccessfulTerritorySuggestion/);
+    assert.match(helperSource, /getProviderConfirmationSectionCopy/);
   });
 
   it("keeps electric and gas providers separate via utility_type filter", () => {
@@ -35,12 +37,15 @@ describe("uciProviderResolution helpers", () => {
 });
 
 describe("UciProviderResolutionPanel UI states", () => {
-  it("renders status, manual fallback, override reason, and confirmation actions", () => {
+  it("renders confirm-or-override and manual fallback states", () => {
     assert.match(panelSource, /data-testid="uci-resolution-status-card"/);
-    assert.match(panelSource, /Manual selection fallback/);
+    assert.match(panelSource, /getProviderConfirmationSectionCopy/);
+    assert.match(panelSource, /confirmationCopy\.title/);
+    assert.match(panelSource, /uci-resolution-confirm-override/);
+    assert.match(panelSource, /uci-resolution-manual-fallback/);
+    assert.match(panelSource, /confirmationCopy\.primaryCta/);
     assert.match(panelSource, /data-testid="uci-resolution-override-reason"/);
     assert.match(panelSource, /data-testid="uci-resolution-confirm-button"/);
-    assert.match(panelSource, /No automatic provider is applied/);
   });
 
   it("wires dashboard API calls for resolve, confirm, and override", () => {

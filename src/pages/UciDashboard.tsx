@@ -23,6 +23,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -171,6 +181,7 @@ import {
   type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
 import { UciSetupWorkflow } from "@/components/uci/UciSetupWorkflow";
+import { UciProjectContextBar } from "@/components/uci/UciProjectContextBar";
 import {
   buildInitializedSlugSet,
   countSelectedProviders,
@@ -376,6 +387,8 @@ export default function UciDashboard() {
   const [providerUtilityFilter, setProviderUtilityFilter] = useState<string>("all");
   const [detailOpen, setDetailOpen] = useState(false);
   const [setupSectionExpanded, setSetupSectionExpanded] = useState(true);
+  const [projectSwitchConfirmOpen, setProjectSwitchConfirmOpen] = useState(false);
+  const projectDataGenerationRef = useRef(0);
 
   const providerCatalogTypes = useMemo(() => {
     const types = new Set(
@@ -563,15 +576,20 @@ export default function UciDashboard() {
       setRecords([]);
       return;
     }
+    const generation = projectDataGenerationRef.current;
     setRecordsLoading(true);
     try {
       const res = await listProjectCoordination(projectId);
+      if (generation !== projectDataGenerationRef.current) return;
       setRecords(res.records ?? []);
     } catch (e: unknown) {
+      if (generation !== projectDataGenerationRef.current) return;
       toast.error(formatUciUserError(e, "Failed to load coordination"));
       setRecords([]);
     } finally {
-      setRecordsLoading(false);
+      if (generation === projectDataGenerationRef.current) {
+        setRecordsLoading(false);
+      }
     }
   }, [authLoading, user?.id, projectId]);
 
@@ -633,6 +651,33 @@ export default function UciDashboard() {
     });
   }, []);
 
+  const uciSelectedProject = useMemo(
+    () => projects.find((project) => project.id === projectId) ?? null,
+    [projects, projectId],
+  );
+
+  const hasUnsavedUciSetupChanges = useMemo(() => {
+    if (!projectId) return false;
+    if (providerSetupConfirmed) return true;
+    if (countSelectedProviders(initPick) > 0) return true;
+    if (detailOpen && reason.trim()) return true;
+    if (detailOpen && applicationReviewNotes.trim()) return true;
+    return false;
+  }, [projectId, providerSetupConfirmed, initPick, detailOpen, reason, applicationReviewNotes]);
+
+  const performProjectChangeReset = useCallback(() => {
+    setProjectSwitchConfirmOpen(false);
+    setProjectId(null);
+  }, []);
+
+  const handleChangeProjectRequest = useCallback(() => {
+    if (hasUnsavedUciSetupChanges) {
+      setProjectSwitchConfirmOpen(true);
+      return;
+    }
+    performProjectChangeReset();
+  }, [hasUnsavedUciSetupChanges, performProjectChangeReset]);
+
   const loadProviderSetup = useCallback(async () => {
     if (authLoading || !user?.id || !projectId) {
       setProviderSetup(null);
@@ -643,8 +688,10 @@ export default function UciDashboard() {
       return;
     }
     setProviderSetupLoading(true);
+    const generation = projectDataGenerationRef.current;
     try {
       const setup = await getProjectProviderSetup(projectId);
+      if (generation !== projectDataGenerationRef.current) return;
       setProviderSetup(setup);
       setProviderSetupConfirmed(false);
       const hasAddress = Boolean(
@@ -662,11 +709,14 @@ export default function UciDashboard() {
         return next;
       });
     } catch (e: unknown) {
+      if (generation !== projectDataGenerationRef.current) return;
       setProviderSetup(null);
       setAddressSourceAcknowledged(null);
       toast.error(formatUciUserError(e, "Failed to load provider setup guidance"));
     } finally {
-      setProviderSetupLoading(false);
+      if (generation === projectDataGenerationRef.current) {
+        setProviderSetupLoading(false);
+      }
     }
   }, [authLoading, user?.id, projectId]);
 
@@ -675,15 +725,20 @@ export default function UciDashboard() {
       setProviderResolution(null);
       return;
     }
+    const generation = projectDataGenerationRef.current;
     setProviderResolutionLoading(true);
     try {
       const resolution = await getProjectProviderResolution(projectId);
+      if (generation !== projectDataGenerationRef.current) return;
       setProviderResolution(resolution);
     } catch (e: unknown) {
+      if (generation !== projectDataGenerationRef.current) return;
       setProviderResolution(null);
       toast.error(formatUciUserError(e, "Failed to load provider mapping status"));
     } finally {
-      setProviderResolutionLoading(false);
+      if (generation === projectDataGenerationRef.current) {
+        setProviderResolutionLoading(false);
+      }
     }
   }, [authLoading, user?.id, projectId]);
 
@@ -696,6 +751,7 @@ export default function UciDashboard() {
           serviceType,
           addressSourceAcknowledged: addressSourceAcknowledged ?? undefined,
         });
+        if (result.project_id !== projectId) return;
         setProviderResolution((prev) => ({
           project_id: result.project_id,
           resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
@@ -729,6 +785,7 @@ export default function UciDashboard() {
       setProviderResolutionActionLoading(true);
       try {
         const result = await confirmProjectProviderResolution(projectId, params);
+        if (result.project_id !== projectId) return;
         setProviderResolution((prev) => ({
           project_id: result.project_id,
           resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
@@ -768,6 +825,7 @@ export default function UciDashboard() {
       setProviderResolutionActionLoading(true);
       try {
         const result = await overrideProjectProviderResolution(projectId, params);
+        if (result.project_id !== projectId) return;
         setProviderResolution((prev) => ({
           project_id: result.project_id,
           resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
@@ -807,15 +865,26 @@ export default function UciDashboard() {
   }, [authLoading, user?.id, loadProviderResolution]);
 
   /**
-   * Project/tenant safety: when the active PermitPilot project changes, any
-   * open coordination detail (and its PEPCO selection/progress state) may
-   * belong to the previous project and must be cleared. Backend access
-   * checks remain the source of truth; this only prevents stale UI state.
+   * Project/tenant safety: when the UCI-selected project changes, clear transient UI
+   * state and invalidate in-flight project-scoped requests. Saved coordination
+   * records remain in the backend and reload for the new project.
    */
   useEffect(() => {
+    projectDataGenerationRef.current += 1;
     setDetailOpen(false);
     setDetailId(null);
     setDetail(null);
+    setInitPick({});
+    setProviderSetupConfirmed(false);
+    setAddressSourceAcknowledged(null);
+    setUnresolvedUtilityTypes([]);
+    setProviderUtilityFilter("all");
+    setProviderResolution(null);
+    setProviderSetup(null);
+    setPortfolio(null);
+    setSetupSectionExpanded(true);
+    setReason("");
+    setApplicationReviewNotes("");
     setPepcoSelectedProjectKey(null);
     setPepcoRowScrapeStatus({});
     setPepcoAppDetailProgress([]);
@@ -2183,6 +2252,14 @@ export default function UciDashboard() {
             </div>
           </div>
 
+          {uciSelectedProject ? (
+            <UciProjectContextBar
+              project={uciSelectedProject}
+              mutedClass={uciMutedClass}
+              onChangeProject={handleChangeProjectRequest}
+            />
+          ) : null}
+
           <UciSetupWorkflow
             editorialCardClass={EDITORIAL_FORM_CARD}
             mutedClass={uciMutedClass}
@@ -2365,6 +2442,16 @@ export default function UciDashboard() {
               {detailProvider?.name ?? "Record"} · child sections are read-only; counts reflect loaded data.
             </SheetDescription>
           </SheetHeader>
+
+          {uciSelectedProject ? (
+            <UciProjectContextBar
+              project={uciSelectedProject}
+              mutedClass={uciMutedClass}
+              onChangeProject={handleChangeProjectRequest}
+              compact
+              className="mt-4"
+            />
+          ) : null}
 
           {detailLoading ? (
             <div className="flex justify-center py-12">
@@ -2948,6 +3035,22 @@ export default function UciDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={projectSwitchConfirmOpen} onOpenChange={setProjectSwitchConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change UCI project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved setup changes for this project. Switching projects will discard those
+              unsaved selections, but saved coordination records will remain.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay on project</AlertDialogCancel>
+            <AlertDialogAction onClick={performProjectChangeReset}>Change project</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

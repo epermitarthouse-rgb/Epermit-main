@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,8 +17,10 @@ import {
   formatConfidenceLabel,
   formatResolutionMethodLabel,
   formatResolutionStatusLabel,
+  getProviderConfirmationSectionCopy,
   getResolutionUserMessage,
   isResolutionConfirmed,
+  isSuccessfulTerritorySuggestion,
   needsOverrideReason,
 } from "@/lib/uciProviderResolution";
 import { formatUtilityTypeLabel } from "@/lib/uciSetupWorkflow";
@@ -86,6 +88,26 @@ export function UciProviderResolutionPanel({
   const suggestedProvider = findProviderById(providers, activeResolution?.suggested_provider_id);
   const overrideRequired = needsOverrideReason(activeResolution, selectedProviderId);
   const confirmed = isResolutionConfirmed(activeResolution);
+  const hasAuthoritativeSuggestion = isSuccessfulTerritorySuggestion(activeResolution);
+  const confirmationCopy = getProviderConfirmationSectionCopy(activeResolution);
+
+  useEffect(() => {
+    if (confirmed) return;
+    if (hasAuthoritativeSuggestion && activeResolution?.suggested_provider_id) {
+      setSelectedProviderId(activeResolution.suggested_provider_id);
+      return;
+    }
+    if (!hasAuthoritativeSuggestion) {
+      setSelectedProviderId("");
+      setOverrideReason("");
+    }
+  }, [
+    activeResolution?.suggested_provider_id,
+    activeResolution?.status,
+    activeServiceType,
+    confirmed,
+    hasAuthoritativeSuggestion,
+  ]);
 
   const handleSubmit = () => {
     if (!selectedProviderId) return;
@@ -273,14 +295,18 @@ export function UciProviderResolutionPanel({
                 </div>
               </div>
             ) : (
-              <div className="space-y-3 rounded-lg border border-dashed border-teal/25 px-3 py-3">
+              <div
+                className="space-y-3 rounded-lg border border-dashed border-teal/25 px-3 py-3"
+                data-testid={
+                  hasAuthoritativeSuggestion
+                    ? "uci-resolution-confirm-override"
+                    : "uci-resolution-manual-fallback"
+                }
+              >
                 <p className="text-sm font-medium text-ink-primary-light dark:text-foreground">
-                  Manual selection fallback
+                  {confirmationCopy.title}
                 </p>
-                <p className={cn("text-xs", mutedClass)}>
-                  Select and confirm the utility serving this project. No automatic provider is applied
-                  without authoritative territory evidence.
-                </p>
+                <p className={cn("text-xs", mutedClass)}>{confirmationCopy.description}</p>
                 <div className="grid max-w-md gap-2">
                   <Label htmlFor="uci-resolution-provider">Provider</Label>
                   <Select value={selectedProviderId} onValueChange={setSelectedProviderId}>
@@ -331,7 +357,7 @@ export function UciProviderResolutionPanel({
                   {resolutionActionLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : null}
-                  {overrideRequired ? "Confirm override" : "Confirm provider"}
+                  {overrideRequired ? "Confirm override" : confirmationCopy.primaryCta}
                 </Button>
               </div>
             )}

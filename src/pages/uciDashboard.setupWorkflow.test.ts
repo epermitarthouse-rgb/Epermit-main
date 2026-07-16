@@ -43,4 +43,9 @@ describe("UciDashboard guided setup workflow regression", () => {
     assert.match(dashboardSource, /confirmProjectProviderResolution/);
     assert.match(dashboardSource, /overrideProjectProviderResolution/);
   });
+
+  it("shows persistent UCI project context above setup and workflow sections", () => {
+    assert.match(dashboardSource, /UciProjectContextBar/);
+    assert.match(dashboardSource, /handleChangeProjectRequest/);
+  });
 });
