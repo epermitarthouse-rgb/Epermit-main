@@ -2,14 +2,16 @@
 
 const { PROVIDER_RESOLUTION_VERSION } = require("../uci-provider-resolution-contract.js");
 const {
-  isElectricTerritoryDataAvailable,
+  checkElectricTerritoryAvailability,
   loadStateTerritoryGeoJson,
-  readManifest,
+  loadTerritoryManifest,
 } = require("./territory-dataset-loader.service.js");
 const { geocodeUsAddressWithCensus } = require("./territory-geocode.service.js");
 const { resolvePointInPolygonMatches } = require("./territory-polygon-resolver.service.js");
 const { resolveCountyFallback } = require("./territory-county-resolver.service.js");
-const { normalizeUsStateCode } = require("./territory-geo.utils.js");
+const { extractTerritoryStateCode } = require("./territory-geo.utils.js");
+const { listManifestStateCodes } = require("./territory-manifest.service.js");
+const { logTerritoryResolver } = require("./territory-resolver-diagnostics.service.js");
 
 /**
  * @param {Record<string, unknown>} manifest
@@ -58,8 +60,22 @@ function buildCandidatesFromMatches(matches, tenantProviders) {
 }
 
 /**
+ * @param {object} base
+ * @param {string} reasonCode
+ * @param {Record<string, unknown>} [extra]
+ */
+function buildTerritoryUnavailablePayload(base, reasonCode, extra = {}) {
+  return {
+    ...base,
+    status: "territory_data_unavailable",
+    territory_unavailable_reason: reasonCode,
+    ...extra,
+  };
+}
+
+/**
  * @param {object} params
- * @param {string} params.serviceType
+ * @param {string | null | undefined} [params.projectId]
  * @param {ReturnType<import('../uci-provider-setup.service.js').buildProviderSetupAddressContext>} params.addressContext
  * @param {string | null | undefined} [params.addressSourceAcknowledged]
  * @param {Array<Record<string, unknown>>} params.tenantProviders
@@ -85,10 +101,6 @@ async function resolveElectricTerritory(params) {
   }
 
   const formattedAddress = address?.formatted ?? null;
-  const addressParts =
-    address?.parts && typeof address.parts === "object" && !Array.isArray(address.parts)
-      ? address.parts
-      : {};
 
   if (!formattedAddress) {
     return {
@@ -123,12 +135,32 @@ async function resolveElectricTerritory(params) {
   }
 
   const geocode = await geocodeUsAddressWithCensus(formattedAddress);
-  const stateCode =
-    normalizeUsStateCode(geocode.state_code) ||
-    normalizeUsStateCode(addressParts.state) ||
-    normalizeUsStateCode(params.addressContext.structured?.parts?.state);
+  const stateCode = extractTerritoryStateCode(params.addressContext, geocode);
+  const manifestResult = await loadTerritoryManifest();
+  const manifest = manifestResult.ok ? manifestResult.manifest : null;
+  const manifestStates = listManifestStateCodes(manifest);
+
+  logTerritoryResolver("resolve_started", {
+    project_id: params.projectId ?? null,
+    input_address: formattedAddress,
+    geocoder_status: geocode.code,
+    geocoder_state_result: geocode.state_code ?? null,
+    normalized_state_code: stateCode,
+    active_dataset_version: manifestResult.datasetVersion ?? manifest?.dataset_version ?? null,
+    manifest_schema_version: manifest?.schema_version ?? null,
+    manifest_state_keys: manifestStates,
+    manifest_loader_ok: manifestResult.ok,
+    manifest_loader_code: manifestResult.code,
+    manifest_truthy: Boolean(manifest),
+    manifest_state_count: manifestStates.length,
+  });
 
   if (!geocode.ok || geocode.latitude == null || geocode.longitude == null) {
+    logTerritoryResolver("resolve_geocode_failed", {
+      project_id: params.projectId ?? null,
+      geocoder_status: geocode.code,
+      normalized_state_code: stateCode,
+    });
     return {
       service_type: serviceType,
       status: geocode.code === "LOW_CONFIDENCE" ? "manual_confirmation_required" : "geocoding_failed",
@@ -144,6 +176,7 @@ async function resolveElectricTerritory(params) {
         geocoded_at: geocode.geocoded_at,
         geocode_match_type: geocode.match_type,
         geocode_confidence: geocode.confidence,
+        state_code: stateCode,
       },
       source: { name: "EIA Energy Atlas", dataset_vintage: null, layer_id: null, source_url: null, generated_at: null, available: false },
       candidates: [],
@@ -163,82 +196,126 @@ async function resolveElectricTerritory(params) {
     };
   }
 
-  if (!await isElectricTerritoryDataAvailable(serviceType, stateCode)) {
-    return {
-      service_type: serviceType,
-      status: "territory_data_unavailable",
-      resolution_tier: null,
-      resolution_method: "manual_selection",
-      confidence: "none",
-      address: {
-        formatted: geocode.formatted ?? formattedAddress,
-        source: "project",
-        latitude: geocode.latitude,
-        longitude: geocode.longitude,
-        geocode_provider: geocode.geocode_provider,
-        geocoded_at: geocode.geocoded_at,
-        geocode_match_type: geocode.match_type,
-        geocode_confidence: geocode.confidence,
-        state_code: stateCode || null,
+  const availability = await checkElectricTerritoryAvailability(serviceType, stateCode);
+  logTerritoryResolver("state_availability_checked", {
+    project_id: params.projectId ?? null,
+    requested_state: stateCode,
+    state_availability_result: availability.available,
+    territory_unavailable_reason: availability.code,
+    expected_artifact_filename: availability.artifactFile,
+    active_dataset_version: availability.manifest?.dataset_version ?? manifest?.dataset_version ?? null,
+    manifest_state_keys: listManifestStateCodes(availability.manifest ?? manifest),
+  });
+
+  if (!availability.available) {
+    const reasonCode = availability.code ?? "STATE_NOT_IN_MANIFEST";
+    logTerritoryResolver("resolve_territory_unavailable", {
+      project_id: params.projectId ?? null,
+      requested_state: stateCode,
+      territory_unavailable_reason: reasonCode,
+      expected_artifact_filename: availability.artifactFile,
+    });
+    return buildTerritoryUnavailablePayload(
+      {
+        service_type: serviceType,
+        resolution_tier: null,
+        resolution_method: "manual_selection",
+        confidence: "none",
+        address: {
+          formatted: geocode.formatted ?? formattedAddress,
+          source: "project",
+          latitude: geocode.latitude,
+          longitude: geocode.longitude,
+          geocode_provider: geocode.geocode_provider,
+          geocoded_at: geocode.geocoded_at,
+          geocode_match_type: geocode.match_type,
+          geocode_confidence: geocode.confidence,
+          state_code: stateCode,
+        },
+        source: { name: "EIA Energy Atlas", dataset_vintage: null, layer_id: null, source_url: null, generated_at: null, available: false },
+        candidates: [],
+        suggested_provider_id: null,
+        boundary_risk: false,
+        boundary_distance_miles: null,
+        requires_human_confirmation: true,
+        confirmed_provider_id: null,
+        confirmed_by: null,
+        confirmed_at: null,
+        override_reason: null,
+        notes: stateCode
+          ? `Territory dataset is not available for state ${stateCode}.`
+          : "Territory dataset is not available for this project state.",
+        resolver_version: PROVIDER_RESOLUTION_VERSION,
+        resolved_at: now,
+        user_message:
+          "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
       },
-      source: { name: "EIA Energy Atlas", dataset_vintage: null, layer_id: null, source_url: null, generated_at: null, available: false },
-      candidates: [],
-      suggested_provider_id: null,
-      boundary_risk: false,
-      boundary_distance_miles: null,
-      requires_human_confirmation: true,
-      confirmed_provider_id: null,
-      confirmed_by: null,
-      confirmed_at: null,
-      override_reason: null,
-      notes: stateCode
-        ? `Territory dataset is not available for state ${stateCode}.`
-        : "Territory dataset is not available for this project state.",
-      resolver_version: PROVIDER_RESOLUTION_VERSION,
-      resolved_at: now,
-      user_message:
-        "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
-    };
+      reasonCode,
+    );
   }
 
-  const loaded = await loadStateTerritoryGeoJson(stateCode);
+  logTerritoryResolver("state_artifact_load_started", {
+    project_id: params.projectId ?? null,
+    requested_state: availability.stateCode ?? stateCode,
+    expected_artifact_filename: availability.artifactFile,
+    active_dataset_version: availability.manifest?.dataset_version ?? null,
+  });
+
+  const loaded = await loadStateTerritoryGeoJson(availability.stateCode ?? stateCode);
   if (!loaded.ok || !loaded.geojson) {
-    return {
-      service_type: serviceType,
-      status: "territory_data_unavailable",
-      resolution_tier: null,
-      resolution_method: "manual_selection",
-      confidence: "none",
-      address: {
-        formatted: geocode.formatted ?? formattedAddress,
-        source: "project",
-        latitude: geocode.latitude,
-        longitude: geocode.longitude,
-        geocode_provider: geocode.geocode_provider,
-        geocoded_at: geocode.geocoded_at,
-        state_code: stateCode,
+    const reasonCode = loaded.code ?? "STATE_ARTIFACT_DOWNLOAD_FAILED";
+    logTerritoryResolver("state_artifact_load_failed", {
+      project_id: params.projectId ?? null,
+      requested_state: availability.stateCode ?? stateCode,
+      territory_unavailable_reason: reasonCode,
+      expected_artifact_filename: availability.artifactFile,
+    });
+    return buildTerritoryUnavailablePayload(
+      {
+        service_type: serviceType,
+        resolution_tier: null,
+        resolution_method: "manual_selection",
+        confidence: "none",
+        address: {
+          formatted: geocode.formatted ?? formattedAddress,
+          source: "project",
+          latitude: geocode.latitude,
+          longitude: geocode.longitude,
+          geocode_provider: geocode.geocode_provider,
+          geocoded_at: geocode.geocoded_at,
+          state_code: availability.stateCode ?? stateCode,
+        },
+        source: buildSourceBlock(loaded.manifest ?? availability.manifest ?? {}),
+        candidates: [],
+        suggested_provider_id: null,
+        boundary_risk: false,
+        boundary_distance_miles: null,
+        requires_human_confirmation: true,
+        confirmed_provider_id: null,
+        confirmed_by: null,
+        confirmed_at: null,
+        override_reason: null,
+        notes: `Territory dataset could not be loaded (${loaded.code}).`,
+        resolver_version: PROVIDER_RESOLUTION_VERSION,
+        resolved_at: now,
+        dataset_error: loaded.code,
+        user_message:
+          "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
       },
-      source: buildSourceBlock(loaded.manifest ?? {}),
-      candidates: [],
-      suggested_provider_id: null,
-      boundary_risk: false,
-      boundary_distance_miles: null,
-      requires_human_confirmation: true,
-      confirmed_provider_id: null,
-      confirmed_by: null,
-      confirmed_at: null,
-      override_reason: null,
-      notes: `Territory dataset could not be loaded (${loaded.code}).`,
-      resolver_version: PROVIDER_RESOLUTION_VERSION,
-      resolved_at: now,
-      dataset_error: loaded.code,
-      user_message:
-        "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
-    };
+      reasonCode,
+    );
   }
 
-  const manifest = loaded.manifest ?? (await readManifest()) ?? {};
-  const source = buildSourceBlock(manifest);
+  logTerritoryResolver("state_artifact_load_completed", {
+    project_id: params.projectId ?? null,
+    requested_state: availability.stateCode ?? stateCode,
+    expected_artifact_filename: availability.artifactFile,
+    active_dataset_version: loaded.datasetVersion ?? availability.manifest?.dataset_version ?? null,
+  });
+
+  const resolvedManifest = loaded.manifest ?? availability.manifest ?? manifest ?? {};
+  const source = buildSourceBlock(resolvedManifest);
+  const resolvedStateCode = availability.stateCode ?? stateCode;
 
   const polygon = resolvePointInPolygonMatches(loaded.geojson, {
     longitude: geocode.longitude,
@@ -254,7 +331,7 @@ async function resolveElectricTerritory(params) {
     geocoded_at: geocode.geocoded_at,
     geocode_match_type: geocode.match_type,
     geocode_confidence: geocode.confidence,
-    state_code: stateCode,
+    state_code: resolvedStateCode,
     county: geocode.county_name ?? null,
   };
 
@@ -331,7 +408,7 @@ async function resolveElectricTerritory(params) {
 
   // Tier 3 county fallback
   const countyName = geocode.county_name ?? null;
-  const county = await resolveCountyFallback(stateCode, countyName);
+  const county = await resolveCountyFallback(resolvedStateCode, countyName);
   if (county.ok && county.matches.length === 1) {
     const candidates = buildCandidatesFromMatches(county.matches, params.tenantProviders);
     const suggested = candidates[0] ?? null;

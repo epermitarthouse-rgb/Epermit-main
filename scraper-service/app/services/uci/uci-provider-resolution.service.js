@@ -22,9 +22,11 @@ const {
 } = require("./uci-provider-resolution-contract.js");
 const {
   isElectricTerritoryDataAvailable,
+  checkElectricTerritoryAvailability,
   validateTerritoryDatasetHealth,
   configureTerritoryDatasetLoader,
 } = require("./territory/territory-dataset-loader.service.js");
+const { extractTerritoryStateCode } = require("./territory/territory-geo.utils.js");
 const { resolveElectricTerritory } = require("./territory/electric-territory-resolver.service.js");
 
 /** Electric-only EIA territory tiers; gas/water/sewer/telecom stay manual until dedicated datasets exist. */
@@ -82,7 +84,8 @@ async function isTerritoryDataAvailableForServiceType(serviceType, stateCode = n
   if (!ELECTRIC_TERRITORY_SERVICE_TYPES.has(normalizeServiceType(serviceType))) {
     return false;
   }
-  return isElectricTerritoryDataAvailable("electric", stateCode);
+  const result = await checkElectricTerritoryAvailability("electric", stateCode);
+  return Boolean(result.available);
 }
 
 /**
@@ -91,13 +94,14 @@ async function isTerritoryDataAvailableForServiceType(serviceType, stateCode = n
  * @param {ReturnType<typeof buildProviderSetupAddressContext>} params.addressContext
  * @param {string | null | undefined} [params.addressSourceAcknowledged]
  */
-function buildTerritoryUnavailableResolution(params) {
+function buildTerritoryUnavailableResolution(params, reasonCode = "MANIFEST_MISSING") {
   const serviceType = normalizeServiceType(params.serviceType);
   const now = new Date().toISOString();
 
   return {
     service_type: serviceType,
     status: "territory_data_unavailable",
+    territory_unavailable_reason: reasonCode,
     resolution_tier: null,
     resolution_method: "manual_selection",
     confidence: "none",
@@ -176,12 +180,19 @@ async function resolveProviderResolutionForProject(supabase, params) {
 
   const addressContext = buildProviderSetupAddressContext(project);
   const existing = readProviderResolutionForServiceType(project, serviceType);
+  const projectStateCode = extractTerritoryStateCode(addressContext);
 
   /** @type {Record<string, unknown>} */
   let result;
 
-  if (normalizeServiceType(serviceType) === "electric" && (await isTerritoryDataAvailableForServiceType(serviceType))) {
+  const territoryAvailability = await checkElectricTerritoryAvailability(
+    "electric",
+    normalizeServiceType(serviceType) === "electric" ? projectStateCode : null,
+  );
+
+  if (normalizeServiceType(serviceType) === "electric" && territoryAvailability.available) {
     result = await resolveElectricTerritory({
+      projectId: params.projectId,
       serviceType,
       addressContext,
       addressSourceAcknowledged: params.addressSourceAcknowledged,
@@ -189,11 +200,14 @@ async function resolveProviderResolutionForProject(supabase, params) {
       existingResolution: existing,
     });
   } else if (normalizeServiceType(serviceType) === "electric") {
-    result = buildTerritoryUnavailableResolution({
-      serviceType,
-      addressContext,
-      addressSourceAcknowledged: params.addressSourceAcknowledged,
-    });
+    result = buildTerritoryUnavailableResolution(
+      {
+        serviceType,
+        addressContext,
+        addressSourceAcknowledged: params.addressSourceAcknowledged,
+      },
+      territoryAvailability.code ?? "MANIFEST_MISSING",
+    );
   } else {
     result = {
       ...buildTerritoryUnavailableResolution({
@@ -509,6 +523,8 @@ async function getProviderResolutionForProject(supabase, params) {
   const store = readProviderResolutionStore(project);
   const addressContext = buildProviderSetupAddressContext(project);
   const filterType = params.serviceType ? normalizeServiceType(params.serviceType) : null;
+  const projectStateCode = extractTerritoryStateCode(addressContext);
+  const electricAvailability = await checkElectricTerritoryAvailability("electric", projectStateCode);
 
   /** @type {Record<string, unknown>} */
   const byServiceType = {};
@@ -532,8 +548,16 @@ async function getProviderResolutionForProject(supabase, params) {
     project_id: params.projectId,
     resolver_version: store?.resolver_version ?? PROVIDER_RESOLUTION_VERSION,
     territory_data_available: {
-      electric: await isTerritoryDataAvailableForServiceType("electric"),
+      electric: electricAvailability.available,
       gas: false,
+    },
+    territory_availability: {
+      electric: {
+        available: electricAvailability.available,
+        code: electricAvailability.code,
+        state_code: electricAvailability.stateCode,
+        artifact_file: electricAvailability.artifactFile,
+      },
     },
     territory_dataset_health: await validateTerritoryDatasetHealth(),
     address_context: {
@@ -552,6 +576,7 @@ module.exports = {
   PROVIDER_RESOLUTION_VERSION,
   ELECTRIC_TERRITORY_SERVICE_TYPES,
   isTerritoryDataAvailableForServiceType,
+  checkElectricTerritoryAvailability,
   buildTerritoryUnavailableResolution,
   resolveProviderResolutionForProject,
   confirmProviderResolutionForProject,

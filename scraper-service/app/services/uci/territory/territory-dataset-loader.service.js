@@ -5,6 +5,13 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { TERRITORY_SCHEMA_VERSION } = require("./territory-sources.js");
 const { normalizeUsStateCode, normalizeCountyLookupName } = require("./territory-geo.utils.js");
+const {
+  manifestHasState,
+  listManifestStateCodes,
+  getManifestStateEntry,
+  normalizeTerritoryManifest,
+} = require("./territory-manifest.service.js");
+const { checkTerritoryAvailability } = require("./territory-availability.service.js");
 const { DEFAULT_TERRITORY_DATA_DIR, getTerritoryStorageConfig, shouldUseTerritoryStorage } = require("./territory-storage-config.service.js");
 const {
   configureTerritoryStorageClient,
@@ -15,6 +22,11 @@ const {
   clearTerritoryStorageRuntimeState,
   logTerritoryStorage,
 } = require("./territory-storage-client.service.js");
+const {
+  buildManifestLoadResult,
+  logTerritoryManifestLoad,
+  normalizeManifestLoadFailureCode,
+} = require("./territory-manifest-loader.service.js");
 
 const DEFAULT_DATA_DIR = DEFAULT_TERRITORY_DATA_DIR;
 
@@ -69,12 +81,8 @@ function readLocalManifest(dataDir = resolveTerritoryDataDir()) {
  * @param {Record<string, unknown> | null} manifest
  * @param {string} stateCode
  */
-function manifestHasState(manifest, stateCode) {
-  if (!manifest) return false;
-  const states = manifest.states;
-  if (!states || typeof states !== "object" || Array.isArray(states)) return false;
-  const entry = /** @type {Record<string, unknown>} */ (states)[normalizeUsStateCode(stateCode)];
-  return Boolean(entry && typeof entry === "object");
+function manifestHasStateEntry(manifest, stateCode) {
+  return manifestHasState(manifest, stateCode);
 }
 
 /**
@@ -103,7 +111,7 @@ function loadLocalStateTerritoryGeoJson(stateCode, options = {}) {
     return { ok: false, code: "MANIFEST_MISSING", geojson: null, manifest: null, source: "local" };
   }
 
-  if (!manifestHasState(manifest, normalized)) {
+  if (!manifestHasStateEntry(manifest, normalized)) {
     return { ok: false, code: "STATE_NOT_INGESTED", geojson: null, manifest, source: "local" };
   }
 
@@ -168,18 +176,103 @@ function loadLocalStateTerritoryGeoJson(stateCode, options = {}) {
 /**
  * @param {string | null | undefined} [dataDir]
  */
-async function readManifest(dataDir = null) {
+async function loadTerritoryManifest(dataDir = null) {
   if (shouldUseTerritoryStorage(loaderContext.supabase)) {
     const result = await fetchRemoteManifest(loaderContext.supabase);
-    if (result.ok && result.manifest) return result.manifest;
+    logTerritoryManifestLoad({
+      phase: "remote_result",
+      ok: result.ok,
+      code: result.code,
+      dataset_version: result.datasetVersion ?? null,
+      manifest_truthy: Boolean(result.manifest),
+      manifest_state_count: result.manifest ? listManifestStateCodes(result.manifest).length : 0,
+      reason: result.reason ?? null,
+      error: result.error ?? null,
+    });
+
+    if (result.ok && result.manifest) {
+      return buildManifestLoadResult(true, result.code === "CACHE_HIT" ? "CACHE_HIT" : "LOADED", result.manifest, result.datasetVersion);
+    }
+
     const config = getTerritoryStorageConfig();
     if (config.allowLocalFallback) {
       logTerritoryStorage("fallback_local_manifest", { reason: result.code });
-      return readLocalManifest(dataDir ?? resolveTerritoryDataDir());
+      const localManifest = normalizeTerritoryManifest(readLocalManifest(dataDir ?? resolveTerritoryDataDir()));
+      if (localManifest) {
+        return buildManifestLoadResult(true, "LOADED", localManifest, localManifest.dataset_version ?? null, {
+          source: "local",
+        });
+      }
+      return buildManifestLoadResult(false, "MANIFEST_MISSING", null, null, { source: "local" });
     }
-    return null;
+
+    return buildManifestLoadResult(
+      false,
+      normalizeManifestLoadFailureCode(result.code),
+      null,
+      result.datasetVersion ?? null,
+      { reason: result.reason ?? null, error: result.error ?? null, source: "storage" },
+    );
   }
-  return readLocalManifest(dataDir ?? resolveTerritoryDataDir());
+
+  const localManifest = normalizeTerritoryManifest(readLocalManifest(dataDir ?? resolveTerritoryDataDir()));
+  if (!localManifest) {
+    return buildManifestLoadResult(false, "MANIFEST_MISSING", null, null, { source: "local" });
+  }
+  return buildManifestLoadResult(true, "LOADED", localManifest, localManifest.dataset_version ?? null, {
+    source: "local",
+  });
+}
+
+/**
+ * @param {string | null | undefined} [dataDir]
+ */
+async function readManifest(dataDir = null) {
+  const result = await loadTerritoryManifest(dataDir);
+  return result.ok && result.manifest ? result.manifest : null;
+}
+
+/**
+ * @param {string} serviceType
+ * @param {string | null | undefined} [stateCode]
+ */
+async function checkElectricTerritoryAvailability(serviceType, stateCode = null) {
+  if (String(serviceType ?? "").trim().toLowerCase() !== "electric") {
+    return {
+      available: false,
+      code: "INVALID_SERVICE_TYPE",
+      manifest: null,
+      stateCode: null,
+      artifactFile: null,
+    };
+  }
+
+  const manifestResult = await loadTerritoryManifest();
+  logTerritoryManifestLoad({
+    phase: "availability_input",
+    ok: manifestResult.ok,
+    code: manifestResult.code,
+    manifest_truthy: Boolean(manifestResult.manifest),
+    manifest_state_count: manifestResult.manifest ? listManifestStateCodes(manifestResult.manifest).length : 0,
+    requested_state: stateCode ?? null,
+  });
+
+  if (!manifestResult.ok || !manifestResult.manifest) {
+    return {
+      available: false,
+      code: manifestResult.code ?? "MANIFEST_MISSING",
+      manifest: null,
+      stateCode: null,
+      artifactFile: null,
+      datasetVersion: manifestResult.datasetVersion ?? null,
+      reason: manifestResult.reason ?? manifestResult.error ?? null,
+    };
+  }
+
+  return checkTerritoryAvailability(manifestResult.manifest, stateCode, {
+    supabase: loaderContext.supabase,
+    localStateExists: localStateGeoJsonExists,
+  });
 }
 
 /**
@@ -187,23 +280,8 @@ async function readManifest(dataDir = null) {
  * @param {string | null | undefined} [stateCode]
  */
 async function isElectricTerritoryDataAvailable(serviceType, stateCode = null) {
-  if (String(serviceType ?? "").trim().toLowerCase() !== "electric") return false;
-
-  const manifest = await readManifest();
-  if (!manifest || manifest.schema_version !== TERRITORY_SCHEMA_VERSION) return false;
-
-  if (!stateCode) {
-    const states = manifest.states;
-    return Boolean(states && typeof states === "object" && Object.keys(states).length > 0);
-  }
-
-  const normalized = normalizeUsStateCode(stateCode);
-  if (!manifestHasState(manifest, normalized)) return false;
-
-  if (shouldUseTerritoryStorage(loaderContext.supabase)) {
-    return true;
-  }
-  return localStateGeoJsonExists(normalized);
+  const result = await checkElectricTerritoryAvailability(serviceType, stateCode);
+  return Boolean(result.available);
 }
 
 /**
@@ -329,10 +407,7 @@ async function validateTerritoryDatasetHealth() {
     };
   }
 
-  const states =
-    manifest.states && typeof manifest.states === "object" && !Array.isArray(manifest.states)
-      ? Object.keys(/** @type {Record<string, unknown>} */ (manifest.states))
-      : [];
+  const states = listManifestStateCodes(manifest);
 
   return {
     healthy: states.length > 0,
@@ -357,8 +432,10 @@ module.exports = {
   DEFAULT_DATA_DIR,
   resolveTerritoryDataDir,
   configureTerritoryDatasetLoader,
+  loadTerritoryManifest,
   readManifest,
-  manifestHasState,
+  manifestHasState: manifestHasStateEntry,
+  checkElectricTerritoryAvailability,
   isElectricTerritoryDataAvailable,
   loadStateTerritoryGeoJson,
   loadCountyUtilityEntry,

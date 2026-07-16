@@ -9,6 +9,12 @@ const {
   sanitizeStorageErrorForLog,
 } = require("../../../../shared/supabase-storage-upload.js");
 const { TERRITORY_SCHEMA_VERSION } = require("./territory-sources.js");
+const { normalizeUsStateCode } = require("./territory-geo.utils.js");
+const {
+  normalizeTerritoryManifest,
+  listManifestStateCodes,
+  getManifestStateEntry,
+} = require("./territory-manifest.service.js");
 const { getTerritoryStorageConfig } = require("./territory-storage-config.service.js");
 const {
   buildCurrentJsonPath,
@@ -24,14 +30,21 @@ let loaderContext = { supabase: null };
 /** @type {Map<string, Promise<Buffer>>} */
 const inFlightDownloads = new Map();
 
-/** @type {{ activeVersion: string | null, manifest: Record<string, unknown> | null, countyStore: Record<string, unknown> | null, lastSuccessfulFetchAt: string | null, lastError: string | null }} */
+/** @type {{ activeVersion: string | null, resolvedCurrentVersion: string | null, manifest: Record<string, unknown> | null, countyStore: Record<string, unknown> | null, lastSuccessfulFetchAt: string | null, lastError: string | null }} */
 const runtimeState = {
   activeVersion: null,
+  resolvedCurrentVersion: null,
   manifest: null,
   countyStore: null,
   lastSuccessfulFetchAt: null,
   lastError: null,
 };
+
+/** @type {Promise<string> | null} */
+let inFlightCurrentVersion = null;
+
+/** @type {Map<string, Promise<{ ok: boolean, code: string, manifest: Record<string, unknown> | null, datasetVersion: string | null, error?: string, reason?: string }>>} */
+const inFlightManifestLoads = new Map();
 
 /**
  * @param {{ supabase?: import("@supabase/supabase-js").SupabaseClient | null }} ctx
@@ -80,7 +93,12 @@ function validateManifestSchema(manifest) {
     return { ok: false, code: "INVALID_MANIFEST", reason: "missing_dataset_version" };
   }
   const states = manifest.states;
-  if (!states || typeof states !== "object" || Array.isArray(states)) {
+  const normalizedStates = normalizeTerritoryManifest({ states })?.states;
+  if (
+    !normalizedStates ||
+    typeof normalizedStates !== "object" ||
+    Object.keys(/** @type {Record<string, unknown>} */ (normalizedStates)).length === 0
+  ) {
     return { ok: false, code: "INVALID_MANIFEST", reason: "missing_states" };
   }
   return { ok: true, code: "OK" };
@@ -172,25 +190,44 @@ async function resolveActiveDatasetVersion(supabase, bucket, prefix, configuredV
     return validateDatasetVersion(pinned);
   }
 
-  const currentPath = buildCurrentJsonPath(prefix);
-  const currentResult = await downloadStorageObject(supabase, bucket, currentPath);
-  if (!currentResult.ok || !currentResult.buffer) {
-    throw Object.assign(new Error(currentResult.errorMessage || "current_json_unavailable"), {
-      code: currentResult.errorCode || "CURRENT_JSON_MISSING",
-    });
+  if (runtimeState.resolvedCurrentVersion) {
+    logTerritoryStorage("current_version_cache_hit", { dataset_version: runtimeState.resolvedCurrentVersion });
+    return runtimeState.resolvedCurrentVersion;
   }
-  let current;
-  try {
-    current = JSON.parse(currentResult.buffer.toString("utf8"));
-  } catch {
-    throw Object.assign(new Error("current_json_parse_failed"), { code: "CURRENT_JSON_INVALID" });
+
+  if (inFlightCurrentVersion) {
+    logTerritoryStorage("current_version_dedup_wait");
+    return inFlightCurrentVersion;
   }
-  if (!current?.dataset_version) {
-    throw Object.assign(new Error("current_json_missing_dataset_version"), {
-      code: "CURRENT_JSON_INVALID",
-    });
-  }
-  return validateDatasetVersion(String(current.dataset_version));
+
+  inFlightCurrentVersion = (async () => {
+    const currentPath = buildCurrentJsonPath(prefix);
+    const currentResult = await downloadStorageObject(supabase, bucket, currentPath);
+    if (!currentResult.ok || !currentResult.buffer) {
+      throw Object.assign(new Error(currentResult.errorMessage || "current_json_unavailable"), {
+        code: currentResult.errorCode || "CURRENT_JSON_MISSING",
+      });
+    }
+    let current;
+    try {
+      current = JSON.parse(currentResult.buffer.toString("utf8"));
+    } catch {
+      throw Object.assign(new Error("current_json_parse_failed"), { code: "CURRENT_JSON_INVALID" });
+    }
+    if (!current?.dataset_version) {
+      throw Object.assign(new Error("current_json_missing_dataset_version"), {
+        code: "CURRENT_JSON_INVALID",
+      });
+    }
+    const version = validateDatasetVersion(String(current.dataset_version));
+    runtimeState.resolvedCurrentVersion = version;
+    logTerritoryStorage("current_version_resolved", { dataset_version: version });
+    return version;
+  })().finally(() => {
+    inFlightCurrentVersion = null;
+  });
+
+  return inFlightCurrentVersion;
 }
 
 /**
@@ -220,6 +257,13 @@ async function tryResolveActiveDatasetVersion(supabase, bucket, prefix, configur
  * @param {boolean} [options.forceReload]
  */
 async function fetchRemoteManifest(supabase, options = {}) {
+  if (options.forceReload) {
+    runtimeState.resolvedCurrentVersion = null;
+    runtimeState.activeVersion = null;
+    runtimeState.manifest = null;
+    runtimeState.countyStore = null;
+  }
+
   const config = getTerritoryStorageConfig();
   const resolvedVersion = await tryResolveActiveDatasetVersion(
     supabase,
@@ -239,26 +283,51 @@ async function fetchRemoteManifest(supabase, options = {}) {
   const version = resolvedVersion.version;
 
   if (!options.forceReload && runtimeState.manifest && runtimeState.activeVersion === version) {
+    logTerritoryStorage("manifest_cache_hit", {
+      dataset_version: version,
+      state_count: listManifestStateCodes(runtimeState.manifest).length,
+    });
     return { ok: true, code: "CACHE_HIT", manifest: runtimeState.manifest, datasetVersion: version };
   }
 
+  const inflightKey = `${config.bucket}:${version}`;
+  if (!options.forceReload && inFlightManifestLoads.has(inflightKey)) {
+    logTerritoryStorage("manifest_inflight_join", { dataset_version: version });
+    return inFlightManifestLoads.get(inflightKey);
+  }
+
+  logTerritoryStorage("manifest_cache_miss", { dataset_version: version });
+
+  const loadTask = (async () => {
   const manifestPath = buildManifestPath(config.prefix, version);
   const manifestResult = await downloadStorageObject(supabase, config.bucket, manifestPath);
   if (!manifestResult.ok || !manifestResult.buffer) {
     return {
       ok: false,
-      code: manifestResult.errorCode || "MANIFEST_MISSING",
+      code: manifestResult.errorCode || "MANIFEST_FETCH_FAILED",
       manifest: null,
       datasetVersion: version,
       error: manifestResult.errorMessage,
     };
   }
+
+  logTerritoryStorage("manifest_download_parsed", {
+    dataset_version: version,
+    bytes: manifestResult.buffer.length,
+    json_parse_pending: true,
+  });
+
   writeLocalCacheFile(version, "manifest.json", manifestResult.buffer);
 
   let manifest;
   try {
     manifest = JSON.parse(manifestResult.buffer.toString("utf8"));
   } catch (err) {
+    logTerritoryStorage("manifest_parse_failed", {
+      dataset_version: version,
+      bytes: manifestResult.buffer.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return {
       ok: false,
       code: "MANIFEST_PARSE_FAILED",
@@ -268,36 +337,78 @@ async function fetchRemoteManifest(supabase, options = {}) {
     };
   }
 
+  logTerritoryStorage("manifest_json_parsed", {
+    dataset_version: version,
+    raw_manifest_type: Array.isArray(manifest) ? "array" : typeof manifest,
+    raw_schema_version: manifest?.schema_version ?? null,
+    raw_internal_dataset_version: manifest?.dataset_version ?? null,
+  });
+
   const schema = validateManifestSchema(manifest);
   if (!schema.ok) {
+    logTerritoryStorage("manifest_invalid", {
+      dataset_version: version,
+      validation_code: schema.code,
+      validation_reason: schema.reason,
+    });
     return {
       ok: false,
-      code: schema.code,
+      code: "MANIFEST_INVALID",
       manifest: null,
       datasetVersion: version,
       reason: schema.reason,
     };
   }
 
-  const expectedVersion = String(manifest.dataset_version ?? version);
-  if (expectedVersion !== version) {
+  const internalVersion = manifest?.dataset_version != null ? String(manifest.dataset_version) : null;
+  if (internalVersion && internalVersion !== version) {
+    logTerritoryStorage("manifest_version_aligned", {
+      active_dataset_version: version,
+      manifest_internal_dataset_version: internalVersion,
+    });
+  }
+
+  const normalizedManifest = normalizeTerritoryManifest({
+    ...manifest,
+    dataset_version: version,
+  });
+
+  if (!normalizedManifest) {
+    logTerritoryStorage("manifest_normalize_failed", {
+      dataset_version: version,
+      raw_manifest_type: Array.isArray(manifest) ? "array" : typeof manifest,
+    });
     return {
       ok: false,
-      code: "VERSION_MISMATCH",
+      code: "MANIFEST_INVALID",
       manifest: null,
       datasetVersion: version,
-      reason: `manifest_version_${expectedVersion}_active_${version}`,
+      reason: "normalize_returned_null",
     };
   }
 
   runtimeState.activeVersion = version;
-  runtimeState.manifest = manifest;
+  runtimeState.manifest = normalizedManifest;
+  logTerritoryStorage("manifest_cached", {
+    dataset_version: version,
+    cache_key: inflightKey,
+    state_count: listManifestStateCodes(runtimeState.manifest).length,
+    normalized_manifest_type: typeof runtimeState.manifest,
+    normalized_schema_version: runtimeState.manifest.schema_version ?? null,
+  });
   logTerritoryStorage("manifest_loaded", {
     dataset_version: version,
-    states: Object.keys(manifest.states ?? {}).length,
+    states: listManifestStateCodes(runtimeState.manifest).length,
+    state_keys: listManifestStateCodes(runtimeState.manifest),
   });
 
-  return { ok: true, code: "LOADED", manifest, datasetVersion: version };
+  return { ok: true, code: "LOADED", manifest: runtimeState.manifest, datasetVersion: version };
+  })().finally(() => {
+    inFlightManifestLoads.delete(inflightKey);
+  });
+
+  inFlightManifestLoads.set(inflightKey, loadTask);
+  return loadTask;
 }
 
 /**
@@ -320,24 +431,34 @@ async function fetchRemoteStateGeoJson(supabase, stateCode, options = {}) {
 
   const manifest = manifestResult.manifest;
   const version = manifestResult.datasetVersion;
-  const normalizedState = String(stateCode ?? "")
-    .trim()
-    .toUpperCase();
-  const states = /** @type {Record<string, { checksum_sha256?: string, file?: string }>} */ (
-    manifest.states ?? {}
-  );
-  const stateEntry = states[normalizedState];
-  if (!stateEntry) {
+  const normalizedState = normalizeUsStateCode(stateCode);
+  if (!normalizedState) {
     return {
       ok: false,
-      code: "STATE_NOT_INGESTED",
+      code: "INVALID_STATE",
       geojson: null,
       manifest,
       datasetVersion: version,
     };
   }
 
-  const fileName = stateEntry.file || `territories_${normalizedState}.geojson`;
+  const stateEntry = getManifestStateEntry(manifest, normalizedState);
+  if (!stateEntry) {
+    logTerritoryStorage("state_not_in_manifest", {
+      dataset_version: version,
+      requested_state: normalizedState,
+      manifest_states: listManifestStateCodes(manifest),
+    });
+    return {
+      ok: false,
+      code: "STATE_NOT_IN_MANIFEST",
+      geojson: null,
+      manifest,
+      datasetVersion: version,
+    };
+  }
+
+  const fileName = String(stateEntry.file ?? `territories_${normalizedState}.geojson`);
   const config = getTerritoryStorageConfig();
   const storagePath = buildStateGeoJsonPath(config.prefix, String(version), normalizedState);
 
@@ -360,7 +481,7 @@ async function fetchRemoteStateGeoJson(supabase, stateCode, options = {}) {
     logTerritoryStorage("cache_hit", { dataset_version: version, artifact: fileName, layer: "tmp" });
   }
 
-  const expectedChecksum = stateEntry.checksum_sha256;
+  const expectedChecksum = stateEntry.checksum_sha256 ? String(stateEntry.checksum_sha256) : null;
   if (expectedChecksum) {
     const actual = sha256Buffer(bytes);
     if (actual !== expectedChecksum) {
@@ -538,10 +659,7 @@ async function probeTerritoryStorageHealth(supabase) {
     }
 
     const manifest = manifestResult.manifest;
-    const states =
-      manifest.states && typeof manifest.states === "object" && !Array.isArray(manifest.states)
-        ? Object.keys(/** @type {Record<string, unknown>} */ (manifest.states))
-        : [];
+    const states = listManifestStateCodes(manifest);
 
     const countyAvailable = Boolean(
       manifest.county_fallback &&
@@ -602,11 +720,14 @@ async function uploadTerritoryArtifact(supabase, storagePath, body, allowOverwri
 
 function clearTerritoryStorageRuntimeState() {
   runtimeState.activeVersion = null;
+  runtimeState.resolvedCurrentVersion = null;
   runtimeState.manifest = null;
   runtimeState.countyStore = null;
   runtimeState.lastSuccessfulFetchAt = null;
   runtimeState.lastError = null;
   inFlightDownloads.clear();
+  inFlightCurrentVersion = null;
+  inFlightManifestLoads.clear();
 }
 
 function getTerritoryStorageRuntimeState() {

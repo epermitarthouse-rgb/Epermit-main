@@ -59,9 +59,12 @@ describe("territory geo utils", () => {
     assert.ok(dist > 0 && dist < 20);
   });
 
-  it("normalizes US state codes", () => {
+  it("normalizes US state codes and full state names", () => {
     assert.equal(normalizeUsStateCode(" MD "), "MD");
     assert.equal(normalizeUsStateCode("md"), "MD");
+    assert.equal(normalizeUsStateCode("Virginia"), "VA");
+    assert.equal(normalizeUsStateCode("5710 Telegraph Rd, Alexandria, VA 22303"), "VA");
+    assert.equal(normalizeUsStateCode(null), null);
   });
 });
 
