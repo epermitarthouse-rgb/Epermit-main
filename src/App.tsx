@@ -55,6 +55,7 @@ import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
 import BaltimoreRecordsListPage from "./pages/baltimore/BaltimoreRecordsListPage";
 import BaltimoreRecordDetailPage from "./pages/baltimore/BaltimoreRecordDetailPage";
 import UciDashboard from "./pages/UciDashboard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
 
 const queryClient = new QueryClient();
@@ -141,7 +142,16 @@ const App = () => (
                   <Route path="/api-docs" element={<APIDocumentation />} />
                   <Route path="/checklist-history" element={<ChecklistHistory />} />
                   <Route path="/settings" element={<Settings />} />
-                  <Route path="/uci" element={<UciDashboard />} />
+                  <Route
+                    path="/uci"
+                    element={
+                      <div className="min-h-screen bg-background px-4 py-6 sm:px-6">
+                        <ErrorBoundary fallbackTitle="Utility Coordination dashboard failed to load">
+                          <UciDashboard />
+                        </ErrorBoundary>
+                      </div>
+                    }
+                  />
                   <Route path="/design-system-preview" element={<EpermitDesignSystemPreview />} />
                   <Route path="/comment-review" element={<CommentReview />} />
                   <Route path="/response-matrix" element={<ResponseMatrix />} />

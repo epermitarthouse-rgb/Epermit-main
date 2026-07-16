@@ -345,6 +345,7 @@ export default function UciDashboard() {
 
   const [providers, setProviders] = useState<UtilityProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
+  const [providersLoadError, setProvidersLoadError] = useState<string | null>(null);
   const [tenantScopeId, setTenantScopeId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [records, setRecords] = useState<CoordinationRecord[]>([]);
@@ -358,6 +359,7 @@ export default function UciDashboard() {
     useState<UciProviderSetupAddressSource | null>(null);
   const [unresolvedUtilityTypes, setUnresolvedUtilityTypes] = useState<string[]>([]);
   const [providerUtilityFilter, setProviderUtilityFilter] = useState<string>("all");
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const providerCatalogTypes = useMemo(() => {
     const types = new Set(
@@ -515,6 +517,7 @@ export default function UciDashboard() {
   const loadProviders = useCallback(async () => {
     if (authLoading || !user?.id) return;
     setProvidersLoading(true);
+    setProvidersLoadError(null);
     try {
       const res = await listUciProviders(projectId ?? undefined);
       setProviders(res.providers ?? []);
@@ -527,7 +530,10 @@ export default function UciDashboard() {
         return next;
       });
     } catch (e: unknown) {
-      toast.error(formatUciUserError(e, "Failed to load providers"));
+      const message = formatUciUserError(e, "Failed to load providers");
+      setProvidersLoadError(message);
+      setProviders([]);
+      toast.error(message);
     } finally {
       setProvidersLoading(false);
     }
@@ -1135,7 +1141,7 @@ export default function UciDashboard() {
     const selectedTypes = new Set(
       providers
         .filter((provider) => initPick[provider.slug])
-        .map((provider) => provider.utility_type.trim().toLowerCase())
+        .map((provider) => provider.utility_type?.trim().toLowerCase() ?? "")
         .filter(Boolean),
     );
     const catalogTypes = providerSetup?.utility_types_in_catalog ?? [];
@@ -1994,6 +2000,27 @@ export default function UciDashboard() {
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-teal" />
                 </div>
+              ) : providersLoadError ? (
+                <div
+                  className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-foreground"
+                  data-testid="uci-providers-load-error"
+                >
+                  <p className="font-medium">Utility provider directory could not be loaded.</p>
+                  <p className={cn("mt-1", uciMutedClass)}>{providersLoadError}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => void loadProviders()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : filteredProviders.length === 0 ? (
+                <p className={cn("py-6 text-center text-sm", uciMutedClass)} data-testid="uci-providers-empty">
+                  No utility providers are available for this workspace yet.
+                </p>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredProviders.map((p) => (

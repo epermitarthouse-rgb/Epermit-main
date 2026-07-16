@@ -59,4 +59,33 @@ describe("UciDashboard auth dependency regression", () => {
       "EditorialPageHeader is rendered but must be imported — otherwise /uci blanks on first paint",
     );
   });
+
+  it("declares detailOpen state used by coordination sheet and PEPCO mailbox effect", () => {
+    assert.match(
+      dashboardSource,
+      /const \[detailOpen, setDetailOpen\] = useState\(false\)/,
+      "detailOpen state must exist — Row 3 edits removed it and caused ReferenceError on /uci",
+    );
+    assert.match(dashboardSource, /<Sheet open=\{detailOpen\} onOpenChange=\{setDetailOpen\}/);
+    assert.match(dashboardSource, /\[detailOpen, detailId, isPepcoCoordination\]/);
+  });
+
+  it("does not call utility_type.trim without null-safe access in uncoveredUtilityTypes", () => {
+    const block = extractBlock(
+      dashboardSource,
+      "const uncoveredUtilityTypes = useMemo",
+      "const toggleAllInit",
+    );
+    assert.doesNotMatch(
+      block,
+      /provider\.utility_type\.trim\(\)/,
+      "missing utility_type must not throw during provider init selection",
+    );
+    assert.match(block, /provider\.utility_type\?\.trim\(\)/);
+  });
+
+  it("surfaces provider load failures instead of rendering an empty silent grid", () => {
+    assert.match(dashboardSource, /providersLoadError/);
+    assert.match(dashboardSource, /data-testid="uci-providers-load-error"/);
+  });
 });
