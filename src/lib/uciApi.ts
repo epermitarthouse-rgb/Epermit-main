@@ -23,6 +23,8 @@ import type {
   UciProjectCoordinationResponse,
   UciProviderSetupConfirmation,
   UciProviderSetupResponse,
+  UciProviderResolutionActionResponse,
+  UciProviderResolutionListResponse,
   UciProvidersResponse,
   UtilityProvider,
   UciRecentEventsResponse,
@@ -421,6 +423,84 @@ export async function getProjectProviderSetup(
     `/api/uci/projects/${encodeURIComponent(projectId)}/provider-setup`,
     {},
     "Failed to load provider setup guidance",
+  );
+}
+
+export async function getProjectProviderResolution(
+  projectId: string,
+  options?: { serviceType?: string },
+): Promise<UciProviderResolutionListResponse> {
+  const params = new URLSearchParams();
+  if (options?.serviceType) params.set("service_type", options.serviceType);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return uciFetchJson<UciProviderResolutionListResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/provider-resolution${query}`,
+    {},
+    "Failed to load provider resolution",
+  );
+}
+
+export async function resolveProjectProviderResolution(
+  projectId: string,
+  params: { serviceType: string; addressSourceAcknowledged?: string },
+): Promise<UciProviderResolutionActionResponse> {
+  return uciFetchJson<UciProviderResolutionActionResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/provider-resolution/resolve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_type: params.serviceType,
+        ...(params.addressSourceAcknowledged
+          ? { address_source_acknowledged: params.addressSourceAcknowledged }
+          : {}),
+      }),
+    },
+    "Failed to run provider resolution",
+  );
+}
+
+export async function confirmProjectProviderResolution(
+  projectId: string,
+  params: { serviceType: string; providerId: string; notes?: string },
+): Promise<UciProviderResolutionActionResponse> {
+  return uciFetchJson<UciProviderResolutionActionResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/provider-resolution/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_type: params.serviceType,
+        provider_id: params.providerId,
+        ...(params.notes ? { notes: params.notes } : {}),
+      }),
+    },
+    "Failed to confirm provider resolution",
+  );
+}
+
+export async function overrideProjectProviderResolution(
+  projectId: string,
+  params: {
+    serviceType: string;
+    providerId: string;
+    overrideReason: string;
+    notes?: string;
+  },
+): Promise<UciProviderResolutionActionResponse> {
+  return uciFetchJson<UciProviderResolutionActionResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/provider-resolution/override`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_type: params.serviceType,
+        provider_id: params.providerId,
+        override_reason: params.overrideReason,
+        ...(params.notes ? { notes: params.notes } : {}),
+      }),
+    },
+    "Failed to override provider resolution",
   );
 }
 

@@ -63,3 +63,10 @@ scraper-service/login_failed.png
 scraper-service/record_not_loaded.png
 scraper-service/mdc-reports/
 scraper-service/downloads/
+# D2.2 ingested territory datasets (large; generated locally — do not commit)
+scraper-service/data/territory/electric/territories_*.geojson
+scraper-service/data/territory/electric/utilities_by_state.json
+scraper-service/data/territory/electric/county_utility.json
+scraper-service/data/territory/electric/unresolved_providers.json
+!scraper-service/data/territory/electric/manifest.json
+!scraper-service/tests/fixtures/territory/**

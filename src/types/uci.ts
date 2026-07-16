@@ -292,6 +292,102 @@ export interface UciProviderMappingMetadata {
   provider_slug?: string;
 }
 
+export type UciProviderResolutionStatus =
+  | "resolved"
+  | "ambiguous"
+  | "not_found"
+  | "geocoding_failed"
+  | "territory_data_unavailable"
+  | "manual_confirmation_required"
+  | "confirmed"
+  | "overridden";
+
+export type UciProviderResolutionMethod =
+  | "point_in_polygon"
+  | "boundary_buffer"
+  | "county_fallback"
+  | "zip_cache_suggestion"
+  | "manual_selection";
+
+export type UciProviderResolutionConfidence = "high" | "medium" | "low" | "none";
+
+export interface UciProviderResolutionCandidate {
+  provider_id: string;
+  provider_slug: string;
+  display_name: string;
+  match_reason: string;
+  coverage_or_distance?: number | null;
+}
+
+export interface UciProviderResolutionResult {
+  service_type: string;
+  status: UciProviderResolutionStatus;
+  resolution_tier: number | null;
+  resolution_method: UciProviderResolutionMethod | null;
+  confidence: UciProviderResolutionConfidence;
+  address: {
+    formatted: string | null;
+    source: "project" | "portal" | "manual";
+    latitude: number | null;
+    longitude: number | null;
+    geocode_provider: string | null;
+    geocoded_at: string | null;
+  };
+  source: {
+    name: string;
+    dataset_vintage: string | null;
+    layer_id: string | null;
+    source_url: string | null;
+    generated_at: string | null;
+    available?: boolean;
+  };
+  candidates: UciProviderResolutionCandidate[];
+  suggested_provider_id: string | null;
+  boundary_risk: boolean;
+  boundary_distance_miles: number | null;
+  requires_human_confirmation: boolean;
+  confirmed_provider_id: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  confirmed_provider_slug?: string | null;
+  override_reason: string | null;
+  notes: string | null;
+  resolver_version?: string;
+  resolved_at?: string | null;
+  user_message?: string | null;
+  original_suggestion?: {
+    suggested_provider_id: string | null;
+    candidates: UciProviderResolutionCandidate[];
+    resolution_method: UciProviderResolutionMethod | null;
+    resolution_tier: number | null;
+    source: UciProviderResolutionResult["source"] | null;
+  };
+}
+
+export interface UciProviderResolutionListResponse {
+  project_id: string;
+  resolver_version: string;
+  territory_data_available: {
+    electric: boolean;
+    gas: boolean;
+  };
+  address_context: {
+    formatted: string | null;
+    source: string;
+    address_mismatch: boolean;
+  };
+  resolutions: Record<string, UciProviderResolutionResult>;
+  user_messages: {
+    territory_unavailable: string;
+  };
+}
+
+export interface UciProviderResolutionActionResponse {
+  project_id: string;
+  service_type: string;
+  resolution: UciProviderResolutionResult;
+}
+
 export interface UciLoadProfileAnalyzeResponse {
   coordination_record_id: string;
   project_id: string;

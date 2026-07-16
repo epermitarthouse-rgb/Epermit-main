@@ -58,6 +58,10 @@ import {
   getCoordinationDetail,
   getProjectPortfolioView,
   getProjectProviderSetup,
+  getProjectProviderResolution,
+  resolveProjectProviderResolution,
+  confirmProjectProviderResolution,
+  overrideProjectProviderResolution,
   initProjectCoordination,
   isUciSessionExpiredError,
   listApplicationPackageDocumentCandidates,
@@ -119,6 +123,7 @@ import type {
   UciNormalizedSyncResult,
   UciProviderSetupAddressSource,
   UciProviderSetupResponse,
+  UciProviderResolutionListResponse,
   UciRecordDetailResponse,
   UciPortfolioViewResponse,
   UciPortalSyncRun,
@@ -359,6 +364,11 @@ export default function UciDashboard() {
   const [initting, setInitting] = useState(false);
   const [providerSetup, setProviderSetup] = useState<UciProviderSetupResponse | null>(null);
   const [providerSetupLoading, setProviderSetupLoading] = useState(false);
+  const [providerResolution, setProviderResolution] = useState<UciProviderResolutionListResponse | null>(
+    null,
+  );
+  const [providerResolutionLoading, setProviderResolutionLoading] = useState(false);
+  const [providerResolutionActionLoading, setProviderResolutionActionLoading] = useState(false);
   const [providerSetupConfirmed, setProviderSetupConfirmed] = useState(false);
   const [addressSourceAcknowledged, setAddressSourceAcknowledged] =
     useState<UciProviderSetupAddressSource | null>(null);
@@ -626,6 +636,7 @@ export default function UciDashboard() {
   const loadProviderSetup = useCallback(async () => {
     if (authLoading || !user?.id || !projectId) {
       setProviderSetup(null);
+      setProviderResolution(null);
       setProviderSetupConfirmed(false);
       setAddressSourceAcknowledged(null);
       setUnresolvedUtilityTypes([]);
@@ -659,10 +670,141 @@ export default function UciDashboard() {
     }
   }, [authLoading, user?.id, projectId]);
 
+  const loadProviderResolution = useCallback(async () => {
+    if (authLoading || !user?.id || !projectId) {
+      setProviderResolution(null);
+      return;
+    }
+    setProviderResolutionLoading(true);
+    try {
+      const resolution = await getProjectProviderResolution(projectId);
+      setProviderResolution(resolution);
+    } catch (e: unknown) {
+      setProviderResolution(null);
+      toast.error(formatUciUserError(e, "Failed to load provider mapping status"));
+    } finally {
+      setProviderResolutionLoading(false);
+    }
+  }, [authLoading, user?.id, projectId]);
+
+  const handleResolveProviderMapping = useCallback(
+    async (serviceType: string) => {
+      if (!projectId) return;
+      setProviderResolutionActionLoading(true);
+      try {
+        const result = await resolveProjectProviderResolution(projectId, {
+          serviceType,
+          addressSourceAcknowledged: addressSourceAcknowledged ?? undefined,
+        });
+        setProviderResolution((prev) => ({
+          project_id: result.project_id,
+          resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
+          territory_data_available: prev?.territory_data_available ?? { electric: false, gas: false },
+          address_context: prev?.address_context ?? {
+            formatted: result.resolution.address.formatted,
+            source: result.resolution.address.source,
+            address_mismatch: false,
+          },
+          resolutions: {
+            ...(prev?.resolutions ?? {}),
+            [result.service_type]: result.resolution,
+          },
+          user_messages: prev?.user_messages ?? {
+            territory_unavailable:
+              "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
+          },
+        }));
+      } catch (e: unknown) {
+        toast.error(formatUciUserError(e, "Failed to run provider territory check"));
+      } finally {
+        setProviderResolutionActionLoading(false);
+      }
+    },
+    [projectId, addressSourceAcknowledged],
+  );
+
+  const handleConfirmProviderMapping = useCallback(
+    async (params: { serviceType: string; providerId: string; notes?: string }) => {
+      if (!projectId) return;
+      setProviderResolutionActionLoading(true);
+      try {
+        const result = await confirmProjectProviderResolution(projectId, params);
+        setProviderResolution((prev) => ({
+          project_id: result.project_id,
+          resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
+          territory_data_available: prev?.territory_data_available ?? { electric: false, gas: false },
+          address_context: prev?.address_context ?? {
+            formatted: result.resolution.address.formatted,
+            source: result.resolution.address.source,
+            address_mismatch: false,
+          },
+          resolutions: {
+            ...(prev?.resolutions ?? {}),
+            [result.service_type]: result.resolution,
+          },
+          user_messages: prev?.user_messages ?? {
+            territory_unavailable:
+              "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
+          },
+        }));
+        toast.success("Utility provider confirmed.");
+      } catch (e: unknown) {
+        toast.error(formatUciUserError(e, "Failed to confirm provider"));
+      } finally {
+        setProviderResolutionActionLoading(false);
+      }
+    },
+    [projectId],
+  );
+
+  const handleOverrideProviderMapping = useCallback(
+    async (params: {
+      serviceType: string;
+      providerId: string;
+      overrideReason: string;
+      notes?: string;
+    }) => {
+      if (!projectId) return;
+      setProviderResolutionActionLoading(true);
+      try {
+        const result = await overrideProjectProviderResolution(projectId, params);
+        setProviderResolution((prev) => ({
+          project_id: result.project_id,
+          resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
+          territory_data_available: prev?.territory_data_available ?? { electric: false, gas: false },
+          address_context: prev?.address_context ?? {
+            formatted: result.resolution.address.formatted,
+            source: result.resolution.address.source,
+            address_mismatch: false,
+          },
+          resolutions: {
+            ...(prev?.resolutions ?? {}),
+            [result.service_type]: result.resolution,
+          },
+          user_messages: prev?.user_messages ?? {
+            territory_unavailable:
+              "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
+          },
+        }));
+        toast.success("Provider override recorded.");
+      } catch (e: unknown) {
+        toast.error(formatUciUserError(e, "Failed to override provider"));
+      } finally {
+        setProviderResolutionActionLoading(false);
+      }
+    },
+    [projectId],
+  );
+
   useEffect(() => {
     if (authLoading || !user?.id) return;
     void loadProviderSetup();
   }, [authLoading, user?.id, loadProviderSetup]);
+
+  useEffect(() => {
+    if (authLoading || !user?.id) return;
+    void loadProviderResolution();
+  }, [authLoading, user?.id, loadProviderResolution]);
 
   /**
    * Project/tenant safety: when the active PermitPilot project changes, any
@@ -2055,6 +2197,12 @@ export default function UciDashboard() {
             onRetryProviders={() => void loadProviders()}
             providerSetup={providerSetup}
             providerSetupLoading={providerSetupLoading}
+            providerResolution={providerResolution}
+            providerResolutionLoading={providerResolutionLoading}
+            providerResolutionActionLoading={providerResolutionActionLoading}
+            onResolveProviderMapping={(serviceType) => void handleResolveProviderMapping(serviceType)}
+            onConfirmProviderMapping={(params) => void handleConfirmProviderMapping(params)}
+            onOverrideProviderMapping={(params) => void handleOverrideProviderMapping(params)}
             providerUtilityFilter={providerUtilityFilter}
             onProviderUtilityFilterChange={setProviderUtilityFilter}
             providerCatalogTypes={providerCatalogTypes}

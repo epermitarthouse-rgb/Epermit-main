@@ -19,7 +19,12 @@
  * @property {string} [portal_key] Adapter / credentials key when distinct from slug.
  * @property {string[]} aliases Reviewed alias strings (brand, legal, EIA, portal).
  * @property {Array<{ alias: string, source: string }>} [alias_provenance]
+ * @property {Record<string, unknown>} [directory_source] Optional seed provenance override.
+ * @property {boolean} [territory_manual_only] When true, EIA name stays unsupported/manual in territory reconciliation.
  */
+
+/** EIA legal names that must remain manual — no canonical auto-mapping. */
+const TERRITORY_UNSUPPORTED_EIA_NAMES = [];
 
 /** @type {ProviderCatalogEntry[]} */
 const UTILITY_PROVIDER_DIRECTORY = [
@@ -88,7 +93,7 @@ const UTILITY_PROVIDER_DIRECTORY = [
     utility_type: "electric",
     ownership_type: "cooperative",
     cet_relationship: true,
-    aliases: ["SMECO", "Southern Maryland Electric Cooperative"],
+    aliases: ["SMECO", "Southern Maryland Electric Cooperative", "SOUTHERN MARYLAND ELEC COOP INC"],
   },
   {
     slug: "choptank-electric",
@@ -98,6 +103,85 @@ const UTILITY_PROVIDER_DIRECTORY = [
     ownership_type: "cooperative",
     cet_relationship: false,
     aliases: ["Choptank Electric Cooperative", "Choptank Electric Coop"],
+  },
+  {
+    slug: "hagerstown-light",
+    display_name: "Hagerstown Light",
+    canonical_name: "Hagerstown Light Department",
+    utility_type: "electric",
+    ownership_type: "municipal",
+    cet_relationship: false,
+    aliases: ["HAGERSTOWN LIGHT DEPARTMENT", "Hagerstown Light", "Hagerstown Light Department"],
+    directory_source: {
+      row: "row3_provider_directory",
+      seed: "eia_md_territory_reconciliation_2026_07_17",
+      source: "EIA Energy Atlas — Electric Retail Service Territories (Maryland)",
+      note: "Distinct municipal utility reviewed from official EIA Maryland territory dataset",
+    },
+  },
+  {
+    slug: "easton-utilities",
+    display_name: "Easton Utilities",
+    canonical_name: "Easton Utilities Commission",
+    utility_type: "electric",
+    ownership_type: "municipal",
+    cet_relationship: false,
+    aliases: ["EASTON UTILITIES COMM", "Easton Utilities Comm", "Easton Utilities Commission"],
+    directory_source: {
+      row: "row3_provider_directory",
+      seed: "eia_md_territory_reconciliation_2026_07_17",
+      source: "EIA Energy Atlas — Electric Retail Service Territories (Maryland)",
+      note: "Distinct municipal utility reviewed from official EIA Maryland territory dataset",
+    },
+  },
+  {
+    slug: "thurmont-municipal",
+    display_name: "Thurmont Municipal Light",
+    canonical_name: "Thurmont Municipal Light Co",
+    utility_type: "electric",
+    ownership_type: "municipal",
+    cet_relationship: false,
+    aliases: ["THURMONT MUNICIPAL LIGHT CO", "Thurmont Municipal Light Co", "Thurmont Municipal Light"],
+    directory_source: {
+      row: "row3_provider_directory",
+      seed: "eia_md_territory_reconciliation_2026_07_17",
+      source: "EIA Energy Atlas — Electric Retail Service Territories (Maryland)",
+      note: "Distinct municipal utility reviewed from official EIA Maryland territory dataset",
+    },
+  },
+  {
+    slug: "berlin-electric",
+    display_name: "Town of Berlin Electric",
+    canonical_name: "Town of Berlin — Maryland",
+    utility_type: "electric",
+    ownership_type: "municipal",
+    cet_relationship: false,
+    aliases: ["TOWN OF BERLIN - (MD)", "Town of Berlin - (MD)", "Town of Berlin MD"],
+    directory_source: {
+      row: "row3_provider_directory",
+      seed: "eia_md_territory_reconciliation_2026_07_17",
+      source: "EIA Energy Atlas — Electric Retail Service Territories (Maryland)",
+      note: "Distinct municipal utility reviewed from official EIA Maryland territory dataset",
+    },
+  },
+  {
+    slug: "williamsport-municipal",
+    display_name: "Town of Williamsport Electric",
+    canonical_name: "Town of Williamsport — Maryland",
+    utility_type: "electric",
+    ownership_type: "municipal",
+    cet_relationship: false,
+    aliases: [
+      "TOWN OF WILLIAMSPORT - (MD)",
+      "Town of Williamsport - (MD)",
+      "Town of Williamsport MD",
+    ],
+    directory_source: {
+      row: "row3_provider_directory",
+      seed: "eia_md_territory_reconciliation_2026_07_17",
+      source: "EIA Energy Atlas — Electric Retail Service Territories (Maryland)",
+      note: "Distinct municipal utility reviewed from official EIA Maryland territory dataset",
+    },
   },
   {
     slug: "dominion",
@@ -509,4 +593,5 @@ module.exports = {
   UTILITY_PROVIDER_DIRECTORY,
   AMBIGUOUS_PROVIDER_ALIASES,
   LEGACY_SLUG_DISPLAY_OVERRIDES,
+  TERRITORY_UNSUPPORTED_EIA_NAMES,
 };

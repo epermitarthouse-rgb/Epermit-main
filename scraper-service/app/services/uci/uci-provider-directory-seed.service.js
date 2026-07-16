@@ -32,11 +32,13 @@ function buildProviderSeedRow(entry) {
     ownership_type: entry.ownership_type ?? null,
     cet_relationship: Boolean(entry.cet_relationship),
     portal_key: entry.portal_key ?? slug,
-    directory_source: {
-      row: "row3_provider_directory",
-      seed: "client_ux_seed_2026_07_15",
-      note: "UX seed — not authoritative territory data",
-    },
+    directory_source:
+      entry.directory_source ??
+      {
+        row: "row3_provider_directory",
+        seed: "client_ux_seed_2026_07_15",
+        note: "UX seed — not authoritative territory data",
+      },
     is_global_template: true,
     tenant_id: null,
     is_active: true,

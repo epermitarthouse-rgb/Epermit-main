@@ -28,6 +28,16 @@ const {
   buildHumanAssistedMappingMetadata,
   parseProviderSetupConfirmation,
 } = require("../services/uci/uci-provider-setup.service.js");
+const {
+  getProviderResolutionForProject,
+  resolveProviderResolutionForProject,
+  confirmProviderResolutionForProject,
+  overrideProviderResolutionForProject,
+  configureTerritoryDatasetLoader,
+} = require("../services/uci/uci-provider-resolution.service.js");
+const {
+  readProviderResolutionForServiceType,
+} = require("../services/uci/uci-provider-resolution-persistence.js");
 const { recordUserTransition } = require("../services/uci/uci-transitions.service.js");
 const { runLoadProfileAnalysis } = require("../services/uci/uci-load-profile.service.js");
 const {
@@ -181,7 +191,38 @@ async function maybeLinkMfaSessionToPortalSyncJob(supabase, portalSyncJobId, pep
  */
 function createUciRouter(opts) {
   const { supabase } = opts;
+  configureTerritoryDatasetLoader({ supabase });
   const router = Router();
+
+  router.get("/territory-dataset/health", async (req, res) => {
+    try {
+      await requireAuthenticatedUser(req, supabase);
+      const { validateTerritoryDatasetHealth } = require("../services/uci/territory/territory-dataset-loader.service.js");
+      const health = await validateTerritoryDatasetHealth();
+      res.json({
+        ok: Boolean(health.healthy),
+        territory_dataset: {
+          healthy: Boolean(health.healthy),
+          code: health.code,
+          source: health.source ?? null,
+          storage_enabled: health.storage_enabled ?? false,
+          bucket: health.bucket ?? null,
+          prefix: health.prefix ?? null,
+          active_dataset_version: health.active_dataset_version ?? health.dataset_version ?? null,
+          source_vintage: health.source_vintage ?? null,
+          states: Array.isArray(health.states) ? health.states : [],
+          county_fallback_available: Boolean(health.county_fallback_available),
+          checksum_status: health.checksum_status ?? null,
+          cache_status: health.cache_status ?? null,
+          allow_local_fallback: health.allow_local_fallback ?? null,
+          error_reason: health.error_reason ?? health.last_error ?? null,
+        },
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
 
   router.get("/providers", async (req, res) => {
     try {
@@ -253,6 +294,103 @@ function createUciRouter(opts) {
         userId: user.id,
       });
       res.json(setup);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/projects/:projectId/provider-resolution", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.params.projectId || "").trim();
+      const serviceType = req.query.service_type
+        ? String(req.query.service_type).trim()
+        : req.query.serviceType
+          ? String(req.query.serviceType).trim()
+          : null;
+      const payload = await getProviderResolutionForProject(supabase, {
+        projectId,
+        userId: user.id,
+        serviceType,
+      });
+      res.json(payload);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/projects/:projectId/provider-resolution/resolve", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.params.projectId || "").trim();
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const serviceType = String(body.service_type ?? body.serviceType ?? "").trim();
+      const addressSourceAcknowledged =
+        body.address_source_acknowledged != null
+          ? String(body.address_source_acknowledged).trim()
+          : body.addressSourceAcknowledged != null
+            ? String(body.addressSourceAcknowledged).trim()
+            : null;
+      const payload = await resolveProviderResolutionForProject(supabase, {
+        projectId,
+        userId: user.id,
+        serviceType,
+        addressSourceAcknowledged,
+      });
+      res.json(payload);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/projects/:projectId/provider-resolution/confirm", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.params.projectId || "").trim();
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const serviceType = String(body.service_type ?? body.serviceType ?? "").trim();
+      const providerId = String(body.provider_id ?? body.providerId ?? "").trim();
+      const notes = body.notes != null ? String(body.notes) : null;
+      const payload = await confirmProviderResolutionForProject(supabase, {
+        projectId,
+        userId: user.id,
+        serviceType,
+        providerId,
+        notes,
+      });
+      res.json(payload);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/projects/:projectId/provider-resolution/override", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.params.projectId || "").trim();
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const serviceType = String(body.service_type ?? body.serviceType ?? "").trim();
+      const providerId = String(body.provider_id ?? body.providerId ?? "").trim();
+      const overrideReason = String(
+        body.override_reason ?? body.overrideReason ?? "",
+      ).trim();
+      const notes = body.notes != null ? String(body.notes) : null;
+      const payload = await overrideProviderResolutionForProject(supabase, {
+        projectId,
+        userId: user.id,
+        serviceType,
+        providerId,
+        overrideReason,
+        notes,
+      });
+      res.json(payload);
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
@@ -337,11 +475,24 @@ function createUciRouter(opts) {
         addressMismatch: Boolean(addressContext.address_mismatch),
       });
 
+      /** @type {Record<string, Record<string, unknown>>} */
+      const providerResolutionBySlug = {};
+      for (const provider of resolved) {
+        const slug = String(provider.slug ?? "").toLowerCase();
+        const utilityType = String(provider.utility_type ?? "").trim().toLowerCase();
+        if (!slug || !utilityType) continue;
+        const resolution = readProviderResolutionForServiceType(project, utilityType);
+        if (resolution) {
+          providerResolutionBySlug[slug] = resolution;
+        }
+      }
+
       const result = await initCoordinationForProviders(supabase, {
         projectId,
         userId: user.id,
         resolvedProviders: resolved,
         providerSetupMetadata,
+        providerResolutionBySlug,
       });
 
       res.json(result);

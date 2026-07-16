@@ -122,6 +122,14 @@ describe("UCI Row 3 — alias normalization and resolution", () => {
     assert.equal(result.slug, null);
   });
 
+  it("resolves SMECO EIA legal name to smeco without creating a duplicate provider entry", () => {
+    const smecoEntries = UTILITY_PROVIDER_DIRECTORY.filter((p) => p.slug === "smeco");
+    assert.equal(smecoEntries.length, 1);
+    const result = resolveProviderAlias("SOUTHERN MARYLAND ELEC COOP INC", { index });
+    assert.equal(result.status, "found");
+    assert.equal(result.slug, "smeco");
+  });
+
   it("returns ambiguous for explicitly ambiguous Dominion Energy without qualifier", () => {
     const result = resolveProviderAlias("Dominion Energy", { index });
     assert.equal(result.status, "ambiguous");

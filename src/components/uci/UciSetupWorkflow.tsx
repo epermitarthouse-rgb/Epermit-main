@@ -42,8 +42,10 @@ import type { Project } from "@/types/project";
 import type {
   UciProviderSetupAddressSource,
   UciProviderSetupResponse,
+  UciProviderResolutionListResponse,
   UtilityProvider,
 } from "@/types/uci";
+import { UciProviderResolutionPanel } from "@/components/uci/UciProviderResolutionPanel";
 import { PERMITPILOT_DEMO_TENANT_ID } from "@/types/uci";
 import {
   AlertTriangle,
@@ -73,6 +75,21 @@ type UciSetupWorkflowProps = {
   onRetryProviders: () => void;
   providerSetup: UciProviderSetupResponse | null;
   providerSetupLoading: boolean;
+  providerResolution: UciProviderResolutionListResponse | null;
+  providerResolutionLoading: boolean;
+  providerResolutionActionLoading: boolean;
+  onResolveProviderMapping: (serviceType: string) => void;
+  onConfirmProviderMapping: (params: {
+    serviceType: string;
+    providerId: string;
+    notes?: string;
+  }) => void;
+  onOverrideProviderMapping: (params: {
+    serviceType: string;
+    providerId: string;
+    overrideReason: string;
+    notes?: string;
+  }) => void;
   providerUtilityFilter: string;
   onProviderUtilityFilterChange: (value: string) => void;
   providerCatalogTypes: string[];
@@ -230,6 +247,12 @@ export function UciSetupWorkflow({
   onRetryProviders,
   providerSetup,
   providerSetupLoading,
+  providerResolution,
+  providerResolutionLoading,
+  providerResolutionActionLoading,
+  onResolveProviderMapping,
+  onConfirmProviderMapping,
+  onOverrideProviderMapping,
   providerUtilityFilter,
   onProviderUtilityFilterChange,
   providerCatalogTypes,
@@ -444,6 +467,21 @@ export function UciSetupWorkflow({
               )}
             </div>
           </section>
+
+          <UciProviderResolutionPanel
+            mutedClass={mutedClass}
+            projectId={projectId}
+            serviceTypes={providerCatalogTypes}
+            providers={providers}
+            addressSourceAcknowledged={addressSourceAcknowledged}
+            addressReady={hasConfirmableAddress(addressPresentation) && Boolean(addressSourceAcknowledged)}
+            resolutionState={providerResolution}
+            resolutionLoading={providerResolutionLoading}
+            resolutionActionLoading={providerResolutionActionLoading}
+            onResolve={onResolveProviderMapping}
+            onConfirm={onConfirmProviderMapping}
+            onOverride={onOverrideProviderMapping}
+          />
 
           <section className="space-y-4" data-testid="uci-step-providers">
             <StepHeading step={3} title="Select utility providers" complete={selectedProviders.length > 0} />

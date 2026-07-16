@@ -35,4 +35,12 @@ describe("UciDashboard guided setup workflow regression", () => {
     assert.match(workflowSource, /Automatic territory matching is not available yet/);
     assert.match(workflowSource, /Confirm these selections using project/);
   });
+
+  it("includes the D2.2 provider resolution panel with auditable mapping states", () => {
+    assert.match(workflowSource, /UciProviderResolutionPanel/);
+    assert.match(dashboardSource, /getProjectProviderResolution/);
+    assert.match(dashboardSource, /resolveProjectProviderResolution/);
+    assert.match(dashboardSource, /confirmProjectProviderResolution/);
+    assert.match(dashboardSource, /overrideProjectProviderResolution/);
+  });
 });

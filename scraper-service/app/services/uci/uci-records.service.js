@@ -1,6 +1,9 @@
 "use strict";
 
 const { listApplicationsByCoordination } = require("./uci-applications.service.js");
+const {
+  mergeProviderResolutionIntoCoordinationMetadata,
+} = require("./uci-provider-resolution-persistence.js");
 
 const RECORD_WITH_PROVIDER_SELECT = `
   *,
@@ -202,10 +205,12 @@ function mergeProviderMappingMetadata(existingMetadata, mappingMetadata, provide
  * @param {string} p.userId
  * @param {Array<Record<string, unknown>>} p.resolvedProviders
  * @param {Record<string, unknown> | null | undefined} [p.providerSetupMetadata]
+ * @param {Record<string, Record<string, unknown>> | null | undefined} [p.providerResolutionBySlug]
  * @returns {Promise<{ created: Array<Record<string, unknown>>, existing: Array<Record<string, unknown>>, records: Array<Record<string, unknown>> }>}
  */
 async function initCoordinationForProviders(supabase, p) {
-  const { projectId, userId, resolvedProviders, providerSetupMetadata } = p;
+  const { projectId, userId, resolvedProviders, providerSetupMetadata, providerResolutionBySlug } =
+    p;
 
   if (!providerSetupMetadata || typeof providerSetupMetadata !== "object") {
     const err = new Error("provider_setup confirmation metadata is required");
@@ -252,6 +257,18 @@ async function initCoordinationForProviders(supabase, p) {
     }
 
     const providerSlug = String(provider.slug ?? "").toLowerCase();
+    let metadata =
+      providerSetupMetadata && providerSlug
+        ? mergeProviderMappingMetadata({}, providerSetupMetadata, providerSlug)
+        : {};
+    const resolutionSnapshot =
+      providerResolutionBySlug && providerSlug
+        ? providerResolutionBySlug[providerSlug]
+        : null;
+    if (resolutionSnapshot && typeof resolutionSnapshot === "object") {
+      metadata = mergeProviderResolutionIntoCoordinationMetadata(metadata, resolutionSnapshot);
+    }
+
     const insertRow = {
       project_id: projectId,
       user_id: userId,
@@ -260,10 +277,7 @@ async function initCoordinationForProviders(supabase, p) {
       scope_description: "",
       current_stage: 1,
       current_stage_state: "NOT_STARTED",
-      metadata:
-        providerSetupMetadata && providerSlug
-          ? mergeProviderMappingMetadata({}, providerSetupMetadata, providerSlug)
-          : {},
+      metadata,
     };
 
     const { data: inserted, error: insErr } = await supabase
@@ -325,11 +339,21 @@ async function initCoordinationForProviders(supabase, p) {
       const providerSlug = providerSlugById.get(String(record.utility_provider_id)) || "";
       if (!providerSlug) continue;
 
-      const nextMetadata = mergeProviderMappingMetadata(
+      let nextMetadata = mergeProviderMappingMetadata(
         record.metadata,
         providerSetupMetadata,
         providerSlug,
       );
+      const resolutionSnapshot =
+        providerResolutionBySlug && providerSlug
+          ? providerResolutionBySlug[providerSlug]
+          : null;
+      if (resolutionSnapshot && typeof resolutionSnapshot === "object") {
+        nextMetadata = mergeProviderResolutionIntoCoordinationMetadata(
+          nextMetadata,
+          resolutionSnapshot,
+        );
+      }
 
       const { error: metaErr } = await supabase
         .from("coordination_records")
