@@ -1,0 +1,140 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
+  buildInitializedSlugSet,
+  countSelectedProviders,
+  deriveAddressPresentation,
+  filterProvidersForPicker,
+  getInitDisabledReasons,
+  sortProvidersForPicker,
+} from "./uciSetupWorkflow.ts";
+import type { UciProviderSetupResponse, UtilityProvider } from "@/types/uci";
+
+function provider(partial: Partial<UtilityProvider> & Pick<UtilityProvider, "slug">): UtilityProvider {
+  return {
+    id: partial.id ?? partial.slug,
+    slug: partial.slug,
+    name: partial.name ?? partial.slug,
+    display_name: partial.display_name ?? partial.name ?? partial.slug,
+    utility_type: partial.utility_type ?? "electric",
+    primary_portal_type: partial.primary_portal_type ?? null,
+    portal_url: partial.portal_url ?? null,
+    automation_status: partial.automation_status ?? "placeholder",
+    is_active: partial.is_active ?? true,
+    cet_relationship: partial.cet_relationship ?? false,
+    canonical_name: partial.canonical_name ?? null,
+  };
+}
+
+describe("uciSetupWorkflow helpers", () => {
+  it("returns missing address presentation when no project address exists", () => {
+    const setup = {
+      structured: { formatted: "", source: "structured", complete: false },
+      scraped_location: null,
+      address: { formatted: "", source: "none", complete: false },
+      address_mismatch: false,
+      mismatch_warning: null,
+      recommended_address_source: "structured",
+    } as UciProviderSetupResponse;
+
+    const presentation = deriveAddressPresentation(setup, false, null);
+    assert.equal(presentation.mode, "missing");
+  });
+
+  it("returns single address presentation when only structured address exists", () => {
+    const setup = {
+      structured: { formatted: "123 Main St, Washington, DC", source: "structured", complete: true },
+      scraped_location: null,
+      address: { formatted: "123 Main St, Washington, DC", source: "structured", complete: true },
+      address_mismatch: false,
+      mismatch_warning: null,
+      recommended_address_source: "structured",
+    } as UciProviderSetupResponse;
+
+    const presentation = deriveAddressPresentation(setup, false, "structured");
+    assert.equal(presentation.mode, "single");
+    assert.equal(presentation.activeFormatted, "123 Main St, Washington, DC");
+  });
+
+  it("returns choose_source when structured and scraped addresses conflict", () => {
+    const setup = {
+      structured: { formatted: "123 Main St, Washington, DC", source: "structured", complete: true },
+      scraped_location: { formatted: "456 Portal Ave, Washington, DC", source: "portal_data_location" },
+      address: { formatted: "123 Main St, Washington, DC", source: "structured", complete: true },
+      address_mismatch: true,
+      mismatch_warning: "Addresses differ",
+      recommended_address_source: "structured",
+      available_address_sources: ["structured", "jurisdiction_scrape"],
+    } as UciProviderSetupResponse;
+
+    const presentation = deriveAddressPresentation(setup, false, "structured");
+    assert.equal(presentation.mode, "choose_source");
+    assert.equal(presentation.structuredFormatted, "123 Main St, Washington, DC");
+    assert.equal(presentation.scrapedFormatted, "456 Portal Ave, Washington, DC");
+  });
+
+  it("sorts CET partners first and filters providers by search and utility type", () => {
+    const catalog = [
+      provider({ slug: "z-co", display_name: "Z Utility", utility_type: "electric" }),
+      provider({ slug: "pepco", display_name: "PEPCO", utility_type: "electric", cet_relationship: true }),
+      provider({ slug: "washington-gas", display_name: "Washington Gas", utility_type: "gas" }),
+    ];
+
+    const sorted = sortProvidersForPicker(catalog);
+    assert.equal(sorted[0].slug, "pepco");
+
+    const filtered = filterProvidersForPicker(catalog, {
+      utilityTypeFilter: "gas",
+      searchQuery: "wash",
+    });
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].slug, "washington-gas");
+  });
+
+  it("builds initialized slug set and excludes initialized providers from selection counts", () => {
+    const setup = {
+      providers: [
+        { slug: "pepco", already_initialized: true },
+        { slug: "bge", already_initialized: false },
+      ],
+    } as UciProviderSetupResponse;
+
+    const initialized = buildInitializedSlugSet(setup);
+    assert.ok(initialized.has("pepco"));
+    assert.equal(countSelectedProviders({ pepco: true, bge: true }), 2);
+  });
+
+  it("lists exact disabled reasons for initialize coordination", () => {
+    const reasons = getInitDisabledReasons({
+      projectSelected: false,
+      providerSetupLoading: false,
+      providersLoading: false,
+      initting: false,
+      addressPresentation: deriveAddressPresentation(null, false, null),
+      addressSourceAcknowledged: null,
+      providerSetupConfirmed: false,
+      selectedProviderCount: 0,
+    });
+
+    assert.ok(reasons.includes("Select a project."));
+    assert.ok(reasons.includes("Select at least one utility provider."));
+    assert.ok(reasons.includes("Check the confirmation box to proceed."));
+  });
+
+  it("requires address confirmation when project address is missing", () => {
+    const reasons = getInitDisabledReasons({
+      projectSelected: true,
+      providerSetupLoading: false,
+      providersLoading: false,
+      initting: false,
+      addressPresentation: { mode: "missing", structuredFormatted: null, scrapedFormatted: null, activeFormatted: null, activeSourceLabel: null, mismatchWarning: null },
+      addressSourceAcknowledged: null,
+      providerSetupConfirmed: true,
+      selectedProviderCount: 1,
+    });
+
+    assert.ok(
+      reasons.some((reason) => reason.includes("Add or confirm the project address")),
+    );
+  });
+});

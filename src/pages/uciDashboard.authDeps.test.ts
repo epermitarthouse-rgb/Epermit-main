@@ -6,6 +6,10 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dashboardSource = readFileSync(join(__dirname, "UciDashboard.tsx"), "utf8");
+const workflowSource = readFileSync(
+  join(__dirname, "..", "components", "uci", "UciSetupWorkflow.tsx"),
+  "utf8",
+);
 
 function extractBlock(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);
@@ -74,7 +78,7 @@ describe("UciDashboard auth dependency regression", () => {
     const block = extractBlock(
       dashboardSource,
       "const uncoveredUtilityTypes = useMemo",
-      "const toggleAllInit",
+      "const detailRecord = detail?.record",
     );
     assert.doesNotMatch(
       block,
@@ -84,8 +88,8 @@ describe("UciDashboard auth dependency regression", () => {
     assert.match(block, /provider\.utility_type\?\.trim\(\)/);
   });
 
-  it("surfaces provider load failures instead of rendering an empty silent grid", () => {
+  it("surfaces provider load failures in the guided workflow component", () => {
     assert.match(dashboardSource, /providersLoadError/);
-    assert.match(dashboardSource, /data-testid="uci-providers-load-error"/);
+    assert.match(workflowSource, /Provider directory could not be loaded/);
   });
 });

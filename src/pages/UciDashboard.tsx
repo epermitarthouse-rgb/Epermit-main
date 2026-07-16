@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TenantContextBadge } from '@/components/uci/TenantContextBadge';
 import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,7 +90,6 @@ import {
   ChevronRight,
   Info,
   Loader2,
-  MapPin,
   RadioTower,
   RefreshCw,
   Eye,
@@ -127,7 +125,6 @@ import type {
   UciPortalSyncResponse,
   UtilityProvider,
 } from "@/types/uci";
-import { PERMITPILOT_DEMO_TENANT_ID } from "@/types/uci";
 import {
   normalizedSyncDrawerMessage,
   notifyNormalizedSyncResult,
@@ -168,6 +165,14 @@ import {
   type UciPackageDocumentCandidate,
   type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
+import { UciSetupWorkflow } from "@/components/uci/UciSetupWorkflow";
+import {
+  buildInitializedSlugSet,
+  countSelectedProviders,
+  deriveAddressPresentation,
+  getInitDisabledReasons,
+  providerDisplayLabel as workflowProviderDisplayLabel,
+} from "@/lib/uciSetupWorkflow";
 import {
   classificationNeedsAttention,
   formatCommunicationClassification,
@@ -360,6 +365,7 @@ export default function UciDashboard() {
   const [unresolvedUtilityTypes, setUnresolvedUtilityTypes] = useState<string[]>([]);
   const [providerUtilityFilter, setProviderUtilityFilter] = useState<string>("all");
   const [detailOpen, setDetailOpen] = useState(false);
+  const [setupSectionExpanded, setSetupSectionExpanded] = useState(true);
 
   const providerCatalogTypes = useMemo(() => {
     const types = new Set(
@@ -370,15 +376,8 @@ export default function UciDashboard() {
     return [...types].sort();
   }, [providers]);
 
-  const filteredProviders = useMemo(() => {
-    if (providerUtilityFilter === "all") return providers;
-    return providers.filter(
-      (p) => p.utility_type?.trim().toLowerCase() === providerUtilityFilter,
-    );
-  }, [providers, providerUtilityFilter]);
-
   const providerDisplayLabel = useCallback(
-    (provider: UtilityProvider) => provider.display_name ?? provider.name ?? provider.slug,
+    (provider: UtilityProvider) => workflowProviderDisplayLabel(provider),
     [],
   );
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -571,6 +570,59 @@ export default function UciDashboard() {
     void refreshCoordination();
   }, [authLoading, user?.id, refreshCoordination]);
 
+  useEffect(() => {
+    if (!projectId) {
+      setSetupSectionExpanded(true);
+      return;
+    }
+    setSetupSectionExpanded(records.length === 0);
+  }, [projectId, records.length]);
+
+  const addressPresentation = useMemo(
+    () => deriveAddressPresentation(providerSetup, providerSetupLoading, addressSourceAcknowledged),
+    [providerSetup, providerSetupLoading, addressSourceAcknowledged],
+  );
+
+  const initDisabledReasons = useMemo(
+    () =>
+      getInitDisabledReasons({
+        projectSelected: Boolean(projectId),
+        providerSetupLoading,
+        providersLoading,
+        initting,
+        addressPresentation,
+        addressSourceAcknowledged,
+        providerSetupConfirmed,
+        selectedProviderCount: countSelectedProviders(initPick),
+      }),
+    [
+      projectId,
+      providerSetupLoading,
+      providersLoading,
+      initting,
+      addressPresentation,
+      addressSourceAcknowledged,
+      providerSetupConfirmed,
+      initPick,
+    ],
+  );
+
+  const handleProviderPickChange = useCallback(
+    (slug: string, checked: boolean) => {
+      if (providerSetup && buildInitializedSlugSet(providerSetup).has(slug)) return;
+      setInitPick((prev) => ({ ...prev, [slug]: checked }));
+    },
+    [providerSetup],
+  );
+
+  const handleClearSelectedProviders = useCallback(() => {
+    setInitPick((prev) => {
+      const next = { ...prev };
+      for (const slug of Object.keys(next)) next[slug] = false;
+      return next;
+    });
+  }, []);
+
   const loadProviderSetup = useCallback(async () => {
     if (authLoading || !user?.id || !projectId) {
       setProviderSetup(null);
@@ -584,8 +636,20 @@ export default function UciDashboard() {
       const setup = await getProjectProviderSetup(projectId);
       setProviderSetup(setup);
       setProviderSetupConfirmed(false);
-      setAddressSourceAcknowledged(setup.recommended_address_source);
+      const hasAddress = Boolean(
+        setup.structured?.formatted?.trim() ||
+          setup.scraped_location?.formatted?.trim() ||
+          setup.address?.formatted?.trim(),
+      );
+      setAddressSourceAcknowledged(hasAddress ? setup.recommended_address_source : null);
       setUnresolvedUtilityTypes([]);
+      setInitPick((prev) => {
+        const next = { ...prev };
+        for (const item of setup.providers ?? []) {
+          if (item.already_initialized) next[item.slug] = false;
+        }
+        return next;
+      });
     } catch (e: unknown) {
       setProviderSetup(null);
       setAddressSourceAcknowledged(null);
@@ -623,11 +687,6 @@ export default function UciDashboard() {
     clearPendingAppDetailRunOptions();
     setPepcoLastNormalizedSync(null);
   }, [projectId]);
-
-  const selectedProject = useMemo(
-    () => projects.find((p) => p.id === projectId) ?? null,
-    [projects, projectId],
-  );
 
   const openDetail = async (id: string) => {
     setDetailId(id);
@@ -1102,8 +1161,9 @@ export default function UciDashboard() {
       toast.error("Acknowledge the project address source before initializing");
       return;
     }
+    const initializedSlugs = buildInitializedSlugSet(providerSetup);
     const slugs = providers
-      .filter((p) => initPick[p.slug])
+      .filter((p) => initPick[p.slug] && !initializedSlugs.has(p.slug))
       .map((p) => p.slug);
     if (slugs.length === 0) {
       toast.error("Select at least one provider to initialize");
@@ -1120,6 +1180,7 @@ export default function UciDashboard() {
         `Created ${out.created?.length ?? 0} record(s); ${out.already_existed?.length ?? 0} already existed`,
       );
       setRecords(out.records ?? []);
+      setSetupSectionExpanded(false);
       await loadProviderSetup();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Initialize failed");
@@ -1138,23 +1199,16 @@ export default function UciDashboard() {
   };
 
   const uncoveredUtilityTypes = useMemo(() => {
+    const initializedSlugs = buildInitializedSlugSet(providerSetup);
     const selectedTypes = new Set(
       providers
-        .filter((provider) => initPick[provider.slug])
+        .filter((provider) => initPick[provider.slug] && !initializedSlugs.has(provider.slug))
         .map((provider) => provider.utility_type?.trim().toLowerCase() ?? "")
         .filter(Boolean),
     );
     const catalogTypes = providerSetup?.utility_types_in_catalog ?? [];
     return catalogTypes.filter((utilityType) => !selectedTypes.has(utilityType));
-  }, [providers, initPick, providerSetup?.utility_types_in_catalog]);
-
-  const toggleAllInit = (value: boolean) => {
-    setInitPick((prev) => {
-      const next = { ...prev };
-      for (const p of filteredProviders) next[p.slug] = value;
-      return next;
-    });
-  };
+  }, [providers, initPick, providerSetup?.utility_types_in_catalog, providerSetup]);
 
   const detailRecord = detail?.record;
   const detailProvider = detailRecord ? getEmbeddedProvider(detailRecord) : null;
@@ -1987,376 +2041,44 @@ export default function UciDashboard() {
             </div>
           </div>
 
-          {/* Providers */}
-          <Card className={cn(EDITORIAL_FORM_CARD, "text-ink-primary-light")}>
-            <CardHeader>
-              <CardTitle className={uciSectionTitleClass}>Utility providers</CardTitle>
-              <CardDescription className={cn(uciMutedClass, "opacity-100")}>
-                Seeded catalog — automation status is informational only.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {providersLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-teal" />
-                </div>
-              ) : providersLoadError ? (
-                <div
-                  className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-foreground"
-                  data-testid="uci-providers-load-error"
-                >
-                  <p className="font-medium">Utility provider directory could not be loaded.</p>
-                  <p className={cn("mt-1", uciMutedClass)}>{providersLoadError}</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => void loadProviders()}
-                  >
-                    Retry
-                  </Button>
-                </div>
-              ) : filteredProviders.length === 0 ? (
-                <p className={cn("py-6 text-center text-sm", uciMutedClass)} data-testid="uci-providers-empty">
-                  No utility providers are available for this workspace yet.
-                </p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredProviders.map((p) => (
-                    <div
-                      key={p.id}
-                      className={cn(
-                        "rounded-xl border p-3.5 text-sm shadow-sm transition-shadow",
-                        "border-cream-sunken/90 bg-cream-raised text-ink-primary-light",
-                        "hover:shadow-md dark:border-teal/25 dark:bg-gradient-to-b dark:from-obsidian-raised dark:to-obsidian dark:text-foreground dark:shadow-inner",
-                      )}
-                    >
-                      <p className="font-semibold !text-ink-primary-light dark:!text-foreground">
-                        {providerDisplayLabel(p)}
-                      </p>
-                      <p className={cn("text-xs", uciMutedClass, "dark:text-muted-foreground")}>
-                        {p.utility_type}
-                        {p.canonical_name ? ` · ${p.canonical_name}` : ""}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {p.cet_relationship ? (
-                          <Badge variant="brand" className="dark:border-cream/30 dark:text-foreground">
-                            CET partner
-                          </Badge>
-                        ) : null}
-                        <Badge variant="mutedLight">{formatAutomationLabel(p.automation_status)}</Badge>
-                        {p.primary_portal_type ? (
-                          <Badge variant="brand" className="dark:border-cream/30 dark:text-foreground">
-                            {p.primary_portal_type}
-                          </Badge>
-                        ) : null}
-                        {p.is_active ? (
-                          <Badge variant="ai">Active</Badge>
-                        ) : (
-                          <Badge variant="destructive" className="dark:text-foreground">
-                            Inactive
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <UciSetupWorkflow
+            editorialCardClass={EDITORIAL_FORM_CARD}
+            mutedClass={uciMutedClass}
+            projects={projects}
+            projectsLoading={projectsLoading}
+            projectId={projectId}
+            onProjectChange={setProjectId}
+            tenantScopeId={tenantScopeId}
+            providers={providers}
+            providersLoading={providersLoading}
+            providersLoadError={providersLoadError}
+            onRetryProviders={() => void loadProviders()}
+            providerSetup={providerSetup}
+            providerSetupLoading={providerSetupLoading}
+            providerUtilityFilter={providerUtilityFilter}
+            onProviderUtilityFilterChange={setProviderUtilityFilter}
+            providerCatalogTypes={providerCatalogTypes}
+            initPick={initPick}
+            onInitPickChange={handleProviderPickChange}
+            onClearSelectedProviders={handleClearSelectedProviders}
+            addressSourceAcknowledged={addressSourceAcknowledged}
+            onAddressSourceAcknowledged={setAddressSourceAcknowledged}
+            unresolvedUtilityTypes={unresolvedUtilityTypes}
+            onToggleUnresolvedUtilityType={toggleUnresolvedUtilityType}
+            uncoveredUtilityTypes={uncoveredUtilityTypes}
+            providerSetupConfirmed={providerSetupConfirmed}
+            onProviderSetupConfirmedChange={setProviderSetupConfirmed}
+            initDisabledReasons={initDisabledReasons}
+            initting={initting}
+            onInitialize={() => void handleInit()}
+            hasExistingRecords={Boolean(projectId && records.length > 0)}
+            setupExpanded={setupSectionExpanded}
+            onSetupExpandedChange={setSetupSectionExpanded}
+            formatAutomationLabel={formatAutomationLabel}
+          />
 
-          {/* Project */}
-          <Card className={cn(EDITORIAL_FORM_CARD, "text-ink-primary-light")}>
-            <CardHeader>
-              <CardTitle className={uciSectionTitleClass}>Project</CardTitle>
-              <CardDescription className={cn(uciMutedClass, "opacity-100")}>
-                Coordination records are scoped per tenant and project (owner or team access).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {tenantScopeId ? (
-                <TenantContextBadge
-                  isDemo={tenantScopeId === PERMITPILOT_DEMO_TENANT_ID}
-                  tenantName={selectedProject?.name ?? 'Workspace'}
-                />
-              ) : null}
-              <div className="grid max-w-md gap-2">
-                <Label className="text-ink-primary-light">Selected project</Label>
-                <Select
-                  value={projectId ?? ""}
-                  onValueChange={(v) => setProjectId(v || null)}
-                  disabled={projectsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={projectsLoading ? "Loading projects…" : "Choose a project"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                        {p.jurisdiction ? ` · ${p.jurisdiction}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedProject ? (
-                <div className={cn("text-sm", uciMutedClass)}>
-                  <p>
-                    <span className="font-medium text-ink-primary-light">{selectedProject.name}</span>
-                    {selectedProject.jurisdiction ? ` · ${selectedProject.jurisdiction}` : ""}
-                  </p>
-                  {selectedProject.permit_number ? (
-                    <p className="font-medium text-ink-primary-light">
-                      Permit: {selectedProject.permit_number}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          {/* Initialize */}
-          <Card className={cn(EDITORIAL_FORM_CARD, "text-ink-primary-light")}>
-            <CardHeader>
-              <CardTitle className={uciSectionTitleClass}>Initialize coordination</CardTitle>
-              <CardDescription className={cn(uciMutedClass, "opacity-100")}>
-                Guided human-assisted provider setup — no automatic territory matching. Safe to
-                re-run: existing provider rows are not duplicated.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!projectId ? (
-                <p className={cn("text-sm", uciMutedClass)}>
-                  Select a project above to review address context and confirm providers.
-                </p>
-              ) : providerSetupLoading ? (
-                <div className="flex items-center gap-2 text-sm text-ink-secondary-light">
-                  <Loader2 className="h-4 w-4 animate-spin text-teal" />
-                  Loading provider setup guidance…
-                </div>
-              ) : providerSetup ? (
-                <div className="space-y-4 rounded-xl border border-amber-200/80 bg-amber-50/70 p-4 dark:border-amber-500/30 dark:bg-amber-950/20">
-                  <div className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
-                    <div className="space-y-2 text-sm">
-                      <p className="font-medium text-ink-primary-light dark:text-foreground">
-                        {providerSetup.territory_matching_message}
-                      </p>
-                      <ol className={cn("list-decimal space-y-1 pl-5 text-xs", uciMutedClass)}>
-                        {(providerSetup.guidance_steps ?? []).map((step) => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-cream-sunken/90 bg-cream/80 px-3 py-2.5 text-sm dark:border-teal/25 dark:bg-obsidian/50">
-                      <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-light">
-                        Structured project address
-                      </p>
-                      <p className="mt-1 font-medium text-ink-primary-light dark:text-foreground">
-                        {providerSetup.structured?.formatted || "No structured address on file"}
-                      </p>
-                    </div>
-
-                    {providerSetup.scraped_location ? (
-                      <div className="rounded-lg border border-cream-sunken/90 bg-cream/80 px-3 py-2.5 text-sm dark:border-teal/25 dark:bg-obsidian/50">
-                        <p className="text-xs font-medium uppercase tracking-wide text-ink-secondary-light">
-                          Latest scraped portal location
-                        </p>
-                        <p className="mt-1 font-medium text-ink-primary-light dark:text-foreground">
-                          {providerSetup.scraped_location.formatted}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {providerSetup.address_mismatch && providerSetup.mismatch_warning ? (
-                      <p className="rounded-md border border-amber-300/80 bg-amber-100/80 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
-                        {providerSetup.mismatch_warning}
-                      </p>
-                    ) : null}
-
-                    {providerSetup.address_mismatch ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-ink-secondary-light">
-                          Address to confirm for provider mapping
-                        </p>
-                        {(providerSetup.available_address_sources ?? [])
-                          .filter((source) => source !== "none")
-                          .map((source) => (
-                            <label
-                              key={source}
-                              className="flex cursor-pointer items-start gap-2 rounded-md border border-cream-sunken/90 px-2.5 py-2 text-xs dark:border-teal/25"
-                            >
-                              <input
-                                type="radio"
-                                name="uci-address-source"
-                                className="mt-0.5"
-                                checked={addressSourceAcknowledged === source}
-                                onChange={() => setAddressSourceAcknowledged(source)}
-                              />
-                              <span>
-                                <span className="block font-medium capitalize">
-                                  {source.replace(/_/g, " ")}
-                                </span>
-                                <span className={uciMutedClass}>
-                                  {source === "structured"
-                                    ? providerSetup.structured?.formatted
-                                    : providerSetup.scraped_location?.formatted}
-                                </span>
-                              </span>
-                            </label>
-                          ))}
-                      </div>
-                    ) : (
-                      <p className={cn("text-xs", uciMutedClass)}>
-                        Confirming address source:{" "}
-                        <span className="font-medium text-ink-primary-light dark:text-foreground">
-                          {(providerSetup.recommended_address_source ?? "structured").replace(/_/g, " ")}
-                        </span>
-                        {providerSetup.address.formatted
-                          ? ` — ${providerSetup.address.formatted}`
-                          : ""}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Label className="text-ink-primary-light">Utility type</Label>
-                <Select value={providerUtilityFilter} onValueChange={setProviderUtilityFilter}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All types</SelectItem>
-                    {providerCatalogTypes.map((utilityType) => (
-                      <SelectItem key={utilityType} value={utilityType}>
-                        {utilityType}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => toggleAllInit(true)}>
-                  Select all
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => toggleAllInit(false)}>
-                  Clear
-                </Button>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredProviders.map((p) => {
-                  const checked = Boolean(initPick[p.slug]);
-                  const setupItem = providerSetup?.providers.find((item) => item.slug === p.slug);
-                  return (
-                  <label
-                    key={p.id}
-                    title={providerDisplayLabel(p)}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-all",
-                      "border-cream-sunken/90 bg-cream/80 text-ink-primary-light",
-                      "hover:border-cream-sunken hover:bg-cream-raised/70",
-                      "focus-within:outline-none focus-within:ring-2 focus-within:ring-teal/40",
-                      checked &&
-                        "border-teal/55 bg-teal/[0.09] shadow-sm ring-2 ring-teal/30 dark:border-teal/50 dark:bg-teal/[0.18] dark:ring-teal/35",
-                      !checked &&
-                        "dark:border-obsidian-strong/80 dark:bg-obsidian/50 dark:text-foreground dark:hover:border-teal/28 dark:hover:bg-obsidian-raised/65",
-                    )}
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(c) =>
-                        setInitPick((prev) => ({ ...prev, [p.slug]: Boolean(c) }))
-                      }
-                      className={cn(
-                        "shrink-0 border-gold/50 dark:border-cream/35",
-                        "data-[state=checked]:border-teal data-[state=checked]:bg-teal data-[state=checked]:text-white",
-                        "dark:data-[state=checked]:border-teal-soft dark:data-[state=checked]:bg-teal",
-                      )}
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium !text-ink-primary-light dark:!text-foreground">
-                        {providerDisplayLabel(p)}
-                      </span>
-                      <span className={cn("block truncate text-xs", uciMutedClass)}>
-                        {p.utility_type}
-                        {p.cet_relationship ? " · CET partner" : ""}
-                      </span>
-                      {setupItem?.already_initialized ? (
-                        <span className={cn("block text-xs", uciMutedClass)}>Already initialized</span>
-                      ) : null}
-                    </span>
-                  </label>
-                  );
-                })}
-              </div>
-
-              {projectId && uncoveredUtilityTypes.length > 0 ? (
-                <div className="space-y-2 rounded-lg border border-cream-sunken/90 bg-cream/50 p-3 dark:border-teal/25 dark:bg-obsidian/40">
-                  <Label className="text-ink-primary-light">
-                    Utility types without a selected provider (optional)
-                  </Label>
-                  <div className="flex flex-wrap gap-2">
-                    {uncoveredUtilityTypes.map((utilityType) => {
-                      const marked = unresolvedUtilityTypes.includes(utilityType);
-                      return (
-                        <label
-                          key={utilityType}
-                          className="flex cursor-pointer items-center gap-2 rounded-md border border-cream-sunken/90 px-2.5 py-1.5 text-xs dark:border-teal/25"
-                        >
-                          <Checkbox
-                            checked={marked}
-                            onCheckedChange={(checked) =>
-                              toggleUnresolvedUtilityType(utilityType, Boolean(checked))
-                            }
-                          />
-                          <span className="capitalize">{utilityType}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-teal/25 bg-teal/[0.04] px-3 py-3 text-sm dark:border-teal/35 dark:bg-teal/[0.08]">
-                <Checkbox
-                  checked={providerSetupConfirmed}
-                  disabled={!projectId || providerSetupLoading}
-                  onCheckedChange={(checked) => setProviderSetupConfirmed(Boolean(checked))}
-                  className="mt-0.5 shrink-0"
-                />
-                <span className="text-ink-primary-light dark:text-foreground">
-                  I confirm these provider selections for this project. Automatic territory matching
-                  is unavailable; my choices are based on project knowledge.
-                </span>
-              </label>
-
-              <Button
-                className="bg-teal hover:bg-teal/90 text-white"
-                disabled={
-                  !projectId ||
-                  initting ||
-                  providers.length === 0 ||
-                  providerSetupLoading ||
-                  !providerSetupConfirmed ||
-                  !addressSourceAcknowledged ||
-                  !Object.values(initPick).some(Boolean)
-                }
-                onClick={() => void handleInit()}
-              >
-                {initting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Initialize coordination
-              </Button>
-            </CardContent>
-          </Card>
-
+          {projectId ? (
+            <>
           <PortfolioSummarySection
             portfolio={portfolio}
             loading={portfolioLoading}
@@ -2428,7 +2150,7 @@ export default function UciDashboard() {
                           >
                             <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
                               <div className="space-y-1">
-                                <span>{prov?.name ?? "—"}</span>
+                                <span>{prov ? providerDisplayLabel(prov) : "—"}</span>
                                 {getProviderMappingFromMetadata(r.metadata)?.confirmed_at ? (
                                   <Badge variant="outline" className="text-[10px]">
                                     Mapping confirmed
@@ -2474,6 +2196,8 @@ export default function UciDashboard() {
               )}
             </CardContent>
           </Card>
+            </>
+          ) : null}
         </div>
       </section>
 
