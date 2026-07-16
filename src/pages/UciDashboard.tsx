@@ -109,6 +109,10 @@ import {
   Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  logUciProjectDataEvent,
+  shouldApplyProjectScopedResponse,
+} from "@/lib/uciProjectScopedRequest";
 import { PepcoSelectedProjectDetailTabs } from "@/components/uci/PepcoApplicationDetailsPanel";
 import { PepcoProjectList } from "@/components/uci/PepcoProjectList";
 import {
@@ -389,6 +393,18 @@ export default function UciDashboard() {
   const [setupSectionExpanded, setSetupSectionExpanded] = useState(true);
   const [projectSwitchConfirmOpen, setProjectSwitchConfirmOpen] = useState(false);
   const projectDataGenerationRef = useRef(0);
+  const currentProjectIdRef = useRef<string | null>(null);
+
+  const shouldApplyProjectResponse = useCallback(
+    (generation: number, requestedProjectId: string | null) =>
+      shouldApplyProjectScopedResponse(
+        generation,
+        requestedProjectId,
+        projectDataGenerationRef.current,
+        currentProjectIdRef.current,
+      ),
+    [],
+  );
 
   const providerCatalogTypes = useMemo(() => {
     const types = new Set(
@@ -570,28 +586,116 @@ export default function UciDashboard() {
     void loadProviders();
   }, [authLoading, user?.id, loadProviders]);
 
+  /**
+   * Project/tenant safety: increment generation and clear transient UI state when
+   * the selected project changes. Must be declared before project-scoped loaders
+   * so load effects capture the current generation (not one that is immediately invalidated).
+   */
+  useEffect(() => {
+    currentProjectIdRef.current = projectId;
+    projectDataGenerationRef.current += 1;
+    const generation = projectDataGenerationRef.current;
+    logUciProjectDataEvent("generation_created", { projectId, generation });
+    logUciProjectDataEvent("project_selected", { projectId, generation });
+
+    setDetailOpen(false);
+    setDetailId(null);
+    setDetail(null);
+    setInitPick({});
+    setProviderSetupConfirmed(false);
+    setAddressSourceAcknowledged(null);
+    setUnresolvedUtilityTypes([]);
+    setProviderUtilityFilter("all");
+    setProviderResolution(null);
+    setProviderSetup(null);
+    setPortfolio(null);
+    setSetupSectionExpanded(true);
+    setReason("");
+    setApplicationReviewNotes("");
+    setPepcoSelectedProjectKey(null);
+    setPepcoRowScrapeStatus({});
+    setPepcoAppDetailProgress([]);
+    setPepcoAppDetailMsg(null);
+    setPepcoDashboardMsg(null);
+    setPepcoDiscoveryMsg(null);
+    setPepcoPendingSessionId(null);
+    setPepcoAppDetailPendingSessionId(null);
+    setPepcoAppDetailMfaSessionId(null);
+    setPepcoCodeModalOpen(false);
+    clearPendingAppDetailRunOptions();
+    setPepcoLastNormalizedSync(null);
+
+    if (projectId) {
+      setProviderSetupLoading(true);
+      setProviderResolutionLoading(true);
+      setRecordsLoading(true);
+    } else {
+      setProviderSetupLoading(false);
+      setProviderResolutionLoading(false);
+      setRecordsLoading(false);
+      setRecords([]);
+    }
+  }, [projectId]);
+
   const refreshCoordination = useCallback(async () => {
     if (authLoading || !user?.id) return;
     if (!projectId) {
       setRecords([]);
+      setRecordsLoading(false);
       return;
     }
     const generation = projectDataGenerationRef.current;
+    const requestedProjectId = projectId;
     setRecordsLoading(true);
+    logUciProjectDataEvent("request_started", {
+      projectId: requestedProjectId,
+      generation,
+      requestType: "coordination_records",
+    });
     try {
-      const res = await listProjectCoordination(projectId);
-      if (generation !== projectDataGenerationRef.current) return;
+      const res = await listProjectCoordination(requestedProjectId);
+      if (!shouldApplyProjectResponse(generation, requestedProjectId)) {
+        logUciProjectDataEvent("response_ignored_stale", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "coordination_records",
+        });
+        return;
+      }
       setRecords(res.records ?? []);
+      logUciProjectDataEvent("request_completed", {
+        projectId: requestedProjectId,
+        generation,
+        requestType: "coordination_records",
+      });
     } catch (e: unknown) {
-      if (generation !== projectDataGenerationRef.current) return;
+      if (!shouldApplyProjectResponse(generation, requestedProjectId)) {
+        logUciProjectDataEvent("response_ignored_stale", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "coordination_records",
+        });
+        return;
+      }
+      logUciProjectDataEvent("request_failed", {
+        projectId: requestedProjectId,
+        generation,
+        requestType: "coordination_records",
+        message: e instanceof Error ? e.message : String(e),
+      });
       toast.error(formatUciUserError(e, "Failed to load coordination"));
       setRecords([]);
     } finally {
-      if (generation === projectDataGenerationRef.current) {
+      if (shouldApplyProjectResponse(generation, requestedProjectId)) {
         setRecordsLoading(false);
+        logUciProjectDataEvent("loading_cleared", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "coordination_records",
+        });
       }
     }
-  }, [authLoading, user?.id, projectId]);
+  }, [authLoading, user?.id, projectId, shouldApplyProjectResponse]);
 
   useEffect(() => {
     if (authLoading || !user?.id) return;
@@ -685,13 +789,27 @@ export default function UciDashboard() {
       setProviderSetupConfirmed(false);
       setAddressSourceAcknowledged(null);
       setUnresolvedUtilityTypes([]);
+      setProviderSetupLoading(false);
       return;
     }
-    setProviderSetupLoading(true);
     const generation = projectDataGenerationRef.current;
+    const requestedProjectId = projectId;
+    setProviderSetupLoading(true);
+    logUciProjectDataEvent("request_started", {
+      projectId: requestedProjectId,
+      generation,
+      requestType: "provider_setup",
+    });
     try {
-      const setup = await getProjectProviderSetup(projectId);
-      if (generation !== projectDataGenerationRef.current) return;
+      const setup = await getProjectProviderSetup(requestedProjectId);
+      if (!shouldApplyProjectResponse(generation, requestedProjectId)) {
+        logUciProjectDataEvent("response_ignored_stale", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "provider_setup",
+        });
+        return;
+      }
       setProviderSetup(setup);
       setProviderSetupConfirmed(false);
       const hasAddress = Boolean(
@@ -708,39 +826,99 @@ export default function UciDashboard() {
         }
         return next;
       });
+      logUciProjectDataEvent("request_completed", {
+        projectId: requestedProjectId,
+        generation,
+        requestType: "provider_setup",
+      });
     } catch (e: unknown) {
-      if (generation !== projectDataGenerationRef.current) return;
+      if (!shouldApplyProjectResponse(generation, requestedProjectId)) {
+        logUciProjectDataEvent("response_ignored_stale", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "provider_setup",
+        });
+        return;
+      }
+      logUciProjectDataEvent("request_failed", {
+        projectId: requestedProjectId,
+        generation,
+        requestType: "provider_setup",
+        message: e instanceof Error ? e.message : String(e),
+      });
       setProviderSetup(null);
       setAddressSourceAcknowledged(null);
       toast.error(formatUciUserError(e, "Failed to load provider setup guidance"));
     } finally {
-      if (generation === projectDataGenerationRef.current) {
+      if (shouldApplyProjectResponse(generation, requestedProjectId)) {
         setProviderSetupLoading(false);
+        logUciProjectDataEvent("loading_cleared", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "provider_setup",
+        });
       }
     }
-  }, [authLoading, user?.id, projectId]);
+  }, [authLoading, user?.id, projectId, shouldApplyProjectResponse]);
 
   const loadProviderResolution = useCallback(async () => {
     if (authLoading || !user?.id || !projectId) {
       setProviderResolution(null);
+      setProviderResolutionLoading(false);
       return;
     }
     const generation = projectDataGenerationRef.current;
+    const requestedProjectId = projectId;
     setProviderResolutionLoading(true);
+    logUciProjectDataEvent("request_started", {
+      projectId: requestedProjectId,
+      generation,
+      requestType: "provider_resolution",
+    });
     try {
-      const resolution = await getProjectProviderResolution(projectId);
-      if (generation !== projectDataGenerationRef.current) return;
+      const resolution = await getProjectProviderResolution(requestedProjectId);
+      if (!shouldApplyProjectResponse(generation, requestedProjectId)) {
+        logUciProjectDataEvent("response_ignored_stale", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "provider_resolution",
+        });
+        return;
+      }
       setProviderResolution(resolution);
+      logUciProjectDataEvent("request_completed", {
+        projectId: requestedProjectId,
+        generation,
+        requestType: "provider_resolution",
+      });
     } catch (e: unknown) {
-      if (generation !== projectDataGenerationRef.current) return;
+      if (!shouldApplyProjectResponse(generation, requestedProjectId)) {
+        logUciProjectDataEvent("response_ignored_stale", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "provider_resolution",
+        });
+        return;
+      }
+      logUciProjectDataEvent("request_failed", {
+        projectId: requestedProjectId,
+        generation,
+        requestType: "provider_resolution",
+        message: e instanceof Error ? e.message : String(e),
+      });
       setProviderResolution(null);
       toast.error(formatUciUserError(e, "Failed to load provider mapping status"));
     } finally {
-      if (generation === projectDataGenerationRef.current) {
+      if (shouldApplyProjectResponse(generation, requestedProjectId)) {
         setProviderResolutionLoading(false);
+        logUciProjectDataEvent("loading_cleared", {
+          projectId: requestedProjectId,
+          generation,
+          requestType: "provider_resolution",
+        });
       }
     }
-  }, [authLoading, user?.id, projectId]);
+  }, [authLoading, user?.id, projectId, shouldApplyProjectResponse]);
 
   const handleResolveProviderMapping = useCallback(
     async (serviceType: string) => {
@@ -863,41 +1041,6 @@ export default function UciDashboard() {
     if (authLoading || !user?.id) return;
     void loadProviderResolution();
   }, [authLoading, user?.id, loadProviderResolution]);
-
-  /**
-   * Project/tenant safety: when the UCI-selected project changes, clear transient UI
-   * state and invalidate in-flight project-scoped requests. Saved coordination
-   * records remain in the backend and reload for the new project.
-   */
-  useEffect(() => {
-    projectDataGenerationRef.current += 1;
-    setDetailOpen(false);
-    setDetailId(null);
-    setDetail(null);
-    setInitPick({});
-    setProviderSetupConfirmed(false);
-    setAddressSourceAcknowledged(null);
-    setUnresolvedUtilityTypes([]);
-    setProviderUtilityFilter("all");
-    setProviderResolution(null);
-    setProviderSetup(null);
-    setPortfolio(null);
-    setSetupSectionExpanded(true);
-    setReason("");
-    setApplicationReviewNotes("");
-    setPepcoSelectedProjectKey(null);
-    setPepcoRowScrapeStatus({});
-    setPepcoAppDetailProgress([]);
-    setPepcoAppDetailMsg(null);
-    setPepcoDashboardMsg(null);
-    setPepcoDiscoveryMsg(null);
-    setPepcoPendingSessionId(null);
-    setPepcoAppDetailPendingSessionId(null);
-    setPepcoAppDetailMfaSessionId(null);
-    setPepcoCodeModalOpen(false);
-    clearPendingAppDetailRunOptions();
-    setPepcoLastNormalizedSync(null);
-  }, [projectId]);
 
   const openDetail = async (id: string) => {
     setDetailId(id);

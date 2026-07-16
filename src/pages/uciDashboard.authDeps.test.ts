@@ -32,7 +32,7 @@ describe("UciDashboard auth dependency regression", () => {
     const block = extractBlock(
       dashboardSource,
       "const refreshCoordination = useCallback",
-      "Project/tenant safety",
+      "const addressPresentation = useMemo",
     );
     assert.doesNotMatch(block, /\[authLoading, user, session/);
     assert.doesNotMatch(block, /session\?\.access_token/);
@@ -48,7 +48,7 @@ describe("UciDashboard auth dependency regression", () => {
     const coordinationBlock = extractBlock(
       dashboardSource,
       "const refreshCoordination = useCallback",
-      "Project/tenant safety",
+      "const addressPresentation = useMemo",
     );
     assert.match(coordinationBlock, /authLoading/);
     assert.match(coordinationBlock, /!user\?\.id/);
