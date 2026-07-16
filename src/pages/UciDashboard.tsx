@@ -357,8 +357,28 @@ export default function UciDashboard() {
   const [addressSourceAcknowledged, setAddressSourceAcknowledged] =
     useState<UciProviderSetupAddressSource | null>(null);
   const [unresolvedUtilityTypes, setUnresolvedUtilityTypes] = useState<string[]>([]);
+  const [providerUtilityFilter, setProviderUtilityFilter] = useState<string>("all");
 
-  const [detailOpen, setDetailOpen] = useState(false);
+  const providerCatalogTypes = useMemo(() => {
+    const types = new Set(
+      providers
+        .map((p) => p.utility_type?.trim().toLowerCase())
+        .filter(Boolean) as string[],
+    );
+    return [...types].sort();
+  }, [providers]);
+
+  const filteredProviders = useMemo(() => {
+    if (providerUtilityFilter === "all") return providers;
+    return providers.filter(
+      (p) => p.utility_type?.trim().toLowerCase() === providerUtilityFilter,
+    );
+  }, [providers, providerUtilityFilter]);
+
+  const providerDisplayLabel = useCallback(
+    (provider: UtilityProvider) => provider.display_name ?? provider.name ?? provider.slug,
+    [],
+  );
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<UciRecordDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -1125,7 +1145,7 @@ export default function UciDashboard() {
   const toggleAllInit = (value: boolean) => {
     setInitPick((prev) => {
       const next = { ...prev };
-      for (const p of providers) next[p.slug] = value;
+      for (const p of filteredProviders) next[p.slug] = value;
       return next;
     });
   };
@@ -1976,7 +1996,7 @@ export default function UciDashboard() {
                 </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {providers.map((p) => (
+                  {filteredProviders.map((p) => (
                     <div
                       key={p.id}
                       className={cn(
@@ -1985,11 +2005,19 @@ export default function UciDashboard() {
                         "hover:shadow-md dark:border-teal/25 dark:bg-gradient-to-b dark:from-obsidian-raised dark:to-obsidian dark:text-foreground dark:shadow-inner",
                       )}
                     >
-                      <p className="font-semibold !text-ink-primary-light dark:!text-foreground">{p.name}</p>
+                      <p className="font-semibold !text-ink-primary-light dark:!text-foreground">
+                        {providerDisplayLabel(p)}
+                      </p>
                       <p className={cn("text-xs", uciMutedClass, "dark:text-muted-foreground")}>
                         {p.utility_type}
+                        {p.canonical_name ? ` · ${p.canonical_name}` : ""}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
+                        {p.cet_relationship ? (
+                          <Badge variant="brand" className="dark:border-cream/30 dark:text-foreground">
+                            CET partner
+                          </Badge>
+                        ) : null}
                         <Badge variant="mutedLight">{formatAutomationLabel(p.automation_status)}</Badge>
                         {p.primary_portal_type ? (
                           <Badge variant="brand" className="dark:border-cream/30 dark:text-foreground">
@@ -2171,6 +2199,23 @@ export default function UciDashboard() {
                 </div>
               ) : null}
 
+              <div className="flex flex-wrap items-center gap-3">
+                <Label className="text-ink-primary-light">Utility type</Label>
+                <Select value={providerUtilityFilter} onValueChange={setProviderUtilityFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    {providerCatalogTypes.map((utilityType) => (
+                      <SelectItem key={utilityType} value={utilityType}>
+                        {utilityType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => toggleAllInit(true)}>
                   Select all
@@ -2180,13 +2225,13 @@ export default function UciDashboard() {
                 </Button>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {providers.map((p) => {
+                {filteredProviders.map((p) => {
                   const checked = Boolean(initPick[p.slug]);
                   const setupItem = providerSetup?.providers.find((item) => item.slug === p.slug);
                   return (
                   <label
                     key={p.id}
-                    title={p.name}
+                    title={providerDisplayLabel(p)}
                     className={cn(
                       "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-all",
                       "border-cream-sunken/90 bg-cream/80 text-ink-primary-light",
@@ -2211,7 +2256,11 @@ export default function UciDashboard() {
                     />
                     <span className="min-w-0">
                       <span className="block truncate font-medium !text-ink-primary-light dark:!text-foreground">
-                        {p.name}
+                        {providerDisplayLabel(p)}
+                      </span>
+                      <span className={cn("block truncate text-xs", uciMutedClass)}>
+                        {p.utility_type}
+                        {p.cet_relationship ? " · CET partner" : ""}
                       </span>
                       {setupItem?.already_initialized ? (
                         <span className={cn("block text-xs", uciMutedClass)}>Already initialized</span>

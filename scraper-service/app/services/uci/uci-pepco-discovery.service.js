@@ -23,13 +23,17 @@ const {
   getMailboxStatusForUser,
 } = require("../microsoft/microsoft-mailbox.service.js");
 
+const { resolveProviderAlias } = require("./uci-provider-directory.service.js");
+
 /**
+ * Match portal credential jurisdiction labels to the canonical PEPCO provider.
+ * Accepts slug, display name, and reviewed legal aliases (e.g. "PEPCO", "Potomac Electric Power Co").
  * @param {unknown} jurisdiction
  * @returns {boolean}
  */
 function isPepcoJurisdiction(jurisdiction) {
-  const s = String(jurisdiction ?? "").trim().toLowerCase();
-  return s === "pepco";
+  const result = resolveProviderAlias(jurisdiction);
+  return result.status === "found" && result.slug === "pepco";
 }
 
 /**

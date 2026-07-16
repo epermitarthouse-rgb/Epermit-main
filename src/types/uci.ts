@@ -14,11 +14,17 @@ export interface UtilityProvider {
   id: string;
   slug: string;
   name: string;
+  display_name?: string | null;
+  canonical_name?: string | null;
   utility_type: string;
+  ownership_type?: string | null;
+  cet_relationship?: boolean;
+  portal_key?: string | null;
   primary_portal_type: string | null;
   portal_url: string | null;
   automation_status: string;
   is_active: boolean;
+  label?: string;
 }
 
 /** Row from `coordination_records` with optional embedded `utility_providers` join */
@@ -249,7 +255,12 @@ export interface UciProviderSetupCatalogItem {
   id: string;
   slug: string;
   name: string;
+  display_name?: string;
+  canonical_name?: string | null;
   utility_type: string;
+  ownership_type?: string | null;
+  cet_relationship?: boolean;
+  portal_key?: string | null;
   automation_status: string;
   already_initialized: boolean;
   suggested: boolean;

@@ -1,14 +1,19 @@
 "use strict";
 
-const { ACTIVE_PROVIDER_COLUMNS } = require("./uci-providers.service.js");
+const {
+  ACTIVE_PROVIDER_COLUMNS,
+  formatProvidersForApiResponse,
+} = require("./uci-providers.service.js");
 
 /**
  * List global templates plus tenant-owned providers for a tenant.
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string | null | undefined} tenantId
+ * @param {object} [opts]
+ * @param {string | null} [opts.utilityType]
  * @returns {Promise<Array<Record<string, unknown>>>}
  */
-async function listActiveProvidersForTenant(supabase, tenantId) {
+async function listActiveProvidersForTenant(supabase, tenantId, opts = {}) {
   let query = supabase
     .from("utility_providers")
     .select(ACTIVE_PROVIDER_COLUMNS)
@@ -33,7 +38,7 @@ async function listActiveProvidersForTenant(supabase, tenantId) {
     });
   }
 
-  return Array.isArray(data) ? data : [];
+  return formatProvidersForApiResponse(Array.isArray(data) ? data : [], opts.utilityType ?? null);
 }
 
 /**

@@ -24,6 +24,7 @@ import type {
   UciProviderSetupConfirmation,
   UciProviderSetupResponse,
   UciProvidersResponse,
+  UtilityProvider,
   UciRecentEventsResponse,
   UciRecordDetailResponse,
   UciTransitionResponse,
@@ -367,14 +368,39 @@ async function uciFetchJson<T>(
   return (await res.json()) as T;
 }
 
-export async function listUciProviders(projectId?: string): Promise<UciProvidersResponse> {
-  const query = projectId
-    ? `?projectId=${encodeURIComponent(projectId)}`
-    : "";
+export async function listUciProviders(
+  projectId?: string,
+  options?: { utilityType?: string },
+): Promise<UciProvidersResponse> {
+  const params = new URLSearchParams();
+  if (projectId) params.set("projectId", projectId);
+  if (options?.utilityType) params.set("utilityType", options.utilityType);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return uciFetchJson<UciProvidersResponse>(
     `/api/uci/providers${query}`,
     {},
     "Failed to load providers",
+  );
+}
+
+export async function resolveUciProviderAlias(
+  alias: string,
+  options?: { utilityType?: string },
+): Promise<{
+  status: "found" | "not_found" | "ambiguous";
+  slug: string | null;
+  provider_id: string | null;
+  reason: string | null;
+  candidate_slugs?: string[];
+  normalized_input?: string;
+  provider?: UtilityProvider | null;
+}> {
+  const params = new URLSearchParams({ alias });
+  if (options?.utilityType) params.set("utilityType", options.utilityType);
+  return uciFetchJson(
+    `/api/uci/providers/resolve?${params.toString()}`,
+    {},
+    "Failed to resolve provider alias",
   );
 }
 

@@ -9,6 +9,7 @@ const {
 } = require("../services/uci/uci-access.service.js");
 const {
   listActiveProvidersForApi,
+  resolveProviderAliasForApi,
 } = require("../services/uci/uci-providers.service.js");
 const {
   listActiveProvidersForTenant,
@@ -186,18 +187,44 @@ function createUciRouter(opts) {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.query.projectId || "").trim();
+      const utilityType = String(req.query.utilityType || req.query.utility_type || "").trim();
+      const utilityTypeFilter = utilityType || null;
       if (projectId) {
         await requireProjectAccess({ supabase, userId: user.id, projectId });
         const project = await getProjectTenantId(supabase, projectId);
         const providers = await listActiveProvidersForTenant(
           supabase,
           project?.tenant_id ? String(project.tenant_id) : null,
+          { utilityType: utilityTypeFilter },
         );
         res.json({ providers, tenant_id: project?.tenant_id ?? null });
         return;
       }
-      const providers = await listActiveProvidersForApi(supabase);
+      const providers = await listActiveProvidersForApi(supabase, {
+        utilityType: utilityTypeFilter,
+      });
       res.json({ providers, tenant_id: null });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/providers/resolve", async (req, res) => {
+    try {
+      await requireAuthenticatedUser(req, supabase);
+      const alias = String(req.query.alias || req.query.q || req.query.name || "").trim();
+      if (!alias) {
+        const err = new Error("alias query parameter is required");
+        err.statusCode = 400;
+        err.code = "INVALID_QUERY";
+        throw err;
+      }
+      const utilityType = String(req.query.utilityType || req.query.utility_type || "").trim();
+      const result = await resolveProviderAliasForApi(supabase, alias, {
+        utilityType: utilityType || null,
+      });
+      res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

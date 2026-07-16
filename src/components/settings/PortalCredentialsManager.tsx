@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,32 +46,18 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { listUciProviders } from "@/lib/uciApi";
+import type { UtilityProvider } from "@/types/uci";
 
-/**
- * UI label → seeded `utility_providers.slug` (see Sprint 2 spec). Stored in
- * `portal_credentials.jurisdiction` when a utility is selected.
- */
-const UCI_UTILITY_OPTIONS: { label: string; url: string }[] = [
-  { label: "PEPCO", url: "https://secure.pepco.com/service-installation-upgrades-portal/" },
-  { label: "BGE", url: "" },
-  { label: "Washington Gas", url: "" },
-  { label: "Dominion Energy", url: "" },
-  { label: "Florida Power & Light", url: "" },
-  { label: "Consolidated Edison", url: "" },
-  { label: "PSEG", url: "" },
-  { label: "Eversource Energy", url: "" },
-  { label: "Duke Energy", url: "" },
-  { label: "Georgia Power", url: "" },
-];
+/** Legacy credential labels saved before Row 3 directory — keep editable */
+const UCI_LEGACY_UTILITY_LABELS = new Set(["BGE (Exelon)"]);
 
-/** Legacy saved rows; keep selectable so edits are not orphaned */
-const UCI_LEGACY_UTILITY_OPTIONS: { label: string; url: string }[] = [
-  { label: "BGE (Exelon)", url: "" },
-];
-
-const ALL_UCI_UTILITY_OPTIONS = [...UCI_UTILITY_OPTIONS, ...UCI_LEGACY_UTILITY_OPTIONS];
-
-const UCI_UTILITY_LABEL_SET = new Set(ALL_UCI_UTILITY_OPTIONS.map((o) => o.label));
+type UtilityCredentialOption = {
+  slug: string;
+  label: string;
+  url: string;
+  utility_type: string;
+};
 
 const LEGACY_DC_LOGIN_URL = "https://washington-dc-us.avolvecloud.com/User/Index";
 
@@ -134,13 +120,48 @@ const JURISDICTION_PORTALS = [
 const defaultForm = {
   jurisdiction: "",
   utility: "",
+  utilitySlug: "",
   portal_username: "",
   portal_password: "",
   login_url: "",
 };
 
-function isSavedUtilityCredential(storedJurisdiction: string): boolean {
-  return UCI_UTILITY_LABEL_SET.has(storedJurisdiction.trim());
+function providerCredentialLabel(provider: UtilityProvider): string {
+  return (provider.display_name ?? provider.name ?? provider.slug).trim();
+}
+
+function buildUtilityOptions(providers: UtilityProvider[]): UtilityCredentialOption[] {
+  return providers.map((provider) => ({
+    slug: provider.slug,
+    label: providerCredentialLabel(provider),
+    url: provider.portal_url?.trim() ?? "",
+    utility_type: provider.utility_type?.trim().toLowerCase() ?? "",
+  }));
+}
+
+function findUtilityOption(
+  options: UtilityCredentialOption[],
+  stored: string,
+): UtilityCredentialOption | undefined {
+  const trimmed = stored.trim();
+  if (!trimmed) return undefined;
+  const lower = trimmed.toLowerCase();
+  return options.find(
+    (option) =>
+      option.label === trimmed ||
+      option.slug === lower ||
+      option.label.toLowerCase() === lower,
+  );
+}
+
+function isSavedUtilityCredential(
+  storedJurisdiction: string,
+  options: UtilityCredentialOption[],
+): boolean {
+  const trimmed = storedJurisdiction.trim();
+  if (!trimmed) return false;
+  if (UCI_LEGACY_UTILITY_LABELS.has(trimmed)) return true;
+  return Boolean(findUtilityOption(options, trimmed));
 }
 
 function utilityOptionTestId(label: string): string {
@@ -150,6 +171,8 @@ function utilityOptionTestId(label: string): string {
 export function PortalCredentialsManager() {
   const { user } = useAuth();
   const [credentials, setCredentials] = useState<PortalCredentialSafe[]>([]);
+  const [utilityOptions, setUtilityOptions] = useState<UtilityCredentialOption[]>([]);
+  const [utilitiesLoading, setUtilitiesLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -164,6 +187,16 @@ export function PortalCredentialsManager() {
   const commandInputRef = useRef<HTMLInputElement>(null);
   const utilityCommandInputRef = useRef<HTMLInputElement>(null);
 
+  const allUtilityOptions = useMemo(() => {
+    const options = [...utilityOptions];
+    for (const label of UCI_LEGACY_UTILITY_LABELS) {
+      if (!options.some((option) => option.label === label)) {
+        options.push({ slug: "", label, url: "", utility_type: "electric" });
+      }
+    }
+    return options;
+  }, [utilityOptions]);
+
   const fetchCredentials = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -177,9 +210,27 @@ export function PortalCredentialsManager() {
     setLoading(false);
   }, [user]);
 
+  const fetchUtilityProviders = useCallback(async () => {
+    if (!user) return;
+    setUtilitiesLoading(true);
+    try {
+      const res = await listUciProviders();
+      setUtilityOptions(buildUtilityOptions(res.providers ?? []));
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to load utility providers");
+      console.error(e);
+    } finally {
+      setUtilitiesLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchCredentials();
   }, [fetchCredentials]);
+
+  useEffect(() => {
+    fetchUtilityProviders();
+  }, [fetchUtilityProviders]);
 
   const openAdd = () => {
     setEditingId(null);
@@ -192,10 +243,12 @@ export function PortalCredentialsManager() {
   const openEdit = (row: PortalCredentialSafe) => {
     setEditingId(row.id);
     const stored = row.jurisdiction.trim();
-    if (isSavedUtilityCredential(stored)) {
+    if (isSavedUtilityCredential(stored, allUtilityOptions)) {
+      const match = findUtilityOption(allUtilityOptions, stored);
       setForm({
         jurisdiction: "",
-        utility: stored,
+        utility: match?.label ?? stored,
+        utilitySlug: match?.slug ?? "",
         portal_username: row.portal_username,
         portal_password: "",
         login_url: row.login_url ?? "",
@@ -204,6 +257,7 @@ export function PortalCredentialsManager() {
       setForm({
         jurisdiction: row.jurisdiction,
         utility: "",
+        utilitySlug: "",
         portal_username: row.portal_username,
         portal_password: "",
         login_url: row.login_url ?? "",
@@ -225,13 +279,13 @@ export function PortalCredentialsManager() {
     setJurisdictionOpen(false);
   };
 
-  const handleUtilitySelect = (utilityLabel: string) => {
-    const match = ALL_UCI_UTILITY_OPTIONS.find((u) => u.label === utilityLabel);
+  const handleUtilitySelect = (option: UtilityCredentialOption) => {
     setForm((f) => ({
       ...f,
-      utility: utilityLabel,
+      utility: option.label,
+      utilitySlug: option.slug,
       jurisdiction: "",
-      login_url: match ? match.url : "",
+      login_url: option.url,
     }));
     setUtilityOpen(false);
   };
@@ -241,6 +295,15 @@ export function PortalCredentialsManager() {
     const jurisdictionPayload = form.utility.trim() || form.jurisdiction.trim();
     if (!jurisdictionPayload || !form.portal_username.trim()) {
       toast.error("Select a jurisdiction or a utility provider, and enter a username");
+      return;
+    }
+
+    if (
+      form.utility.trim() &&
+      !form.utilitySlug.trim() &&
+      !UCI_LEGACY_UTILITY_LABELS.has(form.utility.trim())
+    ) {
+      toast.error("Select a utility provider from the directory list");
       return;
     }
 
@@ -254,7 +317,7 @@ export function PortalCredentialsManager() {
       const trimmedUrl = form.login_url.trim();
       const loginUrl = trimmedUrl
         ? trimmedUrl
-        : UCI_UTILITY_LABEL_SET.has(jurisdictionPayload)
+        : isSavedUtilityCredential(jurisdictionPayload, allUtilityOptions)
           ? ""
           : LEGACY_DC_LOGIN_URL;
 
@@ -303,7 +366,7 @@ export function PortalCredentialsManager() {
     j.jurisdiction.toLowerCase().includes(jurisdictionSearch.toLowerCase()),
   );
 
-  const filteredUtilities = ALL_UCI_UTILITY_OPTIONS.filter((u) =>
+  const filteredUtilities = allUtilityOptions.filter((u) =>
     u.label.toLowerCase().includes(utilitySearch.toLowerCase()),
   );
 
@@ -467,7 +530,7 @@ export function PortalCredentialsManager() {
                     className="w-full justify-between font-normal"
                     data-testid="combobox-utility"
                   >
-                    {form.utility || "Select a utility provider..."}
+                    {form.utility || (utilitiesLoading ? "Loading utility providers..." : "Select a utility provider...")}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -485,19 +548,22 @@ export function PortalCredentialsManager() {
                       <CommandGroup>
                         {filteredUtilities.map((u) => (
                           <CommandItem
-                            key={u.label}
-                            value={u.label}
-                            onSelect={() => handleUtilitySelect(u.label)}
+                            key={u.slug}
+                            value={u.slug}
+                            onSelect={() => handleUtilitySelect(u)}
                             data-testid={utilityOptionTestId(u.label)}
                           >
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                form.utility === u.label ? "opacity-100" : "opacity-0",
+                                form.utilitySlug === u.slug ? "opacity-100" : "opacity-0",
                               )}
                             />
                             <div className="flex flex-col">
                               <span>{u.label}</span>
+                              <span className="text-xs text-muted-foreground capitalize">
+                                {u.utility_type}
+                              </span>
                               {u.url ? (
                                 <span className="text-xs text-muted-foreground truncate max-w-[300px]">{u.url}</span>
                               ) : null}
