@@ -237,7 +237,15 @@ async function main() {
   console.log(`Unresolved utility names: ${unresolved.length}, ambiguous: ${ambiguous.length}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  buildCountyMap,
+  SCHEMA_VERSION,
+  SCRIPT_VERSION,
+};

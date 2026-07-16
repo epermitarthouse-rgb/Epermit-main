@@ -214,3 +214,164 @@ describe("Maryland alias resolution via Row 3 index", () => {
     }
   });
 });
+
+describe("Maryland EIA-861 county utility reconciliation", () => {
+  const SOMERSET_UTILITIES = [
+    "A & N Electric Coop",
+    "Choptank Electric Cooperative, Inc",
+    "Delmarva Power",
+  ];
+
+  it("resolves A & N Electric Coop to a-n-electric-coop", () => {
+    const result = reconcileEiaUtilityName("A & N Electric Coop");
+    assert.equal(result.status, "resolved");
+    assert.equal(result.provider_slug, "a-n-electric-coop");
+    assert.equal(result.reason, "alias_match");
+  });
+
+  it("resolves reviewed A&N alias variants to the same slug", () => {
+    for (const alias of [
+      "A & N Electric Coop",
+      "A&N Electric Cooperative",
+      "A and N Electric Cooperative",
+    ]) {
+      const result = reconcileEiaUtilityName(alias);
+      assert.equal(result.status, "resolved", alias);
+      assert.equal(result.provider_slug, "a-n-electric-coop", alias);
+    }
+  });
+
+  it("does not map A&N to Choptank, Delmarva Power, or SMECO", () => {
+    const result = reconcileEiaUtilityName("A & N Electric Coop");
+    assert.ok(!["choptank-electric", "delmarva-power", "smeco"].includes(result.provider_slug));
+  });
+
+  it("resolves all MD:Somerset county utilities without unresolved names", () => {
+    const unresolved = [];
+    for (const utilityName of SOMERSET_UTILITIES) {
+      const result = reconcileEiaUtilityName(utilityName);
+      if (result.status !== "resolved") {
+        unresolved.push({ utility_name: utilityName, reason: result.reason });
+      }
+    }
+    assert.deepEqual(unresolved, []);
+  });
+
+  it("county ingestion reconciliation reports zero unresolved for MD:Somerset", () => {
+    const { buildCountyMap } = require("../scripts/ingest-eia861-county.js");
+    const rows = SOMERSET_UTILITIES.map((utilityName, idx) => ({
+      data_year: 2024,
+      utility_id_eia: String(3503 + idx),
+      utility_name: utilityName,
+      short_form: utilityName,
+      state: "MD",
+      county: "Somerset",
+    }));
+    const { unresolved, store } = buildCountyMap(rows, ["MD"]);
+    const somerset = store["MD:Somerset"];
+    assert.ok(somerset);
+    assert.deepEqual(
+      /** @type {{ canonical_provider_slugs?: string[] }} */ (somerset).canonical_provider_slugs,
+      ["a-n-electric-coop", "choptank-electric", "delmarva-power"],
+    );
+    assert.deepEqual(
+      unresolved.filter((entry) => entry.county_key === "MD:Somerset"),
+      [],
+    );
+  });
+
+  it("existing polygon provider mappings remain unaffected", () => {
+    const report = reconcileTerritoryProviderNames(MD_EIA_NAMES);
+    assert.equal(report.totals.resolved, 9);
+    assert.equal(report.totals.unresolved, 0);
+    assert.equal(reconcileEiaUtilityName("CHOPTANK ELECTRIC COOPERATIVE, INC").provider_slug, "choptank-electric");
+    assert.equal(reconcileEiaUtilityName("SOUTHERN MARYLAND ELEC COOP INC").provider_slug, "smeco");
+  });
+
+  it("seed dry-run schedules insert for A&N on first run", async () => {
+    const existing = UTILITY_PROVIDER_DIRECTORY.filter((entry) => entry.slug !== "a-n-electric-coop").map(
+      (entry, idx) => ({
+        id: `uuid-${idx}`,
+        slug: entry.slug,
+        name: entry.display_name,
+      }),
+    );
+
+    const supabase = {
+      from(table) {
+        if (table === "utility_providers") {
+          return {
+            select() {
+              return {
+                is() {
+                  return {
+                    eq() {
+                      return Promise.resolve({ data: existing, error: null });
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    const result = await seedUtilityProviderDirectory(supabase, { dryRun: true });
+    const anActions = result.providerActions.filter((a) => a.slug === "a-n-electric-coop");
+    assert.equal(anActions.length, 1);
+    assert.equal(anActions[0].action, "insert");
+
+    const aliasNormalized = normalizeProviderAlias("A & N Electric Coop");
+    assert.ok(result.aliasActions.some((a) => a.alias_normalized === aliasNormalized));
+  });
+
+  it("seed dry-run updates A&N without duplicate insert on later runs", async () => {
+    const existing = UTILITY_PROVIDER_DIRECTORY.map((entry, idx) => ({
+      id: `uuid-${idx}`,
+      slug: entry.slug,
+      name: entry.display_name,
+    }));
+
+    const supabase = {
+      from(table) {
+        if (table === "utility_providers") {
+          return {
+            select() {
+              return {
+                is() {
+                  return {
+                    eq() {
+                      return Promise.resolve({ data: existing, error: null });
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    const result = await seedUtilityProviderDirectory(supabase, { dryRun: true });
+    const anActions = result.providerActions.filter((a) => a.slug === "a-n-electric-coop");
+    assert.equal(anActions.length, 1);
+    assert.equal(anActions[0].action, "update");
+    assert.equal(
+      result.providerActions.filter((a) => a.action === "insert" && a.slug === "a-n-electric-coop").length,
+      0,
+    );
+  });
+
+  it("catalog has no duplicate slugs after A&N addition", () => {
+    const slugs = UTILITY_PROVIDER_DIRECTORY.map((p) => p.slug);
+    assert.equal(new Set(slugs).size, slugs.length);
+    assert.ok(UTILITY_PROVIDER_DIRECTORY.some((p) => p.slug === "a-n-electric-coop"));
+    assert.equal(
+      UTILITY_PROVIDER_DIRECTORY.filter((p) => p.slug === "a-n-electric-coop").length,
+      1,
+    );
+  });
+});

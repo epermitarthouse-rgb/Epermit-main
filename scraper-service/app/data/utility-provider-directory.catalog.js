@@ -105,6 +105,25 @@ const UTILITY_PROVIDER_DIRECTORY = [
     aliases: ["Choptank Electric Cooperative", "Choptank Electric Coop"],
   },
   {
+    slug: "a-n-electric-coop",
+    display_name: "A&N Electric Cooperative",
+    canonical_name: "A&N Electric Cooperative",
+    utility_type: "electric",
+    ownership_type: "cooperative",
+    cet_relationship: false,
+    aliases: [
+      "A & N Electric Coop",
+      "A&N Electric Cooperative",
+      "A and N Electric Cooperative",
+    ],
+    directory_source: {
+      row: "row3_provider_directory",
+      seed: "eia_md_county_reconciliation_2026_07_17",
+      source: "EIA Form 861 Service Territory 2024",
+      note: "Distinct electric cooperative reviewed from EIA-861 Maryland county fallback dataset",
+    },
+  },
+  {
     slug: "hagerstown-light",
     display_name: "Hagerstown Light",
     canonical_name: "Hagerstown Light Department",

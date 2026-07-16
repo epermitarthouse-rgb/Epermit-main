@@ -1,8 +1,8 @@
 {
   "schema_version": "d2.2-territory-v1",
   "ingestion_script_version": "2.0.0",
-  "dataset_version": "20260716T171009Z",
-  "generated_at": "2026-07-16T17:10:09.372144+00:00",
+  "dataset_version": "20260716T180924Z",
+  "generated_at": "2026-07-16T18:09:24.217682+00:00",
   "source_name": "EIA Energy Atlas",
   "source_url": "https://services3.arcgis.com/OYP7N6mAJJCyH6hd/ArcGIS/rest/services/Electric_Retail_Service_Territories_HIFLD/FeatureServer/0",
   "layer_id": "0",
@@ -32,7 +32,8 @@
         "display_name": "bge",
         "candidate_slugs": [
           "bge"
-        ]
+        ],
+        "manual_confirmation_required": false
       },
       {
         "status": "resolved",
@@ -43,7 +44,20 @@
         "display_name": "pepco",
         "candidate_slugs": [
           "pepco"
-        ]
+        ],
+        "manual_confirmation_required": false
+      },
+      {
+        "status": "resolved",
+        "eia_legal_name": "SOUTHERN MARYLAND ELEC COOP INC",
+        "reason": "alias_match",
+        "provider_slug": "smeco",
+        "provider_id": null,
+        "display_name": "smeco",
+        "candidate_slugs": [
+          "smeco"
+        ],
+        "manual_confirmation_required": false
       },
       {
         "status": "resolved",
@@ -54,71 +68,79 @@
         "display_name": "choptank-electric",
         "candidate_slugs": [
           "choptank-electric"
-        ]
+        ],
+        "manual_confirmation_required": false
+      },
+      {
+        "status": "resolved",
+        "eia_legal_name": "HAGERSTOWN LIGHT DEPARTMENT",
+        "reason": "alias_match",
+        "provider_slug": "hagerstown-light",
+        "provider_id": null,
+        "display_name": "hagerstown-light",
+        "candidate_slugs": [
+          "hagerstown-light"
+        ],
+        "manual_confirmation_required": false
+      },
+      {
+        "status": "resolved",
+        "eia_legal_name": "EASTON UTILITIES COMM",
+        "reason": "alias_match",
+        "provider_slug": "easton-utilities",
+        "provider_id": null,
+        "display_name": "easton-utilities",
+        "candidate_slugs": [
+          "easton-utilities"
+        ],
+        "manual_confirmation_required": false
+      },
+      {
+        "status": "resolved",
+        "eia_legal_name": "THURMONT MUNICIPAL LIGHT CO",
+        "reason": "alias_match",
+        "provider_slug": "thurmont-municipal",
+        "provider_id": null,
+        "display_name": "thurmont-municipal",
+        "candidate_slugs": [
+          "thurmont-municipal"
+        ],
+        "manual_confirmation_required": false
+      },
+      {
+        "status": "resolved",
+        "eia_legal_name": "TOWN OF BERLIN - (MD)",
+        "reason": "alias_match",
+        "provider_slug": "berlin-electric",
+        "provider_id": null,
+        "display_name": "berlin-electric",
+        "candidate_slugs": [
+          "berlin-electric"
+        ],
+        "manual_confirmation_required": false
+      },
+      {
+        "status": "resolved",
+        "eia_legal_name": "TOWN OF WILLIAMSPORT - (MD)",
+        "reason": "alias_match",
+        "provider_slug": "williamsport-municipal",
+        "provider_id": null,
+        "display_name": "williamsport-municipal",
+        "candidate_slugs": [
+          "williamsport-municipal"
+        ],
+        "manual_confirmation_required": false
       }
     ],
     "ambiguous": [],
-    "unresolved": [
-      {
-        "status": "unresolved",
-        "eia_legal_name": "SOUTHERN MARYLAND ELEC COOP INC",
-        "reason": "no_matching_alias",
-        "provider_slug": null,
-        "provider_id": null,
-        "display_name": null,
-        "candidate_slugs": []
-      },
-      {
-        "status": "unresolved",
-        "eia_legal_name": "HAGERSTOWN LIGHT DEPARTMENT",
-        "reason": "no_matching_alias",
-        "provider_slug": null,
-        "provider_id": null,
-        "display_name": null,
-        "candidate_slugs": []
-      },
-      {
-        "status": "unresolved",
-        "eia_legal_name": "EASTON UTILITIES COMM",
-        "reason": "no_matching_alias",
-        "provider_slug": null,
-        "provider_id": null,
-        "display_name": null,
-        "candidate_slugs": []
-      },
-      {
-        "status": "unresolved",
-        "eia_legal_name": "THURMONT MUNICIPAL LIGHT CO",
-        "reason": "no_matching_alias",
-        "provider_slug": null,
-        "provider_id": null,
-        "display_name": null,
-        "candidate_slugs": []
-      },
-      {
-        "status": "unresolved",
-        "eia_legal_name": "TOWN OF BERLIN - (MD)",
-        "reason": "no_matching_alias",
-        "provider_slug": null,
-        "provider_id": null,
-        "display_name": null,
-        "candidate_slugs": []
-      },
-      {
-        "status": "unresolved",
-        "eia_legal_name": "TOWN OF WILLIAMSPORT - (MD)",
-        "reason": "no_matching_alias",
-        "provider_slug": null,
-        "provider_id": null,
-        "display_name": null,
-        "candidate_slugs": []
-      }
-    ],
+    "unresolved": [],
+    "unsupported_manual": [],
     "totals": {
       "input": 9,
-      "resolved": 3,
+      "resolved": 9,
       "ambiguous": 0,
-      "unresolved": 6
+      "unresolved": 0,
+      "unsupported_manual": 0
     }
   },
   "errors": [],
@@ -126,8 +148,8 @@
     "source_name": "EIA Form 861 Service Territory",
     "source_url": "https://www.eia.gov/electricity/data/eia861/zip/f8612024.zip",
     "source_year": 2024,
-    "checksum_sha256": "d73b1cb3a1ffe37432a22e49994b3b02da408d96922194874a452c70ec963160",
+    "checksum_sha256": "cae943605433df95238d5c5dd17e56f04d24e8510e796de935aa0da994e19dba",
     "county_count": 23,
-    "generated_at": "2026-07-16T17:12:42.848Z"
+    "generated_at": "2026-07-16T18:09:40.056Z"
   }
 }
