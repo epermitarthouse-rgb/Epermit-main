@@ -801,7 +801,7 @@ export default function UciDashboard() {
   const performProjectChangeReset = useCallback(() => {
     setProjectSwitchConfirmOpen(false);
     setProjectId(null);
-  }, []);
+  }, [setProjectId]);
 
   const handleChangeProjectRequest = useCallback(() => {
     if (hasUnsavedUciSetupChanges) {
