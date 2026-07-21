@@ -2,20 +2,19 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { SelectedProjectProvider, useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
+import { SelectedProjectProvider } from "@/contexts/SelectedProjectContext";
 import { ScrapeProvider, useScrapeOptional } from "@/contexts/ScrapeContext";
 import { CommandPalette } from "@/components/navigation/CommandPalette";
 import { FloatingHelpWidget } from "@/components/help/FloatingHelpWidget";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ActiveProjectControl } from "@/components/layout/ActiveProjectControl";
 import { useAuth } from "@/hooks/useAuth";
-import { useProjects } from "@/hooks/useProjects";
 import { resolvePageTitle } from "@/components/layout/hybridNav";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   ArrowLeft,
-  Briefcase,
   ChevronRight,
   Eye,
   Home,
@@ -52,40 +51,6 @@ function ScrapeHeaderIndicator() {
       <span className="truncate sm:hidden">Scraping</span>
       <Eye className="h-3 w-3 shrink-0 opacity-60" />
     </button>
-  );
-}
-
-function ActiveProjectPicker() {
-  const ctx = useSelectedProjectOptional();
-  const { projects, loading } = useProjects();
-  if (!ctx) return null;
-
-  return (
-    <label
-      className="hidden items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 md:flex"
-      title="Active project"
-      data-testid="header-active-project"
-    >
-      <Briefcase className="h-4 w-4 text-primary" />
-      <select
-        value={ctx.selectedProjectId ?? ""}
-        onChange={(e) =>
-          ctx.setSelectedProjectId(e.target.value ? e.target.value : null)
-        }
-        disabled={loading}
-        className="max-w-[200px] truncate bg-transparent text-xs font-medium text-foreground outline-none"
-        aria-label="Active project"
-        data-testid="header-project-name"
-      >
-        <option value="">Select project</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-            {p.permit_number ? ` · ${p.permit_number}` : ""}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
@@ -142,7 +107,7 @@ function AppHeader({
 
         <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
           <ScrapeHeaderIndicator />
-          <ActiveProjectPicker />
+          <ActiveProjectControl />
 
           <button
             type="button"

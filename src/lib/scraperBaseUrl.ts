@@ -11,7 +11,7 @@ export function getScraperBaseUrl(): string {
   }
   const raw =
     import.meta.env.VITE_API_BASE_URL ||
-    "https://epermit-production.up.railway.app";
+    "https://epermit-main-production.up.railway.app";
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/localhost|127\.0\.0\.1/i.test(raw)) return `http://${raw}`;
   return `https://${raw}`;
