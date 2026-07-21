@@ -85,7 +85,7 @@ export default function JurisdictionMapPage() {
   }
 
   return (
-    <div className="min-h-full w-full bg-cream text-ink-primary-light">
+    <div className="min-h-full w-full bg-background text-foreground">
       <EditorialPageHeader
         eyebrow="GEO DATA"
         title="Jurisdiction Map"

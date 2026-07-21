@@ -35,8 +35,8 @@ export default function Analytics() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center bg-cream">
-        <Loader2 className="h-8 w-8 animate-spin text-teal" />
+      <div className="flex min-h-[50vh] items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -46,13 +46,13 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-cream text-ink-primary-light">
+    <div className="min-h-screen bg-background text-foreground">
       <EditorialPageHeader
         eyebrow="ANALYTICS & REPORTING"
         title="Analytics & Reporting"
         description="Permit cycle times, costs, and performance metrics for your workspace."
         icon={BarChart3}
-        iconClassName="text-teal"
+        iconClassName="text-primary"
         actions={<AnalyticsExport
           summary={summary}
           jurisdictionMetrics={jurisdictionMetrics}

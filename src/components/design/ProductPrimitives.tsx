@@ -130,11 +130,12 @@ export function StatusPill({
   tone = "default",
   children,
   className,
+  ...props
 }: {
   tone?: StatusTone;
   children: React.ReactNode;
   className?: string;
-}) {
+} & React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
       className={cn(
@@ -142,6 +143,7 @@ export function StatusPill({
         toneClasses[tone],
         className,
       )}
+      {...props}
     >
       {children}
     </span>

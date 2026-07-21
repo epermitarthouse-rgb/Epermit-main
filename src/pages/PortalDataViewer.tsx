@@ -3039,8 +3039,8 @@ export default function PortalDataViewer() {
 
   return (
     <>
-      <Section variant="cream" className="pt-12 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <Section variant="cream" className="border-b border-border/70 px-4 py-6 md:px-6 md:py-8 lg:px-8">
+        <div className="mx-auto max-w-7xl">
           <Button
             variant="ghost"
             size="sm"
@@ -3048,29 +3048,29 @@ export default function PortalDataViewer() {
             data-testid="button-back-to-dashboard"
             className={cn(
               PORTAL_ACTION_BUTTON_LIGHT_OUTLINE,
-              "mb-3 -ml-1 border-transparent bg-transparent shadow-none hover:bg-cream-sunken",
+              "mb-3 -ml-1 border-transparent bg-transparent shadow-none hover:bg-muted",
             )}
           >
             <ArrowLeft />
             Back to Dashboard
           </Button>
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <Eyebrow>PORTAL DATA</Eyebrow>
-              <h1 className="mt-3 font-serif text-4xl sm:text-5xl text-ink-primary-light leading-tight">
-                Portal Data <em className="text-gold italic">Viewer</em>
+              <Eyebrow>PORTAL HARVEST</Eyebrow>
+              <h1 className="mt-2 font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
+                Portal Harvest
               </h1>
-              <p className="mt-3 text-ink-secondary-light max-w-2xl text-sm sm:text-base leading-relaxed">
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
                 Review extracted permit information, reports, attachments, screenshots, and jurisdiction-specific portal data.
               </p>
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mt-8">
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-xl font-serif text-ink-primary-light font-normal">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-tight text-xl font-bold text-foreground">
                       {portalData.projectNum}
                     </h2>
                     {loading && (
-                      <Loader2 className="h-4 w-4 animate-spin text-ink-tertiary-light" />
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
                   </div>
                   {portalData.description && (

@@ -205,11 +205,11 @@ export default function Dashboard() {
                       "U"}
                   </div>
                   <div className="min-w-0">
-                    <Eyebrow className="mb-1 text-ink-secondary-light">Home</Eyebrow>
-                    <h1 className="font-display text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl">
+                    <Eyebrow className="mb-1 text-muted-foreground">Home</Eyebrow>
+                    <h1 className="font-tight text-2xl font-black tracking-tight text-foreground sm:text-3xl">
                       {welcomeFirstName ? (
                         <>
-                          Welcome, <span className="italic text-gold">{welcomeFirstName}</span>!
+                          Welcome, <span className="text-primary">{welcomeFirstName}</span>!
                         </>
                       ) : (
                         "Welcome!"

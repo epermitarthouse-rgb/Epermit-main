@@ -134,15 +134,15 @@ export default function ClassifiedComments() {
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center bg-cream">
+      <div className="min-h-[80vh] flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-teal" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] bg-cream pb-12">
-      <div className="max-w-4xl mx-auto px-4 md:px-6 pt-6 md:pt-8">
+    <div className="min-h-[80vh] bg-background pb-12 text-foreground">
+      <div className="mx-auto max-w-4xl px-4 pt-6 md:px-6 md:pt-8">
         <Button
           variant="ghost"
           size="sm"

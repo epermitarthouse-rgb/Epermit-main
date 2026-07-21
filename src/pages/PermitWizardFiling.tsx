@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { StatusPill } from "@/components/design/ProductPrimitives";
+import { filingStatusTone } from "@/adapters/filingStatusAdapter";
 import {
   Rocket,
   Loader2,
@@ -382,23 +384,14 @@ export default function PermitWizardFiling() {
   }
 
   return (
-    <section className="py-4 sm:py-6 md:py-8 lg:py-12 pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6">
-      <div className="max-w-7xl mr-auto ml-0 w-full min-w-0">
-        <motion.div
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <Rocket className="h-6 w-6" />
-              Permit Filing
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Multi-municipality 9-agent autonomous filing pipeline
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
+    <div className="min-h-screen bg-background text-foreground">
+      <EditorialPageHeader
+        eyebrow="PERMIT FILING"
+        title="Permit Filing"
+        description="Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses."
+        icon={Rocket}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -406,19 +399,18 @@ export default function PermitWizardFiling() {
               disabled={refreshing}
               data-testid="button-refresh"
             >
-              <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <Button
-              onClick={() => setStartDialogOpen(true)}
-              data-testid="button-start-filing"
-            >
-              <Plus className="h-4 w-4 mr-1" />
+            <Button onClick={() => setStartDialogOpen(true)} data-testid="button-start-filing">
+              <Plus className="mr-1 h-4 w-4" />
               Start New Filing
             </Button>
           </div>
-        </motion.div>
-
+        }
+      />
+      <section className="container-page">
+      <div className="mx-auto ml-0 mr-auto w-full min-w-0 max-w-7xl">
         {!selectedProjectId && !loading && filings.length === 0 && (
           <Card className="border-dashed mb-6">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -510,9 +502,12 @@ export default function PermitWizardFiling() {
                       >
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between gap-2 mb-1">
-                            <Badge className={statusCfg.className} data-testid={`badge-filing-status-${filing.id}`}>
+                            <StatusPill
+                              tone={filingStatusTone(filing.filing_status)}
+                              data-testid={`badge-filing-status-${filing.id}`}
+                            >
                               {statusCfg.label}
-                            </Badge>
+                            </StatusPill>
                             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                           </div>
                           {muniInfo && (
@@ -726,6 +721,7 @@ export default function PermitWizardFiling() {
           }}
         />
       </div>
-    </section>
+      </section>
+    </div>
   );
 }

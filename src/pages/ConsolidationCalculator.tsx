@@ -184,7 +184,7 @@ const ConsolidationCalculator = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-cream text-ink-primary-light">
+    <div className="min-h-screen bg-background text-foreground">
       <EditorialPageHeader
         eyebrow="TOOL STACK"
         title={

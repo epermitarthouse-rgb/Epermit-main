@@ -406,7 +406,7 @@ const ROICalculator = () => {
   };
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-cream text-ink-primary-light">
+    <div className="min-h-screen w-full overflow-x-hidden bg-background text-foreground">
       <EditorialPageHeader
         eyebrow="ROI"
         title={

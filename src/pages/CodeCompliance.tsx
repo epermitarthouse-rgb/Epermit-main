@@ -24,7 +24,7 @@ export default function CodeCompliance() {
         />
       </Helmet>
       
-      <div className="min-h-full w-full bg-cream text-ink-primary-light">
+      <div className="min-h-full w-full bg-background text-foreground">
         <EditorialPageHeader
           eyebrow="AI COMPLIANCE"
           align="center"

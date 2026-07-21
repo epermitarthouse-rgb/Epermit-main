@@ -1726,34 +1726,34 @@ export default function CommentReview() {
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center bg-cream">
-        <Loader2 className="h-8 w-8 animate-spin text-teal" />
+      <div className="flex min-h-[80vh] items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] bg-cream">
-      <Section variant="cream" className="pt-10 pb-8 border-b border-cream-sunken">
-        <div className="max-w-7xl mx-auto px-4 md:px-6">
+    <div className="min-h-[80vh] bg-background text-foreground">
+      <Section variant="cream" className="border-b border-border/70 pt-6 pb-6 md:pt-8 md:pb-8">
+        <div className="mx-auto max-w-7xl px-4 md:px-6">
           <div className="flex items-start gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/dashboard")}
-              className="text-ink-secondary-light hover:text-ink-primary-light shrink-0"
+              className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
               <Eyebrow>COMMENT REVIEW</Eyebrow>
-              <h1 className="mt-3 font-display text-4xl sm:text-5xl text-ink-primary-light leading-tight">
-                Comment <em className="text-gold italic">Review</em>
+              <h1 className="mt-2 font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
+                Comment Review
               </h1>
-              <p className="mt-3 text-ink-secondary-light max-w-2xl text-sm sm:text-base leading-relaxed">
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
                 Review parsed jurisdiction comments, classifier outputs, statuses, disciplines, and applicant/reviewer discussion history.
               </p>
-              <p className="text-sm text-ink-tertiary-light mt-2 max-w-2xl">
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground/80">
                 Comments from the portal report &quot;Plan Review - Review Comments&quot; for the selected project.
               </p>
               {projectId ? (

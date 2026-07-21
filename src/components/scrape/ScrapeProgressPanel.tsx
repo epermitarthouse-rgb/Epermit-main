@@ -11,10 +11,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ProgressLine, StatusPill } from "@/components/design/ProductPrimitives";
+import { scrapeStatusTone } from "@/adapters/scrapeStatusAdapter";
 import {
-  scrapeJobStatusBadgeClass,
   scrapeJobStatusLabel,
   type ScrapeEvent,
   type ScrapeJob,
@@ -179,12 +179,9 @@ export function ScrapeProgressPanel({
             <h3 className="text-sm font-semibold text-foreground truncate dark:text-ink-primary-dark">
               Portal scrape
             </h3>
-            <Badge
-              variant="outline"
-              className={cn("text-[10px]", scrapeJobStatusBadgeClass(status))}
-            >
+            <StatusPill tone={scrapeStatusTone(status)}>
               {scrapeJobStatusLabel(status)}
-            </Badge>
+            </StatusPill>
           </div>
           <p className="text-xs text-muted-foreground dark:text-ink-tertiary-dark">
             Permit{" "}
@@ -242,12 +239,7 @@ export function ScrapeProgressPanel({
               {progress!.current} / {progress!.total} ({progressPct}%)
             </span>
           </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden dark:bg-obsidian-raised">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
+          <ProgressLine value={progressPct} className="h-1.5" />
         </div>
       )}
 

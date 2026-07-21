@@ -1183,32 +1183,31 @@ export default function ResponseMatrix() {
   }
 
   return (
-    <div className="min-h-[80vh] w-full min-w-0 overflow-x-hidden bg-cream">
+    <div className="min-h-[80vh] w-full min-w-0 overflow-x-hidden bg-background text-foreground">
       <style>{RESPONSE_MATRIX_STYLES}</style>
-      <Section variant="cream" className="pt-10 pb-8 border-b border-cream-sunken">
-        <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0">
+      <Section variant="cream" className="border-b border-border/70 pt-6 pb-6 md:pt-8 md:pb-8">
+        <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 md:px-6">
         <header className="flex flex-col gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/dashboard")}
-              className="shrink-0 text-ink-secondary-light hover:text-ink-primary-light hover:bg-cream-sunken"
+              className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="min-w-0 pl-2 border-l-2 border-gold/40">
+            <div className="min-w-0 border-l-2 border-primary/40 pl-3">
               <Eyebrow>RESPONSE MATRIX</Eyebrow>
-              <h1 className="mt-2 font-display text-4xl sm:text-5xl text-ink-primary-light leading-tight">
-                Response <em className="text-gold italic">Matrix</em>
+              <h1 className="mt-1.5 font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
+                Response Matrix
               </h1>
-              <p className="text-ink-secondary-light text-sm mt-2 max-w-2xl leading-relaxed">
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 Manage and draft official responses to permit comments.
                 {withoutMetadata.length > 0 ? (
-                  <span className="block mt-1 text-ink-tertiary-light">{matrixSourceLabel}</span>
+                  <span className="mt-1 block text-muted-foreground/80">{matrixSourceLabel}</span>
                 ) : null}
               </p>
-              <div className="h-0.5 w-16 mt-2 bg-gradient-to-r from-gold/70 to-transparent rounded-full" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
