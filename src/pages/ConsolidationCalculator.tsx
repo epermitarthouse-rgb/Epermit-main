@@ -16,7 +16,7 @@ import {
   DollarSign, Users, ArrowRight, Check, TrendingDown, Download,
   Calculator, Layers, Save
 } from "lucide-react";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { PageHeader } from "@/components/design/ProductPrimitives";
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -184,21 +184,14 @@ const ConsolidationCalculator = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <EditorialPageHeader
-        eyebrow="TOOL STACK"
-        title={
-          <>
-            Consolidation <em className="text-gold italic">Calculator</em>
-          </>
-        }
-        description="See how much you can save by replacing multiple tools with one platform."
-        icon={Calculator}
-        iconClassName="text-teal"
-        align="center"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Tool Stack"
+        title="Consolidation Calculator"
+        body="See how much you can save by replacing multiple tools with one platform."
       />
 
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto w-full max-w-6xl">
         <div className="grid lg:grid-cols-5 gap-8">
           {/* Left Side - Inputs */}
           <div className="lg:col-span-3 space-y-6">

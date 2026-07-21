@@ -20,7 +20,7 @@ import {
   ArrowRight, Zap, Shield, AlertTriangle, Save, LogIn, Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { PageHeader } from "@/components/design/ProductPrimitives";
 import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -406,24 +406,17 @@ const ROICalculator = () => {
   };
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-background text-foreground">
-      <EditorialPageHeader
+    <div className="space-y-6">
+      <PageHeader
         eyebrow="ROI"
-        title={
-          <>
-            <span className="italic text-gold">ROI</span> Calculator
-          </>
-        }
-        description="Calculate your potential savings with AI-powered permit acceleration."
-        icon={TrendingUp}
-        iconClassName="text-teal"
-        align="center"
+        title="ROI Calculator"
+        body="Calculate your potential savings with AI-powered permit acceleration."
       />
 
-      <div className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8">
+      <div className="mx-auto w-full max-w-4xl">
         {/* Progress */}
         <div className="mb-8 max-w-2xl mx-auto">
-          <div className="mb-2 flex justify-between text-sm text-ink-secondary-light">
+          <div className="mb-2 flex justify-between text-sm text-muted-foreground">
             <span>Step {step} of {totalSteps}</span>
             <span>{Math.round(progress)}% complete</span>
           </div>
@@ -434,7 +427,7 @@ const ROICalculator = () => {
                 key={label}
                 className={cn(
                   "text-xs shrink-0",
-                  step > i + 1 ? "text-gold-deep" : step === i + 1 ? "font-medium text-ink-primary-light" : "text-ink-tertiary-light"
+                  step > i + 1 ? "text-primary" : step === i + 1 ? "font-medium text-foreground" : "text-muted-foreground"
                 )}
               >
                 {label}

@@ -2,14 +2,12 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { ArrowLeft, Database, Layers, Loader2, RefreshCw } from "lucide-react";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
-import { DATA_INTELLIGENCE_PANEL, EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
+import { MetricCard, PageHeader, Panel } from "@/components/design/ProductPrimitives";
 
 interface ParsedCommentRow {
   id: string;
@@ -134,119 +132,111 @@ export default function ClassifiedComments() {
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-teal" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] bg-background pb-12 text-foreground">
-      <div className="mx-auto max-w-4xl px-4 pt-6 md:px-6 md:pt-8">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 text-ink-secondary-light hover:text-ink-primary-light"
-          onClick={() => navigate("/dashboard")}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Dashboard
-        </Button>
-      </div>
-      <EditorialPageHeader
-        eyebrow="DISCIPLINE VIEW"
-        title={
-          <>
-            Classified{" "}
-            <em className="text-gold italic">Comments</em>
-          </>
-        }
-        description="Comments grouped by discipline for the selected project."
-        icon={Layers}
-        iconClassName="text-teal"
-        actions={
+    <div className="space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2 text-muted-foreground hover:text-foreground"
+        onClick={() => navigate("/dashboard")}
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Dashboard
+      </Button>
+
+      <PageHeader
+        eyebrow="Discipline View"
+        title="Classified Comments"
+        body="Comments grouped by discipline for the selected project."
+        action={
           projectId ? (
-            <div className="flex flex-wrap gap-2 justify-end">
-              <Button
-                variant="outlineGold"
-                size="sm"
+            <>
+              <button
+                type="button"
+                className="pilot-button-ghost"
                 onClick={() => void reloadListOnly()}
                 disabled={runningClassifier || isLoading}
               >
-                <Database className="h-4 w-4 mr-2" />
+                <Database className="h-4 w-4" />
                 Reload list
-              </Button>
-              <Button
-                variant="gold"
-                size="sm"
+              </button>
+              <button
+                type="button"
+                className="pilot-button-primary"
                 onClick={() => void refreshClassifications()}
                 disabled={runningClassifier}
               >
                 {runningClassifier ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2 text-cream" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-4 w-4" />
                 )}
                 Refresh classifications
-              </Button>
-            </div>
+              </button>
+            </>
           ) : null
         }
       />
 
-      <div className="max-w-4xl mx-auto px-4 md:px-6 pt-8 space-y-4">
-        {!projectId ? (
-          <Card className={EDITORIAL_FORM_CARD}>
-            <CardContent className="py-10 text-center text-ink-secondary-light space-y-2">
-              Select a project in the sidebar to view classified comments.
-            </CardContent>
-          </Card>
-        ) : isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-teal" />
-          </div>
-        ) : comments.length === 0 ? (
-          <Card className={EDITORIAL_FORM_CARD}>
-            <CardContent className="py-8 text-center text-ink-secondary-light">
-              No parsed comments for this project. Load comments from the portal on the Comment Review page first.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {grouped.keys.map((discipline) => {
-              const items = grouped.map.get(discipline)!;
-              return (
-                <Card key={discipline} className={DATA_INTELLIGENCE_PANEL}>
-                  <CardHeader className="pb-2 border-b border-border/40 dark:border-[hsl(var(--border-obsidian-strong)/0.35)]">
-                    <CardTitle className="text-lg text-foreground dark:text-ink-primary-dark">
-                      {discipline}
-                      <span className="text-muted-foreground dark:text-ink-secondary-dark font-normal ml-2">({items.length})</span>
-                    </CardTitle>
-                    <CardDescription className="text-muted-foreground dark:text-ink-secondary-dark">
-                      Parsed comment text retained verbatim from the classifier.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <ul className="space-y-2">
-                      {items.map((c) => (
-                        <li
-                          key={c.id}
-                          className="text-sm text-muted-foreground dark:text-ink-secondary-dark border-l-2 border-teal/40 pl-3 py-1.5 bg-muted/30 dark:bg-obsidian-sunken/25 rounded-r-md"
-                        >
-                          <span className="text-foreground dark:text-ink-primary-dark">{c.original_text}</span>
-                          {c.code_reference && (
-                            <span className="text-muted-foreground dark:text-ink-tertiary-dark ml-2 font-mono text-xs">({c.code_reference})</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+      <div className="grid gap-4 md:grid-cols-3">
+        <MetricCard label="Disciplines" value={grouped.keys.length} icon={Layers} />
+        <MetricCard label="Total comments" value={comments.length} icon={Database} />
+        <MetricCard
+          label="Unclassified"
+          value={grouped.map.get("Unclassified")?.length ?? 0}
+        />
       </div>
+
+      {!projectId ? (
+        <Panel>
+          <p className="py-10 text-center text-muted-foreground">
+            Select a project in the sidebar to view classified comments.
+          </p>
+        </Panel>
+      ) : isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : comments.length === 0 ? (
+        <Panel>
+          <p className="py-8 text-center text-muted-foreground">
+            No parsed comments for this project. Load comments from the portal on the Comment Review page first.
+          </p>
+        </Panel>
+      ) : (
+        <div className="space-y-4">
+          {grouped.keys.map((discipline) => {
+            const items = grouped.map.get(discipline)!;
+            return (
+              <Panel
+                key={discipline}
+                title={discipline}
+                eyebrow={`${items.length} comment${items.length === 1 ? "" : "s"}`}
+              >
+                <ul className="space-y-2">
+                  {items.map((c) => (
+                    <li
+                      key={c.id}
+                      className="rounded-r-md border-l-2 border-primary/40 bg-muted/30 py-1.5 pl-3 text-sm text-muted-foreground"
+                    >
+                      <span className="text-foreground">{c.original_text}</span>
+                      {c.code_reference && (
+                        <span className="ml-2 font-mono text-xs text-muted-foreground">({c.code_reference})</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

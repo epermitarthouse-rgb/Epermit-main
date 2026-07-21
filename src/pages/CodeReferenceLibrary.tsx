@@ -37,6 +37,7 @@ import {
 import { CodeComparisonMatrix } from '@/components/code-reference/CodeComparisonMatrix';
 import { PermitFeeCalculator } from '@/components/code-reference/PermitFeeCalculator';
 import { motion } from 'framer-motion';
+import { MetricCard, PageHeader } from '@/components/design/ProductPrimitives';
 
 interface CodeSection {
   id: string;
@@ -960,43 +961,25 @@ export default function CodeReferenceLibrary() {
         <meta name="description" content="Comprehensive building code database covering 35+ jurisdictions. Quick reference for IBC, state codes, and city amendments." />
       </Helmet>
 
-      <div className="w-full max-w-7xl ml-0 mr-auto pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 py-4 sm:py-6 md:py-8">
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Code Reference"
+          title="Code Reference Library"
+          body={`Comprehensive building code database covering ${jurisdictionCodes.length} jurisdictions. Quick reference for IBC, state codes, major city amendments, and more.`}
+        />
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <MetricCard label="Jurisdictions" value={jurisdictionCodes.length} icon={Book} />
+          <MetricCard label="Code sections" value={`${totalSections}+`} icon={FileText} />
+          <MetricCard label="Model codes" value={modelCodes.length} />
+          <MetricCard label="State & city codes" value={stateCodes.length + cityCodes.length} />
+        </div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-8"
         >
-          {/* Header */}
-          <div className="text-center space-y-4">
-            <div className="flex items-center justify-center gap-3">
-              <BookOpen className="h-10 w-10 text-primary" />
-              <h1 className="text-4xl font-bold">Code Reference Library</h1>
-            </div>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Comprehensive building code database covering {jurisdictionCodes.length} jurisdictions. 
-              Quick reference for IBC, state codes, major city amendments, and more.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
-              <Badge variant="secondary">
-                <Book className="h-3 w-3 mr-1" />
-                {jurisdictionCodes.length} Jurisdictions
-              </Badge>
-              <Badge variant="secondary">
-                <FileText className="h-3 w-3 mr-1" />
-                {totalSections}+ Code Sections
-              </Badge>
-              <Badge variant="outline">
-                {modelCodes.length} Model Codes
-              </Badge>
-              <Badge variant="outline">
-                {stateCodes.length} State Codes
-              </Badge>
-              <Badge variant="outline">
-                {cityCodes.length} City Codes
-              </Badge>
-            </div>
-          </div>
-
           {/* Search & Filters */}
           <Card>
             <CardContent className="pt-6">
