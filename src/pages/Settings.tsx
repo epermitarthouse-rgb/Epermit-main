@@ -435,101 +435,103 @@ export default function Settings() {
                       </div>
                     ) : (
                       <>
-                        {/* Email (read-only) */}
-                        <div className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            Email
-                          </Label>
-                          <Input
-                            value={user?.email || ""}
-                            disabled
-                            className="bg-muted"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Email cannot be changed
-                          </p>
-                        </div>
-
-                        {/* Full Name */}
-                        <div className="space-y-2">
-                          <Label htmlFor="full_name" className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            Full Name
-                          </Label>
-                          <Input
-                            id="full_name"
-                            value={profile.full_name || ""}
-                            onChange={(e) => handleProfileChange("full_name", e.target.value)}
-                            placeholder="Enter your full name"
-                          />
-                          {profileErrors.full_name && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.full_name}
+                        <div className="grid gap-5 md:grid-cols-2">
+                          {/* Email (read-only) */}
+                          <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              Email
+                            </Label>
+                            <Input
+                              value={user?.email || ""}
+                              disabled
+                              className="bg-muted"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Email cannot be changed
                             </p>
-                          )}
-                        </div>
+                          </div>
 
-                        {/* Company Name */}
-                        <div className="space-y-2">
-                          <Label htmlFor="company_name" className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-muted-foreground" />
-                            Company Name
-                          </Label>
-                          <Input
-                            id="company_name"
-                            value={profile.company_name || ""}
-                            onChange={(e) => handleProfileChange("company_name", e.target.value)}
-                            placeholder="Enter your company name"
-                          />
-                          {profileErrors.company_name && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.company_name}
-                            </p>
-                          )}
-                        </div>
+                          {/* Full Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor="full_name" className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              Full Name
+                            </Label>
+                            <Input
+                              id="full_name"
+                              value={profile.full_name || ""}
+                              onChange={(e) => handleProfileChange("full_name", e.target.value)}
+                              placeholder="Enter your full name"
+                            />
+                            {profileErrors.full_name && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.full_name}
+                              </p>
+                            )}
+                          </div>
 
-                        {/* Job Title */}
-                        <div className="space-y-2">
-                          <Label htmlFor="job_title" className="flex items-center gap-2">
-                            <Briefcase className="h-4 w-4 text-muted-foreground" />
-                            Job Title
-                          </Label>
-                          <Input
-                            id="job_title"
-                            value={profile.job_title || ""}
-                            onChange={(e) => handleProfileChange("job_title", e.target.value)}
-                            placeholder="Enter your job title"
-                          />
-                          {profileErrors.job_title && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.job_title}
-                            </p>
-                          )}
-                        </div>
+                          {/* Company Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor="company_name" className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              Company Name
+                            </Label>
+                            <Input
+                              id="company_name"
+                              value={profile.company_name || ""}
+                              onChange={(e) => handleProfileChange("company_name", e.target.value)}
+                              placeholder="Enter your company name"
+                            />
+                            {profileErrors.company_name && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.company_name}
+                              </p>
+                            )}
+                          </div>
 
-                        {/* Phone */}
-                        <div className="space-y-2">
-                          <Label htmlFor="phone" className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            Phone Number
-                          </Label>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            value={profile.phone || ""}
-                            onChange={(e) => handleProfileChange("phone", e.target.value)}
-                            placeholder="Enter your phone number"
-                          />
-                          {profileErrors.phone && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.phone}
-                            </p>
-                          )}
+                          {/* Job Title */}
+                          <div className="space-y-2">
+                            <Label htmlFor="job_title" className="flex items-center gap-2">
+                              <Briefcase className="h-4 w-4 text-muted-foreground" />
+                              Job Title
+                            </Label>
+                            <Input
+                              id="job_title"
+                              value={profile.job_title || ""}
+                              onChange={(e) => handleProfileChange("job_title", e.target.value)}
+                              placeholder="Enter your job title"
+                            />
+                            {profileErrors.job_title && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.job_title}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Phone */}
+                          <div className="space-y-2">
+                            <Label htmlFor="phone" className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              Phone Number
+                            </Label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              value={profile.phone || ""}
+                              onChange={(e) => handleProfileChange("phone", e.target.value)}
+                              placeholder="Enter your phone number"
+                            />
+                            {profileErrors.phone && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.phone}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <Separator />
@@ -598,64 +600,66 @@ export default function Settings() {
                       )}
                     </div>
 
-                    {/* New Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">New Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="newPassword"
-                          type={showNewPassword ? "text" : "password"}
-                          value={passwords.newPassword}
-                          onChange={(e) => {
-                            setPasswords((prev) => ({ ...prev, newPassword: e.target.value }));
-                            setPasswordErrors((prev) => ({ ...prev, newPassword: "" }));
-                          }}
-                          placeholder="Enter new password"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={() => setShowNewPassword(!showNewPassword)}
-                        >
-                          {showNewPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {/* New Password */}
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="newPassword"
+                            type={showNewPassword ? "text" : "password"}
+                            value={passwords.newPassword}
+                            onChange={(e) => {
+                              setPasswords((prev) => ({ ...prev, newPassword: e.target.value }));
+                              setPasswordErrors((prev) => ({ ...prev, newPassword: "" }));
+                            }}
+                            placeholder="Enter new password"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        {passwordErrors.newPassword && (
+                          <p className="text-xs text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {passwordErrors.newPassword}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Must be at least 8 characters
+                        </p>
                       </div>
-                      {passwordErrors.newPassword && (
-                        <p className="text-xs text-destructive flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {passwordErrors.newPassword}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Must be at least 8 characters
-                      </p>
-                    </div>
 
-                    {/* Confirm Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        value={passwords.confirmPassword}
-                        onChange={(e) => {
-                          setPasswords((prev) => ({ ...prev, confirmPassword: e.target.value }));
-                          setPasswordErrors((prev) => ({ ...prev, confirmPassword: "" }));
-                        }}
-                        placeholder="Confirm new password"
-                      />
-                      {passwordErrors.confirmPassword && (
-                        <p className="text-xs text-destructive flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {passwordErrors.confirmPassword}
-                        </p>
-                      )}
+                      {/* Confirm Password */}
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          value={passwords.confirmPassword}
+                          onChange={(e) => {
+                            setPasswords((prev) => ({ ...prev, confirmPassword: e.target.value }));
+                            setPasswordErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                          }}
+                          placeholder="Confirm new password"
+                        />
+                        {passwordErrors.confirmPassword && (
+                          <p className="text-xs text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {passwordErrors.confirmPassword}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <Separator />
@@ -686,7 +690,7 @@ export default function Settings() {
                     <div>
                       <h4 className="font-medium mb-4">Email Notifications</h4>
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailDeadlineReminders">Deadline Reminders</Label>
                             <p className="text-sm text-muted-foreground">
@@ -702,7 +706,7 @@ export default function Settings() {
 
                         <Separator />
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailInspectionReminders">Inspection Reminders</Label>
                             <p className="text-sm text-muted-foreground">
@@ -718,7 +722,7 @@ export default function Settings() {
 
                         <Separator />
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailProjectUpdates">Project Updates</Label>
                             <p className="text-sm text-muted-foreground">
@@ -734,7 +738,7 @@ export default function Settings() {
 
                         <Separator />
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailJurisdictionUpdates">Jurisdiction Updates</Label>
                             <p className="text-sm text-muted-foreground">
@@ -755,7 +759,7 @@ export default function Settings() {
                     {/* In-App Notifications */}
                     <div>
                       <h4 className="font-medium mb-4">In-App Notifications</h4>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="space-y-0.5">
                           <Label htmlFor="inAppNotifications">Enable In-App Notifications</Label>
                           <p className="text-sm text-muted-foreground">
