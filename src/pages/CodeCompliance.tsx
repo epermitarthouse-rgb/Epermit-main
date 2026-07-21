@@ -39,17 +39,15 @@ export default function CodeCompliance() {
           }
         />
 
-        <div className="pilot-card p-4 sm:p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-          >
-            <ErrorBoundary fallbackTitle="Failed to load compliance analyzer">
-              <AIComplianceAnalyzer />
-            </ErrorBoundary>
-          </motion.div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+        >
+          <ErrorBoundary fallbackTitle="Failed to load compliance analyzer">
+            <AIComplianceAnalyzer />
+          </ErrorBoundary>
+        </motion.div>
       </div>
     </>
   );
