@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
+import { PageHeader, AlertBanner, ServicePill } from "@/components/design/ProductPrimitives";
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -2363,37 +2363,32 @@ export default function UciDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <EditorialPageHeader
-        eyebrow="UCI"
-        title="Utility Coordination Intelligence"
-        description="Track utility provider coordination, lifecycle stages, and project readiness."
-        icon={RadioTower}
-        iconClassName="text-teal"
-        className="dark:bg-muted dark:text-foreground"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Utility Coordination Intelligence"
+        title="Utility Coordination"
+        body="Track utility provider coordination, lifecycle stages, and project readiness. Live data from uciApi — no mock submissions."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <ServicePill kind="utility">Utility coordination</ServicePill>
+            <ServicePill kind="permit">Permit expediting</ServicePill>
+          </div>
+        }
       />
 
-      <section className="pb-12 pt-2 px-4 sm:px-6">
+      <section className="space-y-6 px-0">
         <div className="mx-auto w-full max-w-6xl space-y-6">
-          <div
-            className={cn(
-              EDITORIAL_FORM_CARD,
-              "flex items-start gap-3 px-4 py-3 text-sm text-ink-secondary-light",
-            )}
-          >
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-teal" />
-            <div className="text-ink-primary-light">
-              <p className="font-medium text-ink-primary-light">
-                PEPCO read-only portal sync is available. Application submission and automated
-                lifecycle agents are not yet enabled.
-              </p>
+          <AlertBanner
+            tone="info"
+            title="PEPCO read-only portal sync is available"
+            detail={
               <ul className={cn("mt-1 list-disc pl-5 text-xs", uciMutedClass)}>
                 <li>PEPCO portal discovery and refresh: available (read-only)</li>
                 <li>Application submission automation: not enabled</li>
                 <li>Manual coordination tracking: available</li>
               </ul>
-            </div>
-          </div>
+            }
+          />
 
           {uciSelectedProject ? (
             <UciProjectContextBar

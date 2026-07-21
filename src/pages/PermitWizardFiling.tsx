@@ -6,8 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
-import { StatusPill } from "@/components/design/ProductPrimitives";
+import { PageHeader, ServicePill, StatusPill } from "@/components/design/ProductPrimitives";
 import { filingStatusTone } from "@/adapters/filingStatusAdapter";
 import {
   Rocket,
@@ -384,33 +383,38 @@ export default function PermitWizardFiling() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <EditorialPageHeader
-        eyebrow="PERMIT FILING"
-        title="Permit Filing"
-        description="Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses."
-        icon={Rocket}
-        actions={
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Permit Filing"
+        title="Phase · Filing workflow"
+        body="Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses with utility coordination dependencies surfaced in the same flow."
+        action={
           <div className="flex flex-wrap items-center gap-2">
+            <ServicePill kind="permit">Permit expediting</ServicePill>
+            <ServicePill kind="utility">Utility coordination</ServicePill>
             <Button
               variant="outline"
               size="sm"
               onClick={handleRefresh}
               disabled={refreshing}
               data-testid="button-refresh"
+              className="pilot-button-ghost"
             >
               <RefreshCw className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <Button onClick={() => setStartDialogOpen(true)} data-testid="button-start-filing">
+            <Button
+              onClick={() => setStartDialogOpen(true)}
+              data-testid="button-start-filing"
+              className="pilot-button-primary"
+            >
               <Plus className="mr-1 h-4 w-4" />
               Start New Filing
             </Button>
           </div>
         }
       />
-      <section className="container-page">
-      <div className="mx-auto ml-0 mr-auto w-full min-w-0 max-w-7xl">
+      <div className="space-y-6">
         {!selectedProjectId && !loading && filings.length === 0 && (
           <Card className="border-dashed mb-6">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -721,7 +725,6 @@ export default function PermitWizardFiling() {
           }}
         />
       </div>
-      </section>
     </div>
   );
 }

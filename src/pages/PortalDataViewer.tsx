@@ -65,9 +65,14 @@ import {
   MessageSquare,
   ArrowLeft,
   Loader2,
+  Cloud,
+  Inbox,
 } from "lucide-react";
-import { Section } from "@/components/ui/Section";
-import { Eyebrow, EyebrowDark } from "@/components/ui/Typography";
+import {
+  AlertBanner,
+  MetricCard,
+  PageHeader,
+} from "@/components/design/ProductPrimitives";
 import AccelaProjectView from "@/components/portal/AccelaProjectView";
 import {
   PgcStatusTab,
@@ -85,6 +90,8 @@ import {
 } from "@/lib/portalView";
 import { resolvePgcPortalFileOpenUrl } from "@/lib/pgcPortalFileUrl";
 import { cn } from "@/lib/utils";
+import { Section } from "@/components/ui/Section";
+import { EyebrowDark } from "@/components/ui/Typography";
 
 /** Commun-ET tab pills — presentation only; tab `value` and visibility unchanged. */
 const PORTAL_TAB_TRIGGER =
@@ -3038,101 +3045,130 @@ export default function PortalDataViewer() {
   );
 
   return (
-    <>
-      <Section variant="cream" className="border-b border-border/70 px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/dashboard")}
-            data-testid="button-back-to-dashboard"
-            className={cn(
-              PORTAL_ACTION_BUTTON_LIGHT_OUTLINE,
-              "mb-3 -ml-1 border-transparent bg-transparent shadow-none hover:bg-muted",
-            )}
-          >
-            <ArrowLeft />
-            Back to Dashboard
-          </Button>
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <Eyebrow>PORTAL HARVEST</Eyebrow>
-              <h1 className="mt-2 font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
-                Portal Harvest
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
-                Review extracted permit information, reports, attachments, screenshots, and jurisdiction-specific portal data.
-              </p>
-              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-tight text-xl font-bold text-foreground">
-                      {portalData.projectNum}
-                    </h2>
-                    {loading && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-                  </div>
-                  {portalData.description && (
-                    <p className="text-ink-secondary-light mt-1 max-w-2xl text-sm">
-                      {portalData.description}
-                    </p>
-                  )}
-                  {portalData.location && (
-                    <p className="text-sm text-ink-tertiary-light mt-0.5">
-                      {portalData.location}
-                    </p>
-                  )}
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    {displayPortalStatus && (
-                      <span className="inline-flex items-center rounded-full border border-gold/25 bg-gold-soft/70 px-3 py-1 text-xs font-semibold text-ink-primary-light">
-                        {displayPortalStatus}
-                      </span>
-                    )}
-                    {lastCheckedStr && (
-                      <span className="text-sm text-ink-tertiary-light">
-                        {lastCheckedStr}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Portal Harvest"
+        title="Operational monitoring for county and provider portals."
+        body="Review extracted permit information, reports, attachments, screenshots, and jurisdiction-specific portal data. Harvest feeds both permit expediting and utility coordination."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/dashboard")}
+              data-testid="button-back-to-dashboard"
+              className="pilot-button-ghost"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Dashboard
+            </Button>
+            <Button
+              onClick={handleManualRefresh}
+              disabled={refreshing || scrape.isScraping}
+              data-testid="button-refresh-portal-data"
+              className="pilot-button-primary"
+            >
+              {refreshing || scrape.isScraping ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {scrape.isScraping
+                ? "Harvesting…"
+                : refreshing
+                  ? "Refreshing…"
+                  : "Force Sync"}
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Active project"
+          value={selectedProjectId ? "1" : "0"}
+          hint={portalData.projectNum || "Select a project in the shell"}
+          icon={Cloud}
+        />
+        <MetricCard
+          label="Harvest status"
+          value={scrape.isScraping ? "Live" : displayPortalStatus || "Idle"}
+          hint={lastCheckedStr || "No recent sync"}
+          icon={Inbox}
+        />
+        <MetricCard
+          label="Reports"
+          value={`${(portalData.tabs?.reports?.reportEntries ?? []).length + (portalData.tabs?.reports?.pdfs ?? []).length}`}
+          hint="Captured report artifacts"
+          icon={FileText}
+        />
+        <MetricCard
+          label="Files"
+          value={String(
+            (filesTab?.folders ?? []).reduce(
+              (sum: number, f: { files?: unknown[] }) =>
+                sum + (f.files?.length ?? 0),
+              0,
+            ) || (liveFileResults.active ? "…" : "0"),
+          )}
+          hint={liveFileResults.active ? "Live scrape files active" : "Saved file results"}
+          icon={FolderOpen}
+        />
+      </div>
+
+      {scrape.isScraping && (
+        <AlertBanner
+          tone="info"
+          title="Portal harvest in progress"
+          detail={
+            <span className="inline-flex items-center gap-2" data-testid="text-auto-refresh-active">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Auto-refreshing while scrape job runs. Scrape controls remain available in the harvest UI.
+            </span>
+          }
+        />
+      )}
+
+      {!selectedProjectId && (
+        <AlertBanner
+          tone="warn"
+          title="No active project selected"
+          detail="Choose a project in the sidebar or header to load portal_data and run harvest."
+        />
+      )}
+
+      {(portalData.projectNum || portalData.description || displayPortalStatus) && (
+        <div className="pilot-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="pilot-kicker">Current harvest target</div>
+              <h2 className="mt-1 font-tight text-xl font-bold text-foreground">
+                {portalData.projectNum || "Project"}
+              </h2>
+              {portalData.description && (
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  {portalData.description}
+                </p>
+              )}
+              {portalData.location && (
+                <p className="mt-0.5 text-sm text-muted-foreground">{portalData.location}</p>
+              )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {scrape.isScraping && (
-                <span
-                  className="text-xs text-teal flex items-center gap-1"
-                  data-testid="text-auto-refresh-active"
-                >
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Auto-refreshing
+            <div className="flex flex-wrap items-center gap-2">
+              {displayPortalStatus && (
+                <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold">
+                  {displayPortalStatus}
                 </span>
               )}
-              <Button
-                variant="outline"
-                onClick={handleManualRefresh}
-                disabled={refreshing}
-                data-testid="button-refresh-portal-data"
-                className={
-                  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gold/60 bg-transparent px-3.5 text-sm font-semibold text-gold-deep shadow-none transition-colors hover:bg-gold hover:text-cream hover:border-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 disabled:cursor-not-allowed disabled:border-cream-sunken disabled:bg-cream-raised disabled:text-ink-tertiary-light disabled:opacity-70 [&_svg]:h-4 [&_svg]:w-4"
-                }
-              >
-                {refreshing ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <RefreshCw />
-                )}
-                {refreshing ? "Refreshing..." : "Refresh Data"}
-              </Button>
+              {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
           </div>
         </div>
-      </Section>
+      )}
 
-      <div className="mt-10 bg-cream border-b border-cream-raised">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="pilot-card overflow-hidden">
       <Tabs defaultValue="info" className="w-full">
-        <TabsList className="h-auto w-full flex flex-wrap gap-2 bg-transparent p-0 py-4 justify-start border-0 rounded-none text-ink-secondary-light">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b border-border bg-muted/30 p-2">
           <TabsTrigger value="info" className={PORTAL_TAB_TRIGGER}>
             Info
           </TabsTrigger>
@@ -3166,7 +3202,7 @@ export default function PortalDataViewer() {
             >
               Files
               {liveFileResults.active ? (
-                <Badge className="ml-2 border border-teal/30 bg-teal/10 text-[10px] text-teal">
+                <Badge className="ml-2 border border-primary/30 bg-primary/10 text-[10px] text-primary">
                   Live
                 </Badge>
               ) : null}
@@ -3174,8 +3210,8 @@ export default function PortalDataViewer() {
           ) : null}
         </TabsList>
 
-        <TabsContent value="info" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
-          <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+        <TabsContent value="info" className="mt-0 p-4 focus-visible:outline-none sm:p-6">
+          <Card className="overflow-hidden rounded-lg border border-border bg-card shadow-none">
             <CardContent className="p-0">
               <TabErrorBoundary tabName="Info">
                 <>
@@ -4923,7 +4959,6 @@ export default function PortalDataViewer() {
           </TabsContent>
         )}
       </Tabs>
-        </div>
       </div>
 
       <Dialog
@@ -4981,6 +5016,6 @@ export default function PortalDataViewer() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

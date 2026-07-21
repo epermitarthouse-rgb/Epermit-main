@@ -58,8 +58,7 @@ import { effectiveResponseStatus, responseStatusBadgeClass } from "@/lib/respons
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
-import { Section } from "@/components/ui/Section";
-import { Eyebrow } from "@/components/ui/Typography";
+import { PageHeader, MetricCard, ServicePill } from "@/components/design/ProductPrimitives";
 import { PlanMarkupWorkspace } from "@/components/plans/PlanMarkupWorkspace";
 import { useApprovalGate } from "@/components/plans/ArchitectApprovalDialog";
 import type { PanelComment } from "@/components/plans/CommentPlanPanel";
@@ -1183,46 +1182,74 @@ export default function ResponseMatrix() {
   }
 
   return (
-    <div className="min-h-[80vh] w-full min-w-0 overflow-x-hidden bg-background text-foreground">
+    <div className="min-h-[80vh] w-full min-w-0 space-y-6 overflow-x-hidden bg-background text-foreground">
       <style>{RESPONSE_MATRIX_STYLES}</style>
-      <Section variant="cream" className="border-b border-border/70 pt-6 pb-6 md:pt-8 md:pb-8">
-        <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 md:px-6">
-        <header className="flex flex-col gap-4">
-          <div className="flex min-w-0 items-center gap-3">
+      <PageHeader
+        eyebrow="Response Matrix"
+        title="Comment reconciliation across permitting and utility coordination."
+        body={
+          <>
+            Manage and draft official responses to permit comments in one workspace.
+            {withoutMetadata.length > 0 ? (
+              <span className="mt-1 block text-muted-foreground/80">{matrixSourceLabel}</span>
+            ) : null}
+          </>
+        }
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <ServicePill kind="permit">Permit expediting</ServicePill>
+            <ServicePill kind="utility">Utility coordination</ServicePill>
+            {projectId && (
+              <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full border border-border bg-muted px-2 text-xs font-medium shrink-0">
+                {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
+              </span>
+            )}
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/dashboard")}
-              className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="shrink-0"
+              aria-label="Back to dashboard"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="min-w-0 border-l-2 border-primary/40 pl-3">
-              <Eyebrow>RESPONSE MATRIX</Eyebrow>
-              <h1 className="mt-1.5 font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
-                Response Matrix
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Manage and draft official responses to permit comments.
-                {withoutMetadata.length > 0 ? (
-                  <span className="mt-1 block text-muted-foreground/80">{matrixSourceLabel}</span>
-                ) : null}
-              </p>
-            </div>
           </div>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Comments"
+          value={`${withoutMetadata.length}`}
+          hint={projectId ? "Loaded for active project" : "Select a project"}
+        />
+        <MetricCard
+          label="Matrix rows"
+          value={`${rows.length}`}
+          hint="Visible after filters"
+        />
+        <MetricCard
+          label="Project"
+          value={projectId ? "Linked" : "None"}
+          hint={projectId ? projectId.slice(0, 8) : "Required for actions"}
+        />
+        <MetricCard
+          label="Source"
+          value={withoutMetadata.length > 0 ? "Live" : "Empty"}
+          hint="Real parsed comments — never mocked"
+        />
+      </div>
+
+      <div className="mx-auto w-full min-w-0 max-w-[1600px]">
+        <header className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {projectId && (
-              <span className="inline-flex items-center justify-center rounded-full border border-gold/35 bg-gold/12 text-gold-deep text-xs font-medium h-6 min-w-[24px] px-2 shrink-0">
-                {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
-              </span>
-            )}
-            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 justify-end">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
               <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
               <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
               <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="outlineGold"
+                    variant="outline"
                     size="sm"
                     disabled={!projectId}
                     data-testid="button-actions-dropdown"
@@ -1306,8 +1333,7 @@ export default function ResponseMatrix() {
             </div>
           </div>
         </header>
-        </div>
-      </Section>
+      </div>
 
       <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0 space-y-4 py-6">
 

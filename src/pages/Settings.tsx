@@ -38,8 +38,7 @@ import { PortalCredentialsManager } from "@/components/settings/PortalCredential
 import { MicrosoftMailboxConnector } from "@/components/settings/MicrosoftMailboxConnector";
 import { ArchitectProfileManager } from "@/components/settings/ArchitectProfileManager";
 import { ExportBrandingManager } from "@/components/settings/ExportBrandingManager";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
-import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
+import { PageHeader } from "@/components/design/ProductPrimitives";
 import { cn } from "@/lib/utils";
 
 // Validation schemas
@@ -361,82 +360,65 @@ export default function Settings() {
     );
   }
 
+  const settingsTabTrigger =
+    "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/15 data-[state=active]:text-primary text-muted-foreground hover:bg-muted/50 hover:text-foreground";
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <EditorialPageHeader
-        eyebrow="ACCOUNT"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Account"
         title="Settings"
-        description="Manage your profile, security, notifications, portals, branding, and data cleanup."
-        icon={User}
-        iconClassName="text-teal"
+        body="Manage your profile, security, notifications, portals, branding, and data cleanup — for both permit expediting and utility coordination work."
       />
 
-      <section className="py-4 sm:py-8">
-        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6">
-          {/* Tabs */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Tabs defaultValue="profile" className="space-y-6">
-              <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/45 p-1 text-ink-secondary-light sm:grid-cols-4 lg:grid-cols-7">
-                <TabsTrigger
-                  value="profile"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <User className="h-4 w-4" />
-                  <span className="hidden sm:inline">Profile</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="security"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <Lock className="h-4 w-4" />
-                  <span className="hidden sm:inline">Security</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="notifications"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <Bell className="h-4 w-4" />
-                  <span className="hidden sm:inline">Notifications</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="portals"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <KeyRound className="h-4 w-4" />
-                  <span className="hidden sm:inline">Portal Credentials</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="architect"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                  data-testid="tab-architect-profile"
-                >
-                  <Stamp className="h-4 w-4" />
-                  <span className="hidden sm:inline">Architect</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="branding"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                  data-testid="tab-export-branding"
-                >
-                  <FileSignature className="h-4 w-4" />
-                  <span className="hidden sm:inline">Export Branding</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="cleanup"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <Database className="h-4 w-4" />
-                  <span className="hidden sm:inline">Clean Up Data</span>
-                </TabsTrigger>
-              </TabsList>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Tabs defaultValue="profile" className="space-y-6">
+          <TabsList className="pilot-card flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1.5">
+            <TabsTrigger value="profile" className={settingsTabTrigger}>
+              <User className="h-4 w-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="security" className={settingsTabTrigger}>
+              <Lock className="h-4 w-4" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className={settingsTabTrigger}>
+              <Bell className="h-4 w-4" />
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger value="portals" className={settingsTabTrigger}>
+              <KeyRound className="h-4 w-4" />
+              Portal Credentials
+            </TabsTrigger>
+            <TabsTrigger
+              value="architect"
+              className={settingsTabTrigger}
+              data-testid="tab-architect-profile"
+            >
+              <Stamp className="h-4 w-4" />
+              Architect
+            </TabsTrigger>
+            <TabsTrigger
+              value="branding"
+              className={settingsTabTrigger}
+              data-testid="tab-export-branding"
+            >
+              <FileSignature className="h-4 w-4" />
+              Export Branding
+            </TabsTrigger>
+            <TabsTrigger value="cleanup" className={settingsTabTrigger}>
+              <Database className="h-4 w-4" />
+              Clean Up Data
+            </TabsTrigger>
+          </TabsList>
 
               {/* Profile Tab */}
               <TabsContent value="profile">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Profile Information</CardTitle>
                     <CardDescription className="text-ink-secondary-light">
@@ -572,7 +554,7 @@ export default function Settings() {
 
               {/* Security Tab */}
               <TabsContent value="security">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Change Password</CardTitle>
                     <CardDescription className="text-ink-secondary-light">
@@ -692,7 +674,7 @@ export default function Settings() {
 
               {/* Notifications Tab */}
               <TabsContent value="notifications">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Notification Preferences</CardTitle>
                     <CardDescription className="text-ink-secondary-light">
@@ -822,7 +804,7 @@ export default function Settings() {
 
               {/* Clean Up Data Tab */}
               <TabsContent value="cleanup">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Trash2 className="h-5 w-5 text-ink-tertiary-light" />
@@ -867,8 +849,6 @@ export default function Settings() {
               </TabsContent>
             </Tabs>
           </motion.div>
-        </div>
-      </section>
     </div>
   );
 }

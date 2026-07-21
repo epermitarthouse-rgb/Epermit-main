@@ -530,35 +530,77 @@ export default function AdminPanel() {
         <Flag className="mr-2 h-4 w-4" />
         Feature Flags
       </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/authorizations')}>
+        <History className="mr-2 h-4 w-4" />
+        Authorizations
+        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/members')}>
+        <Users className="mr-2 h-4 w-4" />
+        Members
+        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+      </Button>
     </div>
   );
+
+  const totalSubscribers = jurisdictions.reduce((sum, j) => sum + j.subscriber_count, 0);
 
   return (
     <>
       <AdminPageShell
-        variant="editorial"
-        title="Admin Panel"
-        description="Notifications, drip campaigns, activity log, and email branding."
+        title="Workspace Operations"
+        description="Notifications, drip campaigns, activity log, and email branding — live PermitPilot admin controls."
         breadcrumbs={[{ label: 'Overview' }]}
         actions={adminQuickLinks}
+        eyebrow="Admin Control Center"
       >
         <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="pilot-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="pilot-kicker text-muted-foreground">Jurisdictions</span>
+                <Building2 className="h-4 w-4 text-primary" />
+              </div>
+              <div className="mt-1 font-display text-3xl font-semibold">{jurisdictions.length}</div>
+            </div>
+            <div className="pilot-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="pilot-kicker text-muted-foreground">Subscriptions</span>
+                <Users className="h-4 w-4 text-primary" />
+              </div>
+              <div className="mt-1 font-display text-3xl font-semibold">{totalSubscribers}</div>
+            </div>
+            <div className="pilot-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="pilot-kicker text-muted-foreground">Activity events</span>
+                <History className="h-4 w-4 text-primary" />
+              </div>
+              <div className="mt-1 font-display text-3xl font-semibold">{activityLogs.length}</div>
+            </div>
+            <div className="pilot-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="pilot-kicker text-muted-foreground">Scheduled</span>
+                <Calendar className="h-4 w-4 text-primary" />
+              </div>
+              <div className="mt-1 font-display text-3xl font-semibold">{scheduledNotifications.length}</div>
+            </div>
+          </div>
 
             <Tabs defaultValue="notifications" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/40 p-1 text-ink-secondary-light">
-              <TabsTrigger value="notifications" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+            <TabsList className="pilot-card flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1.5">
+              <TabsTrigger value="notifications" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <Bell className="h-4 w-4" />
                 Notifications
               </TabsTrigger>
-              <TabsTrigger value="drip" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+              <TabsTrigger value="drip" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <MailCheck className="h-4 w-4" />
                 Drip Campaigns
               </TabsTrigger>
-              <TabsTrigger value="activity" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+              <TabsTrigger value="activity" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <History className="h-4 w-4" />
                 Activity Log
               </TabsTrigger>
-              <TabsTrigger value="branding" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+              <TabsTrigger value="branding" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <Palette className="h-4 w-4" />
                 Email Branding
               </TabsTrigger>
