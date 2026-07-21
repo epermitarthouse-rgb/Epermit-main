@@ -2497,8 +2497,83 @@ export default function UciDashboard() {
                 />
               </div>
 
+              {/*
+                Coordination modules — Lovable-style hub tile grid, but wired to
+                REAL PP capabilities only. Lovable's mock hub tiles (Conflict
+                Hunter, Easement/ROW, Provider Map, Miss Utility, Long-Lead,
+                Predictive Impact) have no PP equivalent yet and are
+                intentionally NOT shipped here — no fake modules/links.
+              */}
+              <Panel eyebrow="UCI Hub" title="Coordination modules">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document.getElementById("uci-stage-rail")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
+                  >
+                    <Zap className="mt-0.5 h-4 w-4 text-primary" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle stages</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {uciFurthestStage ? `Stage ${uciFurthestStage} of ${STAGE_OPTIONS.length}` : "10-stage tracker"}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document.getElementById("uci-records-table")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
+                  >
+                    <Layers className="mt-0.5 h-4 w-4 text-primary" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Coordination records</div>
+                      <div className="text-[11px] text-muted-foreground">{uciCoordinationRecordCount} record(s) this project</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document.getElementById("uci-attention-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    className={cn(
+                      "group flex items-start gap-3 rounded-lg border p-3 text-left transition-all",
+                      uciNeedsAttentionCount > 0
+                        ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                        : "border-border bg-muted/30 hover:border-primary/50 hover:bg-primary/5",
+                    )}
+                  >
+                    <AlertTriangle className="mt-0.5 h-4 w-4 text-primary" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Attention queue</div>
+                      <div className="text-[11px] text-muted-foreground">{uciNeedsAttentionCount} flagged communication(s)</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={records.length === 0}
+                    onClick={() => {
+                      const target = uciAttentionRecords[0]?.id ?? records[0]?.id;
+                      if (target) void openDetail(target);
+                    }}
+                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RadioTower className="mt-0.5 h-4 w-4 text-primary" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Provider detail</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Load profile · UCI builder · COS · meter-set
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </Panel>
+
               {/* Stage progress rail — presentational, driven by real stage_summary counts */}
-              <Panel eyebrow="Lifecycle" title="Stage progress">
+              <Panel eyebrow="Lifecycle" title="Stage progress" id="uci-stage-rail">
                 {portfolioLoading ? (
                   <div className="flex justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin text-teal" />
@@ -2535,6 +2610,7 @@ export default function UciDashboard() {
               {/* Records table (main) + attention queue (secondary) */}
               <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
                 <Panel
+                  id="uci-records-table"
                   eyebrow="Utility coordination"
                   title="Coordination records"
                   action={
@@ -2630,7 +2706,7 @@ export default function UciDashboard() {
                 </Panel>
 
                 <aside className="space-y-4 lg:self-start">
-                  <Panel eyebrow="Attention queue" title="Needs attention">
+                  <Panel id="uci-attention-queue" eyebrow="Attention queue" title="Needs attention">
                     {portfolioLoading ? (
                       <div className="flex justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-teal" />

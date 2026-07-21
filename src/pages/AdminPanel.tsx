@@ -15,6 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import { Shield, Send, Users, Bell, Loader2, Mail, Eye, Palette, Save, History, CheckCircle, XCircle, Clock, Calendar, Trash2, Building2, MailCheck, Flag, MapPin } from 'lucide-react';
 import { DripCampaignManager } from '@/components/admin/DripCampaignManager';
 import { AdminPageShell } from '@/components/admin/AdminPageShell';
+import { MetricCard } from '@/components/design/ProductPrimitives';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
@@ -540,6 +541,11 @@ export default function AdminPanel() {
         Members
         <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
       </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/audit')}>
+        <History className="mr-2 h-4 w-4" />
+        Audit Log
+        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+      </Button>
     </div>
   );
 
@@ -556,34 +562,10 @@ export default function AdminPanel() {
       >
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="pilot-card p-4">
-              <div className="flex items-center justify-between">
-                <span className="pilot-kicker text-muted-foreground">Jurisdictions</span>
-                <Building2 className="h-4 w-4 text-primary" />
-              </div>
-              <div className="mt-1 font-display text-3xl font-semibold">{jurisdictions.length}</div>
-            </div>
-            <div className="pilot-card p-4">
-              <div className="flex items-center justify-between">
-                <span className="pilot-kicker text-muted-foreground">Subscriptions</span>
-                <Users className="h-4 w-4 text-primary" />
-              </div>
-              <div className="mt-1 font-display text-3xl font-semibold">{totalSubscribers}</div>
-            </div>
-            <div className="pilot-card p-4">
-              <div className="flex items-center justify-between">
-                <span className="pilot-kicker text-muted-foreground">Activity events</span>
-                <History className="h-4 w-4 text-primary" />
-              </div>
-              <div className="mt-1 font-display text-3xl font-semibold">{activityLogs.length}</div>
-            </div>
-            <div className="pilot-card p-4">
-              <div className="flex items-center justify-between">
-                <span className="pilot-kicker text-muted-foreground">Scheduled</span>
-                <Calendar className="h-4 w-4 text-primary" />
-              </div>
-              <div className="mt-1 font-display text-3xl font-semibold">{scheduledNotifications.length}</div>
-            </div>
+            <MetricCard label="Jurisdictions" value={jurisdictions.length} icon={Building2} detail="Subscribed for notifications" />
+            <MetricCard label="Subscriptions" value={totalSubscribers} icon={Users} detail="Active jurisdiction subscribers" />
+            <MetricCard label="Activity events" value={activityLogs.length} icon={History} detail="Recent admin actions logged" />
+            <MetricCard label="Scheduled" value={scheduledNotifications.length} icon={Calendar} detail="Pending / processing sends" />
           </div>
 
             <Tabs defaultValue="notifications" className="space-y-6">
