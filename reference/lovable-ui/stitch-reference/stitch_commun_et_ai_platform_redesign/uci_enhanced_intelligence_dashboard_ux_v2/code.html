@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot | UCI Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&amp;family=Inter:wght@400;500;600;700&amp;family=Inter+Tight:wght@600;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .grid-overlay {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary-fixed": "#cbe6ff",
+                      "inverse-surface": "#382e27",
+                      "on-secondary-fixed-variant": "#0e4b6e",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#fff8f5",
+                      "secondary-fixed-dim": "#9bccf6",
+                      "on-tertiary": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "on-primary-fixed": "#2f1500",
+                      "on-error-container": "#93000a",
+                      "background": "#fff8f5",
+                      "surface-container-low": "#fff1e9",
+                      "outline-variant": "#dbc2b1",
+                      "on-surface-variant": "#554337",
+                      "tertiary-container": "#00ace0",
+                      "surface": "#fff8f5",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary": "#2f6388",
+                      "primary-fixed": "#ffdcc3",
+                      "on-error": "#ffffff",
+                      "on-primary-fixed-variant": "#6e3900",
+                      "surface-dim": "#e8d7cc",
+                      "secondary-container": "#a3d4fe",
+                      "on-primary-container": "#572b00",
+                      "on-secondary-fixed": "#001e30",
+                      "error-container": "#ffdad6",
+                      "tertiary-fixed-dim": "#71d2ff",
+                      "on-tertiary-fixed": "#001e2b",
+                      "surface-variant": "#f1dfd5",
+                      "on-secondary": "#ffffff",
+                      "surface-container": "#fcebe0",
+                      "primary-fixed-dim": "#ffb77e",
+                      "on-tertiary-container": "#003b50",
+                      "inverse-primary": "#ffb77e",
+                      "surface-container-highest": "#f1dfd5",
+                      "inverse-on-surface": "#ffede3",
+                      "on-secondary-container": "#275c81",
+                      "surface-tint": "#914c00",
+                      "tertiary": "#006686",
+                      "surface-container-high": "#f6e5da",
+                      "on-background": "#221a13",
+                      "on-tertiary-fixed-variant": "#004d66",
+                      "tertiary-fixed": "#c0e8ff",
+                      "outline": "#887365",
+                      "on-surface": "#221a13",
+                      "primary": "#914c00",
+                      "primary-container": "#e8882f"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "sm": "8px",
+                      "xl": "40px",
+                      "lg": "24px",
+                      "xs": "4px",
+                      "unit": "4px",
+                      "margin": "32px",
+                      "xxl": "64px",
+                      "gutter": "24px",
+                      "md": "16px"
+              },
+              "fontFamily": {
+                      "h1": ["Inter Tight"],
+                      "display-xl": ["Cormorant Garamond"],
+                      "body-sm": ["Inter"],
+                      "label-caps": ["Inter Tight"],
+                      "body-md": ["Inter"],
+                      "display-lg": ["Cormorant Garamond"],
+                      "data-mono": ["JetBrains Mono"],
+                      "body-lg": ["Inter"],
+                      "h3": ["Inter Tight"],
+                      "h2": ["Inter Tight"]
+              },
+              "fontSize": {
+                      "h1": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "display-xl": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                      "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "display-lg": ["48px", {"lineHeight": "1.1", "fontWeight": "600"}],
+                      "data-mono": ["14px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "h3": ["20px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                      "h2": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-surface font-body-md text-on-surface">
+<!-- Sidebar Navigation -->
+<aside class="w-64 h-screen fixed left-0 top-0 border-r border-white/10 bg-[#0E1B2C] dark:bg-[#070D16] flex flex-col py-6 shadow-xl z-50">
+<div class="px-6 mb-8 flex items-center space-x-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg">electric_bolt</span>
+</div>
+<div>
+<h1 class="text-xl font-bold tracking-tighter text-white font-h1">PermitPilot</h1>
+<p class="text-[10px] uppercase tracking-widest text-primary font-label-caps">UCI Module</p>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white transition-colors hover:bg-white/5 font-serif font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg bg-primary-container/10 text-primary-container border-r-2 border-primary-container font-serif font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="map">map</span>
+<span>Utility Mapper</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white transition-colors hover:bg-white/5 font-serif font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="timeline">timeline</span>
+<span>Schedule Engine</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white transition-colors hover:bg-white/5 font-serif font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="hourglass_empty">hourglass_empty</span>
+<span>Lead Times</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white transition-colors hover:bg-white/5 font-serif font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>Archive</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-1 border-t border-white/5 pt-6">
+<button class="w-full bg-primary text-white py-3 rounded-lg font-h2 text-sm mb-4 active:scale-95 transition-transform">
+                Export Intelligence
+            </button>
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white transition-colors hover:bg-white/5 font-serif" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white transition-colors hover:bg-white/5 font-serif" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 right-0 left-64 h-16 border-b border-slate-200 bg-[#F8FAFC]/80 backdrop-blur-md flex justify-between items-center px-8 z-40">
+<div class="flex items-center space-x-8">
+<div class="flex space-x-6">
+<a class="font-serif text-lg text-slate-500 hover:text-primary transition-colors" href="#">Projects</a>
+<a class="font-serif text-lg text-primary border-b-2 border-primary pb-1" href="#">Analytics</a>
+<a class="font-serif text-lg text-slate-500 hover:text-primary transition-colors" href="#">Coordination</a>
+</div>
+</div>
+<div class="flex items-center space-x-6">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+<input class="bg-white border-slate-200 rounded-full pl-10 pr-4 py-1.5 text-sm w-64 focus:ring-primary focus:border-primary" placeholder="Search Infrastructure..." type="text"/>
+</div>
+<div class="flex items-center space-x-4 border-l border-slate-200 pl-6">
+<button class="material-symbols-outlined text-slate-500">notifications</button>
+<button class="material-symbols-outlined text-slate-500">apps</button>
+<div class="w-8 h-8 rounded-full bg-slate-200 overflow-hidden ring-2 ring-white">
+<img alt="User Profile" data-alt="A professional headshot of a middle-aged male executive wearing a sharp navy blue suit and a crisp white shirt. The background is a blurred high-end corporate office with soft, warm lighting. The overall mood is sophisticated, reflecting a leadership role in an elite intelligence and technology platform. The visual style is polished and high-fidelity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAucaKmdwpQ-KwBR6DJsoKa7b2IQMdWYTEu3Oc4CJFdjQLalomtGx73rw7476Il2B_Y0wIYzot6ytcPw2T4H8ACZ0-IfY-WZ1gkciIm3NPHxb2F-6TuL_QrVBNATbyETWMvGfd2-QPE9qIMLLdb59e3n7WOQpcb4Idd32bqMuerL0Q9eDT_HxTYDFxuMJvJDfRIf3xE4K72USyJVgk2UMLj0dM3W4RFsjcjTwJcZl8GXIqaQUfPbNof9MOrmrQkdn_iWlmaIrK4vhQ"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="p-margin space-y-lg">
+<!-- Header Section -->
+<div class="flex justify-between items-end">
+<div>
+<span class="font-label-caps text-primary uppercase mb-2 block">System Status: Active Monitoring</span>
+<h2 class="font-display-lg text-h1 text-on-surface">Utility Coordination Intelligence</h2>
+</div>
+<!-- P50/P90 Projection Widget -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-lg flex space-x-lg">
+<div class="flex flex-col">
+<span class="font-label-caps text-slate-500 text-[10px] uppercase mb-1">P50 Projection</span>
+<span class="font-h1 text-primary">Aug 14</span>
+<span class="font-body-sm text-slate-400">Likely Confidence</span>
+</div>
+<div class="w-px bg-slate-100"></div>
+<div class="flex flex-col">
+<span class="font-label-caps text-slate-500 text-[10px] uppercase mb-1">P90 Projection</span>
+<span class="font-h1 text-secondary">Sep 28</span>
+<span class="font-body-sm text-slate-400">Upper Bound</span>
+</div>
+<button class="bg-secondary-container text-on-secondary-container px-md rounded-lg self-center font-h3 text-xs py-2 active:opacity-80 transition-opacity">
+                        Run Prediction
+                    </button>
+</div>
+</div>
+<!-- Utility Lifecycle Tracker -->
+<section class="bg-white border border-slate-200 rounded-xl p-lg shadow-sm">
+<div class="flex justify-between mb-lg items-center">
+<h3 class="font-h3 text-on-surface">10-Stage Utility Lifecycle Tracker</h3>
+<span class="font-data-mono text-xs text-primary-container bg-primary-container/10 px-3 py-1 rounded-full">Current: Class of Service</span>
+</div>
+<div class="relative">
+<div class="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -translate-y-1/2"></div>
+<div class="absolute top-1/2 left-0 w-[40%] h-0.5 bg-primary -translate-y-1/2"></div>
+<div class="relative flex justify-between items-center w-full">
+<!-- Step 1 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-primary ring-4 ring-primary/20 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400 group-hover:text-primary">Load Planning</span>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-primary ring-4 ring-primary/20 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Application</span>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-primary ring-4 ring-primary/20 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Engineering</span>
+</div>
+<!-- Step 4 (ACTIVE) -->
+<div class="flex flex-col items-center group">
+<div class="w-6 h-6 rounded-full bg-white border-2 border-primary flex items-center justify-center z-10 ring-4 ring-primary/30">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+</div>
+<span class="mt-2 font-label-caps text-[10px] text-primary font-bold">Class of Service</span>
+<div class="absolute bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-inverse-surface text-inverse-on-surface text-[10px] rounded shadow-xl z-20">Utility provider determines service availability and point of connection.</div></div>
+<!-- Step 5 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-slate-200 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Cost Proposal</span>
+</div>
+<!-- Step 6 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-slate-200 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Contracting</span>
+</div>
+<!-- Step 7 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-slate-200 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Scheduling</span>
+</div>
+<!-- Step 8 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-slate-200 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Construction</span>
+</div>
+<!-- Step 9 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-slate-200 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Inspection</span>
+</div>
+<!-- Step 10 -->
+<div class="flex flex-col items-center group">
+<div class="w-4 h-4 rounded-full bg-slate-200 z-10"></div>
+<span class="mt-2 font-label-caps text-[10px] text-slate-400">Energization</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Center Grid -->
+<div class="grid grid-cols-12 gap-lg">
+<!-- Left Column: Active Utility Mappings Table -->
+<div class="col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+<div class="p-lg border-b border-slate-100 flex justify-between items-center">
+<h3 class="font-h3 text-on-surface">Active Utility Mappings</h3>
+<button class="material-symbols-outlined text-slate-400 hover:text-primary">filter_list</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-surface-container text-on-surface-variant">
+<tr>
+<th class="px-lg py-3 font-label-caps text-[11px] uppercase">Provider</th>
+<th class="px-lg py-3 font-label-caps text-[11px] uppercase">Type</th>
+<th class="px-lg py-3 font-label-caps text-[11px] uppercase">SR#</th>
+<th class="px-lg py-3 font-label-caps text-[11px] uppercase">Stage</th>
+<th class="px-lg py-3 font-label-caps text-[11px] uppercase">Days</th>
+<th class="px-lg py-3 font-label-caps text-[11px] uppercase">Risk</th><th class="px-lg py-3 font-label-caps text-[11px] uppercase">Action</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-on-surface divide-y divide-slate-100">
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="px-lg py-4 font-semibold">PEPCO</td>
+<td class="px-lg py-4">Electric</td>
+<td class="px-lg py-4 font-data-mono">2024-U771</td>
+<td class="px-lg py-4">
+<span class="bg-primary-container/10 text-primary-container px-2 py-0.5 rounded text-[11px]">Engineering</span>
+</td>
+<td class="px-lg py-4 font-data-mono">14</td>
+<td class="px-lg py-4">
+<div class="w-2 h-2 rounded-full bg-green-500" title="Low Risk"></div>
+</td><td class="px-lg py-4"><button class="text-primary font-bold text-[10px] uppercase hover:underline">View Details</button></td>
+</tr>
+<tr class="bg-slate-50/30 hover:bg-slate-50 transition-colors">
+<td class="px-lg py-4 font-semibold">BGE</td>
+<td class="px-lg py-4">Gas</td>
+<td class="px-lg py-4 font-data-mono">BGE-X9920</td>
+<td class="px-lg py-4">
+<span class="bg-tertiary-container/10 text-tertiary-container px-2 py-0.5 rounded text-[11px]">Field Survey</span>
+</td>
+<td class="px-lg py-4 font-data-mono">32</td>
+<td class="px-lg py-4">
+<div class="w-2 h-2 rounded-full bg-error" title="High Risk"></div>
+</td><td class="px-lg py-4"><button class="text-primary font-bold text-[10px] uppercase hover:underline">View Details</button></td>
+</tr>
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="px-lg py-4 font-semibold">Verizon</td>
+<td class="px-lg py-4">Fiber</td>
+<td class="px-lg py-4 font-data-mono">VZ-8812L</td>
+<td class="px-lg py-4">
+<span class="bg-secondary-container/10 text-secondary-container px-2 py-0.5 rounded text-[11px]">Contracting</span>
+</td>
+<td class="px-lg py-4 font-data-mono">8</td>
+<td class="px-lg py-4">
+<div class="w-2 h-2 rounded-full bg-yellow-500" title="Medium Risk"></div>
+</td><td class="px-lg py-4"><button class="text-primary font-bold text-[10px] uppercase hover:underline">View Details</button></td>
+</tr>
+<tr class="bg-slate-50/30 hover:bg-slate-50 transition-colors">
+<td class="px-lg py-4 font-semibold">Washington Gas</td>
+<td class="px-lg py-4">Gas</td>
+<td class="px-lg py-4 font-data-mono">WG-0021A</td>
+<td class="px-lg py-4">
+<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded text-[11px]">Pending</span>
+</td>
+<td class="px-lg py-4 font-data-mono">45</td>
+<td class="px-lg py-4">
+<div class="w-2 h-2 rounded-full bg-error" title="Critical Delay"></div>
+</td><td class="px-lg py-4"><button class="text-primary font-bold text-[10px] uppercase hover:underline">View Details</button></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Column: Predictive Schedule Impacts Panel -->
+<div class="col-span-5 flex flex-col space-y-lg">
+<div class="bg-[#1A5276] text-white rounded-xl p-lg shadow-xl relative overflow-hidden group">
+<div class="absolute inset-0 grid-overlay opacity-20"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-6">
+<h3 class="font-h3 text-white">Predictive Analysis</h3>
+<span class="material-symbols-outlined text-primary">insights</span>
+</div>
+<div class="space-y-lg">
+<!-- Long Lead Item -->
+<div class="bg-white/5 border border-white/10 rounded-lg p-md">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-caps text-[10px] text-secondary-fixed">Critical Long-Lead Item</span>
+<span class="font-data-mono text-primary text-xs">32 Weeks</span>
+</div><div class="flex items-center space-x-2 mb-2"><span class="material-symbols-outlined text-error text-xs">timer</span><span class="text-error font-bold text-[10px] uppercase tracking-wider">12 Days until Schedule Impact</span></div>
+<h4 class="font-h2 text-lg mb-1">750 kVA Transformer</h4>
+<p class="font-body-sm text-slate-300">Supply chain constraint detected. Estimated delivery: March 2025.</p>
+</div>
+<!-- Alert Item -->
+<div class="bg-error/10 border border-error/30 rounded-lg p-md">
+<div class="flex items-center space-x-2 mb-2">
+<span class="material-symbols-outlined text-error text-sm" data-weight="fill">warning</span>
+<span class="font-label-caps text-[10px] text-error">Cross-Utility Conflict</span>
+</div>
+<h4 class="font-h2 text-lg text-white mb-1">Gas line depth conflict</h4>
+<p class="font-body-sm text-slate-300">Segment 4A: Gas service line depth (30") conflicts with planned 13.2kV conduit run. Redesign required.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Analytics Quick View -->
+<div class="bg-white border border-slate-200 rounded-xl p-lg flex-1 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<span class="font-h3">Site Load Profile</span>
+<span class="font-data-mono text-[10px] text-slate-400">REAL-TIME DATA</span>
+</div>
+<div class="h-24 flex items-end justify-between space-x-1">
+<div class="bg-primary/20 w-full h-[30%] rounded-t-sm"></div>
+<div class="bg-primary/20 w-full h-[45%] rounded-t-sm"></div>
+<div class="bg-primary/40 w-full h-[60%] rounded-t-sm"></div>
+<div class="bg-primary/20 w-full h-[40%] rounded-t-sm"></div>
+<div class="bg-primary/60 w-full h-[85%] rounded-t-sm"></div>
+<div class="bg-primary w-full h-[100%] rounded-t-sm"></div>
+<div class="bg-primary/40 w-full h-[55%] rounded-t-sm"></div>
+<div class="bg-primary/20 w-full h-[35%] rounded-t-sm"></div>
+</div>
+<div class="mt-4 grid grid-cols-2 gap-4">
+<div class="text-center">
+<span class="font-data-mono text-h2 text-on-surface text-primary">3.2</span>
+<span class="block font-label-caps text-[10px] text-slate-400">MW PEAK</span>
+</div>
+<div class="text-center border-l border-slate-100">
+<span class="font-data-mono text-h2 text-on-surface text-primary">0.85</span>
+<span class="block font-label-caps text-[10px] text-slate-400">PWR FACTOR</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom: UCI Agent Feed -->
+<section class="bg-[#0E1B2C] rounded-xl overflow-hidden shadow-2xl border border-white/5">
+<div class="bg-white/5 px-lg py-3 flex justify-between items-center">
+<div class="flex items-center space-x-2">
+<div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+<span class="font-label-caps text-[11px] text-white tracking-widest">UCI AGENT LIVE FEED</span>
+</div>
+<span class="font-data-mono text-[10px] text-slate-500 uppercase">Version 4.2.1-stable</span>
+</div>
+<div class="p-lg font-data-mono text-sm space-y-2 text-slate-300 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+<p class="cursor-pointer hover:bg-white/5 transition-colors rounded px-1"><span class="text-primary">[14:22:01]</span> <span class="text-secondary-fixed">PROVIDER_MAPPER:</span> Analyzing spatial data for SR# 2024-U771. Alignment confirmed.</p>
+<p class="cursor-pointer hover:bg-white/5 transition-colors rounded px-1"><span class="text-primary">[14:23:45]</span> <span class="text-secondary-fixed">LOAD_PROFILE_ANALYZER:</span> New peak load calculation detected: 3.2MW. Updating PEPCO engineering request.</p>
+<p class="cursor-pointer hover:bg-white/5 transition-colors rounded px-1"><span class="text-primary">[14:25:12]</span> <span class="text-error">CONFLICT_ENGINE:</span> Detected conflict between Verizon duct bank and Washington Gas main at Node G-12.</p>
+<p class="cursor-pointer hover:bg-white/5 transition-colors rounded px-1"><span class="text-primary">[14:26:30]</span> <span class="text-green-400">UCI_CORE:</span> Auto-generating mitigation request for Project Architect. Escalating to Priority 2.</p>
+<p class="cursor-pointer hover:bg-white/5 transition-colors rounded px-1"><span class="text-primary">[14:28:05]</span> <span class="text-secondary-fixed">DOC_SCANNER:</span> Parsing "BGE-X9920_Survey_Report.pdf". Field survey data mapped to BIM model.</p>
+<p class="cursor-pointer hover:bg-white/5 transition-colors rounded px-1"><span class="text-slate-600">_</span></p>
+</div>
+</section>
+</div>
+</main>
+<!-- Contextual FAB -->
+<button class="fixed bottom-margin right-margin bg-primary text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform z-50">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</body></html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot Architecture & User Flow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter+Tight:wght@600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@100..900&family=Inter:wght@100..900&family=Inter+Tight:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-dim": "#e8d7cc",
+                        "status-warning": "#B06000",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#e8882f",
+                        "on-secondary-fixed": "#0f1c2d",
+                        "on-primary-fixed": "#2f1500",
+                        "status-success": "#137333",
+                        "secondary": "#535f73",
+                        "surface-container-highest": "#f1dfd5",
+                        "surface-container": "#fcebe0",
+                        "text-muted": "#64748B",
+                        "on-surface": "#221a13",
+                        "surface-variant": "#f1dfd5",
+                        "tertiary-fixed": "#cbe6ff",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#572b00",
+                        "surface-container-high": "#f6e5da",
+                        "surface-bright": "#fff8f5",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#9bccf6",
+                        "error": "#ba1a1a",
+                        "inverse-primary": "#ffb77e",
+                        "secondary-fixed": "#d6e3fb",
+                        "surface-border": "#E2E8F0",
+                        "primary-fixed": "#ffdcc3",
+                        "on-secondary-container": "#596579",
+                        "tertiary-container": "#74a5cd",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "surface-tint": "#914c00",
+                        "surface-container-low": "#fff1e9",
+                        "on-tertiary-fixed": "#001e30",
+                        "outline": "#887365",
+                        "background-alt": "#F5F8FB",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "background": "#fff8f5",
+                        "primary": "#914c00",
+                        "tertiary": "#2f6388",
+                        "on-secondary": "#ffffff",
+                        "on-background": "#221a13",
+                        "inverse-surface": "#382e27",
+                        "surface": "#fff8f5",
+                        "status-error": "#C5221F",
+                        "on-tertiary-fixed-variant": "#0e4b6e",
+                        "inverse-on-surface": "#ffede3",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#bac7de",
+                        "primary-fixed-dim": "#ffb77e",
+                        "on-tertiary-container": "#003a59",
+                        "on-surface-variant": "#554337",
+                        "on-error": "#ffffff",
+                        "secondary-container": "#d6e3fb",
+                        "outline-variant": "#dbc2b1"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    spacing: {
+                        "gutter": "24px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "unit": "4px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "margin": "32px",
+                        "xl": "40px",
+                        "xxl": "64px"
+                    },
+                    fontFamily: {
+                        "body-lg": ["Inter"],
+                        "h3": ["Inter Tight"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "data-mono": ["JetBrains Mono"],
+                        "body-md": ["Inter"],
+                        "label-caps": ["Inter Tight"],
+                        "h1": ["Inter Tight"],
+                        "body-sm": ["Inter"],
+                        "h2": ["Inter Tight"]
+                    },
+                    fontSize: {
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "h3": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "fontWeight": "600" }],
+                        "data-mono": ["14px", { "lineHeight": "1.4", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "h1": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "h2": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }]
+                    }
+                }
+            }
+        };
+    </script>
+<style>
+        .flow-line {
+            background: linear-gradient(90deg, #e8882f 50%, transparent 50%);
+            background-size: 10px 10px;
+            height: 2px;
+        }
+        .flow-line-vertical {
+            background: linear-gradient(180deg, #e8882f 50%, transparent 50%);
+            background-size: 10px 10px;
+            width: 2px;
+        }
+    </style>
+</head>
+<body class="bg-background-alt text-on-background font-body-md min-h-screen flex">
+<!-- Sidebar Component from JSON -->
+<aside class="fixed left-0 top-0 h-screen w-64 bg-secondary dark:bg-on-secondary-fixed shadow-lg flex flex-col z-50">
+<div class="p-lg border-b border-secondary-fixed-dim/20">
+<h1 class="font-display-lg text-display-lg text-on-primary tracking-tight">PermitPilot</h1>
+<p class="font-body-sm text-body-sm text-secondary-fixed-dim mt-sm">V3 Mission Control</p>
+</div>
+<div class="p-lg">
+<button class="w-full bg-primary-container text-on-primary py-sm px-md rounded font-h3 text-h3 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-primary transition-colors flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined">add</span>
+                New Permit Application
+            </button>
+</div>
+<nav class="flex-1 overflow-y-auto py-md">
+<ul class="flex flex-col gap-xs">
+<li>
+<a class="flex items-center gap-md px-lg py-md bg-secondary-container text-on-secondary-container border-r-4 border-primary scale-95 transition-transform duration-150 font-h3 text-h3" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                        Mission Control
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-md px-lg py-md text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+                        Project Matrix
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-md px-lg py-md text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">description</span>
+                        Document Vault
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-md px-lg py-md text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+                        Agent Intelligence
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-md px-lg py-md text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">map</span>
+                        Utility Mapping
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-md px-lg py-md text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">group</span>
+                        Stakeholders
+                    </a>
+</li>
+</ul>
+</nav>
+<div class="border-t border-secondary-fixed-dim/20 p-md">
+<ul class="flex flex-col gap-xs">
+<li>
+<a class="flex items-center gap-md px-md py-sm text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">dns</span>
+                        System Status
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm text-on-secondary hover:bg-secondary-container/10 transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 flex-1 flex flex-col min-h-screen">
+<!-- TopNavBar Component from JSON -->
+<header class="docked full-width top-0 sticky z-40 backdrop-blur-md border-b border-outline-variant shadow-sm bg-surface/80 dark:bg-surface-dim/80 flex justify-between items-center h-16 px-margin w-full">
+<div class="flex items-center gap-lg">
+<div class="relative hidden md:block">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="pl-xl pr-md py-sm rounded border border-surface-border bg-surface-container-lowest focus:border-primary-container focus:ring-0 transition-colors text-body-sm w-64" placeholder="Search resources..." type="text"/>
+</div>
+</div>
+<nav class="hidden md:flex gap-lg">
+<a class="text-on-surface-variant font-medium font-h2 text-h2 hover:text-primary transition-colors" href="#">Active Trackers</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-h2 text-h2 hover:text-primary transition-colors opacity-80" href="#">Global Reports</a>
+<a class="text-on-surface-variant font-medium font-h2 text-h2 hover:text-primary transition-colors" href="#">Utility Registry</a>
+</nav>
+<div class="flex items-center gap-md text-primary dark:text-primary-fixed-dim">
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">help_outline</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">account_circle</span></button>
+</div>
+</header>
+<!-- Page Content -->
+<div class="p-margin flex-1 overflow-x-auto">
+<div class="mb-lg">
+<h2 class="font-h1 text-h1 text-on-surface mb-xs">PermitPilot Platform Architecture & User Flow Review</h2>
+<p class="font-body-lg text-body-lg text-text-muted">End-to-End System Flow & Architecture mapped across the project lifecycle.</p>
+</div>
+<!-- Architecture Flow Canvas -->
+<div class="relative min-w-[1200px] bg-surface-container-lowest border border-surface-border rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-margin flex flex-col gap-margin">
+<!-- Intelligence Layer Indicator -->
+<div class="absolute left-margin top-margin bottom-margin w-12 flex flex-col items-center justify-center border-r border-dashed border-outline-variant pr-md z-0 opacity-20">
+<span class="material-symbols-outlined text-[120px] text-primary-container rotate-90">smart_toy</span>
+<div class="flow-line-vertical flex-1 my-sm"></div>
+<span class="font-label-caps text-label-caps text-text-muted -rotate-90 whitespace-nowrap tracking-widest uppercase">Agent Intelligence Layer</span>
+</div>
+<div class="pl-24 relative z-10 flex flex-col gap-margin">
+<!-- Tier 1: Public Awareness -->
+<section class="relative">
+<div class="flex items-center gap-sm mb-md">
+<span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-label-caps text-label-caps text-primary">01</span>
+<h3 class="font-h2 text-h2 text-on-surface">Public Awareness (Marketing Site)</h3>
+</div>
+<div class="grid grid-cols-4 gap-gutter">
+<div class="bg-background-alt border border-surface-border rounded p-md hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute inset-0 bg-primary-container/5 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+<span class="material-symbols-outlined text-text-muted mb-sm">home</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Home Hero</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Initial landing and value proposition.</p>
+</div>
+<div class="bg-background-alt border border-surface-border rounded p-md hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute inset-0 bg-primary-container/5 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+<span class="material-symbols-outlined text-text-muted mb-sm">layers</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Service Pages</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Strategy, UCI, and PM details.</p>
+</div>
+<div class="bg-background-alt border border-surface-border rounded p-md hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute inset-0 bg-primary-container/5 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+<span class="material-symbols-outlined text-text-muted mb-sm">cases</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Case Study</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Proven past performance metrics.</p>
+</div>
+<div class="bg-background-alt border border-primary-container/30 rounded p-md hover:shadow-md transition-shadow relative overflow-hidden group shadow-[inset_0_0_15px_rgba(232,136,47,0.05)]">
+<div class="absolute inset-0 bg-primary-container/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+<span class="material-symbols-outlined text-primary-container mb-sm">forum</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Conversational Quote</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Lead capture & initial assessment.</p>
+<!-- Connection Node Bottom -->
+<div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary-container"></div>
+</div>
+</div>
+</section>
+<!-- Flow Connector -->
+<div class="relative h-8 flex items-center justify-end pr-[12.5%]">
+<div class="w-px h-full flow-line-vertical"></div>
+<span class="material-symbols-outlined absolute -bottom-3 text-primary-container text-[16px] bg-surface-container-lowest">arrow_drop_down</span>
+</div>
+<!-- Tier 2: Strategic Initiation -->
+<section class="relative">
+<div class="flex items-center gap-sm mb-md">
+<span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-label-caps text-label-caps text-primary">02</span>
+<h3 class="font-h2 text-h2 text-on-surface">Strategic Initiation (Phase 0)</h3>
+</div>
+<div class="grid grid-cols-3 gap-gutter bg-surface-container-low p-md rounded border border-outline-variant/30">
+<div class="bg-surface-container-lowest border border-surface-border rounded p-md shadow-sm relative">
+<span class="material-symbols-outlined text-primary-container mb-sm absolute top-md right-md opacity-20 text-[40px]">smart_toy</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs relative z-10">AI Feasibility Analyzer</h4>
+<p class="font-body-sm text-body-sm text-text-muted relative z-10">Initial automated viability check.</p>
+</div>
+<div class="bg-surface-container-lowest border border-surface-border rounded p-md shadow-sm">
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Site Investigation Report</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Deep dive data gathering (SIR).</p>
+<div class="mt-sm flex gap-xs">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-1 rounded font-label-caps text-[10px]">Data Collection</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-surface-border rounded p-md shadow-sm relative">
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Executive Summary</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Synthesized ESIR output.</p>
+<div class="mt-sm flex gap-xs">
+<span class="bg-tertiary-container text-on-tertiary-container px-2 py-1 rounded font-label-caps text-[10px]">Client Deliverable</span>
+</div>
+<!-- Connection Nodes -->
+<div class="absolute -bottom-1 left-1/4 -translate-x-1/2 w-2 h-2 rounded-full bg-secondary"></div>
+<div class="absolute -bottom-1 left-3/4 -translate-x-1/2 w-2 h-2 rounded-full bg-secondary"></div>
+</div>
+</div>
+</section>
+<!-- Flow Connectors -->
+<div class="relative h-8 flex justify-end pr-[8%] pl-[66%]">
+<div class="flex justify-between w-[60%] border-t flow-line absolute top-0 left-[66%]"></div>
+<div class="w-px h-full bg-surface-border absolute left-[71%]"></div>
+<div class="w-px h-full bg-surface-border absolute left-[83%]"></div>
+<div class="w-px h-full bg-surface-border absolute left-[95%]"></div>
+</div>
+<!-- Tier 3: Technical Mission Control -->
+<section class="relative">
+<div class="flex items-center gap-sm mb-md">
+<span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-label-caps text-label-caps text-primary">03</span>
+<h3 class="font-h2 text-h2 text-on-surface">Technical Mission Control (Unified Matrix)</h3>
+</div>
+<div class="bg-background-alt border border-surface-border rounded-xl p-lg">
+<div class="grid grid-cols-4 gap-sm">
+<!-- Track 1 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">architecture</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Building Permits</span>
+</div>
+<!-- Track 2 -->
+<div class="bg-surface-container-lowest border border-primary-container/30 rounded p-sm flex items-center gap-sm shadow-[inset_4px_0_0_#e8882f]">
+<span class="material-symbols-outlined text-primary-container">power</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Utility Coordination</span>
+</div>
+<!-- Track 3 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">signpost</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Signage</span>
+</div>
+<!-- Track 4 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">local_hospital</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Health</span>
+</div>
+<!-- Track 5 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">policy</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Special Inspections</span>
+</div>
+<!-- Track 6 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">domain_disabled</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Raze</span>
+</div>
+<!-- Track 7 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">fact_check</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Final Inspections</span>
+</div>
+<!-- Track 8 -->
+<div class="bg-surface-container-lowest border border-surface-border rounded p-sm flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-muted">done_all</span>
+<span class="font-data-mono text-data-mono text-on-surface text-sm">Closeout</span>
+</div>
+</div>
+<!-- Internal Flow Line -->
+<div class="mt-lg relative h-px flow-line flex items-center justify-between px-xl">
+<div class="w-3 h-3 rounded-full bg-primary-container ring-4 ring-surface-container-lowest"></div>
+<div class="w-3 h-3 rounded-full bg-primary-container ring-4 ring-surface-container-lowest"></div>
+<div class="w-3 h-3 rounded-full bg-primary-container ring-4 ring-surface-container-lowest"></div>
+</div>
+<div class="flex justify-between px-xl mt-xs font-label-caps text-label-caps text-text-muted text-[10px] uppercase">
+<span>SIR Data Input</span>
+<span>Matrix Sync</span>
+<span>Final CO Logic</span>
+</div>
+</div>
+</section>
+<!-- Flow Connector -->
+<div class="relative h-8 flex justify-center">
+<div class="w-px h-full flow-line-vertical"></div>
+<span class="material-symbols-outlined absolute -bottom-3 text-primary-container text-[16px] bg-surface-container-lowest z-10">arrow_drop_down</span>
+</div>
+<!-- Tier 4: Field & Conclusion -->
+<section class="relative">
+<div class="flex items-center gap-sm mb-md">
+<span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-label-caps text-label-caps text-primary">04</span>
+<h3 class="font-h2 text-h2 text-on-surface">Field & Conclusion</h3>
+</div>
+<div class="grid grid-cols-4 gap-gutter">
+<div class="bg-surface-container-lowest border border-surface-border rounded p-md shadow-sm">
+<span class="material-symbols-outlined text-secondary mb-sm">phone_iphone</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Mobile Companion</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Field sync and on-site updates.</p>
+</div>
+<div class="bg-surface-container-lowest border border-surface-border rounded p-md shadow-sm">
+<span class="material-symbols-outlined text-secondary mb-sm">verified</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Occupancy Cert</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Final certificate generation.</p>
+</div>
+<div class="bg-surface-container-lowest border border-surface-border rounded p-md shadow-sm">
+<span class="material-symbols-outlined text-secondary mb-sm">archive</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Archiving</h4>
+<p class="font-body-sm text-body-sm text-text-muted">Secure vault storage.</p>
+</div>
+<div class="bg-surface-container-highest border border-primary-container/30 rounded p-md shadow-sm relative">
+<span class="material-symbols-outlined text-primary-container mb-sm absolute top-md right-md opacity-20 text-[40px]">smart_toy</span>
+<span class="material-symbols-outlined text-primary-container mb-sm relative z-10">loop</span>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs relative z-10">Post-Mortem Intel</h4>
+<p class="font-body-sm text-body-sm text-text-muted relative z-10">AI loop feeding back to Phase 0.</p>
+<!-- Feedback Loop Line (Visual Representation) -->
+<svg class="absolute -top-12 -right-8 w-16 h-24 overflow-visible pointer-events-none" fill="none" viewbox="0 0 50 100" xmlns="http://www.w3.org/2000/svg">
+<path d="M 10,100 C 50,80 50,20 10,0" fill="none" stroke="#e8882f" stroke-dasharray="4 4" stroke-width="2"></path>
+<path d="M 8,0 L 14,0 L 11,-5 Z" fill="#e8882f"></path>
+</svg>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+</main>
+</body></html>

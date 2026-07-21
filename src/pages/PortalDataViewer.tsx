@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useProjects } from "@/hooks/useProjects";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useScrape } from "@/contexts/ScrapeContext";
 import { useArlingtonLivePortalRefresh } from "@/hooks/useArlingtonLivePortalRefresh";
@@ -76,6 +77,7 @@ import {
   StatusPill,
 } from "@/components/design/ProductPrimitives";
 import AccelaProjectView from "@/components/portal/AccelaProjectView";
+import { PortalHarvestQueue } from "@/components/portal/PortalHarvestQueue";
 import {
   PgcStatusTab,
   type PgcStatusTabData,
@@ -926,7 +928,21 @@ function detectPortalTypeFromUrl(url: string | null | undefined): string {
 export default function PortalDataViewer() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { selectedProjectId } = useSelectedProject();
+  const { selectedProjectId, setSelectedProjectId } = useSelectedProject();
+  const { projects, loading: projectsLoading } = useProjects();
+  /**
+   * Lovable structure: Portal Harvest lands on a fleet-wide monitoring queue
+   * first; the single-project Accela/ProjectDox detail view below is a
+   * drill-in, not the primary landing composition.
+   */
+  const [view, setView] = useState<"queue" | "detail">("queue");
+  const openProjectDetail = useCallback(
+    (projectId: string) => {
+      setSelectedProjectId(projectId);
+      setView("detail");
+    },
+    [setSelectedProjectId],
+  );
   const [loading, setLoading] = useState(true);
   const [portalData, setPortalData] = useState<PortalData | null>(null);
   const [portalStatus, setPortalStatus] = useState<string | null>(null);
@@ -1464,9 +1480,23 @@ export default function PortalDataViewer() {
     }
   }, [portalData]);
 
+  if (view === "queue") {
+    return (
+      <PortalHarvestQueue
+        projects={projects}
+        projectsLoading={authLoading || projectsLoading}
+        selectedProjectId={selectedProjectId}
+        onOpenProject={openProjectDetail}
+      />
+    );
+  }
+
   if (authLoading || (loading && !portalData)) {
     return (
       <section className="py-6 px-4 sm:px-6 max-w-5xl">
+        <Button variant="ghost" size="sm" className="mb-4 gap-1.5" onClick={() => setView("queue")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+        </Button>
         <Skeleton className="h-12 w-64 mb-4" />
         <Skeleton className="h-6 w-full mb-2" />
         <Skeleton className="h-6 w-3/4 mb-6" />
@@ -1478,7 +1508,10 @@ export default function PortalDataViewer() {
 
   if (noPermitConfigured) {
     return (
-      <section className="py-6 px-4 sm:px-6 max-w-5xl">
+      <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+        </Button>
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
@@ -1549,9 +1582,12 @@ export default function PortalDataViewer() {
 
     return (
       <section
-        className="py-6 px-4 sm:px-6 max-w-5xl"
+        className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl"
         data-testid="portal-data-viewer"
       >
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+        </Button>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold text-foreground">
@@ -1635,7 +1671,10 @@ export default function PortalDataViewer() {
         `[PortalDataViewer] rendering empty state: expectedPortalType=${expectedPortalType}, label="${emptyLabel}"`,
       );
     return (
-      <section className="py-6 px-4 sm:px-6 max-w-5xl">
+      <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+        </Button>
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
@@ -1662,7 +1701,10 @@ export default function PortalDataViewer() {
           ? "No ProjectDox data available."
           : "No portal data available.";
     return (
-      <section className="py-6 px-4 sm:px-6 max-w-5xl">
+      <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+        </Button>
         <div className="p-8 text-center text-muted-foreground">
           {noTabsLabel} Run a scrape first.
         </div>
@@ -3055,12 +3097,12 @@ export default function PortalDataViewer() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/dashboard")}
-              data-testid="button-back-to-dashboard"
+              onClick={() => setView("queue")}
+              data-testid="button-back-to-portal-queue"
               className="pilot-button-ghost"
             >
               <ArrowLeft className="h-4 w-4" />
-              Dashboard
+              Portal Queue
             </Button>
             <Button
               onClick={handleManualRefresh}

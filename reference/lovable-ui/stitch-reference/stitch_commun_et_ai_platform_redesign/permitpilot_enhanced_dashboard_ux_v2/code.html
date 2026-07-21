@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot by Commun-ET - Secure Dashboard</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&amp;family=Inter+Tight:wght@500;600;700&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline-variant": "#dbc2b1",
+                    "error-container": "#ffdad6",
+                    "on-secondary-container": "#275c81",
+                    "inverse-surface": "#382e27",
+                    "error": "#ba1a1a",
+                    "primary-fixed": "#ffdcc3",
+                    "primary": "#914c00",
+                    "surface-container-high": "#f6e5da",
+                    "primary-container": "#e8882f",
+                    "on-error-container": "#93000a",
+                    "on-error": "#ffffff",
+                    "on-tertiary-fixed": "#001e2b",
+                    "primary-fixed-dim": "#ffb77e",
+                    "on-background": "#221a13",
+                    "surface-container-highest": "#f1dfd5",
+                    "surface-bright": "#fff8f5",
+                    "inverse-primary": "#ffb77e",
+                    "tertiary-fixed-dim": "#71d2ff",
+                    "secondary-fixed-dim": "#9bccf6",
+                    "on-secondary-fixed-variant": "#0e4b6e",
+                    "surface-container-low": "#fff1e9",
+                    "background": "#ffffff",
+                    "secondary": "#2f6388",
+                    "on-primary": "#ffffff",
+                    "surface": "#ffffff",
+                    "tertiary": "#006686",
+                    "on-secondary-fixed": "#001e30",
+                    "on-primary-fixed": "#2f1500",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-container": "#00ace0",
+                    "secondary-container": "#a3d4fe",
+                    "on-surface": "#221a13",
+                    "inverse-on-surface": "#ffede3",
+                    "on-surface-variant": "#554337",
+                    "on-primary-fixed-variant": "#6e3900",
+                    "surface-dim": "#e8d7cc",
+                    "on-tertiary-container": "#003b50",
+                    "surface-container": "#fcebe0",
+                    "surface-tint": "#914c00",
+                    "outline": "#887365",
+                    "on-tertiary-fixed-variant": "#004d66",
+                    "tertiary-fixed": "#c0e8ff",
+                    "surface-variant": "#f1dfd5",
+                    "secondary-fixed": "#cbe6ff",
+                    "on-primary-container": "#572b00"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "lg": "24px",
+                    "xl": "40px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "margin": "32px",
+                    "unit": "4px",
+                    "gutter": "24px",
+                    "xxl": "64px"
+            },
+            "fontFamily": {
+                    "h2": [
+                            "Inter Tight"
+                    ],
+                    "h3": [
+                            "Inter Tight"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "body-sm": [
+                            "Inter"
+                    ],
+                    "display-xl": [
+                            "Cormorant Garamond"
+                    ],
+                    "data-mono": [
+                            "JetBrains Mono"
+                    ],
+                    "label-caps": [
+                            "Inter Tight"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "h1": [
+                            "Inter Tight"
+                    ],
+                    "display-lg": [
+                            "Cormorant Garamond"
+                    ]
+            },
+            "fontSize": {
+                    "h2": [
+                            "24px",
+                            {
+                                    "lineHeight": "1.3",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "h3": [
+                            "20px",
+                            {
+                                    "lineHeight": "1.4",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "1.6",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.5",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "display-xl": [
+                            "64px",
+                            {
+                                    "lineHeight": "1.1",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "data-mono": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.4",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "label-caps": [
+                            "12px",
+                            {
+                                    "lineHeight": "1",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "1.5",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "h1": [
+                            "32px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "1.1",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-background antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-[#0E1B2C] dark:bg-[#070D15] font-['Inter_Tight'] font-medium text-sm antialiased fixed left-0 top-0 h-full w-64 z-40 border-r border-white/5 shadow-xl flex flex-col h-full px-4 py-6">
+<div class="flex items-center gap-md mb-xl px-sm">
+<div class="w-10 h-10 rounded bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+<img alt="Commun-ET Logo" class="w-full h-full object-cover" data-alt="Minimalist abstract geometric logo in shades of blue and orange representing connectivity and structure" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAn0iDW8DNYjVzDQ0Ei-9PYucAVA8-47Cy2klrzQnSZIZpQRN_i6bY70FzOdsZ1nmjRSRzJjM6Y8zKkrijibDTMJPmQ01YA_l47g8tPnFSPGyu1jZEPu5L7tkwaml_Nf9Jr-IABviCjesRGDij4h3pYaU7LYwqOGG021Ga9kNS7EdtSUIHBwZIO3C7RwROyTNJddhyqhDOs9V5JrPNcrNTuRANQTEvQTipqN1mkW51dcZMTU9IrBgzJVHn9jDxYs2g7O_4yzbwS7DM"/>
+</div>
+<div class="flex flex-col">
+<span class="text-xl font-bold tracking-tight text-white font-display-lg">PermitPilot</span>
+<span class="text-xs text-slate-400">a product of Commun-ET</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs flex-1">
+<a class="flex items-center gap-md px-md py-sm bg-white/10 text-[#E8882F] rounded-lg font-semibold active:scale-[0.98] transition-transform hover:bg-white/5 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors rounded-lg hover:bg-white/5 hover:text-white transition-all duration-200 active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">description</span>
+                Permits
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors rounded-lg hover:bg-white/5 hover:text-white transition-all duration-200 active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">insights</span>
+                Analytics
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors rounded-lg hover:bg-white/5 hover:text-white transition-all duration-200 active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+                Settings
+            </a>
+<div class="mt-4 pt-4 border-t border-white/5">
+<div class="px-md mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">Utility Coordination</div>
+<div class="flex flex-col gap-xs">
+<a class="flex items-center gap-md px-md py-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all rounded-lg text-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">grid_view</span>
+            UCI Dashboard
+        </a>
+<a class="flex items-center gap-md px-md py-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all rounded-lg text-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">troubleshoot</span>
+            Conflict Hunter
+        </a>
+<a class="flex items-center gap-md px-md py-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all rounded-lg text-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">inventory_2</span>
+            Equipment Tracker
+        </a>
+</div>
+</div></div>
+<div class="mt-auto pt-lg border-t border-white/5">
+<button class="w-full bg-[#E8882F] text-white font-label-caps text-label-caps py-md rounded-lg flex items-center justify-center gap-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-[#d47824] transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Permit
+            </button>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<main class="flex-1 ml-64 flex flex-col h-full bg-[#F5F8FB]">
+<!-- TopAppBar -->
+<header class="bg-[#F8FAFC]/80 dark:bg-[#0E1B2C]/80 backdrop-blur-md font-['Inter_Tight'] font-semibold text-xs uppercase tracking-wider fixed top-0 right-0 w-[calc(100%-16rem)] z-30 border-b border-slate-200 dark:border-white/10 shadow-sm flex items-center justify-between px-8 h-16 w-full focus-within:ring-2 focus-within:ring-[#E8882F]/20">
+<div class="flex items-center gap-md w-96 relative">
+<span class="material-symbols-outlined absolute left-3 text-slate-400 pointer-events-none">search</span>
+<input class="w-full bg-white dark:bg-[#070D15] border border-slate-200 dark:border-white/10 rounded px-10 py-2 text-on-surface text-xs focus:outline-none focus:border-[#E8882F] focus:ring-0 transition-colors placeholder:text-slate-400" placeholder="Search projects, jurisdictions..." type="text"/>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-md border-r border-slate-200 pr-lg">
+<div class="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded text-xs font-medium border border-emerald-200 mr-2">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+                Secure Session
+            </div>
+<button class="text-slate-500 dark:text-slate-400 hover:text-[#1A5276] dark:hover:text-white transition-colors relative">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-[#E8882F] rounded-full border-2 border-[#F8FAFC]"></span>
+</button>
+<button class="text-slate-500 dark:text-slate-400 hover:text-[#1A5276] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">apps</span>
+</button>
+</div>
+<div class="flex items-center gap-sm">
+<div class="text-right hidden md:block">
+<div class="text-xs font-bold text-slate-700 dark:text-slate-200">Sarah Jenkins</div>
+<div class="text-[10px] text-slate-500 uppercase tracking-wider">Staff Account</div>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden border border-slate-200 shadow-sm hover:ring-2 hover:ring-[#E8882F]/50 transition-all">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="Professional headshot of a person with neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhKd4Sro7Piivz0WBS1NhvOmc-CzuWQpzsRTbGgKgB06L8qmWTSv1q0tNGDdGDZh2NpWnQjepFhq3oddLSaX3glrB5J4XFa-ajKykDWULQvdFPbEpoxNF-wmZfDwT9WoFhXh1mTZXZlg2_O2AaD3o7UT3n8k_NBx3dOp4nPTBwukD5UZZ8xJ1xRTFX7RXpxuvT9iX2xtY9WAvEiDlBHKk7DM1m4gFLZu9HdS12HG5dBFAIQveuMW7ZAHJOwUpY60cIEFjvzyx-p6E"/>
+</button>
+</div>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto pt-24 px-8 pb-12 flex flex-col gap-8">
+<!-- Page Header -->
+<div class="flex items-center justify-between">
+<div>
+<h1 class="font-h1 text-h1 text-on-surface">Dashboard</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Overview of your active permits and AI agent operations on PermitPilot by Commun-ET.</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[16px] text-[#E8882F]">add_circle</span>
+        New Permit
+    </button>
+<button class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[16px] text-[#E8882F]">upload_file</span>
+        Upload Site Plan
+    </button>
+<button class="bg-[#E8882F] text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#d47824] transition-colors flex items-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[16px]">analytics</span>
+        Run Conflict Analysis
+    </button>
+</div></div>
+<!-- Metrics Row -->
+<div class="grid grid-cols-4 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest rounded-[12px] p-lg border border-slate-200 shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary-container/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<span class="font-display-lg text-display-lg text-on-secondary-fixed relative z-10 tracking-tight">23</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant relative z-10">Active Projects</span>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest rounded-[12px] p-lg border border-slate-200 shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-tertiary-container/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<span class="font-display-lg text-display-lg text-on-secondary-fixed relative z-10 tracking-tight">7</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant relative z-10">Agents Running</span>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest rounded-[12px] p-lg border border-slate-200 shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-secondary-container/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<span class="font-display-lg text-display-lg text-on-secondary-fixed relative z-10 tracking-tight">12</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant relative z-10">Permits Pending</span>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-container-lowest rounded-[12px] p-lg border border-slate-200 shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-error-container/20 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<span class="font-display-lg text-display-lg text-error relative z-10 tracking-tight">2</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant relative z-10">Conflicts to Resolve</span>
+</div>
+</div>
+<!-- Two Column Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Left Col: Active Projects -->
+<div class="col-span-8 bg-surface-container-lowest rounded-[12px] border border-slate-200 shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col">
+<div class="p-lg border-b border-slate-100 flex items-center justify-between">
+<h2 class="font-h3 text-h3 text-on-surface">Active Projects</h2><div class="flex items-center gap-2 ml-4 px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-full">
+<div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+<span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Portfolio Health: 94%</span>
+</div>
+<button class="font-label-caps text-label-caps text-primary-container hover:text-primary transition-colors flex items-center gap-1">
+                            View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="p-0 overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr>
+<th class="font-label-caps text-label-caps text-on-surface-variant py-md px-lg font-medium border-b border-slate-100 bg-[#F8FAFC]/50">Project</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant py-md px-lg font-medium border-b border-slate-100 bg-[#F8FAFC]/50">Jurisdiction</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant py-md px-lg font-medium border-b border-slate-100 bg-[#F8FAFC]/50">Status</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant py-md px-lg font-medium border-b border-slate-100 bg-[#F8FAFC]/50">Next Milestone</th>
+<th class="font-label-caps text-label-caps text-on-surface-variant py-md px-lg font-medium border-b border-slate-100 bg-[#F8FAFC]/50">Assigned</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm">
+<tr class="border-b border-slate-100 hover:bg-[#F8FAFC]/50 transition-colors group">
+<td class="py-md px-lg text-on-surface font-medium">1024 Market St. Renovation</td>
+<td class="py-md px-lg text-on-surface-variant">San Francisco, CA</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-[#E6F4EA] text-[#137333] font-label-caps text-[10px]">Approved</span>
+</td>
+<td class="py-md px-lg font-data-mono text-data-mono text-on-surface-variant">Oct 12, 2023</td>
+<td class="py-md px-lg text-on-surface-variant">Agent Alpha</td>
+</tr>
+<tr class="border-b border-slate-100 hover:bg-[#F8FAFC]/50 transition-colors group">
+<td class="py-md px-lg text-on-surface font-medium">South Bay Fiber Expansion</td>
+<td class="py-md px-lg text-on-surface-variant">Santa Clara, CA</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-[#FEF7E0] text-[#B06000] font-label-caps text-[10px]">Pending</span>
+</td>
+<td class="py-md px-lg font-data-mono text-data-mono text-on-surface-variant">Oct 15, 2023</td>
+<td class="py-md px-lg text-on-surface-variant">Agent Beta</td>
+</tr>
+<tr class="border-b border-slate-100 hover:bg-[#F8FAFC]/50 transition-colors group">
+<td class="py-md px-lg text-on-surface font-medium">Downtown Transit Hub</td>
+<td class="py-md px-lg text-on-surface-variant">Seattle, WA</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-[#FCE8E6] text-[#C5221F] font-label-caps text-[10px]">Review</span>
+</td>
+<td class="py-md px-lg font-data-mono text-data-mono text-on-surface-variant">Oct 18, 2023</td>
+<td class="py-md px-lg text-on-surface-variant">Agent Gamma</td>
+</tr>
+<tr class="border-b border-slate-100 hover:bg-[#F8FAFC]/50 transition-colors group">
+<td class="py-md px-lg text-on-surface font-medium">Riverside Park Utilities</td>
+<td class="py-md px-lg text-on-surface-variant">Austin, TX</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-[#FEF7E0] text-[#B06000] font-label-caps text-[10px]">Pending</span>
+</td>
+<td class="py-md px-lg font-data-mono text-data-mono text-on-surface-variant">Oct 21, 2023</td>
+<td class="py-md px-lg text-on-surface-variant">Agent Alpha</td>
+</tr>
+<tr class="hover:bg-[#F8FAFC]/50 transition-colors group">
+<td class="py-md px-lg text-on-surface font-medium">North Corridor Highway</td>
+<td class="py-md px-lg text-on-surface-variant">Denver, CO</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-[#E6F4EA] text-[#137333] font-label-caps text-[10px]">Approved</span>
+</td>
+<td class="py-md px-lg font-data-mono text-data-mono text-on-surface-variant">Oct 25, 2023</td>
+<td class="py-md px-lg text-on-surface-variant">Agent Delta</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Col: Agent Activity -->
+<div class="col-span-4 bg-surface-container-lowest rounded-[12px] border border-slate-200 shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col">
+<div class="p-lg border-b border-slate-100 flex items-center justify-between">
+<h2 class="font-h3 text-h3 text-on-surface">Intelligence &amp; Alerts</h2>
+<span class="material-symbols-outlined text-slate-400">memory</span>
+</div>
+<div class="p-lg flex-1 relative">
+<!-- Timeline Line -->
+<div class="absolute left-[39px] top-lg bottom-lg w-px bg-slate-200 z-0"></div>
+<div class="flex flex-col gap-6 relative z-10"><!-- High Priority -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded-full bg-error-container/20 border border-error/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-error text-[16px]">warning</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-error">High Priority</span>
+<span class="font-data-mono text-[11px] text-slate-400">10:42 AM</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface leading-snug">Detected conflict in zoning requirements for South Bay Expansion.</p>
+<div class="flex gap-2 mt-1">
+<a class="text-[11px] font-bold text-secondary hover:underline" href="#">View Conflict Report</a>
+<span class="text-slate-300">•</span>
+<a class="text-[11px] font-bold text-secondary hover:underline" href="#">Assign Staff</a>
+</div>
+</div>
+</div>
+<!-- Medium Priority -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded-full bg-primary-container/10 border border-primary-container/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-primary-container text-[16px]">smart_toy</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-primary-container">Medium Priority</span>
+<span class="font-data-mono text-[11px] text-slate-400">09:15 AM</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface leading-snug">Agent Alpha successfully extracted parcel data for Market St.</p>
+<a class="text-[11px] font-bold text-secondary hover:underline mt-1" href="#">Review Application</a>
+</div>
+</div>
+<!-- Low Priority -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-slate-500 text-[16px]">info</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-slate-500">Low Priority</span>
+<span class="font-data-mono text-[11px] text-slate-400">Yesterday</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface leading-snug">Environmental impact report summary drafted for Transit Hub.</p>
+<a class="text-[11px] font-bold text-secondary hover:underline mt-1" href="#">Download PDF</a>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

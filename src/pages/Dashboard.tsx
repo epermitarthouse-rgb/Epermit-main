@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Bot,
   Brain,
   Calculator,
   Clock,
@@ -12,6 +13,8 @@ import {
   Crown,
   FileUp,
   FolderKanban,
+  HeartPulse,
+  ListChecks,
   Loader2,
   PlusCircle,
   RefreshCw,
@@ -22,9 +25,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertBanner,
   PageHeader,
+  Panel,
   ServicePill,
   StatusPill,
 } from "@/components/design/ProductPrimitives";
@@ -475,123 +480,167 @@ export default function Dashboard() {
 
         {!gettingStartedComplete && <GettingStartedChecklist />}
 
-        <div className="pilot-card overflow-hidden p-5">
-          <div className="pilot-kicker mb-3">Portal monitor</div>
-          <AgentWorkflowStatus />
-        </div>
-
-        {selectedProjectId && <ProjectHealthCard projectId={selectedProjectId} />}
-
-        <div className="grid items-stretch gap-6 lg:grid-cols-2">
-          <InspectionsPunchListWidget />
-          <RecentChecklistsWidget />
-        </div>
-
-        {/* Saved Calculations — preserved PP feature */}
-        <section className="pilot-card p-5 sm:p-6">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <h2 className="font-tight text-lg font-bold">Saved Calculations</h2>
-            <Badge variant="secondary">{calculations.length} saved</Badge>
-          </div>
-
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-32 w-full rounded-lg" />
-              ))}
+        {/*
+          Secondary operations workspace — NOT co-primary with the Lovable
+          KPI/Active-Projects/Intelligence composition above. Intake Pipeline,
+          project health, inspections/checklists, and saved calculations are
+          all real PP capabilities, demoted into a single tabbed panel below
+          the Lovable-primary fold rather than stacked as full-width sections.
+        */}
+        <Panel
+          eyebrow="Secondary · operations workspace"
+          title="Workflow Tools"
+          className="p-0"
+        >
+          <Tabs defaultValue="intake" className="w-full">
+            <div className="border-b border-border px-5 pt-5">
+              <TabsList className="h-auto flex-wrap justify-start bg-transparent p-0">
+                <TabsTrigger value="intake" className="gap-1.5">
+                  <Bot className="h-3.5 w-3.5" /> Intake Pipeline
+                </TabsTrigger>
+                <TabsTrigger value="health" className="gap-1.5">
+                  <HeartPulse className="h-3.5 w-3.5" /> Project Health
+                </TabsTrigger>
+                <TabsTrigger value="inspections" className="gap-1.5">
+                  <ListChecks className="h-3.5 w-3.5" /> Inspections &amp; Checklists
+                </TabsTrigger>
+                <TabsTrigger value="calculations" className="gap-1.5">
+                  <Calculator className="h-3.5 w-3.5" /> Saved Calculations
+                  {calculations.length > 0 ? (
+                    <Badge variant="secondary" className="ml-1">
+                      {calculations.length}
+                    </Badge>
+                  ) : null}
+                </TabsTrigger>
+              </TabsList>
             </div>
-          ) : calculations.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-12 text-center">
-              <Calculator className="h-10 w-10 text-muted-foreground" />
-              <p className="font-tight font-semibold">No saved calculations yet</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                Run an ROI or Consolidation calculation to save results here.
-              </p>
-              <div className="flex gap-2">
-                <Button asChild size="sm">
-                  <Link to="/roi-calculator">ROI Calculator</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/consolidation-calculator">Consolidation</Link>
-                </Button>
+
+            <TabsContent value="intake" className="m-0 p-5">
+              <AgentWorkflowStatus />
+            </TabsContent>
+
+            <TabsContent value="health" className="m-0 p-5">
+              {selectedProjectId ? (
+                <ProjectHealthCard projectId={selectedProjectId} />
+              ) : (
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-10 text-center">
+                  <HeartPulse className="h-8 w-8 text-muted-foreground" />
+                  <p className="font-tight font-semibold">No project selected</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    Select an active project from the header to view its health snapshot.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="inspections" className="m-0 p-5">
+              <div className="grid items-stretch gap-6 lg:grid-cols-2">
+                <InspectionsPunchListWidget />
+                <RecentChecklistsWidget />
               </div>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {calculations.map((calc) => (
-                <Card key={calc.id} className="border-border bg-card">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <Badge variant="outline">
-                        {calc.calculation_type === "roi" ? "ROI" : "Consolidation"}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDelete(calc.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <CardTitle className="mt-2 text-base">{calc.name}</CardTitle>
-                    <CardDescription className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {isValid(new Date(calc.created_at))
-                        ? format(new Date(calc.created_at), "MMM d, yyyy")
-                        : "—"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {calc.calculation_type === "roi" && calc.results_data && (
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Annual Savings</span>
-                          <span className="font-semibold text-success">
-                            $
-                            {(
-                              (calc.results_data as { annualSavings?: number }).annualSavings || 0
-                            ).toLocaleString()}
-                          </span>
+            </TabsContent>
+
+            <TabsContent value="calculations" className="m-0 p-5">
+              {loading ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-32 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : calculations.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-12 text-center">
+                  <Calculator className="h-10 w-10 text-muted-foreground" />
+                  <p className="font-tight font-semibold">No saved calculations yet</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    Run an ROI or Consolidation calculation to save results here.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button asChild size="sm">
+                      <Link to="/roi-calculator">ROI Calculator</Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/consolidation-calculator">Consolidation</Link>
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {calculations.map((calc) => (
+                    <Card key={calc.id} className="border-border bg-card">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <Badge variant="outline">
+                            {calc.calculation_type === "roi" ? "ROI" : "Consolidation"}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDelete(calc.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Time Saved</span>
-                          <span className="font-semibold">
-                            {(calc.results_data as { hoursSaved?: number }).hoursSaved || 0} hrs/yr
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    {calc.calculation_type === "consolidation" && calc.results_data && (
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Current Cost</span>
-                          <span className="font-semibold">
-                            $
-                            {(
-                              (calc.results_data as { currentCost?: number }).currentCost || 0
-                            ).toLocaleString()}
-                            /yr
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">With PermitPilot</span>
-                          <span className="font-semibold text-success">
-                            $
-                            {(
-                              (calc.results_data as { insightCost?: number }).insightCost || 0
-                            ).toLocaleString()}
-                            /yr
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
+                        <CardTitle className="mt-2 text-base">{calc.name}</CardTitle>
+                        <CardDescription className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {isValid(new Date(calc.created_at))
+                            ? format(new Date(calc.created_at), "MMM d, yyyy")
+                            : "—"}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {calc.calculation_type === "roi" && calc.results_data && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Annual Savings</span>
+                              <span className="font-semibold text-success">
+                                $
+                                {(
+                                  (calc.results_data as { annualSavings?: number }).annualSavings || 0
+                                ).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Time Saved</span>
+                              <span className="font-semibold">
+                                {(calc.results_data as { hoursSaved?: number }).hoursSaved || 0} hrs/yr
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {calc.calculation_type === "consolidation" && calc.results_data && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Current Cost</span>
+                              <span className="font-semibold">
+                                $
+                                {(
+                                  (calc.results_data as { currentCost?: number }).currentCost || 0
+                                ).toLocaleString()}
+                                /yr
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">With PermitPilot</span>
+                              <span className="font-semibold text-success">
+                                $
+                                {(
+                                  (calc.results_data as { insightCost?: number }).insightCost || 0
+                                ).toLocaleString()}
+                                /yr
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </Panel>
       </div>
     </>
   );

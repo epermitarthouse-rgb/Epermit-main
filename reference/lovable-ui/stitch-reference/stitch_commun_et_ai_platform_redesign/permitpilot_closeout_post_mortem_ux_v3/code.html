@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot | Project Closeout &amp; Post-Mortem Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Inter+Tight:wght@600;700;800;900&amp;family=Cormorant+Garamond:wght@600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#fff1e9",
+                        "on-error-container": "#93000a",
+                        "primary": "#914c00",
+                        "outline": "#887365",
+                        "on-tertiary-fixed": "#001e30",
+                        "on-surface": "#221a13",
+                        "surface-container-high": "#f6e5da",
+                        "secondary": "#535f73",
+                        "primary-fixed": "#ffdcc3",
+                        "on-tertiary": "#ffffff",
+                        "surface-border": "#E2E8F0",
+                        "primary-fixed-dim": "#ffb77e",
+                        "inverse-surface": "#382e27",
+                        "surface-tint": "#914c00",
+                        "surface": "#fff8f5",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#bac7de",
+                        "secondary-fixed": "#d6e3fb",
+                        "outline-variant": "#dbc2b1",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#9bccf6",
+                        "error-container": "#ffdad6",
+                        "status-warning": "#B06000",
+                        "surface-bright": "#fff8f5",
+                        "status-error": "#C5221F",
+                        "on-tertiary-fixed-variant": "#0e4b6e",
+                        "on-secondary-container": "#596579",
+                        "background": "#fff8f5",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "error": "#ba1a1a",
+                        "on-surface-variant": "#554337",
+                        "inverse-on-surface": "#ffede3",
+                        "text-muted": "#64748B",
+                        "surface-container-highest": "#f1dfd5",
+                        "background-alt": "#F5F8FB",
+                        "tertiary": "#2f6388",
+                        "on-primary-fixed": "#2f1500",
+                        "surface-variant": "#f1dfd5",
+                        "tertiary-container": "#74a5cd",
+                        "surface-dim": "#e8d7cc",
+                        "secondary-container": "#d6e3fb",
+                        "primary-container": "#e8882f",
+                        "tertiary-fixed": "#cbe6ff",
+                        "status-success": "#137333",
+                        "on-primary-container": "#572b00",
+                        "inverse-primary": "#ffb77e",
+                        "surface-container": "#fcebe0",
+                        "on-background": "#221a13",
+                        "on-tertiary-container": "#003a59",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "on-secondary-fixed": "#0f1c2d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "sm": "8px",
+                        "gutter": "24px",
+                        "unit": "4px",
+                        "xxl": "64px",
+                        "xl": "40px",
+                        "margin": "32px",
+                        "xs": "4px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Inter Tight"],
+                        "h2": ["Inter Tight"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "data-mono": ["JetBrains Mono"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "h3": ["Inter Tight"],
+                        "h1": ["Inter Tight"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "h2": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "1.1", "fontWeight": "600"}],
+                        "data-mono": ["14px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "h3": ["20px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "h1": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid #E2E8F0;
+        }
+        .sidebar-active {
+            background-color: #914c00;
+            color: #ffffff;
+            font-weight: 700;
+            border-radius: 0.5rem;
+            margin-left: 0.5rem;
+            margin-right: 0.5rem;
+        }
+        .metric-flare::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, transparent 50%, rgba(232, 136, 47, 0.05) 50%);
+            border-radius: 0 0.25rem 0 0;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md text-body-md overflow-hidden">
+<!-- Side Navigation Shell -->
+<nav class="fixed left-0 top-0 h-full w-64 bg-inverse-surface dark:bg-on-background shadow-2xl flex flex-col py-md px-sm z-[100]">
+<div class="mb-xl px-4">
+<span class="font-h2 text-h2 font-black text-on-primary-fixed bg-primary-container px-2 py-1 rounded">PermitPilot</span>
+<p class="font-label-caps text-label-caps text-primary-fixed opacity-60 mt-2">Mission Control v3</p>
+</div>
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:bg-primary-container/20 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:bg-primary-container/20 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-label-caps text-label-caps">Unified Matrix</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:bg-primary-container/20 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">domain</span>
+<span class="font-label-caps text-label-caps">Building Permits</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:bg-primary-container/20 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-label-caps text-label-caps">Raze Permits</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:bg-primary-container/20 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">electrical_services</span>
+<span class="font-label-caps text-label-caps">Utility Coordination</span>
+</a>
+<a class="sidebar-active flex items-center gap-3 px-4 py-2" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-caps text-label-caps">Reports</span>
+</a>
+</div>
+<div class="mt-auto border-t border-outline/20 pt-md space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:text-on-primary-fixed transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-secondary-fixed-variant hover:text-on-primary-fixed transition-colors" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+<div class="px-4 py-2 mt-4">
+<button class="w-full bg-primary-container text-on-primary-container font-label-caps text-label-caps py-2 px-4 rounded-lg scale-95 active:scale-90 transition-transform">New Permit</button>
+</div>
+</div>
+</nav>
+<!-- Top App Bar Shell -->
+<header class="fixed top-0 right-0 w-[calc(100%-256px)] z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant flex items-center justify-between px-margin py-md shadow-sm">
+<div class="flex flex-col">
+<h1 class="font-h1 text-h1 text-primary tracking-tight">Project Closeout &amp; Post-Mortem Intelligence</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">System Version: UX v3.0.1 • Final Phase Tracking</p>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative group">
+<span class="absolute inset-y-0 left-0 pl-3 flex items-center text-outline">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container border border-outline-variant rounded-full text-body-sm focus:ring-0 focus:border-primary w-64 transition-all" placeholder="Search closeout logs..." type="text"/>
+</div>
+<div class="flex gap-sm">
+<button class="material-symbols-outlined p-2 text-on-surface-variant hover:text-primary transition-all duration-300 opacity-80 hover:opacity-100">notifications</button>
+<button class="material-symbols-outlined p-2 text-on-surface-variant hover:text-primary transition-all duration-300 opacity-80 hover:opacity-100">history</button>
+<button class="material-symbols-outlined p-2 text-on-surface-variant hover:text-primary transition-all duration-300 opacity-80 hover:opacity-100">download</button>
+</div>
+<div class="h-8 w-px bg-outline-variant mx-2"></div>
+<button class="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-on-primary-fixed-variant transition-colors">
+<span class="material-symbols-outlined text-[18px]">rocket_launch</span>
+                Deploy Agent
+            </button>
+<img alt="Lead Coordinator Profile" class="h-10 w-10 rounded-full border-2 border-primary object-cover" data-alt="A professional headshot of a senior project coordinator in a modern office environment. The person is middle-aged with a confident smile, wearing a sharp business suit. The background is a blurred high-tech corporate office with warm lighting and deep blue and wood accents, aligning with the PermitPilot professional aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFzBDUVsnjphj4q39Usz-f5yI_j9hygM5FSe5yCX7rKhKnJpbFzvQJXhimMEJvJCcFZ_wXeQanTRmFpYYAoTryfhrXro90jw0CIEv3YGGWFxXqx87PWc-hzrhpx-yJAxBjUhf2-Xu8Xn2gsKeuDsaP26QOVOR7Zf2haT7HPQw00Iup4xDVYCXa12F0sZn0PXvwA-bPhUBG50d2_RAMg--KIwchSZ01vpooTSvwgglc_dSIcdUYM5Na7opCmb5FhtQVTkV-Uge9xJw"/>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-[100px] h-screen overflow-y-auto px-margin pb-xl">
+<!-- Intelligence Summary Bento -->
+<section class="grid grid-cols-12 gap-gutter mb-gutter">
+<!-- Summary Card 1 -->
+<div class="col-span-12 md:col-span-4 bg-surface-container-lowest border border-surface-border rounded-xl p-lg relative metric-flare shadow-[0_4px_20px_rgba(14,27,44,0.02)]">
+<div class="flex justify-between items-start mb-md">
+<span class="material-symbols-outlined text-primary bg-primary-fixed/30 p-2 rounded-lg">speed</span>
+<span class="text-status-success font-label-caps text-label-caps bg-status-success/10 px-2 py-1 rounded">ON TRACK</span>
+</div>
+<p class="font-label-caps text-label-caps text-outline mb-1">PLANNED VS ACTUAL</p>
+<h3 class="font-h2 text-h2 text-on-surface">+4.2 Days</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">Permit cycle efficiency increased since last sprint.</p>
+</div>
+<!-- Summary Card 2 -->
+<div class="col-span-12 md:col-span-4 bg-surface-container-lowest border border-surface-border rounded-xl p-lg relative metric-flare shadow-[0_4px_20px_rgba(14,27,44,0.02)]">
+<div class="flex justify-between items-start mb-md">
+<span class="material-symbols-outlined text-tertiary bg-tertiary-fixed/30 p-2 rounded-lg">account_balance_wallet</span>
+<span class="text-primary font-label-caps text-label-caps bg-primary-fixed/30 px-2 py-1 rounded">RECONCILING</span>
+</div>
+<p class="font-label-caps text-label-caps text-outline mb-1">TOTAL PERMIT EXPENDITURE</p>
+<h3 class="font-h2 text-h2 text-on-surface">$142,480.00</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">98% of invoices synced to QuickBooks.</p>
+</div>
+<!-- Summary Card 3 (High Priority Action) -->
+<div class="col-span-12 md:col-span-4 bg-surface-container-lowest border-2 border-primary-container rounded-xl p-lg relative shadow-[0_4px_20px_rgba(232,136,47,0.1)]">
+<div class="flex justify-between items-start mb-md">
+<span class="material-symbols-outlined text-on-primary-container bg-primary-container p-2 rounded-lg" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="text-primary font-label-caps text-label-caps bg-primary-fixed/30 px-2 py-1 rounded">HIGH PRIORITY</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-primary-container mb-1">DOCUMENT VAULT SYNC</p>
+<h3 class="font-h2 text-h2 text-on-surface">12 Files Pending</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">Required for final project liability clearance.</p>
+<button class="mt-md w-full bg-primary text-on-primary font-label-caps text-label-caps py-2 rounded flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-md">sync</span>
+                    Sync Now
+                </button>
+</div>
+</section>
+<!-- Main Checklist Tables -->
+<div class="space-y-gutter">
+<!-- Section 1: Archive & Document Sync -->
+<section class="bg-surface-container-lowest border border-surface-border rounded-xl overflow-hidden shadow-sm">
+<div class="px-lg py-md border-b border-surface-border bg-surface-container-low flex justify-between items-center">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">cloud_upload</span>
+<h2 class="font-h3 text-h3 text-on-surface">Archive &amp; Document Sync</h2>
+</div>
+<span class="font-label-caps text-label-caps text-outline">85% COMPLETE</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-highest">
+<tr>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Item</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Category</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Responsible Party</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Status</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Verification Link</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-border">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4 font-body-md text-on-surface">Final Approved Plans (As-Builts)</td>
+<td class="px-lg py-4"><span class="font-label-caps text-[10px] px-2 py-0.5 rounded bg-tertiary/10 text-tertiary">LEGAL ARCHIVE</span></td>
+<td class="px-lg py-4 font-body-sm text-on-surface-variant">Arch. J. Sterling</td>
+<td class="px-lg py-4"><span class="flex items-center gap-1.5 text-status-success font-label-caps text-[10px]"><span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">check_circle</span> VERIFIED</span></td>
+<td class="px-lg py-4"><a class="text-primary font-data-mono text-xs hover:underline" href="#">VAULT-AB-9921</a></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4 font-body-md text-on-surface">Final Electrical Release</td>
+<td class="px-lg py-4"><span class="font-label-caps text-[10px] px-2 py-0.5 rounded bg-tertiary/10 text-tertiary">INSPECTION</span></td>
+<td class="px-lg py-4 font-body-sm text-on-surface-variant">E. Miller (GC)</td>
+<td class="px-lg py-4"><span class="flex items-center gap-1.5 text-status-warning font-label-caps text-[10px]"><span class="material-symbols-outlined text-[14px]">pending</span> PENDING</span></td>
+<td class="px-lg py-4"><button class="bg-primary-container/10 text-primary px-3 py-1 rounded text-xs font-label-caps border border-primary-container/20">UPLOAD FILE</button></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4 font-body-md text-on-surface">Certificate of Occupancy</td>
+<td class="px-lg py-4"><span class="font-label-caps text-[10px] px-2 py-0.5 rounded bg-tertiary/10 text-tertiary">COMPLIANCE</span></td>
+<td class="px-lg py-4 font-body-sm text-on-surface-variant">Agent Pilot-01</td>
+<td class="px-lg py-4"><span class="flex items-center gap-1.5 text-status-success font-label-caps text-[10px]"><span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">check_circle</span> VERIFIED</span></td>
+<td class="px-lg py-4"><a class="text-primary font-data-mono text-xs hover:underline" href="#">DCRA-CO-7712</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Section 2: Financial Reconciliation -->
+<section class="bg-surface-container-lowest border border-surface-border rounded-xl overflow-hidden shadow-sm">
+<div class="px-lg py-md border-b border-surface-border bg-surface-container-low flex justify-between items-center">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">account_balance</span>
+<h2 class="font-h3 text-h3 text-on-surface">Financial Reconciliation</h2>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-body-sm text-on-surface-variant">Auto-sync with QuickBooks enabled</span>
+<span class="material-symbols-outlined text-status-success text-[18px]">sync_saved_locally</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-highest">
+<tr>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Item</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Category</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Responsible Party</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Status</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-outline border-b border-surface-border">Verification Link</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-border">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4 font-body-md text-on-surface">Permit Bond Release Refund</td>
+<td class="px-lg py-4"><span class="font-label-caps text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary">REVENUE</span></td>
+<td class="px-lg py-4 font-body-sm text-on-surface-variant">L. Harris (Finance)</td>
+<td class="px-lg py-4"><span class="flex items-center gap-1.5 text-status-success font-label-caps text-[10px]"><span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">payments</span> RECEIVED</span></td>
+<td class="px-lg py-4 font-data-mono text-xs text-on-surface-variant">TX-ID: 4492-QB</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4 font-body-md text-on-surface">Utility Tap-In Final Invoice</td>
+<td class="px-lg py-4"><span class="font-label-caps text-[10px] px-2 py-0.5 rounded bg-status-error/10 text-status-error">LIABILITY</span></td>
+<td class="px-lg py-4 font-body-sm text-on-surface-variant">Project Manager</td>
+<td class="px-lg py-4"><span class="flex items-center gap-1.5 text-status-warning font-label-caps text-[10px]"><span class="material-symbols-outlined text-[14px]">schedule</span> IN REVIEW</span></td>
+<td class="px-lg py-4"><button class="text-primary font-label-caps text-xs flex items-center gap-1 hover:underline">REVIEW IN QB <span class="material-symbols-outlined text-xs">open_in_new</span></button></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Section 3: Intelligence Loop -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<div class="bg-surface-container-lowest border border-surface-border rounded-xl p-lg shadow-sm">
+<div class="flex items-center gap-3 mb-md">
+<span class="material-symbols-outlined text-primary">psychology</span>
+<h2 class="font-h3 text-h3 text-on-surface">Post-Mortem Entry</h2>
+</div>
+<div class="space-y-md">
+<div>
+<label class="block font-label-caps text-label-caps text-outline mb-2 uppercase">Core Lesson Learned</label>
+<textarea class="w-full bg-surface-container border border-outline-variant rounded-lg p-3 text-body-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Enter key takeaway for the organizational knowledge graph..." rows="3"></textarea>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div>
+<label class="block font-label-caps text-label-caps text-outline mb-2 uppercase">Delay Root Cause</label>
+<select class="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-body-sm">
+<option>Municipal Backlog</option>
+<option>Missing Documentation</option>
+<option>Utility Conflict</option>
+<option>Weather Delay</option>
+</select>
+</div>
+<div>
+<label class="block font-label-caps text-label-caps text-outline mb-2 uppercase">Success Driver</label>
+<select class="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-body-sm">
+<option>Agent Automation</option>
+<option>Early Submission</option>
+<option>Expediter Liaison</option>
+</select>
+</div>
+</div>
+<button class="w-full py-3 bg-inverse-surface text-on-primary font-label-caps text-label-caps rounded-lg hover:bg-on-background transition-colors flex items-center justify-center gap-2">
+                            Commit to Knowledge Graph
+                            <span class="material-symbols-outlined text-[18px]">account_tree</span>
+</button>
+</div>
+</div>
+<!-- Lessons Visualized (Stylized Chart Placeholders) -->
+<div class="bg-surface-container-lowest border border-surface-border rounded-xl p-lg shadow-sm relative overflow-hidden flex flex-col">
+<div class="flex items-center justify-between mb-md">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">monitoring</span>
+<h2 class="font-h3 text-h3 text-on-surface">Cycle Efficiency</h2>
+</div>
+<span class="font-data-mono text-xs text-status-success">+12% vs Org Avg</span>
+</div>
+<div class="flex-1 flex items-end gap-2 px-md py-4">
+<div class="flex-1 bg-primary-fixed-dim/20 rounded-t-sm relative group h-[40%] transition-all hover:bg-primary-container/40">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 font-data-mono text-[10px] bg-inverse-surface text-white px-1.5 py-0.5 rounded">P1</div>
+</div>
+<div class="flex-1 bg-primary-fixed-dim/40 rounded-t-sm relative group h-[65%] transition-all hover:bg-primary-container/40">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 font-data-mono text-[10px] bg-inverse-surface text-white px-1.5 py-0.5 rounded">P2</div>
+</div>
+<div class="flex-1 bg-primary-fixed-dim/60 rounded-t-sm relative group h-[50%] transition-all hover:bg-primary-container/40">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 font-data-mono text-[10px] bg-inverse-surface text-white px-1.5 py-0.5 rounded">P3</div>
+</div>
+<div class="flex-1 bg-primary-container rounded-t-sm relative group h-[90%] transition-all hover:bg-primary/80">
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 font-data-mono text-[10px] bg-inverse-surface text-white px-1.5 py-0.5 rounded">CUR</div>
+</div>
+</div>
+<div class="pt-4 border-t border-surface-border">
+<p class="font-body-sm text-body-sm text-on-surface-variant italic leading-relaxed">
+                            "The automated 'Vault Sync' protocol saved approximately 18 manual hours during this project phase."
+                        </p>
+<div class="mt-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[16px]">verified</span>
+<span class="font-label-caps text-[10px] text-outline uppercase tracking-widest">AI Agent Validation</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Contextual Micro-Interaction Elements -->
+<script>
+        // Simple scroll behavior for Top Bar
+        const mainCanvas = document.querySelector('main');
+        const topBar = document.querySelector('header');
+        
+        mainCanvas.addEventListener('scroll', () => {
+            if (mainCanvas.scrollTop > 20) {
+                topBar.classList.add('shadow-md');
+                topBar.classList.remove('shadow-sm');
+            } else {
+                topBar.classList.add('shadow-sm');
+                topBar.classList.remove('shadow-md');
+            }
+        });
+
+        // Toggle hover scaling effects programmatically if needed
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.style.transform = 'scale(0.95)';
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+</body></html>

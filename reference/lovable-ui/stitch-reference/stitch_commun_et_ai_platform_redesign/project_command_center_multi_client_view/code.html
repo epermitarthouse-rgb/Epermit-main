@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Project Command Center - McDonald's - 75 New York Ave NE</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&amp;family=Inter+Tight:wght@600;700&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#ffdcc3",
+                        "status-error": "#C5221F",
+                        "on-tertiary-fixed-variant": "#0e4b6e",
+                        "on-tertiary-container": "#003a59",
+                        "on-secondary-fixed": "#0f1c2d",
+                        "inverse-surface": "#382e27",
+                        "on-surface-variant": "#554337",
+                        "on-background": "#221a13",
+                        "error-container": "#ffdad6",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#bac7de",
+                        "tertiary-fixed-dim": "#9bccf6",
+                        "tertiary-fixed": "#cbe6ff",
+                        "surface": "#fff8f5",
+                        "on-secondary-container": "#596579",
+                        "outline-variant": "#dbc2b1",
+                        "surface-dim": "#e8d7cc",
+                        "secondary": "#535f73",
+                        "status-success": "#137333",
+                        "secondary-fixed": "#d6e3fb",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-container-high": "#f6e5da",
+                        "primary": "#914c00",
+                        "on-primary-container": "#572b00",
+                        "background": "#fff8f5",
+                        "status-warning": "#B06000",
+                        "on-surface": "#221a13",
+                        "inverse-on-surface": "#ffede3",
+                        "surface-container-highest": "#f1dfd5",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "surface-border": "#E2E8F0",
+                        "surface-bright": "#fff8f5",
+                        "on-error": "#ffffff",
+                        "text-muted": "#64748B",
+                        "tertiary-container": "#74a5cd",
+                        "primary-fixed-dim": "#ffb77e",
+                        "secondary-container": "#d6e3fb",
+                        "surface-variant": "#f1dfd5",
+                        "surface-container-low": "#fff1e9",
+                        "on-tertiary-fixed": "#001e30",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#fcebe0",
+                        "on-primary-fixed": "#2f1500",
+                        "outline": "#887365",
+                        "inverse-primary": "#ffb77e",
+                        "on-secondary": "#ffffff",
+                        "surface-tint": "#914c00",
+                        "primary-container": "#e8882f",
+                        "tertiary": "#2f6388",
+                        "background-alt": "#F5F8FB"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin": "32px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "xxl": "64px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "xl": "40px",
+                        "gutter": "24px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "h2": ["Inter Tight"],
+                        "label-caps": ["Inter Tight"],
+                        "h1": ["Inter Tight"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "h3": ["Inter Tight"],
+                        "data-mono": ["JetBrains Mono"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "h2": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "h1": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "fontWeight": "600" }],
+                        "h3": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "data-mono": ["14px", { "lineHeight": "1.4", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    },
+                    "boxShadow": {
+                        'level-1': '0 4px 20px rgba(14, 27, 44, 0.02)',
+                        'level-2': '0 8px 30px rgba(14, 27, 44, 0.04)',
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F5F8FB; }
+        .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+        
+        /* Micro-interactions */
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(14, 27, 44, 0.06); }
+    </style>
+</head>
+<body class="text-on-surface antialiased overflow-hidden flex h-screen w-full">
+<!-- SideNavBar (Shared Component Blueprint) -->
+<aside class="fixed left-0 top-0 h-screen w-64 border-r border-surface-border bg-surface-container-low dark:bg-surface-container-low flex flex-col py-lg px-md z-40">
+<!-- Header -->
+<div class="mb-xl px-2">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-h3 text-h3 overflow-hidden">
+<img alt="Project Lead" class="w-full h-full object-cover" data-alt="A professional headshot of a female civil engineer in her late 30s. She is wearing a crisp white button-down shirt and a subtle silver necklace. The background is a blurred modern office setting with cool, natural lighting. Her expression is confident and approachable, fitting a high-level project lead. The overall tone is corporate, modern, and trustworthy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIku6sy2vTRYn5bTnuV8teJDXVmZv4S7sn-1J4UFWxFM80AnDTreFw1NuKsD9kXZUTWYnQr6VokhXRkpYKkrYvmEi1yEZ75lM0ik9i06P2edRMvGS9sqqAZKHHSeysKxrwOnTYBzBH6dYoZmnz5xDW_KQNbN2msExwumaX2PzErE7DrHfXdg_L5wrQff2AUerRqLApmxJfTj0Sok9jZH3HCZSSimqsE2-4gnc3O068aJgKTw2zSLXeo8zvxA_tQxY_QTX3CBCKXtI"/>
+</div>
+<div>
+<h2 class="font-h3 text-h3 text-on-surface truncate" title="North Main Substation">North Main Substation</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Utility Corridor A-12</p>
+</div>
+</div>
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary py-2 px-4 rounded-lg font-label-caps text-label-caps shadow-sm hover:bg-primary/90 transition-colors">
+<span class="material-symbols-outlined text-[18px]">analytics</span>
+                Analyze Conflicts
+            </button>
+</div>
+<!-- Navigation Links -->
+<nav class="flex-1 flex flex-col gap-1 overflow-y-auto pr-2">
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-3 py-2.5 text-primary font-bold bg-primary-fixed-dim/20 rounded-lg translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors">description</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">Documents</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors">map</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">Map View</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors">smart_toy</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">AI Agent</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors">event_upcoming</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">Timeline</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors">folder_shared</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">Resources</span>
+</a>
+</nav>
+<!-- Footer Links -->
+<div class="mt-auto pt-4 border-t border-surface-border flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors text-[20px]">help</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">Help Center</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary-container transition-colors text-[20px]">download</span>
+<span class="font-label-caps text-label-caps group-hover:text-primary-container transition-colors">Export Data</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col ml-64 bg-[#F5F8FB] h-screen overflow-hidden">
+<!-- TopNavBar (Shared Component Blueprint) -->
+<header class="flex justify-between items-center px-margin py-md w-full bg-surface/80 dark:bg-surface/80 backdrop-blur-md docked full-width top-0 z-50 border-b border-surface-border shadow-sm flex-shrink-0">
+<!-- Brand & Search -->
+<div class="flex items-center gap-8">
+<div class="font-display-lg text-h2 text-primary tracking-tight">PermitPilot</div>
+<div class="relative w-64 hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-lowest border border-surface-border rounded-full py-1.5 pl-10 pr-4 font-body-sm text-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" placeholder="Search resources..." type="text"/>
+</div>
+</div>
+<!-- Navigation Links (Global Context) -->
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-label-caps text-label-caps" href="#">Setup</a>
+<a class="text-secondary-fixed-variant font-medium hover:text-primary-container transition-colors font-label-caps text-label-caps" href="#">Permit Filing</a>
+<a class="text-secondary-fixed-variant font-medium hover:text-primary-container transition-colors font-label-caps text-label-caps" href="#">Utility Coordination</a>
+<a class="text-secondary-fixed-variant font-medium hover:text-primary-container transition-colors font-label-caps text-label-caps" href="#">Closeout</a>
+</nav>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-colors scale-95 active:scale-90 flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-colors scale-95 active:scale-90 flex items-center justify-center">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<button class="bg-surface-container-lowest border border-surface-border text-on-surface font-label-caps text-label-caps px-4 py-2 rounded-lg shadow-sm hover:bg-surface-container transition-colors scale-95 active:scale-90">
+                    Create Project
+                </button>
+<div class="w-8 h-8 rounded-full bg-surface-border overflow-hidden cursor-pointer border border-surface-border">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A small circular avatar image showing a generic user silhouette or minimal abstract geometric pattern in cool blue tones, representing a user profile icon in a software interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPIS-7Jutoj1rXY7sCMMt1oMzSD2SaSVJiSsMy0gig6E0QOai08WerXM6kKuusmhD1cFHKvCO5XOE7mmnDJf9E_DEKiA9hZv7XTMlFtNfsIH4zvaNe1TdNwjHt-we5b-WeVQTV27hWJPBFb1xqC4ymQV3qhblv63CFH-8mWqNRnMrpnxHxMXBfatmtuvnM9gmFJwTktJJSsNiPmS5VCrCfpgSN1_3N9-O1AyQ7GwlcKucYU1b1iJWmXaU813T4d0FerVYKT9Upfto"/>
+</div>
+</div>
+</header>
+<!-- Main Dashboard Canvas -->
+<main class="flex-1 overflow-y-auto p-margin">
+<div class="max-w-[1440px] mx-auto flex flex-col gap-lg">
+<!-- 1. Project Status Header -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-surface-border pb-6">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<span class="font-data-mono text-data-mono text-text-muted bg-surface-container-highest px-2 py-1 rounded">PRJ-2023-089A</span>
+<span class="bg-secondary-fixed/30 text-on-secondary-fixed font-label-caps text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-secondary-fixed">Phase 0: Site Investigation</span>
+</div>
+<h1 class="font-h1 text-h1 text-on-surface">McDonald's - 75 New York Ave NE <span class="font-body-lg text-text-muted font-normal block md:inline md:ml-2">Command Center</span></h1>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 bg-surface-container-lowest border border-surface-border px-4 py-2 rounded-lg font-label-caps text-label-caps hover:bg-surface-container transition-colors shadow-level-1">
+<span class="material-symbols-outlined text-[18px]">share</span> Share
+                        </button>
+<button class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg font-label-caps text-label-caps shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-primary/90 transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span> New Action
+                        </button>
+</div>
+</section>
+<!-- 2. Guided Roadmap Stepper -->
+<section class="bg-surface-container-lowest rounded-xl border border-surface-border p-md shadow-level-1">
+<div class="flex items-center justify-between relative">
+<!-- Connecting Line Background -->
+<div class="absolute left-[10%] right-[10%] top-1/2 -translate-y-1/2 h-0.5 bg-surface-container-highest z-0"></div>
+<!-- Active Line Progress -->
+<div class="absolute left-[10%] w-[15%] top-1/2 -translate-y-1/2 h-0.5 bg-primary z-0"></div>
+<!-- Step 1: Active -->
+<div class="relative z-10 flex flex-col items-center gap-2 w-1/4">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center ring-4 ring-surface-container-lowest shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">travel_explore</span>
+</div>
+<span class="font-label-caps text-label-caps text-primary text-center">Investigation</span>
+</div>
+<!-- Step 2: Pending -->
+<div class="relative z-10 flex flex-col items-center gap-2 w-1/4">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-border text-on-surface-variant flex items-center justify-center ring-4 ring-surface-container-lowest">
+<span class="font-data-mono text-data-mono">2</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant text-center">Filing</span>
+</div>
+<!-- Step 3: Pending -->
+<div class="relative z-10 flex flex-col items-center gap-2 w-1/4">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-border text-on-surface-variant flex items-center justify-center ring-4 ring-surface-container-lowest">
+<span class="font-data-mono text-data-mono">3</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant text-center">Coordination</span>
+</div>
+<!-- Step 4: Pending -->
+<div class="relative z-10 flex flex-col items-center gap-2 w-1/4">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-border text-on-surface-variant flex items-center justify-center ring-4 ring-surface-container-lowest">
+<span class="font-data-mono text-data-mono">4</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant text-center">Closeout</span>
+</div>
+</div>
+</section>
+<!-- Grid Layout for Modules -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Left Column (Main Modules) -->
+<div class="col-span-12 lg:col-span-8 flex flex-col gap-gutter">
+<!-- 3. Site Investigation (Phase 0) Module Card -->
+<section class="bg-surface-container-lowest rounded-xl border border-surface-border shadow-level-1 overflow-hidden relative group">
+<!-- Decorative flare -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none transition-transform duration-500 group-hover:scale-110"></div>
+<div class="p-lg border-b border-surface-border bg-[#F8FAFC]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high border border-surface-border flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">troubleshoot</span>
+</div>
+<div>
+<h2 class="font-h2 text-h2 text-on-surface">Site Investigation Module</h2>
+<p class="font-body-sm text-body-sm text-text-muted mt-1">Phase 0 data collection and initial analysis hub.</p>
+</div>
+</div>
+</div>
+<div class="p-lg grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Entry Point 1 -->
+<a class="block p-4 rounded-lg border border-surface-border bg-surface-container-lowest hover-lift group/card cursor-pointer" href="{{DATA:SCREEN:SCREEN_59}}">
+<div class="w-8 h-8 rounded bg-tertiary-container/20 text-tertiary flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-[18px]">summarize</span>
+</div>
+<h3 class="font-h3 text-[16px] text-on-surface mb-2 group-hover/card:text-primary transition-colors">Executive SIR (ESIR)</h3>
+<p class="font-body-sm text-[13px] text-on-surface-variant leading-relaxed">High-level overview of site readiness and risks. Suitable for all retail types (inline, outparcels, etc.).</p>
+<div class="mt-4 flex items-center text-primary font-label-caps text-[10px] opacity-0 group-hover/card:opacity-100 transition-opacity translate-x-[-10px] group-hover/card:translate-x-0 duration-300">
+                                        ACCESS REPORT <span class="material-symbols-outlined text-[14px] ml-1">arrow_forward</span>
+</div>
+</a>
+<!-- Entry Point 2 -->
+<a class="block p-4 rounded-lg border border-surface-border bg-surface-container-lowest hover-lift group/card cursor-pointer relative overflow-hidden" href="{{DATA:SCREEN:SCREEN_6}}">
+<!-- Tech pattern bg -->
+<div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 16px 16px;"></div>
+<div class="w-8 h-8 rounded bg-primary-container/20 text-primary-container flex items-center justify-center mb-4 relative z-10">
+<span class="material-symbols-outlined text-[18px]">engineering</span>
+</div>
+<h3 class="font-h3 text-[16px] text-on-surface mb-2 group-hover/card:text-primary transition-colors relative z-10">Technical Workspace</h3>
+<p class="font-body-sm text-[13px] text-on-surface-variant leading-relaxed relative z-10">Detailed engineering data, utility mapping, and constraint analysis.</p>
+<div class="mt-4 flex items-center text-primary font-label-caps text-[10px] opacity-0 group-hover/card:opacity-100 transition-opacity translate-x-[-10px] group-hover/card:translate-x-0 duration-300 relative z-10">
+                                        ENTER WORKSPACE <span class="material-symbols-outlined text-[14px] ml-1">arrow_forward</span>
+</div>
+</a>
+<!-- Entry Point 3 -->
+<a class="block p-4 rounded-lg border border-surface-border bg-surface-container-lowest hover-lift group/card cursor-pointer" href="{{DATA:SCREEN:SCREEN_98}}">
+<div class="w-8 h-8 rounded bg-secondary-fixed/50 text-on-secondary-fixed flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-[18px]">library_books</span>
+</div>
+<h3 class="font-h3 text-[16px] text-on-surface mb-2 group-hover/card:text-primary transition-colors">Documentation Annex</h3>
+<p class="font-body-sm text-[13px] text-on-surface-variant leading-relaxed">Central repository for deeds, permits, and historical records.</p>
+<div class="mt-4 flex items-center text-primary font-label-caps text-[10px] opacity-0 group-hover/card:opacity-100 transition-opacity translate-x-[-10px] group-hover/card:translate-x-0 duration-300">
+                                        VIEW ARCHIVE <span class="material-symbols-outlined text-[14px] ml-1">arrow_forward</span>
+</div>
+</a>
+</div>
+</section>
+<!-- 5. Recent Field Evidence -->
+<section class="bg-surface-container-lowest rounded-xl border border-surface-border shadow-level-1 p-lg">
+<div class="flex items-center justify-between mb-4 border-b border-surface-border pb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-text-muted">photo_camera</span>
+<h3 class="font-h3 text-[18px] text-on-surface">Recent Field Evidence</h3>
+</div>
+<button class="text-primary font-label-caps text-label-caps hover:underline flex items-center gap-1">
+                                    View Gallery <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<!-- Photo 1 -->
+<div class="aspect-square rounded-lg overflow-hidden border border-surface-border relative group cursor-pointer">
+<img alt="Site markings" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A clear, high-resolution photograph taken at a civil engineering construction site during daylight. The image focuses on ground-level utility markings spray-painted in vivid yellow and red on weathered asphalt. In the blurred background, standard construction equipment and safety barriers are visible. The overall lighting is bright and natural, indicating a clear, sunny day suitable for site inspection. The aesthetic is documentary and technical." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaahQbz7sX_tWUDKf9t9tT8E18ArDWdalstB0qtZPPeG2VN6e-as0PzOMEqN4EBOaxZO9JIuXxtQYzoOr5xKshpR1dKc8GnzCEk1TSlkmGPwddwq0Wrhe2QfLSHcDDQOvaL_RiTngMI1ohYhLfjEFcdM836JvOAsDUVR9ortvp4h2ku5N1gfvT-v_yBEVC4EiEQ6p12un-OfPE5Hs80L7OJ5Lwz7OfidrK2r1DKIkP25zDLSL6LTy8oQ46aywVM1zcHVBHBDlirpg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+<span class="text-white font-data-mono text-[10px]">Util-Mark-01.jpg</span>
+</div>
+</div>
+<!-- Photo 2 -->
+<div class="aspect-square rounded-lg overflow-hidden border border-surface-border relative group cursor-pointer">
+<img alt="Electrical box" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A detailed close-up shot of an open electrical utility box or transformer cabinet outdoors. The metal casing is slightly weathered, painted in standard industrial green. Inside, complex wiring and connection points are visible. The image has a documentary, technical feel, typical of field evidence collected by a site inspector. The lighting is even, minimizing deep shadows to ensure technical details are clearly visible against a bright, modern UI backdrop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5KCpo7xugBmAikRlw1xwWVsVariou5T2_QpKow3AFjt3jrwfnaQ4dchr8-DSiHUM93PmMKEAur5NAH71dCsfpsx7OkQiGTiitPnT4vPqfZI3U__TcXR_ez7x3NEdsv4wcY4sjsq05YiCUQNnJchRVvh-OkF2X2KYcmGoGqHRA_AWwi2UkcvMvrCoUz_EbsR2u5JRSbbYveXdnYnftChHmU3tU7go_oST7H1NhK2SQhXyVAPzPOa_7Jq03jEbyr74B16gkDES391M"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+<span class="text-white font-data-mono text-[10px]">Transformer-A.jpg</span>
+</div>
+</div>
+<!-- Photo 3 -->
+<div class="aspect-square rounded-lg overflow-hidden border border-surface-border relative group cursor-pointer">
+<img alt="Site overview" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A wide-angle landscape photograph of a commercial plot slated for redevelopment. The ground is partially broken with patches of dirt and old concrete. A surveyor's tripod and equipment stand in the middle ground. The sky is partially cloudy, casting soft, diffuse light over the scene. The mood is anticipatory and professional, capturing the 'Phase 0' initial site condition before major excavation begins in a clean, modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPjoYID1JAoEQoX21Q3d6hO-f0wgPgMJF86O8HT9_THFSOhLkelWgoLfp2MIIgs_oxXAgran0J6D2Pj6oEAxaNh6bLfyxTZITvB5Q2CjT3XXoa35rEl3ezQcS2aTLva_2XCS-OMqD7mPiT0EAtBFmC07JChVwvsezTe8h6vSe0dmt-Zic68XIlJK80WbIYWiXArZ7lXdudY63pZWNzFAO6OIG-srIWdwsLug0YudizM-tkO9CSHVfC5_mX--2pnvXT_5rMfMFkWJs"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+<span class="text-white font-data-mono text-[10px]">Site-Overview.jpg</span>
+</div>
+</div>
+<!-- Add Photo Action -->
+<div class="aspect-square rounded-lg border-2 border-dashed border-surface-border bg-surface-container-high/50 flex flex-col items-center justify-center text-text-muted hover:bg-surface-container-high hover:text-primary hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-[28px] mb-1 group-hover:scale-110 transition-transform">add_a_photo</span>
+<span class="font-label-caps text-[10px]">Upload New</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column (Sidebar/Intelligence) -->
+<div class="col-span-12 lg:col-span-4 flex flex-col gap-gutter">
+<!-- 4. Project Intelligence: Institutional Memory -->
+<section class="bg-surface-container-lowest rounded-xl border border-surface-border shadow-level-1 overflow-hidden relative">
+<!-- Subtle AI gradient top border -->
+<div class="h-1 w-full bg-gradient-to-r from-tertiary-container via-primary-container to-tertiary-container"></div>
+<div class="p-5">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-primary-container text-[20px]" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<h3 class="font-h3 text-[16px] text-on-surface">Institutional Memory</h3>
+</div>
+<div class="bg-surface-bright rounded-lg p-4 border border-surface-border mb-3 relative">
+<span class="material-symbols-outlined absolute top-4 right-4 text-surface-border text-[40px] opacity-20 rotate-12">format_quote</span>
+<p class="font-body-sm text-[13px] text-on-surface-variant relative z-10 italic">"Previous retail developments in this corridor face extended review times for drive-thru conditional use permits. Early traffic study submission is highly recommended."</p>
+<div class="mt-3 flex items-center justify-between">
+<span class="font-label-caps text-[10px] text-text-muted">Source: QSR Portfolio Data</span>
+<button class="text-primary font-label-caps text-[10px] hover:underline">View Source</button>
+</div>
+</div>
+<div class="flex gap-2">
+<span class="bg-surface-container text-on-surface-variant font-data-mono text-[10px] px-2 py-1 rounded">#Zoning</span>
+<span class="bg-surface-container text-on-surface-variant font-data-mono text-[10px] px-2 py-1 rounded">#TrafficStudy</span>
+</div>
+</div>
+</section>
+<!-- 4. Project Intelligence: Cost Alerts -->
+<section class="bg-surface-container-lowest rounded-xl border border-status-warning/30 shadow-level-1 p-5 relative overflow-hidden">
+<!-- Warning flare -->
+<div class="absolute top-0 right-0 w-24 h-24 bg-status-warning/5 rounded-bl-full pointer-events-none"></div>
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-status-warning/10 text-status-warning flex items-center justify-center flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[18px]">warning</span>
+</div>
+<div>
+<h3 class="font-h3 text-[16px] text-on-surface mb-1">Cost Alert: Utility Coordination</h3>
+<p class="font-body-sm text-[13px] text-on-surface-variant mb-3 leading-relaxed">Based on current investigation delays, the upcoming Utility Coordination phase is at risk of exceeding estimated budget by <span class="font-data-mono font-bold text-status-warning">12.5%</span>.</p>
+<div class="flex items-center gap-2">
+<button class="bg-surface-container border border-surface-border text-on-surface px-3 py-1.5 rounded font-label-caps text-[10px] hover:bg-surface-container-highest transition-colors">Review Budget</button>
+<button class="text-text-muted font-label-caps text-[10px] hover:text-on-surface transition-colors">Dismiss</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Supplementary Action Card -->
+<section class="bg-primary/5 rounded-xl border border-primary/20 p-5 flex flex-col items-center justify-center text-center mt-auto border-dashed">
+<div class="w-12 h-12 rounded-full bg-surface-container-lowest shadow-sm flex items-center justify-center text-primary mb-3">
+<span class="material-symbols-outlined text-[24px]">smart_toy</span>
+</div>
+<h4 class="font-h3 text-[14px] text-on-surface mb-1">AI Assistant Available</h4>
+<p class="font-body-sm text-[12px] text-on-surface-variant mb-4">Need help analyzing site documents?</p>
+<button class="w-full bg-surface-container-lowest border border-primary/30 text-primary font-label-caps text-[12px] py-2 rounded-lg hover:bg-primary hover:text-on-primary transition-colors shadow-sm">
+                                Ask Project Agent
+                            </button>
+</section>
+</div>
+</div>
+<!-- Bottom spacing -->
+<div class="h-8 w-full"></div>
+</div>
+</main>
+</div>
+</body></html>
