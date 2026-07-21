@@ -103,15 +103,16 @@ export function Panel({
   children,
   className,
   action,
+  ...props
 }: {
   title?: React.ReactNode;
   eyebrow?: string;
   children: React.ReactNode;
   className?: string;
   action?: React.ReactNode;
-}) {
+} & React.HTMLAttributes<HTMLElement>) {
   return (
-    <section className={cn("pilot-card p-5", className)}>
+    <section className={cn("pilot-card p-5", className)} {...props}>
       {(title || eyebrow || action) && (
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
