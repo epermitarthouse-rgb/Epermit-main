@@ -895,18 +895,18 @@ function ReportsExtractedTextDetails({
     len > 120_000 ? `${text.slice(0, 120_000)}\n\n[truncated]` : text;
   return (
     <div className="mt-4 w-full min-w-0">
-      <p className="text-xs text-muted-foreground dark:text-ink-tertiary-dark">Extracted text available</p>
+      <p className="text-xs text-muted-foreground dark:text-muted-foreground">Extracted text available</p>
       <details
-        className="mt-2 rounded-lg border border-border bg-muted/20 dark:border-obsidian-raised dark:bg-obsidian-sunken"
+        className="mt-2 rounded-lg border border-border bg-muted/20 dark:border-border dark:bg-muted"
         data-testid={testId}
       >
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 px-4 py-3 text-sm font-medium text-primary [&::-webkit-details-marker]:hidden">
           <span>{summaryLabel}</span>
-          <span className="text-xs font-mono font-normal text-muted-foreground dark:text-ink-tertiary-dark">
+          <span className="text-xs font-mono font-normal text-muted-foreground dark:text-muted-foreground">
             {len.toLocaleString()} chars
           </span>
         </summary>
-        <pre className="max-h-[min(55vh,480px)] overflow-auto border-t border-border p-4 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words dark:border-obsidian-raised dark:text-ink-secondary-dark">
+        <pre className="max-h-[min(55vh,480px)] overflow-auto border-t border-border p-4 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words dark:border-border dark:text-muted-foreground">
           {display}
         </pre>
       </details>
@@ -3296,7 +3296,7 @@ export default function PortalDataViewer() {
                           {infoTab?.keyValues?.map((kv, i) => (
                             <div
                               key={i}
-                              className={`flex border-t border-cream-raised first:border-t-0 last:border-b-0 hover:bg-card/50 transition-colors ${
+                              className={`flex border-t border-border first:border-t-0 last:border-b-0 hover:bg-card/50 transition-colors ${
                                 i % 2 === 0 ? "bg-background" : "bg-card/30"
                               }`}
                             >
@@ -3339,7 +3339,7 @@ export default function PortalDataViewer() {
                               <TableRow
                                 key={ri}
                                 className={
-                                  "border-t border-cream-raised hover:bg-card/60 transition-colors " +
+                                  "border-t border-border hover:bg-card/60 transition-colors " +
                                   (ri % 2 === 1 ? "bg-card/35" : "bg-background")
                                 }
                               >
@@ -3368,7 +3368,7 @@ export default function PortalDataViewer() {
                     <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
                       Info extraction debug
                     </summary>
-                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/30 p-3 font-mono text-muted-foreground dark:border-obsidian-raised dark:bg-obsidian-sunken/90 dark:text-ink-secondary-dark">
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/30 p-3 font-mono text-muted-foreground dark:border-border dark:bg-muted/90 dark:text-muted-foreground">
                       {JSON.stringify(infoTab.info_debug, null, 2)}
                     </pre>
                   </details>
@@ -3935,7 +3935,7 @@ export default function PortalDataViewer() {
 
         <TabsContent
           value="reports"
-          className="mt-8 pt-0 pb-0 bg-background text-foreground focus-visible:outline-none dark:bg-obsidian dark:text-ink-primary-dark"
+          className="mt-8 pt-0 pb-0 bg-background text-foreground focus-visible:outline-none dark:bg-background dark:text-foreground"
         >
           <div className="px-4 py-6 sm:px-6 md:px-8">
             <div className="max-w-7xl mx-auto">
@@ -3943,14 +3943,14 @@ export default function PortalDataViewer() {
               <h2 className="mt-2 font-tight text-2xl font-bold text-foreground sm:text-3xl">
                 Extracted <em className="text-primary italic">Reports</em>
               </h2>
-              <p className="mt-3 text-muted-foreground max-w-2xl text-sm sm:text-base leading-relaxed dark:text-ink-secondary-dark">
+              <p className="mt-3 text-muted-foreground max-w-2xl text-sm sm:text-base leading-relaxed dark:text-muted-foreground">
                 Stored report artifacts, live viewer links, screenshots, and extracted text used by the AI pipeline.
               </p>
-              <p className="text-sm text-muted-foreground/90 mb-6 mt-4 dark:text-ink-secondary-dark/90">
+              <p className="text-sm text-muted-foreground/90 mb-6 mt-4 dark:text-muted-foreground/90">
             Source data from the portal. For an actionable comment list and
-            responses, use <strong className="text-foreground font-semibold dark:text-ink-primary-dark">Comment Review</strong>.
+            responses, use <strong className="text-foreground font-semibold dark:text-foreground">Comment Review</strong>.
           </p>
-          <Card className="border border-border bg-card shadow-none dark:border-obsidian-raised dark:bg-obsidian-raised/50">
+          <Card className="border border-border bg-card shadow-none dark:border-border dark:bg-card/50">
             <CardContent className="p-0">
               <TabErrorBoundary tabName="Reports">
                 {reportsTab?.error ? (
@@ -3968,12 +3968,12 @@ export default function PortalDataViewer() {
                       /^status$/i.test(String(h).trim()),
                     );
                     return (
-                    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card dark:border-obsidian-raised dark:bg-obsidian-raised/50">
-                    <div className="grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-border px-5 py-3 dark:border-obsidian-raised">
-                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-tertiary-dark">
+                    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card dark:border-border dark:bg-card/50">
+                    <div className="grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-border px-5 py-3 dark:border-border">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-muted-foreground">
                         Report Name
                       </div>
-                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-tertiary-dark">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-muted-foreground">
                         Status
                       </div>
                       <div className="justify-self-end" aria-hidden />
@@ -4014,15 +4014,15 @@ export default function PortalDataViewer() {
                             <CollapsibleTrigger asChild>
                               <button
                                 type="button"
-                                className={`grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-border px-5 py-4 text-left transition-colors dark:border-obsidian-raised ${ri % 2 === 1 ? "bg-muted/30 hover:bg-muted/50 dark:bg-obsidian-sunken/40 dark:hover:bg-obsidian-sunken/60" : "bg-card hover:bg-muted/20 dark:bg-obsidian/80 dark:hover:bg-obsidian-raised/45"}`}
+                                className={`grid w-full min-w-0 grid-cols-[1fr_minmax(120px,140px)_80px] items-center gap-2 border-b border-border px-5 py-4 text-left transition-colors dark:border-border ${ri % 2 === 1 ? "bg-muted/30 hover:bg-muted/50 dark:bg-muted/40 dark:hover:bg-obsidian-sunken/60" : "bg-card hover:bg-muted/20 dark:bg-background/80 dark:hover:bg-obsidian-raised/45"}`}
                               >
-                                <span className="truncate text-sm font-medium text-foreground dark:text-ink-primary-dark">
+                                <span className="truncate text-sm font-medium text-foreground dark:text-foreground">
                                   {reportName}
                                 </span>
-                                <span className="text-sm text-ink-secondary-dark">
+                                <span className="text-sm text-muted-foreground">
                                   {statusLabel}
                                 </span>
-                                <span className="flex justify-end text-ink-tertiary-dark">
+                                <span className="flex justify-end text-muted-foreground">
                                   {isExpanded ? (
                                     <ChevronDown
                                       className="h-4 w-4 shrink-0"
@@ -4038,13 +4038,13 @@ export default function PortalDataViewer() {
                               </button>
                             </CollapsibleTrigger>
                               <CollapsibleContent>
-                                <div className="w-full border-b border-border bg-muted/20 p-4 dark:border-obsidian-raised dark:bg-obsidian-sunken/50">
-                                      <Card className="rounded-xl border border-gold/25 bg-card p-5 shadow-none dark:bg-obsidian-raised/70">
+                                <div className="w-full border-b border-border bg-muted/20 p-4 dark:border-border dark:bg-muted/50">
+                                      <Card className="rounded-xl border border-primary/25 bg-card p-5 shadow-none dark:bg-card/70">
                                         <CardHeader className="space-y-0 p-0 pb-4">
                                           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                             <div className="min-w-0 flex-1">
                                               <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="font-serif text-2xl text-ink-primary-dark">
+                                            <h3 className="font-serif text-2xl text-foreground">
                                               {reportName}
                                             </h3>
                                               {hasError &&
@@ -4285,7 +4285,7 @@ export default function PortalDataViewer() {
                                                 when available.
                                               </p>
                                               <div
-                                                className="overflow-auto rounded-lg border border-border bg-muted/30 cursor-pointer transition-all hover:ring-1 hover:ring-gold/40 dark:border-obsidian-raised dark:bg-obsidian-sunken"
+                                                className="overflow-auto rounded-lg border border-border bg-muted/30 cursor-pointer transition-all hover:ring-1 hover:ring-primary/40 dark:border-border dark:bg-muted"
                                                 style={{ maxHeight: "420px" }}
                                                 onClick={() => {
                                                   setReportReaderOpen({
@@ -4400,7 +4400,7 @@ export default function PortalDataViewer() {
                             return (
                               <Card
                                 key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                                className="w-full border border-border bg-muted/20 text-foreground shadow-none dark:border-obsidian-raised dark:bg-obsidian-sunken/20 dark:text-ink-primary-dark"
+                                className="w-full border border-border bg-muted/20 text-foreground shadow-none dark:border-border dark:bg-muted/20 dark:text-foreground"
                               >
                                 <CardHeader className="pb-2">
                                   <CardTitle className="text-base">
@@ -4477,7 +4477,7 @@ export default function PortalDataViewer() {
                           return (
                             <Card
                               key={`${entry.fileSlug ?? entry.reportName}-${idx}`}
-                              className="w-full border border-border bg-muted/20 text-foreground shadow-none dark:border-obsidian-raised dark:bg-obsidian-sunken/20 dark:text-ink-primary-dark"
+                              className="w-full border border-border bg-muted/20 text-foreground shadow-none dark:border-border dark:bg-muted/20 dark:text-foreground"
                             >
                               <CardHeader className="pb-2">
                                 <CardTitle className="text-base">
@@ -4609,7 +4609,7 @@ export default function PortalDataViewer() {
                               <div className="px-4 py-2 text-xs font-mono uppercase tracking-wide text-muted-foreground border-b border-border">
                                 {folder.name}
                               </div>
-                              <ul className="divide-y divide-cream-sunken">
+                              <ul className="divide-y divide-border">
                                 {folder.files.map((file) => (
                                   <li
                                     key={`${file.portal_file_id}-${file.file_version}`}
@@ -4677,7 +4677,7 @@ export default function PortalDataViewer() {
                       No files data available.
                     </p>
                   ) : foldersForRender.length > 0 ? (
-                    <div className="divide-y divide-cream-sunken">
+                    <div className="divide-y divide-border">
                       {liveFileResults.active ? (
                         <div className="px-5 py-3 text-xs font-mono uppercase tracking-wide text-muted-foreground border-b border-border bg-background">
                           Saved files (last completed scrape)
@@ -4714,7 +4714,7 @@ export default function PortalDataViewer() {
                                 ) : (
                                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                                 )}
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gold/35 bg-gold/12 text-primary shadow-sm">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-primary shadow-sm">
                                   <FolderOpen className="h-4 w-4 shrink-0" />
                                 </div>
                                 <span className="flex-1 text-left text-sm font-medium text-foreground">
@@ -4737,7 +4737,7 @@ export default function PortalDataViewer() {
                                   files
                                 </Badge>
                                 {totalComments > 0 && (
-                                  <Badge className="shrink-0 border border-gold/30 bg-gold/12 text-xs font-semibold text-foreground">
+                                  <Badge className="shrink-0 border border-primary/30 bg-primary/12 text-xs font-semibold text-foreground">
                                     <MessageSquare className="mr-1 h-3 w-3 text-primary" />
                                     {totalComments}
                                   </Badge>
@@ -4850,7 +4850,7 @@ export default function PortalDataViewer() {
                                             </TableCell>
                                             <TableCell className="text-right text-sm">
                                               {(file.commentCount || 0) > 0 ? (
-                                                <Badge className="border border-gold/25 bg-gold/12 text-xs font-semibold text-foreground">
+                                                <Badge className="border border-primary/25 bg-primary/12 text-xs font-semibold text-foreground">
                                                   {file.commentCount}
                                                 </Badge>
                                               ) : (
