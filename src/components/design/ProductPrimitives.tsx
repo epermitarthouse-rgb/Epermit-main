@@ -73,19 +73,26 @@ export function MetricCard({
   label,
   value,
   icon: Icon,
+  hint,
+  detail,
   className,
+  ...props
 }: {
   label: string;
   value: React.ReactNode;
   icon?: LucideIcon;
+  hint?: React.ReactNode;
+  detail?: React.ReactNode;
   className?: string;
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
+  const caption = detail ?? hint;
   return (
-    <div className={cn("pilot-card-raised p-5", className)}>
+    <div className={cn("pilot-card-raised p-5", className)} {...props}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="pilot-kicker">{label}</p>
           <p className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{value}</p>
+          {caption ? <p className="mt-2 text-xs text-muted-foreground">{caption}</p> : null}
         </div>
         {Icon ? (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">

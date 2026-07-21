@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,8 @@ import {
   ToggleLeft,
   FolderKanban,
   Plus,
+  BookOpen,
+  Table as TableIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -62,6 +65,7 @@ import {
   type ComplianceBatchProgress,
 } from "@/lib/complianceBatchProcessor";
 import { cn } from "@/lib/utils";
+import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
 import { useProjects } from "@/hooks/useProjects";
@@ -1070,6 +1074,26 @@ export function AIComplianceAnalyzer() {
     return groups;
   }, [completedBatchFiles, loadedExistingResults]);
 
+  /** Aggregate KPI strip across every analyzed file's real results — never seeded. */
+  const aggregateFindingStats = useMemo(() => {
+    let critical = 0;
+    let warnings = 0;
+    let advisory = 0;
+    let filesWithResults = 0;
+    for (const group of resultGroups) {
+      const groupResults = [group.ibcResult, group.localResult].filter(
+        (r): r is AnalysisResult => Boolean(r),
+      );
+      if (groupResults.length > 0) filesWithResults += 1;
+      for (const result of groupResults) {
+        critical += result.summary.critical ?? 0;
+        warnings += result.summary.warnings ?? 0;
+        advisory += result.summary.advisory ?? 0;
+      }
+    }
+    return { critical, warnings, advisory, filesWithResults };
+  }, [resultGroups]);
+
   const [fileResultTabs, setFileResultTabs] = useState<Record<string, "ibc" | "local">>({});
 
   const renderFileResultGroup = (group: {
@@ -1845,18 +1869,6 @@ export function AIComplianceAnalyzer() {
                 Retry failed files ({failedFileCount})
               </Button>
             )}
-            {currentResult && (
-              <>
-                <Button variant="outlineGold" size="lg" onClick={exportReportPDF}>
-                  <FileDown className="h-4 w-4 mr-2" />
-                  Export PDF
-                </Button>
-                <Button variant="ghost" size="lg" onClick={exportReportJSON}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export JSON
-                </Button>
-              </>
-            )}
           </div>
 
           {/* Progress Bar */}
@@ -1886,9 +1898,85 @@ export function AIComplianceAnalyzer() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="space-y-10"
+            className="space-y-6"
           >
-            {resultGroups.map((group) => renderFileResultGroup(group))}
+            {/* Findings KPI strip — aggregated across every analyzed file's real results */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                label="Critical"
+                value={aggregateFindingStats.critical}
+                icon={AlertCircle}
+                detail="Blocking issues across all analyzed files"
+              />
+              <MetricCard
+                label="Warnings"
+                value={aggregateFindingStats.warnings}
+                icon={AlertTriangle}
+                detail="Should be resolved before submission"
+              />
+              <MetricCard
+                label="Advisory"
+                value={aggregateFindingStats.advisory}
+                icon={Info}
+                detail="Informational, non-blocking notes"
+              />
+              <MetricCard
+                label="Files analyzed"
+                value={aggregateFindingStats.filesWithResults}
+                icon={FileText}
+                detail={`${completedBatchFiles.length} in this batch session`}
+              />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+              <div className="space-y-10">
+                {resultGroups.map((group) => renderFileResultGroup(group))}
+              </div>
+
+              <aside className="space-y-4 lg:self-start">
+                <Panel eyebrow="Actions" title="Export report">
+                  <div className="space-y-2">
+                    <Button
+                      variant="outlineGold"
+                      className="w-full justify-start"
+                      onClick={exportReportPDF}
+                      disabled={!currentResult}
+                    >
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export PDF
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start"
+                      onClick={exportReportJSON}
+                      disabled={!currentResult}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export JSON
+                    </Button>
+                  </div>
+                </Panel>
+
+                <Panel eyebrow="Cross-reference" title="Related tools">
+                  <div className="space-y-2 text-sm">
+                    <Link
+                      to="/code-reference"
+                      className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                    >
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      Code Reference Library
+                    </Link>
+                    <Link
+                      to="/response-matrix"
+                      className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                    >
+                      <TableIcon className="h-4 w-4 text-primary" />
+                      Response Matrix
+                    </Link>
+                  </div>
+                </Panel>
+              </aside>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
