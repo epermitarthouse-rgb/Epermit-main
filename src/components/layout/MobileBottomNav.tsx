@@ -4,8 +4,9 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 
+/** Lovable shell mobile IA — same PP hrefs as plan §6 */
 const navItems = [
-  { icon: Home, label: "Home", path: "/" },
+  { icon: Home, label: "Home", path: "/dashboard" },
   { icon: FolderKanban, label: "Projects", path: "/projects" },
   { icon: Globe, label: "Harvest", path: "/portal-data" },
   { icon: Rocket, label: "Filing", path: "/permit-wizard-filing" },
@@ -23,7 +24,11 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
       >
         <div className="flex h-16 items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive =
+              item.path === "/dashboard"
+                ? location.pathname === "/dashboard"
+                : location.pathname === item.path ||
+                  location.pathname.startsWith(`${item.path}/`);
             return (
               <NavLink
                 key={item.path}
@@ -42,6 +47,7 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
             );
           })}
           <button
+            type="button"
             onClick={toggleSidebar}
             className={cn(
               "flex h-full flex-1 flex-col items-center justify-center gap-1 rounded-md transition-colors",
