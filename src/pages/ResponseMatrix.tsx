@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useGroundedDraftQueue } from "@/hooks/useGroundedDraftQueue";
-import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, MessageSquare, AlertTriangle } from "lucide-react";
+import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, MessageSquare, AlertTriangle, Filter } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -598,6 +598,34 @@ function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
   );
 }
 
+function ResponseConfidenceCell({ row }: { row: ParsedCommentRow }) {
+  const text = row.response_text?.trim() ?? "";
+  const hasGrounded = Boolean(row.grounded_generated_at || row.grounded_confidence);
+  const approvalStatus = effectiveResponseStatus(row);
+  return (
+    <div className="max-w-[200px] space-y-1.5">
+      {hasGrounded ? (
+        <ConfidenceBadge value={row.grounded_confidence} />
+      ) : (
+        <span className="text-xs text-muted-foreground italic">No grounded draft yet</span>
+      )}
+      {approvalStatus && (
+        <Badge
+          variant="outline"
+          className={cn("block w-fit text-[10px] font-medium", responseStatusBadgeClass(approvalStatus))}
+        >
+          {approvalStatus}
+        </Badge>
+      )}
+      {text ? (
+        <p className="text-xs text-muted-foreground line-clamp-2" title={text}>
+          {text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function commentMatrixSourceLabel(rows: ParsedCommentRow[]): string {
   const hasPortal = rows.some((r) => r.ingest_source === "raw_ref");
   const hasManual = rows.some((r) => r.ingest_source === "manual_letter");
@@ -611,8 +639,24 @@ export default function ResponseMatrix() {
   const { user, loading: authLoading } = useAuth();
   const { projectId } = useResolvedProjectId();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const filterPending = searchParams.get("filter") === "pending";
+  const scoringView = searchParams.get("view") === "scoring";
+  const setMatrixView = useCallback(
+    (v: "reconciliation" | "scoring") => {
+      const next = new URLSearchParams(searchParams);
+      if (v === "scoring") next.set("view", "scoring");
+      else next.delete("view");
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const togglePendingFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    if (filterPending) next.delete("filter");
+    else next.set("filter", "pending");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, filterPending]);
   const [saving, setSaving] = useState(false);
   const timerRef = useRef<ReviewTimerHandle>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
@@ -1235,6 +1279,52 @@ export default function ResponseMatrix() {
         }
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-md border border-border bg-card p-0.5 text-xs">
+              {(["reconciliation", "scoring"] as const).map((v) => {
+                const active = (v === "scoring") === scoringView;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setMatrixView(v)}
+                    className={cn(
+                      "rounded px-3 py-1.5 capitalize transition-colors",
+                      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {v === "scoring" ? "AI Scoring" : "Reconciliation"}
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              variant={filterPending ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={togglePendingFilter}
+            >
+              <Filter className="h-4 w-4" /> {filterPending ? "Pending only" : "Filter"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
+              onClick={() =>
+                runBatchGrounded(
+                  rows
+                    .filter(
+                      (r) =>
+                        !r.response_text?.trim() ||
+                        (r.status ?? "").toLowerCase() === "pending" ||
+                        (r.status ?? "").toLowerCase() === "pending review",
+                    )
+                    .map((r) => r.id),
+                )
+              }
+            >
+              <Sparkles className="h-4 w-4" /> Auto-Draft
+            </Button>
             <ServicePill kind="permit">Permit expediting</ServicePill>
             <ServicePill kind="utility">Utility coordination</ServicePill>
             {projectId && (
@@ -1635,7 +1725,7 @@ export default function ResponseMatrix() {
                     Code Ref.
                   </TableHead>
                   <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
-                    Response
+                    {scoringView ? "AI Confidence" : "Response"}
                   </TableHead>
                   <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Draft
@@ -1743,7 +1833,11 @@ export default function ResponseMatrix() {
                                 Modified
                               </Badge>
                             )}
-                            <ResponsePreviewCell row={row} />
+                            {scoringView ? (
+                              <ResponseConfidenceCell row={row} />
+                            ) : (
+                              <ResponsePreviewCell row={row} />
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="align-top py-3">
