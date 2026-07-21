@@ -50,6 +50,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input";
 import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
+import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import {
   analyzeCoordinationLoadProfile,
   addCoordinationManualVerifiedValue,
@@ -103,6 +104,7 @@ import {
   ChevronRight,
   Info,
   Loader2,
+  Plus,
   RadioTower,
   RefreshCw,
   Eye,
@@ -373,12 +375,33 @@ const uciManualFormTextClass = "text-foreground dark:text-foreground";
 export default function UciDashboard() {
   const { projects, loading: projectsLoading } = useProjects();
   const { user, loading: authLoading } = useAuth();
+  /**
+   * The app-wide active-project selection (header ActiveProjectControl,
+   * persisted across pages via localStorage/URL). Used only to seed the
+   * initial value below so landing on /uci with an already-selected
+   * project immediately shows the hub for that project, instead of
+   * forcing re-selection inside the UCI setup form. UCI keeps its own
+   * local projectId afterward (see the generation/reset effect below) —
+   * this is a one-way hydration + best-effort outward sync, not a full
+   * state merge, to avoid disturbing the existing project-switch-safety
+   * logic already built around local state.
+   */
+  const globalSelectedProject = useSelectedProjectOptional();
 
   const [providers, setProviders] = useState<UtilityProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersLoadError, setProvidersLoadError] = useState<string | null>(null);
   const [tenantScopeId, setTenantScopeId] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectId, setProjectIdState] = useState<string | null>(
+    () => globalSelectedProject?.selectedProjectId ?? null,
+  );
+  const setProjectId = useCallback(
+    (id: string | null) => {
+      setProjectIdState(id);
+      globalSelectedProject?.setSelectedProjectId(id);
+    },
+    [globalSelectedProject],
+  );
   const [records, setRecords] = useState<CoordinationRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [initPick, setInitPick] = useState<Record<string, boolean>>({});
@@ -2425,353 +2448,392 @@ export default function UciDashboard() {
             />
           ) : null}
 
-          <UciSetupWorkflow
-            editorialCardClass={UCI_SETUP_CARD_CLASS}
-            mutedClass={uciMutedClass}
-            projects={projects}
-            projectsLoading={projectsLoading}
-            projectId={projectId}
-            onProjectChange={setProjectId}
-            tenantScopeId={tenantScopeId}
-            providers={providers}
-            providersLoading={providersLoading}
-            providersLoadError={providersLoadError}
-            onRetryProviders={() => void loadProviders()}
-            providerSetup={providerSetup}
-            providerSetupLoading={providerSetupLoading}
-            providerResolution={providerResolution}
-            providerResolutionLoading={providerResolutionLoading}
-            providerResolutionActionLoading={providerResolutionActionLoading}
-            onResolveProviderMapping={(serviceType) => void handleResolveProviderMapping(serviceType)}
-            onConfirmProviderMapping={(params) => void handleConfirmProviderMapping(params)}
-            onOverrideProviderMapping={(params) => void handleOverrideProviderMapping(params)}
-            providerUtilityFilter={providerUtilityFilter}
-            onProviderUtilityFilterChange={setProviderUtilityFilter}
-            providerCatalogTypes={providerCatalogTypes}
-            initPick={initPick}
-            onInitPickChange={handleProviderPickChange}
-            onClearSelectedProviders={handleClearSelectedProviders}
-            addressSourceAcknowledged={addressSourceAcknowledged}
-            onAddressSourceAcknowledged={setAddressSourceAcknowledged}
-            unresolvedUtilityTypes={unresolvedUtilityTypes}
-            onToggleUnresolvedUtilityType={toggleUnresolvedUtilityType}
-            uncoveredUtilityTypes={uncoveredUtilityTypes}
-            providerSetupConfirmed={providerSetupConfirmed}
-            onProviderSetupConfirmedChange={setProviderSetupConfirmed}
-            initDisabledReasons={initDisabledReasons}
-            initting={initting}
-            onInitialize={() => void handleInit()}
-            hasExistingRecords={Boolean(projectId && records.length > 0)}
-            setupExpanded={setupSectionExpanded}
-            onSetupExpandedChange={setSetupSectionExpanded}
-            formatAutomationLabel={formatAutomationLabel}
-          />
+          {/*
+            Lovable-style hub is the PRIMARY view regardless of project-selection
+            or data-load state. The old step-by-step setup form (UciSetupWorkflow,
+            rendered further below via #uci-setup-workflow) is secondary: reachable
+            from the "Setup" hub tile, never the sole/first thing rendered.
+          */}
+          {!projectId ? (
+            <AlertBanner
+              tone="default"
+              title="No project selected yet"
+              detail="Select a project to load its coordination records, stage progress, and attention queue. Use the “Setup” tile below or the project picker in the header to choose one."
+            />
+          ) : null}
 
-          {projectId ? (
-            <>
-              {/* KPI row — real portfolio/records rollups, never invented percentages */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <MetricCard
-                  label="Coordination records"
-                  value={portfolioLoading ? "—" : uciCoordinationRecordCount}
-                  icon={Layers}
-                  detail="Per-utility coordination rows for this project"
-                />
-                <MetricCard
-                  label="Needs attention"
-                  value={portfolioLoading ? "—" : uciNeedsAttentionCount}
-                  icon={AlertTriangle}
-                  detail={uciNeedsAttentionCount > 0 ? "Communications flagged for review" : "Nothing flagged right now"}
-                />
-                <MetricCard
-                  label="Providers mapped"
-                  value={uciMappedProviderCount}
-                  icon={RadioTower}
-                  detail="Unique utility providers coordinated"
-                />
-                <MetricCard
-                  label="Furthest stage"
-                  value={uciFurthestStage ? `${uciFurthestStage} / ${STAGE_OPTIONS.length}` : "—"}
-                  icon={Zap}
-                  detail="Highest lifecycle stage reached across records"
-                />
-              </div>
+          {/* KPI row — real portfolio/records rollups, never invented percentages */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard
+              label="Coordination records"
+              value={!projectId || portfolioLoading ? "—" : uciCoordinationRecordCount}
+              icon={Layers}
+              detail="Per-utility coordination rows for this project"
+            />
+            <MetricCard
+              label="Needs attention"
+              value={!projectId || portfolioLoading ? "—" : uciNeedsAttentionCount}
+              icon={AlertTriangle}
+              detail={uciNeedsAttentionCount > 0 ? "Communications flagged for review" : "Nothing flagged right now"}
+            />
+            <MetricCard
+              label="Providers mapped"
+              value={!projectId ? "—" : uciMappedProviderCount}
+              icon={RadioTower}
+              detail="Unique utility providers coordinated"
+            />
+            <MetricCard
+              label="Furthest stage"
+              value={uciFurthestStage ? `${uciFurthestStage} / ${STAGE_OPTIONS.length}` : "—"}
+              icon={Zap}
+              detail="Highest lifecycle stage reached across records"
+            />
+          </div>
 
-              {/*
-                Coordination modules — Lovable-style hub tile grid, but wired to
-                REAL PP capabilities only. Lovable's mock hub tiles (Conflict
-                Hunter, Easement/ROW, Provider Map, Miss Utility, Long-Lead,
-                Predictive Impact) have no PP equivalent yet and are
-                intentionally NOT shipped here — no fake modules/links.
-              */}
-              <Panel eyebrow="UCI Hub" title="Coordination modules">
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      document.getElementById("uci-stage-rail")?.scrollIntoView({ behavior: "smooth", block: "start" })
-                    }
-                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
-                  >
-                    <Zap className="mt-0.5 h-4 w-4 text-primary" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle stages</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {uciFurthestStage ? `Stage ${uciFurthestStage} of ${STAGE_OPTIONS.length}` : "10-stage tracker"}
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      document.getElementById("uci-records-table")?.scrollIntoView({ behavior: "smooth", block: "start" })
-                    }
-                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
-                  >
-                    <Layers className="mt-0.5 h-4 w-4 text-primary" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Coordination records</div>
-                      <div className="text-[11px] text-muted-foreground">{uciCoordinationRecordCount} record(s) this project</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      document.getElementById("uci-attention-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })
-                    }
-                    className={cn(
-                      "group flex items-start gap-3 rounded-lg border p-3 text-left transition-all",
-                      uciNeedsAttentionCount > 0
-                        ? "border-primary bg-primary/10 ring-1 ring-primary/40"
-                        : "border-border bg-muted/30 hover:border-primary/50 hover:bg-primary/5",
-                    )}
-                  >
-                    <AlertTriangle className="mt-0.5 h-4 w-4 text-primary" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Attention queue</div>
-                      <div className="text-[11px] text-muted-foreground">{uciNeedsAttentionCount} flagged communication(s)</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={records.length === 0}
-                    onClick={() => {
-                      const target = uciAttentionRecords[0]?.id ?? records[0]?.id;
-                      if (target) void openDetail(target);
-                    }}
-                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RadioTower className="mt-0.5 h-4 w-4 text-primary" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground group-hover:text-primary">Provider detail</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Load profile · UCI builder · COS · meter-set
-                      </div>
-                    </div>
-                  </button>
+          {/*
+            Coordination modules — Lovable-style hub tile grid, but wired to
+            REAL PP capabilities only. Lovable's mock hub tiles (Conflict
+            Hunter, Easement/ROW, Provider Map, Miss Utility, Long-Lead,
+            Predictive Impact) have no PP equivalent yet and are
+            intentionally NOT shipped here — no fake modules/links. Always
+            rendered as the primary view — never gated on project selection
+            or provider/record load state.
+          */}
+          <Panel eyebrow="UCI Hub" title="Coordination modules">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById("uci-stage-rail")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
+              >
+                <Zap className="mt-0.5 h-4 w-4 text-primary" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle stages</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {uciFurthestStage ? `Stage ${uciFurthestStage} of ${STAGE_OPTIONS.length}` : "10-stage tracker"}
+                  </div>
                 </div>
-              </Panel>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById("uci-records-table")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
+              >
+                <Layers className="mt-0.5 h-4 w-4 text-primary" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Coordination records</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {projectId ? `${uciCoordinationRecordCount} record(s) this project` : "Select a project"}
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById("uci-attention-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className={cn(
+                  "group flex items-start gap-3 rounded-lg border p-3 text-left transition-all",
+                  uciNeedsAttentionCount > 0
+                    ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                    : "border-border bg-muted/30 hover:border-primary/50 hover:bg-primary/5",
+                )}
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 text-primary" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Attention queue</div>
+                  <div className="text-[11px] text-muted-foreground">{uciNeedsAttentionCount} flagged communication(s)</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                disabled={records.length === 0}
+                onClick={() => {
+                  const target = uciAttentionRecords[0]?.id ?? records[0]?.id;
+                  if (target) void openDetail(target);
+                }}
+                className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RadioTower className="mt-0.5 h-4 w-4 text-primary" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Provider detail</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Load profile · UCI builder · COS · meter-set
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                data-testid="uci-hub-tile-setup"
+                onClick={() => {
+                  setSetupSectionExpanded(true);
+                  document.getElementById("uci-setup-workflow")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
+              >
+                <Plus className="mt-0.5 h-4 w-4 text-primary" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Setup</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {projectId ? "Add another utility" : "Select a project & map providers"}
+                  </div>
+                </div>
+              </button>
+            </div>
+          </Panel>
 
-              {/* Stage progress rail — presentational, driven by real stage_summary counts */}
-              <Panel eyebrow="Lifecycle" title="Stage progress" id="uci-stage-rail">
-                {portfolioLoading ? (
+          {/* Stage progress rail — presentational, driven by real stage_summary counts */}
+          <Panel eyebrow="Lifecycle" title="Stage progress" id="uci-stage-rail">
+            {portfolioLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-teal" />
+              </div>
+            ) : (
+              <div className="flex items-start gap-1 overflow-x-auto pb-1">
+                {STAGE_OPTIONS.map((stage) => {
+                  const count = uciStageSummary[String(stage)] ?? 0;
+                  const isFurthest = uciFurthestStage === stage;
+                  return (
+                    <div key={stage} className="flex min-w-[64px] flex-1 flex-col items-center gap-1.5">
+                      <div
+                        className={cn(
+                          "flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-data font-bold",
+                          count > 0
+                            ? isFurthest
+                              ? "border-primary bg-primary/20 text-primary"
+                              : "border-teal bg-teal/15 text-teal"
+                            : "border-border bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {stage}
+                      </div>
+                      <span className={cn("text-[10px] font-medium", count > 0 ? "text-foreground" : "text-muted-foreground")}>
+                        {count > 0 ? `${count} rec.` : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
+
+          {/* Records table (main) + attention queue (secondary) */}
+          <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+            <Panel
+              id="uci-records-table"
+              eyebrow="Utility coordination"
+              title="Coordination records"
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={uciToolbarOutlineButtonClass}
+                  onClick={() => void refreshCoordination()}
+                  disabled={!projectId}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh
+                </Button>
+              }
+            >
+              {!projectId ? (
+                <p className={cn("py-8 text-center text-sm", uciMutedClass)} data-testid="uci-records-no-project">
+                  Select a project above to view its coordination records.
+                </p>
+              ) : recordsLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-teal" />
+                </div>
+              ) : records.length === 0 ? (
+                <p className={cn("py-8 text-center text-sm", uciMutedClass)}>
+                  No utility coordination records yet. Use the “Setup” tile above to initialize providers.
+                </p>
+              ) : (
+                <Table
+                  wrapperClassName="rounded-lg border border-border/50 bg-card/80 shadow-inner dark:border-teal/25 dark:bg-muted/40"
+                  className="bg-background/40 text-foreground dark:bg-transparent"
+                >
+                  <TableHeader className={uciTableHeaderRowClass}>
+                    <TableRow className="border-border/40 transition-colors hover:bg-muted/25 dark:border-teal/15 dark:hover:bg-muted/65">
+                      <TableHead className={uciTableHeadClass}>Provider</TableHead>
+                      <TableHead className={uciTableHeadClass}>Type</TableHead>
+                      <TableHead className={uciTableHeadClass}>Stage</TableHead>
+                      <TableHead className={uciTableHeadClass}>State</TableHead>
+                      <TableHead className={uciTableHeadClass}>Updated</TableHead>
+                      <TableHead className={cn(uciTableHeadClass, "w-[100px]")} />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {records.map((r) => {
+                      const prov = getEmbeddedProvider(r);
+                      return (
+                        <TableRow
+                          key={r.id}
+                          className="border-border/35 bg-background/30 transition-colors hover:bg-primary/10 dark:border-teal/12 dark:bg-card/45 dark:hover:bg-teal/6"
+                        >
+                          <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
+                            <div className="space-y-1">
+                              <span>{prov ? providerDisplayLabel(prov) : "—"}</span>
+                              {getProviderMappingFromMetadata(r.metadata)?.confirmed_at ? (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Mapping confirmed
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className={uciTableCellClass}>
+                            {prov?.utility_type ?? r.utility_type ?? "—"}
+                          </TableCell>
+                          <TableCell className={uciTableCellClass}>{r.current_stage}</TableCell>
+                          <TableCell className={cn(uciTableCellClass, "max-w-[160px]")}>
+                            <Badge
+                              variant="secondary"
+                              title={r.current_stage_state}
+                              className={cn(
+                                "whitespace-nowrap rounded-md px-2.5 py-0.5 text-[11px] font-semibold tracking-wide",
+                                uciLifecycleStateBadgeClass(r.current_stage_state),
+                              )}
+                            >
+                              {formatLifecycleState(r.current_stage_state)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={cn(uciTableCellClass, "!text-foreground/95", "!font-normal", "text-xs dark:!text-foreground/95")}>
+                            {formatWhen(r.updated_at)}
+                          </TableCell>
+                          <TableCell className={uciTableCellClass}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={uciViewRowButtonClass}
+                              onClick={() => void openDetail(r.id)}
+                            >
+                              <Eye className="mr-1 h-4 w-4" />
+                              View
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </Panel>
+
+            <aside className="space-y-4 lg:self-start">
+              <Panel id="uci-attention-queue" eyebrow="Attention queue" title="Needs attention">
+                {!projectId ? (
+                  <p className={cn("text-xs", uciMutedClass)}>Select a project to see flagged communications.</p>
+                ) : portfolioLoading ? (
                   <div className="flex justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin text-teal" />
                   </div>
+                ) : uciAttentionRecords.length === 0 ? (
+                  <p className={cn("text-xs", uciMutedClass)}>
+                    No coordination records are currently flagged for attention.
+                  </p>
                 ) : (
-                  <div className="flex items-start gap-1 overflow-x-auto pb-1">
-                    {STAGE_OPTIONS.map((stage) => {
-                      const count = uciStageSummary[String(stage)] ?? 0;
-                      const isFurthest = uciFurthestStage === stage;
-                      return (
-                        <div key={stage} className="flex min-w-[64px] flex-1 flex-col items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-data font-bold",
-                              count > 0
-                                ? isFurthest
-                                  ? "border-primary bg-primary/20 text-primary"
-                                  : "border-teal bg-teal/15 text-teal"
-                                : "border-border bg-muted text-muted-foreground",
-                            )}
-                          >
-                            {stage}
-                          </div>
-                          <span className={cn("text-[10px] font-medium", count > 0 ? "text-foreground" : "text-muted-foreground")}>
-                            {count > 0 ? `${count} rec.` : "—"}
-                          </span>
+                  <ul className="space-y-2">
+                    {uciAttentionRecords.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">
+                            {r.utility_type ?? "Utility"} · Stage {r.current_stage}
+                          </p>
+                          <p className={cn("truncate", uciMutedClass)}>
+                            {r.needs_attention_count} flagged · {formatLifecycleState(r.current_stage_state)}
+                          </p>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => void openDetail(r.id)}
+                        >
+                          <Eye className="mr-1 h-3.5 w-3.5" />
+                          View
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </Panel>
 
-              {/* Records table (main) + attention queue (secondary) */}
-              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                <Panel
-                  id="uci-records-table"
-                  eyebrow="Utility coordination"
-                  title="Coordination records"
-                  action={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={uciToolbarOutlineButtonClass}
-                      onClick={() => void refreshCoordination()}
-                    >
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Refresh
-                    </Button>
-                  }
-                >
-                  {recordsLoading ? (
-                    <div className="flex justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-teal" />
-                    </div>
-                  ) : records.length === 0 ? (
-                    <p className={cn("py-8 text-center text-sm", uciMutedClass)}>
-                      No utility coordination records yet. Initialize providers to begin.
-                    </p>
+              <Panel eyebrow="Rollup" title="Stage distribution">
+                <ul className="space-y-1.5 text-xs">
+                  {STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).length === 0 ? (
+                    <li className={uciMutedClass}>No stage activity recorded yet.</li>
                   ) : (
-                    <Table
-                      wrapperClassName="rounded-lg border border-border/50 bg-card/80 shadow-inner dark:border-teal/25 dark:bg-muted/40"
-                      className="bg-background/40 text-foreground dark:bg-transparent"
-                    >
-                        <TableHeader className={uciTableHeaderRowClass}>
-                          <TableRow className="border-border/40 transition-colors hover:bg-muted/25 dark:border-teal/15 dark:hover:bg-muted/65">
-                            <TableHead className={uciTableHeadClass}>Provider</TableHead>
-                            <TableHead className={uciTableHeadClass}>Type</TableHead>
-                            <TableHead className={uciTableHeadClass}>Stage</TableHead>
-                            <TableHead className={uciTableHeadClass}>State</TableHead>
-                            <TableHead className={uciTableHeadClass}>Updated</TableHead>
-                            <TableHead className={cn(uciTableHeadClass, "w-[100px]")} />
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {records.map((r) => {
-                            const prov = getEmbeddedProvider(r);
-                            return (
-                              <TableRow
-                                key={r.id}
-                                className="border-border/35 bg-background/30 transition-colors hover:bg-primary/10 dark:border-teal/12 dark:bg-card/45 dark:hover:bg-teal/6"
-                              >
-                                <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
-                                  <div className="space-y-1">
-                                    <span>{prov ? providerDisplayLabel(prov) : "—"}</span>
-                                    {getProviderMappingFromMetadata(r.metadata)?.confirmed_at ? (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        Mapping confirmed
-                                      </Badge>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                                <TableCell className={uciTableCellClass}>
-                                  {prov?.utility_type ?? r.utility_type ?? "—"}
-                                </TableCell>
-                                <TableCell className={uciTableCellClass}>{r.current_stage}</TableCell>
-                                <TableCell className={cn(uciTableCellClass, "max-w-[160px]")}>
-                                  <Badge
-                                    variant="secondary"
-                                    title={r.current_stage_state}
-                                    className={cn(
-                                      "whitespace-nowrap rounded-md px-2.5 py-0.5 text-[11px] font-semibold tracking-wide",
-                                      uciLifecycleStateBadgeClass(r.current_stage_state),
-                                    )}
-                                  >
-                                    {formatLifecycleState(r.current_stage_state)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className={cn(uciTableCellClass, "!text-foreground/95", "!font-normal", "text-xs dark:!text-foreground/95")}>
-                                  {formatWhen(r.updated_at)}
-                                </TableCell>
-                                <TableCell className={uciTableCellClass}>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className={uciViewRowButtonClass}
-                                    onClick={() => void openDetail(r.id)}
-                                  >
-                                    <Eye className="mr-1 h-4 w-4" />
-                                    View
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
+                    STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).map((stage) => (
+                      <li key={stage} className="flex items-center justify-between">
+                        <span className={uciMutedClass}>Stage {stage}</span>
+                        <span className="font-data font-semibold text-foreground">
+                          {uciStageSummary[String(stage)]}
+                        </span>
+                      </li>
+                    ))
                   )}
-                </Panel>
+                </ul>
+              </Panel>
+            </aside>
+          </div>
 
-                <aside className="space-y-4 lg:self-start">
-                  <Panel id="uci-attention-queue" eyebrow="Attention queue" title="Needs attention">
-                    {portfolioLoading ? (
-                      <div className="flex justify-center py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-teal" />
-                      </div>
-                    ) : uciAttentionRecords.length === 0 ? (
-                      <p className={cn("text-xs", uciMutedClass)}>
-                        No coordination records are currently flagged for attention.
-                      </p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {uciAttentionRecords.map((r) => (
-                          <li
-                            key={r.id}
-                            className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2 text-xs"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium text-foreground">
-                                {r.utility_type ?? "Utility"} · Stage {r.current_stage}
-                              </p>
-                              <p className={cn("truncate", uciMutedClass)}>
-                                {r.needs_attention_count} flagged · {formatLifecycleState(r.current_stage_state)}
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0"
-                              onClick={() => void openDetail(r.id)}
-                            >
-                              <Eye className="mr-1 h-3.5 w-3.5" />
-                              View
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </Panel>
-
-                  <Panel eyebrow="Rollup" title="Stage distribution">
-                    <ul className="space-y-1.5 text-xs">
-                      {STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).length === 0 ? (
-                        <li className={uciMutedClass}>No stage activity recorded yet.</li>
-                      ) : (
-                        STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).map((stage) => (
-                          <li key={stage} className="flex items-center justify-between">
-                            <span className={uciMutedClass}>Stage {stage}</span>
-                            <span className="font-data font-semibold text-foreground">
-                              {uciStageSummary[String(stage)]}
-                            </span>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  </Panel>
-                </aside>
-              </div>
-            </>
-          ) : (
-            <AlertBanner
-              tone="default"
-              title="Select a project to load coordination records"
-              detail="Choose a project above to view coordination records, stage progress, and the attention queue."
+          {/*
+            Old step-by-step setup form — SECONDARY panel, reachable via the
+            "Setup" hub tile above. Never rendered as the page's sole/primary
+            content (see hub block above, which always renders first).
+          */}
+          <div id="uci-setup-workflow" className="space-y-6">
+            <UciSetupWorkflow
+              editorialCardClass={UCI_SETUP_CARD_CLASS}
+              mutedClass={uciMutedClass}
+              projects={projects}
+              projectsLoading={projectsLoading}
+              projectId={projectId}
+              onProjectChange={setProjectId}
+              tenantScopeId={tenantScopeId}
+              providers={providers}
+              providersLoading={providersLoading}
+              providersLoadError={providersLoadError}
+              onRetryProviders={() => void loadProviders()}
+              providerSetup={providerSetup}
+              providerSetupLoading={providerSetupLoading}
+              providerResolution={providerResolution}
+              providerResolutionLoading={providerResolutionLoading}
+              providerResolutionActionLoading={providerResolutionActionLoading}
+              onResolveProviderMapping={(serviceType) => void handleResolveProviderMapping(serviceType)}
+              onConfirmProviderMapping={(params) => void handleConfirmProviderMapping(params)}
+              onOverrideProviderMapping={(params) => void handleOverrideProviderMapping(params)}
+              providerUtilityFilter={providerUtilityFilter}
+              onProviderUtilityFilterChange={setProviderUtilityFilter}
+              providerCatalogTypes={providerCatalogTypes}
+              initPick={initPick}
+              onInitPickChange={handleProviderPickChange}
+              onClearSelectedProviders={handleClearSelectedProviders}
+              addressSourceAcknowledged={addressSourceAcknowledged}
+              onAddressSourceAcknowledged={setAddressSourceAcknowledged}
+              unresolvedUtilityTypes={unresolvedUtilityTypes}
+              onToggleUnresolvedUtilityType={toggleUnresolvedUtilityType}
+              uncoveredUtilityTypes={uncoveredUtilityTypes}
+              providerSetupConfirmed={providerSetupConfirmed}
+              onProviderSetupConfirmedChange={setProviderSetupConfirmed}
+              initDisabledReasons={initDisabledReasons}
+              initting={initting}
+              onInitialize={() => void handleInit()}
+              hasExistingRecords={Boolean(projectId && records.length > 0)}
+              setupExpanded={setupSectionExpanded}
+              onSetupExpandedChange={setSetupSectionExpanded}
+              formatAutomationLabel={formatAutomationLabel}
             />
-          )}
+          </div>
         </div>
       </section>
 
