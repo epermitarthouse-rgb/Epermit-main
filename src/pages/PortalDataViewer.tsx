@@ -72,6 +72,8 @@ import {
   AlertBanner,
   MetricCard,
   PageHeader,
+  Panel,
+  StatusPill,
 } from "@/components/design/ProductPrimitives";
 import AccelaProjectView from "@/components/portal/AccelaProjectView";
 import {
@@ -90,26 +92,24 @@ import {
 } from "@/lib/portalView";
 import { resolvePgcPortalFileOpenUrl } from "@/lib/pgcPortalFileUrl";
 import { cn } from "@/lib/utils";
-import { Section } from "@/components/ui/Section";
-import { EyebrowDark } from "@/components/ui/Typography";
 
-/** Commun-ET tab pills — presentation only; tab `value` and visibility unchanged. */
+/** Tab pills — presentation only; tab `value` and visibility unchanged. */
 const PORTAL_TAB_TRIGGER =
-  "h-auto rounded-full border border-cream-sunken bg-cream-raised px-4 py-2 text-sm font-medium text-ink-secondary-light shadow-none transition-all hover:bg-cream-sunken hover:text-ink-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/35 focus-visible:ring-offset-2 focus-visible:ring-offset-cream data-[state=active]:border-gold data-[state=active]:bg-gold data-[state=active]:px-4 data-[state=active]:py-2 data-[state=active]:text-sm data-[state=active]:font-semibold data-[state=active]:text-cream data-[state=active]:shadow-cream data-[state=active]:hover:bg-gold data-[state=active]:hover:text-cream";
+  "h-auto rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:px-4 data-[state=active]:py-2 data-[state=active]:text-sm data-[state=active]:font-semibold data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm data-[state=active]:hover:bg-primary data-[state=active]:hover:text-primary-foreground";
 
 /** PortalDataViewer primary actions — h-9 / px-3.5 / icon 16px (see [&_svg] on base). */
 const PORTAL_ACTION_BUTTON_BASE =
-  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-3.5 text-sm font-medium transition-all duration-200 ease-out-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/35 disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
+  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-3.5 text-sm font-medium transition-all duration-200 ease-out-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
 
-const PORTAL_ACTION_BUTTON_PRIMARY = `${PORTAL_ACTION_BUTTON_BASE} bg-gold text-cream shadow-cream hover:bg-gold-deep`;
+const PORTAL_ACTION_BUTTON_PRIMARY = `${PORTAL_ACTION_BUTTON_BASE} bg-primary text-primary-foreground shadow-sm hover:bg-primary/90`;
 
-const PORTAL_ACTION_BUTTON_OUTLINE = `${PORTAL_ACTION_BUTTON_BASE} border border-gold/45 bg-transparent text-gold hover:bg-gold hover:text-cream`;
+const PORTAL_ACTION_BUTTON_OUTLINE = `${PORTAL_ACTION_BUTTON_BASE} border border-primary/45 bg-transparent text-primary hover:bg-primary hover:text-primary-foreground`;
 
-const PORTAL_ACTION_BUTTON_SECONDARY_FILL = `${PORTAL_ACTION_BUTTON_BASE} border border-cream-sunken bg-cream-sunken/90 text-ink-primary-light hover:bg-cream-sunken`;
+const PORTAL_ACTION_BUTTON_SECONDARY_FILL = `${PORTAL_ACTION_BUTTON_BASE} border border-border bg-muted/80 text-foreground hover:bg-muted`;
 
-const PORTAL_ACTION_BUTTON_LIGHT_OUTLINE = `${PORTAL_ACTION_BUTTON_BASE} border border-cream-sunken bg-cream-raised text-ink-secondary-light hover:bg-cream-sunken hover:text-ink-primary-light`;
+const PORTAL_ACTION_BUTTON_LIGHT_OUTLINE = `${PORTAL_ACTION_BUTTON_BASE} border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground`;
 
-const PORTAL_ACTION_BUTTON_AI = `${PORTAL_ACTION_BUTTON_BASE} border border-teal/30 bg-teal/10 text-teal hover:bg-teal/18`;
+const PORTAL_ACTION_BUTTON_AI = `${PORTAL_ACTION_BUTTON_BASE} border border-primary/30 bg-primary/10 text-primary hover:bg-primary/18`;
 
 class TabErrorBoundary extends React.Component<
   { tabName: string; children: React.ReactNode },
@@ -617,14 +617,14 @@ function WashingtonStatusFieldLine({
   const v = (value || "").trim() || "—";
   return (
     <div className="flex gap-3 py-1.5 items-start">
-      <div className="min-w-[11rem] max-w-[45%] shrink-0 text-right text-[12px] font-semibold text-ink-secondary-light leading-snug">
+      <div className="min-w-[11rem] max-w-[45%] shrink-0 text-right text-[12px] font-semibold text-muted-foreground leading-snug">
         {label && label !== "—" ? `${label}:` : ""}
       </div>
       <div
         className={
           denseValue
-            ? "flex-1 text-xs leading-snug text-ink-primary-light max-h-24 overflow-y-auto break-words"
-            : "flex-1 text-[13px] leading-snug text-ink-primary-light break-words"
+            ? "flex-1 text-xs leading-snug text-foreground max-h-24 overflow-y-auto break-words"
+            : "flex-1 text-[13px] leading-snug text-foreground break-words"
         }
       >
         {v}
@@ -697,7 +697,7 @@ function WashingtonStatusTabPanel({
   );
 
   return (
-    <div className="max-w-lg mx-auto space-y-3 rounded-xl border border-cream-sunken bg-cream-raised px-5 py-6 shadow-cream">
+    <div className="max-w-lg mx-auto space-y-3 rounded-xl border border-border bg-card px-5 py-6 shadow-sm">
       <div className="space-y-1">
         {fields.map((kv, i) => (
           <WashingtonStatusFieldLine
@@ -712,9 +712,9 @@ function WashingtonStatusTabPanel({
           const asLines = washingtonStatusTableAsLines(tbl);
           if (asLines) {
             return (
-              <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-cream-sunken/80">
+              <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-border/80">
                 {tbl.title ? (
-                  <p className="text-[11px] text-ink-tertiary-light mb-1.5">
+                  <p className="text-[11px] text-muted-foreground mb-1.5">
                     {tbl.title}
                   </p>
                 ) : null}
@@ -737,9 +737,9 @@ function WashingtonStatusTabPanel({
           const displayHeaders = statusTableDisplayHeaders(tbl);
           if (!displayHeaders.length && !(tbl.rows?.length ?? 0)) return null;
           return (
-            <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-cream-sunken/80">
+            <div key={`wst-t-${ti}`} className="mt-4 pt-3 border-t border-border/80">
               {tbl.title ? (
-                <p className="text-[11px] text-ink-tertiary-light mb-1.5">
+                <p className="text-[11px] text-muted-foreground mb-1.5">
                   {tbl.title}
                 </p>
               ) : null}
@@ -747,7 +747,7 @@ function WashingtonStatusTabPanel({
                 {(tbl.rows ?? []).map((row, ri) => (
                   <p
                     key={ri}
-                    className="text-[12px] leading-snug text-ink-primary-light"
+                    className="text-[12px] leading-snug text-foreground"
                   >
                     {displayHeaders
                       .map((h) => String(row[h] ?? "").trim())
@@ -762,8 +762,8 @@ function WashingtonStatusTabPanel({
       </div>
 
       {hasBottomActions ? (
-        <div className="mt-8 pt-4 border-t border-cream-sunken">
-          <p className="text-sm font-semibold text-ink-primary-light mb-3">
+        <div className="mt-8 pt-4 border-t border-border">
+          <p className="text-sm font-semibold text-foreground mb-3">
             For more details:
           </p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -900,7 +900,7 @@ function ReportsExtractedTextDetails({
         className="mt-2 rounded-lg border border-border bg-muted/20 dark:border-obsidian-raised dark:bg-obsidian-sunken"
         data-testid={testId}
       >
-        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 px-4 py-3 text-sm font-medium text-gold [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 px-4 py-3 text-sm font-medium text-primary [&::-webkit-details-marker]:hidden">
           <span>{summaryLabel}</span>
           <span className="text-xs font-mono font-normal text-muted-foreground dark:text-ink-tertiary-dark">
             {len.toLocaleString()} chars
@@ -3137,78 +3137,54 @@ export default function PortalDataViewer() {
         />
       )}
 
-      {(portalData.projectNum || portalData.description || displayPortalStatus) && (
-        <div className="pilot-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="pilot-kicker">Current harvest target</div>
-              <h2 className="mt-1 font-tight text-xl font-bold text-foreground">
-                {portalData.projectNum || "Project"}
-              </h2>
-              {portalData.description && (
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  {portalData.description}
-                </p>
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <Panel
+          title="Harvest workspace"
+          eyebrow="Live portal data"
+          className="overflow-hidden p-0 [&>div:first-child]:border-b [&>div:first-child]:border-border [&>div:first-child]:px-5 [&>div:first-child]:pt-5 [&>div:first-child]:pb-4"
+        >
+          <Tabs defaultValue="info" className="w-full">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b border-border bg-muted/30 p-2">
+              <TabsTrigger value="info" className={PORTAL_TAB_TRIGGER}>
+                Info
+              </TabsTrigger>
+              {hasStatusTab && (
+                <TabsTrigger value="status" className={PORTAL_TAB_TRIGGER}>
+                  Status
+                </TabsTrigger>
               )}
-              {portalData.location && (
-                <p className="mt-0.5 text-sm text-muted-foreground">{portalData.location}</p>
+              {hasTasksTab && (
+                <TabsTrigger value="tasks" className={PORTAL_TAB_TRIGGER}>
+                  Tasks
+                </TabsTrigger>
               )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {displayPortalStatus && (
-                <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold">
-                  {displayPortalStatus}
-                </span>
+              {hasReviewTab && (
+                <TabsTrigger
+                  value="review"
+                  className={PORTAL_TAB_TRIGGER}
+                  data-testid="tab-review"
+                >
+                  Review
+                </TabsTrigger>
               )}
-              {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="pilot-card overflow-hidden">
-      <Tabs defaultValue="info" className="w-full">
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b border-border bg-muted/30 p-2">
-          <TabsTrigger value="info" className={PORTAL_TAB_TRIGGER}>
-            Info
-          </TabsTrigger>
-          {hasStatusTab && (
-            <TabsTrigger value="status" className={PORTAL_TAB_TRIGGER}>
-              Status
-            </TabsTrigger>
-          )}
-          {hasTasksTab && (
-            <TabsTrigger value="tasks" className={PORTAL_TAB_TRIGGER}>
-              Tasks
-            </TabsTrigger>
-          )}
-          {hasReviewTab && (
-            <TabsTrigger
-              value="review"
-              className={PORTAL_TAB_TRIGGER}
-              data-testid="tab-review"
-            >
-              Review
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="reports" className={PORTAL_TAB_TRIGGER}>
-            Reports
-          </TabsTrigger>
-          {filesTab || liveFileResults.active ? (
-            <TabsTrigger
-              value="files"
-              className={PORTAL_TAB_TRIGGER}
-              data-testid="tab-files"
-            >
-              Files
-              {liveFileResults.active ? (
-                <Badge className="ml-2 border border-primary/30 bg-primary/10 text-[10px] text-primary">
-                  Live
-                </Badge>
+              <TabsTrigger value="reports" className={PORTAL_TAB_TRIGGER}>
+                Reports
+              </TabsTrigger>
+              {filesTab || liveFileResults.active ? (
+                <TabsTrigger
+                  value="files"
+                  className={PORTAL_TAB_TRIGGER}
+                  data-testid="tab-files"
+                >
+                  Files
+                  {liveFileResults.active ? (
+                    <Badge className="ml-2 border border-primary/30 bg-primary/10 text-[10px] text-primary">
+                      Live
+                    </Badge>
+                  ) : null}
+                </TabsTrigger>
               ) : null}
-            </TabsTrigger>
-          ) : null}
-        </TabsList>
+            </TabsList>
 
         <TabsContent value="info" className="mt-0 p-4 focus-visible:outline-none sm:p-6">
           <Card className="overflow-hidden rounded-lg border border-border bg-card shadow-none">
@@ -3223,37 +3199,37 @@ export default function PortalDataViewer() {
                 ) : hasInfoData || hasInfoFallbackForPgc ? (
                   <div className="p-4 space-y-6">
                     {!isPgcEplan && displayProjectInfo.length > 0 && (
-                      <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
-                        <div className="border-b border-cream-sunken px-6 py-5">
-                          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-gold">
+                      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+                        <div className="border-b border-border px-6 py-5">
+                          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
                             PROJECT INFO
                           </div>
-                          <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-ink-primary-light leading-tight">
-                            Project <em className="text-gold italic">Details</em>
+                          <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-foreground leading-tight">
+                            Project <em className="text-primary italic">Details</em>
                           </h2>
                         </div>
                         <div className="overflow-x-auto">
                           <div className="min-w-0">
-                            <div className="grid grid-cols-3 border-b border-cream-sunken bg-cream">
-                              <div className="col-span-1 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                            <div className="grid grid-cols-3 border-b border-border bg-background">
+                              <div className="col-span-1 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                                 Field
                               </div>
-                              <div className="col-span-2 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                              <div className="col-span-2 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                                 Value
                               </div>
                             </div>
                           {displayProjectInfo.map((kv, i) => (
                             <div
                               key={`${kv.key}-${i}`}
-                              className={`grid grid-cols-3 border-t border-cream-sunken last:border-b-0 hover:bg-cream-raised/50 transition-colors ${
-                                i % 2 === 0 ? "bg-cream" : "bg-cream-raised/40"
+                              className={`grid grid-cols-3 border-t border-border last:border-b-0 hover:bg-card/50 transition-colors ${
+                                i % 2 === 0 ? "bg-background" : "bg-card/40"
                               }`}
                             >
-                              <div className="col-span-1 w-1/3 min-w-[140px] px-4 py-3 text-sm font-medium text-ink-primary-light bg-cream-raised/60 border-r border-cream-sunken">
+                              <div className="col-span-1 w-1/3 min-w-[140px] px-4 py-3 text-sm font-medium text-foreground bg-card/60 border-r border-border">
                                 {kv.key}
                               </div>
                               <div
-                                className={`col-span-2 px-4 py-3 text-sm text-ink-primary-light ${
+                                className={`col-span-2 px-4 py-3 text-sm text-foreground ${
                                   kv.key === "Description"
                                     ? "whitespace-normal break-words"
                                     : ""
@@ -3263,7 +3239,7 @@ export default function PortalDataViewer() {
                                   ? kv.value
                                   : kv.value.trim() !== ""
                                     ? kv.value
-                                    : <span className="text-ink-tertiary-light/60">—</span>}
+                                    : <span className="text-muted-foreground/60">—</span>}
                               </div>
                             </div>
                           ))}
@@ -3274,37 +3250,37 @@ export default function PortalDataViewer() {
                     {!isPgcEplan &&
                       displayProjectInfo.length === 0 &&
                       hasInfoFallbackForPgc && (
-                        <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
-                          <div className="border-b border-cream-sunken px-6 py-5">
-                            <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-gold">
+                        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+                          <div className="border-b border-border px-6 py-5">
+                            <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
                               PROJECT SUMMARY
                             </div>
-                            <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-ink-primary-light leading-tight">
-                              Portal <em className="text-gold italic">Summary</em>
+                            <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-foreground leading-tight">
+                              Portal <em className="text-primary italic">Summary</em>
                             </h2>
                           </div>
                           <div className="overflow-x-auto">
                             <div className="min-w-0">
-                              <div className="grid grid-cols-3 border-b border-cream-sunken bg-cream">
-                                <div className="col-span-1 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                              <div className="grid grid-cols-3 border-b border-border bg-background">
+                                <div className="col-span-1 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                                   Field
                                 </div>
-                                <div className="col-span-2 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light">
+                                <div className="col-span-2 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                                   Value
                                 </div>
                               </div>
                             {pgcInfoFallbackRows.map((kv, i) => (
                               <div
                                 key={`${kv.key}-${i}`}
-                                className={`grid grid-cols-3 border-t border-cream-sunken last:border-b-0 hover:bg-cream-raised/50 transition-colors ${
-                                  i % 2 === 0 ? "bg-cream" : "bg-cream-raised/40"
+                                className={`grid grid-cols-3 border-t border-border last:border-b-0 hover:bg-card/50 transition-colors ${
+                                  i % 2 === 0 ? "bg-background" : "bg-card/40"
                                 }`}
                               >
-                                <div className="col-span-1 px-4 py-3 text-sm font-medium text-ink-primary-light bg-cream-raised/60 border-r border-cream-sunken">
+                                <div className="col-span-1 px-4 py-3 text-sm font-medium text-foreground bg-card/60 border-r border-border">
                                   {kv.key}
                                 </div>
-                                <div className="col-span-2 px-4 py-3 text-sm text-ink-primary-light">
-                                  {kv.value.trim() !== "" ? kv.value : <span className="text-ink-tertiary-light/60">—</span>}
+                                <div className="col-span-2 px-4 py-3 text-sm text-foreground">
+                                  {kv.value.trim() !== "" ? kv.value : <span className="text-muted-foreground/60">—</span>}
                                 </div>
                               </div>
                             ))}
@@ -3316,18 +3292,18 @@ export default function PortalDataViewer() {
                       infoTab?.keyValues &&
                       infoTab?.keyValues?.length > 0 &&
                       displayProjectInfo.length === 0 && (
-                        <div className="rounded-xl border border-cream-sunken overflow-hidden bg-cream">
+                        <div className="rounded-xl border border-border overflow-hidden bg-background">
                           {infoTab?.keyValues?.map((kv, i) => (
                             <div
                               key={i}
-                              className={`flex border-t border-cream-raised first:border-t-0 last:border-b-0 hover:bg-cream-raised/50 transition-colors ${
-                                i % 2 === 0 ? "bg-cream" : "bg-cream-raised/30"
+                              className={`flex border-t border-cream-raised first:border-t-0 last:border-b-0 hover:bg-card/50 transition-colors ${
+                                i % 2 === 0 ? "bg-background" : "bg-card/30"
                               }`}
                             >
-                              <div className="w-1/3 min-w-[140px] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light bg-cream-raised/60 shrink-0 border-r border-cream-sunken">
+                              <div className="w-1/3 min-w-[140px] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground bg-card/60 shrink-0 border-r border-border">
                                 {kv.key}
                               </div>
-                              <div className="flex-1 px-4 py-3 text-sm text-ink-primary-light">
+                              <div className="flex-1 px-4 py-3 text-sm text-foreground">
                                 {kv.value}
                               </div>
                             </div>
@@ -3337,7 +3313,7 @@ export default function PortalDataViewer() {
                     {filteredInfoTables.map((tbl, ti) => (
                       <div
                         key={ti}
-                        className={`overflow-x-auto rounded-xl border border-cream-sunken bg-cream min-w-0 ${
+                        className={`overflow-x-auto rounded-xl border border-border bg-background min-w-0 ${
                           ti === 0 &&
                           !infoTab?.keyValues?.length &&
                           displayProjectInfo.length === 0
@@ -3347,11 +3323,11 @@ export default function PortalDataViewer() {
                       >
                         <Table className="min-w-[800px] w-full">
                           <TableHeader>
-                            <TableRow className="bg-cream-raised hover:bg-cream-raised border-b border-cream-sunken">
+                            <TableRow className="bg-card hover:bg-card border-b border-border">
                               {tbl.headers?.map((h, hi) => (
                                 <TableHead
                                   key={hi}
-                                  className="table-head-sticky text-[10px] font-mono uppercase tracking-[0.16em] text-ink-tertiary-light font-normal whitespace-nowrap"
+                                  className="table-head-sticky text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground font-normal whitespace-nowrap"
                                 >
                                   {h}
                                 </TableHead>
@@ -3363,14 +3339,14 @@ export default function PortalDataViewer() {
                               <TableRow
                                 key={ri}
                                 className={
-                                  "border-t border-cream-raised hover:bg-cream-raised/60 transition-colors " +
-                                  (ri % 2 === 1 ? "bg-cream-raised/35" : "bg-cream")
+                                  "border-t border-cream-raised hover:bg-card/60 transition-colors " +
+                                  (ri % 2 === 1 ? "bg-card/35" : "bg-background")
                                 }
                               >
                                 {tbl.headers?.map((h) => (
                                   <TableCell
                                     key={h}
-                                    className="whitespace-nowrap text-ink-primary-light"
+                                    className="whitespace-nowrap text-foreground"
                                   >
                                     {row[h] ?? ""}
                                   </TableCell>
@@ -3383,13 +3359,13 @@ export default function PortalDataViewer() {
                     ))}
                   </div>
                 ) : (
-                  <p className="p-4 text-ink-tertiary-light">
+                  <p className="p-4 text-muted-foreground">
                     No info data available.
                   </p>
                 )}
                 {isPgcEplan && infoTab?.info_debug != null && (
-                  <details className="p-4 border-t border-cream-sunken text-xs">
-                    <summary className="cursor-pointer text-ink-tertiary-light select-none hover:text-ink-primary-light">
+                  <details className="p-4 border-t border-border text-xs">
+                    <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
                       Info extraction debug
                     </summary>
                     <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/30 p-3 font-mono text-muted-foreground dark:border-obsidian-raised dark:bg-obsidian-sunken/90 dark:text-ink-secondary-dark">
@@ -3404,8 +3380,8 @@ export default function PortalDataViewer() {
         </TabsContent>
 
         {hasStatusTab && (
-          <TabsContent value="status" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
-            <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+          <TabsContent value="status" className="mt-8 pt-6 pb-10 bg-background focus-visible:outline-none">
+            <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
               <CardContent
                 className={cn(
                   isPgcEplan || isWashingtonDcProjectDox ? "p-4 pt-4" : "p-0",
@@ -3430,8 +3406,8 @@ export default function PortalDataViewer() {
                     <div className="p-4 space-y-4">
                       {isMdAvolveProjectDox &&
                         montgomeryStatusActionLinks.length > 0 && (
-                          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream p-5 space-y-2">
-                            <p className="text-sm font-medium text-ink-primary-light">
+                          <div className="rounded-xl border border-border bg-card shadow-sm p-5 space-y-2">
+                            <p className="text-sm font-medium text-foreground">
                               Report actions
                             </p>
                             <div className="flex flex-col gap-3">
@@ -3530,18 +3506,18 @@ export default function PortalDataViewer() {
                         )}
                       {statusTabData?.keyValues &&
                         statusTabData.keyValues.length > 0 && (
-                          <div className="rounded-xl border border-cream-sunken bg-cream shadow-cream overflow-hidden">
+                          <div className="rounded-xl border border-border bg-background shadow-sm overflow-hidden">
                             {statusTabData.keyValues.map((kv, i) => (
                               <div
                                 key={`${kv.key}-${i}`}
-                                className={`grid grid-cols-3 border-t border-cream-sunken first:border-t-0 ${
-                                  i % 2 === 0 ? "bg-cream" : "bg-cream-raised/35"
+                                className={`grid grid-cols-3 border-t border-border first:border-t-0 ${
+                                  i % 2 === 0 ? "bg-background" : "bg-card/35"
                                 }`}
                               >
-                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-cream-sunken bg-cream-raised/50 text-ink-primary-light">
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-border bg-card/50 text-foreground">
                                   {kv.key}
                                 </div>
-                                <div className="col-span-2 px-3 py-2 text-sm text-ink-primary-light">
+                                <div className="col-span-2 px-3 py-2 text-sm text-foreground">
                                   {kv.value || "—"}
                                 </div>
                               </div>
@@ -3551,14 +3527,14 @@ export default function PortalDataViewer() {
                       {(statusTabData?.tables ?? []).map((tbl, ti) => {
                         const displayHeaders = statusTableDisplayHeaders(tbl);
                         return (
-                          <div key={ti} className="overflow-x-auto rounded-xl border border-cream-sunken bg-cream shadow-cream">
+                          <div key={ti} className="overflow-x-auto rounded-xl border border-border bg-background shadow-sm">
                             <Table>
                               <TableHeader>
-                                <TableRow className="border-b border-cream-sunken bg-cream hover:bg-cream">
+                                <TableRow className="border-b border-border bg-background hover:bg-background">
                                   {displayHeaders.map((h, hi) => (
                                     <TableHead
                                       key={hi}
-                                      className="text-[10px] font-mono uppercase tracking-[0.12em] text-ink-tertiary-light font-normal"
+                                      className="text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground font-normal"
                                     >
                                       {h}
                                     </TableHead>
@@ -3571,14 +3547,14 @@ export default function PortalDataViewer() {
                                     key={ri}
                                     className={
                                       ri % 2 === 1
-                                        ? "bg-cream-raised/35 border-t border-cream-sunken hover:bg-cream-raised/55"
-                                        : "bg-cream border-t border-cream-sunken hover:bg-cream-raised/45"
+                                        ? "bg-card/35 border-t border-border hover:bg-card/55"
+                                        : "bg-background border-t border-border hover:bg-card/45"
                                     }
                                   >
                                     {displayHeaders.map((h, ci) => (
                                       <TableCell
                                         key={`${ri}-${ci}`}
-                                        className="text-ink-primary-light"
+                                        className="text-foreground"
                                       >
                                         {row[h] ?? ""}
                                       </TableCell>
@@ -3599,8 +3575,8 @@ export default function PortalDataViewer() {
         )}
 
         {hasTasksTab && (
-          <TabsContent value="tasks" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
-            <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+          <TabsContent value="tasks" className="mt-8 pt-6 pb-10 bg-background focus-visible:outline-none">
+            <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
               <CardContent className="p-0">
                 <TabErrorBoundary tabName="Tasks">
                   {tasksTabData?.error ? (
@@ -3612,18 +3588,18 @@ export default function PortalDataViewer() {
                     <div className="p-4 space-y-4">
                       {tasksTabData?.keyValues &&
                         tasksTabData.keyValues.length > 0 && (
-                          <div className="rounded-xl border border-cream-sunken bg-cream shadow-cream overflow-hidden">
+                          <div className="rounded-xl border border-border bg-background shadow-sm overflow-hidden">
                             {tasksTabData.keyValues.map((kv, i) => (
                               <div
                                 key={`${kv.key}-${i}`}
-                                className={`grid grid-cols-3 border-t border-cream-sunken first:border-t-0 ${
-                                  i % 2 === 0 ? "bg-cream" : "bg-cream-raised/35"
+                                className={`grid grid-cols-3 border-t border-border first:border-t-0 ${
+                                  i % 2 === 0 ? "bg-background" : "bg-card/35"
                                 }`}
                               >
-                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-cream-sunken bg-cream-raised/50 text-ink-primary-light">
+                                <div className="col-span-1 px-3 py-2 text-sm font-semibold border-r border-border bg-card/50 text-foreground">
                                   {kv.key}
                                 </div>
-                                <div className="col-span-2 px-3 py-2 text-sm whitespace-pre-wrap text-ink-primary-light">
+                                <div className="col-span-2 px-3 py-2 text-sm whitespace-pre-wrap text-foreground">
                                   {kv.value || "—"}
                                 </div>
                               </div>
@@ -3631,17 +3607,17 @@ export default function PortalDataViewer() {
                           </div>
                         )}
                       {pgcTaskTablesForRender.map((tbl, ti) => (
-                        <div key={ti} className="overflow-x-auto rounded-xl border border-cream-sunken bg-cream shadow-cream">
+                        <div key={ti} className="overflow-x-auto rounded-xl border border-border bg-background shadow-sm">
                           {isPgcEplan && tbl.title && (
-                            <p className="text-sm font-semibold mb-2 px-4 pt-4 text-ink-primary-light">{tbl.title}</p>
+                            <p className="text-sm font-semibold mb-2 px-4 pt-4 text-foreground">{tbl.title}</p>
                           )}
-                          <Table wrapperClassName="!rounded-xl !border-cream-sunken !border !bg-cream !shadow-none dark:!border-cream-sunken">
+                          <Table wrapperClassName="!rounded-xl !border-border !border !bg-background !shadow-none dark:!border-border">
                             <TableHeader>
-                              <TableRow className="!border-cream-sunken border-b bg-cream hover:!bg-cream">
+                              <TableRow className="!border-border border-b bg-background hover:!bg-background">
                                 {tbl.headers?.map((h, hi) => (
                                   <TableHead
                                     key={hi}
-                                    className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]"
+                                    className="!text-muted-foreground text-[10px] font-mono font-medium uppercase tracking-[0.14em]"
                                   >
                                     {h}
                                   </TableHead>
@@ -3654,14 +3630,14 @@ export default function PortalDataViewer() {
                                   key={ri}
                                   className={
                                     ri % 2 === 1
-                                      ? "border-t border-cream-sunken bg-cream-raised/50 hover:!bg-cream-raised/80"
-                                      : "border-t border-cream-sunken bg-cream hover:!bg-cream-raised/65"
+                                      ? "border-t border-border bg-card/50 hover:!bg-card/80"
+                                      : "border-t border-border bg-background hover:!bg-card/65"
                                   }
                                 >
                                   {tbl.headers?.map((h) => (
                                     <TableCell
                                       key={h}
-                                      className="!text-ink-primary-light font-tight text-sm"
+                                      className="!text-foreground font-tight text-sm"
                                     >
                                       {row[h] ?? ""}
                                     </TableCell>
@@ -3681,7 +3657,7 @@ export default function PortalDataViewer() {
         )}
 
         {hasReviewTab && (
-          <TabsContent value="review" className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none">
+          <TabsContent value="review" className="mt-8 pt-6 pb-10 bg-background focus-visible:outline-none">
             <Card>
               <CardContent className="p-4">
                 <TabErrorBoundary tabName="Review">
@@ -3961,11 +3937,11 @@ export default function PortalDataViewer() {
           value="reports"
           className="mt-8 pt-0 pb-0 bg-background text-foreground focus-visible:outline-none dark:bg-obsidian dark:text-ink-primary-dark"
         >
-          <Section variant="cream" className="py-10 sm:py-14 px-4 sm:px-6 md:px-8">
+          <div className="px-4 py-6 sm:px-6 md:px-8">
             <div className="max-w-7xl mx-auto">
-              <EyebrowDark className="mb-2">REPORTS</EyebrowDark>
-              <h2 className="mt-2 font-serif text-3xl sm:text-4xl text-foreground dark:text-ink-primary-dark">
-                Extracted <em className="text-gold italic">Reports</em>
+              <div className="pilot-kicker mb-2">REPORTS</div>
+              <h2 className="mt-2 font-tight text-2xl font-bold text-foreground sm:text-3xl">
+                Extracted <em className="text-primary italic">Reports</em>
               </h2>
               <p className="mt-3 text-muted-foreground max-w-2xl text-sm sm:text-base leading-relaxed dark:text-ink-secondary-dark">
                 Stored report artifacts, live viewer links, screenshots, and extracted text used by the AI pipeline.
@@ -4589,21 +4565,21 @@ export default function PortalDataViewer() {
             </CardContent>
           </Card>
             </div>
-          </Section>
+          </div>
         </TabsContent>
 
         {(filesTab || liveFileResults.active) && (
           <TabsContent
             value="files"
-            className="mt-8 pt-6 pb-10 bg-cream focus-visible:outline-none"
+            className="mt-8 pt-6 pb-10 bg-background focus-visible:outline-none"
             data-testid="tabcontent-files"
           >
-            <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
+            <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
               <CardContent className="p-0">
                 <TabErrorBoundary tabName="Files">
                   {liveFileResults.active ? (
                     <div
-                      className="border-b border-cream-sunken bg-teal/5 px-5 py-4 space-y-3"
+                      className="border-b border-border bg-teal/5 px-5 py-4 space-y-3"
                       data-testid="live-scrape-files-banner"
                     >
                       <div className="flex flex-wrap items-center gap-2">
@@ -4611,12 +4587,12 @@ export default function PortalDataViewer() {
                           Current scrape
                         </Badge>
                         {liveFileResults.reconnecting ? (
-                          <span className="text-xs text-ink-tertiary-light">
+                          <span className="text-xs text-muted-foreground">
                             Reconnecting…
                           </span>
                         ) : null}
                       </div>
-                      <p className="text-sm text-ink-primary-light">
+                      <p className="text-sm text-foreground">
                         Uploaded {liveFileResults.stats.uploaded} of{" "}
                         {liveFileResults.stats.total}
                         {liveFileResults.stats.failed > 0
@@ -4629,8 +4605,8 @@ export default function PortalDataViewer() {
                       {liveFoldersGrouped.length > 0 ? (
                         <div className="space-y-3">
                           {liveFoldersGrouped.map((folder) => (
-                            <div key={`live-${folder.name}`} className="rounded-lg border border-cream-sunken bg-cream overflow-hidden">
-                              <div className="px-4 py-2 text-xs font-mono uppercase tracking-wide text-ink-tertiary-light border-b border-cream-sunken">
+                            <div key={`live-${folder.name}`} className="rounded-lg border border-border bg-background overflow-hidden">
+                              <div className="px-4 py-2 text-xs font-mono uppercase tracking-wide text-muted-foreground border-b border-border">
                                 {folder.name}
                               </div>
                               <ul className="divide-y divide-cream-sunken">
@@ -4640,18 +4616,18 @@ export default function PortalDataViewer() {
                                     className="flex items-center justify-between gap-3 px-4 py-2 text-sm"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
-                                      <FileText className="h-4 w-4 shrink-0 text-gold/90" />
+                                      <FileText className="h-4 w-4 shrink-0 text-primary/90" />
                                       {file.status === "uploaded" && file.public_url ? (
                                         <a
                                           href={file.public_url}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="truncate text-gold hover:underline"
+                                          className="truncate text-primary hover:underline"
                                         >
                                           {file.file_name}
                                         </a>
                                       ) : (
-                                        <span className="truncate text-ink-primary-light">
+                                        <span className="truncate text-foreground">
                                           {file.file_name}
                                         </span>
                                       )}
@@ -4663,7 +4639,7 @@ export default function PortalDataViewer() {
                                           ? "border-destructive/40 text-destructive"
                                           : file.status === "uploaded"
                                             ? "border-teal/40 text-teal"
-                                            : "border-cream-sunken text-ink-secondary-light"
+                                            : "border-border text-muted-foreground"
                                       }
                                     >
                                       {file.status === "discovered"
@@ -4685,7 +4661,7 @@ export default function PortalDataViewer() {
                           ))}
                         </div>
                       ) : liveFileResults.loading ? (
-                        <p className="text-xs text-ink-tertiary-light">
+                        <p className="text-xs text-muted-foreground">
                           Loading live file progress…
                         </p>
                       ) : null}
@@ -4703,7 +4679,7 @@ export default function PortalDataViewer() {
                   ) : foldersForRender.length > 0 ? (
                     <div className="divide-y divide-cream-sunken">
                       {liveFileResults.active ? (
-                        <div className="px-5 py-3 text-xs font-mono uppercase tracking-wide text-ink-tertiary-light border-b border-cream-sunken bg-cream">
+                        <div className="px-5 py-3 text-xs font-mono uppercase tracking-wide text-muted-foreground border-b border-border bg-background">
                           Saved files (last completed scrape)
                         </div>
                       ) : null}
@@ -4730,18 +4706,18 @@ export default function PortalDataViewer() {
                           >
                             <CollapsibleTrigger asChild>
                               <button
-                                className="w-full flex items-center justify-between gap-3 bg-cream px-5 py-4 text-left transition-colors hover:bg-cream-raised"
+                                className="w-full flex items-center justify-between gap-3 bg-background px-5 py-4 text-left transition-colors hover:bg-card"
                                 data-testid={`button-folder-${fi}`}
                               >
                                 {isOpen ? (
-                                  <ChevronDown className="h-4 w-4 shrink-0 text-ink-secondary-light" />
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                                 ) : (
-                                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-secondary-light" />
+                                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                                 )}
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gold/35 bg-gold/12 text-gold shadow-sm">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gold/35 bg-gold/12 text-primary shadow-sm">
                                   <FolderOpen className="h-4 w-4 shrink-0" />
                                 </div>
-                                <span className="flex-1 text-left text-sm font-medium text-ink-primary-light">
+                                <span className="flex-1 text-left text-sm font-medium text-foreground">
                                   {isPgcEplan
                                     ? [
                                         folder.parentFolder || "",
@@ -4753,7 +4729,7 @@ export default function PortalDataViewer() {
                                 </span>
                                 <Badge
                                   variant="outline"
-                                  className="shrink-0 border-cream-sunken bg-cream-raised px-2 py-0.5 text-xs font-mono font-semibold tabular-nums text-ink-primary-light"
+                                  className="shrink-0 border-border bg-card px-2 py-0.5 text-xs font-mono font-semibold tabular-nums text-foreground"
                                 >
                                   {folder.fileCount ??
                                     folder.files?.length ??
@@ -4761,31 +4737,31 @@ export default function PortalDataViewer() {
                                   files
                                 </Badge>
                                 {totalComments > 0 && (
-                                  <Badge className="shrink-0 border border-gold/30 bg-gold/12 text-xs font-semibold text-ink-primary-light">
-                                    <MessageSquare className="mr-1 h-3 w-3 text-gold" />
+                                  <Badge className="shrink-0 border border-gold/30 bg-gold/12 text-xs font-semibold text-foreground">
+                                    <MessageSquare className="mr-1 h-3 w-3 text-primary" />
                                     {totalComments}
                                   </Badge>
                                 )}
                               </button>
                             </CollapsibleTrigger>
                             <CollapsibleContent>
-                              <div className="overflow-x-auto bg-cream">
-                                <Table wrapperClassName="!rounded-none !border-0 !border-t !border-cream-sunken !bg-cream !shadow-none">
+                              <div className="overflow-x-auto bg-background">
+                                <Table wrapperClassName="!rounded-none !border-0 !border-t !border-border !bg-background !shadow-none">
                                   <TableHeader>
-                                    <TableRow className="!border-cream-sunken border-b bg-cream-raised/60 hover:!bg-cream-raised/80">
-                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
+                                    <TableRow className="!border-border border-b bg-card/60 hover:!bg-card/80">
+                                      <TableHead className="!text-muted-foreground text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         File Name
                                       </TableHead>
-                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
+                                      <TableHead className="!text-muted-foreground text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Status
                                       </TableHead>
-                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
+                                      <TableHead className="!text-muted-foreground text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Reviewed By
                                       </TableHead>
-                                      <TableHead className="!text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
+                                      <TableHead className="!text-muted-foreground text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Uploaded
                                       </TableHead>
-                                      <TableHead className="!text-right !text-ink-secondary-light text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
+                                      <TableHead className="!text-right !text-muted-foreground text-[10px] font-mono font-medium uppercase tracking-[0.14em]">
                                         Comments
                                       </TableHead>
                                     </TableRow>
@@ -4809,7 +4785,7 @@ export default function PortalDataViewer() {
                                       return (
                                         <React.Fragment key={fileKey}>
                                           <TableRow
-                                            className={`${fIdx % 2 === 1 ? "bg-cream-raised/50" : "bg-cream"} border-t border-cream-sunken ${hasComments ? "cursor-pointer hover:!bg-cream-raised/85" : "hover:!bg-cream-raised/70"}`}
+                                            className={`${fIdx % 2 === 1 ? "bg-card/50" : "bg-background"} border-t border-border ${hasComments ? "cursor-pointer hover:!bg-card/85" : "hover:!bg-card/70"}`}
                                             onClick={() => {
                                               if (!hasComments) return;
                                               setExpandedFileComments(
@@ -4824,15 +4800,15 @@ export default function PortalDataViewer() {
                                             }}
                                             data-testid={`row-file-${fi}-${fIdx}`}
                                           >
-                                            <TableCell className="!text-ink-primary-light text-sm">
+                                            <TableCell className="!text-foreground text-sm">
                                               <div className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4 shrink-0 text-gold/90" />
+                                                <FileText className="h-4 w-4 shrink-0 text-primary/90" />
                                                 {fileOpenUrl ? (
                                                   <a
                                                     href={fileOpenUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="truncate max-w-[300px] text-gold hover:text-gold-deep hover:underline transition-colors"
+                                                    className="truncate max-w-[300px] text-primary hover:text-primary-deep hover:underline transition-colors"
                                                     onClick={(e) =>
                                                       e.stopPropagation()
                                                     }
@@ -4841,7 +4817,7 @@ export default function PortalDataViewer() {
                                                     {file.name}
                                                   </a>
                                                 ) : (
-                                                  <span className="truncate max-w-[300px] text-ink-primary-light">
+                                                  <span className="truncate max-w-[300px] text-foreground">
                                                     {file.name}
                                                   </span>
                                                 )}
@@ -4863,22 +4839,22 @@ export default function PortalDataViewer() {
                                                 )}
                                               </div>
                                             </TableCell>
-                                            <TableCell className="!text-ink-primary-light whitespace-nowrap text-sm">
+                                            <TableCell className="!text-foreground whitespace-nowrap text-sm">
                                               {file.status || "—"}
                                             </TableCell>
-                                            <TableCell className="!text-ink-primary-light whitespace-nowrap text-sm">
+                                            <TableCell className="!text-foreground whitespace-nowrap text-sm">
                                               {file.reviewedBy || "—"}
                                             </TableCell>
-                                            <TableCell className="!text-ink-primary-light whitespace-nowrap text-sm">
+                                            <TableCell className="!text-foreground whitespace-nowrap text-sm">
                                               {file.uploadedDate || "—"}
                                             </TableCell>
                                             <TableCell className="text-right text-sm">
                                               {(file.commentCount || 0) > 0 ? (
-                                                <Badge className="border border-gold/25 bg-gold/12 text-xs font-semibold text-ink-primary-light">
+                                                <Badge className="border border-gold/25 bg-gold/12 text-xs font-semibold text-foreground">
                                                   {file.commentCount}
                                                 </Badge>
                                               ) : (
-                                                <span className="text-ink-secondary-light">
+                                                <span className="text-muted-foreground">
                                                   0
                                                 </span>
                                               )}
@@ -4959,6 +4935,141 @@ export default function PortalDataViewer() {
           </TabsContent>
         )}
       </Tabs>
+        </Panel>
+
+        <div className="space-y-4">
+          <Panel title="Current harvest target" eyebrow="Project">
+            {portalData.projectNum || portalData.description || displayPortalStatus ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-tight text-lg font-bold text-foreground">
+                      {portalData.projectNum || "Project"}
+                    </h3>
+                    {portalData.description && (
+                      <p className="mt-1 text-sm text-muted-foreground">{portalData.description}</p>
+                    )}
+                    {portalData.location && (
+                      <p className="mt-0.5 text-sm text-muted-foreground">{portalData.location}</p>
+                    )}
+                  </div>
+                  {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+                {displayPortalStatus && (
+                  <StatusPill tone={scrape.isScraping ? "info" : "default"}>
+                    {displayPortalStatus}
+                  </StatusPill>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Select a project to load portal harvest data.
+              </p>
+            )}
+          </Panel>
+
+          <Panel title="Recent harvest" eyebrow="Inbox">
+            <ul className="space-y-3">
+              <li className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="pilot-kicker">Reports</div>
+                  <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {(portalData.tabs?.reports?.reportEntries ?? []).length +
+                      (portalData.tabs?.reports?.pdfs ?? []).length}{" "}
+                    items
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-medium text-foreground">Captured report artifacts</div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Open the Reports tab to review harvested PDFs and report entries.
+                </p>
+              </li>
+              <li className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="pilot-kicker">Files</div>
+                  <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {(filesTab?.folders ?? []).reduce(
+                      (sum: number, f: { files?: unknown[] }) => sum + (f.files?.length ?? 0),
+                      0,
+                    )}{" "}
+                    files
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-medium text-foreground">
+                  {liveFileResults.active ? "Live scrape files active" : "Saved file results"}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Use the Files tab for folders, attachments, and comment-linked documents.
+                </p>
+              </li>
+              <li className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="pilot-kicker">Sync</div>
+                  <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {lastCheckedStr || "—"}
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-medium text-foreground">
+                  {scrape.isScraping ? "Harvest running" : "Last portal sync"}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Force Sync refreshes portal_data for the active project without leaving this page.
+                </p>
+              </li>
+            </ul>
+          </Panel>
+
+          <Panel title="Operator playbook" eyebrow="Fallback workflows">
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">Force Sync</div>
+                  <StatusPill tone={scrape.isScraping ? "info" : "good"}>
+                    {scrape.isScraping ? "Active" : "Ready"}
+                  </StatusPill>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Re-run harvest when portal feeds lag or after credential rotation in Settings.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">Credential check</div>
+                  <StatusPill tone={!selectedProjectId ? "warn" : "default"}>
+                    {!selectedProjectId ? "Blocked" : "Configured via Settings"}
+                  </StatusPill>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Portal credentials stay server-side. Manage them in Settings — passwords are never shown here.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">Scrape job</div>
+                  <StatusPill
+                    tone={
+                      scrape.isScraping
+                        ? "info"
+                        : scrape.lastScrapeOutcome === "error"
+                          ? "bad"
+                          : scrape.lastScrapeOutcome === "done"
+                            ? "good"
+                            : "default"
+                    }
+                  >
+                    {scrape.isScraping
+                      ? scrape.scrapeJobStatus || "Queued"
+                      : scrape.lastScrapeOutcome || "Idle"}
+                  </StatusPill>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {scrape.scrapeLiveMessage ||
+                    "Live job status appears here while a harvest is running."}
+                </p>
+              </div>
+            </div>
+          </Panel>
+        </div>
       </div>
 
       <Dialog

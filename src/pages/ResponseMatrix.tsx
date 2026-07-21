@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useGroundedDraftQueue } from "@/hooks/useGroundedDraftQueue";
-import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw } from "lucide-react";
+import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, MessageSquare, AlertTriangle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,7 +58,7 @@ import { effectiveResponseStatus, responseStatusBadgeClass } from "@/lib/respons
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
-import { PageHeader, MetricCard, ServicePill } from "@/components/design/ProductPrimitives";
+import { PageHeader, MetricCard, ServicePill, AlertBanner, Panel } from "@/components/design/ProductPrimitives";
 import { PlanMarkupWorkspace } from "@/components/plans/PlanMarkupWorkspace";
 import { useApprovalGate } from "@/components/plans/ArchitectApprovalDialog";
 import type { PanelComment } from "@/components/plans/CommentPlanPanel";
@@ -141,7 +141,7 @@ function statusBadgeClass(status: string): string {
   if (s.includes("ready")) {
     return "border-sky-700/35 bg-sky-500/[0.13] text-sky-950";
   }
-  return "bg-cream-sunken/80 text-ink-secondary-light border-cream-sunken";
+  return "bg-muted/80 text-muted-foreground border-border";
 }
 
 /** Closed trigger pill: navy surface + cream ink (dropdown menu items keep light chips via statusBadgeClass). */
@@ -165,12 +165,12 @@ function statusSelectTriggerAccentClass(status: string): string {
 const DISCIPLINE_COLORS: Record<string, string> = {
   zoning: "bg-violet-500/15 text-violet-700 border-violet-500/30",
   structural: "bg-blue-500/15 text-blue-700 border-blue-500/30",
-  architectural: "bg-teal/15 text-ink-primary-light border-teal/30",
-  mechanical: "bg-gold/12 text-gold-deep border-gold/32",
-  mep: "bg-gold/12 text-gold-deep border-gold/32",
+  architectural: "bg-teal/15 text-foreground border-teal/30",
+  mechanical: "bg-gold/12 text-primary-deep border-gold/32",
+  mep: "bg-gold/12 text-primary-deep border-gold/32",
   electrical: "bg-yellow-500/15 text-yellow-700 border-yellow-500/30",
   fire: "bg-red-500/15 text-red-700 border-red-500/30",
-  general: "bg-cream-sunken/90 text-ink-secondary-light border-cream-sunken",
+  general: "bg-muted/90 text-muted-foreground border-border",
 };
 
 function disciplineBadgeClass(discipline: string | null): string {
@@ -186,19 +186,19 @@ function CodeRefChip({ value }: { value: string | null | undefined }) {
     navigator.clipboard.writeText(text);
     toast.success("Code reference copied");
   };
-  if (!text) return <span className="text-ink-tertiary-light">—</span>;
+  if (!text) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="group/code flex items-center gap-1 max-w-full">
-      <span className="text-xs font-mono-data bg-gold-soft/90 text-ink-primary-light px-2 py-1 rounded border border-gold/35 truncate">
+      <span className="text-xs font-mono-data bg-primary/10 text-foreground px-2 py-1 rounded border border-primary/35 truncate">
         {text}
       </span>
       <button
         type="button"
         onClick={copy}
-        className="opacity-0 group-hover/code:opacity-100 p-1 rounded shrink-0 transition-opacity hover:bg-cream-sunken/70"
+        className="opacity-0 group-hover/code:opacity-100 p-1 rounded shrink-0 transition-opacity hover:bg-muted/70"
         aria-label="Copy code reference"
       >
-        <Copy className="h-3.5 w-3.5 text-ink-tertiary-light" />
+        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
     </div>
   );
@@ -222,7 +222,7 @@ function MarkupStatusBadge({ commentId, projectId }: { commentId: string; projec
     return () => { cancelled = true; };
   }, [commentId, projectId]);
 
-  if (status === "none") return <span className="text-ink-tertiary-light text-xs">—</span>;
+  if (status === "none") return <span className="text-muted-foreground text-xs">—</span>;
 
   const variant = status === "approved" ? "default" : status === "rejected" ? "destructive" : "secondary";
   return (
@@ -271,39 +271,39 @@ function RelevanceBadge({ value }: { value?: string }) {
 
 function EvidenceCitationCard({ item, index }: { item: GroundedEvidenceItem; index: number }) {
   return (
-    <div className="rounded-lg border border-cream-sunken bg-cream-raised p-3 space-y-1.5 shadow-sm dark:border-border/60 dark:bg-obsidian-raised/40">
+    <div className="rounded-lg border border-border bg-card p-3 space-y-1.5 shadow-sm dark:border-border/60 dark:bg-muted/40">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-ink-primary-light dark:text-ink-primary-dark">
+        <p className="text-sm font-semibold text-foreground dark:text-foreground">
           Citation {index + 1}
         </p>
         <RelevanceBadge value={item.relevance} />
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">File</dt>
-        <dd className="text-ink-primary-light dark:text-ink-primary-dark break-all">{item.file_name ?? "Document"}</dd>
+        <dt className="text-muted-foreground dark:text-muted-foreground font-medium">File</dt>
+        <dd className="text-foreground dark:text-foreground break-all">{item.file_name ?? "Document"}</dd>
         {item.page_number != null && (
           <>
-            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Page</dt>
-            <dd className="text-ink-primary-light dark:text-ink-primary-dark">{item.page_number}</dd>
+            <dt className="text-muted-foreground dark:text-muted-foreground font-medium">Page</dt>
+            <dd className="text-foreground dark:text-foreground">{item.page_number}</dd>
           </>
         )}
         {item.sheet_label && (
           <>
-            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Sheet</dt>
-            <dd className="text-ink-primary-light dark:text-ink-primary-dark font-mono-data">{item.sheet_label}</dd>
+            <dt className="text-muted-foreground dark:text-muted-foreground font-medium">Sheet</dt>
+            <dd className="text-foreground dark:text-foreground font-mono-data">{item.sheet_label}</dd>
           </>
         )}
         {item.sheet_title && (
           <>
-            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Title</dt>
-            <dd className="text-ink-primary-light dark:text-ink-primary-dark">{item.sheet_title}</dd>
+            <dt className="text-muted-foreground dark:text-muted-foreground font-medium">Title</dt>
+            <dd className="text-foreground dark:text-foreground">{item.sheet_title}</dd>
           </>
         )}
       </dl>
       {item.snippet && (
-        <div className="pt-1 border-t border-cream-sunken/80 dark:border-border/50">
-          <p className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-1">Evidence</p>
-          <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark whitespace-pre-wrap break-words leading-relaxed">
+        <div className="pt-1 border-t border-border/80 dark:border-border/50">
+          <p className="text-xs font-medium text-muted-foreground dark:text-muted-foreground mb-1">Evidence</p>
+          <p className="text-sm text-foreground dark:text-foreground whitespace-pre-wrap break-words leading-relaxed">
             {item.snippet}
           </p>
         </div>
@@ -326,13 +326,13 @@ function DetailSection({
       ? "border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10"
       : variant === "action"
         ? "border-teal/35 bg-teal/5 dark:bg-teal/10"
-        : "border-cream-sunken bg-cream-raised/80 dark:border-border/60 dark:bg-obsidian-raised/30";
+        : "border-border bg-card/80 dark:border-border/60 dark:bg-muted/30";
   return (
     <section className={cn("rounded-lg border p-4 space-y-2", borderCls)}>
-      <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-ink-secondary-light dark:text-ink-secondary-dark">
+      <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-muted-foreground dark:text-muted-foreground">
         {title}
       </h4>
-      <div className="text-sm text-ink-primary-light dark:text-ink-primary-dark leading-relaxed whitespace-pre-wrap break-words">
+      <div className="text-sm text-foreground dark:text-foreground leading-relaxed whitespace-pre-wrap break-words">
         {children}
       </div>
     </section>
@@ -362,12 +362,12 @@ function CommentDetailPanel({
   const evidence = Array.isArray(row.grounded_evidence) ? row.grounded_evidence : [];
 
   return (
-    <div className="px-4 py-5 sm:px-6 bg-cream-sunken/40 dark:bg-obsidian/50 border-t border-cream-sunken dark:border-border/50 space-y-4">
+    <div className="px-4 py-5 sm:px-6 bg-muted/40 dark:bg-muted/50 border-t border-border dark:border-border/50 space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <DetailSection title="City / reviewer comment">
             {(ctx.reviewer_name || ctx.comment_number) && (
-              <p className="text-xs font-mono uppercase tracking-wide text-ink-secondary-light mb-2">
+              <p className="text-xs font-mono uppercase tracking-wide text-muted-foreground mb-2">
                 {[ctx.reviewer_name, ctx.comment_number ? `#${ctx.comment_number}` : null]
                   .filter(Boolean)
                   .join(" · ")}
@@ -376,7 +376,7 @@ function CommentDetailPanel({
             {ctx.display_primary_text ? (
               <p>{ctx.display_primary_text}</p>
             ) : (
-              <p className="text-ink-tertiary-light italic">No comment text</p>
+              <p className="text-muted-foreground italic">No comment text</p>
             )}
             {row.ingest_source === "manual_letter" && (
               <Badge variant="outline" className="mt-2 text-[10px] border-teal/40 text-teal">
@@ -393,7 +393,7 @@ function CommentDetailPanel({
 
           {existing ? (
             <DetailSection title="Existing letter response">
-              <p className="text-ink-secondary-light dark:text-ink-secondary-dark">{existing}</p>
+              <p className="text-muted-foreground dark:text-muted-foreground">{existing}</p>
             </DetailSection>
           ) : null}
         </div>
@@ -402,7 +402,7 @@ function CommentDetailPanel({
           <div className="flex flex-wrap items-center gap-2">
             <ConfidenceBadge value={row.grounded_confidence} />
             {row.grounded_generated_at && (
-              <span className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">
+              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Grounded {new Date(row.grounded_generated_at).toLocaleString()}
               </span>
             )}
@@ -428,7 +428,7 @@ function CommentDetailPanel({
 
           {evidence.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-ink-secondary-light dark:text-ink-secondary-dark">
+              <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-muted-foreground dark:text-muted-foreground">
                 Evidence found ({evidence.length})
               </h4>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -445,27 +445,27 @@ function CommentDetailPanel({
 
           <div className="grid gap-3 sm:grid-cols-2 pt-1">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark">Assigned to</label>
+              <label className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Assigned to</label>
               <Input
                 value={row.assigned_to ?? ""}
                 onChange={(e) => onUpdateAssigned(e.target.value)}
                 placeholder="Name or email"
-                className="border-cream-sunken bg-cream-raised dark:bg-obsidian-raised"
+                className="border-border bg-card dark:bg-card-raised"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark">Sheet reference</label>
+              <label className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Sheet reference</label>
               <Input
                 value={row.sheet_reference ?? ""}
                 onChange={(e) => onUpdateSheetRef(e.target.value)}
                 placeholder="e.g. A1.02"
-                className="border-cream-sunken bg-cream-raised dark:bg-obsidian-raised"
+                className="border-border bg-card dark:bg-card-raised"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">Plan markup</span>
+            <span className="text-xs text-muted-foreground dark:text-muted-foreground">Plan markup</span>
             <MarkupStatusBadge commentId={row.id} projectId={row.project_id} />
           </div>
         </div>
@@ -526,7 +526,7 @@ function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand
   return (
     <div className="max-w-[240px] space-y-1">
       {(ctx.reviewer_name || ctx.comment_number) && (
-        <p className="text-[10px] font-mono uppercase tracking-wide text-ink-secondary-light dark:text-ink-secondary-dark truncate">
+        <p className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground dark:text-muted-foreground truncate">
           {[ctx.reviewer_name, ctx.comment_number ? `#${ctx.comment_number}` : null]
             .filter(Boolean)
             .join(" · ")}
@@ -536,8 +536,8 @@ function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand
         className={cn(
           "text-sm line-clamp-2 leading-snug",
           preview
-            ? "text-ink-primary-light dark:text-ink-primary-dark"
-            : "text-ink-tertiary-light italic",
+            ? "text-foreground dark:text-foreground"
+            : "text-muted-foreground italic",
         )}
         title={preview || undefined}
       >
@@ -567,11 +567,11 @@ function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
   return (
     <div className="max-w-[200px] space-y-1.5">
       {text ? (
-        <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark line-clamp-2" title={text}>
+        <p className="text-sm text-foreground dark:text-foreground line-clamp-2" title={text}>
           {text}
         </p>
       ) : (
-        <p className="text-sm text-ink-tertiary-light italic">No response yet</p>
+        <p className="text-sm text-muted-foreground italic">No response yet</p>
       )}
       <div className="flex flex-wrap gap-1">
         {approvalStatus && (
@@ -1168,6 +1168,44 @@ export default function ResponseMatrix() {
   const matrixSourceLabel = commentMatrixSourceLabel(withoutMetadata);
   const pipelineBusy = enriching || routing || pipelineResuming;
 
+  const openCount = withoutMetadata.filter((r) => {
+    const s = (r.status ?? "").toLowerCase();
+    const rs = effectiveResponseStatus(r);
+    return (
+      !r.response_text?.trim() ||
+      s === "pending" ||
+      s === "pending review" ||
+      rs === "Changes Requested" ||
+      rs == null
+    );
+  }).length;
+  const draftedCount = withoutMetadata.filter((r) => {
+    const rs = effectiveResponseStatus(r);
+    const s = (r.status ?? "").toLowerCase();
+    return (
+      rs === "AI Generated" ||
+      rs === "Draft" ||
+      rs === "Awaiting Approval" ||
+      s === "draft" ||
+      s === "ready for review"
+    );
+  }).length;
+  const acceptedCount = withoutMetadata.filter((r) => {
+    const s = (r.status ?? "").toLowerCase();
+    const rs = effectiveResponseStatus(r);
+    return s === "approved" || rs === "Approved";
+  }).length;
+  const crossServiceCount = withoutMetadata.filter((r) => {
+    const d = (r.discipline ?? "").toLowerCase();
+    return (
+      d.includes("utilit") ||
+      d.includes("electric") ||
+      d.includes("gas") ||
+      d.includes("water") ||
+      d.includes("telecom")
+    );
+  }).length;
+
   const runActionsMenuItem = useCallback((action: () => void) => {
     setActionsMenuOpen(false);
     action();
@@ -1219,31 +1257,43 @@ export default function ResponseMatrix() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
-          label="Comments"
-          value={`${withoutMetadata.length}`}
-          hint={projectId ? "Loaded for active project" : "Select a project"}
+          label="Open"
+          value={`${openCount}`}
+          detail="Needs operator attention"
+          icon={AlertTriangle}
         />
         <MetricCard
-          label="Matrix rows"
-          value={`${rows.length}`}
-          hint="Visible after filters"
+          label="Drafted"
+          value={`${draftedCount}`}
+          detail="Ready for review"
+          icon={MessageSquare}
         />
         <MetricCard
-          label="Project"
-          value={projectId ? "Linked" : "None"}
-          hint={projectId ? projectId.slice(0, 8) : "Required for actions"}
+          label="Accepted"
+          value={`${acceptedCount}`}
+          detail="Ready to export"
+          icon={CheckCircle2}
         />
         <MetricCard
-          label="Source"
-          value={withoutMetadata.length > 0 ? "Live" : "Empty"}
-          hint="Real parsed comments — never mocked"
+          label="Cross-service"
+          value={`${crossServiceCount}`}
+          detail="Utility-facing items in the same queue"
+          icon={AlertCircle}
         />
       </div>
 
-      <div className="mx-auto w-full min-w-0 max-w-[1600px]">
-        <header className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+      <AlertBanner
+        tone="info"
+        title="Utility comments reconcile in this workspace"
+        detail="Provider markups and permit review comments share scoring, approval, and export workflows so filings and service requests stay aligned. All rows are live parsed comments — never mocked."
+      />
+
+      <div className="w-full min-w-0 space-y-4">
+        <Panel
+          title="Reconciliation queue"
+          eyebrow="Comment matrix"
+          action={
+            <div className="flex flex-wrap items-center gap-2">
               <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
               <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
               <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
@@ -1331,11 +1381,9 @@ export default function ResponseMatrix() {
                 Save Changes
               </Button>
             </div>
-          </div>
-        </header>
-      </div>
-
-      <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0 space-y-4 py-6">
+          }
+        >
+          <div className="space-y-4">
 
         <Dialog open={validateOpen} onOpenChange={setValidateOpen}>
           <DialogContent>
@@ -1518,7 +1566,7 @@ export default function ResponseMatrix() {
               <Badge variant="secondary">Showing pending comments only</Badge>
             </p>
           )}
-          <p className="text-sm text-ink-secondary-light mb-2">{matrixSourceLabel}</p>
+          <p className="text-sm text-muted-foreground mb-2">{matrixSourceLabel}</p>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <Button
               variant="outline"
@@ -1551,21 +1599,21 @@ export default function ResponseMatrix() {
               Generate Grounded for Pending
             </Button>
             {groundedBatchProgress && (
-              <span className="text-sm text-ink-secondary-light dark:text-ink-secondary-dark flex items-center gap-2">
+              <span className="text-sm text-muted-foreground dark:text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-teal" />
                 Generating {groundedBatchProgress.completed + groundedBatchProgress.active} of{" "}
                 {groundedBatchProgress.total}…
               </span>
             )}
           </div>
-          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
-            <div className="overflow-x-auto bg-gradient-to-b from-cream via-cream-raised/95 to-cream-raised">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
             <Table
               wrapperClassName="rounded-none border-0 shadow-none bg-transparent dark:border-0"
               className="w-full min-w-[960px]"
             >
               <TableHeader className="dark:[&_tr]:!bg-transparent">
-                <TableRow className="border-b border-border !bg-muted/60 hover:!bg-muted/80 dark:!border-obsidian-raised/55 dark:!bg-obsidian-raised dark:hover:!bg-obsidian">
+                <TableRow className="border-b border-border !bg-muted/60 hover:!bg-muted/80">
                   <TableHead className="w-10 table-head-sticky px-2 py-3">
                     <Checkbox
                       checked={rows.length > 0 && selectedRowIds.size === rows.length}
@@ -1574,22 +1622,22 @@ export default function ResponseMatrix() {
                     />
                   </TableHead>
                   <TableHead className="w-10 table-head-sticky px-2 py-3" />
-                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Status
                   </TableHead>
-                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Discipline
                   </TableHead>
-                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Comment
                   </TableHead>
-                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Code Ref.
                   </TableHead>
-                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Response
                   </TableHead>
-                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Draft
                   </TableHead>
                 </TableRow>
@@ -1606,11 +1654,11 @@ export default function ResponseMatrix() {
                     <Fragment key={row.id}>
                       <TableRow
                         className={cn(
-                          "!border-transparent border-t border-cream-sunken bg-cream hover:!bg-cream-sunken/50 dark:bg-cream dark:hover:!bg-cream-sunken/50",
-                          idx % 2 === 1 && "!bg-cream-raised hover:!bg-cream-sunken/50 dark:!bg-cream-raised",
-                          "text-ink-primary-light transition-colors duration-150",
+                          "border-t border-border bg-card hover:!bg-muted/40",
+                          idx % 2 === 1 && "!bg-muted/20 hover:!bg-muted/50",
+                          "text-foreground transition-colors duration-150",
                           statusBorderClass(row.status),
-                          isExpanded && "!bg-cream-sunken/60 dark:!bg-obsidian-raised/40",
+                          isExpanded && "!bg-muted/50",
                         )}
                       >
                         <TableCell className="align-middle w-10 px-2">
@@ -1642,8 +1690,8 @@ export default function ResponseMatrix() {
                             <SelectTrigger
                               className={cn(
                                 "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold shadow-sm",
-                                "bg-muted/60 hover:bg-muted/80 dark:bg-obsidian dark:hover:bg-obsidian-raised",
-                                "text-foreground dark:!text-ink-primary-dark text-[11px] md:text-xs",
+                                "bg-muted/60 hover:bg-muted/80 dark:bg-card dark:hover:bg-obsidian-raised",
+                                "text-foreground dark:!text-foreground text-[11px] md:text-xs",
                                 statusSelectTriggerAccentClass(row.status),
                               )}
                             >
@@ -1673,13 +1721,13 @@ export default function ResponseMatrix() {
                             const refs = parseStoredCodeReferences(row.code_references);
                             const primary = row.code_reference?.trim() || refs[0] || "";
                             if (!primary && refs.length === 0) {
-                              return <span className="text-ink-tertiary-light">—</span>;
+                              return <span className="text-muted-foreground">—</span>;
                             }
                             return (
                               <div className="space-y-1">
                                 {primary ? <CodeRefChip value={primary} /> : null}
                                 {refs.length > 1 ? (
-                                  <p className="text-[10px] text-ink-secondary-light dark:text-ink-secondary-dark">
+                                  <p className="text-[10px] text-muted-foreground dark:text-muted-foreground">
                                     +{refs.length - 1} more
                                   </p>
                                 ) : null}
@@ -1763,6 +1811,8 @@ export default function ResponseMatrix() {
           </div>
           </>
         )}
+          </div>
+        </Panel>
       </div>
     </div>
   );
