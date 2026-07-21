@@ -421,7 +421,7 @@ export default function Settings() {
                 <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Profile Information</CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Update your personal information and company details
                     </CardDescription>
                   </CardHeader>
@@ -535,7 +535,7 @@ export default function Settings() {
                         <Separator />
 
                         <Button
-                          variant="gold"
+                          variant="default"
                           onClick={handleProfileSave}
                           disabled={profileSaving}
                         >
@@ -557,7 +557,7 @@ export default function Settings() {
                 <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Change Password</CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Update your password to keep your account secure
                     </CardDescription>
                   </CardHeader>
@@ -660,7 +660,7 @@ export default function Settings() {
 
                     <Separator />
 
-                    <Button variant="gold" onClick={handlePasswordChange} disabled={passwordSaving}>
+                    <Button variant="default" onClick={handlePasswordChange} disabled={passwordSaving}>
                       {passwordSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -677,7 +677,7 @@ export default function Settings() {
                 <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Notification Preferences</CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Choose how you want to be notified about updates
                     </CardDescription>
                   </CardHeader>
@@ -772,7 +772,7 @@ export default function Settings() {
 
                     <Separator />
 
-                    <Button variant="gold" onClick={handleNotificationsSave} disabled={notificationsSaving}>
+                    <Button variant="default" onClick={handleNotificationsSave} disabled={notificationsSaving}>
                       {notificationsSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -807,10 +807,10 @@ export default function Settings() {
                 <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Trash2 className="h-5 w-5 text-ink-tertiary-light" />
+                      <Trash2 className="h-5 w-5 text-muted-foreground" />
                       Clean Up Data
                     </CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Remove duplicate projects or empty test projects for your account
                     </CardDescription>
                   </CardHeader>
@@ -820,7 +820,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         For each permit number with multiple projects, keeps the most recently checked and deletes the rest (including their comments).
                       </p>
-                      <Button variant="outlineGold" onClick={handleRemoveDuplicateProjects} disabled={removingDuplicates}>
+                      <Button variant="outline" onClick={handleRemoveDuplicateProjects} disabled={removingDuplicates}>
                         {removingDuplicates ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
@@ -835,7 +835,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         Deletes all projects that have no portal data and no permit number (empty test entries).
                       </p>
-                      <Button variant="outlineGold" onClick={handleClearTestData} disabled={clearingTestData}>
+                      <Button variant="outline" onClick={handleClearTestData} disabled={clearingTestData}>
                         {clearingTestData ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (

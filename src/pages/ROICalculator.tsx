@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/design/ProductPrimitives";
-import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 // Types
@@ -438,7 +437,7 @@ const ROICalculator = () => {
 
         {/* Step 1: Company Profile */}
         {step === 1 && (
-          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
+          <Card className={cn("animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <Building2 className="h-6 w-6 text-teal shrink-0" />
@@ -534,7 +533,7 @@ const ROICalculator = () => {
                           className={cn(
                             "flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors text-sm min-w-0",
                             companyProfile.primaryJurisdictions.includes(jurisdiction)
-                              ? "border-teal/35 bg-teal/10"
+                              ? "border-primary/35 bg-teal/10"
                               : "hover:bg-secondary/50"
                           )}
                         >
@@ -557,7 +556,7 @@ const ROICalculator = () => {
 
         {/* Step 2: Current Tools */}
         {step === 2 && (
-          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
+          <Card className={cn("animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <FileText className="h-6 w-6 text-teal" />
@@ -575,7 +574,7 @@ const ROICalculator = () => {
                       className={cn(
                         "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all",
                         currentTools.tools.includes(tool.id)
-                          ? "border-teal/35 bg-teal/12 shadow-md"
+                          ? "border-primary/35 bg-teal/12 shadow-md"
                           : "hover:bg-secondary/50"
                       )}
                     >
@@ -634,7 +633,7 @@ const ROICalculator = () => {
 
         {/* Step 3: Pain Points */}
         {step === 3 && (
-          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
+          <Card className={cn("animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <AlertTriangle className="h-6 w-6 text-teal" />
@@ -685,7 +684,7 @@ const ROICalculator = () => {
 
         {/* Step 4: Results Preview (Teaser) */}
         {step === 4 && (
-          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
+          <Card className={cn("animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <TrendingUp className="h-6 w-6 text-teal" />
@@ -699,12 +698,12 @@ const ROICalculator = () => {
                 <div className="rounded-xl border border-teal/25 bg-teal/10 p-6 text-center">
                   <Clock className="mx-auto mb-3 h-8 w-8 text-teal" />
                   <p className="mb-2 text-4xl font-bold text-gold-deep">{Math.round(results.totalHoursSaved)}</p>
-                  <p className="text-ink-secondary-light">Hours Saved Per Year</p>
+                  <p className="text-muted-foreground">Hours Saved Per Year</p>
                 </div>
                 <div className="rounded-xl border border-teal/25 bg-teal/10 p-6 text-center">
                   <DollarSign className="mx-auto mb-3 h-8 w-8 text-teal" />
                   <p className="mb-2 text-4xl font-bold text-gold-deep">${Math.round(results.totalAnnualSavings / 1000)}K+</p>
-                  <p className="text-ink-secondary-light">Estimated Annual Savings</p>
+                  <p className="text-muted-foreground">Estimated Annual Savings</p>
                 </div>
               </div>
 
@@ -742,7 +741,7 @@ const ROICalculator = () => {
 
         {/* Step 5: Lead Capture */}
         {step === 5 && (
-          <Card className={cn(EDITORIAL_FORM_CARD, "animate-fade-in max-w-2xl mx-auto")}>
+          <Card className={cn("animate-fade-in max-w-2xl mx-auto")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <Users className="h-6 w-6 text-teal" />
@@ -843,33 +842,33 @@ const ROICalculator = () => {
         {step === 6 && (
           <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
             {/* Summary Header */}
-            <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
+            <Card>
               <CardContent className="p-8">
                 <div className="mb-8 text-center">
-                  <h2 className="mb-2 font-display text-3xl font-normal text-foreground dark:text-ink-primary-dark">Your ROI Report</h2>
-                  <p className="text-muted-foreground dark:text-ink-secondary-dark">Personalized for {leadInfo.company}</p>
+                  <h2 className="mb-2 font-display text-3xl font-normal text-foreground dark:text-foreground">Your ROI Report</h2>
+                  <p className="text-muted-foreground dark:text-muted-foreground">Personalized for {leadInfo.company}</p>
                 </div>
                 <div className="grid gap-6 md:grid-cols-3">
-                  <div className="rounded-xl border border-teal/20 bg-muted/50 p-4 text-center dark:bg-obsidian-sunken/80">
+                  <div className="rounded-xl border border-primary/20 bg-muted/50 p-4 text-center dark:bg-muted/60">
                     <p className="text-4xl font-bold text-gold">${Math.round(results.totalAnnualSavings).toLocaleString()}</p>
-                    <p className="text-muted-foreground dark:text-ink-secondary-dark">Annual Savings</p>
+                    <p className="text-muted-foreground dark:text-muted-foreground">Annual Savings</p>
                   </div>
-                  <div className="rounded-xl border border-teal/20 bg-muted/50 p-4 text-center dark:bg-obsidian-sunken/80">
+                  <div className="rounded-xl border border-primary/20 bg-muted/50 p-4 text-center dark:bg-muted/60">
                     <p className="text-4xl font-bold text-teal">{Math.round(results.roi)}%</p>
-                    <p className="text-muted-foreground dark:text-ink-secondary-dark">Return on Investment</p>
+                    <p className="text-muted-foreground dark:text-muted-foreground">Return on Investment</p>
                   </div>
-                  <div className="rounded-xl border border-teal/20 bg-muted/50 p-4 text-center dark:bg-obsidian-sunken/80">
+                  <div className="rounded-xl border border-primary/20 bg-muted/50 p-4 text-center dark:bg-muted/60">
                     <p className="text-4xl font-bold text-gold">{results.paybackMonths.toFixed(1)} mo</p>
-                    <p className="text-muted-foreground dark:text-ink-secondary-dark">Payback Period</p>
+                    <p className="text-muted-foreground dark:text-muted-foreground">Payback Period</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Savings Breakdown */}
-            <Card className={cn(DATA_INTELLIGENCE_PANEL)}>
+            <Card>
               <CardHeader>
-                <CardTitle className="text-foreground dark:text-ink-primary-dark">Savings Breakdown</CardTitle>
+                <CardTitle className="text-foreground dark:text-foreground">Savings Breakdown</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
@@ -894,31 +893,31 @@ const ROICalculator = () => {
                 </div>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-teal/15 bg-muted/40 p-4 dark:bg-obsidian-sunken/60">
+                  <div className="rounded-lg border border-primary/15 bg-muted/40 p-4 dark:bg-muted/50">
                     <div className="mb-2 flex items-center gap-3">
                       <Clock className="h-5 w-5 text-teal" />
-                      <span className="font-medium text-foreground dark:text-ink-primary-dark">Time Efficiency</span>
+                      <span className="font-medium text-foreground dark:text-foreground">Time Efficiency</span>
                     </div>
-                    <p className="text-2xl font-bold text-foreground dark:text-ink-primary-dark">{results.timeSavingsPercent.toFixed(0)}% faster</p>
-                    <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark">{Math.round(results.totalHoursSaved)} hours saved annually</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-foreground">{results.timeSavingsPercent.toFixed(0)}% faster</p>
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">{Math.round(results.totalHoursSaved)} hours saved annually</p>
                   </div>
-                  <div className="rounded-lg border border-teal/15 bg-muted/40 p-4 dark:bg-obsidian-sunken/60">
+                  <div className="rounded-lg border border-primary/15 bg-muted/40 p-4 dark:bg-muted/50">
                     <div className="mb-2 flex items-center gap-3">
                       <Shield className="h-5 w-5 text-teal" />
-                      <span className="font-medium text-foreground dark:text-ink-primary-dark">Rejection Rate</span>
+                      <span className="font-medium text-foreground dark:text-foreground">Rejection Rate</span>
                     </div>
-                    <p className="text-2xl font-bold text-foreground dark:text-ink-primary-dark">{results.rejectionReductionPercent.toFixed(0)}% reduction</p>
-                    <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark">{results.rejectionsSaved.toFixed(1)} fewer rejections/year</p>
+                    <p className="text-2xl font-bold text-foreground dark:text-foreground">{results.rejectionReductionPercent.toFixed(0)}% reduction</p>
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">{results.rejectionsSaved.toFixed(1)} fewer rejections/year</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Recommended Plan */}
-            <Card className={cn(EDITORIAL_FORM_CARD, "border-gold/35")}>
+            <Card className={cn("border-gold/35")}>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="flex items-center gap-3 text-ink-primary-light">
+                  <CardTitle className="flex items-center gap-3 text-foreground">
                     <Zap className="h-6 w-6 text-gold" />
                     Recommended Plan
                   </CardTitle>
@@ -928,15 +927,15 @@ const ROICalculator = () => {
               <CardContent>
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-2xl font-bold text-ink-primary-light">
+                    <p className="text-2xl font-bold text-foreground">
                       {companyProfile.companySize.includes("1-10") ? "Starter" :
                        companyProfile.companySize.includes("11-50") ? "Professional" : "Business"}
                     </p>
-                    <p className="text-ink-secondary-light">Based on your company profile</p>
+                    <p className="text-muted-foreground">Based on your company profile</p>
                   </div>
                   <div className="text-right">
                     <p className="text-3xl font-bold text-teal">${results.recommendedTier}</p>
-                    <p className="text-ink-secondary-light">/user/month</p>
+                    <p className="text-muted-foreground">/user/month</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">

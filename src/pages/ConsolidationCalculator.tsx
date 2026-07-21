@@ -17,7 +17,6 @@ import {
   Calculator, Layers, Save
 } from "lucide-react";
 import { PageHeader } from "@/components/design/ProductPrimitives";
-import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
@@ -196,7 +195,7 @@ const ConsolidationCalculator = () => {
           {/* Left Side - Inputs */}
           <div className="lg:col-span-3 space-y-6">
             {/* Step 1: Select Tools */}
-            <Card className={cn(EDITORIAL_FORM_CARD)}>
+            <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -204,7 +203,7 @@ const ConsolidationCalculator = () => {
                       <Layers className="h-6 w-6 text-teal" />
                       Step 1: Select Your Current Tools
                     </CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Choose all the tools you&apos;re currently paying for
                     </CardDescription>
                   </div>
@@ -220,7 +219,7 @@ const ConsolidationCalculator = () => {
                         "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all",
                         selectedTools.includes(tool.id)
                           ? "border-teal/40 bg-teal/10 shadow-md"
-                          : "hover:bg-cream-sunken/50 border-cream-sunken"
+                          : "hover:bg-muted/50 border-border"
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -264,13 +263,13 @@ const ConsolidationCalculator = () => {
             </Card>
 
             {/* Step 2: Team Size */}
-            <Card className={cn(EDITORIAL_FORM_CARD)}>
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
                   <Users className="h-6 w-6 text-teal" />
                   Step 2: Team Size
                 </CardTitle>
-                <CardDescription className="text-ink-secondary-light">
+                <CardDescription className="text-muted-foreground">
                   How many people on your team use these tools?
                 </CardDescription>
               </CardHeader>
@@ -287,7 +286,7 @@ const ConsolidationCalculator = () => {
                     max={200}
                     step={1}
                   />
-                  <div className="flex justify-between text-xs text-ink-tertiary-light">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>1</span>
                     <span>50</span>
                     <span>100</span>
@@ -300,7 +299,7 @@ const ConsolidationCalculator = () => {
 
             {/* Comparison Chart */}
             {selectedTools.length > 0 && (
-              <Card className={cn(EDITORIAL_FORM_CARD)}>
+              <Card>
                 <CardHeader>
                   <CardTitle>Annual Cost Comparison</CardTitle>
                 </CardHeader>
@@ -345,7 +344,7 @@ const ConsolidationCalculator = () => {
           {/* Right Side - Results */}
           <div className="lg:col-span-2 space-y-6">
             {/* Results Summary */}
-            <Card className={cn(EDITORIAL_FORM_CARD, "sticky top-24 transition-all", selectedTools.length > 0 ? "border-teal/35 shadow-lg" : "")}>
+            <Card className={cn("sticky top-24 transition-all", selectedTools.length > 0 ? "border-primary/35 shadow-lg" : "")}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
                   <Calculator className="h-6 w-6 text-teal" />
@@ -370,7 +369,7 @@ const ConsolidationCalculator = () => {
                           "—"
                         )}
                       </p>
-                      <p className="text-ink-secondary-light">Annual Savings</p>
+                      <p className="text-muted-foreground">Annual Savings</p>
                       {calculations.savingsPercent > 0 && (
                         <Badge className="mt-2 border border-teal/30 bg-teal/15 text-teal">
                           {calculations.savingsPercent.toFixed(0)}% less
@@ -380,18 +379,18 @@ const ConsolidationCalculator = () => {
 
                     {/* Cost Comparison */}
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between rounded-lg bg-cream-sunken/45 p-3">
-                        <span className="text-ink-secondary-light">Current Annual Cost</span>
+                      <div className="flex items-center justify-between rounded-lg bg-muted/40 p-3">
+                        <span className="text-muted-foreground">Current Annual Cost</span>
                         <span className="font-bold text-lg">${calculations.currentAnnualCost.toLocaleString()}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border border-teal/25 bg-teal/10 p-3">
-                        <span className="text-ink-secondary-light">With PermitPilot</span>
+                        <span className="text-muted-foreground">With PermitPilot</span>
                         <span className="text-lg font-bold text-teal">${calculations.insightAnnualCost.toLocaleString()}</span>
                       </div>
                     </div>
 
                     {/* Recommended Plan */}
-                    <div className="rounded-lg border border-cream-sunken p-4">
+                    <div className="rounded-lg border border-border p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium">Recommended Plan</span>
                         <Badge>{calculations.recommendedTier.name}</Badge>
@@ -449,16 +448,16 @@ const ConsolidationCalculator = () => {
 
             {/* Quick Stats */}
             {selectedTools.length > 0 && (
-              <Card className={cn(EDITORIAL_FORM_CARD)}>
+              <Card>
                 <CardContent className="p-4">
                   <div className="grid grid-cols-2 gap-4 text-center">
                     <div>
                       <p className="text-2xl font-bold text-teal">{calculations.toolCount}</p>
-                      <p className="text-xs text-ink-tertiary-light">Tools Replaced</p>
+                      <p className="text-xs text-muted-foreground">Tools Replaced</p>
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-gold-deep">1</p>
-                      <p className="text-xs text-ink-tertiary-light">Platform Needed</p>
+                      <p className="text-xs text-muted-foreground">Platform Needed</p>
                     </div>
                   </div>
                 </CardContent>
