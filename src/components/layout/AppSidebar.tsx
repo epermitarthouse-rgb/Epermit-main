@@ -33,6 +33,11 @@ import {
   Layers,
   Flag,
   Palette,
+  ListTodo,
+  BookMarked,
+  Users,
+  ScrollText,
+  FileSignature,
 } from "lucide-react";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
@@ -122,13 +127,6 @@ const intakeNavigation = [
     requiresAuth: true,
   },
   {
-    title: "Baltimore Portal",
-    href: "/baltimore",
-    icon: Building2,
-    description: "Accela portal clone (Permits & Inspections)",
-    requiresAuth: true,
-  },
-  {
     title: "Comment Review",
     href: "/comment-review",
     icon: FileSearch,
@@ -148,6 +146,14 @@ const intakeNavigation = [
     icon: Shield,
     description: "Check code compliance",
     requiresAuth: true,
+  },
+  {
+    title: "Permit Queue",
+    href: "/permit-queue",
+    icon: ListTodo,
+    description: "Coming soon — aggregate filings & scrape jobs",
+    requiresAuth: true,
+    comingSoon: true,
   },
 ];
 
@@ -250,6 +256,14 @@ const helpNavigation = [
     description: "API docs & guides",
   },
   {
+    title: "Glossary",
+    href: "/reference/glossary",
+    icon: BookMarked,
+    description: "Coming soon — shared terminology",
+    requiresAuth: true,
+    comingSoon: true,
+  },
+  {
     title: "FAQ",
     href: "/faq",
     icon: HelpCircle,
@@ -268,6 +282,27 @@ const adminNavigation = [
   { title: "Jurisdictions", href: "/admin/jurisdictions", icon: Building2, description: "Manage jurisdictions" },
   { title: "Feature Flags", href: "/admin/feature-flags", icon: Flag, description: "Toggle features" },
   { title: "Shadow Mode", href: "/admin/shadow-mode", icon: Shield, description: "AI pipeline metrics" },
+  {
+    title: "Authorizations",
+    href: "/admin/authorizations",
+    icon: FileSignature,
+    description: "Preview — LOA admin (not live)",
+    comingSoon: true,
+  },
+  {
+    title: "Members",
+    href: "/admin/members",
+    icon: Users,
+    description: "Preview — workspace members (not live)",
+    comingSoon: true,
+  },
+  {
+    title: "Audit",
+    href: "/admin/audit",
+    icon: ScrollText,
+    description: "Preview — access audit (not live)",
+    comingSoon: true,
+  },
 ];
 
 export function AppSidebar() {
@@ -600,6 +635,7 @@ export function AppSidebar() {
       icon: React.ElementType;
       description?: string;
       requiresAuth?: boolean;
+      comingSoon?: boolean;
     };
     showFavorite?: boolean;
   }) => {
@@ -610,11 +646,18 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={isActive(item.href)}
-          tooltip={item.title}
+          tooltip={item.comingSoon ? `${item.title} (Coming soon)` : item.title}
         >
           <Link to={item.href}>
             <item.icon className="h-4 w-4" />
-            <span>{item.title}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{item.title}</span>
+              {item.comingSoon ? (
+                <span className="shrink-0 rounded border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                  Soon
+                </span>
+              ) : null}
+            </span>
           </Link>
         </SidebarMenuButton>
         {showFavorite && !isCollapsed && (

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LeadCaptureProvider } from "@/contexts/LeadCaptureContext";
 import { LeadCaptureModal } from "@/components/lead-capture/LeadCaptureModal";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -57,6 +57,11 @@ import BaltimoreRecordDetailPage from "./pages/baltimore/BaltimoreRecordDetailPa
 import UciDashboard from "./pages/UciDashboard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
+import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder";
+import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
+import AdminAuthorizationsPlaceholder, {
+  AdminPreviewPlaceholder,
+} from "./pages/placeholders/AdminPreviewPlaceholders";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +87,8 @@ const App = () => (
                   }
                 />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Navigate to="/auth" replace />} />
+                <Route path="/signup" element={<Navigate to="/auth" state={{ authView: "signup" }} replace />} />
                 <Route
                   path="/demos"
                   element={
@@ -137,15 +144,37 @@ const App = () => (
                     <Route path="jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
+                    <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
+                    <Route
+                      path="members"
+                      element={
+                        <AdminPreviewPlaceholder
+                          title="Members"
+                          integrationNote="Preview only (PD-5). Keep PermitPilot user_roles and project invites until decided — do not treat as live workspace approvals."
+                        />
+                      }
+                    />
+                    <Route
+                      path="audit"
+                      element={
+                        <AdminPreviewPlaceholder
+                          title="Audit log"
+                          integrationNote="Preview only (PD-5). Requires access_audit_log writers before export/filter are live."
+                        />
+                      }
+                    />
                   </Route>
                   <Route path="/mvp-documentation" element={<MVPDocumentation />} />
                   <Route path="/api-docs" element={<APIDocumentation />} />
                   <Route path="/checklist-history" element={<ChecklistHistory />} />
+                  <Route path="/checklists" element={<ChecklistHistory />} />
+                  <Route path="/permit-queue" element={<PermitQueuePlaceholder />} />
+                  <Route path="/reference/glossary" element={<GlossaryPlaceholder />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route
                     path="/uci"
                     element={
-                      <div className="min-h-screen bg-background px-4 py-6 sm:px-6">
+                      <div className="min-h-screen bg-background">
                         <ErrorBoundary fallbackTitle="Utility Coordination dashboard failed to load">
                           <UciDashboard />
                         </ErrorBoundary>

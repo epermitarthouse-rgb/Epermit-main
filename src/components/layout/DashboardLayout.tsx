@@ -30,7 +30,7 @@ function ActiveProjectBadge() {
   const jurisdiction = project.jurisdiction;
   return (
     <div className="flex items-center gap-2 truncate min-w-0 text-sm text-foreground/90" data-testid="header-active-project">
-      <Building2 className="h-3.5 w-3.5 shrink-0 text-gold" />
+      <Building2 className="h-3.5 w-3.5 shrink-0 text-primary" />
       <span className="font-medium text-foreground truncate" data-testid="header-project-name">
         {project.name}
       </span>
@@ -90,22 +90,22 @@ function DashboardContent({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-50 flex h-16 items-center gap-2 sm:gap-4 border-b border-border/70 bg-background/85 px-3 text-foreground backdrop-blur-md sm:gap-4 sm:px-4 lg:px-6 dark:border-border/50">
+        <header className="sticky top-0 z-50 flex h-16 items-center gap-2 border-b border-border/70 bg-background/90 px-3 text-foreground backdrop-blur-xl sm:gap-4 sm:px-4 lg:px-6">
           <SidebarTrigger className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-muted/80 hover:text-foreground" />
-          
-          <div className="flex-1 min-w-0">
+
+          <div className="min-w-0 flex-1">
             <ActiveProjectBadge />
           </div>
-          
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <ScrapeHeaderIndicator />
             <Button
               variant="ghost"
               size="sm"
-              className="hidden sm:flex gap-2 border border-border/80 bg-muted/60 px-3 font-tight text-foreground/90 hover:bg-muted hover:text-foreground dark:border-border/50 dark:bg-muted/40"
+              className="hidden gap-2 border border-border/80 bg-surface-muted/60 px-3 font-tight text-foreground/90 hover:bg-muted hover:text-foreground sm:flex"
               onClick={() => setCommandOpen(true)}
             >
-              <Search className="h-4 w-4 shrink-0 text-gold" />
+              <Search className="h-4 w-4 shrink-0 text-primary" />
               <span className="text-muted-foreground">Search...</span>
               <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium tabular-nums text-muted-foreground sm:flex">
                 ⌘K
@@ -113,20 +113,15 @@ function DashboardContent({ children }: { children: ReactNode }) {
             </Button>
             <NotificationBell />
             <ThemeToggle />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSignOut}
-              className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
-            >
+            <Button variant="outline" size="sm" onClick={handleSignOut} className="gap-2 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground">
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>
             </Button>
           </div>
         </header>
-        
+
         <main className="flex-1 overflow-auto overflow-x-hidden bg-background pb-16 text-foreground md:pb-0">
-          {children}
+          <div className="min-h-full">{children}</div>
         </main>
         
       </div>
