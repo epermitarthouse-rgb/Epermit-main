@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader, AlertBanner, MetricCard, Panel, ServicePill } from "@/components/design/ProductPrimitives";
-import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -212,6 +211,10 @@ const LIFECYCLE_OPTIONS: LifecycleState[] = [
 
 const STAGE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
 
+/** Pilot-card surface for UciSetupWorkflow (replaces editorial cream card). */
+const UCI_SETUP_CARD_CLASS =
+  "pilot-card border-border bg-card text-card-foreground shadow-sm";
+
 function getEmbeddedProvider(record: CoordinationRecord): UtilityProvider | null {
   const u = record.utility_providers;
   if (Array.isArray(u)) return (u[0] as UtilityProvider) ?? null;
@@ -254,14 +257,14 @@ function uciLifecycleStateBadgeClass(state: string | undefined): string {
   switch (state as LifecycleState) {
     case "NOT_STARTED":
       return cn(
-        "shadow-sm !border-transparent !bg-muted !text-foreground dark:!bg-obsidian dark:!text-foreground",
+        "shadow-sm !border-transparent !bg-muted !text-foreground dark:!bg-muted dark:!text-foreground",
       );
     case "IN_PROGRESS":
       return cn("!border-transparent !bg-teal !text-white shadow-sm dark:!bg-teal dark:!text-white");
     case "AWAITING_UTILITY":
       return cn(
-        "!border-transparent !bg-gold-soft !font-semibold !text-ink-primary-light shadow-sm",
-        "dark:!bg-gold dark:!text-ink-primary-light",
+        "!border-transparent !bg-primary/10 !font-semibold !text-foreground shadow-sm",
+        "dark:!bg-gold dark:!text-foreground",
       );
     case "BLOCKED":
       return cn("!border-transparent !bg-destructive !text-destructive-foreground shadow-sm");
@@ -272,17 +275,17 @@ function uciLifecycleStateBadgeClass(state: string | undefined): string {
     default:
       return cn(
         "shadow-sm !border-transparent !bg-muted !text-foreground",
-        "dark:!bg-obsidian-raised dark:!text-foreground",
+        "dark:!bg-card dark:!text-foreground",
       );
   }
 }
 
-/** Readable headings on cream / editorial cards (overrides default `text-card-foreground`) */
+/** Readable headings on card surfaces (overrides default `text-card-foreground`) */
 const uciSectionTitleClass =
   "font-display text-2xl font-normal tracking-tight text-foreground !text-foreground";
 
-/** Secondary line on cream surfaces */
-const uciMutedClass = "text-ink-secondary-light";
+/** Secondary line on card surfaces */
+const uciMutedClass = "text-muted-foreground";
 
 /** Detail sheet metadata labels (stage, dates, energization) — above body secondary tone */
 const uciDetailLabelClass = "font-semibold text-foreground !text-foreground";
@@ -290,7 +293,7 @@ const uciDetailLabelClass = "font-semibold text-foreground !text-foreground";
 /** Detail sheet values beside labels */
 const uciDetailValueClass = "font-medium text-foreground";
 
-/** Force readable body cells on cream (Table defaults use theme foreground / card-foreground) */
+/** Force readable body cells (Table defaults use theme foreground / card-foreground) */
 const uciTableCellClass =
   "!font-medium !text-foreground p-4 align-middle dark:!text-foreground";
 
@@ -298,31 +301,31 @@ const uciTableHeadClass =
   "!text-foreground h-12 px-4 text-left align-middle text-xs font-bold uppercase tracking-wider dark:!text-foreground";
 
 const uciTableHeaderRowClass =
-  "[&_tr]:border-cream-sunken/50 [&_tr]:bg-cream-sunken/30 dark:[&_tr]:border-teal/20 dark:[&_tr]:bg-obsidian/55";
+  "[&_tr]:border-border/50 [&_tr]:bg-muted/30 dark:[&_tr]:border-teal/20 dark:[&_tr]:bg-muted/55";
 
 /** Unified subsection titles in sheet (Transitions, Manual update, child CardTitle) */
 const uciSheetSectionTitleClass =
   "font-display text-base font-semibold capitalize tracking-tight !text-foreground dark:!text-foreground";
 
-/** Inset panels: manual form wrapper only (cream in light, obsidian in dark). */
+/** Inset panels: manual form wrapper only. */
 const uciInsetPanelClass = cn(
   "overflow-hidden rounded-lg border shadow-sm",
-  "border-teal/20 bg-cream-raised/90 ring-1 ring-cream-sunken/40",
-  "dark:border-teal/30 dark:bg-obsidian-strong/95 dark:ring-1 dark:ring-gold/20",
+  "border-teal/20 bg-card/90 ring-1 ring-border/40",
+  "dark:border-teal/30 dark:bg-card/95 dark:ring-1 dark:ring-gold/20",
 );
 
 /** Transition history rows: light card in light mode, dark raised in dark mode */
 const uciTransitionCardClass = cn(
   "overflow-hidden rounded-lg border p-3 text-xs shadow-sm",
   "border-border/60 bg-muted/40 text-foreground ring-1 ring-border/40",
-  "dark:border-teal/35 dark:bg-obsidian-strong/95 dark:ring-gold/20",
+  "dark:border-teal/35 dark:bg-card/95 dark:ring-gold/20",
 );
 
 /** Drawer read-only child sections: light card in light mode, dark navy in dark mode */
 const uciDrawerChildCardClass = cn(
   "overflow-hidden rounded-xl border text-foreground shadow-sm",
   "border-border/60 bg-muted/30 ring-1 ring-border/30",
-  "dark:border-teal/35 dark:bg-obsidian-strong/90 dark:ring-gold/25",
+  "dark:border-teal/35 dark:bg-card/90 dark:ring-gold/25",
 );
 
 /**
@@ -340,7 +343,7 @@ const uciPepcoDetailTabsWrapperClass = cn(
 
 const uciDrawerChildCardHeaderClass = cn(
   "border-b border-border/40 bg-muted/20 px-4 py-3",
-  "dark:border-teal/25 dark:bg-obsidian/50",
+  "dark:border-teal/25 dark:bg-muted/50",
 );
 
 const uciDrawerChildCardTitleClass =
@@ -350,9 +353,9 @@ const uciDrawerChildEmptyClass = "text-sm text-muted-foreground";
 const uciDrawerChildCountClass = "text-sm font-medium text-foreground";
 
 const uciViewRowButtonClass = cn(
-  "border-teal/35 bg-white/70 text-ink-primary-light shadow-sm",
+  "border-teal/35 bg-white/70 text-foreground shadow-sm",
   "hover:border-teal/55 hover:bg-teal/8 hover:text-teal dark:border-teal/40",
-  "dark:bg-obsidian/45 dark:text-foreground dark:hover:bg-teal/15 dark:hover:text-foreground",
+  "dark:bg-muted/45 dark:text-foreground dark:hover:bg-teal/15 dark:hover:text-foreground",
 );
 
 /** Toolbar/outline actions (Refresh + View row button family) */
@@ -360,11 +363,11 @@ const uciToolbarOutlineButtonClass = uciViewRowButtonClass;
 
 /** Select + textarea in sheet manual form — match card surface (no bg-background seam). */
 const uciSheetControlClass = cn(
-  "border-cream-sunken bg-cream text-ink-primary-light",
-  "dark:border-teal/25 dark:bg-obsidian-raised dark:text-foreground",
+  "border-border bg-background text-foreground",
+  "dark:border-teal/25 dark:bg-card dark:text-foreground",
 );
 
-/** Manual stage update / compact section labels on cream panel (overrides sheet inherit). */
+/** Manual stage update / compact section labels on inset panel (overrides sheet inherit). */
 const uciManualFormTextClass = "text-foreground dark:text-foreground";
 
 export default function UciDashboard() {
@@ -2423,7 +2426,7 @@ export default function UciDashboard() {
           ) : null}
 
           <UciSetupWorkflow
-            editorialCardClass={EDITORIAL_FORM_CARD}
+            editorialCardClass={UCI_SETUP_CARD_CLASS}
             mutedClass={uciMutedClass}
             projects={projects}
             projectsLoading={projectsLoading}
@@ -2557,11 +2560,11 @@ export default function UciDashboard() {
                     </p>
                   ) : (
                     <Table
-                      wrapperClassName="rounded-lg border border-cream-sunken/50 bg-cream-raised/80 shadow-inner dark:border-teal/25 dark:bg-obsidian/40"
-                      className="bg-cream/40 text-ink-primary-light dark:bg-transparent"
+                      wrapperClassName="rounded-lg border border-border/50 bg-card/80 shadow-inner dark:border-teal/25 dark:bg-muted/40"
+                      className="bg-background/40 text-foreground dark:bg-transparent"
                     >
                         <TableHeader className={uciTableHeaderRowClass}>
-                          <TableRow className="border-cream-sunken/40 transition-colors hover:bg-cream-sunken/25 dark:border-teal/15 dark:hover:bg-obsidian/65">
+                          <TableRow className="border-border/40 transition-colors hover:bg-muted/25 dark:border-teal/15 dark:hover:bg-muted/65">
                             <TableHead className={uciTableHeadClass}>Provider</TableHead>
                             <TableHead className={uciTableHeadClass}>Type</TableHead>
                             <TableHead className={uciTableHeadClass}>Stage</TableHead>
@@ -2576,7 +2579,7 @@ export default function UciDashboard() {
                             return (
                               <TableRow
                                 key={r.id}
-                                className="border-cream-sunken/35 bg-cream/30 transition-colors hover:bg-gold-soft/14 dark:border-teal/12 dark:bg-obsidian-raised/45 dark:hover:bg-teal/6"
+                                className="border-border/35 bg-background/30 transition-colors hover:bg-primary/10 dark:border-teal/12 dark:bg-card/45 dark:hover:bg-teal/6"
                               >
                                 <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
                                   <div className="space-y-1">
@@ -2604,7 +2607,7 @@ export default function UciDashboard() {
                                     {formatLifecycleState(r.current_stage_state)}
                                   </Badge>
                                 </TableCell>
-                                <TableCell className={cn(uciTableCellClass, "!text-ink-primary-light/95", "!font-normal", "text-xs dark:!text-foreground/95")}>
+                                <TableCell className={cn(uciTableCellClass, "!text-foreground/95", "!font-normal", "text-xs dark:!text-foreground/95")}>
                                   {formatWhen(r.updated_at)}
                                 </TableCell>
                                 <TableCell className={uciTableCellClass}>
@@ -2701,14 +2704,14 @@ export default function UciDashboard() {
           overlayClassName="bg-black/45 dark:bg-black/50"
           className={cn(
             "flex w-full max-w-[100vw] flex-col overflow-y-auto sm:max-w-[88vw] lg:max-w-[78vw] xl:max-w-[1280px]",
-            "border-cream-sunken bg-cream text-ink-primary-light shadow-2xl",
-            "ring-1 ring-cream-sunken/70 dark:ring-teal/25",
-            "dark:border-obsidian-strong dark:bg-obsidian-raised dark:text-foreground",
+            "border-border bg-background text-foreground shadow-2xl",
+            "ring-1 ring-border/70 dark:ring-teal/25",
+            "dark:border-border dark:bg-card dark:text-foreground",
           )}
         >
           <SheetHeader className="text-left sm:text-left">
-            <SheetTitle className="text-ink-primary-light dark:text-foreground">Coordination detail</SheetTitle>
-            <SheetDescription className="text-ink-primary-light/85 dark:text-muted-foreground">
+            <SheetTitle className="text-foreground">Coordination detail</SheetTitle>
+            <SheetDescription className="text-muted-foreground">
               {detailProvider?.name ?? "Record"} · child sections are read-only; counts reflect loaded data.
             </SheetDescription>
           </SheetHeader>
@@ -2725,7 +2728,7 @@ export default function UciDashboard() {
 
           {detailLoading ? (
             <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-ink-primary-light dark:text-foreground" />
+              <Loader2 className="h-8 w-8 animate-spin text-foreground" />
             </div>
           ) : detail && detailRecord ? (
             <div className="mt-6 space-y-6 pb-10">
@@ -2735,9 +2738,9 @@ export default function UciDashboard() {
                 </p>
                 <div
                   className={cn(
-                    "grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-cream-sunken/50 bg-cream-raised/40 px-3 py-2 text-xs",
+                    "grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border/50 bg-card/40 px-3 py-2 text-xs",
                     "sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-1",
-                    "dark:border-teal/20 dark:bg-obsidian/30",
+                    "dark:border-teal/20 dark:bg-muted/30",
                   )}
                 >
                   <CoordinationStatusField
@@ -3226,7 +3229,7 @@ export default function UciDashboard() {
               />
             </div>
           ) : (
-            <p className="mt-6 text-sm font-medium text-ink-primary-light dark:text-foreground">
+            <p className="mt-6 text-sm font-medium text-foreground">
               No detail loaded.
             </p>
           )}
@@ -3245,15 +3248,15 @@ export default function UciDashboard() {
       >
         <DialogContent
           className={cn(
-            "border-cream-sunken bg-cream text-ink-primary-light",
-            "dark:border-teal/25 dark:bg-obsidian-raised dark:text-foreground",
+            "border-border bg-background text-foreground",
+            "dark:border-teal/25 dark:bg-card dark:text-foreground",
           )}
         >
           <DialogHeader>
-            <DialogTitle className="text-ink-primary-light dark:text-foreground">
+            <DialogTitle className="text-foreground">
               Enter PEPCO verification code
             </DialogTitle>
-            <DialogDescription className="text-ink-primary-light/85 dark:text-muted-foreground">
+            <DialogDescription className="text-muted-foreground">
               {pepcoCodeModalTarget === "application_detail"
                 ? "Enter the PEPCO verification code sent by email. PermitPilot will continue the application detail scrape."
                 : "A verification code was sent to the PEPCO mailbox. Paste it here and PermitPilot will continue the dashboard discovery."}
@@ -3430,15 +3433,15 @@ function PepcoSelectedProjectProgress({
 /** Compact card/row styling used only inside System Data (technical, collapsed content). */
 const uciSystemDataGroupClass = cn(
   "overflow-hidden rounded-md border border-border/50 bg-muted/15",
-  "dark:border-teal/20 dark:bg-obsidian/35",
+  "dark:border-teal/20 dark:bg-muted/35",
 );
 const uciSystemDataGroupHeaderClass = cn(
   "border-b border-border/30 bg-muted/10 px-2.5 py-1",
-  "dark:border-teal/15 dark:bg-obsidian/45",
+  "dark:border-teal/15 dark:bg-muted/45",
 );
 const uciSystemDataRowClass = cn(
   "rounded-md border border-border/40 bg-background/50 p-2 text-xs",
-  "dark:border-teal/15 dark:bg-obsidian/25",
+  "dark:border-teal/15 dark:bg-muted/25",
 );
 
 const COMMUNICATION_PREVIEW_LIMIT = 160;
@@ -4304,7 +4307,7 @@ function LifecycleSection({
                 ? "border-amber-500/40 bg-amber-500/5 text-foreground"
                 : displayLifecycleProposal.applied
                   ? "border-border/50 bg-muted/15 text-muted-foreground"
-                  : "border-teal/40 bg-cream-raised/40 text-foreground dark:bg-obsidian/35",
+                  : "border-teal/40 bg-card/40 text-foreground dark:bg-muted/35",
             )}
           >
             <p className="font-medium">
@@ -4348,7 +4351,7 @@ function LifecycleSection({
 
         <div className="space-y-1.5">
           {transitions.length === 0 ? (
-            <p className="text-sm font-medium text-ink-primary-light/90 dark:text-foreground/90">
+            <p className="text-sm font-medium text-foreground/90">
               No transitions yet.
             </p>
           ) : (
@@ -4361,7 +4364,7 @@ function LifecycleSection({
                     "rounded-md border-l-2 px-3 py-1.5 text-xs",
                     isSystem
                       ? "border-l-border/50 bg-muted/15 text-muted-foreground"
-                      : "border-l-teal/50 bg-cream-raised/40 text-foreground dark:bg-obsidian/35",
+                      : "border-l-teal/50 bg-card/40 text-foreground dark:bg-muted/35",
                   )}
                 >
                   <p className={cn("font-medium", isSystem ? "italic" : "")}>
