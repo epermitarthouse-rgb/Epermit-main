@@ -11,7 +11,8 @@ import { ProjectTypeBreakdownCard } from '@/components/analytics/ProjectTypeBrea
 import { DateRangeFilter, DateRange, PresetRange, getPresetDateRange } from '@/components/analytics/DateRangeFilter';
 import { AnalyticsExport } from '@/components/analytics/AnalyticsExport';
 import { PageHeader, Panel } from '@/components/design/ProductPrimitives';
-import { Loader2 } from 'lucide-react';
+import { EmptyState } from '@/components/design/EmptyState';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -76,9 +77,13 @@ export default function Analytics() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : error ? (
-        <div className="py-8 text-center">
-          <p className="text-destructive">{error}</p>
-        </div>
+        <Panel>
+          <EmptyState
+            icon={AlertCircle}
+            title="Could not load analytics"
+            body={error}
+          />
+        </Panel>
       ) : (
         <div className="space-y-6">
           <AnalyticsSummaryCards summary={summary} />

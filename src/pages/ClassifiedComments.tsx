@@ -6,8 +6,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { ArrowLeft, Database, Layers, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Database, FolderKanban, Layers, Loader2, MessageSquare, RefreshCw } from "lucide-react";
 import { MetricCard, PageHeader, Panel } from "@/components/design/ProductPrimitives";
+import { EmptyState } from "@/components/design/EmptyState";
 
 interface ParsedCommentRow {
   id: string;
@@ -132,7 +133,7 @@ export default function ClassifiedComments() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -195,19 +196,23 @@ export default function ClassifiedComments() {
 
       {!projectId ? (
         <Panel>
-          <p className="py-10 text-center text-muted-foreground">
-            Select a project in the sidebar to view classified comments.
-          </p>
+          <EmptyState
+            icon={FolderKanban}
+            title="No project selected"
+            body="Select a project in the sidebar to view classified comments."
+          />
         </Panel>
       ) : isLoading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex min-h-[16rem] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : comments.length === 0 ? (
         <Panel>
-          <p className="py-8 text-center text-muted-foreground">
-            No parsed comments for this project. Load comments from the portal on the Comment Review page first.
-          </p>
+          <EmptyState
+            icon={MessageSquare}
+            title="No parsed comments"
+            body="Load comments from the portal on the Comment Review page first."
+          />
         </Panel>
       ) : (
         <div className="space-y-4">

@@ -78,6 +78,7 @@ import { downloadCombinedChecklistPDF, generateCombinedChecklistPDFBase64 } from
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { MetricCard, PageHeader, Panel } from '@/components/design/ProductPrimitives';
+import { EmptyState } from '@/components/design/EmptyState';
 import { ScheduledReportsManager } from '@/components/checklists/ScheduledReportsManager';
 import { EmailBrandingDialog } from '@/components/checklists/EmailBrandingDialog';
 import { EmailPreviewDialog } from '@/components/checklists/EmailPreviewDialog';
@@ -423,13 +424,13 @@ export default function ChecklistHistory() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center">
-        <AlertCircle className="h-16 w-16 text-muted-foreground" />
-        <h1 className="font-tight text-2xl font-bold">Sign In Required</h1>
-        <p className="max-w-sm text-muted-foreground">
-          Please sign in to view your checklist history.
-        </p>
-        <Button onClick={() => navigate('/auth')}>Sign In</Button>
+      <div className="space-y-6">
+        <EmptyState
+          icon={AlertCircle}
+          title="Sign In Required"
+          body="Please sign in to view your checklist history."
+          action={<Button onClick={() => navigate('/auth')}>Sign In</Button>}
+        />
       </div>
     );
   }
@@ -678,15 +679,16 @@ export default function ChecklistHistory() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-16"
             >
-              <ClipboardList className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">No Checklists Found</h2>
-              <p className="text-muted-foreground">
-                {searchQuery || statusFilter !== 'all' || typeFilter !== 'All Types'
-                  ? 'Try adjusting your filters or search query.'
-                  : 'Create your first inspection checklist to get started.'}
-              </p>
+              <EmptyState
+                icon={ClipboardList}
+                title="No Checklists Found"
+                body={
+                  searchQuery || statusFilter !== 'all' || typeFilter !== 'All Types' || projectFilter !== 'all'
+                    ? 'Try adjusting your filters or search query.'
+                    : 'Create your first inspection checklist to get started.'
+                }
+              />
             </motion.div>
           ) : (
             <div className="space-y-4">

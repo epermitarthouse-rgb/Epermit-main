@@ -47,6 +47,7 @@ import { DeleteProjectDialog } from "@/components/projects/DeleteProjectDialog";
 import { FeatureTooltip } from "@/components/onboarding/FeatureTooltip";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
 import { staggerContainer, staggerItem } from "@/components/animations/variants";
+import { EmptyState } from "@/components/design/EmptyState";
 import { cn } from "@/lib/utils";
 
 type FilterKey =
@@ -375,24 +376,27 @@ export default function Projects() {
       ) : view === "cards" ? (
         filteredProjects.length === 0 ? (
           <Panel>
-            <div className="py-10 text-center">
-              <p className="font-tight font-semibold">
-                {searchQuery.trim() || filter !== "all"
+            <EmptyState
+              icon={FolderKanban}
+              title={
+                searchQuery.trim() || filter !== "all"
                   ? "No projects match your filters"
-                  : "No projects yet"}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {searchQuery.trim() || filter !== "all"
+                  : "No projects yet"
+              }
+              body={
+                searchQuery.trim() || filter !== "all"
                   ? "Try another filter or clear search."
-                  : "Create your first project to get started."}
-              </p>
-              {!searchQuery.trim() && filter === "all" && (
-                <Button className="mt-4" onClick={handleCreateProject}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Project
-                </Button>
-              )}
-            </div>
+                  : "Create your first project to get started."
+              }
+              action={
+                !searchQuery.trim() && filter === "all" ? (
+                  <Button onClick={handleCreateProject}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Project
+                  </Button>
+                ) : undefined
+              }
+            />
           </Panel>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
@@ -542,9 +546,27 @@ export default function Projects() {
 
           {filteredProjects.length === 0 ? (
             <Panel>
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No projects match your search.
-              </p>
+              <EmptyState
+                icon={FolderKanban}
+                title={
+                  searchQuery.trim() || filter !== "all"
+                    ? "No projects match your filters"
+                    : "No projects yet"
+                }
+                body={
+                  searchQuery.trim() || filter !== "all"
+                    ? "Try another filter or clear search."
+                    : "Create your first project to get started."
+                }
+                action={
+                  !searchQuery.trim() && filter === "all" ? (
+                    <Button onClick={handleCreateProject}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Project
+                    </Button>
+                  ) : undefined
+                }
+              />
             </Panel>
           ) : (
             filteredProjects.map((project) => (
