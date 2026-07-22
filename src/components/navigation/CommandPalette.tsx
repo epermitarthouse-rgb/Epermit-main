@@ -52,6 +52,9 @@ const navigationItems = [
 const toolItems = [
   { name: "AI Compliance", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code"] },
   { name: "Response Matrix", href: "/response-matrix", icon: Table2, keywords: ["response", "matrix", "comments", "responses"] },
+  { name: "Utility Coordination", href: "/uci", icon: Database, keywords: ["uci", "utility", "coordination", "pepco"] },
+  { name: "UCI · Load Profile", href: "/uci?section=load-profile", icon: Database, keywords: ["uci", "load", "profile"] },
+  { name: "UCI · Application Prep", href: "/uci?section=application-builder", icon: Database, keywords: ["uci", "application", "builder", "prep"] },
   { name: "Code Library", href: "/code-reference", icon: BookOpen, keywords: ["library", "reference", "codes"] },
   { name: "ROI Calculator", href: "/roi-calculator", icon: Calculator, keywords: ["roi", "calculator", "savings"] },
 ];
@@ -100,11 +103,11 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search..." />
+      <CommandInput placeholder="Search navigation pages…" />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        <CommandEmpty>No navigation matches. Live project/permit search is not connected yet.</CommandEmpty>
 
-        <CommandGroup heading="Navigation">
+        <CommandGroup heading="Pages">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             return (

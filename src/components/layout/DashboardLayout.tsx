@@ -119,7 +119,7 @@ function AppHeader({
           >
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate text-sm text-muted-foreground">
-              Search projects, permits, documents
+              Search navigation…
             </span>
             <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium text-muted-foreground sm:flex">
               ⌘K

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader, AlertBanner, MetricCard, Panel, ServicePill } from "@/components/design/ProductPrimitives";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { useProjects } from "@/hooks/useProjects";
@@ -172,6 +174,13 @@ import {
 } from "@/components/uci/UciD13WorkflowPanels";
 import { LoadProfileWorkspace } from "@/components/uci/LoadProfileWorkspace";
 import { UciDocumentCoveragePanel } from "@/components/uci/UciDocumentCoveragePanel";
+import { UciComingSoonPanel } from "@/components/uci/UciComingSoonPanel";
+import {
+  getUciNavSection,
+  isUciDrawerTab,
+  UCI_DRAWER_TABS,
+  type UciDrawerTab,
+} from "@/lib/uciNavSections";
 import {
   getLoadProfileDraftApplication,
 } from "@/lib/uciLoadProfile";
@@ -419,10 +428,17 @@ export default function UciDashboard() {
   const [unresolvedUtilityTypes, setUnresolvedUtilityTypes] = useState<string[]>([]);
   const [providerUtilityFilter, setProviderUtilityFilter] = useState<string>("all");
   const [detailOpen, setDetailOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [drawerTab, setDrawerTab] = useState<UciDrawerTab>("overview");
+  const navigate = useNavigate();
   const [setupSectionExpanded, setSetupSectionExpanded] = useState(true);
   const [projectSwitchConfirmOpen, setProjectSwitchConfirmOpen] = useState(false);
   const projectDataGenerationRef = useRef(0);
   const currentProjectIdRef = useRef<string | null>(null);
+  const sectionParam = searchParams.get("section");
+  const coordinationParam = searchParams.get("coordination");
+  const tabParam = searchParams.get("tab");
+  const activeNavSection = getUciNavSection(sectionParam);
 
   const shouldApplyProjectResponse = useCallback(
     (generation: number, requestedProjectId: string | null) =>
@@ -630,6 +646,17 @@ export default function UciDashboard() {
     setDetailOpen(false);
     setDetailId(null);
     setDetail(null);
+    setDrawerTab("overview");
+    setSearchParams(
+      (prev) => {
+        if (!prev.get("coordination") && !prev.get("tab")) return prev;
+        const next = new URLSearchParams(prev);
+        next.delete("coordination");
+        next.delete("tab");
+        return next;
+      },
+      { replace: true },
+    );
     setInitPick({});
     setProviderSetupConfirmed(false);
     setAddressSourceAcknowledged(null);
@@ -1074,6 +1101,15 @@ export default function UciDashboard() {
   const openDetail = async (id: string) => {
     setDetailId(id);
     setDetailOpen(true);
+    setSearchParams(
+      (prev) => {
+        if (prev.get("coordination") === id) return prev;
+        const next = new URLSearchParams(prev);
+        next.set("coordination", id);
+        return next;
+      },
+      { replace: true },
+    );
     setDetailLoading(true);
     setReason("");
     setPepcoDiscoveryMsg(null);
@@ -2412,6 +2448,132 @@ export default function UciDashboard() {
     [portfolio],
   );
 
+  const handleDetailOpenChange = useCallback(
+    (open: boolean) => {
+      setDetailOpen(open);
+      if (!open) {
+        setSearchParams(
+          (prev) => {
+            if (!prev.get("coordination") && !prev.get("tab")) return prev;
+            const next = new URLSearchParams(prev);
+            next.delete("coordination");
+            next.delete("tab");
+            return next;
+          },
+          { replace: true },
+        );
+      }
+    },
+    [setSearchParams],
+  );
+
+  const updateDrawerTab = useCallback(
+    (tab: UciDrawerTab) => {
+      setDrawerTab(tab);
+      setSearchParams(
+        (prev) => {
+          if (prev.get("tab") === tab) return prev;
+          const next = new URLSearchParams(prev);
+          next.set("tab", tab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  useEffect(() => {
+    if (coordinationParam && coordinationParam !== detailId) {
+      void openDetail(coordinationParam);
+    }
+    // openDetail is intentionally stable enough for deep-link hydration
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deep-link on coordination query only
+  }, [coordinationParam, detailId]);
+
+  useEffect(() => {
+    if (isUciDrawerTab(tabParam)) {
+      setDrawerTab(tabParam);
+    }
+  }, [tabParam]);
+
+  useEffect(() => {
+    if (!isPepcoCoordination && drawerTab === "portal-sync") {
+      setDrawerTab("overview");
+    }
+  }, [isPepcoCoordination, drawerTab]);
+
+  useEffect(() => {
+    const section = getUciNavSection(sectionParam);
+    if (!section) return;
+
+    if (section.target.kind === "external") {
+      navigate(section.target.href);
+      return;
+    }
+
+    if (section.target.kind === "coming-soon") {
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`uci-coming-soon-${section.id}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+
+    if (section.target.kind === "hub") {
+      const anchor = section.target.anchor ?? "uci-hub";
+      requestAnimationFrame(() => {
+        document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+
+    if (section.target.kind === "drawer-tab") {
+      const tab = section.target.tab;
+      setDrawerTab(tab);
+      setSearchParams(
+        (prev) => {
+          if (prev.get("tab") === tab) return prev;
+          const next = new URLSearchParams(prev);
+          next.set("tab", tab);
+          return next;
+        },
+        { replace: true },
+      );
+
+      if (detailId) {
+        if (!detailOpen) setDetailOpen(true);
+        return;
+      }
+
+      const targetId = uciAttentionRecords[0]?.id ?? records[0]?.id;
+      if (targetId) {
+        void openDetail(targetId);
+        return;
+      }
+
+      if (!recordsLoading) {
+        toast.info("Open a coordination record to use this section");
+        requestAnimationFrame(() => {
+          document
+            .getElementById("uci-records-table")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- section deep-link orchestration
+  }, [
+    sectionParam,
+    detailId,
+    detailOpen,
+    records,
+    recordsLoading,
+    uciAttentionRecords,
+    navigate,
+    setSearchParams,
+  ]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -2427,7 +2589,7 @@ export default function UciDashboard() {
       />
 
       <section className="space-y-6 px-0">
-        <div className="mx-auto w-full max-w-6xl space-y-6">
+        <div id="uci-hub" className="mx-auto w-full max-w-6xl space-y-6">
           <AlertBanner
             tone="info"
             title="PEPCO read-only portal sync is available"
@@ -2445,6 +2607,17 @@ export default function UciDashboard() {
               project={uciSelectedProject}
               mutedClass={uciMutedClass}
               onChangeProject={handleChangeProjectRequest}
+            />
+          ) : null}
+
+          {activeNavSection?.support === "mock" ? (
+            <UciComingSoonPanel section={activeNavSection} />
+          ) : null}
+          {activeNavSection?.support === "partial" ? (
+            <AlertBanner
+              tone="warn"
+              title="Partial connection"
+              detail={activeNavSection.note}
             />
           ) : null}
 
@@ -2837,7 +3010,7 @@ export default function UciDashboard() {
         </div>
       </section>
 
-      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+      <Sheet open={detailOpen} onOpenChange={handleDetailOpenChange}>
         <SheetContent
           overlayClassName="bg-black/45 dark:bg-black/50"
           className={cn(
@@ -2930,257 +3103,225 @@ export default function UciDashboard() {
                 ) : null}
               </div>
 
-              {isPepcoCoordination ? (
-                <div className="space-y-4">
-                  <PepcoPortalHeaderSection
-                    detailId={detailId}
-                    detailLoading={detailLoading}
-                    formatWhen={formatWhen}
-                    mutedClass={uciMutedClass}
-                    sectionTitleClass={uciManualFormTextClass}
-                    pepcoDownloadDocuments={pepcoDownloadDocuments}
-                    onPepcoDownloadDocumentsChange={setPepcoDownloadDocuments}
-                    pepcoDiscoveryBusy={pepcoDiscoveryBusy}
-                    pepcoResumeBusy={pepcoResumeBusy}
-                    pepcoDashboardBusy={pepcoDashboardBusy}
-                    pepcoAppDetailBusy={pepcoAppDetailBusy}
-                    pepcoAppDetailResumeBusy={pepcoAppDetailResumeBusy}
-                    pepcoCodeSubmitBusy={pepcoCodeSubmitBusy}
-                    pepcoCodeModalOpen={pepcoCodeModalOpen}
-                    normalizedSyncBusy={normalizedSyncBusy}
-                    pepcoPendingSessionId={pepcoPendingSessionId}
-                    pepcoAppDetailPendingSessionId={pepcoAppDetailPendingSessionId}
-                    pepcoAppDetailMfaSessionId={pepcoAppDetailMfaSessionId}
-                    pepcoDiscoveryMsg={pepcoDiscoveryMsg}
-                    pepcoDashboardMsg={pepcoDashboardMsg}
-                    pepcoAppDetailMsg={pepcoAppDetailMsg}
-                    pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
-                    pepcoApplicationDetailDiscovery={pepcoApplicationDetailDiscovery}
-                    pepcoLastNormalizedSync={pepcoLastNormalizedSync}
-                    hasPepcoDashboardCards={hasPepcoDashboardCards}
-                    hasPepcoApplicationDetails={hasPepcoApplicationDetails}
-                    onLoginCheck={() => void handlePepcoDiscovery()}
-                    onDiscoverDashboard={() => void handlePepcoDashboardDiscover(false)}
-                    onResumeInterrupted={handlePepcoResumeInterrupted}
-                    onNormalizedSync={() => void handleNormalizedSync()}
-                  />
+              <Tabs
+                value={drawerTab}
+                onValueChange={(v) => {
+                  if (isUciDrawerTab(v)) updateDrawerTab(v);
+                }}
+                className="mt-4"
+              >
+                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/40 p-1">
+                  {UCI_DRAWER_TABS.filter((t) => !t.pepcoOnly || isPepcoCoordination).map((t) => (
+                    <TabsTrigger key={t.id} value={t.id} className="text-xs sm:text-sm">
+                      {t.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-                  <PepcoProjectList
-                    projects={pepcoMergedProjects}
-                    selectedKey={pepcoSelectedProjectKey}
-                    onSelect={handleSelectPepcoProject}
-                    onScrapeProject={handleScrapePepcoProject}
-                    rowBusyKey={pepcoRowScrapeBusyId}
-                    disableScrape={
-                      pepcoAppDetailBusy ||
-                      pepcoAppDetailResumeBusy ||
-                      pepcoCodeSubmitBusy ||
-                      pepcoCodeModalOpen ||
-                      Boolean(pepcoAppDetailPendingSessionId)
-                    }
-                    formatWhen={formatWhen}
-                    mutedClass={uciMutedClass}
-                    sectionTitleClass={uciManualFormTextClass}
-                  />
-
-                  {selectedPepcoProject ? (
-                    <PepcoSelectedProjectProgress
-                      isBusy={isSelectedPepcoProjectBusy}
-                      isAwaitingVerification={isSelectedPepcoProjectAwaitingVerification}
-                      rowStatus={selectedPepcoProjectRowStatus}
-                      project={selectedPepcoProject}
-                      mutedClass={uciMutedClass}
-                    />
+                <TabsContent value="overview" className="mt-4 space-y-4">
+                  {providerMappingMetadata ? (
+                    <ProviderMappingBanner mapping={providerMappingMetadata} mutedClass={uciMutedClass} />
                   ) : null}
-
-                  {!selectedPepcoProject ? (
-                    <p className={cn("rounded-md border border-border/60 px-3 py-3 text-xs", uciMutedClass)}>
-                      Select a PEPCO project to view its portal details.
-                    </p>
-                  ) : !selectedPepcoProject.app ? (
-                    <div className={cn("rounded-md border border-border/60 px-3 py-4 text-xs", uciMutedClass)}>
-                      <p>This project has not been synchronized yet.</p>
-                      <p className="mt-1">
-                        Use Scrape Details to load status, messages, and documents.
+                  {displayLifecycleProposal ? (
+                    <div
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-xs",
+                        displayLifecycleProposal.blocked_reason
+                          ? "border-amber-500/40 bg-amber-500/5 text-foreground"
+                          : displayLifecycleProposal.applied
+                            ? "border-border/50 bg-muted/15 text-muted-foreground"
+                            : "border-teal/40 bg-card/40 text-foreground dark:bg-muted/35",
+                      )}
+                    >
+                      <p className="font-medium">
+                        Portal lifecycle suggestion
+                        {displayLifecycleProposal.applied ? " (applied)" : ""}
+                      </p>
+                      <p className={cn("mt-0.5", uciMutedClass)}>
+                        Stage {displayLifecycleProposal.proposed_stage} ·{" "}
+                        {formatLifecycleState(displayLifecycleProposal.proposed_state)} ·{" "}
+                        {displayLifecycleProposal.source_status}
+                      </p>
+                      <p className={cn("mt-0.5", uciMutedClass)}>
+                        {displayLifecycleProposal.reason}
+                        {displayLifecycleProposal.blocked_reason
+                          ? ` · Blocked: ${displayLifecycleProposal.blocked_reason}`
+                          : ""}
+                      </p>
+                      <p className={cn("mt-1 italic", uciMutedClass)}>
+                        Open the Lifecycle tab to apply or reject this proposal.
                       </p>
                     </div>
                   ) : (
-                    <div className={cn(uciDrawerChildCardClass, uciPepcoDetailTabsWrapperClass, "p-4")}>
-                      <PepcoSelectedProjectDetailTabs
-                        app={selectedPepcoProject.app}
-                        coordinationId={detailId}
+                    <p className={cn("text-xs", uciMutedClass)}>
+                      No lifecycle proposal for this record. Use the other tabs for portal sync,
+                      documents, and application prep.
+                    </p>
+                  )}
+                  {!isPepcoCoordination && detailId ? (
+                    <SyncRunsPanel
+                      coordinationId={detailId}
+                      runs={syncRuns}
+                      activeRun={activeSyncRun}
+                      loading={syncRunsLoading}
+                      onRefresh={() => void syncRunsRefresh()}
+                      mutedClass={uciMutedClass}
+                      sectionTitleClass={uciSheetSectionTitleClass}
+                      toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                      formatWhen={formatWhen}
+                    />
+                  ) : null}
+                </TabsContent>
+
+                <TabsContent value="portal-sync" className="mt-4 space-y-4">
+                  {isPepcoCoordination ? (
+                    <div className="space-y-4">
+                      <PepcoPortalHeaderSection
+                        detailId={detailId}
+                        detailLoading={detailLoading}
                         formatWhen={formatWhen}
                         mutedClass={uciMutedClass}
-                        tableHeadClass={uciTableHeadClass}
-                        tableCellClass={uciTableCellClass}
-                        tableHeaderRowClass={uciTableHeaderRowClass}
+                        sectionTitleClass={uciManualFormTextClass}
+                        pepcoDownloadDocuments={pepcoDownloadDocuments}
+                        onPepcoDownloadDocumentsChange={setPepcoDownloadDocuments}
+                        pepcoDiscoveryBusy={pepcoDiscoveryBusy}
+                        pepcoResumeBusy={pepcoResumeBusy}
+                        pepcoDashboardBusy={pepcoDashboardBusy}
+                        pepcoAppDetailBusy={pepcoAppDetailBusy}
+                        pepcoAppDetailResumeBusy={pepcoAppDetailResumeBusy}
+                        pepcoCodeSubmitBusy={pepcoCodeSubmitBusy}
+                        pepcoCodeModalOpen={pepcoCodeModalOpen}
+                        normalizedSyncBusy={normalizedSyncBusy}
+                        pepcoPendingSessionId={pepcoPendingSessionId}
+                        pepcoAppDetailPendingSessionId={pepcoAppDetailPendingSessionId}
+                        pepcoAppDetailMfaSessionId={pepcoAppDetailMfaSessionId}
+                        pepcoDiscoveryMsg={pepcoDiscoveryMsg}
+                        pepcoDashboardMsg={pepcoDashboardMsg}
+                        pepcoAppDetailMsg={pepcoAppDetailMsg}
+                        pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
+                        pepcoApplicationDetailDiscovery={pepcoApplicationDetailDiscovery}
+                        pepcoLastNormalizedSync={pepcoLastNormalizedSync}
+                        hasPepcoDashboardCards={hasPepcoDashboardCards}
+                        hasPepcoApplicationDetails={hasPepcoApplicationDetails}
+                        onLoginCheck={() => void handlePepcoDiscovery()}
+                        onDiscoverDashboard={() => void handlePepcoDashboardDiscover(false)}
+                        onResumeInterrupted={handlePepcoResumeInterrupted}
+                        onNormalizedSync={() => void handleNormalizedSync()}
+                      />
+
+                      <PepcoProjectList
+                        projects={pepcoMergedProjects}
+                        selectedKey={pepcoSelectedProjectKey}
+                        onSelect={handleSelectPepcoProject}
+                        onScrapeProject={handleScrapePepcoProject}
+                        rowBusyKey={pepcoRowScrapeBusyId}
+                        disableScrape={
+                          pepcoAppDetailBusy ||
+                          pepcoAppDetailResumeBusy ||
+                          pepcoCodeSubmitBusy ||
+                          pepcoCodeModalOpen ||
+                          Boolean(pepcoAppDetailPendingSessionId)
+                        }
+                        formatWhen={formatWhen}
+                        mutedClass={uciMutedClass}
+                        sectionTitleClass={uciManualFormTextClass}
+                      />
+
+                      {selectedPepcoProject ? (
+                        <PepcoSelectedProjectProgress
+                          isBusy={isSelectedPepcoProjectBusy}
+                          isAwaitingVerification={isSelectedPepcoProjectAwaitingVerification}
+                          rowStatus={selectedPepcoProjectRowStatus}
+                          project={selectedPepcoProject}
+                          mutedClass={uciMutedClass}
+                        />
+                      ) : null}
+
+                      {!selectedPepcoProject ? (
+                        <p className={cn("rounded-md border border-border/60 px-3 py-3 text-xs", uciMutedClass)}>
+                          Select a PEPCO project to view its portal details.
+                        </p>
+                      ) : !selectedPepcoProject.app ? (
+                        <div className={cn("rounded-md border border-border/60 px-3 py-4 text-xs", uciMutedClass)}>
+                          <p>This project has not been synchronized yet.</p>
+                          <p className="mt-1">
+                            Use Scrape Details to load status, messages, and documents.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className={cn(uciDrawerChildCardClass, uciPepcoDetailTabsWrapperClass, "p-4")}>
+                          <PepcoSelectedProjectDetailTabs
+                            app={selectedPepcoProject.app}
+                            coordinationId={detailId}
+                            formatWhen={formatWhen}
+                            mutedClass={uciMutedClass}
+                            tableHeadClass={uciTableHeadClass}
+                            tableCellClass={uciTableCellClass}
+                            tableHeaderRowClass={uciTableHeaderRowClass}
+                          />
+                        </div>
+                      )}
+
+                      <PepcoSystemDataSection
+                        project={selectedPepcoProject}
+                        applications={(detail.applications ?? []) as CoordinationApplication[]}
+                        communications={(detail.communications_recent ?? []) as CoordinationCommunication[]}
+                        milestones={(detail.milestones ?? []) as CoordinationMilestone[]}
+                        formatWhen={formatWhen}
+                        mutedClass={uciMutedClass}
+                        toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                      />
+
+                      <PepcoDeveloperTools
+                        detailId={detailId}
+                        mutedClass={uciMutedClass}
+                        toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                        manualFormTextClass={uciManualFormTextClass}
+                        pepcoAutoEmailMfa={pepcoAutoEmailMfa}
+                        onPepcoAutoEmailMfaChange={setPepcoAutoEmailMfa}
+                        globalBusy={
+                          pepcoDiscoveryBusy ||
+                          pepcoResumeBusy ||
+                          pepcoDashboardBusy ||
+                          pepcoAppDetailBusy ||
+                          pepcoAppDetailResumeBusy ||
+                          pepcoCodeSubmitBusy ||
+                          normalizedSyncBusy ||
+                          detailLoading
+                        }
+                        pepcoPendingSessionId={pepcoPendingSessionId}
+                        pepcoAppDetailPendingSessionId={pepcoAppDetailPendingSessionId}
+                        pepcoAppDetailMfaSessionId={pepcoAppDetailMfaSessionId}
+                        pepcoResumeBusy={pepcoResumeBusy}
+                        pepcoAppDetailResumeBusy={pepcoAppDetailResumeBusy}
+                        pepcoAppDetailBusy={pepcoAppDetailBusy}
+                        pepcoAppDetailProgress={pepcoAppDetailProgress}
+                        pepcoDiscoveryMsg={pepcoDiscoveryMsg}
+                        pepcoDashboardMsg={pepcoDashboardMsg}
+                        pepcoAppDetailMsg={pepcoAppDetailMsg}
+                        pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
+                        onResumeLogin={() => void handlePepcoResume()}
+                        onResumeApplicationDetail={() => void handlePepcoApplicationDetailResume()}
                       />
                     </div>
-                  )}
+                  ) : null}
 
-                  <PepcoSystemDataSection
-                    project={selectedPepcoProject}
-                    applications={(detail.applications ?? []) as CoordinationApplication[]}
-                    communications={(detail.communications_recent ?? []) as CoordinationCommunication[]}
-                    milestones={(detail.milestones ?? []) as CoordinationMilestone[]}
-                    formatWhen={formatWhen}
-                    mutedClass={uciMutedClass}
-                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                  />
+                  {detailId ? (
+                    <SyncRunsPanel
+                      coordinationId={detailId}
+                      runs={syncRuns}
+                      activeRun={activeSyncRun}
+                      loading={syncRunsLoading}
+                      onRefresh={() => void syncRunsRefresh()}
+                      mutedClass={uciMutedClass}
+                      sectionTitleClass={uciSheetSectionTitleClass}
+                      toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                      formatWhen={formatWhen}
+                    />
+                  ) : null}
+                </TabsContent>
 
-                  <PepcoDeveloperTools
-                    detailId={detailId}
-                    mutedClass={uciMutedClass}
-                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                    manualFormTextClass={uciManualFormTextClass}
-                    pepcoAutoEmailMfa={pepcoAutoEmailMfa}
-                    onPepcoAutoEmailMfaChange={setPepcoAutoEmailMfa}
-                    globalBusy={
-                      pepcoDiscoveryBusy ||
-                      pepcoResumeBusy ||
-                      pepcoDashboardBusy ||
-                      pepcoAppDetailBusy ||
-                      pepcoAppDetailResumeBusy ||
-                      pepcoCodeSubmitBusy ||
-                      normalizedSyncBusy ||
-                      detailLoading
-                    }
-                    pepcoPendingSessionId={pepcoPendingSessionId}
-                    pepcoAppDetailPendingSessionId={pepcoAppDetailPendingSessionId}
-                    pepcoAppDetailMfaSessionId={pepcoAppDetailMfaSessionId}
-                    pepcoResumeBusy={pepcoResumeBusy}
-                    pepcoAppDetailResumeBusy={pepcoAppDetailResumeBusy}
-                    pepcoAppDetailBusy={pepcoAppDetailBusy}
-                    pepcoAppDetailProgress={pepcoAppDetailProgress}
-                    pepcoDiscoveryMsg={pepcoDiscoveryMsg}
-                    pepcoDashboardMsg={pepcoDashboardMsg}
-                    pepcoAppDetailMsg={pepcoAppDetailMsg}
-                    pepcoDashboardFromMetadata={pepcoDashboardFromMetadata}
-                    onResumeLogin={() => void handlePepcoResume()}
-                    onResumeApplicationDetail={() => void handlePepcoApplicationDetailResume()}
-                  />
-                </div>
-              ) : null}
-
-              <UciDocumentCoveragePanel
-                coordinationId={detailId ?? ""}
-                externalApplicationId={selectedPepcoProject?.applicationId ?? null}
-                externalApplicationTitle={selectedPepcoProject?.title ?? null}
-                mutedClass={uciMutedClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                resolvePortalDocumentIndex={resolvePortalDocumentIndex}
-              />
-
-              <LoadProfileWorkspace
-                applications={(detail.applications ?? []) as CoordinationApplication[]}
-                utilityType={detailRecord.utility_type}
-                selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
-                selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
-                formatWhen={formatWhen}
-                mutedClass={uciMutedClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                analyzeBusy={loadProfileBusy}
-                candidateBusy={loadCandidateBusy}
-                candidateResolveBusy={loadCandidateResolveBusy}
-                manualVerifyBusy={manualVerifyBusy}
-                importFindingsBusy={importFindingsBusy}
-                packageStatus={loadProfilePackageContext.packageStatus}
-                hasProjectAddress={loadProfilePackageContext.hasProjectAddress}
-                packageDocumentsComplete={loadProfilePackageContext.packageDocumentsComplete}
-                onAnalyze={() => void handleLoadProfileAnalyze()}
-                onExtractCandidates={(refresh) =>
-                  void handleLoadCandidateExtract(selectedPepcoProject?.applicationId ?? "", refresh)
-                }
-                onImportDocumentFindings={(refresh) =>
-                  void handleImportDocumentFindings(selectedPepcoProject?.applicationId ?? "", refresh)
-                }
-                onResolveCandidate={(candidateId, action, opts) =>
-                  void handleLoadCandidateResolve(candidateId, action, opts)
-                }
-                onManualVerify={(payload) => void handleManualVerifiedValue(payload)}
-              />
-
-              <ApplicationPrepSection
-                coordinationId={detailId ?? ""}
-                selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
-                selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
-                applications={(detail.applications ?? []) as CoordinationApplication[]}
-                formatWhen={formatWhen}
-                mutedClass={uciMutedClass}
-                sectionTitleClass={uciSheetSectionTitleClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                prepBusy={applicationPrepBusy}
-                reviewBusy={applicationReviewBusy}
-                submitBusy={applicationSubmitBusy}
-                reviewNotes={applicationReviewNotes}
-                onReviewNotesChange={setApplicationReviewNotes}
-                onBuild={(externalApplicationId) =>
-                  void handleApplicationPackageBuild(externalApplicationId)
-                }
-                onReview={(status) => void handleApplicationReview(status)}
-                onSubmit={() => void handleApplicationSubmit()}
-                onRefreshDetail={async () => {
-                  if (!detailId) return;
-                  const d = await getCoordinationDetail(detailId);
-                  setDetail(d);
-                }}
-              />
-
-              <LifecycleSection
-                transitions={detail.transitions ?? []}
-                lifecycleProposals={lifecycleProposalsPayload}
-                displayLifecycleProposal={displayLifecycleProposal}
-                lifecycleProposalBusy={lifecycleProposalBusy}
-                onApplyLifecycleProposal={() => void handleApplyLifecycleProposal()}
-                onRejectLifecycleProposal={() => void handleRejectLifecycleProposal()}
-                formatWhen={formatWhen}
-                mutedClass={uciMutedClass}
-                sectionTitleClass={uciSheetSectionTitleClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                toStage={toStage}
-                onToStageChange={setToStage}
-                toState={toState}
-                onToStateChange={setToState}
-                reason={reason}
-                onReasonChange={setReason}
-                transitionSaving={transitionSaving}
-                onSubmitTransition={() => void handleTransition()}
-              />
-
-              {detailId ? (
-                <SyncRunsPanel
-                  coordinationId={detailId}
-                  runs={syncRuns}
-                  activeRun={activeSyncRun}
-                  loading={syncRunsLoading}
-                  onRefresh={() => void syncRunsRefresh()}
-                  mutedClass={uciMutedClass}
-                  sectionTitleClass={uciSheetSectionTitleClass}
-                  toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                  formatWhen={formatWhen}
-                />
-              ) : null}
-
-              {providerMappingMetadata ? (
-                <ProviderMappingBanner mapping={providerMappingMetadata} mutedClass={uciMutedClass} />
-              ) : null}
-
-              <CosAnalysisPanel
-                coordinationId={detailId ?? ""}
-                metadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
-                busy={cosBusy}
-                error={cosError}
-                onAnalyze={() => void handleCosAnalyze()}
-                mutedClass={uciMutedClass}
-                sectionTitleClass={uciSheetSectionTitleClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                formatWhen={formatWhen}
-              />
-
-              {!isPepcoCoordination ? (
-                <>
-                  <h4 className={cn(uciSheetSectionTitleClass, "mb-2")}>Normalized portal data</h4>
-
+                <TabsContent value="applications" className="mt-4 space-y-4">
                   <Card className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
                       <CardTitle className={uciDrawerChildCardTitleClass}>
@@ -3229,6 +3370,47 @@ export default function UciDashboard() {
                     </CardContent>
                   </Card>
 
+                  {!isPepcoCoordination ? (
+                    <Card className={uciDrawerChildCardClass}>
+                      <CardHeader className={uciDrawerChildCardHeaderClass}>
+                        <CardTitle className={uciDrawerChildCardTitleClass}>
+                          Portal status history
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 py-4">
+                        {(() => {
+                          const portalEvents = (detail.milestones as CoordinationMilestone[]).filter(
+                            (m) => m.milestone_type === "portal_status_event",
+                          );
+                          if (portalEvents.length === 0) {
+                            return (
+                              <p className={uciDrawerChildEmptyClass}>
+                                No portal status events yet.
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="space-y-2">
+                              {portalEvents.map((m) => (
+                                <div key={m.id} className={uciTransitionCardClass}>
+                                  <p className="font-medium text-foreground">
+                                    {m.portal_status || "—"}
+                                    {m.portal_milestone ? ` · ${m.portal_milestone}` : ""}
+                                  </p>
+                                  <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
+                                    {formatWhen(m.occurred_at || m.actual_date)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </TabsContent>
+
+                <TabsContent value="communications" className="mt-4 space-y-4">
                   <Card className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
                       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -3299,72 +3481,144 @@ export default function UciDashboard() {
                       )}
                     </CardContent>
                   </Card>
+                </TabsContent>
 
-                  <Card className={uciDrawerChildCardClass}>
-                    <CardHeader className={uciDrawerChildCardHeaderClass}>
-                      <CardTitle className={uciDrawerChildCardTitleClass}>
-                        Portal status history
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 py-4">
-                      {(() => {
-                        const portalEvents = (detail.milestones as CoordinationMilestone[]).filter(
-                          (m) => m.milestone_type === "portal_status_event",
-                        );
-                        if (portalEvents.length === 0) {
-                          return (
-                            <p className={uciDrawerChildEmptyClass}>
-                              No portal status events yet.
-                            </p>
-                          );
-                        }
-                        return (
-                          <div className="space-y-2">
-                            {portalEvents.map((m) => (
-                              <div key={m.id} className={uciTransitionCardClass}>
-                                <p className="font-medium text-foreground">
-                                  {m.portal_status || "—"}
-                                  {m.portal_milestone ? ` · ${m.portal_milestone}` : ""}
-                                </p>
-                                <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
-                                  {formatWhen(m.occurred_at || m.actual_date)}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </CardContent>
-                  </Card>
-                </>
-              ) : null}
+                <TabsContent value="documents" className="mt-4 space-y-4">
+                  <UciDocumentCoveragePanel
+                    coordinationId={detailId ?? ""}
+                    externalApplicationId={selectedPepcoProject?.applicationId ?? null}
+                    externalApplicationTitle={selectedPepcoProject?.title ?? null}
+                    mutedClass={uciMutedClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    resolvePortalDocumentIndex={resolvePortalDocumentIndex}
+                  />
+                </TabsContent>
 
-              <CostsEquipmentWorkflowPanel
-                costs={(detail.costs ?? []) as import("@/types/uci").CoordinationCost[]}
-                equipment={(detail.equipment ?? []) as import("@/types/uci").CoordinationEquipment[]}
-                busy={agentOpsBusy}
-                error={agentOpsError}
-                onSaveCost={(payload) => void handleSaveCost(payload)}
-                onCreateEquipment={(payload) => void handleCreateEquipment(payload)}
-                onCheckInEquipment={(id, payload) => void handleCheckInEquipment(id, payload)}
-                mutedClass={uciMutedClass}
-                sectionTitleClass={uciSheetSectionTitleClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                formatWhen={formatWhen}
-              />
+                <TabsContent value="load-profile" className="mt-4 space-y-4">
+                  <LoadProfileWorkspace
+                    applications={(detail.applications ?? []) as CoordinationApplication[]}
+                    utilityType={detailRecord.utility_type}
+                    selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
+                    selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
+                    formatWhen={formatWhen}
+                    mutedClass={uciMutedClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    analyzeBusy={loadProfileBusy}
+                    candidateBusy={loadCandidateBusy}
+                    candidateResolveBusy={loadCandidateResolveBusy}
+                    manualVerifyBusy={manualVerifyBusy}
+                    importFindingsBusy={importFindingsBusy}
+                    packageStatus={loadProfilePackageContext.packageStatus}
+                    hasProjectAddress={loadProfilePackageContext.hasProjectAddress}
+                    packageDocumentsComplete={loadProfilePackageContext.packageDocumentsComplete}
+                    onAnalyze={() => void handleLoadProfileAnalyze()}
+                    onExtractCandidates={(refresh) =>
+                      void handleLoadCandidateExtract(selectedPepcoProject?.applicationId ?? "", refresh)
+                    }
+                    onImportDocumentFindings={(refresh) =>
+                      void handleImportDocumentFindings(selectedPepcoProject?.applicationId ?? "", refresh)
+                    }
+                    onResolveCandidate={(candidateId, action, opts) =>
+                      void handleLoadCandidateResolve(candidateId, action, opts)
+                    }
+                    onManualVerify={(payload) => void handleManualVerifiedValue(payload)}
+                  />
+                </TabsContent>
 
-              <MeterSetCloseoutPanel
-                recordMetadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
-                meterBusy={meterSetBusy}
-                closeoutBusy={closeoutBusy}
-                error={agentOpsError}
-                onPrepareMeterSet={(date) => void handlePrepareMeterSet(date)}
-                onPrepareCloseout={() => void handlePrepareCloseout()}
-                mutedClass={uciMutedClass}
-                sectionTitleClass={uciSheetSectionTitleClass}
-                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                formatWhen={formatWhen}
-              />
+                <TabsContent value="application-prep" className="mt-4 space-y-4">
+                  <ApplicationPrepSection
+                    coordinationId={detailId ?? ""}
+                    selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
+                    selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
+                    applications={(detail.applications ?? []) as CoordinationApplication[]}
+                    formatWhen={formatWhen}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={uciSheetSectionTitleClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    prepBusy={applicationPrepBusy}
+                    reviewBusy={applicationReviewBusy}
+                    submitBusy={applicationSubmitBusy}
+                    reviewNotes={applicationReviewNotes}
+                    onReviewNotesChange={setApplicationReviewNotes}
+                    onBuild={(externalApplicationId) =>
+                      void handleApplicationPackageBuild(externalApplicationId)
+                    }
+                    onReview={(status) => void handleApplicationReview(status)}
+                    onSubmit={() => void handleApplicationSubmit()}
+                    onRefreshDetail={async () => {
+                      if (!detailId) return;
+                      const d = await getCoordinationDetail(detailId);
+                      setDetail(d);
+                    }}
+                  />
+                </TabsContent>
+
+                <TabsContent value="lifecycle" className="mt-4 space-y-4">
+                  <LifecycleSection
+                    transitions={detail.transitions ?? []}
+                    lifecycleProposals={lifecycleProposalsPayload}
+                    displayLifecycleProposal={displayLifecycleProposal}
+                    lifecycleProposalBusy={lifecycleProposalBusy}
+                    onApplyLifecycleProposal={() => void handleApplyLifecycleProposal()}
+                    onRejectLifecycleProposal={() => void handleRejectLifecycleProposal()}
+                    formatWhen={formatWhen}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={uciSheetSectionTitleClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    toStage={toStage}
+                    onToStageChange={setToStage}
+                    toState={toState}
+                    onToStateChange={setToState}
+                    reason={reason}
+                    onReasonChange={setReason}
+                    transitionSaving={transitionSaving}
+                    onSubmitTransition={() => void handleTransition()}
+                  />
+                </TabsContent>
+
+                <TabsContent value="cos" className="mt-4 space-y-4">
+                  <CosAnalysisPanel
+                    coordinationId={detailId ?? ""}
+                    metadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
+                    busy={cosBusy}
+                    error={cosError}
+                    onAnalyze={() => void handleCosAnalyze()}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={uciSheetSectionTitleClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    formatWhen={formatWhen}
+                  />
+                </TabsContent>
+
+                <TabsContent value="costs" className="mt-4 space-y-4">
+                  <CostsEquipmentWorkflowPanel
+                    costs={(detail.costs ?? []) as import("@/types/uci").CoordinationCost[]}
+                    equipment={(detail.equipment ?? []) as import("@/types/uci").CoordinationEquipment[]}
+                    busy={agentOpsBusy}
+                    error={agentOpsError}
+                    onSaveCost={(payload) => void handleSaveCost(payload)}
+                    onCreateEquipment={(payload) => void handleCreateEquipment(payload)}
+                    onCheckInEquipment={(id, payload) => void handleCheckInEquipment(id, payload)}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={uciSheetSectionTitleClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    formatWhen={formatWhen}
+                  />
+
+                  <MeterSetCloseoutPanel
+                    recordMetadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
+                    meterBusy={meterSetBusy}
+                    closeoutBusy={closeoutBusy}
+                    error={agentOpsError}
+                    onPrepareMeterSet={(date) => void handlePrepareMeterSet(date)}
+                    onPrepareCloseout={() => void handlePrepareCloseout()}
+                    mutedClass={uciMutedClass}
+                    sectionTitleClass={uciSheetSectionTitleClass}
+                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                    formatWhen={formatWhen}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           ) : (
             <p className="mt-6 text-sm font-medium text-foreground">

@@ -41,6 +41,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { hybridNavGroups, type HybridNavItem } from "@/components/layout/hybridNav";
+import { UciSidebarNav } from "@/components/layout/UciSidebarNav";
 
 export function AppSidebar() {
   const location = useLocation();
@@ -95,6 +96,10 @@ export function AppSidebar() {
     item: HybridNavItem;
     showFavorite?: boolean;
   }) => {
+    if (item.href === "/uci") {
+      return <UciSidebarNav />;
+    }
+
     const label = item.comingSoon
       ? item.adminPreview
         ? `${item.title} (Preview)`
