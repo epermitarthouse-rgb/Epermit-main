@@ -33,6 +33,7 @@ import {
   Database,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { isPublicShellHref } from "@/lib/authGatedNav";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -84,9 +85,18 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
     command();
   }, [onOpenChange]);
 
-  const filterItems = (items: typeof navigationItems) => {
-    return items.filter(item => !item.requiresAuth || user);
-  };
+  // Anonymous visitors still see every command (Lovable pattern); selecting one that
+  // requires a session redirects to /auth instead of navigating straight to the route.
+  const goTo = useCallback(
+    (href: string) => {
+      if (!user && !isPublicShellHref(href)) {
+        navigate("/auth", { state: { from: { pathname: href } } });
+        return;
+      }
+      navigate(href);
+    },
+    [user, navigate],
+  );
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
@@ -95,13 +105,13 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
         <CommandEmpty>No results found.</CommandEmpty>
 
         <CommandGroup heading="Navigation">
-          {filterItems(navigationItems).map((item) => {
+          {navigationItems.map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -119,7 +129,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -137,7 +147,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -155,7 +165,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -175,13 +185,13 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
             <span>Open Help</span>
             <CommandShortcut>?</CommandShortcut>
           </CommandItem>
-          {filterItems(settingsItems).map((item) => {
+          {settingsItems.map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>

@@ -1,8 +1,9 @@
 import React from "react";
 import { Home, FolderKanban, Globe, Rocket, Menu } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
+import { AuthGatedNavLink } from "@/components/layout/AuthGatedLink";
 
 /** Lovable shell mobile IA — same PP hrefs as plan §6 */
 const navItems = [
@@ -30,7 +31,7 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
                 : location.pathname === item.path ||
                   location.pathname.startsWith(`${item.path}/`);
             return (
-              <NavLink
+              <AuthGatedNavLink
                 key={item.path}
                 to={item.path}
                 className={cn(
@@ -43,7 +44,7 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
               >
                 <item.icon className={cn("h-5 w-5", isActive && "stroke-[2.5]")} />
                 <span className="font-tight text-[10px] font-medium">{item.label}</span>
-              </NavLink>
+              </AuthGatedNavLink>
             );
           })}
           <button

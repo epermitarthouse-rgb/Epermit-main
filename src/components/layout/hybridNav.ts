@@ -294,6 +294,7 @@ export const hybridNavGroups: HybridNavGroup[] = [
 
 /** Page titles for Lovable-style shell breadcrumbs (PP routes). */
 export const pageTitles: Record<string, string> = {
+  "/": "Home",
   "/dashboard": "Dashboard",
   "/projects": "Projects",
   "/permit-queue": "Permit Queue",

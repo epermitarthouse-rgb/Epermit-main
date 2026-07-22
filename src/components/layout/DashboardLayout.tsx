@@ -10,6 +10,7 @@ import { MobileBottomNav } from "./MobileBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ActiveProjectControl } from "@/components/layout/ActiveProjectControl";
+import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
 import { useAuth } from "@/hooks/useAuth";
 import { resolvePageTitle } from "@/components/layout/hybridNav";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,6 +20,7 @@ import {
   Eye,
   Home,
   Loader2,
+  LogIn,
   LogOut,
   Plus,
   Search,
@@ -85,7 +87,7 @@ function AppHeader({
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <Link
+          <AuthGatedLink
             to="/dashboard"
             aria-label="Go to dashboard"
             title="Home"
@@ -96,7 +98,7 @@ function AppHeader({
             )}
           >
             <Home className="h-4 w-4" />
-          </Link>
+          </AuthGatedLink>
         </div>
 
         <div className="hidden min-w-0 items-center gap-2 text-sm text-muted-foreground md:flex">
@@ -124,13 +126,13 @@ function AppHeader({
             </kbd>
           </button>
 
-          <Link
+          <AuthGatedLink
             to="/permit-wizard-filing"
             className="pilot-button-primary hidden sm:inline-flex"
           >
             <Plus className="h-4 w-4" />
             New workflow
-          </Link>
+          </AuthGatedLink>
 
           <Link
             to="/demos"
@@ -150,16 +152,25 @@ function AppHeader({
             </AvatarFallback>
           </Avatar>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSignOut}
-            className="gap-2 border-border"
-            aria-label="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden lg:inline">Sign Out</span>
-          </Button>
+          {user ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSignOut}
+              className="gap-2 border-border"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden lg:inline">Sign Out</span>
+            </Button>
+          ) : (
+            <Button asChild variant="default" size="sm" className="gap-2">
+              <Link to="/auth" aria-label="Sign in">
+                <LogIn className="h-4 w-4" />
+                <span className="hidden lg:inline">Sign In</span>
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
     </header>

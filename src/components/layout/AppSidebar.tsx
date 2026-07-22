@@ -13,6 +13,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 import { useNavigationHistory } from "@/hooks/useRecentlyUsed";
+import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -94,8 +95,6 @@ export function AppSidebar() {
     item: HybridNavItem;
     showFavorite?: boolean;
   }) => {
-    if (item.requiresAuth && !user) return null;
-
     const label = item.comingSoon
       ? item.adminPreview
         ? `${item.title} (Preview)`
@@ -109,10 +108,10 @@ export function AppSidebar() {
           isActive={isActive(item.href)}
           tooltip={label}
         >
-          <Link to={item.href}>
+          <AuthGatedLink to={item.href}>
             <item.icon />
             <span className="truncate">{item.title}</span>
-          </Link>
+          </AuthGatedLink>
         </SidebarMenuButton>
         {item.comingSoon ? (
           <SidebarMenuBadge className="border border-border/70 bg-muted/50 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
@@ -149,7 +148,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4">
-        <Link to="/dashboard" className="flex items-center gap-3">
+        <AuthGatedLink to="/dashboard" className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary font-display text-2xl font-semibold text-primary-foreground">
             P
           </span>
@@ -163,7 +162,7 @@ export function AppSidebar() {
               </span>
             </span>
           )}
-        </Link>
+        </AuthGatedLink>
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-4">
@@ -192,10 +191,10 @@ export function AppSidebar() {
                           isActive={isActive(page.href)}
                           tooltip={page.title}
                         >
-                          <Link to={page.href}>
+                          <AuthGatedLink to={page.href}>
                             <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
                             <span>{page.title}</span>
-                          </Link>
+                          </AuthGatedLink>
                         </SidebarMenuButton>
                         {!isCollapsed && (
                           <SidebarMenuAction
@@ -248,10 +247,10 @@ export function AppSidebar() {
                           isActive={isActive(page.href)}
                           tooltip={page.title}
                         >
-                          <Link to={page.href}>
+                          <AuthGatedLink to={page.href}>
                             <Clock className="h-4 w-4" />
                             <span>{page.title}</span>
-                          </Link>
+                          </AuthGatedLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
@@ -263,12 +262,11 @@ export function AppSidebar() {
         )}
 
         {hybridNavGroups.map((group) => {
-          if (group.requiresAuth && !user) return null;
+          // Anonymous visitors still see the full nav (Lovable pattern) — clicking a
+          // gated item redirects to /auth via AuthGatedLink instead of hiding it.
           if (group.requiresAdmin && !isAdmin) return null;
 
-          const items = group.items.filter(
-            (item) => !item.requiresAuth || !!user,
-          );
+          const items = group.items;
           if (items.length === 0) return null;
 
           const useCollapsible = group.defaultOpen === false;
