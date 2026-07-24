@@ -176,8 +176,8 @@ export default function Home() {
           <img
             src={ianSwainPhoto}
             alt="Ian Swain, founder of Commun-ET, LLC"
-            width={836}
-            height={836}
+            width={839}
+            height={798}
             loading="lazy"
             className="h-full w-full object-cover object-top"
           />
