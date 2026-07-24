@@ -31,6 +31,7 @@ import Analytics from "./pages/Analytics";
 import AdminPanel from "./pages/AdminPanel";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
+import ArchitectureReplicationChecklist from "./pages/ArchitectureReplicationChecklist";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
@@ -136,6 +137,10 @@ const App = () => (
                     <Route path="jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
+                    <Route
+                      path="architecture-replication"
+                      element={<ArchitectureReplicationChecklist />}
+                    />
                     <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
                     <Route
                       path="members"

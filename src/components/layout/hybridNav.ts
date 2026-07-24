@@ -15,6 +15,7 @@ import {
   Globe,
   HelpCircle,
   Layers,
+  ListChecks,
   ListTodo,
   Map,
   MessageSquare,
@@ -225,6 +226,12 @@ export const hybridNavGroups: HybridNavGroup[] = [
         description: "AI pipeline metrics",
       },
       {
+        title: "Architecture Replication",
+        href: "/admin/architecture-replication",
+        icon: ListChecks,
+        description: "Lovable → PermitPilot checklist",
+      },
+      {
         title: "Authorizations",
         href: "/admin/authorizations",
         icon: FileSignature,
@@ -319,6 +326,7 @@ export const pageTitles: Record<string, string> = {
   "/admin/jurisdictions": "Admin · Jurisdictions",
   "/admin/feature-flags": "Admin · Feature Flags",
   "/admin/shadow-mode": "Admin · Shadow Mode",
+  "/admin/architecture-replication": "Admin · Architecture Replication",
   "/admin/authorizations": "Admin · Authorizations",
   "/admin/members": "Admin · Members",
   "/admin/audit": "Admin · Audit",
