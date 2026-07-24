@@ -7,16 +7,17 @@ import {
   FileCheck2,
   Gauge,
   Mail,
-  MessageSquare,
   RadioTower,
   ShieldCheck,
 } from "lucide-react";
 import ianSwainPhoto from "@/assets/ian-swain.jpg";
+import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
+import { ContactForm } from "@/components/home/ContactForm";
 
 /**
  * PermitPilot homepage content, rendered inside the app shell for anonymous
  * visitors (PD-3). Structure/composition mirrors Lovable's `Home.tsx`
- * (hero → mission → pillars → client value → founder bio → CTA → contact),
+ * (hero → mission → pillars → client value → founder bio → Mission Control CTA → contact),
  * adapted to real PermitPilot product copy and CTAs.
  */
 
@@ -241,42 +242,23 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* MISSION CONTROL CTA */}
       <section className="pilot-card flex flex-col items-start justify-between gap-5 p-8 md:flex-row md:items-center">
         <div>
           <h2 className="font-tight text-2xl font-black tracking-tight text-foreground">
-            Ready to put your permits on autopilot?
+            Ready to see your portfolio in command view?
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Create an account and see PermitPilot work your active permits and
-            utility coordination in real time.
+            Jump into Mission Control and watch agents work your active permits in real time.
           </p>
         </div>
-        <Link to="/auth" className="pilot-button-primary">
-          Get Started <ArrowRight className="h-4 w-4" />
-        </Link>
+        <AuthGatedLink to="/dashboard" className="pilot-button-primary">
+          Open Mission Control <ArrowRight className="h-4 w-4" />
+        </AuthGatedLink>
       </section>
 
       {/* CONTACT */}
-      <section className="pilot-card flex flex-col items-start justify-between gap-5 p-8 md:flex-row md:items-center">
-        <div>
-          <div className="pilot-kicker text-primary">Talk to us</div>
-          <h2 className="mt-2 font-tight text-2xl font-black tracking-tight text-foreground">
-            Questions before you sign up?
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Reach the Commun-ET team directly — we respond to every inquiry.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link to="/contact" className="pilot-button-primary">
-            <MessageSquare className="h-4 w-4" /> Contact Support
-          </Link>
-          <a href="mailto:hello@commun-et.com" className="pilot-button-ghost">
-            <Mail className="h-4 w-4 text-primary" /> hello@commun-et.com
-          </a>
-        </div>
-      </section>
+      <ContactForm />
     </div>
   );
 }
