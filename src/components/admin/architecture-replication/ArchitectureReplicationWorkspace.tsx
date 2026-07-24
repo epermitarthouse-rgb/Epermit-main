@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -7,13 +8,13 @@ import {
   CheckCircle2,
   ClipboardCopy,
   Download,
+  ExternalLink,
   Eye,
   Filter,
   Hourglass,
   LayoutList,
   ListChecks,
   Plug,
-  PlayCircle,
   ShieldCheck,
   UserCheck,
   X,
@@ -21,13 +22,18 @@ import {
 
 import matrixDataRaw from "@/data/architectureReplicationMatrix.json";
 import type { ArchitectureMatrixPayload } from "@/types/architectureReplication";
-import { IMPLEMENTATION_STATUSES, VERIFICATION_STATUSES } from "@/types/architectureReplication";
+import { VERIFICATION_STATUSES } from "@/types/architectureReplication";
 import {
+  SIMPLE_WORK_STATUSES,
   buildImplementationBrief,
   computeCompletionState,
   exportRowsToCsv,
+  fromSimpleWorkStatus,
   mergeOverlay,
+  resolveRowPageHref,
+  toSimpleWorkStatus,
   truncate,
+  type SimpleWorkStatus,
 } from "@/lib/architectureReplication";
 import { useArchitectureReplicationOverlay } from "@/hooks/useArchitectureReplicationOverlay";
 import { AlertBanner, StatCard } from "@/components/design/ProductPrimitives";
@@ -67,10 +73,9 @@ import {
   type FilterState,
 } from "./filterUtils";
 import {
-  completionTone,
-  implementationBadgeVariant,
   priorityBadgeVariant,
   riskBadgeVariant,
+  simpleWorkStatusBadgeVariant,
   verificationBadgeVariant,
 } from "./statusStyles";
 
@@ -219,13 +224,15 @@ export function ArchitectureReplicationWorkspace() {
 
   const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((m) => selectedIds.has(m.row.rowId));
 
-  const handleStartWork = async (rowId: string) => {
+  const handleSetSimpleStatus = async (rowId: string, status: SimpleWorkStatus) => {
     if (!persistenceEnabled) {
       toast.error("Persistence unavailable — apply the architecture_replication migration first.");
       return;
     }
-    const res = await upsertItem(rowId, { implementation_status: "In progress" });
-    if (res.ok) toast.success(`${rowId} marked In progress.`);
+    const res = await upsertItem(rowId, {
+      implementation_status: fromSimpleWorkStatus(status),
+    });
+    if (res.ok) toast.success(`${rowId} marked ${status}.`);
     else toast.error(res.message || "Failed to update status.");
   };
 
@@ -238,7 +245,7 @@ export function ArchitectureReplicationWorkspace() {
     }
   };
 
-  const handleBulkSetStatus = async (status: (typeof IMPLEMENTATION_STATUSES)[number]) => {
+  const handleBulkSetStatus = async (status: SimpleWorkStatus) => {
     if (!persistenceEnabled) {
       toast.error("Persistence unavailable — apply the architecture_replication migration first.");
       return;
@@ -247,7 +254,9 @@ export function ArchitectureReplicationWorkspace() {
     if (ids.length === 0) return;
     let ok = 0;
     for (const id of ids) {
-      const res = await upsertItem(id, { implementation_status: status });
+      const res = await upsertItem(id, {
+        implementation_status: fromSimpleWorkStatus(status),
+      });
       if (res.ok) ok++;
     }
     toast.success(`Updated ${ok}/${ids.length} row(s) to "${status}".`);
@@ -335,7 +344,8 @@ export function ArchitectureReplicationWorkspace() {
             <TableHead>UI status</TableHead>
             <TableHead>Backend status</TableHead>
             <TableHead>Route decision</TableHead>
-            <TableHead>Implementation</TableHead>
+            <TableHead>Page</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Verification</TableHead>
             <TableHead>Completion</TableHead>
             <TableHead>Owner</TableHead>
@@ -345,7 +355,7 @@ export function ArchitectureReplicationWorkspace() {
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={15} className="py-10 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={16} className="py-10 text-center text-sm text-muted-foreground">
                 No rows match the current filters.
               </TableCell>
             </TableRow>
@@ -353,6 +363,8 @@ export function ArchitectureReplicationWorkspace() {
           {rows.map((m) => {
             const { row, overlay, completion } = m;
             const isSelected = selectedIds.has(row.rowId);
+            const pageHref = resolveRowPageHref(row);
+            const simpleStatus = toSimpleWorkStatus(overlay.implementation_status);
             return (
               <TableRow
                 key={row.rowId}
@@ -404,10 +416,44 @@ export function ArchitectureReplicationWorkspace() {
                 <TableCell className="max-w-[200px] text-xs text-muted-foreground">
                   {truncate(row.decisions.routeDecision, 60)}
                 </TableCell>
-                <TableCell>
-                  <Badge variant={implementationBadgeVariant(overlay.implementation_status)}>
-                    {overlay.implementation_status}
-                  </Badge>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {pageHref ? (
+                    <Link
+                      to={pageHref}
+                      className="inline-flex max-w-[180px] items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      title={`Open ${pageHref}`}
+                    >
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{pageHref}</span>
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No page</span>
+                  )}
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Select
+                    value={simpleStatus}
+                    onValueChange={(v) => handleSetSimpleStatus(row.rowId, v as SimpleWorkStatus)}
+                    disabled={!persistenceEnabled}
+                  >
+                    <SelectTrigger
+                      className="h-8 w-[140px]"
+                      aria-label={`Status for ${row.rowId}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SIMPLE_WORK_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          <span className="flex items-center gap-2">
+                            <Badge variant={simpleWorkStatusBadgeVariant(status)} className="pointer-events-none">
+                              {status}
+                            </Badge>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <Badge variant={verificationBadgeVariant(overlay.verification_status)}>
@@ -441,16 +487,6 @@ export function ArchitectureReplicationWorkspace() {
                       onClick={() => setActiveRowId(row.rowId)}
                     >
                       <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      title={persistenceEnabled ? "Start work" : "Persistence unavailable"}
-                      disabled={!persistenceEnabled}
-                      onClick={() => handleStartWork(row.rowId)}
-                    >
-                      <PlayCircle className="h-4 w-4" />
                     </Button>
                     <Button
                       size="icon"
@@ -609,10 +645,10 @@ export function ArchitectureReplicationWorkspace() {
             value={filters.implementationStatus}
             onValueChange={(v) => setFilters((f) => ({ ...f, implementationStatus: v }))}
           >
-            <SelectTrigger><SelectValue placeholder="Implementation status" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>All implementation statuses</SelectItem>
-              {IMPLEMENTATION_STATUSES.map((v) => (
+              <SelectItem value={ALL}>All statuses</SelectItem>
+              {SIMPLE_WORK_STATUSES.map((v) => (
                 <SelectItem key={v} value={v}>{v}</SelectItem>
               ))}
             </SelectContent>
@@ -702,11 +738,14 @@ export function ArchitectureReplicationWorkspace() {
           </Button>
           {persistenceEnabled && (
             <>
-              <Button size="sm" variant="outline" onClick={() => handleBulkSetStatus("Audited")}>
-                Mark Audited
+              <Button size="sm" variant="outline" onClick={() => handleBulkSetStatus("Pending")}>
+                Mark Pending
               </Button>
-              <Button size="sm" variant="outline" onClick={() => handleBulkSetStatus("Ready for implementation")}>
-                Mark Ready for implementation
+              <Button size="sm" variant="outline" onClick={() => handleBulkSetStatus("In Progress")}>
+                Mark In Progress
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => handleBulkSetStatus("Completed")}>
+                Mark Completed
               </Button>
               <Button size="sm" variant="outline" onClick={handleBulkAssignOwner}>
                 Assign owner

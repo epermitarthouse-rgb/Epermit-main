@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ClipboardCopy,
   ExternalLink,
   FileText,
   Link2,
-  PlayCircle,
 } from "lucide-react";
 
 import {
@@ -36,7 +36,6 @@ import {
   COMMENT_TYPES,
   COMPLETION_CHECK_KEYS,
   COMPLETION_CHECK_LABELS,
-  IMPLEMENTATION_STATUSES,
   VERIFICATION_STATUSES,
   type ArchitectureMatrixRow,
   type CommentType,
@@ -46,11 +45,15 @@ import {
   type ReplicationItemOverlay,
 } from "@/types/architectureReplication";
 import {
+  SIMPLE_WORK_STATUSES,
   buildImplementationBrief,
-  firstOpenableRoute,
+  fromSimpleWorkStatus,
+  resolveRowPageHref,
+  toSimpleWorkStatus,
+  type SimpleWorkStatus,
 } from "@/lib/architectureReplication";
 import {
-  implementationBadgeVariant,
+  simpleWorkStatusBadgeVariant,
   verificationBadgeVariant,
 } from "./statusStyles";
 
@@ -203,23 +206,8 @@ export function ArchitectureReplicationDetailSheet({
 
   const handleDiscard = () => setDraft({ ...merged.overlay });
 
-  const handleStartWork = async () => {
-    const res = await onUpsert(row.rowId, { implementation_status: "In progress" });
-    if (res.ok) {
-      toast.success(`${row.rowId} marked In progress.`);
-    } else {
-      toast.error(res.message || "Failed to update status.");
-    }
-  };
-
-  const handleOpenRoute = () => {
-    const path = firstOpenableRoute(row.permitPilot.route);
-    if (!path) {
-      toast.info("No openable PermitPilot route found for this row.");
-      return;
-    }
-    window.open(path, "_blank", "noopener,noreferrer");
-  };
+  const pageHref = resolveRowPageHref(row);
+  const simpleStatus = toSimpleWorkStatus(draft.implementation_status);
 
   const copy = async (text: string, label: string) => {
     try {
@@ -261,8 +249,8 @@ export function ArchitectureReplicationDetailSheet({
             <Badge variant={row.rowKind === "lovable" ? "outline" : "secondary"}>
               {row.rowKind === "lovable" ? "Lovable" : "PP-only"}
             </Badge>
-            <Badge variant={implementationBadgeVariant(draft.implementation_status)}>
-              {draft.implementation_status}
+            <Badge variant={simpleWorkStatusBadgeVariant(simpleStatus)}>
+              {simpleStatus}
             </Badge>
             <Badge variant={verificationBadgeVariant(draft.verification_status)}>
               {draft.verification_status}
@@ -275,12 +263,17 @@ export function ArchitectureReplicationDetailSheet({
         </SheetHeader>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={handleStartWork} disabled={!persistenceEnabled}>
-            <PlayCircle className="h-3.5 w-3.5" /> Start work
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleOpenRoute}>
-            <ExternalLink className="h-3.5 w-3.5" /> Open PP route
-          </Button>
+          {pageHref ? (
+            <Button size="sm" variant="outline" asChild>
+              <Link to={pageHref}>
+                <ExternalLink className="h-3.5 w-3.5" /> Open page
+              </Link>
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" disabled>
+              <ExternalLink className="h-3.5 w-3.5" /> No page link
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -388,17 +381,21 @@ export function ArchitectureReplicationDetailSheet({
           <div className="space-y-4 rounded-lg border border-border/60 p-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Implementation status</Label>
+                <Label>Status</Label>
                 <Select
-                  value={draft.implementation_status}
-                  onValueChange={(v) => updateDraft({ implementation_status: v as ReplicationItemOverlay["implementation_status"] })}
+                  value={simpleStatus}
+                  onValueChange={(v) =>
+                    updateDraft({
+                      implementation_status: fromSimpleWorkStatus(v as SimpleWorkStatus),
+                    })
+                  }
                   disabled={!persistenceEnabled}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {IMPLEMENTATION_STATUSES.map((status) => (
+                    {SIMPLE_WORK_STATUSES.map((status) => (
                       <SelectItem key={status} value={status}>
                         {status}
                       </SelectItem>

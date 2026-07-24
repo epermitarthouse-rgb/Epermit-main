@@ -5,6 +5,7 @@ import type {
   ImplementationStatus,
   VerificationStatus,
 } from "@/types/architectureReplication";
+import type { SimpleWorkStatus } from "@/lib/architectureReplication";
 
 export function implementationBadgeVariant(
   status: ImplementationStatus,
@@ -22,6 +23,20 @@ export function implementationBadgeVariant(
       return "mutedLight";
     case "Audited":
     case "Not reviewed":
+    default:
+      return "outline";
+  }
+}
+
+export function simpleWorkStatusBadgeVariant(
+  status: SimpleWorkStatus,
+): NonNullable<BadgeProps["variant"]> {
+  switch (status) {
+    case "Completed":
+      return "success";
+    case "In Progress":
+      return "warning";
+    case "Pending":
     default:
       return "outline";
   }

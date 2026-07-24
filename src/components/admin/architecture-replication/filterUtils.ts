@@ -1,4 +1,5 @@
 import type { ReplicationComment } from "@/types/architectureReplication";
+import { toSimpleWorkStatus } from "@/lib/architectureReplication";
 import type { MergedRow } from "./ArchitectureReplicationDetailSheet";
 
 export const ALL = "all";
@@ -57,7 +58,11 @@ export const CHIP_DEFS: Array<{ key: ChipKey; label: string; test: (m: MergedRow
   { key: "missing", label: "Missing", test: (m) => m.row.derived.isMissing },
   { key: "uiOnly", label: "UI only", test: (m) => m.row.derived.isUiOnly },
   { key: "backendConnected", label: "Backend connected", test: (m) => m.row.derived.isBackendConnected },
-  { key: "inProgress", label: "In progress", test: (m) => m.overlay.implementation_status === "In progress" },
+  {
+    key: "inProgress",
+    label: "In Progress",
+    test: (m) => toSimpleWorkStatus(m.overlay.implementation_status) === "In Progress",
+  },
   {
     key: "blocked",
     label: "Blocked",
@@ -120,7 +125,10 @@ export function matchesFilters(
   if (filters.backendStatus !== ALL && row.derived.backendStatus !== filters.backendStatus) return false;
   if (filters.routeDecision !== ALL && row.decisions.routeDecision !== filters.routeDecision) return false;
   if (filters.risk !== ALL && row.risk !== filters.risk) return false;
-  if (filters.implementationStatus !== ALL && overlay.implementation_status !== filters.implementationStatus) {
+  if (
+    filters.implementationStatus !== ALL &&
+    toSimpleWorkStatus(overlay.implementation_status) !== filters.implementationStatus
+  ) {
     return false;
   }
   if (filters.verificationStatus !== ALL && overlay.verification_status !== filters.verificationStatus) {

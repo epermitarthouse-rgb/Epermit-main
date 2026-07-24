@@ -99,6 +99,29 @@ export function truncate(text: string, max = 80): string {
   return `${t.slice(0, max - 1)}…`;
 }
 
+export const SIMPLE_WORK_STATUSES = ["Pending", "In Progress", "Completed"] as const;
+export type SimpleWorkStatus = (typeof SIMPLE_WORK_STATUSES)[number];
+
+/** Map the detailed DB implementation status into the 3-value table control. */
+export function toSimpleWorkStatus(status: ImplementationStatus): SimpleWorkStatus {
+  if (status === "In progress") return "In Progress";
+  if (status === "Implemented" || status === "Do not implement") return "Completed";
+  return "Pending";
+}
+
+/** Map a simple table status back onto a persisted implementation status. */
+export function fromSimpleWorkStatus(status: SimpleWorkStatus): ImplementationStatus {
+  switch (status) {
+    case "In Progress":
+      return "In progress";
+    case "Completed":
+      return "Implemented";
+    case "Pending":
+    default:
+      return "Not reviewed";
+  }
+}
+
 export function firstOpenableRoute(routeField: string): string | null {
   if (!routeField) return null;
   const candidates = routeField
@@ -106,22 +129,33 @@ export function firstOpenableRoute(routeField: string): string | null {
     .map((s) => s.trim())
     .filter(Boolean);
   for (const c of candidates) {
+    if (c === "/" || c.startsWith("/ ")) return "/";
     const m = c.match(/(\/[A-Za-z0-9_/?&=#.:*-]+)/);
     if (!m) continue;
-    const path = m[1];
+    const path = m[1].split(/\s/)[0];
     if (
+      !path.startsWith("/") ||
       path.startsWith("/api") ||
       path.includes("*") ||
       path.includes("(") ||
+      path.includes(":") ||
       path.toLowerCase().includes("none") ||
       path.toLowerCase().includes("lovable")
     ) {
       continue;
     }
-    // Prefer concrete app paths
-    if (path.startsWith("/")) return path.split(/\s/)[0];
+    return path;
   }
   return null;
+}
+
+/** Prefer an existing PermitPilot route, then the decided target route. */
+export function resolveRowPageHref(row: ArchitectureMatrixRow): string | null {
+  return (
+    firstOpenableRoute(row.permitPilot.route) ||
+    firstOpenableRoute(row.decisions.targetRoute) ||
+    firstOpenableRoute(row.lovable.route)
+  );
 }
 
 export function buildImplementationBrief(
