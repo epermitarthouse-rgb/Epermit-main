@@ -53,7 +53,8 @@ const FIELD_INFO = {
   name: "A unique, descriptive name for your project (e.g., 'Smith Residence Addition' or '123 Main St Renovation')",
   project_type: "The category that best describes your construction work. This helps determine required permits and inspections.",
   jurisdiction: "The city, county, or municipality where the project is located. This determines which building codes apply.",
-  permit_number: "The official permit number assigned by the jurisdiction after approval. Leave blank until assigned.",
+  permit_number:
+    "Portal permit or application/record number used by Quick Scrape (e.g. Accela record ID). Required to start a scrape for this project.",
   address: "The physical street address where construction will take place.",
   project_url: "Optional direct link to the project page in the jurisdiction portal. Used by the Portal Monitor Agent as a deep link.",
   city: "The city or town where the project is located.",
@@ -295,21 +296,27 @@ export function ProjectFormDialog({
 
   const validateForm = (showAllErrors = false): boolean => {
     const result = projectSchema.safeParse(formData);
-    
+    const newErrors: FormErrors = {};
+
     if (!result.success) {
-      const newErrors: FormErrors = {};
       result.error.errors.forEach((err) => {
         const field = err.path[0] as keyof FormErrors;
         if (showAllErrors || touched.has(field)) {
           newErrors[field] = err.message;
         }
       });
-      setErrors(newErrors);
-      return false;
     }
-    
-    setErrors({});
-    return true;
+
+    // Scrape contract: a linked portal credential needs a project permit/application number.
+    if (formData.credential_id && !formData.permit_number.trim()) {
+      if (showAllErrors || touched.has("permit_number")) {
+        newErrors.permit_number =
+          "Permit / Application Number is required when a portal credential is linked.";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (field: string, value: string) => {
@@ -505,23 +512,28 @@ export function ProjectFormDialog({
                 <FieldError error={errors.jurisdiction} />
               </div>
 
-              {project && (
-                <div>
-                  <Label htmlFor="permit_number" className="flex items-center">
-                    Permit Number
-                    <FieldInfo info={FIELD_INFO.permit_number} />
-                  </Label>
-                  <Input
-                    id="permit_number"
-                    value={formData.permit_number}
-                    onChange={(e) => handleChange('permit_number', e.target.value)}
-                    onBlur={() => handleBlur('permit_number')}
-                    placeholder="e.g., BP-2024-12345"
-                    className={errors.permit_number ? 'border-destructive' : ''}
-                  />
-                  <FieldError error={errors.permit_number} />
-                </div>
-              )}
+              <div>
+                <Label htmlFor="permit_number" className="flex items-center">
+                  Permit / Application Number
+                  {formData.credential_id ? (
+                    <span className="ml-1 text-destructive">*</span>
+                  ) : null}
+                  <FieldInfo info={FIELD_INFO.permit_number} />
+                </Label>
+                <Input
+                  id="permit_number"
+                  value={formData.permit_number}
+                  onChange={(e) => handleChange('permit_number', e.target.value)}
+                  onBlur={() => handleBlur('permit_number')}
+                  placeholder="e.g., B2508799 or BP-2024-12345"
+                  className={errors.permit_number ? 'border-destructive' : ''}
+                  data-testid="input-permit-number"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Used by Quick Scrape to find the portal record. You can also set it later in Edit Project or the header Active Project control.
+                </p>
+                <FieldError error={errors.permit_number} />
+              </div>
 
               <div>
                 <Label htmlFor="credential_id" className="flex items-center">
@@ -531,7 +543,23 @@ export function ProjectFormDialog({
                 </Label>
                 <Select
                   value={formData.credential_id}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, credential_id: value === '__none__' ? '' : value }))}
+                  onValueChange={(value) => {
+                    const next = value === '__none__' ? '' : value;
+                    setFormData(prev => ({ ...prev, credential_id: next }));
+                    setTouched(prev => new Set(prev).add('credential_id').add('permit_number'));
+                    if (next && !formData.permit_number.trim()) {
+                      setErrors(prev => ({
+                        ...prev,
+                        permit_number:
+                          "Permit / Application Number is required when a portal credential is linked.",
+                      }));
+                    } else if (!next) {
+                      setErrors(prev => {
+                        const { permit_number: _removed, ...rest } = prev;
+                        return rest;
+                      });
+                    }
+                  }}
                 >
                   <SelectTrigger data-testid="select-credential">
                     <SelectValue placeholder="Select credential" />

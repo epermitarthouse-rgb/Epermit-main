@@ -646,7 +646,7 @@
         "acceptanceCriteria": "Project list, create, invite and select flows all behave as before with the new card styling; every card field maps to a real column.",
         "verificationHook": "Manual CRUD smoke with a demo account; npx tsc --noEmit",
         "ownerDecisionNeeded": "No",
-        "auditNotes": "FIX 2026-07-27: New Project on Lovable-styled /projects opens existing ProjectFormDialog (route /projects/new). createProject no longer spreads empty billing nulls; surfaces Postgrest errors instead of generic 'Failed to create project'; form stays open on failure. src/App.tsx line 123.",
+        "auditNotes": "FIX 2026-07-27: New Project on Lovable-styled /projects opens existing ProjectFormDialog (route /projects/new). createProject no longer spreads empty billing nulls; surfaces Postgrest errors instead of generic 'Failed to create project'; form stays open on failure. src/App.tsx line 123. AUDIT+FIX 2026-07-27: Permit/application number lives on projects.permit_number (not a separate permit table). Create form previously hid the field behind edit-only gate; now visible on create. Cards/list show scrape readiness (Ready / Missing Permit Number / Missing Portal Credential / Missing Jurisdiction / Setup Incomplete). Full Quick Scrape E2E not marked complete.",
         "matchConfidence": "High"
       },
       "defaults": {
@@ -728,7 +728,7 @@
         "acceptanceCriteria": "Credential capture still round-trips through the existing encrypted path; no new route and no new credential handling code.",
         "verificationHook": "node --test scraper-service/tests (portal credential coverage); manual filing dialog smoke",
         "ownerDecisionNeeded": "No",
-        "auditNotes": "FIX 2026-07-27: /projects/new restored as create entry that opens existing ProjectFormDialog (not Lovable mock /projects/new credentials page). Credentials remain Settings + header link. JOURNEY NOTE 2026-07-27: Primary credential CRUD is Settings \u2192 Portal Credentials (PortalCredentialsManager). Header ActiveProjectControl links projects.credential_id. Filing dialog is secondary. portal_credentials confirmed in supabase/migrations/20260210000000_portal_credentials.sql.",
+        "auditNotes": "FIX 2026-07-27: /projects/new restored as create entry that opens existing ProjectFormDialog (not Lovable mock /projects/new credentials page). Credentials remain Settings + header link. JOURNEY NOTE 2026-07-27: Primary credential CRUD is Settings \u2192 Portal Credentials (PortalCredentialsManager). Header ActiveProjectControl links projects.credential_id. Filing dialog is secondary. portal_credentials confirmed in supabase/migrations/20260210000000_portal_credentials.sql. AUDIT+FIX 2026-07-27: Root cause A \u2014 Permit / Application Number was edit-only in ProjectFormDialog; create now shows it and writes projects.permit_number. Required when credential linked. Header ActiveProjectControl blur now persists permit_number to DB (was localStorage-only). Scrape-ready = permit_number + credential_id + jurisdiction label.",
         "matchConfidence": "High"
       },
       "defaults": {
@@ -2204,7 +2204,7 @@
         "acceptanceCriteria": "Not scoped. Requires an agent_runs schema first.",
         "verificationHook": "n/a \u2014 nothing to test until scope changes",
         "ownerDecisionNeeded": "Yes \u2014 needs a product decision on whether PermitPilot should own this domain",
-        "auditNotes": "CORRECTED 2026-07-27: Earlier matrix claimed 'no workflow UI'. AgentWorkflowStatus on /dashboard is the live scrape initiator and post-scrape chain trigger. Do NOT replicate Lovable localStorage AI Workflow page. Preserve /api/login+/api/scrape and intake-pipeline-agent invocation paths. This row and L033 are the same underlying gap: real agents, no observability surface.",
+        "auditNotes": "CORRECTED 2026-07-27: Earlier matrix claimed 'no workflow UI'. AgentWorkflowStatus on /dashboard is the live scrape initiator and post-scrape chain trigger. Do NOT replicate Lovable localStorage AI Workflow page. Preserve /api/login+/api/scrape and intake-pipeline-agent invocation paths. This row and L033 are the same underlying gap: real agents, no observability surface. AUDIT 2026-07-27: Quick Scrape requires projects.permit_number + projects.credential_id (login_url); toast copy updated from 'sidebar' to header Active Project / Edit Project. Do not mark full scraper workflow complete \u2014 only permit-number contract reconnect verified in code.",
         "matchConfidence": "High"
       },
       "defaults": {

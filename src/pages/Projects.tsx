@@ -49,6 +49,11 @@ import { useGettingStarted } from "@/hooks/useGettingStarted";
 import { staggerContainer, staggerItem } from "@/components/animations/variants";
 import { EmptyState } from "@/components/design/EmptyState";
 import { cn } from "@/lib/utils";
+import {
+  getProjectScrapeReadiness,
+  scrapeReadinessTone,
+} from "@/lib/projectScrapeReadiness";
+import { toast } from "sonner";
 
 type FilterKey =
   | "all"
@@ -222,11 +227,27 @@ export default function Projects() {
       if (selectedProject) {
         const updated = await updateProject(selectedProject.id, data);
         if (!updated) return;
+        const readiness = getProjectScrapeReadiness(updated);
+        if (readiness !== "Ready to Scrape") {
+          toast.message(`Project updated — ${readiness}`, {
+            description:
+              "Link a portal credential and Permit / Application Number before Quick Scrape.",
+          });
+        }
       } else {
         const created = await createProject(data as CreateProjectData);
         if (!created) return;
         setSelectedProjectId(created.id);
         setSelectedProject(created);
+        const readiness = getProjectScrapeReadiness(created);
+        if (readiness === "Ready to Scrape") {
+          toast.success("Project created and ready to scrape.");
+        } else {
+          toast.message(`Project created — ${readiness}`, {
+            description:
+              "Open Edit Project or the header Active Project control to set Permit / Application Number and portal credential before Quick Scrape.",
+          });
+        }
       }
       handleFormOpenChange(false);
     } finally {
@@ -427,6 +448,7 @@ export default function Projects() {
           <div className="grid gap-4 xl:grid-cols-2">
             {filteredProjects.map((project) => {
               const progress = progressForStatus(project.status);
+              const scrapeReadiness = getProjectScrapeReadiness(project);
               return (
                 <Panel
                   key={project.id}
@@ -450,6 +472,9 @@ export default function Projects() {
                     <div className="flex flex-col items-end gap-2">
                       <StatusPill tone={statusTone(project.status)}>
                         {PROJECT_STATUS_CONFIG[project.status].label}
+                      </StatusPill>
+                      <StatusPill tone={scrapeReadinessTone(scrapeReadiness)}>
+                        {scrapeReadiness}
                       </StatusPill>
                       {project.portal_status ? (
                         <span className="rounded-full border border-border bg-muted px-2.5 py-1 font-data text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -562,11 +587,12 @@ export default function Projects() {
           animate="visible"
         >
           <div className="hidden grid-cols-12 gap-4 border-b border-border px-4 py-3 font-tight text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
-            <div className="col-span-4">Project</div>
+            <div className="col-span-3">Project</div>
             <div className="col-span-2">Status</div>
+            <div className="col-span-2">Scrape readiness</div>
             <div className="col-span-2">Jurisdiction</div>
             <div className="col-span-2">Location</div>
-            <div className="col-span-2">Updated</div>
+            <div className="col-span-1">Updated</div>
           </div>
 
           {filteredProjects.length === 0 ? (
@@ -594,14 +620,16 @@ export default function Projects() {
               />
             </Panel>
           ) : (
-            filteredProjects.map((project) => (
+            filteredProjects.map((project) => {
+              const scrapeReadiness = getProjectScrapeReadiness(project);
+              return (
               <motion.div
                 key={project.id}
                 variants={staggerItem}
                 className="grid cursor-pointer grid-cols-12 gap-4 rounded-lg border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary/40 hover:bg-muted/40"
                 onClick={() => handleViewProject(project)}
               >
-                <div className="col-span-12 md:col-span-4">
+                <div className="col-span-12 md:col-span-3">
                   <p className="truncate font-semibold">{project.name}</p>
                   {project.permit_number ? (
                     <p className="mt-0.5 font-mono text-xs text-muted-foreground">
@@ -614,17 +642,23 @@ export default function Projects() {
                     {PROJECT_STATUS_CONFIG[project.status].label}
                   </StatusPill>
                 </div>
+                <div className="col-span-6 md:col-span-2">
+                  <StatusPill tone={scrapeReadinessTone(scrapeReadiness)}>
+                    {scrapeReadiness}
+                  </StatusPill>
+                </div>
                 <div className="col-span-6 truncate text-sm text-muted-foreground md:col-span-2">
                   {project.jurisdiction || "—"}
                 </div>
                 <div className="col-span-6 truncate text-sm text-muted-foreground md:col-span-2">
                   {[project.city, project.state].filter(Boolean).join(", ") || "—"}
                 </div>
-                <div className="col-span-6 font-mono text-sm tabular-nums text-muted-foreground md:col-span-2">
+                <div className="col-span-6 font-mono text-sm tabular-nums text-muted-foreground md:col-span-1">
                   {new Date(project.updated_at).toLocaleDateString()}
                 </div>
               </motion.div>
-            ))
+              );
+            })
           )}
         </motion.div>
       )}

@@ -210,6 +210,37 @@ export function ActiveProjectControl() {
     [user?.id],
   );
 
+  const handlePermitBlur = useCallback(async () => {
+    const trimmed = permitNumber.trim();
+    persistPermitNumber(trimmed);
+
+    // Quick Scrape reads projects.permit_number — keep the header field in sync with DB.
+    const projectId = selectedProject?.selectedProjectId;
+    if (!projectId || !user) return;
+
+    const current = String(
+      projects.find((p) => p.id === projectId)?.permit_number ?? "",
+    ).trim();
+    if (current === trimmed) return;
+
+    const updated = await updateProject(projectId, {
+      permit_number: trimmed || null,
+    });
+    if (!updated) {
+      toast.error("Failed to save permit / application number on the project.");
+      return;
+    }
+    fetchProjects();
+  }, [
+    permitNumber,
+    persistPermitNumber,
+    selectedProject?.selectedProjectId,
+    user,
+    projects,
+    updateProject,
+    fetchProjects,
+  ]);
+
   useEffect(() => {
     if (!selectedProjectData) return;
     const projectPermit = String(selectedProjectData.permit_number ?? "").trim();
@@ -270,10 +301,6 @@ export function ActiveProjectControl() {
     fetchProjects,
   ]);
 
-  const handlePermitBlur = useCallback(() => {
-    persistPermitNumber(permitNumber);
-  }, [permitNumber, persistPermitNumber]);
-
   useEffect(() => {
     if (createNewProject && permitNumber.trim()) setNewProjectName(permitNumber.trim());
   }, [createNewProject, permitNumber]);
@@ -306,16 +333,21 @@ export function ActiveProjectControl() {
         <div className="pilot-kicker">Active project</div>
         <div className="space-y-1">
           <Label htmlFor="header-permit-number" className="text-xs text-muted-foreground">
-            Permit # <span className="text-destructive">*</span>
+            Permit / Application # <span className="text-destructive">*</span>
           </Label>
           <Input
             id="header-permit-number"
             placeholder="e.g. B2508799"
             value={permitNumber}
             onChange={(e) => setPermitNumber(e.target.value)}
-            onBlur={handlePermitBlur}
+            onBlur={() => {
+              void handlePermitBlur();
+            }}
             className={FIELD_CLASS}
           />
+          <p className="text-[10px] text-muted-foreground">
+            Saved on the selected project for Quick Scrape.
+          </p>
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Project</Label>

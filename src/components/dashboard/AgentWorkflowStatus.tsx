@@ -1119,7 +1119,7 @@ export function AgentWorkflowStatus() {
 
     if (!permitNumberToUse || String(permitNumberToUse).trim() === "") {
       toast.error(
-        "Permit # is required. Set it in the sidebar: select the project, then enter Permit # under the project dropdown.",
+        "Permit / Application # is required. Set it on the project (Edit Project or header Active Project), then try again.",
       );
       return;
     }
@@ -1149,7 +1149,7 @@ export function AgentWorkflowStatus() {
 
       if (!credentialId) {
         throw new Error(
-          "No portal credential linked to this project. Select a credential in the sidebar dropdown under \"Portal Credential\", then try again.",
+          "No portal credential linked to this project. Select a credential in the header Active Project control (or Edit Project), then try again.",
         );
       }
 
