@@ -158,7 +158,8 @@ function detectPortalType(url) {
   if (
     lower.includes("avolvecloud.com") ||
     lower.includes("projectdox") ||
-    lower.includes("eplans.princegeorgescountymd.gov")
+    lower.includes("eplans.princegeorgescountymd.gov") ||
+    lower.includes("planreview.dob.dc.gov")
   ) {
     return "projectdox";
   }
@@ -176,6 +177,114 @@ function detectPortalType(url) {
   if (lower.includes("accela.com")) return "accela";
   console.log(`[detectPortalType] no match for url: "${url}" lower: "${lower}"`);
   return "unknown";
+}
+
+/**
+ * Washington DC ePlan dashboard after B2C login (planreview.dob.dc.gov).
+ * Authenticated My Projects surface — must not force-navigate back to legacy Avolve host.
+ * @param {string} [url]
+ */
+function isWashingtonDcPlanReviewDashboard(url) {
+  try {
+    return /planreview\.dob\.dc\.gov/i.test(
+      new URL(String(url || "")).hostname,
+    );
+  } catch {
+    return /planreview\.dob\.dc\.gov/i.test(String(url || ""));
+  }
+}
+
+/** Authenticated DC project shell host (popup). */
+function isDcPlanReviewSessionHost(url) {
+  try {
+    return /^session\.planreview\.dob\.dc\.gov$/i.test(
+      new URL(String(url || "")).hostname,
+    );
+  } catch {
+    return /session\.planreview\.dob\.dc\.gov/i.test(String(url || ""));
+  }
+}
+
+function isDcPlanReviewProjectIndexUrl(url) {
+  return (
+    isDcPlanReviewSessionHost(url) &&
+    /\/Project\/Index/i.test(String(url || ""))
+  );
+}
+
+function isDcPlanReviewSessionDeadUrl(url) {
+  const u = String(url || "");
+  return (
+    /SessionEnded\.aspx/i.test(u) ||
+    /SessionIDDoesNotExist/i.test(u) ||
+    /okta\.com/i.test(u) ||
+    /\/oauth2\/v2\.0\/logout/i.test(u) ||
+    /b2clogin\.com/i.test(u)
+  );
+}
+
+function dcPlanReviewDashboardHomeUrl() {
+  return "https://planreview.dob.dc.gov/";
+}
+
+function buildDcPlanReviewTabUrl(sessionOrigin, projectId, tabParam) {
+  const origin = String(
+    sessionOrigin || "https://session.planreview.dob.dc.gov",
+  ).replace(/\/+$/, "");
+  const pid = encodeURIComponent(String(projectId || "").trim());
+  const tab = encodeURIComponent(String(tabParam || "projectStatusTab"));
+  return `${origin}/Project/Index?tab=${tab}&ProjectID=${pid}`;
+}
+
+/**
+ * DC / generic non-Montgomery ProjectDox: table rows with launchRemote / ProjectID links.
+ * @param {import('playwright').Page} page
+ */
+async function collectDcPlanReviewDashboardProjects(page) {
+  return page.evaluate(() => {
+    const results = [];
+    const seen = new Set();
+    document.querySelectorAll("table tr").forEach((tr) => {
+      const cells = tr.querySelectorAll("td");
+      if (cells.length >= 2) {
+        const link = cells[0]?.querySelector("a");
+        if (link) {
+          const num = link.textContent.trim();
+          const href = link.getAttribute("href") || "";
+          // Extract ProjectID from javascript:launchRemote('Frame.aspx?tab=projectStatusTab&ProjectID=9187')
+          const pidMatch = href.match(/ProjectID=(\d+)/);
+          const projectId = pidMatch ? pidMatch[1] : "";
+
+          if (num && !seen.has(num)) {
+            seen.add(num);
+            let status = (() => {
+              const cell = cells[3];
+              if (!cell) return "";
+              const btn = cell.querySelector("button, a.btn, span.badge, a");
+              if (btn) return btn.textContent.trim();
+              return cell.textContent.trim();
+            })();
+            if (status && status.length > 2 && status.length % 2 === 0) {
+              const half = status.substring(0, status.length / 2);
+              if (status === half + half) status = half;
+            }
+            results.push({
+              id: projectId || num,
+              name: num,
+              projectNum: num,
+              projectId,
+              description: cells[1]?.textContent?.trim() || "",
+              location: cells[2]?.textContent?.trim() || "",
+              status: status || "",
+              tasks: cells[4]?.textContent?.trim() || "",
+              href,
+            });
+          }
+        }
+      }
+    });
+    return results;
+  });
 }
 
 function stableStringify(obj) {
@@ -601,6 +710,187 @@ async function performLogin(page, username, password, dashboardUrl) {
   return url;
 }
 
+/**
+ * Open DC project via dashboard launchRemote → authenticated session.planreview popup.
+ * Must live inside registerExecutionRoutes so it shares performLogin scope.
+ * @param {Record<string, unknown>} session
+ * @param {{ projectNum?: string, projectId?: string, name?: string }} project
+ * @returns {Promise<import('playwright').Page>}
+ */
+async function openDcPlanReviewProjectPopup(session, project) {
+  const context = session.context;
+  if (!context) throw new Error("DC session missing browser context");
+
+  let dashboard = session.page;
+  if (!dashboard || dashboard.isClosed()) {
+    dashboard = await context.newPage();
+    session.page = dashboard;
+  }
+
+  console.log(`[DC][session] dashboard page URL: ${dashboard.url()}`);
+  if (!isWashingtonDcPlanReviewDashboard(dashboard.url())) {
+    await dashboard.goto(dcPlanReviewDashboardHomeUrl(), {
+      waitUntil: "networkidle",
+      timeout: 60000,
+    });
+    await dashboard.waitForTimeout(1500);
+    console.log(
+      `[DC][session] dashboard after navigate: ${dashboard.url()}`,
+    );
+  }
+
+  const permit = String(project.projectNum || project.name || "").trim();
+  if (!permit) throw new Error("DC project open requires projectNum");
+
+  const link = dashboard.locator(`a:has-text("${permit}")`).first();
+  if ((await link.count()) === 0) {
+    throw new Error(`DC dashboard has no link for permit ${permit}`);
+  }
+
+  const popupPromise = context.waitForEvent("page", { timeout: 25000 });
+  await link.click();
+  const popup = await popupPromise;
+  console.log(`[DC][session] popup initial URL: ${popup.url()}`);
+
+  const deadline = Date.now() + 60000;
+  while (Date.now() < deadline) {
+    await popup.waitForLoadState("domcontentloaded").catch(() => {});
+    const u = popup.url();
+    if (isDcPlanReviewSessionDeadUrl(u)) {
+      throw new Error(`DC project popup hit dead session URL: ${u}`);
+    }
+    if (isDcPlanReviewProjectIndexUrl(u)) break;
+    await popup.waitForTimeout(400).catch(() => {});
+  }
+
+  const finalUrl = popup.url();
+  console.log(`[DC][session] popup final URL: ${finalUrl}`);
+  if (!isDcPlanReviewProjectIndexUrl(finalUrl)) {
+    throw new Error(
+      `DC project popup did not reach session.planreview Project/Index (url=${finalUrl})`,
+    );
+  }
+
+  try {
+    session.dcSessionOrigin = new URL(finalUrl).origin;
+  } catch (_) {
+    session.dcSessionOrigin = "https://session.planreview.dob.dc.gov";
+  }
+  session._dcExtractionPage = popup;
+  session._dcExtractionProjectId = String(project.projectId || "").trim();
+  console.log(
+    `[DC][session] active extraction page URL: ${finalUrl} (origin=${session.dcSessionOrigin})`,
+  );
+  return popup;
+}
+
+/**
+ * @param {Record<string, unknown>} session
+ * @param {{ projectNum?: string, projectId?: string }} project
+ */
+async function ensureDcPlanReviewExtractionPage(session, project) {
+  const wantId = String(project.projectId || "").trim();
+  const existing = session._dcExtractionPage;
+  if (
+    existing &&
+    !existing.isClosed() &&
+    String(session._dcExtractionProjectId || "") === wantId
+  ) {
+    const u = existing.url();
+    if (
+      isDcPlanReviewProjectIndexUrl(u) &&
+      !isDcPlanReviewSessionDeadUrl(u)
+    ) {
+      console.log(`[DC][session] reusing active extraction page: ${u}`);
+      return existing;
+    }
+  }
+  if (existing && !existing.isClosed()) {
+    await existing.close().catch(() => {});
+  }
+  session._dcExtractionPage = null;
+  return openDcPlanReviewProjectPopup(session, project);
+}
+
+/**
+ * Re-login to DC dashboard, locate permit, reopen authenticated project popup.
+ * Does not navigate bare Avolve Frame.aspx without a project popup.
+ * @param {Record<string, unknown>} session
+ * @param {{ projectNum?: string, projectId?: string }} project
+ */
+async function rebuildDcPlanReviewProjectSession(session, project) {
+  console.log(
+    `[DC][session] rebuilding project session for ${project.projectNum || project.projectId}…`,
+  );
+  if (session._dcExtractionPage && !session._dcExtractionPage.isClosed()) {
+    await session._dcExtractionPage.close().catch(() => {});
+  }
+  session._dcExtractionPage = null;
+  session._dcExtractionProjectId = null;
+
+  const context = session.context;
+  let dash = session.page;
+  if (!dash || dash.isClosed()) {
+    dash = await context.newPage();
+    session.page = dash;
+  }
+
+  const loginTarget =
+    session.dashboardUrl ||
+    dcPlanReviewDashboardHomeUrl() ||
+    DEFAULT_DASHBOARD_URL;
+  await performLogin(
+    dash,
+    session.username,
+    session.password,
+    loginTarget,
+  );
+  console.log(`[DC][session] re-login landed on: ${dash.url()}`);
+  if (
+    !isWashingtonDcPlanReviewDashboard(dash.url()) &&
+    !dash.url().includes("avolvecloud.com")
+  ) {
+    await dash
+      .goto(dcPlanReviewDashboardHomeUrl(), {
+        waitUntil: "networkidle",
+        timeout: 60000,
+      })
+      .catch(() => {});
+  }
+  if (!isWashingtonDcPlanReviewDashboard(dash.url())) {
+    await dash.waitForTimeout(2000);
+  }
+  console.log(`[DC][session] dashboard after re-login: ${dash.url()}`);
+
+  try {
+    const projects = await collectDcPlanReviewDashboardProjects(dash);
+    const permit = String(project.projectNum || "").trim().toUpperCase();
+    const hit = projects.find(
+      (p) => String(p.projectNum || "").trim().toUpperCase() === permit,
+    );
+    if (hit?.projectId) {
+      project.projectId = hit.projectId;
+      console.log(
+        `[DC][session] rediscovered permit ${permit} projectId=${hit.projectId}`,
+      );
+    } else {
+      console.log(
+        `[DC][session] rediscovery did not list ${permit}; will click by text anyway`,
+      );
+    }
+  } catch (err) {
+    console.log(
+      `[DC][session] rediscovery warning: ${err instanceof Error ? err.message : err}`,
+    );
+  }
+
+  const popup = await openDcPlanReviewProjectPopup(session, project);
+  console.log(
+    `[DC][session] project session rebuilt=true active=${popup.url()}`,
+  );
+  return popup;
+}
+
 // ─── Analyze Drawing (AI Compliance) endpoint ──────────────────────────────
 const { analyzeDrawingWithOpenAI } = require("./services/compliance/analyze-drawing.service.js");
 
@@ -973,7 +1263,15 @@ app.post("/api/login", async (req, res) => {
     }
     console.log("✅ Login successful!");
 
-    if (
+    const onDcPlanReview = isWashingtonDcPlanReviewDashboard(page.url());
+    /** @type {string | null} */
+    let dcSessionOriginCaptured = null;
+    let isDcPlanReviewPortal = onDcPlanReview;
+    if (onDcPlanReview) {
+      console.log(
+        `[ProjectDox][post-login] staying on DC ePlan dashboard (skip Avolve goto): ${page.url()}`,
+      );
+    } else if (
       !isHowardProjectDox &&
       (!page.url().includes("avolvecloud.com") ||
         page.url().includes("projectdoxwebui"))
@@ -1052,8 +1350,56 @@ app.post("/api/login", async (req, res) => {
           `[Howard][discovery] warm result: strategy=${warm.strategy} finalUrl=${warm.finalUrl}`,
         );
       }
+    } else if (isWashingtonDcPlanReviewDashboard(page.url())) {
+      // Washington DC ePlan (planreview.dob.dc.gov): table rows + launchRemote/ProjectID (page 1 only).
+      // Project scrape must use the session.planreview popup — not legacy Avolve Frame.aspx.
+      isDcPlanReviewPortal = true;
+      console.log(
+        `[ProjectDox][discovery] DC ePlan dashboard URL: ${page.url()}`,
+      );
+      projects = await collectDcPlanReviewDashboardProjects(page);
+      console.log(
+        `[ProjectDox][discovery] DC ePlan project rows: ${projects.length}`,
+      );
+
+      // Warm: open first project popup only to capture session.planreview origin (cookies stay on context).
+      if (projects.length > 0) {
+        const firstProject = projects[0];
+        console.log(
+          `\n🔗 [DC][session] Establishing planreview session via project ${firstProject.projectNum}...`,
+        );
+
+        try {
+          const popup = await openDcPlanReviewProjectPopup(
+            { context, page, dcSessionOrigin: null },
+            firstProject,
+          );
+          console.log(
+            `[DC][session] login warm popup final URL: ${popup.url()}`,
+          );
+          try {
+            dcSessionOriginCaptured = new URL(popup.url()).origin;
+          } catch (_) {
+            dcSessionOriginCaptured = "https://session.planreview.dob.dc.gov";
+          }
+          // Close warm popup; scrapeAll reopens the target project as the active extraction page.
+          await popup.close().catch(() => {});
+          console.log(
+            `[DC][session] login warm captured origin=${dcSessionOriginCaptured} (popup closed; scrape will reopen target)`,
+          );
+        } catch (warmErr) {
+          console.warn(
+            `[DC][session] login warm failed (scrape will open project): ${
+              warmErr instanceof Error ? warmErr.message : warmErr
+            }`,
+          );
+          dcSessionOriginCaptured =
+            dcSessionOriginCaptured ||
+            "https://session.planreview.dob.dc.gov";
+        }
+      }
     } else {
-      // Washington / generic Avolve ProjectDox: same igGrid (#grdProjects) + pager as Montgomery; enumerate all pages.
+      // Other generic Avolve ProjectDox hosts: igGrid (#grdProjects) + pager via Montgomery collector.
       console.log(
         `[ProjectDox][discovery] collecting projects (paginated Avolve grid)…`,
       );
@@ -1063,7 +1409,6 @@ app.post("/api/login", async (req, res) => {
           page,
         );
 
-      // ── CRITICAL: Establish WebUI session by navigating through a project link ──
       if (projects.length > 0) {
         const firstProject = projects[0];
         console.log(
@@ -1158,6 +1503,23 @@ app.post("/api/login", async (req, res) => {
         projectDoxSession.howardWebUiBases = howardWebUiBases;
       }
     }
+    if (isDcPlanReviewPortal) {
+      projectDoxSession.portalSubtype = "dc-planreview";
+      projectDoxSession.dcPlanReview = true;
+      projectDoxSession.dcSessionOrigin =
+        dcSessionOriginCaptured || "https://session.planreview.dob.dc.gov";
+      // Keep planreview as the re-login / rediscovery surface.
+      try {
+        if (isWashingtonDcPlanReviewDashboard(page.url())) {
+          projectDoxSession.dashboardUrl = `${new URL(page.url()).origin}/`;
+        }
+      } catch (_) {
+        projectDoxSession.dashboardUrl = dcPlanReviewDashboardHomeUrl();
+      }
+      console.log(
+        `[DC][session] session flagged portalSubtype=dc-planreview origin=${projectDoxSession.dcSessionOrigin} dashboard=${projectDoxSession.dashboardUrl}`,
+      );
+    }
     sessions[sessionId] = projectDoxSession;
     sessions[sessionId]._timeout = setTimeout(
       () => cleanupSession(sessionId, "idle_timeout"),
@@ -1170,6 +1532,7 @@ app.post("/api/login", async (req, res) => {
       portalType: "projectdox",
       ...(isMontgomeryProjectDox && { portalSubtype: "montgomery-projectdox" }),
       ...(isHowardProjectDox && { portalSubtype: "howard-projectdox" }),
+      ...(isDcPlanReviewPortal && { portalSubtype: "dc-planreview" }),
     });
   } catch (err) {
     console.error("❌ Login error:", err.message);
@@ -5643,7 +6006,94 @@ async function scrapeAll(
 
       let context = session.context;
       let page;
+      const isDcPlanReviewSession =
+        session.portalSubtype === "dc-planreview" ||
+        session.dcPlanReview === true;
+      /** Keep DC session.planreview popup open across tabs. */
+      let retainDcExtractionPage = false;
       try {
+        if (isDcPlanReviewSession) {
+          retainDcExtractionPage = true;
+          try {
+            console.log(
+              `[DC][session] dashboard page URL: ${
+                session.page && !session.page.isClosed()
+                  ? session.page.url()
+                  : "(closed)"
+              }`,
+            );
+          } catch (_) {
+            console.log(`[DC][session] dashboard page URL: (unavailable)`);
+          }
+
+          page = await ensureDcPlanReviewExtractionPage(session, project);
+          console.log(
+            `[DC][session] active extraction page URL: ${page.url()}`,
+          );
+
+          const tabUrl = buildDcPlanReviewTabUrl(
+            session.dcSessionOrigin,
+            project.projectId,
+            tab.param,
+          );
+          console.log(
+            `[DC][session] tab=${tab.label} before extraction URL=${page.url()} navigate→ ${tabUrl}`,
+          );
+          await page.goto(tabUrl, {
+            waitUntil: "networkidle",
+            timeout: 90000,
+          });
+          await page.waitForTimeout(2000);
+
+          let pUrl = page.url();
+          console.log(
+            `[DC][session] tab=${tab.label} URL before extraction: ${pUrl}`,
+          );
+
+          const sessionInvalid =
+            page.isClosed() ||
+            !isDcPlanReviewSessionHost(pUrl) ||
+            isDcPlanReviewSessionDeadUrl(pUrl);
+
+          if (sessionInvalid) {
+            console.log(
+              `[DC][session] session invalid before ${tab.label}; rebuilt=pending (re-login + reopen project once)`,
+            );
+            page = await rebuildDcPlanReviewProjectSession(session, project);
+            await page.goto(tabUrl, {
+              waitUntil: "networkidle",
+              timeout: 90000,
+            });
+            await page.waitForTimeout(2000);
+            pUrl = page.url();
+            console.log(
+              `[DC][session] tab=${tab.label} URL after rebuild: ${pUrl} rebuilt=true`,
+            );
+            if (
+              page.isClosed() ||
+              !isDcPlanReviewSessionHost(pUrl) ||
+              isDcPlanReviewSessionDeadUrl(pUrl)
+            ) {
+              console.log(
+                `[DC][session] retry result=fail tab=${tab.label} url=${pUrl}`,
+              );
+              const errTab = {
+                error: "session_expired",
+                keyValues: [],
+                tables: [],
+                links: [],
+              };
+              if (tab.key === "reports") errTab.pdfs = [];
+              if (tab.key === "files") errTab.folders = [];
+              session.data[project.id].tabs[tab.key] = errTab;
+              session.progress++;
+              continue;
+            }
+            console.log(
+              `[DC][session] retry result=ok tab=${tab.label} url=${pUrl}`,
+            );
+          }
+        } else {
         page = await context.newPage();
         const webUiUrl = `${session.webUiBase}/WebForms/Frame.aspx?tab=${tab.param}&ProjectID=${project.projectId}`;
         await page.goto(webUiUrl, { waitUntil: "networkidle", timeout: 90000 });
@@ -5684,6 +6134,7 @@ async function scrapeAll(
             continue;
           }
         }
+        } // end non-DC branch
 
         // Ensure correct tab content is loaded
         if (tab.key === "info") {
@@ -5930,16 +6381,35 @@ async function scrapeAll(
         if (isTargetClosedError(err)) {
           console.log(`      🔄 Browser crashed during ${tab.label} tab, attempting recovery...`);
           try {
-            await reinitializeBrowser(session);
-            console.log(`      ✅ Browser recovered for next tab`);
+            if (isDcPlanReviewSession) {
+              await rebuildDcPlanReviewProjectSession(session, project);
+              console.log(
+                `      ✅ DC project session rebuilt for next tab`,
+              );
+            } else {
+              await reinitializeBrowser(session);
+              console.log(`      ✅ Browser recovered for next tab`);
+            }
           } catch (recErr) {
             console.log(`      ❌ Browser recovery failed: ${recErr.message}`);
           }
         }
       }
-      if (page) await page.close().catch(() => {});
+      if (page && !retainDcExtractionPage) await page.close().catch(() => {});
       context = session.context;
       session.progress++;
+    }
+
+    if (
+      (session.portalSubtype === "dc-planreview" || session.dcPlanReview) &&
+      session._dcExtractionPage
+    ) {
+      await session._dcExtractionPage.close().catch(() => {});
+      session._dcExtractionPage = null;
+      session._dcExtractionProjectId = null;
+      console.log(
+        `[DC][session] closed extraction page after project ${project.projectNum}`,
+      );
     }
   }
 
@@ -6088,10 +6558,44 @@ async function reinitializeBrowser(session) {
       const hb = await howardProjectDox.resolveHowardWebUiBases(loginPage);
       if (hb?.length) session.howardWebUiBases = hb;
     } catch (_) {}
+  } else if (
+    session.portalSubtype === "dc-planreview" ||
+    session.dcPlanReview
+  ) {
+    // DC: re-login to planreview dashboard only. Do not warm legacy Avolve Frame.aspx.
+    // Caller must reopen the target project popup via rebuildDcPlanReviewProjectSession
+    // or ensureDcPlanReviewExtractionPage before extracting tabs.
+    session._dcExtractionPage = null;
+    session._dcExtractionProjectId = null;
+    await performLogin(
+      loginPage,
+      session.username,
+      session.password,
+      session.dashboardUrl || dcPlanReviewDashboardHomeUrl(),
+    );
+    console.log(
+      `[DC][session] reinitialize landed on dashboard: ${loginPage.url()}`,
+    );
+    if (!isWashingtonDcPlanReviewDashboard(loginPage.url())) {
+      await loginPage
+        .goto(dcPlanReviewDashboardHomeUrl(), {
+          waitUntil: "networkidle",
+          timeout: 60000,
+        })
+        .catch(() => {});
+      console.log(
+        `[DC][session] reinitialize forced planreview home: ${loginPage.url()}`,
+      );
+    }
   } else {
     await performLogin(loginPage, session.username, session.password, session.dashboardUrl);
   }
-  if (session.projects && session.projects.length > 0) {
+  if (
+    session.projects &&
+    session.projects.length > 0 &&
+    session.portalSubtype !== "dc-planreview" &&
+    !session.dcPlanReview
+  ) {
     const firstProjectId = session.projects[0].projectId;
     if (firstProjectId) {
       const testPage = await context.newPage();
