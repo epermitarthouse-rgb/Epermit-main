@@ -176,8 +176,11 @@ function friendlyProjectMutationError(err: unknown, fallback: string): string {
   const { message, code } = extractSupabaseError(err);
   const msg = message.toLowerCase();
 
+  if (msg.includes('project owner must belong to tenant')) {
+    return 'Workspace membership is required for this project tenant. Sign in again or ask a workspace admin to restore your membership.';
+  }
   if (code === '42501' || msg.includes('row-level security') || msg.includes('permission denied')) {
-    return 'Permission denied — you do not have access to create or update this project.';
+    return 'Permission denied — your session may be expired or out of sync. Sign out, sign back in, and try again.';
   }
   if (code === '23505' || msg.includes('duplicate key') || msg.includes('already exists')) {
     return 'A project with this information already exists.';
@@ -211,6 +214,67 @@ function friendlyProjectMutationError(err: unknown, fallback: string): string {
   return message || fallback;
 }
 
+/**
+ * INSERT policies require auth.uid() = user_id. React auth state can be stale
+ * while the Supabase JWT is missing/expired — always resolve from the live session.
+ */
+async function requireAuthenticatedUserId(
+  expectedUserId?: string | null,
+): Promise<string | null> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  let userId = userData.user?.id ?? null;
+
+  if (userError || !userId) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed.session?.user?.id) {
+      toast.error('Your session expired. Please sign in again to create or update projects.');
+      return null;
+    }
+    userId = refreshed.session.user.id;
+  }
+
+  if (expectedUserId && expectedUserId !== userId) {
+    toast.error('Signed-in account mismatch. Refresh the page and try again.');
+    return null;
+  }
+
+  return userId;
+}
+
+/**
+ * Match projects_set_tenant_from_owner: first non-demo owner/admin membership.
+ * Omit when missing so legacy NULL tenant_id create still works.
+ */
+async function resolveOwnerTenantId(userId: string): Promise<string | undefined> {
+  const { data, error } = await supabase
+    .from('tenant_memberships')
+    .select('tenant_id, role, created_at, tenants(is_demo, is_active)')
+    .eq('user_id', userId)
+    .in('role', ['owner', 'admin'])
+    .order('created_at', { ascending: true });
+
+  if (error || !data?.length) {
+    if (error) {
+      console.warn('[useProjects] tenant membership lookup failed:', error.message);
+    }
+    return undefined;
+  }
+
+  for (const row of data) {
+    const raw = row.tenants as
+      | { is_demo?: boolean | null; is_active?: boolean | null }
+      | { is_demo?: boolean | null; is_active?: boolean | null }[]
+      | null;
+    const tenant = Array.isArray(raw) ? raw[0] : raw;
+    if (!tenant) continue;
+    if (tenant.is_demo === true) continue;
+    if (tenant.is_active === false) continue;
+    if (row.tenant_id) return String(row.tenant_id);
+  }
+
+  return undefined;
+}
+
 const EXTENDED_CREATE_KEYS = [
   'client_name',
   'client_email',
@@ -225,7 +289,7 @@ const EXTENDED_CREATE_KEYS = [
 function buildProjectInsertPayload(
   data: CreateProjectData,
   userId: string,
-  options: { includeExtended: boolean },
+  options: { includeExtended: boolean; tenantId?: string },
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     name: data.name.trim(),
@@ -252,6 +316,8 @@ function buildProjectInsertPayload(
   assignIfPresent('deadline', data.deadline);
   assignIfPresent('notes', data.notes);
   assignIfPresent('permit_number', data.permit_number);
+  // Explicit workspace ownership (matches projects_set_tenant_from_owner contract).
+  assignIfPresent('tenant_id', options.tenantId ?? data.tenant_id);
 
   // Fee fields: only send when explicitly provided (avoid forcing 0 on every create).
   if (data.permit_fee !== undefined) payload.permit_fee = data.permit_fee;
@@ -289,6 +355,8 @@ export interface CreateProjectData {
   total_cost?: number;
   permit_number?: string | null;
   credential_id?: string | null;
+  /** Workspace tenant (Row 2); resolved from owner membership when omitted. */
+  tenant_id?: string | null;
   /** Optional billing fields (Phase 4C); null clears values on update. */
   client_name?: string | null;
   client_email?: string | null;
@@ -376,9 +444,19 @@ export function useProjects() {
       return null;
     }
 
+    const authUserId = await requireAuthenticatedUserId(user.id);
+    if (!authUserId) return null;
+
     try {
+      const tenantId =
+        (data.tenant_id && String(data.tenant_id).trim()) ||
+        (await resolveOwnerTenantId(authUserId));
+
       const attemptInsert = async (includeExtended: boolean) => {
-        const payload = buildProjectInsertPayload(data, user.id, { includeExtended });
+        const payload = buildProjectInsertPayload(data, authUserId, {
+          includeExtended,
+          tenantId,
+        });
         return supabase
           .from('projects')
           .insert(payload)
@@ -394,6 +472,25 @@ export function useProjects() {
         error = retry.error;
       }
 
+      // Retry without tenant_id if the column is missing on older DBs.
+      if (
+        error &&
+        tenantId &&
+        (isProjectsSchemaMismatchError(error) ||
+          String(error.message || '').toLowerCase().includes('tenant_id'))
+      ) {
+        const payload = buildProjectInsertPayload(data, authUserId, {
+          includeExtended: false,
+        });
+        const retry = await supabase
+          .from('projects')
+          .insert(payload)
+          .select(PROJECT_CORE_SELECT_COLUMNS)
+          .single();
+        newProject = retry.data;
+        error = retry.error;
+      }
+
       if (error) throw error;
       if (!newProject) throw new Error('Project create returned no row');
 
@@ -403,11 +500,11 @@ export function useProjects() {
       // Best-effort activity log — must not fail project creation.
       await logProjectActivity(
         normalized.id,
-        user.id,
+        authUserId,
         'project_created',
         `Project "${data.name}" created`,
         data.description || undefined,
-        { project_type: data.project_type },
+        { project_type: data.project_type, tenant_id: tenantId ?? null },
       );
 
       toast.success('Project created successfully');
@@ -422,11 +519,14 @@ export function useProjects() {
 
   const updateProject = async (id: string, data: UpdateProjectData): Promise<Project | null> => {
     if (!user) return null;
-    
+
+    const authUserId = await requireAuthenticatedUserId(user.id);
+    if (!authUserId) return null;
+
     try {
       // Get current project for comparison
       const currentProject = projects.find(p => p.id === id);
-      
+
       // Handle status transitions
       const updateData: UpdateProjectData & { submitted_at?: string; approved_at?: string } = {
         ...data,
@@ -442,6 +542,9 @@ export function useProjects() {
         }
         updateData.project_type = coerced;
       }
+
+      // Never allow client to reassign ownership away from the authenticated user.
+      delete (updateData as { user_id?: string }).user_id;
 
       if (data.status === 'submitted' && !updateData.submitted_at) {
         updateData.submitted_at = new Date().toISOString();
@@ -464,32 +567,32 @@ export function useProjects() {
           p.id === id ? normalizeProjectRow(updatedProject as Record<string, unknown>) : p,
         ),
       );
-      
+
       // Log activity
       if (data.status && currentProject && data.status !== currentProject.status) {
         const oldStatus = PROJECT_STATUS_CONFIG[currentProject.status].label;
         const newStatus = PROJECT_STATUS_CONFIG[data.status].label;
         await logProjectActivity(
           id,
-          user.id,
+          authUserId,
           'project_status_changed',
           `Status changed from ${oldStatus} to ${newStatus}`,
           undefined,
-          { old_status: currentProject.status, new_status: data.status }
+          { old_status: currentProject.status, new_status: data.status },
         );
         toast.success(`Project moved to ${data.status.replace('_', ' ')}`);
       } else {
         await logProjectActivity(
           id,
-          user.id,
+          authUserId,
           'project_updated',
           'Project details updated',
           undefined,
-          { updated_fields: Object.keys(data) }
+          { updated_fields: Object.keys(data) },
         );
         toast.success('Project updated successfully');
       }
-      
+
       return normalizeProjectRow(updatedProject as Record<string, unknown>);
     } catch (err) {
       const message = friendlyProjectMutationError(err, 'Failed to update project');
@@ -500,6 +603,13 @@ export function useProjects() {
   };
 
   const deleteProject = async (id: string): Promise<boolean> => {
+    if (!user) {
+      toast.error('You must be logged in to delete a project');
+      return false;
+    }
+    const authUserId = await requireAuthenticatedUserId(user.id);
+    if (!authUserId) return false;
+
     try {
       const { error } = await supabase
         .from('projects')

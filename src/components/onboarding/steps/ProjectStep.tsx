@@ -91,8 +91,18 @@ export const ProjectStep = forwardRef<ProjectStepHandle, ProjectStepProps>(
       onLoadingChange?.(true);
       try {
         if (user) {
+          let authUserId = (await supabase.auth.getUser()).data.user?.id ?? null;
+          if (!authUserId) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            authUserId = refreshed.session?.user?.id ?? null;
+          }
+          if (!authUserId || authUserId !== user.id) {
+            toast.error("Your session expired. Please sign in again.");
+            return;
+          }
+
           const { error } = await supabase.from("projects").insert({
-            user_id: user.id,
+            user_id: authUserId,
             name: data.name,
             description: data.description || null,
             project_type: data.project_type,
