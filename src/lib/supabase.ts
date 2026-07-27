@@ -62,10 +62,8 @@ export function readSupabaseAuthStorageSnapshot(): {
     };
 
     const accessToken = parsed.access_token ?? parsed.currentSession?.access_token ?? null;
-    const userId =
-      parsed.user?.id ?? parsed.currentSession?.user?.id ?? null;
-    const expiresAt =
-      parsed.expires_at ?? parsed.currentSession?.expires_at ?? null;
+    const userId = parsed.user?.id ?? parsed.currentSession?.user?.id ?? null;
+    const expiresAt = parsed.expires_at ?? parsed.currentSession?.expires_at ?? null;
     const claims = accessToken ? decodeJwtClaims(accessToken) : { sub: null, role: null };
 
     return {
@@ -85,6 +83,7 @@ export function readSupabaseAuthStorageSnapshot(): {
 /**
  * Runs after supabase-js fetchWithAuth attaches Authorization.
  * Proves whether projects INSERT uses the user JWT or falls back to the anon key.
+ * Does not modify headers or body.
  */
 const instrumentedFetch: typeof fetch = async (input, init) => {
   try {
@@ -132,19 +131,11 @@ const instrumentedFetch: typeof fetch = async (input, init) => {
 };
 
 /**
- * App-wide Supabase singleton. AuthProvider (login) and useProjects (insert)
- * both import this export — do not createClient elsewhere in the browser app.
- *
- * fetchWithAuth uses: Authorization: Bearer (session.access_token ?? anonKey).
- * The instrumented fetch logs which one was attached on projects INSERT.
+ * App-wide Supabase singleton — same URL/anon key as main.
+ * Only difference vs main: read-only fetch probe for projects INSERT auth headers.
+ * Auth options use library defaults (identical to bare createClient on main).
  */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey: SUPABASE_AUTH_STORAGE_KEY,
-  },
   global: {
     fetch: instrumentedFetch,
   },

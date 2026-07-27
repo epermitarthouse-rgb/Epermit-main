@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
   SUPABASE_CLIENT_ID,
-  SUPABASE_URL,
   SUPABASE_ANON_KEY,
   SUPABASE_AUTH_STORAGE_KEY,
   decodeJwtClaims,
@@ -310,63 +309,6 @@ async function requireInsertAuthContext(
   };
 }
 
-/**
- * Temporary diagnostic only — does NOT insert.
- * Compares the held user JWT with what an explicit Bearer fetch would send,
- * vs what supabase-js is about to attach via getSession() ?? anonKey.
- */
-function logExplicitJwtDiagnosticComparison(args: {
-  payloadUserId: unknown;
-  heldAccessToken: string;
-}): void {
-  const held = decodeJwtClaims(args.heldAccessToken);
-  const heldIsAnon = args.heldAccessToken === SUPABASE_ANON_KEY;
-  console.info('[createProject:diagnostic:explicit-jwt-comparison]', {
-    note: 'Diagnostic only — primary insert still uses supabase.from().insert()',
-    explicitWouldAttachUserJwt: !heldIsAnon && held.role !== 'anon' && Boolean(held.sub),
-    explicitJwtSub: held.sub,
-    explicitJwtRole: held.role,
-    explicitJwtSubMatchesPayload: held.sub === args.payloadUserId,
-    heldIsAnonKey: heldIsAnon,
-    restUrlWouldBe: `${SUPABASE_URL}/rest/v1/projects`,
-  });
-}
-
-
-/**
- * Match projects_set_tenant_from_owner: first non-demo owner/admin membership.
- * Omit when missing so legacy NULL tenant_id create still works.
- */
-async function resolveOwnerTenantId(userId: string): Promise<string | undefined> {
-  const { data, error } = await supabase
-    .from('tenant_memberships')
-    .select('tenant_id, role, created_at, tenants(is_demo, is_active)')
-    .eq('user_id', userId)
-    .in('role', ['owner', 'admin'])
-    .order('created_at', { ascending: true });
-
-  if (error || !data?.length) {
-    if (error) {
-      console.warn('[useProjects] tenant membership lookup failed:', error.message);
-    }
-    return undefined;
-  }
-
-  for (const row of data) {
-    const raw = row.tenants as
-      | { is_demo?: boolean | null; is_active?: boolean | null }
-      | { is_demo?: boolean | null; is_active?: boolean | null }[]
-      | null;
-    const tenant = Array.isArray(raw) ? raw[0] : raw;
-    if (!tenant) continue;
-    if (tenant.is_demo === true) continue;
-    if (tenant.is_active === false) continue;
-    if (row.tenant_id) return String(row.tenant_id);
-  }
-
-  return undefined;
-}
-
 const EXTENDED_CREATE_KEYS = [
   'client_name',
   'client_email',
@@ -381,8 +323,12 @@ const EXTENDED_CREATE_KEYS = [
 function buildProjectInsertPayload(
   data: CreateProjectData,
   userId: string,
-  options: { includeExtended: boolean; tenantId?: string },
+  options: { includeExtended: boolean },
 ): Record<string, unknown> {
+  // Match main's proven create contract:
+  // - user_id from the signed-in React user
+  // - status: draft
+  // - do NOT send tenant_id (DB trigger inherits when needed; injecting it diverged from main)
   const payload: Record<string, unknown> = {
     name: data.name.trim(),
     user_id: userId,
@@ -408,8 +354,6 @@ function buildProjectInsertPayload(
   assignIfPresent('deadline', data.deadline);
   assignIfPresent('notes', data.notes);
   assignIfPresent('permit_number', data.permit_number);
-  // Explicit workspace ownership (matches projects_set_tenant_from_owner contract).
-  assignIfPresent('tenant_id', options.tenantId ?? data.tenant_id);
 
   // Fee fields: only send when explicitly provided (avoid forcing 0 on every create).
   if (data.permit_fee !== undefined) payload.permit_fee = data.permit_fee;
@@ -536,93 +480,43 @@ export function useProjects() {
       return null;
     }
 
-    const auth = await requireInsertAuthContext(user.id);
-    if (!auth) return null;
+    // Match main: use React auth user.id as payload.user_id.
+    // Do not refresh/setSession/resolve tenant before insert — that diverged from main
+    // and is the first concrete auth/request-contract difference.
+    const userId = user.id;
 
     try {
-      const tenantId =
-        (data.tenant_id && String(data.tenant_id).trim()) ||
-        (await resolveOwnerTenantId(auth.userId));
-
       const attemptInsert = async (includeExtended: boolean) => {
-        const payload = buildProjectInsertPayload(data, auth.userId, {
-          includeExtended,
-          tenantId,
-        });
-        const jwt = decodeJwtClaims(auth.accessToken);
+        const payload = buildProjectInsertPayload(data, userId, { includeExtended });
+
+        // Read-only diagnostics (no session mutation).
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const accessToken = session?.access_token ?? null;
+        const sessionUserId = session?.user?.id ?? null;
+        const jwt = accessToken ? decodeJwtClaims(accessToken) : { sub: null, role: null };
         const storageImmediatelyBeforeRequest = readSupabaseAuthStorageSnapshot();
-        const { data: probeSession } = await supabase.auth.getSession();
-        const clientToken = probeSession.session?.access_token ?? null;
-        const clientWouldUseAnonKey = !clientToken;
-        const clientJwt = clientToken ? decodeJwtClaims(clientToken) : { sub: null, role: null };
-        const idsAligned =
-          auth.sessionUserId === auth.getUserId &&
-          auth.getUserId === payload.user_id &&
-          jwt.sub === payload.user_id;
 
         console.info('[createProject:pre-insert]', {
-          sessionUserId: auth.sessionUserId,
-          getUserUserId: auth.getUserId,
+          branchContract: 'main-compatible',
+          reactUserId: userId,
+          sessionUserId,
+          getUserUserId: '(skipped — main does not call getUser before insert)',
           payloadUserId: payload.user_id,
           payloadTenantId: payload.tenant_id ?? null,
-          accessTokenPresent: auth.accessTokenPresent,
+          accessTokenPresent: Boolean(accessToken),
           jwtSub: jwt.sub,
           jwtRole: jwt.role,
-          idsAligned,
-          loginClientModule: SUPABASE_CLIENT_ID,
-          insertClientModule: SUPABASE_CLIENT_ID,
-          sameSingleton: true,
-          insertTransport: 'supabase.from().insert()',
+          idsAligned: sessionUserId === userId && jwt.sub === payload.user_id,
+          authorizationWillBe:
+            accessToken && accessToken !== SUPABASE_ANON_KEY ? 'Bearer user-jwt' : 'Bearer anon-key',
+          insertMethod: "supabase.from('projects').insert(payload).select(...).single()",
           authStorageKey: SUPABASE_AUTH_STORAGE_KEY,
           storageImmediatelyBeforeRequest,
-          clientGetSessionTokenPresent: Boolean(clientToken),
-          clientWouldAuthorizeWithAnonKey: clientWouldUseAnonKey,
-          clientJwtSub: clientJwt.sub,
-          clientJwtRole: clientJwt.role,
-          heldTokenMatchesClientSession:
-            Boolean(clientToken) && clientToken === auth.accessToken,
           origin: typeof window !== 'undefined' ? window.location.origin : null,
+          clientModule: SUPABASE_CLIENT_ID,
         });
-
-        logExplicitJwtDiagnosticComparison({
-          payloadUserId: payload.user_id,
-          heldAccessToken: auth.accessToken,
-        });
-
-        if (
-          !auth.accessTokenPresent ||
-          !auth.accessToken ||
-          auth.sessionUserId !== auth.getUserId ||
-          auth.getUserId !== payload.user_id
-        ) {
-          toast.error(
-            'Auth identity mismatch — insert blocked. Sign out, sign in, and try again.',
-          );
-          return {
-            data: null,
-            error: {
-              message: 'Auth identity mismatch before insert',
-              code: '42501',
-            },
-          };
-        }
-
-        if (clientWouldUseAnonKey) {
-          console.error('[createProject:pre-insert] client would fall back to anon key', {
-            storageImmediatelyBeforeRequest,
-            heldJwtSub: jwt.sub,
-          });
-          toast.error(
-            'Auth session missing from Supabase client storage. Sign out, sign in, and try again.',
-          );
-          return {
-            data: null,
-            error: {
-              message: 'Supabase client session missing before insert (would use anon key)',
-              code: '42501',
-            },
-          };
-        }
 
         return supabase
           .from('projects')
@@ -639,41 +533,6 @@ export function useProjects() {
         error = retry.error;
       }
 
-      // Retry without tenant_id if the column is missing on older DBs.
-      if (
-        error &&
-        tenantId &&
-        (isProjectsSchemaMismatchError(error) ||
-          String(error.message || '').toLowerCase().includes('tenant_id'))
-      ) {
-        const payload = buildProjectInsertPayload(data, auth.userId, {
-          includeExtended: false,
-        });
-        const jwt = decodeJwtClaims(auth.accessToken);
-        const storageImmediatelyBeforeRequest = readSupabaseAuthStorageSnapshot();
-        console.info('[createProject:pre-insert:retry-no-tenant]', {
-          sessionUserId: auth.sessionUserId,
-          accessTokenPresent: auth.accessTokenPresent,
-          getUserUserId: auth.getUserId,
-          payloadUserId: payload.user_id,
-          payloadTenantId: null,
-          jwtSub: jwt.sub,
-          jwtRole: jwt.role,
-          loginClientModule: SUPABASE_CLIENT_ID,
-          insertClientModule: SUPABASE_CLIENT_ID,
-          sameSingleton: true,
-          insertTransport: 'supabase.from().insert()',
-          storageImmediatelyBeforeRequest,
-        });
-        const retry = await supabase
-          .from('projects')
-          .insert(payload)
-          .select(PROJECT_CORE_SELECT_COLUMNS)
-          .single();
-        newProject = retry.data;
-        error = retry.error;
-      }
-
       if (error) throw error;
       if (!newProject) throw new Error('Project create returned no row');
 
@@ -683,11 +542,11 @@ export function useProjects() {
       // Best-effort activity log — must not fail project creation.
       await logProjectActivity(
         normalized.id,
-        auth.userId,
+        userId,
         'project_created',
         `Project "${data.name}" created`,
         data.description || undefined,
-        { project_type: data.project_type, tenant_id: tenantId ?? null },
+        { project_type: data.project_type },
       );
 
       toast.success('Project created successfully');
