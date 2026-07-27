@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Project, ProjectStatus, ProjectType, PROJECT_STATUS_CONFIG } from '@/types/project';
+import {
+  Project,
+  ProjectStatus,
+  ProjectType,
+  PROJECT_STATUS_CONFIG,
+  coerceProjectTypeForDb,
+} from '@/types/project';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { logProjectActivity } from '@/lib/activityLogger';
@@ -182,6 +188,13 @@ function friendlyProjectMutationError(err: unknown, fallback: string): string {
   if (code === '23514' || msg.includes('check constraint') || msg.includes('violates check')) {
     return 'One or more project fields failed validation.';
   }
+  if (
+    code === '22P02' ||
+    msg.includes('invalid input value for enum') ||
+    msg.includes('invalid input value for enum project_type')
+  ) {
+    return 'Invalid project type. Choose a supported type (New Construction, Renovation, Addition, Tenant Improvement, Demolition, or Other).';
+  }
   if (code === '23503' || msg.includes('foreign key')) {
     return 'A linked credential or reference is invalid. Choose another credential or clear it.';
   }
@@ -231,7 +244,8 @@ function buildProjectInsertPayload(
   assignIfPresent('state', data.state);
   assignIfPresent('zip_code', data.zip_code);
   assignIfPresent('jurisdiction', data.jurisdiction);
-  assignIfPresent('project_type', data.project_type);
+  // Only live DB enum values — expanded labels from unapplied migration are coerced/dropped.
+  assignIfPresent('project_type', coerceProjectTypeForDb(data.project_type));
   assignIfPresent('description', data.description);
   assignIfPresent('estimated_value', data.estimated_value);
   assignIfPresent('square_footage', data.square_footage);
@@ -351,6 +365,17 @@ export function useProjects() {
       return null;
     }
 
+    if (
+      data.project_type != null &&
+      String(data.project_type).trim() !== '' &&
+      !coerceProjectTypeForDb(data.project_type)
+    ) {
+      toast.error(
+        'Invalid project type. Choose New Construction, Renovation, Addition, Tenant Improvement, Demolition, or Other.',
+      );
+      return null;
+    }
+
     try {
       const attemptInsert = async (includeExtended: boolean) => {
         const payload = buildProjectInsertPayload(data, user.id, { includeExtended });
@@ -403,8 +428,21 @@ export function useProjects() {
       const currentProject = projects.find(p => p.id === id);
       
       // Handle status transitions
-      const updateData: UpdateProjectData & { submitted_at?: string; approved_at?: string } = { ...data };
-      
+      const updateData: UpdateProjectData & { submitted_at?: string; approved_at?: string } = {
+        ...data,
+      };
+
+      if (data.project_type !== undefined) {
+        const coerced = coerceProjectTypeForDb(data.project_type);
+        if (data.project_type && !coerced) {
+          toast.error(
+            'Invalid project type. Choose New Construction, Renovation, Addition, Tenant Improvement, Demolition, or Other.',
+          );
+          return null;
+        }
+        updateData.project_type = coerced;
+      }
+
       if (data.status === 'submitted' && !updateData.submitted_at) {
         updateData.submitted_at = new Date().toISOString();
       }

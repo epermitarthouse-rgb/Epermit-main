@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Loader2, Sparkles, Info, KeyRound } from 'lucide-react';
-import { Project, ProjectType, PROJECT_TYPE_LABELS } from '@/types/project';
+import { Project, ProjectType, PROJECT_TYPE_LABELS, PROJECT_TYPE_VALUES, coerceProjectTypeForDb } from '@/types/project';
 import { CreateProjectData, UpdateProjectData } from '@/hooks/useProjects';
 import { JurisdictionLookup } from './JurisdictionLookup';
 import { toast } from 'sonner';
@@ -93,7 +93,9 @@ const projectSchema = z.object({
   state: z.string().optional(),
   zip_code: z.string().trim().regex(/^(\d{5}(-\d{4})?)?$/, "Invalid ZIP code format").optional(),
   jurisdiction: z.string().trim().max(200, "Jurisdiction must be less than 200 characters").optional(),
-  project_type: z.string().optional(),
+  project_type: z
+    .union([z.enum(PROJECT_TYPE_VALUES), z.literal("")])
+    .optional(),
   description: z.string().trim().max(2000, "Description must be less than 2000 characters").optional(),
   estimated_value: z.string().optional().refine((val) => !val || !isNaN(parseFloat(val)), "Must be a valid number"),
   square_footage: z.string().optional().refine((val) => !val || !isNaN(parseInt(val)), "Must be a valid number"),
@@ -226,7 +228,7 @@ export function ProjectFormDialog({
         state: project.state || '',
         zip_code: project.zip_code || '',
         jurisdiction: project.jurisdiction || '',
-        project_type: project.project_type || '',
+        project_type: coerceProjectTypeForDb(project.project_type) || '',
         description: project.description || '',
         estimated_value: project.estimated_value?.toString() || '',
         square_footage: project.square_footage?.toString() || '',
@@ -366,7 +368,7 @@ export function ProjectFormDialog({
       state: formData.state || undefined,
       zip_code: formData.zip_code.trim() || undefined,
       jurisdiction: formData.jurisdiction.trim() || undefined,
-      project_type: (formData.project_type || undefined) as ProjectType | undefined,
+      project_type: coerceProjectTypeForDb(formData.project_type),
       description: formData.description.trim() || undefined,
       estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : undefined,
       square_footage: formData.square_footage ? parseInt(formData.square_footage) : undefined,

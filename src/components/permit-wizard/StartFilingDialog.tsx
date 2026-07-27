@@ -46,8 +46,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects } from '@/hooks/useProjects';
 import type { Project } from '@/types/project';
-import { PROJECT_TYPE_LABELS } from '@/types/project';
-import type { ProjectType } from '@/types/project';
+import { PROJECT_TYPE_LABELS, coerceProjectTypeForDb } from '@/types/project';
 
 interface Professional {
   id: string;
@@ -543,7 +542,7 @@ export function StartFilingDialog({
           name: newProjectName.trim(),
           address: newProjectAddress.trim() || undefined,
           jurisdiction: newProjectJurisdiction.trim() || undefined,
-          project_type: (newProjectType as ProjectType) || undefined,
+          project_type: coerceProjectTypeForDb(newProjectType),
           estimated_value: constructionValue ? parseFloat(constructionValue) : undefined,
         });
 
