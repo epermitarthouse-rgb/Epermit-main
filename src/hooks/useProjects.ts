@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, SUPABASE_CLIENT_ID } from '@/lib/supabase';
+import {
+  supabase,
+  SUPABASE_CLIENT_ID,
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  SUPABASE_AUTH_STORAGE_KEY,
+  decodeJwtClaims,
+  readSupabaseAuthStorageSnapshot,
+} from '@/lib/supabase';
 import { Project, ProjectStatus, ProjectType, PROJECT_STATUS_CONFIG, coerceProjectTypeForDb } from '@/types/project';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -210,8 +218,12 @@ function friendlyProjectMutationError(err: unknown, fallback: string): string {
 
 /**
  * INSERT WITH CHECK (auth.uid() = user_id) requires the PostgREST request to
- * carry a valid access token on the same singleton used at login.
- * Prefer session.access_token + setSession re-bind over getUser-only.
+ * carry a *user* JWT. supabase-js fetchWithAuth uses:
+ *   Authorization: Bearer (session.access_token ?? anonKey)
+ * so a missing session silently sends the anon key → auth.uid() is null → RLS 42501.
+ *
+ * Do NOT call auth.setSession() here — re-binding before insert races with
+ * autoRefreshToken / refresh-token rotation and can clear localStorage mid-flow.
  */
 async function requireInsertAuthContext(
   expectedUserId?: string | null,
@@ -219,10 +231,12 @@ async function requireInsertAuthContext(
   userId: string;
   sessionUserId: string;
   getUserId: string;
+  accessToken: string;
   accessTokenPresent: boolean;
   clientModule: typeof SUPABASE_CLIENT_ID;
 } | null> {
   const clientModule = SUPABASE_CLIENT_ID;
+  const storageBefore = readSupabaseAuthStorageSnapshot();
 
   let {
     data: { session },
@@ -241,6 +255,8 @@ async function requireInsertAuthContext(
         refreshError,
         hasSession: Boolean(refreshed.session),
         accessTokenPresent: Boolean(refreshed.session?.access_token),
+        storageBefore,
+        storageAfter: readSupabaseAuthStorageSnapshot(),
         clientModule,
       });
       return null;
@@ -248,33 +264,19 @@ async function requireInsertAuthContext(
     session = refreshed.session;
   }
 
-  // Re-bind onto the singleton so the next PostgREST call includes Authorization.
-  if (!session.refresh_token) {
-    toast.error('Your session is incomplete. Please sign in again.');
-    console.error('[createProject:auth] missing refresh_token', { clientModule });
-    return null;
-  }
-
-  const { data: bound, error: bindError } = await supabase.auth.setSession({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-  });
-
-  if (bindError || !bound.session?.access_token || !bound.session.user?.id) {
-    toast.error('Could not attach your auth session. Please sign in again.');
-    console.error('[createProject:auth] setSession failed', { bindError, clientModule });
-    return null;
-  }
-
-  session = bound.session;
-
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const { data: userData, error: userError } = await supabase.auth.getUser(
+    session.access_token,
+  );
   const getUserId = userData.user?.id ?? null;
   const sessionUserId = session.user.id;
 
   if (userError || !getUserId) {
     toast.error('Could not verify your signed-in user. Please sign in again.');
-    console.error('[createProject:auth] getUser failed', { userError, clientModule });
+    console.error('[createProject:auth] getUser failed', {
+      userError,
+      storage: readSupabaseAuthStorageSnapshot(),
+      clientModule,
+    });
     return null;
   }
 
@@ -302,10 +304,34 @@ async function requireInsertAuthContext(
     userId: sessionUserId,
     sessionUserId,
     getUserId,
+    accessToken: session.access_token,
     accessTokenPresent: Boolean(session.access_token),
     clientModule,
   };
 }
+
+/**
+ * Temporary diagnostic only — does NOT insert.
+ * Compares the held user JWT with what an explicit Bearer fetch would send,
+ * vs what supabase-js is about to attach via getSession() ?? anonKey.
+ */
+function logExplicitJwtDiagnosticComparison(args: {
+  payloadUserId: unknown;
+  heldAccessToken: string;
+}): void {
+  const held = decodeJwtClaims(args.heldAccessToken);
+  const heldIsAnon = args.heldAccessToken === SUPABASE_ANON_KEY;
+  console.info('[createProject:diagnostic:explicit-jwt-comparison]', {
+    note: 'Diagnostic only — primary insert still uses supabase.from().insert()',
+    explicitWouldAttachUserJwt: !heldIsAnon && held.role !== 'anon' && Boolean(held.sub),
+    explicitJwtSub: held.sub,
+    explicitJwtRole: held.role,
+    explicitJwtSubMatchesPayload: held.sub === args.payloadUserId,
+    heldIsAnonKey: heldIsAnon,
+    restUrlWouldBe: `${SUPABASE_URL}/rest/v1/projects`,
+  });
+}
+
 
 /**
  * Match projects_set_tenant_from_owner: first non-demo owner/admin membership.
@@ -523,23 +549,49 @@ export function useProjects() {
           includeExtended,
           tenantId,
         });
+        const jwt = decodeJwtClaims(auth.accessToken);
+        const storageImmediatelyBeforeRequest = readSupabaseAuthStorageSnapshot();
+        const { data: probeSession } = await supabase.auth.getSession();
+        const clientToken = probeSession.session?.access_token ?? null;
+        const clientWouldUseAnonKey = !clientToken;
+        const clientJwt = clientToken ? decodeJwtClaims(clientToken) : { sub: null, role: null };
+        const idsAligned =
+          auth.sessionUserId === auth.getUserId &&
+          auth.getUserId === payload.user_id &&
+          jwt.sub === payload.user_id;
 
         console.info('[createProject:pre-insert]', {
           sessionUserId: auth.sessionUserId,
-          accessTokenPresent: auth.accessTokenPresent,
           getUserUserId: auth.getUserId,
           payloadUserId: payload.user_id,
           payloadTenantId: payload.tenant_id ?? null,
+          accessTokenPresent: auth.accessTokenPresent,
+          jwtSub: jwt.sub,
+          jwtRole: jwt.role,
+          idsAligned,
           loginClientModule: SUPABASE_CLIENT_ID,
           insertClientModule: SUPABASE_CLIENT_ID,
           sameSingleton: true,
-          idsAligned:
-            auth.sessionUserId === auth.getUserId &&
-            auth.getUserId === payload.user_id,
+          insertTransport: 'supabase.from().insert()',
+          authStorageKey: SUPABASE_AUTH_STORAGE_KEY,
+          storageImmediatelyBeforeRequest,
+          clientGetSessionTokenPresent: Boolean(clientToken),
+          clientWouldAuthorizeWithAnonKey: clientWouldUseAnonKey,
+          clientJwtSub: clientJwt.sub,
+          clientJwtRole: clientJwt.role,
+          heldTokenMatchesClientSession:
+            Boolean(clientToken) && clientToken === auth.accessToken,
+          origin: typeof window !== 'undefined' ? window.location.origin : null,
+        });
+
+        logExplicitJwtDiagnosticComparison({
+          payloadUserId: payload.user_id,
+          heldAccessToken: auth.accessToken,
         });
 
         if (
           !auth.accessTokenPresent ||
+          !auth.accessToken ||
           auth.sessionUserId !== auth.getUserId ||
           auth.getUserId !== payload.user_id
         ) {
@@ -550,6 +602,23 @@ export function useProjects() {
             data: null,
             error: {
               message: 'Auth identity mismatch before insert',
+              code: '42501',
+            },
+          };
+        }
+
+        if (clientWouldUseAnonKey) {
+          console.error('[createProject:pre-insert] client would fall back to anon key', {
+            storageImmediatelyBeforeRequest,
+            heldJwtSub: jwt.sub,
+          });
+          toast.error(
+            'Auth session missing from Supabase client storage. Sign out, sign in, and try again.',
+          );
+          return {
+            data: null,
+            error: {
+              message: 'Supabase client session missing before insert (would use anon key)',
               code: '42501',
             },
           };
@@ -580,15 +649,21 @@ export function useProjects() {
         const payload = buildProjectInsertPayload(data, auth.userId, {
           includeExtended: false,
         });
+        const jwt = decodeJwtClaims(auth.accessToken);
+        const storageImmediatelyBeforeRequest = readSupabaseAuthStorageSnapshot();
         console.info('[createProject:pre-insert:retry-no-tenant]', {
           sessionUserId: auth.sessionUserId,
           accessTokenPresent: auth.accessTokenPresent,
           getUserUserId: auth.getUserId,
           payloadUserId: payload.user_id,
           payloadTenantId: null,
+          jwtSub: jwt.sub,
+          jwtRole: jwt.role,
           loginClientModule: SUPABASE_CLIENT_ID,
           insertClientModule: SUPABASE_CLIENT_ID,
           sameSingleton: true,
+          insertTransport: 'supabase.from().insert()',
+          storageImmediatelyBeforeRequest,
         });
         const retry = await supabase
           .from('projects')
@@ -621,6 +696,10 @@ export function useProjects() {
       const message = friendlyProjectMutationError(err, 'Failed to create project');
       toast.error(message);
       console.error('Error creating project:', err);
+      console.error('[createProject:post-error:auth-state]', {
+        storage: readSupabaseAuthStorageSnapshot(),
+        origin: typeof window !== 'undefined' ? window.location.origin : null,
+      });
       return null;
     }
   };
