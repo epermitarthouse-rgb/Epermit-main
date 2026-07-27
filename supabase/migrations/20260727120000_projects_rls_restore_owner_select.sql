@@ -1,13 +1,27 @@
--- Harden project tenant inheritance without weakening tenant-scoped SELECT.
+-- Fix projects INSERT...RETURNING under tenant-hardened SELECT.
 --
--- Intended SELECT contract (same as 20260715140400_row2_tenant_rls_hardening):
---   - tenant_id IS NULL  → legacy owner/team access
---   - tenant_id IS NOT NULL → require can_access_tenant AND has_project_access
--- Do NOT add a bare user_id = auth.uid() bypass for tenant-scoped rows.
+-- Breakage (live):
+--   20260715140200 stamps tenant_id on INSERT via projects_set_tenant_from_owner.
+--   20260715140400 SELECT for tenant-scoped rows required only:
+--     can_access_tenant(...) AND has_project_access(...)
+--   App create uses insert().select().single() → INSERT ... RETURNING.
+--   has_project_access is STABLE and re-queries projects; it often cannot see the
+--   row being inserted in the same statement, so RETURNING fails with:
+--     42501 new row violates row-level security policy for table "projects"
 --
--- Trigger: validate/inherit tenant on INSERT and on UPDATE of user_id/tenant_id.
--- Function runs as SECURITY DEFINER so membership lookup is not blocked by RLS.
--- EXECUTE is revoked from PUBLIC/anon/authenticated (trigger-only; not an RPC).
+-- Fix:
+--   Owner SELECT path uses row attributes (no same-statement projects lookup):
+--     user_id = auth.uid()
+--     AND (tenant_id IS NULL OR can_access_tenant(auth.uid(), tenant_id))
+--   Team / legacy paths keep membership + has_project_access.
+--   INSERT/UPDATE/DELETE policies are intentionally unchanged.
+--
+-- Also harden set_project_tenant_from_owner as SECURITY DEFINER so membership
+-- inheritance is not blocked by tenant_memberships RLS (trigger-only; not an RPC).
+--
+-- This file supersedes the earlier draft of the same migration that kept the
+-- broken tenant-scoped SELECT shape from 20260715140400.
+-- Safe: no DROP TABLE, no data rewrites, no UCI policy changes.
 
 DROP POLICY IF EXISTS "Users can view accessible projects" ON public.projects;
 
@@ -15,13 +29,22 @@ CREATE POLICY "Users can view accessible projects"
 ON public.projects
 FOR SELECT
 USING (
+  -- Owner path: attribute check safe for INSERT ... RETURNING.
+  -- Tenant-scoped owners still require membership (demo isolation).
   (
-    -- Legacy unscoped rows: owner or team member
-    tenant_id IS NULL
-    AND (user_id = auth.uid() OR public.has_project_access(auth.uid(), id))
+    user_id = auth.uid()
+    AND (
+      tenant_id IS NULL
+      OR public.can_access_tenant(auth.uid(), tenant_id)
+    )
   )
   OR (
-    -- Tenant-scoped rows: membership required (demo isolation via can_access_tenant)
+    -- Legacy unscoped non-owner / team access
+    tenant_id IS NULL
+    AND public.has_project_access(auth.uid(), id)
+  )
+  OR (
+    -- Tenant-scoped team access
     tenant_id IS NOT NULL
     AND public.can_access_tenant(auth.uid(), tenant_id)
     AND public.has_project_access(auth.uid(), id)
