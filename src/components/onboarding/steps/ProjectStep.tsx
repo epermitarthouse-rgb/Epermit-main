@@ -91,7 +91,6 @@ export const ProjectStep = forwardRef<ProjectStepHandle, ProjectStepProps>(
       onLoadingChange?.(true);
       try {
         if (user) {
-          // Match main: insert with React auth user.id — no getUser/refresh preflight.
           const { error } = await supabase.from("projects").insert({
             user_id: user.id,
             name: data.name,
@@ -109,18 +108,7 @@ export const ProjectStep = forwardRef<ProjectStepHandle, ProjectStepProps>(
         onNext();
       } catch (error) {
         console.error("Error creating project:", error);
-        const err = error as { message?: string; code?: string } | null;
-        const msg = String(err?.message || "").toLowerCase();
-        const code = String(err?.code || "");
-        if (code === "42501" || msg.includes("row-level security") || msg.includes("permission")) {
-          toast.error("Permission denied — you do not have access to create projects.");
-        } else if (code === "23502" || msg.includes("null value")) {
-          toast.error("Missing required project information.");
-        } else if (err?.message) {
-          toast.error(err.message);
-        } else {
-          toast.error("Failed to create project");
-        }
+        toast.error("Failed to create project");
       } finally {
         setLoading(false);
         onLoadingChange?.(false);

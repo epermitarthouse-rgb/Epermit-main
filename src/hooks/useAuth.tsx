@@ -109,20 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription: authSubscription },
-    } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      console.info('[AuthProvider:onAuthStateChange]', {
-        event,
-        hasSession: Boolean(nextSession),
-        userId: nextSession?.user?.id ?? null,
-        storageKey: 'sb-eeqxyjrcldivtpikcpvk-auth-token',
-        origin: window.location.origin,
-      });
-      if (event === 'SIGNED_OUT') {
-        console.warn(
-          '[AuthProvider] SIGNED_OUT — session cleared',
-          new Error('SIGNED_OUT stack').stack,
-        );
-      }
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       finishInitialLoading();
