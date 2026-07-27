@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
-import {
-  Project,
-  ProjectStatus,
-  ProjectType,
-  PROJECT_STATUS_CONFIG,
-  coerceProjectTypeForDb,
-} from '@/types/project';
+import { supabase, SUPABASE_CLIENT_ID } from '@/lib/supabase';
+import { Project, ProjectStatus, ProjectType, PROJECT_STATUS_CONFIG, coerceProjectTypeForDb } from '@/types/project';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { logProjectActivity } from '@/lib/activityLogger';
@@ -215,30 +209,102 @@ function friendlyProjectMutationError(err: unknown, fallback: string): string {
 }
 
 /**
- * INSERT policies require auth.uid() = user_id. React auth state can be stale
- * while the Supabase JWT is missing/expired — always resolve from the live session.
+ * INSERT WITH CHECK (auth.uid() = user_id) requires the PostgREST request to
+ * carry a valid access token on the same singleton used at login.
+ * Prefer session.access_token + setSession re-bind over getUser-only.
  */
-async function requireAuthenticatedUserId(
+async function requireInsertAuthContext(
   expectedUserId?: string | null,
-): Promise<string | null> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  let userId = userData.user?.id ?? null;
+): Promise<{
+  userId: string;
+  sessionUserId: string;
+  getUserId: string;
+  accessTokenPresent: boolean;
+  clientModule: typeof SUPABASE_CLIENT_ID;
+} | null> {
+  const clientModule = SUPABASE_CLIENT_ID;
 
-  if (userError || !userId) {
-    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError || !refreshed.session?.user?.id) {
-      toast.error('Your session expired. Please sign in again to create or update projects.');
-      return null;
-    }
-    userId = refreshed.session.user.id;
+  let {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    console.error('[createProject:auth] getSession error', sessionError);
   }
 
-  if (expectedUserId && expectedUserId !== userId) {
-    toast.error('Signed-in account mismatch. Refresh the page and try again.');
+  if (!session?.access_token || !session.user?.id) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed.session?.access_token || !refreshed.session.user?.id) {
+      toast.error('Your session expired. Please sign in again to create or update projects.');
+      console.error('[createProject:auth] refresh failed', {
+        refreshError,
+        hasSession: Boolean(refreshed.session),
+        accessTokenPresent: Boolean(refreshed.session?.access_token),
+        clientModule,
+      });
+      return null;
+    }
+    session = refreshed.session;
+  }
+
+  // Re-bind onto the singleton so the next PostgREST call includes Authorization.
+  if (!session.refresh_token) {
+    toast.error('Your session is incomplete. Please sign in again.');
+    console.error('[createProject:auth] missing refresh_token', { clientModule });
     return null;
   }
 
-  return userId;
+  const { data: bound, error: bindError } = await supabase.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+  });
+
+  if (bindError || !bound.session?.access_token || !bound.session.user?.id) {
+    toast.error('Could not attach your auth session. Please sign in again.');
+    console.error('[createProject:auth] setSession failed', { bindError, clientModule });
+    return null;
+  }
+
+  session = bound.session;
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const getUserId = userData.user?.id ?? null;
+  const sessionUserId = session.user.id;
+
+  if (userError || !getUserId) {
+    toast.error('Could not verify your signed-in user. Please sign in again.');
+    console.error('[createProject:auth] getUser failed', { userError, clientModule });
+    return null;
+  }
+
+  if (sessionUserId !== getUserId) {
+    toast.error('Auth identity mismatch between session and user. Please sign in again.');
+    console.error('[createProject:auth] session/getUser mismatch', {
+      sessionUserId,
+      getUserId,
+      clientModule,
+    });
+    return null;
+  }
+
+  if (expectedUserId && expectedUserId !== sessionUserId) {
+    toast.error('Signed-in account mismatch. Refresh the page and try again.');
+    console.error('[createProject:auth] React user vs session mismatch', {
+      expectedUserId,
+      sessionUserId,
+      clientModule,
+    });
+    return null;
+  }
+
+  return {
+    userId: sessionUserId,
+    sessionUserId,
+    getUserId,
+    accessTokenPresent: Boolean(session.access_token),
+    clientModule,
+  };
 }
 
 /**
@@ -444,19 +510,51 @@ export function useProjects() {
       return null;
     }
 
-    const authUserId = await requireAuthenticatedUserId(user.id);
-    if (!authUserId) return null;
+    const auth = await requireInsertAuthContext(user.id);
+    if (!auth) return null;
 
     try {
       const tenantId =
         (data.tenant_id && String(data.tenant_id).trim()) ||
-        (await resolveOwnerTenantId(authUserId));
+        (await resolveOwnerTenantId(auth.userId));
 
       const attemptInsert = async (includeExtended: boolean) => {
-        const payload = buildProjectInsertPayload(data, authUserId, {
+        const payload = buildProjectInsertPayload(data, auth.userId, {
           includeExtended,
           tenantId,
         });
+
+        console.info('[createProject:pre-insert]', {
+          sessionUserId: auth.sessionUserId,
+          accessTokenPresent: auth.accessTokenPresent,
+          getUserUserId: auth.getUserId,
+          payloadUserId: payload.user_id,
+          payloadTenantId: payload.tenant_id ?? null,
+          loginClientModule: SUPABASE_CLIENT_ID,
+          insertClientModule: SUPABASE_CLIENT_ID,
+          sameSingleton: true,
+          idsAligned:
+            auth.sessionUserId === auth.getUserId &&
+            auth.getUserId === payload.user_id,
+        });
+
+        if (
+          !auth.accessTokenPresent ||
+          auth.sessionUserId !== auth.getUserId ||
+          auth.getUserId !== payload.user_id
+        ) {
+          toast.error(
+            'Auth identity mismatch — insert blocked. Sign out, sign in, and try again.',
+          );
+          return {
+            data: null,
+            error: {
+              message: 'Auth identity mismatch before insert',
+              code: '42501',
+            },
+          };
+        }
+
         return supabase
           .from('projects')
           .insert(payload)
@@ -479,8 +577,18 @@ export function useProjects() {
         (isProjectsSchemaMismatchError(error) ||
           String(error.message || '').toLowerCase().includes('tenant_id'))
       ) {
-        const payload = buildProjectInsertPayload(data, authUserId, {
+        const payload = buildProjectInsertPayload(data, auth.userId, {
           includeExtended: false,
+        });
+        console.info('[createProject:pre-insert:retry-no-tenant]', {
+          sessionUserId: auth.sessionUserId,
+          accessTokenPresent: auth.accessTokenPresent,
+          getUserUserId: auth.getUserId,
+          payloadUserId: payload.user_id,
+          payloadTenantId: null,
+          loginClientModule: SUPABASE_CLIENT_ID,
+          insertClientModule: SUPABASE_CLIENT_ID,
+          sameSingleton: true,
         });
         const retry = await supabase
           .from('projects')
@@ -500,7 +608,7 @@ export function useProjects() {
       // Best-effort activity log — must not fail project creation.
       await logProjectActivity(
         normalized.id,
-        authUserId,
+        auth.userId,
         'project_created',
         `Project "${data.name}" created`,
         data.description || undefined,
@@ -520,8 +628,8 @@ export function useProjects() {
   const updateProject = async (id: string, data: UpdateProjectData): Promise<Project | null> => {
     if (!user) return null;
 
-    const authUserId = await requireAuthenticatedUserId(user.id);
-    if (!authUserId) return null;
+    const auth = await requireInsertAuthContext(user.id);
+    if (!auth) return null;
 
     try {
       // Get current project for comparison
@@ -574,7 +682,7 @@ export function useProjects() {
         const newStatus = PROJECT_STATUS_CONFIG[data.status].label;
         await logProjectActivity(
           id,
-          authUserId,
+          auth.userId,
           'project_status_changed',
           `Status changed from ${oldStatus} to ${newStatus}`,
           undefined,
@@ -584,7 +692,7 @@ export function useProjects() {
       } else {
         await logProjectActivity(
           id,
-          authUserId,
+          auth.userId,
           'project_updated',
           'Project details updated',
           undefined,
@@ -607,8 +715,8 @@ export function useProjects() {
       toast.error('You must be logged in to delete a project');
       return false;
     }
-    const authUserId = await requireAuthenticatedUserId(user.id);
-    if (!authUserId) return false;
+    const auth = await requireInsertAuthContext(user.id);
+    if (!auth) return false;
 
     try {
       const { error } = await supabase

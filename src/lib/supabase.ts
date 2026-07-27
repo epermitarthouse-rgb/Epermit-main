@@ -7,4 +7,17 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error("Supabase Keys Missing!");
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+/** Stable id for auth/insert audits — login and CRUD must share this module. */
+export const SUPABASE_CLIENT_ID = 'src/lib/supabase.ts#singleton' as const;
+
+/**
+ * App-wide Supabase singleton. AuthProvider (login) and useProjects (insert)
+ * both import this export — do not createClient elsewhere in the browser app.
+ */
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
