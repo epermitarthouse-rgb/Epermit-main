@@ -646,7 +646,7 @@
         "acceptanceCriteria": "Project list, create, invite and select flows all behave as before with the new card styling; every card field maps to a real column.",
         "verificationHook": "Manual CRUD smoke with a demo account; npx tsc --noEmit",
         "ownerDecisionNeeded": "No",
-        "auditNotes": "src/App.tsx line 123.",
+        "auditNotes": "FIX 2026-07-27: New Project on Lovable-styled /projects opens existing ProjectFormDialog (route /projects/new). createProject no longer spreads empty billing nulls; surfaces Postgrest errors instead of generic 'Failed to create project'; form stays open on failure. src/App.tsx line 123.",
         "matchConfidence": "High"
       },
       "defaults": {
@@ -654,7 +654,7 @@
         "verificationStatus": "Not tested"
       },
       "derived": {
-        "uiStatus": "Partial \u2014 Lovable's project cards and filter chrome are more refined",
+        "uiStatus": "Partial \u2014 Lovable card chrome; create uses real ProjectFormDialog via /projects/new",
         "backendStatus": "Fully working",
         "hasPreserve": true,
         "isMissing": false,
@@ -694,7 +694,7 @@
       "permitPilot": {
         "matchStatus": "Same purpose different architecture",
         "featureName": "Portal credential capture (in the filing dialog, not a page)",
-        "route": "Modal inside /projects and /permit-wizard-filing",
+        "route": "/projects/new (ProjectFormDialog); Settings \u2192 Portal Credentials; header ActiveProjectControl",
         "routeExists": "Partial \u2014 capability exists, no dedicated route",
         "sourceFiles": "src/components/permit-wizard/StartFilingDialog.tsx; scraper-service/app/routes/portal-credentials.routes.js",
         "navEntry": "Projects \u2192 start filing; permit wizard entry",
@@ -718,7 +718,7 @@
       "work": {
         "preserve": "Preserve encrypted storage, tenant scoping and credential validation via check-portal-status. Credentials must never be handled by new UI code paths.",
         "lovableOnly": "No",
-        "doNotReplicate": "Do not build a /projects/new credential page; Lovable's version stores nothing.",
+        "doNotReplicate": "Do not build Lovable's /projects/new credential-only mock page. Use ProjectFormDialog + Settings portals.",
         "requiredBackend": "None.",
         "requiredFrontend": "Restyle the existing dialog using Lovable's form styling.",
         "dependencies": "Security review required for any change that touches credential input.",
@@ -728,7 +728,7 @@
         "acceptanceCriteria": "Credential capture still round-trips through the existing encrypted path; no new route and no new credential handling code.",
         "verificationHook": "node --test scraper-service/tests (portal credential coverage); manual filing dialog smoke",
         "ownerDecisionNeeded": "No",
-        "auditNotes": "portal_credentials confirmed in supabase/migrations/20260210000000_portal_credentials.sql.",
+        "auditNotes": "FIX 2026-07-27: /projects/new restored as create entry that opens existing ProjectFormDialog (not Lovable mock /projects/new credentials page). Credentials remain Settings + header link. JOURNEY NOTE 2026-07-27: Primary credential CRUD is Settings \u2192 Portal Credentials (PortalCredentialsManager). Header ActiveProjectControl links projects.credential_id. Filing dialog is secondary. portal_credentials confirmed in supabase/migrations/20260210000000_portal_credentials.sql.",
         "matchConfidence": "High"
       },
       "defaults": {
@@ -1958,7 +1958,7 @@
         "acceptanceCriteria": "Restyled viewer shows real scraper runs and statuses; no scraper contract change; no fabricated runs.",
         "verificationHook": "node --test scraper-service/tests; manual /portal-data smoke",
         "ownerDecisionNeeded": "No",
-        "auditNotes": "Mapping confirmed: Lovable /portals/harvest \u2194 PermitPilot /portal-data.",
+        "auditNotes": "CRITICAL JOURNEY NOTE (2026-07-27): Scrape initiation is NOT on /portal-data. Live start is Dashboard \u2192 Workflow Tools \u2192 Intake Pipeline (AgentWorkflowStatus) \u2192 POST scraper-service /api/login then /api/scrape. Portal Harvest Force Sync only silentRefetch()s projects.portal_data \u2014 it does not start a scrape. Operator-playbook copy that implies Force Sync re-runs harvest is misleading. Preserve scraper API contract; restyle queue/detail only. Mapping confirmed: Lovable /portals/harvest \u2194 PermitPilot /portal-data.",
         "matchConfidence": "High"
       },
       "defaults": {
@@ -1966,7 +1966,7 @@
         "verificationStatus": "Not tested"
       },
       "derived": {
-        "uiStatus": "Partial \u2014 Lovable's harvest-run list styling is the target",
+        "uiStatus": "Partial \u2014 Lovable harvest-run list styling is the target; scrape START lives on Dashboard Intake Pipeline, not here. Force Sync is DB refresh only.",
         "backendStatus": "Fully working",
         "hasPreserve": true,
         "isMissing": false,
@@ -2168,17 +2168,17 @@
         "notes": "Persists to localStorage only."
       },
       "permitPilot": {
-        "matchStatus": "Backend match only",
-        "featureName": "Agent pipeline (backend only, no workflow UI)",
-        "route": "\u2014 (no route)",
-        "routeExists": "No",
+        "matchStatus": "Same purpose different architecture",
+        "featureName": "Intake Pipeline / AgentWorkflowStatus (Dashboard) + intake-pipeline-agent",
+        "route": "/dashboard (Workflow Tools \u2192 Intake Pipeline tab)",
+        "routeExists": "Yes \u2014 embedded on Dashboard, not /matrix/ai-workflow",
         "sourceFiles": "supabase/functions/intake-pipeline-agent; auto-router-agent; permit-classifier-agent; guardian-quality-agent; validate-completeness-agent",
         "navEntry": "Not user-facing",
         "auth": "Service-side",
         "dataSource": "Supabase (per-agent tables) \u2014 no unified run log",
         "backendEndpoint": "intake-pipeline-agent; auto-router-agent; permit-classifier-agent; discipline-classifier-agent; guardian-quality-agent; validate-completeness-agent; license-validation-agent",
         "backendConnected": "Yes (backend)",
-        "functionalStatus": "Real backend, no UI",
+        "functionalStatus": "Working \u2014 scrape modes + chained parse/classify/enrich/auto-route",
         "uiParity": "None \u2014 no workflow lane UI",
         "functionalParity": "Inverted \u2014 PermitPilot has the real agents, Lovable has only the UI"
       },
@@ -2192,11 +2192,11 @@
         "entryPointDecision": "Omit from PermitPilot navigation"
       },
       "work": {
-        "preserve": "Preserve every existing agent edge function and its invocation path.",
+        "preserve": "Preserve AgentWorkflowStatus scrape modes, scraper-service /api/login+/api/scrape contract, ScrapeContext progress UI, and intake-pipeline-agent chain (parse\u2192classify\u2192enrich\u2192auto-route). Do not move scrape start to Lovable's mock Force Sync semantics.",
         "lovableOnly": "Yes",
         "doNotReplicate": "Do not replicate Lovable's localStorage persistence. Workflow state must live in Supabase or not exist.",
         "requiredBackend": "An agent_runs table with status, timing and error capture, written by the existing agent functions.",
-        "requiredFrontend": "None until run data is persisted.",
+        "requiredFrontend": "Optional: clearer Discovery path from Portal Harvest to Intake Pipeline for 'start scrape'. Do not build /matrix/ai-workflow localStorage UI.",
         "dependencies": "Needs an agent_runs schema and a decision on retention.",
         "fakeBackendRisk": "High \u2014 lanes with no run data would be pure decoration",
         "phase": "Backlog \u2014 pairs with L033",
@@ -2204,7 +2204,7 @@
         "acceptanceCriteria": "Not scoped. Requires an agent_runs schema first.",
         "verificationHook": "n/a \u2014 nothing to test until scope changes",
         "ownerDecisionNeeded": "Yes \u2014 needs a product decision on whether PermitPilot should own this domain",
-        "auditNotes": "This row and L033 are the same underlying gap: real agents, no observability surface.",
+        "auditNotes": "CORRECTED 2026-07-27: Earlier matrix claimed 'no workflow UI'. AgentWorkflowStatus on /dashboard is the live scrape initiator and post-scrape chain trigger. Do NOT replicate Lovable localStorage AI Workflow page. Preserve /api/login+/api/scrape and intake-pipeline-agent invocation paths. This row and L033 are the same underlying gap: real agents, no observability surface.",
         "matchConfidence": "High"
       },
       "defaults": {
@@ -2212,8 +2212,8 @@
         "verificationStatus": "Not tested"
       },
       "derived": {
-        "uiStatus": "None \u2014 no workflow lane UI",
-        "backendStatus": "Yes (backend)",
+        "uiStatus": "Partial \u2014 real scrape+chain UI exists as Dashboard Intake Pipeline (AgentWorkflowStatus); no Lovable-style /matrix/ai-workflow lane page",
+        "backendStatus": "Fully working (intake-pipeline-agent + scraper-service)",
         "hasPreserve": true,
         "isMissing": false,
         "isBackendConnected": true,
@@ -8912,7 +8912,7 @@
       },
       "permitPilot": {
         "matchStatus": "Not applicable",
-        "featureName": "Live utility scraper service",
+        "featureName": "Live scraper-service (jurisdiction portal harvest + UCI)",
         "route": "`scraper-service HTTP API (/api/uci and others)`",
         "routeExists": "yes",
         "sourceFiles": "",
@@ -8935,7 +8935,7 @@
         "entryPointDecision": "Keep existing entry point"
       },
       "work": {
-        "preserve": "The real data engine behind UCI and portal harvest. Lovable has no backend at all.",
+        "preserve": "The real Playwright engine behind Portal Harvest jurisdiction scrapes AND UCI. Lovable has no backend. Do not change scraper behavior for UI styling. The real data engine behind UCI and portal harvest. Lovable has no backend at all.",
         "lovableOnly": "\u2014",
         "doNotReplicate": "\u2014",
         "requiredBackend": "None \u2014 preserve existing",
@@ -8947,7 +8947,7 @@
         "acceptanceCriteria": "Behavior unchanged through UI replication",
         "verificationHook": "Regression on existing route",
         "ownerDecisionNeeded": "No",
-        "auditNotes": "The real data engine behind UCI and portal harvest. Lovable has no backend at all.",
+        "auditNotes": "CORRECTED 2026-07-27: Not UCI-only. Jurisdiction harvest (Arlington Accela durable worker, Baltimore/Fairfax Accela, PGC/Montgomery/Howard/Washington ProjectDox) runs through the same scraper-service HTTP API. The real data engine behind UCI and portal harvest. Lovable has no backend at all.",
         "matchConfidence": "High"
       },
       "defaults": {

@@ -236,7 +236,7 @@ export function PortalHarvestQueue({
                 Create a project and link a portal credential to start harvesting.
               </p>
               <Button asChild size="sm">
-                <Link to="/projects">New Project</Link>
+                <Link to="/projects/new">New Project</Link>
               </Button>
             </div>
           ) : (

@@ -122,6 +122,7 @@ const App = () => (
                 <Route element={<ProtectedLayoutRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/projects" element={<Projects />} />
+                  <Route path="/projects/new" element={<Projects />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/jurisdictions/compare" element={<JurisdictionComparison />} />
                   <Route path="/jurisdiction-comparison" element={<JurisdictionComparison />} />

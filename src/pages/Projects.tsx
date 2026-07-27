@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Filter,
@@ -83,6 +83,7 @@ function progressForStatus(status: ProjectStatus): number {
 export default function Projects() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { completeItem } = useGettingStarted();
   const {
     projects,
@@ -109,11 +110,21 @@ export default function Projects() {
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<ProjectStatus | null>(null);
 
+  const isCreateRoute = location.pathname === "/projects/new";
+
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
     }
   }, [user, authLoading, navigate]);
+
+  // Lovable entry `/projects/new` reuses the existing ProjectFormDialog workflow.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (!isCreateRoute) return;
+    setSelectedProject(null);
+    setFormDialogOpen(true);
+  }, [authLoading, user, isCreateRoute]);
 
   useEffect(() => {
     const selectedId = selectedProject?.id;
@@ -169,9 +180,23 @@ export default function Projects() {
     };
   }, [projects]);
 
-  const handleCreateProject = () => {
+  const openCreateWorkflow = () => {
     setSelectedProject(null);
     setFormDialogOpen(true);
+    if (!isCreateRoute) {
+      navigate("/projects/new");
+    }
+  };
+
+  const handleFormOpenChange = (open: boolean) => {
+    setFormDialogOpen(open);
+    if (!open && isCreateRoute) {
+      navigate("/projects", { replace: true });
+    }
+  };
+
+  const handleCreateProject = () => {
+    openCreateWorkflow();
   };
 
   const handleEditProject = (project: Project) => {
@@ -195,15 +220,15 @@ export default function Projects() {
     setFormLoading(true);
     try {
       if (selectedProject) {
-        await updateProject(selectedProject.id, data);
+        const updated = await updateProject(selectedProject.id, data);
+        if (!updated) return;
       } else {
         const created = await createProject(data as CreateProjectData);
-        if (created) {
-          setSelectedProjectId(created.id);
-          setSelectedProject(created);
-        }
+        if (!created) return;
+        setSelectedProjectId(created.id);
+        setSelectedProject(created);
       }
-      setFormDialogOpen(false);
+      handleFormOpenChange(false);
     } finally {
       setFormLoading(false);
     }
@@ -262,8 +287,8 @@ export default function Projects() {
               type="button"
               className="pilot-button-primary"
               onClick={() => {
-                handleCreateProject();
                 completeItem("create_project");
+                openCreateWorkflow();
               }}
             >
               <Plus className="h-4 w-4" /> New Project
@@ -606,7 +631,7 @@ export default function Projects() {
 
       <ProjectFormDialog
         open={formDialogOpen}
-        onOpenChange={setFormDialogOpen}
+        onOpenChange={handleFormOpenChange}
         project={selectedProject}
         onSubmit={handleFormSubmit}
         loading={formLoading}

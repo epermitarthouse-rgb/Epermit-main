@@ -209,7 +209,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 className="pilot-button-ghost"
-                onClick={() => navigate("/projects")}
+                onClick={() => navigate("/projects/new")}
               >
                 <PlusCircle className="h-4 w-4 text-primary" /> New Project
               </button>
@@ -369,7 +369,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">
                     Create a project to start tracking permits and portal harvest.
                   </p>
-                  <Button onClick={() => navigate("/projects")}>
+                  <Button onClick={() => navigate("/projects/new")}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     New Project
                   </Button>

@@ -304,6 +304,7 @@ export const pageTitles: Record<string, string> = {
   "/": "Home",
   "/dashboard": "Dashboard",
   "/projects": "Projects",
+  "/projects/new": "Projects · New",
   "/permit-queue": "Permit Queue",
   "/demos": "Demos",
   "/permit-wizard-filing": "Permit Filing",

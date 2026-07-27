@@ -146,6 +146,116 @@ function isProjectsSchemaMismatchError(err: { message?: string; code?: string } 
   );
 }
 
+/** Supabase/Postgrest errors are plain objects — not always `instanceof Error`. */
+function extractSupabaseError(err: unknown): { message: string; code?: string; details?: string } {
+  if (!err) return { message: 'Unknown error' };
+  if (err instanceof Error) {
+    const withCode = err as Error & { code?: string; details?: string };
+    return { message: err.message, code: withCode.code, details: withCode.details };
+  }
+  if (typeof err === 'object') {
+    const e = err as { message?: string; code?: string; details?: string; hint?: string; error_description?: string };
+    const message =
+      e.message ||
+      e.error_description ||
+      e.hint ||
+      e.details ||
+      'Request failed';
+    return { message: String(message), code: e.code, details: e.details };
+  }
+  return { message: String(err) };
+}
+
+function friendlyProjectMutationError(err: unknown, fallback: string): string {
+  const { message, code } = extractSupabaseError(err);
+  const msg = message.toLowerCase();
+
+  if (code === '42501' || msg.includes('row-level security') || msg.includes('permission denied')) {
+    return 'Permission denied — you do not have access to create or update this project.';
+  }
+  if (code === '23505' || msg.includes('duplicate key') || msg.includes('already exists')) {
+    return 'A project with this information already exists.';
+  }
+  if (code === '23502' || msg.includes('null value in column')) {
+    return 'Missing required project information.';
+  }
+  if (code === '23514' || msg.includes('check constraint') || msg.includes('violates check')) {
+    return 'One or more project fields failed validation.';
+  }
+  if (code === '23503' || msg.includes('foreign key')) {
+    return 'A linked credential or reference is invalid. Choose another credential or clear it.';
+  }
+  if (code === 'PGRST116' || msg.includes('0 rows') || msg.includes('contains 0 rows')) {
+    return 'Project save completed but could not be reloaded. Refresh the Projects list.';
+  }
+  if (isProjectsSchemaMismatchError({ message, code })) {
+    return 'Project database schema is out of date for some fields. Try again with core project details only.';
+  }
+  // Avoid dumping SQL / internal stack fragments into the toast.
+  if (msg.includes('syntax error') || msg.includes('sqlstate')) {
+    return fallback;
+  }
+  return message || fallback;
+}
+
+const EXTENDED_CREATE_KEYS = [
+  'client_name',
+  'client_email',
+  'service_type',
+  'contract_value',
+  'reimbursement_amount',
+  'reimbursement_description',
+  'project_url',
+  'credential_id',
+] as const;
+
+function buildProjectInsertPayload(
+  data: CreateProjectData,
+  userId: string,
+  options: { includeExtended: boolean },
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    name: data.name.trim(),
+    user_id: userId,
+    status: 'draft' as ProjectStatus,
+  };
+
+  const assignIfPresent = (key: string, value: unknown) => {
+    if (value === undefined || value === null) return;
+    if (typeof value === 'string' && value.trim() === '') return;
+    payload[key] = value;
+  };
+
+  assignIfPresent('address', data.address);
+  assignIfPresent('city', data.city);
+  assignIfPresent('state', data.state);
+  assignIfPresent('zip_code', data.zip_code);
+  assignIfPresent('jurisdiction', data.jurisdiction);
+  assignIfPresent('project_type', data.project_type);
+  assignIfPresent('description', data.description);
+  assignIfPresent('estimated_value', data.estimated_value);
+  assignIfPresent('square_footage', data.square_footage);
+  assignIfPresent('deadline', data.deadline);
+  assignIfPresent('notes', data.notes);
+  assignIfPresent('permit_number', data.permit_number);
+
+  // Fee fields: only send when explicitly provided (avoid forcing 0 on every create).
+  if (data.permit_fee !== undefined) payload.permit_fee = data.permit_fee;
+  if (data.expeditor_cost !== undefined) payload.expeditor_cost = data.expeditor_cost;
+  if (data.total_cost !== undefined) payload.total_cost = data.total_cost;
+
+  if (options.includeExtended) {
+    for (const key of EXTENDED_CREATE_KEYS) {
+      const value = data[key];
+      if (value === undefined || value === null) continue;
+      if (typeof value === 'string' && value.trim() === '') continue;
+      payload[key] = value;
+    }
+  }
+
+  return payload;
+}
+
 export interface CreateProjectData {
   name: string;
   address?: string;
@@ -236,35 +346,49 @@ export function useProjects() {
       return null;
     }
 
+    if (!data.name?.trim()) {
+      toast.error('Missing required project information — project name is required.');
+      return null;
+    }
+
     try {
-      const { data: newProject, error } = await supabase
-        .from('projects')
-        .insert({
-          ...data,
-          user_id: user.id,
-          status: 'draft' as ProjectStatus,
-        })
-        .select()
-        .single();
+      const attemptInsert = async (includeExtended: boolean) => {
+        const payload = buildProjectInsertPayload(data, user.id, { includeExtended });
+        return supabase
+          .from('projects')
+          .insert(payload)
+          .select(includeExtended ? PROJECT_SELECT_COLUMNS : PROJECT_CORE_SELECT_COLUMNS)
+          .single();
+      };
+
+      let { data: newProject, error } = await attemptInsert(true);
+
+      if (error && isProjectsSchemaMismatchError(error)) {
+        const retry = await attemptInsert(false);
+        newProject = retry.data;
+        error = retry.error;
+      }
 
       if (error) throw error;
+      if (!newProject) throw new Error('Project create returned no row');
 
-      setProjects(prev => [normalizeProjectRow(newProject as Record<string, unknown>), ...prev]);
-      
-      // Log activity
+      const normalized = normalizeProjectRow(newProject as Record<string, unknown>);
+      setProjects(prev => [normalized, ...prev]);
+
+      // Best-effort activity log — must not fail project creation.
       await logProjectActivity(
-        newProject.id,
+        normalized.id,
         user.id,
         'project_created',
         `Project "${data.name}" created`,
         data.description || undefined,
-        { project_type: data.project_type }
+        { project_type: data.project_type },
       );
-      
+
       toast.success('Project created successfully');
-      return normalizeProjectRow(newProject as Record<string, unknown>);
+      return normalized;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create project';
+      const message = friendlyProjectMutationError(err, 'Failed to create project');
       toast.error(message);
       console.error('Error creating project:', err);
       return null;
@@ -330,7 +454,7 @@ export function useProjects() {
       
       return normalizeProjectRow(updatedProject as Record<string, unknown>);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update project';
+      const message = friendlyProjectMutationError(err, 'Failed to update project');
       toast.error(message);
       console.error('Error updating project:', err);
       return null;
@@ -350,7 +474,7 @@ export function useProjects() {
       toast.success('Project deleted successfully');
       return true;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete project';
+      const message = friendlyProjectMutationError(err, 'Failed to delete project');
       toast.error(message);
       console.error('Error deleting project:', err);
       return false;

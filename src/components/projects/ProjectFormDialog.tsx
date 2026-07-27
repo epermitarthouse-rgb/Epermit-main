@@ -349,44 +349,69 @@ export function ProjectFormDialog({
       return;
     }
     
-    const permitFee = formData.permit_fee ? parseFloat(formData.permit_fee) : 0;
-    const expeditorCost = formData.expeditor_cost ? parseFloat(formData.expeditor_cost) : 0;
-    
+    const permitFee = formData.permit_fee ? parseFloat(formData.permit_fee) : undefined;
+    const expeditorCost = formData.expeditor_cost ? parseFloat(formData.expeditor_cost) : undefined;
+
     const data: CreateProjectData | UpdateProjectData = {
       name: formData.name.trim(),
       address: formData.address.trim() || undefined,
-      project_url: formData.project_url.trim() || undefined,
       city: formData.city.trim() || undefined,
       state: formData.state || undefined,
       zip_code: formData.zip_code.trim() || undefined,
       jurisdiction: formData.jurisdiction.trim() || undefined,
-      project_type: formData.project_type || undefined,
+      project_type: (formData.project_type || undefined) as ProjectType | undefined,
       description: formData.description.trim() || undefined,
       estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : undefined,
       square_footage: formData.square_footage ? parseInt(formData.square_footage) : undefined,
       deadline: formData.deadline ? new Date(formData.deadline).toISOString() : undefined,
       notes: formData.notes.trim() || undefined,
-      permit_fee: permitFee,
-      expeditor_cost: expeditorCost,
-      total_cost: permitFee + expeditorCost,
-      client_name: formData.client_name.trim() || null,
-      client_email: formData.client_email.trim() || null,
-      service_type: formData.service_type.trim() || null,
-      contract_value: formData.contract_value.trim()
-        ? parseFloat(formData.contract_value)
-        : null,
-      reimbursement_amount: formData.reimbursement_amount.trim()
-        ? parseFloat(formData.reimbursement_amount)
-        : null,
-      reimbursement_description:
-        formData.reimbursement_description.trim() || null,
     };
 
-    if (project && formData.permit_number) {
-      (data as UpdateProjectData).permit_number = formData.permit_number.trim();
+    // Optional portal deep-link — omit when empty so create does not send unknown/blank columns.
+    if (formData.project_url.trim()) {
+      data.project_url = formData.project_url.trim();
     }
 
-    data.credential_id = formData.credential_id || null;
+    // Fees: only send when the user entered a value (create) or when editing.
+    if (permitFee !== undefined) {
+      data.permit_fee = permitFee;
+    }
+    if (expeditorCost !== undefined) {
+      data.expeditor_cost = expeditorCost;
+    }
+    if (permitFee !== undefined || expeditorCost !== undefined) {
+      data.total_cost = (permitFee || 0) + (expeditorCost || 0);
+    }
+
+    // Billing fields — include only when set on create; allow null clears on edit.
+    const clientName = formData.client_name.trim();
+    const clientEmail = formData.client_email.trim();
+    const serviceType = formData.service_type.trim();
+    const contractValue = formData.contract_value.trim();
+    const reimbursementAmount = formData.reimbursement_amount.trim();
+    const reimbursementDescription = formData.reimbursement_description.trim();
+
+    if (project) {
+      data.client_name = clientName || null;
+      data.client_email = clientEmail || null;
+      data.service_type = serviceType || null;
+      data.contract_value = contractValue ? parseFloat(contractValue) : null;
+      data.reimbursement_amount = reimbursementAmount ? parseFloat(reimbursementAmount) : null;
+      data.reimbursement_description = reimbursementDescription || null;
+      data.credential_id = formData.credential_id || null;
+      if (formData.permit_number.trim()) {
+        data.permit_number = formData.permit_number.trim();
+      }
+    } else {
+      if (clientName) data.client_name = clientName;
+      if (clientEmail) data.client_email = clientEmail;
+      if (serviceType) data.service_type = serviceType;
+      if (contractValue) data.contract_value = parseFloat(contractValue);
+      if (reimbursementAmount) data.reimbursement_amount = parseFloat(reimbursementAmount);
+      if (reimbursementDescription) data.reimbursement_description = reimbursementDescription;
+      if (formData.credential_id) data.credential_id = formData.credential_id;
+      if (formData.permit_number.trim()) data.permit_number = formData.permit_number.trim();
+    }
 
     await onSubmit(data);
   };
