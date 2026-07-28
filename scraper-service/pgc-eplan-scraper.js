@@ -14597,10 +14597,13 @@ async function harvestProjectFilesAndSampleDownloads(
       let consecutiveViewerOpenFailures = 0;
 
       let filesToProcess = rowsInFolder;
-      if (devControls?.explicitFileIds?.length) {
-        const idSet = new Set(devControls.explicitFileIds.map(String));
+      const explicitIdSet = devControls?.explicitFileIds?.length
+        ? new Set(devControls.explicitFileIds.map(String))
+        : null;
+      const retrySelectedOnly = !!devControls?.retrySelectedOnly && !!explicitIdSet;
+      if (explicitIdSet && !retrySelectedOnly) {
         filesToProcess = rowsInFolder.filter((r) =>
-          idSet.has(String(r.file?.fileId)),
+          explicitIdSet.has(String(r.file?.fileId)),
         );
       }
       if (devControls?.startFileIndex > 0) {
@@ -14608,6 +14611,26 @@ async function harvestProjectFilesAndSampleDownloads(
       }
       if (devControls?.maxFilesPerFolder > 0) {
         filesToProcess = filesToProcess.slice(0, devControls.maxFilesPerFolder);
+      }
+
+      // Targeted retry: restore checkpoints for untargeted files; download only selected.
+      if (retrySelectedOnly) {
+        for (const row of rowsInFolder) {
+          const f = row.file;
+          const id = String(f?.fileId || "");
+          if (!id || explicitIdSet.has(id)) continue;
+          const cpKey = `${id}|${f.version != null ? String(f.version).trim() : ""}`;
+          const priorCp = harvestOpts.uploadedCheckpointMap?.get(cpKey);
+          if (priorCp?.publicUrl) {
+            f.downloadStatus = "ok";
+            f.publicUrl = priorCp.publicUrl;
+            f.sha256 = priorCp.sha256 || null;
+            f.checkpointRestored = true;
+          }
+        }
+        filesToProcess = rowsInFolder.filter((r) =>
+          explicitIdSet.has(String(r.file?.fileId)),
+        );
       }
 
       files_loop: for (const row of filesToProcess) {
@@ -14624,7 +14647,8 @@ async function harvestProjectFilesAndSampleDownloads(
 
         const cpKey = `${String(f.fileId)}|${f.version != null ? String(f.version).trim() : ""}`;
         const priorCp = harvestOpts.uploadedCheckpointMap?.get(cpKey);
-        if (priorCp?.publicUrl) {
+        // Targeted retry of a failed file must re-download even if a stale checkpoint exists.
+        if (priorCp?.publicUrl && !(retrySelectedOnly && explicitIdSet?.has(String(f.fileId)))) {
           f.downloadStatus = "ok";
           f.publicUrl = priorCp.publicUrl;
           f.sha256 = priorCp.sha256 || null;
@@ -17609,7 +17633,7 @@ async function processPgcSsrReportsForProject(
 
     const builtSpecs = wfid ? buildPgcReportUrls(projectID, wfid) : [];
     /** @type {{ fileSlug: string, reportName: string, fallbackUrl: string | null }[]} */
-    const specList = PGC_TARGET_REPORT_NAMES.map((nm, i) => {
+    let specList = PGC_TARGET_REPORT_NAMES.map((nm, i) => {
       const b = builtSpecs.find(
         (s) =>
           normalizeReportName(s.reportName) === normalizeReportName(nm),
@@ -17620,6 +17644,24 @@ async function processPgcSsrReportsForProject(
         fallbackUrl: b?.url || null,
       };
     });
+
+    const retryReportTargets = Array.isArray(opts.retryReportTargets)
+      ? opts.retryReportTargets
+      : Array.isArray(opts.devHarvestControls?.explicitReportTargets)
+        ? opts.devHarvestControls.explicitReportTargets
+        : null;
+    const priorReportEntries = Array.isArray(opts.priorReportEntries)
+      ? opts.priorReportEntries
+      : [];
+    if (retryReportTargets && retryReportTargets.length > 0) {
+      const pgcRetryLib = require("./lib/pgc-retry-artifacts.js");
+      specList = specList.filter((spec) =>
+        pgcRetryLib.matchRetryReportTarget(spec, retryReportTargets),
+      );
+      console.log(
+        `[PGC] Reports | retry filter | ${specList.length} report(s) targeted`,
+      );
+    }
 
     const outDir = path.join(__dirname, "pgc-reports", safePid);
     await fs.promises.mkdir(outDir, { recursive: true });
@@ -17799,81 +17841,146 @@ async function processPgcSsrReportsForProject(
         const excelPath = path.join(outDir, `${spec.fileSlug}.xlsx`);
         const pdfPath = path.join(outDir, `${spec.fileSlug}.pdf`);
 
-        // Always attempt both formats. One logical report = PDF + Excel artifacts.
-        entry.excelAttempted = true;
+        const pgcRetryLib = retryReportTargets
+          ? require("./lib/pgc-retry-artifacts.js")
+          : null;
+        const retryTarget = pgcRetryLib
+          ? pgcRetryLib.matchRetryReportTarget(spec, retryReportTargets)
+          : null;
+        const priorEntry =
+          priorReportEntries.find(
+            (p) =>
+              normalizeReportName(p.reportName) ===
+                normalizeReportName(spec.reportName) ||
+              String(p.fileSlug || "") === String(spec.fileSlug || ""),
+          ) || null;
+        const seedFormatFromPrior = (format) => {
+          if (!priorEntry) return false;
+          if (format === "excel") {
+            const url = priorEntry.excelUrl || priorEntry.excelPublicUrl;
+            if (url && /supabase\.co\/storage\//i.test(String(url))) {
+              entry.excelDownloaded = true;
+              entry.excelPublicUrl = url;
+              entry.excelUrl = url;
+              entry.excelStatus = priorEntry.excelStatus || "success";
+              entry.excelError = null;
+              entry.excelExportedAt = priorEntry.excelExportedAt || null;
+              entry.excelAttempted = true;
+              return true;
+            }
+          }
+          if (format === "pdf") {
+            const url = priorEntry.pdfUrl || priorEntry.pdfPublicUrl;
+            if (url && /supabase\.co\/storage\//i.test(String(url))) {
+              entry.pdfDownloaded = true;
+              entry.pdfPublicUrl = url;
+              entry.pdfUrl = url;
+              entry.pdfStatus = priorEntry.pdfStatus || "success";
+              entry.pdfError = null;
+              entry.pdfExportedAt = priorEntry.pdfExportedAt || null;
+              entry.pdfAttempted = true;
+              return true;
+            }
+          }
+          return false;
+        };
+        const shouldExportExcel =
+          !retryTarget ||
+          pgcRetryLib.shouldRetryReportFormat("excel", retryTarget);
+        const shouldExportPdf =
+          !retryTarget ||
+          pgcRetryLib.shouldRetryReportFormat("pdf", retryTarget);
+
         let viewerUrlForHttp = activePage.url() || navigateUrl;
-        const xRes = await exportReportFormat(
-          activePage,
-          "EXCELOPENXML",
-          excelPath,
-          viewerHandle,
-          viewerUrlForHttp,
-        );
-        entry.excelDownloaded = xRes.ok;
-        entry.excelPath = xRes.ok ? excelPath : null;
-        entry.excelRetries = xRes.retries;
-        entry.excelError = xRes.ok ? null : xRes.error || "excel_export_failed";
-        if (xRes.ok) {
-          entry.excelExportedAt = new Date().toISOString();
-          console.log(`[PGC] Reports | excel ok | ${spec.reportName}`);
-        } else {
-          console.log(
-            `[PGC] Reports | excel fail | ${spec.reportName} | ${entry.excelError}`,
+        if (shouldExportExcel) {
+          entry.excelAttempted = true;
+          const xRes = await exportReportFormat(
+            activePage,
+            "EXCELOPENXML",
+            excelPath,
+            viewerHandle,
+            viewerUrlForHttp,
           );
-          pgcProgress.pgcLogDetail("task8_excel_fail", {
-            reportName: spec.reportName,
-            error: entry.excelError,
-          });
+          entry.excelDownloaded = xRes.ok;
+          entry.excelPath = xRes.ok ? excelPath : null;
+          entry.excelRetries =
+            (Number(priorEntry?.excelRetries) || 0) + (xRes.retries || 0) + 1;
+          entry.excelError = xRes.ok ? null : xRes.error || "excel_export_failed";
+          if (xRes.ok) {
+            entry.excelExportedAt = new Date().toISOString();
+            console.log(`[PGC] Reports | excel ok | ${spec.reportName}`);
+          } else {
+            console.log(
+              `[PGC] Reports | excel fail | ${spec.reportName} | ${entry.excelError}`,
+            );
+            pgcProgress.pgcLogDetail("task8_excel_fail", {
+              reportName: spec.reportName,
+              error: entry.excelError,
+            });
+          }
+        } else {
+          seedFormatFromPrior("excel");
+          console.log(
+            `[PGC] Reports | excel skip (not selected for retry) | ${spec.reportName}`,
+          );
         }
 
         // Re-settle viewer before PDF (SSRS often drops $find after first export).
-        await activePage.waitForTimeout(1000);
-        let viewerHandlePdf = await waitForPgcReportViewerHandle(
-          activePage,
-          15000,
-        );
-        if (!viewerHandlePdf) {
-          try {
-            await activePage.goto(navigateUrl, {
-              waitUntil: "domcontentloaded",
-              timeout: 30000,
-            });
-            await activePage.waitForTimeout(TASK8_REPORT_POST_NAV_MS);
-            viewerHandlePdf = await waitForPgcReportViewerHandle(
-              activePage,
-              30000,
+        if (shouldExportPdf) {
+          await activePage.waitForTimeout(1000);
+          let viewerHandlePdf = await waitForPgcReportViewerHandle(
+            activePage,
+            15000,
+          );
+          if (!viewerHandlePdf) {
+            try {
+              await activePage.goto(navigateUrl, {
+                waitUntil: "domcontentloaded",
+                timeout: 30000,
+              });
+              await activePage.waitForTimeout(TASK8_REPORT_POST_NAV_MS);
+              viewerHandlePdf = await waitForPgcReportViewerHandle(
+                activePage,
+                30000,
+              );
+            } catch (reNavErr) {
+              pgcProgress.pgcLogDetail("task8_pdf_renav_error", {
+                reportName: spec.reportName,
+                error: (reNavErr && reNavErr.message) || String(reNavErr),
+              });
+            }
+          }
+          viewerUrlForHttp = activePage.url() || navigateUrl;
+          entry.pdfAttempted = true;
+          const pRes = await exportReportFormat(
+            activePage,
+            "PDF",
+            pdfPath,
+            viewerHandlePdf,
+            viewerUrlForHttp,
+          );
+          entry.pdfDownloaded = pRes.ok;
+          entry.pdfPath = pRes.ok ? pdfPath : null;
+          entry.pdfRetries =
+            (Number(priorEntry?.pdfRetries) || 0) + (pRes.retries || 0) + 1;
+          entry.pdfError = pRes.ok ? null : pRes.error || "pdf_export_failed";
+          if (pRes.ok) {
+            entry.pdfExportedAt = new Date().toISOString();
+            console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
+          } else {
+            console.log(
+              `[PGC] Reports | pdf fail | ${spec.reportName} | ${entry.pdfError}`,
             );
-          } catch (reNavErr) {
-            pgcProgress.pgcLogDetail("task8_pdf_renav_error", {
+            pgcProgress.pgcLogDetail("task8_pdf_fail", {
               reportName: spec.reportName,
-              error: (reNavErr && reNavErr.message) || String(reNavErr),
+              error: entry.pdfError,
             });
           }
-        }
-        viewerUrlForHttp = activePage.url() || navigateUrl;
-        entry.pdfAttempted = true;
-        const pRes = await exportReportFormat(
-          activePage,
-          "PDF",
-          pdfPath,
-          viewerHandlePdf,
-          viewerUrlForHttp,
-        );
-        entry.pdfDownloaded = pRes.ok;
-        entry.pdfPath = pRes.ok ? pdfPath : null;
-        entry.pdfRetries = pRes.retries;
-        entry.pdfError = pRes.ok ? null : pRes.error || "pdf_export_failed";
-        if (pRes.ok) {
-          entry.pdfExportedAt = new Date().toISOString();
-          console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
         } else {
+          seedFormatFromPrior("pdf");
           console.log(
-            `[PGC] Reports | pdf fail | ${spec.reportName} | ${entry.pdfError}`,
+            `[PGC] Reports | pdf skip (not selected for retry) | ${spec.reportName}`,
           );
-          pgcProgress.pgcLogDetail("task8_pdf_fail", {
-            reportName: spec.reportName,
-            error: entry.pdfError,
-          });
         }
 
         if (!entry.excelDownloaded && !entry.pdfDownloaded) {
@@ -18640,6 +18747,12 @@ async function runPgcProductionPipeline(
       dashboardUrl: dashboardUrlForReports,
       onScrapeProgress: opts.onScrapeProgress,
       scrapeJobId: opts.scrapeJobId || null,
+      retryReportTargets:
+        opts.pgcRetryArtifacts?.reports ||
+        opts.devHarvestControls?.explicitReportTargets ||
+        null,
+      priorReportEntries: opts.priorReportEntries || null,
+      devHarvestControls: opts.devHarvestControls || null,
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {

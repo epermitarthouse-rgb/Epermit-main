@@ -109,6 +109,20 @@ import {
   summarizeReportCompletion,
   type LatestScrapeJobSummary,
 } from "@/lib/portalHarvestMetrics";
+import { getExpandedReportCardLayoutClasses } from "@/lib/portalReportCardLayout";
+import {
+  buildPgcRetryArtifactPayload,
+  collectPortalFailedItems,
+  countRetryableFailedItems,
+  harvestStatusAfterRetry,
+  mapReportArtifactStatusToRetryLiveState,
+  mapScrapeFileStatusToRetryLiveState,
+  summarizeRetryLiveResults,
+  type PortalFailedItem,
+} from "@/lib/portalHarvestFailedItems";
+import { startPgcFailedArtifactsRetry } from "@/lib/pgcRetryFailedApi";
+import { PgcRetryFailedItemsDialog } from "@/components/portal/PgcRetryFailedItemsDialog";
+import { toast } from "sonner";
 
 /** Tab pills — presentation only; tab `value` and visibility unchanged. */
 const PORTAL_TAB_TRIGGER =
@@ -950,7 +964,7 @@ function detectPortalTypeFromUrl(url: string | null | undefined): string {
 }
 
 export default function PortalDataViewer() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { selectedProjectId, setSelectedProjectId } = useSelectedProject();
   const { projects, loading: projectsLoading } = useProjects();
@@ -1044,6 +1058,10 @@ export default function PortalDataViewer() {
   const [selectedReviewWorkflow, setSelectedReviewWorkflow] = useState<string | null>(
     null,
   );
+  const [retryFailedOpen, setRetryFailedOpen] = useState(false);
+  const [retryFailedBusy, setRetryFailedBusy] = useState(false);
+  const [retryFailedItems, setRetryFailedItems] = useState<PortalFailedItem[]>([]);
+  const [retrySummaryLine, setRetrySummaryLine] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
 
   useEffect(() => {
@@ -1534,6 +1552,251 @@ export default function PortalDataViewer() {
       );
     }
   }, [portalData]);
+
+  /**
+   * Retry Failed Items hooks — must run before any early return so hook count
+   * stays identical across queue / loading / empty / Accela / ProjectDox paths.
+   */
+  const isPgcEplanPortal = portalData?.portalSubtype === "pgc-eplan";
+  const pgcRetryFolders = portalData?.tabs?.files?.folders;
+  const pgcRetryReportEntries = portalData?.tabs?.reports?.reportEntries ?? [];
+
+  const pgcFailedItems = useMemo(() => {
+    if (!isPgcEplanPortal) return [] as PortalFailedItem[];
+    return collectPortalFailedItems({
+      scrapeFileResults: liveFileResults.rows,
+      folders: pgcRetryFolders,
+      reportEntries: pgcRetryReportEntries,
+    });
+  }, [
+    isPgcEplanPortal,
+    liveFileResults.rows,
+    pgcRetryFolders,
+    pgcRetryReportEntries,
+  ]);
+
+  const pgcFailedCounts = useMemo(
+    () => countRetryableFailedItems(pgcFailedItems),
+    [pgcFailedItems],
+  );
+
+  const openRetryFailedDialog = useCallback(async () => {
+    setRetrySummaryLine(null);
+    let items = pgcFailedItems;
+    if (isPgcEplanPortal && resolvedProjectId) {
+      try {
+        const { data } = await supabase
+          .from("scrape_file_results")
+          .select("*")
+          .eq("project_id", resolvedProjectId)
+          .eq("status", "failed")
+          .order("updated_at", { ascending: false })
+          .limit(500);
+        if (data?.length) {
+          items = collectPortalFailedItems({
+            scrapeFileResults: data as ScrapeFileResult[],
+            folders: pgcRetryFolders,
+            reportEntries: pgcRetryReportEntries,
+          });
+        }
+      } catch {
+        // Fall back to in-memory failed items from portal_data + live rows.
+      }
+    }
+    setRetryFailedItems(items);
+    setRetryFailedOpen(true);
+  }, [
+    pgcFailedItems,
+    isPgcEplanPortal,
+    resolvedProjectId,
+    pgcRetryFolders,
+    pgcRetryReportEntries,
+  ]);
+
+  const handleRetrySelectedFailed = useCallback(
+    async (selected: PortalFailedItem[]) => {
+      if (!isPgcEplanPortal) return;
+      const payload = buildPgcRetryArtifactPayload(selected);
+      if (
+        (payload.files.length === 0 && payload.reports.length === 0) ||
+        !session?.access_token ||
+        !resolvedCredentialId ||
+        !user?.id ||
+        !resolvedProjectId ||
+        !resolvedPermitNumber
+      ) {
+        toast.error(
+          !session?.access_token
+            ? "Sign in required to retry failed items."
+            : !resolvedCredentialId
+              ? "Link a portal credential before retrying."
+              : "No retryable failed items selected.",
+        );
+        return;
+      }
+      setRetryFailedBusy(true);
+      setRetryFailedItems((prev) =>
+        prev.map((item) =>
+          selected.some((s) => s.id === item.id)
+            ? { ...item, liveState: "queued" as const }
+            : item,
+        ),
+      );
+      try {
+        const result = await startPgcFailedArtifactsRetry({
+          accessToken: session.access_token,
+          credentialId: resolvedCredentialId,
+          loginUrl: credentialForView?.login_url,
+          userId: user.id,
+          projectId: resolvedProjectId,
+          permitNumber: resolvedPermitNumber,
+          artifacts: payload,
+        });
+        scrape.startScrapeSession(
+          result.sessionId,
+          resolvedProjectId,
+          resolvedPermitNumber,
+          result.jobId,
+        );
+        setRetryFailedItems((prev) =>
+          prev.map((item) =>
+            selected.some((s) => s.id === item.id)
+              ? { ...item, liveState: "retrying" as const }
+              : item,
+          ),
+        );
+        toast.success(
+          `Retry started for ${selected.length} failed item${selected.length === 1 ? "" : "s"}.`,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "SCRAPER_OFFLINE") {
+          toast.error(
+            "Local Scraper is not running. Start scraper-service, then retry.",
+          );
+        } else {
+          toast.error(msg || "Failed to start retry");
+        }
+        setRetryFailedItems((prev) =>
+          prev.map((item) =>
+            selected.some((s) => s.id === item.id)
+              ? { ...item, liveState: "failed" as const }
+              : item,
+          ),
+        );
+      } finally {
+        setRetryFailedBusy(false);
+      }
+    },
+    [
+      isPgcEplanPortal,
+      session?.access_token,
+      resolvedCredentialId,
+      user?.id,
+      resolvedProjectId,
+      resolvedPermitNumber,
+      credentialForView?.login_url,
+      scrape,
+    ],
+  );
+
+  // Live-update retry row states from scrape_file_results + report entries.
+  useEffect(() => {
+    if (!retryFailedOpen || !isPgcEplanPortal) return;
+    setRetryFailedItems((prev) => {
+      if (prev.length === 0) return prev;
+      return prev.map((item) => {
+        if (item.artifactType === "file" && item.fileId) {
+          const row = liveFileResults.rows.find(
+            (r) => String(r.portal_file_id) === String(item.fileId),
+          );
+          if (row) {
+            return {
+              ...item,
+              liveState: mapScrapeFileStatusToRetryLiveState(row.status),
+              failureReason:
+                row.status === "failed"
+                  ? String(
+                      row.failure_message ||
+                        row.failure_code ||
+                        item.failureReason,
+                    )
+                  : item.failureReason,
+              lastAttempt: row.updated_at || item.lastAttempt,
+            };
+          }
+        }
+        if (
+          (item.artifactType === "pdf" || item.artifactType === "excel") &&
+          item.reportName
+        ) {
+          const ent = reportEntryByReportName.get(item.reportName);
+          if (ent) {
+            const st =
+              item.artifactType === "pdf" ? ent.pdfStatus : ent.excelStatus;
+            return {
+              ...item,
+              liveState: mapReportArtifactStatusToRetryLiveState(st),
+              failureReason:
+                (item.artifactType === "pdf" ? ent.pdfError : ent.excelError) ||
+                item.failureReason,
+            };
+          }
+        }
+        return item;
+      });
+    });
+  }, [
+    retryFailedOpen,
+    isPgcEplanPortal,
+    liveFileResults.rows,
+    reportEntryByReportName,
+  ]);
+
+  const wasRetryScrapingRef = useRef(false);
+  useEffect(() => {
+    if (!retryFailedOpen || !isPgcEplanPortal) {
+      wasRetryScrapingRef.current = false;
+      return;
+    }
+    if (scrape.isScraping) {
+      wasRetryScrapingRef.current = true;
+      return;
+    }
+    if (!wasRetryScrapingRef.current) return;
+    wasRetryScrapingRef.current = false;
+    const summary = summarizeRetryLiveResults(retryFailedItems);
+    const filesSummary = summarizePortalFilesFromFolders(
+      portalData?.tabs?.files?.folders,
+    );
+    const reportComplete = summarizeReportCompletion(
+      deriveLogicalReports(portalData?.tabs?.reports),
+    ).complete;
+    const harvestNext = harvestStatusAfterRetry({
+      failedRemaining: summary.stillFailed,
+      pendingRemaining: filesSummary.pending,
+      hadSuccess:
+        summary.succeeded > 0 ||
+        filesSummary.downloaded > 0 ||
+        reportComplete > 0,
+    });
+    setRetrySummaryLine(
+      `${summary.succeeded} succeeded, ${summary.stillFailed} still failed` +
+        (summary.humanActionRequired
+          ? `, ${summary.humanActionRequired} need human action`
+          : "") +
+        ` · harvest ${harvestNext}`,
+    );
+    void silentRefetch();
+  }, [
+    retryFailedOpen,
+    isPgcEplanPortal,
+    scrape.isScraping,
+    retryFailedItems,
+    portalData?.tabs?.files?.folders,
+    portalData?.tabs?.reports,
+    silentRefetch,
+  ]);
 
   if (view === "queue") {
     return (
@@ -3202,6 +3465,7 @@ export default function PortalDataViewer() {
     isSessionScraping: scrape.isScraping,
   });
   const displayHarvestStatus = harvestRow.harvestStatus;
+
   const lastSuccessfulHarvestStr = harvestRow.lastSuccessfulHarvestAt
     ? `Last successful harvest: ${formatDistanceToNow(new Date(harvestRow.lastSuccessfulHarvestAt), { addSuffix: true })}`
     : "No successful harvest yet";
@@ -4266,15 +4530,17 @@ export default function PortalDataViewer() {
                               </button>
                             </CollapsibleTrigger>
                               <CollapsibleContent>
-                                <div className="w-full border-b border-border bg-muted/20 p-4 dark:border-border dark:bg-muted/50">
-                                      <Card className="rounded-xl border border-primary/25 bg-card p-5 shadow-none dark:bg-card/70">
-                                        <CardHeader className="space-y-0 p-0 pb-4">
-                                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                            <div className="min-w-0 flex-1">
-                                              <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="font-serif text-2xl text-foreground">
-                                              {reportName}
-                                            </h3>
+                                <div className="w-full min-w-0 border-b border-border bg-muted/20 p-3 sm:p-4 dark:border-border dark:bg-muted/50">
+                                      {(() => {
+                                        const reportLayout =
+                                          getExpandedReportCardLayoutClasses();
+                                        return (
+                                      <Card className={reportLayout.root}>
+                                        <CardHeader className={reportLayout.header}>
+                                          <h3 className={reportLayout.title}>
+                                            {reportName}
+                                          </h3>
+                                          <div className={reportLayout.badgeRow}>
                                               {hasError &&
                                                 (() => {
                                                   const soft =
@@ -4307,9 +4573,99 @@ export default function PortalDataViewer() {
                                                     </Badge>
                                                   );
                                                 })()}
-                                              </div>
-                                            </div>
-                                            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                                              {isPgcEplan
+                                                ? (() => {
+                                                    const ent =
+                                                      reportEntryByReportName.get(
+                                                        reportName,
+                                                      );
+                                                    const pdfHref =
+                                                      ent?.pdfUrl &&
+                                                      isStorageBackedReportUrl(
+                                                        ent.pdfUrl,
+                                                      ) &&
+                                                      !isSsrsReportViewerUrl(
+                                                        ent.pdfUrl,
+                                                      )
+                                                        ? String(ent.pdfUrl).trim()
+                                                        : null;
+                                                    const excelHref =
+                                                      ent?.excelUrl &&
+                                                      isStorageBackedReportUrl(
+                                                        ent.excelUrl,
+                                                      ) &&
+                                                      !isSsrsReportViewerUrl(
+                                                        ent.excelUrl,
+                                                      )
+                                                        ? String(
+                                                            ent.excelUrl,
+                                                          ).trim()
+                                                        : null;
+                                                    const pdfStatusLabel =
+                                                      ent?.pdfStatus ||
+                                                      (pdfHref
+                                                        ? "success"
+                                                        : ent?.pdfError
+                                                          ? "failed"
+                                                          : "pending");
+                                                    const excelStatusLabel =
+                                                      ent?.excelStatus ||
+                                                      (excelHref
+                                                        ? "success"
+                                                        : ent?.excelError
+                                                          ? "failed"
+                                                          : "pending");
+                                                    const complete =
+                                                      String(ent?.logicalStatus || "")
+                                                        .toLowerCase() === "complete" ||
+                                                      (pdfHref && excelHref);
+                                                    return (
+                                                      <>
+                                                          <Badge
+                                                            variant="outline"
+                                                            className="text-[10px] uppercase tracking-wide"
+                                                          >
+                                                            PDF: {pdfStatusLabel}
+                                                          </Badge>
+                                                          <Badge
+                                                            variant="outline"
+                                                            className="text-[10px] uppercase tracking-wide"
+                                                          >
+                                                            Excel: {excelStatusLabel}
+                                                          </Badge>
+                                                          {complete ? (
+                                                            <Badge
+                                                              variant="outline"
+                                                              className="text-[10px] uppercase tracking-wide"
+                                                            >
+                                                              Complete
+                                                            </Badge>
+                                                          ) : ent?.logicalStatus ? (
+                                                            <Badge
+                                                              variant="outline"
+                                                              className="text-[10px] uppercase tracking-wide"
+                                                            >
+                                                              {ent.logicalStatus}
+                                                            </Badge>
+                                                          ) : null}
+                                                      </>
+                                                    );
+                                                  })()
+                                                : null}
+                                          </div>
+                                          {(isPgcEplan &&
+                                            (() => {
+                                              const ent =
+                                                reportEntryByReportName.get(reportName);
+                                              return ent?.pdfError || ent?.excelError ? (
+                                                <p className="w-full text-xs text-destructive break-words">
+                                                  {[ent.pdfError, ent.excelError]
+                                                    .filter(Boolean)
+                                                    .join(" · ")}
+                                                </p>
+                                              ) : null;
+                                            })())}
+                                          <div className={reportLayout.actionRow}>
                                               {isPgcEplan
                                                 ? (() => {
                                                     const ent =
@@ -4353,58 +4709,15 @@ export default function PortalDataViewer() {
                                                             ent.excelUrl,
                                                           ).trim()
                                                         : null;
-                                                    const pdfStatusLabel =
-                                                      ent?.pdfStatus ||
-                                                      (pdfHref
-                                                        ? "success"
-                                                        : ent?.pdfError
-                                                          ? "failed"
-                                                          : "pending");
-                                                    const excelStatusLabel =
-                                                      ent?.excelStatus ||
-                                                      (excelHref
-                                                        ? "success"
-                                                        : ent?.excelError
-                                                          ? "failed"
-                                                          : "pending");
                                                     return (
                                                       <>
-                                                        <div className="flex w-full flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                                          <Badge
-                                                            variant="outline"
-                                                            className="text-[10px] uppercase tracking-wide"
-                                                          >
-                                                            PDF: {pdfStatusLabel}
-                                                          </Badge>
-                                                          <Badge
-                                                            variant="outline"
-                                                            className="text-[10px] uppercase tracking-wide"
-                                                          >
-                                                            Excel: {excelStatusLabel}
-                                                          </Badge>
-                                                          {ent?.logicalStatus ? (
-                                                            <Badge
-                                                              variant="outline"
-                                                              className="text-[10px] uppercase tracking-wide"
-                                                            >
-                                                              {ent.logicalStatus}
-                                                            </Badge>
-                                                          ) : null}
-                                                        </div>
-                                                        {(ent?.pdfError ||
-                                                          ent?.excelError) && (
-                                                          <p className="w-full text-xs text-destructive">
-                                                            {[ent.pdfError, ent.excelError]
-                                                              .filter(Boolean)
-                                                              .join(" · ")}
-                                                          </p>
-                                                        )}
                                                         {viewerHref ? (
                                                           <Button
                                                             asChild
                                                             variant="ghost"
                                                             className={cn(
                                                               PORTAL_ACTION_BUTTON_PRIMARY,
+                                                              "w-full sm:w-auto",
                                                             )}
                                                           >
                                                             <a
@@ -4414,7 +4727,7 @@ export default function PortalDataViewer() {
                                                               title="Open SSRS ReportViewer in ePlan (original layout)"
                                                             >
                                                               <FileText />
-                                                              Open viewer
+                                                              Open Viewer
                                                             </a>
                                                           </Button>
                                                         ) : null}
@@ -4424,6 +4737,7 @@ export default function PortalDataViewer() {
                                                             variant="ghost"
                                                             className={cn(
                                                               PORTAL_ACTION_BUTTON_OUTLINE,
+                                                              "w-full sm:w-auto",
                                                             )}
                                                           >
                                                             <a
@@ -4443,6 +4757,7 @@ export default function PortalDataViewer() {
                                                             variant="ghost"
                                                             className={cn(
                                                               PORTAL_ACTION_BUTTON_OUTLINE,
+                                                              "w-full sm:w-auto",
                                                             )}
                                                           >
                                                             <a
@@ -4485,6 +4800,7 @@ export default function PortalDataViewer() {
                                                               variant="ghost"
                                                               className={cn(
                                                                 PORTAL_ACTION_BUTTON_PRIMARY,
+                                                                "w-full sm:w-auto",
                                                               )}
                                                             >
                                                               <a
@@ -4493,7 +4809,7 @@ export default function PortalDataViewer() {
                                                                 rel="noreferrer"
                                                               >
                                                                 <FileText />
-                                                                Open viewer
+                                                                Open Viewer
                                                               </a>
                                                             </Button>
                                                           ) : null}
@@ -4503,6 +4819,7 @@ export default function PortalDataViewer() {
                                                               variant="ghost"
                                                               className={cn(
                                                                 PORTAL_ACTION_BUTTON_OUTLINE,
+                                                                "w-full sm:w-auto",
                                                               )}
                                                             >
                                                               <a
@@ -4521,6 +4838,7 @@ export default function PortalDataViewer() {
                                                               variant="ghost"
                                                               className={cn(
                                                                 PORTAL_ACTION_BUTTON_OUTLINE,
+                                                                "w-full sm:w-auto",
                                                               )}
                                                             >
                                                               <a
@@ -4545,6 +4863,7 @@ export default function PortalDataViewer() {
                                                     variant="ghost"
                                                     className={cn(
                                                       PORTAL_ACTION_BUTTON_AI,
+                                                      "w-full sm:w-auto",
                                                     )}
                                                     onClick={() =>
                                                       navigate(
@@ -4561,24 +4880,22 @@ export default function PortalDataViewer() {
                                                     Open Comment Review
                                                   </Button>
                                                 )}
-                                            </div>
                                           </div>
                                         </CardHeader>
-                                        <CardContent className="pt-0">
+                                        <CardContent className="min-w-0 pt-0">
                                           {hasError ? (
                                             <p className="text-sm text-destructive">
                                               {pdf?.error}
                                             </p>
                                           ) : pdf?.screenshot ? (
-                                            <div>
+                                            <div className="w-full min-w-0">
                                               <p className="text-xs text-muted-foreground mb-2">
                                                 Compressed preview (storage-sized). Click
                                                 for full reading view — text or portal link
                                                 when available.
                                               </p>
                                               <div
-                                                className="overflow-auto rounded-lg border border-border bg-muted/30 cursor-pointer transition-all hover:ring-1 hover:ring-primary/40 dark:border-border dark:bg-muted"
-                                                style={{ maxHeight: "420px" }}
+                                                className={reportLayout.previewWrap}
                                                 onClick={() => {
                                                   setReportReaderOpen({
                                                     reportName,
@@ -4599,7 +4916,7 @@ export default function PortalDataViewer() {
                                                 <img
                                                   src={`data:image/png;base64,${pdf.screenshot}`}
                                                   alt={reportName}
-                                                  className="w-full pointer-events-none"
+                                                  className={reportLayout.previewImg}
                                                 />
                                               </div>
                                               {pdf.text && (
@@ -4671,6 +4988,8 @@ export default function PortalDataViewer() {
                                           )}
                                         </CardContent>
                                       </Card>
+                                        );
+                                      })()}
                                 </div>
                               </CollapsibleContent>
                           </Collapsible>
@@ -5399,11 +5718,37 @@ export default function PortalDataViewer() {
               <div className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium text-foreground">Retry Failed Items</div>
-                  <StatusPill tone="default">Upcoming</StatusPill>
+                  {isPgcEplan && pgcFailedCounts.retryable > 0 ? (
+                    <StatusPill tone="warn">
+                      {pgcFailedCounts.retryable} retryable
+                    </StatusPill>
+                  ) : (
+                    <StatusPill tone="default">
+                      {isPgcEplan && pgcFailedCounts.total > 0
+                        ? "Not retryable"
+                        : "Upcoming"}
+                    </StatusPill>
+                  )}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   Retry only failed reports, attachments, or files from the latest harvest.
+                  Pending items stay out of this action.
                 </p>
+                {isPgcEplan && pgcFailedCounts.total > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    disabled={pgcFailedCounts.retryable === 0 || scrape.isScraping}
+                    onClick={() => {
+                      void openRetryFailedDialog();
+                    }}
+                    data-testid="button-retry-failed-items"
+                  >
+                    Review failed items ({pgcFailedCounts.total})
+                  </Button>
+                ) : null}
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -5451,6 +5796,19 @@ export default function PortalDataViewer() {
           </Panel>
         </div>
       </div>
+
+      {isPgcEplan ? (
+        <PgcRetryFailedItemsDialog
+          open={retryFailedOpen}
+          onOpenChange={setRetryFailedOpen}
+          items={retryFailedItems}
+          busy={retryFailedBusy || scrape.isScraping}
+          summaryLine={retrySummaryLine}
+          onRetrySelected={(selected) => {
+            void handleRetrySelectedFailed(selected);
+          }}
+        />
+      ) : null}
 
       <Dialog
         open={!!reportReaderOpen}

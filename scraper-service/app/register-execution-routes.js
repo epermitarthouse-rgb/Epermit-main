@@ -84,6 +84,7 @@ const {
 const scrapeEvents = require("../lib/scrape-events.js");
 const { SCRAPE_STAGES } = require("../lib/scrape-stages.js");
 const scrapeFileResults = require("../lib/scrape-file-results.js");
+const pgcRetryArtifacts = require("../lib/pgc-retry-artifacts.js");
 const scrapeLease = require("../lib/scrape-lease.js");
 const arlingtonDurableJob = require("../lib/arlington-durable-job.js");
 const arlingtonJobStore = require("../lib/arlington-job-store.js");
@@ -2470,6 +2471,20 @@ app.post("/api/scrape", async (req, res) => {
     }
     console.log("[PGC] Credentials source: saved_portal_settings (session)");
     console.log("[PGC] Env credential fallback: disabled (server)");
+    const parsedRetryArtifacts = pgcRetryArtifacts.parsePgcRetryArtifacts(
+      req.body?.pgcRetryArtifacts,
+    );
+    if (String(scrapeMode || "").trim() === "scrape_retry_selected") {
+      if (!parsedRetryArtifacts) {
+        return res.status(400).json({
+          error:
+            "scrape_retry_selected requires pgcRetryArtifacts with at least one failed file or report artifact",
+        });
+      }
+      console.log(
+        `[PGC] Targeted failed-items retry | files=${parsedRetryArtifacts.files.length} reports=${parsedRetryArtifacts.reports.length}`,
+      );
+    }
     let targets;
     if (permitNumber != null && String(permitNumber).trim() !== "") {
       const permitNorm = String(permitNumber).trim();
@@ -2479,14 +2494,19 @@ app.post("/api/scrape", async (req, res) => {
           pgcEplan.pgcPermitKeysMatch(p.projectNum, permitNorm),
       );
       if (targets.length === 0) {
-        const pgcOptsEarly = pgcPipelineOptsFromScrapeMode(scrapeMode || "all");
+        const pgcOptsEarly = pgcPipelineOptsFromScrapeMode(
+          scrapeMode || "all",
+          parsedRetryArtifacts,
+        );
         const pgcFilesOnlyEarly =
           pgcOptsEarly.skipDetail &&
           !pgcOptsEarly.skipFiles &&
           pgcOptsEarly.skipReports &&
           pgcOptsEarly.skipWorkflow &&
           pgcOptsEarly.skipReview;
-        if (pgcFilesOnlyEarly) {
+        const pgcRetrySelectedEarly =
+          String(scrapeMode || "").trim() === "scrape_retry_selected";
+        if (pgcFilesOnlyEarly || pgcRetrySelectedEarly) {
           targets = [
             {
               id: permitNorm,
@@ -2499,7 +2519,7 @@ app.post("/api/scrape", async (req, res) => {
             },
           ];
           console.log(
-            `[PGC] Files Only scrape — no login session row for ${permitNorm}; will resolve on dashboard at scrape phase`,
+            `[PGC] ${pgcRetrySelectedEarly ? "Retry selected" : "Files Only"} scrape — no login session row for ${permitNorm}; will resolve on dashboard at scrape phase`,
           );
         } else {
           return res.status(404).json({
@@ -2523,20 +2543,46 @@ app.post("/api/scrape", async (req, res) => {
     publishScrapeOrchestration(session, {
       stage: SCRAPE_STAGES.OPENING_PROJECT,
       event_type: "scrape_started",
-      user_message: `Opening ${targets.length} PGC project(s).`,
+      user_message:
+        String(scrapeMode || "").trim() === "scrape_retry_selected"
+          ? `Retrying selected failed PGC artifacts for ${targets.length} project(s).`
+          : `Opening ${targets.length} PGC project(s).`,
       progress_current: 0,
       progress_total: targets.length,
       dedupeKey: "pgc_open",
       forceFeed: true,
     });
     res.json({
-      message: "PGC ePlan scraping started",
+      message:
+        String(scrapeMode || "").trim() === "scrape_retry_selected"
+          ? "PGC failed-items retry started"
+          : "PGC ePlan scraping started",
       total: session.total,
       portalType: "projectdox",
       portalSubtype: "pgc-eplan",
       jobId: scrapeJobId,
+      retrySelected: String(scrapeMode || "").trim() === "scrape_retry_selected",
     });
     scrapeLease.acquireScrapeLease(session, sessionId, rearmSessionIdleTimeout);
+    const retryFileIds = parsedRetryArtifacts
+      ? pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(parsedRetryArtifacts)
+      : [];
+    const baseDevControls =
+      parsePgcDevHarvestControls(req.body?.devHarvestControls) || {};
+    const mergedDevControls =
+      parsedRetryArtifacts &&
+      String(scrapeMode || "").trim() === "scrape_retry_selected"
+        ? {
+            ...baseDevControls,
+            ...(retryFileIds.length ? { explicitFileIds: retryFileIds } : {}),
+            ...(parsedRetryArtifacts.reports.length
+              ? { explicitReportTargets: parsedRetryArtifacts.reports }
+              : {}),
+            retrySelectedOnly: true,
+          }
+        : Object.keys(baseDevControls).length
+          ? baseDevControls
+          : null;
     scrapePgcAll(
       session,
       targets,
@@ -2545,7 +2591,8 @@ app.post("/api/scrape", async (req, res) => {
       userId,
       scrapeMode || "all",
       {
-        devHarvestControls: parsePgcDevHarvestControls(req.body?.devHarvestControls),
+        devHarvestControls: mergedDevControls,
+        pgcRetryArtifacts: parsedRetryArtifacts,
       },
     )
       .then((result) => {
@@ -5516,7 +5563,7 @@ function cleanupPgcSuccessLocalArtifacts(pipelineResult) {
  * Map UI scrapeMode (PGC-specific strings from dashboard) to runPgcProductionPipeline skips.
  * Omits unchanged tabs in mapPgcPipelineToPortalData so Supabase merge keeps prior data.
  */
-function pgcPipelineOptsFromScrapeMode(scrapeMode) {
+function pgcPipelineOptsFromScrapeMode(scrapeMode, retryArtifacts = null) {
   const m = String(scrapeMode ?? "all").trim();
   const none = {
     skipDetail: false,
@@ -5557,6 +5604,10 @@ function pgcPipelineOptsFromScrapeMode(scrapeMode) {
       skipFiles: true,
       skipReports: true,
     };
+  }
+  // Targeted failed-artifact retry — never a full scrape; tabs driven by selection.
+  if (m === "scrape_retry_selected") {
+    return pgcRetryArtifacts.buildPgcRetryPipelineOpts(retryArtifacts);
   }
   if (m === "scrape_all" || m === "all") return { ...none };
   if (m === "standard") {
@@ -5609,6 +5660,12 @@ function parsePgcDevHarvestControls(raw) {
       ),
     ];
   }
+  if (Array.isArray(raw.explicitReportTargets) && raw.explicitReportTargets.length > 0) {
+    out.explicitReportTargets = raw.explicitReportTargets;
+  }
+  if (raw.retrySelectedOnly === true) {
+    out.retrySelectedOnly = true;
+  }
   if (process.env.NODE_ENV === "production" && Object.keys(out).length === 0) {
     return null;
   }
@@ -5624,13 +5681,18 @@ async function scrapePgcAll(
   scrapeMode,
   extraOpts = {},
 ) {
-  const pgcOpts = pgcPipelineOptsFromScrapeMode(scrapeMode);
+  const retryArtifacts =
+    extraOpts.pgcRetryArtifacts ||
+    pgcRetryArtifacts.parsePgcRetryArtifacts(extraOpts.pgcRetryArtifactsRaw);
+  const pgcOpts = pgcPipelineOptsFromScrapeMode(scrapeMode, retryArtifacts);
   const pgcFilesOnly =
     pgcOpts.skipDetail &&
     !pgcOpts.skipFiles &&
     pgcOpts.skipReports &&
     pgcOpts.skipWorkflow &&
     pgcOpts.skipReview;
+  const pgcRetrySelected =
+    String(scrapeMode || "").trim() === "scrape_retry_selected";
 
   session._scrapeCumulativeBytes = 0;
   session._downloadedHashes = new Map();
@@ -5647,11 +5709,31 @@ async function scrapePgcAll(
     );
     uploadedCheckpointMap =
       scrapeFileResults.buildUploadedCheckpointMap(priorRows);
-    if (uploadedCheckpointMap.size > 0) {
-      console.log(
-        `[PGC] Resuming harvest with ${uploadedCheckpointMap.size} checkpointed file(s)`,
+  }
+  if (pgcRetrySelected && supabaseProjectId && supabase) {
+    try {
+      const { data: priorOk } = await supabase
+        .from("scrape_file_results")
+        .select(
+          "portal_file_id, file_version, public_url, storage_path, status",
+        )
+        .eq("project_id", supabaseProjectId)
+        .in("status", ["uploaded", "skipped"])
+        .limit(5000);
+      const seeded = scrapeFileResults.buildUploadedCheckpointMap(priorOk || []);
+      for (const [k, v] of seeded) {
+        if (!uploadedCheckpointMap.has(k)) uploadedCheckpointMap.set(k, v);
+      }
+    } catch (seedErr) {
+      console.warn(
+        `[PGC] Retry checkpoint seed skipped: ${seedErr?.message || seedErr}`,
       );
     }
+  }
+  if (uploadedCheckpointMap.size > 0) {
+    console.log(
+      `[PGC] Resuming harvest with ${uploadedCheckpointMap.size} checkpointed file(s)`,
+    );
   }
 
   const devHarvestControls =
@@ -5666,7 +5748,7 @@ async function scrapePgcAll(
 
   const dash = session.dashboardUrl || pgcEplan.PGC_DASHBOARD_URL;
 
-  if (pgcFilesOnly && projects.length === 1 && session.page) {
+  if ((pgcFilesOnly || pgcRetrySelected) && projects.length === 1 && session.page) {
     const resolved = await pgcEplan.resolvePgcExplicitTargetOnDashboard(
       session.page,
       dash,
@@ -5677,7 +5759,7 @@ async function scrapePgcAll(
     } else {
       session._pgcExplicitTargetResolveFailed = true;
       console.warn(
-        `[PGC] Files Only explicit target not resolved on dashboard before harvest | permit=${projects[0].projectNum} projectId=${projects[0].projectId}`,
+        `[PGC] ${pgcRetrySelected ? "Retry selected" : "Files Only"} explicit target not resolved on dashboard before harvest | permit=${projects[0].projectNum} projectId=${projects[0].projectId}`,
       );
     }
   }
@@ -5757,6 +5839,20 @@ async function scrapePgcAll(
         console.log(`[PGC] Browser relaunched (${reason || "task6"})`);
         return relPage;
       };
+      let priorReportEntries = null;
+      if (pgcRetrySelected && supabaseProjectId && !pgcOpts.skipReports) {
+        try {
+          const { data: priorProj } = await supabase
+            .from("projects")
+            .select("portal_data")
+            .eq("id", supabaseProjectId)
+            .maybeSingle();
+          priorReportEntries =
+            priorProj?.portal_data?.tabs?.reports?.reportEntries || null;
+        } catch (_) {
+          priorReportEntries = null;
+        }
+      }
       const pipelineResult = await pgcEplan.runPgcProductionPipeline(
         page,
         {
@@ -5777,6 +5873,7 @@ async function scrapePgcAll(
           scrapeJobId: fileProgress?.scrapeJobId || session.scrapeJobId || null,
           uploadLocal,
           storagePrefix,
+          priorReportEntries,
           onScrapeProgress: (event) => {
             if (event.progress_current != null) {
               session.progress = Number(event.progress_current);
@@ -5816,6 +5913,7 @@ async function scrapePgcAll(
           fileProgress,
           uploadedCheckpointMap,
           devHarvestControls,
+          pgcRetryArtifacts: retryArtifacts,
           refreshScrapeLease: () =>
             scrapeLease.refreshScrapeLease(
               session,
@@ -5833,7 +5931,11 @@ async function scrapePgcAll(
               parentFolder: fields.parentFolder,
             };
             await scrapeFileResults.upsertFileDiscovered(fileProgress, base);
-            await scrapeFileResults.markFileDownloading(fileProgress, base);
+            if (pgcRetrySelected) {
+              await scrapeFileResults.markFileRetrying(fileProgress, base);
+            } else {
+              await scrapeFileResults.markFileDownloading(fileProgress, base);
+            }
           },
           onFileFailed: async (fields) => {
             if (!fileProgress) return;
@@ -5927,6 +6029,50 @@ async function scrapePgcAll(
         project,
         pipelineResult,
       );
+      if (pgcRetrySelected && retryArtifacts && supabaseProjectId) {
+        try {
+          const { data: existingRow } = await supabase
+            .from("projects")
+            .select("portal_data")
+            .eq("id", supabaseProjectId)
+            .maybeSingle();
+          const priorTabs = existingRow?.portal_data?.tabs || {};
+          const cur = session.data[project.id];
+          if (cur?.tabs?.files?.folders && priorTabs.files?.folders) {
+            const targetedIds = pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(
+              retryArtifacts,
+            );
+            cur.tabs.files.folders =
+              pgcRetryArtifacts.mergeFolderFilesPreservingUntargeted(
+                priorTabs.files.folders,
+                cur.tabs.files.folders,
+                targetedIds,
+              );
+          }
+          if (cur?.tabs?.reports && priorTabs.reports?.reportEntries) {
+            const mergedEntries =
+              pgcRetryArtifacts.mergeReportEntriesPreservingSuccess(
+                priorTabs.reports.reportEntries,
+                cur.tabs.reports.reportEntries || [],
+                retryArtifacts.reports || [],
+              );
+            cur.tabs.reports.reportEntries = mergedEntries;
+            cur.tabs.reports.tables = [
+              {
+                headers: ["REPORT NAME", "Status"],
+                rows: mergedEntries.map((r) => ({
+                  "REPORT NAME": r.reportName,
+                  Status: r.logicalStatus || "Pending",
+                })),
+              },
+            ];
+          }
+        } catch (mergeErr) {
+          console.warn(
+            `[PGC] Retry portal_data merge skipped: ${mergeErr?.message || mergeErr}`,
+          );
+        }
+      }
       cleanupPgcSuccessLocalArtifacts(pipelineResult);
     } catch (err) {
       console.error(`   ❌ [PGC] ${project.projectNum}:`, err.message);
