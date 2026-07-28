@@ -1061,6 +1061,10 @@ export default function PortalDataViewer() {
   const [retryFailedOpen, setRetryFailedOpen] = useState(false);
   const [retryFailedBusy, setRetryFailedBusy] = useState(false);
   const [retryFailedItems, setRetryFailedItems] = useState<PortalFailedItem[]>([]);
+  /** Owned here so dialog remounts (early returns) cannot re-select-all. */
+  const [retrySelectedIds, setRetrySelectedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [retrySummaryLine, setRetrySummaryLine] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
 
@@ -1604,6 +1608,10 @@ export default function PortalDataViewer() {
       }
     }
     setRetryFailedItems(items);
+    // Select-all only when the dialog is opened — never again on submit/remount.
+    setRetrySelectedIds(
+      new Set(items.filter((i) => i.retryable).map((i) => i.id)),
+    );
     setRetryFailedOpen(true);
   }, [
     pgcFailedItems,
@@ -1613,9 +1621,14 @@ export default function PortalDataViewer() {
     pgcRetryReportEntries,
   ]);
 
+  const handleRetrySelectedIdsChange = useCallback((next: Set<string>) => {
+    setRetrySelectedIds(next);
+  }, []);
+
   const handleRetrySelectedFailed = useCallback(
     async (selected: PortalFailedItem[]) => {
       if (!isPgcEplanPortal) return;
+      // Trust the click-time snapshot from the dialog — never re-expand from UI state.
       const payload = buildPgcRetryArtifactPayload(selected);
       if (
         (payload.files.length === 0 && payload.reports.length === 0) ||
@@ -1798,53 +1811,81 @@ export default function PortalDataViewer() {
     silentRefetch,
   ]);
 
+  const retryFailedDialog =
+    isPgcEplanPortal || retryFailedOpen ? (
+      <PgcRetryFailedItemsDialog
+        open={retryFailedOpen}
+        onOpenChange={(next) => {
+          setRetryFailedOpen(next);
+          if (!next) setRetrySelectedIds(new Set());
+        }}
+        items={retryFailedItems}
+        selectedIds={retrySelectedIds}
+        onSelectedIdsChange={handleRetrySelectedIdsChange}
+        busy={retryFailedBusy || scrape.isScraping}
+        summaryLine={retrySummaryLine}
+        onRetrySelected={(selected) => {
+          void handleRetrySelectedFailed(selected);
+        }}
+      />
+    ) : null;
+
   if (view === "queue") {
     return (
-      <PortalHarvestQueue
-        projects={projects}
-        projectsLoading={authLoading || projectsLoading}
-        selectedProjectId={selectedProjectId}
-        onOpenProject={openProjectDetail}
-      />
+      <>
+        <PortalHarvestQueue
+          projects={projects}
+          projectsLoading={authLoading || projectsLoading}
+          selectedProjectId={selectedProjectId}
+          onOpenProject={openProjectDetail}
+        />
+        {retryFailedDialog}
+      </>
     );
   }
 
   if (authLoading || (loading && !portalData)) {
     return (
-      <section className="py-6 px-4 sm:px-6 max-w-5xl">
-        <Button variant="ghost" size="sm" className="mb-4 gap-1.5" onClick={() => setView("queue")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
-        </Button>
-        <Skeleton className="h-12 w-64 mb-4" />
-        <Skeleton className="h-6 w-full mb-2" />
-        <Skeleton className="h-6 w-3/4 mb-6" />
-        <Skeleton className="h-10 w-48 mb-6" />
-        <Skeleton className="h-64 w-full" />
-      </section>
+      <>
+        <section className="py-6 px-4 sm:px-6 max-w-5xl">
+          <Button variant="ghost" size="sm" className="mb-4 gap-1.5" onClick={() => setView("queue")}>
+            <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+          </Button>
+          <Skeleton className="h-12 w-64 mb-4" />
+          <Skeleton className="h-6 w-full mb-2" />
+          <Skeleton className="h-6 w-3/4 mb-6" />
+          <Skeleton className="h-10 w-48 mb-6" />
+          <Skeleton className="h-64 w-full" />
+        </section>
+        {retryFailedDialog}
+      </>
     );
   }
 
   if (noPermitConfigured) {
     return (
-      <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
-        </Button>
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-            <h2 className="text-lg font-semibold mb-2">No project linked</h2>
-            <p className="text-muted-foreground mb-4">
-              In Settings &gt; Portal Credentials, link credentials to a
-              project. Then select that project in the sidebar and set Permit #
-              there.
-            </p>
-            <Button asChild variant="outline">
-              <Link to="/settings">Open Settings</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
+      <>
+        <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+            <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+          </Button>
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+              <h2 className="text-lg font-semibold mb-2">No project linked</h2>
+              <p className="text-muted-foreground mb-4">
+                In Settings &gt; Portal Credentials, link credentials to a
+                project. Then select that project in the sidebar and set Permit #
+                there.
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/settings">Open Settings</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+        {retryFailedDialog}
+      </>
     );
   }
 
@@ -1974,7 +2015,12 @@ export default function PortalDataViewer() {
   };
 
   if (shouldRenderArlingtonAccelaShell && arlingtonAccelaPortalData) {
-    return renderAccelaPortalSection(arlingtonAccelaPortalData);
+    return (
+      <>
+        {renderAccelaPortalSection(arlingtonAccelaPortalData)}
+        {retryFailedDialog}
+      </>
+    );
   }
 
   if (!portalData) {
@@ -1989,25 +2035,28 @@ export default function PortalDataViewer() {
         `[PortalDataViewer] rendering empty state: expectedPortalType=${expectedPortalType}, label="${emptyLabel}"`,
       );
     return (
-      <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
-        </Button>
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h2 className="text-lg font-semibold mb-2">{emptyLabel}</h2>
-            <p className="text-muted-foreground mb-4">
-              Saved data for the selected project will appear here
-              automatically. Run a new scrape only if this project does not have
-              valid saved data yet.
-            </p>
-            <Button asChild className="bg-accent hover:bg-accent/90">
-              <Link to="/dashboard">Go to Dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
+      <>
+        <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+            <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+          </Button>
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+              <h2 className="text-lg font-semibold mb-2">{emptyLabel}</h2>
+              <p className="text-muted-foreground mb-4">
+                Saved data for the selected project will appear here
+                automatically. Run a new scrape only if this project does not have
+                valid saved data yet.
+              </p>
+              <Button asChild className="bg-accent hover:bg-accent/90">
+                <Link to="/dashboard">Go to Dashboard</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+        {retryFailedDialog}
+      </>
     );
   }
 
@@ -2019,14 +2068,17 @@ export default function PortalDataViewer() {
           ? "No ProjectDox data available."
           : "No portal data available.";
     return (
-      <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
-        </Button>
-        <div className="p-8 text-center text-muted-foreground">
-          {noTabsLabel} Run a scrape first.
-        </div>
-      </section>
+      <>
+        <section className="space-y-4 py-6 px-4 sm:px-6 max-w-5xl">
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setView("queue")}>
+            <ArrowLeft className="h-4 w-4" /> Back to Portal Queue
+          </Button>
+          <div className="p-8 text-center text-muted-foreground">
+            {noTabsLabel} Run a scrape first.
+          </div>
+        </section>
+        {retryFailedDialog}
+      </>
     );
   }
 
@@ -2035,7 +2087,12 @@ export default function PortalDataViewer() {
     (!expectedPortalType && portalData.portalType === "accela");
 
   if (renderAccelaUI) {
-    return renderAccelaPortalSection(portalData as any);
+    return (
+      <>
+        {renderAccelaPortalSection(portalData as any)}
+        {retryFailedDialog}
+      </>
+    );
   }
 
   const infoTab = portalData.tabs?.info;
@@ -5797,18 +5854,7 @@ export default function PortalDataViewer() {
         </div>
       </div>
 
-      {isPgcEplan ? (
-        <PgcRetryFailedItemsDialog
-          open={retryFailedOpen}
-          onOpenChange={setRetryFailedOpen}
-          items={retryFailedItems}
-          busy={retryFailedBusy || scrape.isScraping}
-          summaryLine={retrySummaryLine}
-          onRetrySelected={(selected) => {
-            void handleRetrySelectedFailed(selected);
-          }}
-        />
-      ) : null}
+      {retryFailedDialog}
 
       <Dialog
         open={!!reportReaderOpen}

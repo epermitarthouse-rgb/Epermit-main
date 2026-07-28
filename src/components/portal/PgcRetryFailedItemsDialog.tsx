@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -47,52 +47,65 @@ export function PgcRetryFailedItemsDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: PortalFailedItem[];
+  /** Controlled selection — owned by parent so remounts cannot select-all. */
+  selectedIds: ReadonlySet<string>;
+  onSelectedIdsChange: (next: Set<string>) => void;
   busy?: boolean;
   summaryLine?: string | null;
   onRetrySelected: (selected: PortalFailedItem[]) => void;
 }) {
-  const { open, onOpenChange, items, busy, summaryLine, onRetrySelected } = props;
+  const {
+    open,
+    onOpenChange,
+    items,
+    selectedIds,
+    onSelectedIdsChange,
+    busy,
+    summaryLine,
+    onRetrySelected,
+  } = props;
   const groups = useMemo(() => groupFailedItemsByFolderAndType(items), [items]);
   const counts = useMemo(() => countRetryableFailedItems(items), [items]);
   const retryableIds = useMemo(
     () => items.filter((i) => i.retryable).map((i) => i.id),
     [items],
   );
-  // Stable key so liveState-only item updates don't look like a new ID set.
   const retryableIdsKey = useMemo(() => retryableIds.join("\0"), [retryableIds]);
   const retryableIdsRef = useRef(retryableIds);
   retryableIdsRef.current = retryableIds;
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const wasOpenRef = useRef(false);
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
 
+  // While open: only prune invalid IDs. Never expand to all (parent sets all on open).
   useEffect(() => {
-    const justOpened = open && !wasOpenRef.current;
-    wasOpenRef.current = open;
-    if (!open) return;
-    setSelectedIds((prev) =>
-      syncFailedItemsSelection(prev, retryableIdsRef.current, {
-        resetToAll: justOpened,
-      }),
+    if (!open || busy) return;
+    const next = syncFailedItemsSelection(
+      selectedIdsRef.current,
+      retryableIdsRef.current,
+      { resetToAll: false },
     );
-  }, [open, retryableIdsKey]);
+    const prev = selectedIdsRef.current;
+    if (next.size === prev.size && [...next].every((id) => prev.has(id))) {
+      return;
+    }
+    onSelectedIdsChange(next);
+  }, [open, busy, retryableIdsKey, onSelectedIdsChange]);
 
   const toggle = (id: string, retryable: boolean) => {
     if (!retryable || busy) return;
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectedIdsChange(next);
   };
 
-  const selectAllRetryable = () => setSelectedIds(new Set(retryableIds));
-  const clearSelection = () => setSelectedIds(new Set());
+  const selectAllRetryable = () => onSelectedIdsChange(new Set(retryableIds));
+  const clearSelection = () => onSelectedIdsChange(new Set());
 
   const selectedItems = items.filter((i) => selectedIds.has(i.id) && i.retryable);
 
   const handleRetryClick = () => {
-    // Snapshot selection at click time so later item/live-state updates cannot expand it.
+    // Snapshot at click time so later item/live-state updates cannot expand it.
     const snapshot = items.filter((i) => selectedIds.has(i.id) && i.retryable);
     onRetrySelected(snapshot);
   };

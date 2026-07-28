@@ -260,6 +260,26 @@ describe("syncFailedItemsSelection", () => {
     assert.equal(payload.reports.length, 0);
   });
 
+  it("submit must not re-apply resetToAll even if dialog remounts with empty local state", () => {
+    // Parent owns selection across remounts. A remounted dialog with empty local
+    // state must sync with resetToAll:false using the parent's partial set —
+    // never expand to all retryable IDs.
+    const parentOwnedPartial = new Set(["file:sfr:111:"]);
+    const afterRemount = syncFailedItemsSelection(
+      parentOwnedPartial,
+      allRetryable,
+      { resetToAll: false },
+    );
+    assert.equal(afterRemount.size, 1);
+    assert.deepEqual([...afterRemount], ["file:sfr:111:"]);
+
+    // Contrast: resetToAll is reserved for dialog open only.
+    const onOpen = syncFailedItemsSelection(new Set(), allRetryable, {
+      resetToAll: true,
+    });
+    assert.equal(onOpen.size, allRetryable.length);
+  });
+
   it("prunes IDs that are no longer retryable without adding others", () => {
     const prev = new Set(["file:sfr:111:", "file:sfr:222:"]);
     const next = syncFailedItemsSelection(prev, ["file:sfr:111:"], {
