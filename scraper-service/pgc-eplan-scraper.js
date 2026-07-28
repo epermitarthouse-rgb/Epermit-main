@@ -17965,18 +17965,29 @@ async function processPgcSsrReportsForProject(
       reports,
     };
     const foundCount = gridRows.length;
+    const pdfOk = reports.filter((r) => r.pdfDownloaded).length;
+    const excelOk = reports.filter((r) => r.excelDownloaded).length;
+    const completeCount = reports.filter(
+      (r) => r.logicalStatus === "Complete",
+    ).length;
+    const partialCount = reports.filter(
+      (r) => r.logicalStatus === "Partial",
+    ).length;
+    const failedCount = reports.filter(
+      (r) => r.logicalStatus === "Failed",
+    ).length;
     const exportedCount = reports.filter(
       (r) => r.excelDownloaded || r.pdfDownloaded,
     ).length;
     console.log(
-      `[PGC] Reports | summary | ${projectID} | found:${foundCount} exported:${exportedCount}`,
+      `[PGC] Reports | summary | ${projectID} | found:${foundCount} logical:${reports.length} complete:${completeCount} partial:${partialCount} failed:${failedCount} pdfOk:${pdfOk} excelOk:${excelOk} exportedAny:${exportedCount}`,
     );
     pgcEmitScrapeProgress(onProgress, {
       event_type: "section_completed",
-      user_message: `Reports section complete (${exportedCount} of ${foundCount} exported).`,
+      user_message: `Reports section complete (${completeCount} of ${reports.length} complete; PDF ${pdfOk}/${reports.length}, Excel ${excelOk}/${reports.length}).`,
       progress_current: reportTotal,
       progress_total: reportTotal,
-      technical_message: `[PGC] Reports | summary | ${projectID} | found:${foundCount} exported:${exportedCount}`,
+      technical_message: `[PGC] Reports | summary | ${projectID} | found:${foundCount} complete:${completeCount} pdfOk:${pdfOk} excelOk:${excelOk}`,
     });
     pgcProgress.pgcLogDetail("task8_report_export_payload", {
       ...payload,
