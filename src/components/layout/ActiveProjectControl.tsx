@@ -4,13 +4,6 @@ import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
 import { isProjectDoxUrl } from "@/lib/portalView";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { formFieldsFromSelectedProject } from "@/lib/quickScrapeFormState";
-import { isRadixSelectPortalTarget } from "@/lib/radixSelectPortal";
+import { cn } from "@/lib/utils";
 
 const PERMIT_NUMBER_STORAGE_KEY_PREFIX = "epermit:permitNumber";
 
@@ -30,6 +23,9 @@ const FIELD_CLASS =
  * Header project-context control (Lovable places project context in the header,
  * not a large pinned sidebar block). Carries the full PP permit#/credential/create
  * workflow that previously lived in AppSidebar — moved, not deleted.
+ *
+ * Project/credential pickers are inline lists (not Radix Select). Select Content
+ * portals outside Popover and races dismiss/focus, so option clicks never commit.
  */
 export function ActiveProjectControl() {
   const { user } = useAuth();
@@ -329,15 +325,6 @@ export function ActiveProjectControl() {
     if (createNewProject && permitNumber.trim()) setNewProjectName(permitNumber.trim());
   }, [createNewProject, permitNumber]);
 
-  const keepPopoverOpenForSelectPortal = useCallback(
-    (event: { target: EventTarget | null; preventDefault: () => void }) => {
-      if (isRadixSelectPortalTarget(event.target)) {
-        event.preventDefault();
-      }
-    },
-    [],
-  );
-
   if (!selectedProject || !user) return null;
 
   const triggerLabel = selectedProjectData
@@ -345,6 +332,18 @@ export function ActiveProjectControl() {
     : permitNumber.trim()
       ? `Permit ${permitNumber.trim()}`
       : "Select project";
+
+  const projectPickerDisabled = loading || projects.length === 0;
+  const selectedProjectValue = selectedProject.selectedProjectId ?? "__none__";
+  const selectedCredentialValue = selectedCredentialId || "__none__";
+
+  const listItemClass = (active: boolean) =>
+    cn(
+      "flex w-full items-start px-3 py-2 text-left text-sm transition-colors",
+      active
+        ? "bg-accent text-accent-foreground"
+        : "text-foreground hover:bg-muted/80",
+    );
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>
@@ -362,13 +361,7 @@ export function ActiveProjectControl() {
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-80 space-y-3"
-        onPointerDownOutside={keepPopoverOpenForSelectPortal}
-        onFocusOutside={keepPopoverOpenForSelectPortal}
-        onInteractOutside={keepPopoverOpenForSelectPortal}
-      >
+      <PopoverContent align="end" className="w-80 space-y-3">
         <div className="pilot-kicker">Active project</div>
         <div className="space-y-1">
           <Label htmlFor="header-permit-number" className="text-xs text-muted-foreground">
@@ -390,28 +383,46 @@ export function ActiveProjectControl() {
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Project</Label>
-          <Select
-            value={selectedProject.selectedProjectId ?? "__none__"}
-            onValueChange={handleSelectValueChange}
-            disabled={loading || projects.length === 0}
+          <div
+            role="listbox"
+            aria-label="Select a project"
+            data-testid="header-project-select"
+            className={cn(
+              "max-h-48 overflow-y-auto rounded-md border border-input bg-background",
+              projectPickerDisabled && "pointer-events-none opacity-50",
+            )}
           >
-            <SelectTrigger className={FIELD_CLASS} data-testid="header-project-select">
-              <SelectValue placeholder="Select a project" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              className="z-[200] max-h-64"
-              data-testid="header-project-select-content"
+            <button
+              type="button"
+              role="option"
+              aria-selected={selectedProjectValue === "__none__"}
+              className={listItemClass(selectedProjectValue === "__none__")}
+              onClick={() => handleSelectValueChange("__none__")}
+              disabled={projectPickerDisabled}
             >
-              <SelectItem value="__none__">Select a project</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                  {p.permit_number ? ` · ${p.permit_number}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              Select a project
+            </button>
+            {projects.map((p) => {
+              const active = selectedProjectValue === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  data-testid={`header-project-option-${p.id}`}
+                  className={listItemClass(active)}
+                  onClick={() => handleSelectValueChange(p.id)}
+                  disabled={projectPickerDisabled}
+                >
+                  <span className="min-w-0 break-words">
+                    {p.name}
+                    {p.permit_number ? ` · ${p.permit_number}` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
         {sidebarCredentials.length > 0 && (
           <div className="space-y-1">
@@ -419,20 +430,44 @@ export function ActiveProjectControl() {
               <KeyRound className="h-3 w-3 text-primary" />
               Portal Credential
             </Label>
-            <Select value={selectedCredentialId || "__none__"} onValueChange={handleCredentialChange}>
-              <SelectTrigger className={FIELD_CLASS} data-testid="select-header-credential">
-                <SelectValue placeholder="Select credential" />
-              </SelectTrigger>
-              <SelectContent position="popper" className="z-[200] max-h-64">
-                <SelectItem value="__none__">None (select a credential)</SelectItem>
-                {sidebarCredentials.map((cred) => (
-                  <SelectItem key={cred.id} value={cred.id}>
-                    {cred.jurisdiction}
-                    {cred.portal_username ? ` — ${cred.portal_username}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div
+              role="listbox"
+              aria-label="Select credential"
+              data-testid="select-header-credential"
+              className="max-h-40 overflow-y-auto rounded-md border border-input bg-background"
+            >
+              <button
+                type="button"
+                role="option"
+                aria-selected={selectedCredentialValue === "__none__"}
+                className={listItemClass(selectedCredentialValue === "__none__")}
+                onClick={() => {
+                  void handleCredentialChange("__none__");
+                }}
+              >
+                None (select a credential)
+              </button>
+              {sidebarCredentials.map((cred) => {
+                const active = selectedCredentialValue === cred.id;
+                return (
+                  <button
+                    key={cred.id}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={listItemClass(active)}
+                    onClick={() => {
+                      void handleCredentialChange(cred.id);
+                    }}
+                  >
+                    <span className="min-w-0 break-words">
+                      {cred.jurisdiction}
+                      {cred.portal_username ? ` — ${cred.portal_username}` : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
         {!selectedProject.selectedProjectId && permitNumber.trim() && (

@@ -12,15 +12,33 @@ function fakeElement(closestMatch: string | null): Element {
 }
 
 describe("isRadixSelectPortalTarget", () => {
-  it("detects select listbox portal nodes so popover dismiss can be blocked", () => {
+  it("detects select listbox / viewport / option portal nodes so popover dismiss can be blocked", () => {
     assert.equal(
       isRadixSelectPortalTarget(fakeElement('[role="listbox"]')),
       true,
     );
     assert.equal(
-      isRadixSelectPortalTarget(fakeElement("[data-radix-select-content]")),
+      isRadixSelectPortalTarget(fakeElement("[data-radix-select-viewport]")),
       true,
     );
+    assert.equal(
+      isRadixSelectPortalTarget(fakeElement('[role="option"]')),
+      true,
+    );
+    assert.equal(
+      isRadixSelectPortalTarget(
+        fakeElement("[data-radix-popper-content-wrapper]"),
+      ),
+      true,
+    );
+  });
+
+  it("resolves text-node targets via parentElement", () => {
+    const parent = fakeElement('[role="option"]');
+    const textNode = {
+      parentElement: parent,
+    } as unknown as EventTarget;
+    assert.equal(isRadixSelectPortalTarget(textNode), true);
   });
 
   it("does not treat ordinary clicks as select portal", () => {
