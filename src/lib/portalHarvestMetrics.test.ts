@@ -474,6 +474,11 @@ describe("UI label contracts", () => {
     assert.doesNotMatch(queueSrc, /label=["']Stale \(7d\+\)["']/i);
     assert.match(queueSrc, /Run Full Harvest/i);
     assert.match(queueSrc, /Upcoming/);
+    assert.match(queueSrc, /button-portal-harvest-filter/);
+    assert.match(queueSrc, /DropdownMenuCheckboxItem/);
+    assert.doesNotMatch(queueSrc, /Filter[\s\S]{0,120}Upcoming/);
+    assert.doesNotMatch(queueSrc, /Manage Project Credentials/);
+    assert.doesNotMatch(queueSrc, /pilot-button-primary/);
     assert.doesNotMatch(queueSrc, />\s*Force Sync\s*</);
 
     assert.match(detailSrc, /label=["']Selected project["']/i);

@@ -318,7 +318,7 @@ export function ActiveProjectControl() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex max-w-[150px] items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 text-left sm:max-w-[200px] md:max-w-[260px]"
+          className="flex min-w-0 max-w-[7.5rem] shrink items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 text-left sm:max-w-[10rem] md:max-w-[12rem] xl:max-w-[16rem]"
           title="Active project"
           data-testid="header-active-project"
         >

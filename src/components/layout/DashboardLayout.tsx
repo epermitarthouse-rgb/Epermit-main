@@ -44,7 +44,7 @@ function ScrapeHeaderIndicator() {
   return (
     <button
       type="button"
-      className="flex max-w-[220px] cursor-pointer items-center gap-2 rounded-md border border-warning/35 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning transition-colors hover:bg-warning/18 dark:border-primary/35 dark:bg-primary/12 dark:text-primary dark:hover:bg-primary/18"
+      className="flex max-w-[140px] shrink cursor-pointer items-center gap-2 rounded-md border border-warning/35 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning transition-colors hover:bg-warning/18 sm:max-w-[180px] dark:border-primary/35 dark:bg-primary/12 dark:text-primary dark:hover:bg-primary/18"
       onClick={() => setScrapeMinimized(false)}
       data-testid="header-scrape-indicator"
     >
@@ -73,11 +73,11 @@ function AppHeader({
     "PP";
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-xl">
-      <div className="flex h-16 items-center gap-3 px-4 md:gap-4 md:px-6 lg:px-8">
-        <SidebarTrigger className="h-9 w-9 border border-border bg-card text-foreground" />
+    <header className="sticky top-0 z-30 min-w-0 overflow-hidden border-b border-border bg-background/90 backdrop-blur-xl">
+      <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 lg:px-8">
+        <SidebarTrigger className="h-9 w-9 shrink-0 border border-border bg-card text-foreground" />
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -101,76 +101,79 @@ function AppHeader({
           </AuthGatedLink>
         </div>
 
-        <div className="hidden min-w-0 items-center gap-2 text-sm text-muted-foreground md:flex">
+        <div className="hidden min-w-0 max-w-[9rem] items-center gap-2 text-sm text-muted-foreground lg:flex xl:max-w-[14rem]">
           <span className="shrink-0">PermitPilot</span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate font-medium text-foreground">{title}</span>
         </div>
 
-        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1.5 overflow-hidden sm:gap-2">
           <ScrapeHeaderIndicator />
           <ActiveProjectControl />
 
           <button
             type="button"
             onClick={onOpenCommand}
-            className="hidden min-w-48 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left lg:flex"
+            className="hidden min-w-0 max-w-[11rem] shrink items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left xl:flex"
             aria-label="Open command palette"
           >
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="flex-1 truncate text-sm text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
               Search navigation…
             </span>
-            <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium text-muted-foreground sm:flex">
+            <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium text-muted-foreground 2xl:flex">
               ⌘K
             </kbd>
           </button>
 
           <AuthGatedLink
             to="/permit-wizard-filing"
-            className="pilot-button-primary hidden sm:inline-flex"
+            className="pilot-button-primary hidden shrink-0 lg:inline-flex"
+            aria-label="New workflow"
           >
-            <Plus className="h-4 w-4" />
-            New workflow
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden xl:inline">New workflow</span>
           </AuthGatedLink>
 
           <Link
             to="/demos"
-            className="pilot-button-primary inline-flex bg-accent text-accent-foreground hover:bg-accent/90"
+            className="pilot-button-primary inline-flex shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
             aria-label="Request Demo"
           >
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">Request Demo</span>
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="hidden xl:inline">Request Demo</span>
           </Link>
 
-          <ThemeToggle />
-          <NotificationBell />
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <ThemeToggle />
+            <NotificationBell />
 
-          <Avatar className="hidden h-9 w-9 border border-border sm:flex">
-            <AvatarFallback className="bg-primary font-tight text-xs font-bold text-primary-foreground">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+            <Avatar className="hidden h-9 w-9 border border-border xl:flex">
+              <AvatarFallback className="bg-primary font-tight text-xs font-bold text-primary-foreground">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
 
-          {user ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSignOut}
-              className="gap-2 border-border"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden lg:inline">Sign Out</span>
-            </Button>
-          ) : (
-            <Button asChild variant="default" size="sm" className="gap-2">
-              <Link to="/auth" aria-label="Sign in">
-                <LogIn className="h-4 w-4" />
-                <span className="hidden lg:inline">Sign In</span>
-              </Link>
-            </Button>
-          )}
+            {user ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSignOut}
+                className="shrink-0 gap-2 border-border"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span className="hidden xl:inline">Sign Out</span>
+              </Button>
+            ) : (
+              <Button asChild variant="default" size="sm" className="shrink-0 gap-2">
+                <Link to="/auth" aria-label="Sign in">
+                  <LogIn className="h-4 w-4 shrink-0" />
+                  <span className="hidden xl:inline">Sign In</span>
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </header>
@@ -192,14 +195,14 @@ function DashboardContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <AppHeader
           onOpenCommand={() => setCommandOpen(true)}
           onSignOut={handleSignOut}
         />
 
-        <main className="flex-1 overflow-auto overflow-x-hidden px-4 py-5 pb-20 text-foreground md:px-6 md:pb-5 lg:px-8">
-          <div className="min-h-full">{children}</div>
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-20 text-foreground md:px-6 md:pb-5 lg:px-8">
+          <div className="min-h-full min-w-0 max-w-full">{children}</div>
         </main>
       </div>
 
@@ -219,8 +222,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <SelectedProjectProvider>
       <ScrapeProvider>
         <SidebarProvider>
-          <div className="signal-grid flex min-h-screen w-full bg-background text-foreground">
-            <div className="flex min-h-screen w-full">
+          <div className="signal-grid flex min-h-screen w-full overflow-x-hidden bg-background text-foreground">
+            <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden">
               <AppSidebar />
               <DashboardContent>{children}</DashboardContent>
             </div>
