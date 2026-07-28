@@ -25,57 +25,59 @@ import {
   StatusPill,
 } from "@/components/design/ProductPrimitives";
 import type { Project } from "@/types/project";
+import { usePortalHarvestEvidence } from "@/hooks/usePortalHarvestEvidence";
+import {
+  formatAttentionBreakdownLines,
+  harvestStatusTone,
+  summarizePortalHarvestMetrics,
+  type HarvestQueueStatus,
+  type PortalHarvestRow,
+} from "@/lib/portalHarvestMetrics";
 
-const STALE_DAYS = 7;
-
-type QueueRow = {
-  project: Project;
-  linked: boolean;
-  synced: boolean;
-  staleOrPending: boolean;
-  daysSinceCheck: number | null;
-};
-
-function buildQueueRows(projects: Project[]): QueueRow[] {
-  const now = Date.now();
-  return projects.map((project) => {
-    const linked = !!project.credential_id;
-    const synced = !!project.portal_data;
-    const daysSinceCheck = project.last_checked_at
-      ? Math.floor((now - new Date(project.last_checked_at).getTime()) / (1000 * 60 * 60 * 24))
-      : null;
-    const staleOrPending = linked && (!synced || daysSinceCheck === null || daysSinceCheck > STALE_DAYS);
-    return { project, linked, synced, staleOrPending, daysSinceCheck };
-  });
-}
-
-function renderQueueStatus(row: QueueRow) {
-  if (!row.linked) {
+function renderQueueStatus(status: HarvestQueueStatus) {
+  const tone = harvestStatusTone(status);
+  if (status === "Credentials Required") {
     return (
-      <StatusPill tone="default">
-        <KeyRound className="h-3 w-3" /> No credential
+      <StatusPill tone={tone}>
+        <KeyRound className="h-3 w-3" /> {status}
       </StatusPill>
     );
   }
-  if (!row.synced) {
+  if (status === "Awaiting First Harvest" || status === "Stale" || status === "Partial") {
     return (
-      <StatusPill tone="warn">
-        <RefreshCw className="h-3 w-3" /> Awaiting first sync
+      <StatusPill tone={tone}>
+        <TriangleAlert className="h-3 w-3" /> {status}
       </StatusPill>
     );
   }
-  if (row.staleOrPending) {
+  if (status === "Running" || status === "Queued") {
     return (
-      <StatusPill tone="warn">
-        <TriangleAlert className="h-3 w-3" /> Stale sync
+      <StatusPill tone={tone}>
+        <RefreshCw className="h-3 w-3" /> {status}
+      </StatusPill>
+    );
+  }
+  if (status === "Failed" || status === "Human Action Required") {
+    return (
+      <StatusPill tone={tone}>
+        <ShieldAlert className="h-3 w-3" /> {status}
       </StatusPill>
     );
   }
   return (
-    <StatusPill tone="good">
-      <Cloud className="h-3 w-3" /> Synced
+    <StatusPill tone={tone}>
+      <Cloud className="h-3 w-3" /> {status}
     </StatusPill>
   );
+}
+
+function projectById(projects: Project[], id: string): Project | undefined {
+  return projects.find((p) => p.id === id);
+}
+
+function recentActivityLabel(row: PortalHarvestRow, project: Project | undefined) {
+  const permit = project?.permit_number?.trim();
+  return permit || project?.name || row.projectId;
 }
 
 export function PortalHarvestQueue({
@@ -83,50 +85,75 @@ export function PortalHarvestQueue({
   projectsLoading,
   selectedProjectId,
   onOpenProject,
-  onForceSyncAll,
-  forceSyncing,
 }: {
   projects: Project[];
   projectsLoading: boolean;
   selectedProjectId: string | null;
   onOpenProject: (projectId: string) => void;
+  /** @deprecated Unwired full-harvest control — kept off the public API intentionally. */
   onForceSyncAll?: () => void;
   forceSyncing?: boolean;
 }) {
-  const rows = useMemo(() => buildQueueRows(projects), [projects]);
+  const evidence = usePortalHarvestEvidence(projects);
+  const metrics = useMemo(
+    () => summarizePortalHarvestMetrics(evidence.rows),
+    [evidence.rows],
+  );
+  const attentionBreakdownLines = useMemo(
+    () => formatAttentionBreakdownLines(metrics.attentionBreakdown),
+    [metrics.attentionBreakdown],
+  );
 
-  const linkedCount = rows.filter((r) => r.linked).length;
-  const syncedCount = rows.filter((r) => r.synced).length;
-  const pendingCount = rows.filter((r) => r.linked && !r.synced).length;
-  const staleCount = rows.filter((r) => r.linked && r.synced && r.staleOrPending).length;
+  const loading = projectsLoading || evidence.loading;
 
-  const recentHarvest = useMemo(
+  const recentChecked = useMemo(
     () =>
-      [...rows]
-        .filter((r) => r.project.last_checked_at)
+      [...evidence.rows]
+        .filter((r) => r.lastCheckedAt)
         .sort(
           (a, b) =>
-            new Date(b.project.last_checked_at!).getTime() -
-            new Date(a.project.last_checked_at!).getTime(),
+            new Date(b.lastCheckedAt!).getTime() - new Date(a.lastCheckedAt!).getTime(),
         )
         .slice(0, 6),
-    [rows],
+    [evidence.rows],
   );
 
   const attentionRows = useMemo(
-    () => rows.filter((r) => r.linked && (r.staleOrPending || !r.synced)).slice(0, 4),
-    [rows],
+    () =>
+      evidence.rows
+        .filter(
+          (r) =>
+            r.linked &&
+            (r.needsAttention || r.harvestStatus === "Awaiting First Harvest"),
+        )
+        .slice(0, 4),
+    [evidence.rows],
   );
 
   const handleExport = () => {
-    const header = ["Project", "Jurisdiction", "Permit #", "Portal Status", "Last Checked"];
-    const body = rows.map((r) => [
-      r.project.name,
-      r.project.jurisdiction || "",
-      r.project.permit_number || "",
-      r.project.portal_status || "",
-      r.project.last_checked_at ? new Date(r.project.last_checked_at).toISOString() : "",
-    ]);
+    const header = [
+      "Project",
+      "Jurisdiction",
+      "Permit #",
+      "Portal Status",
+      "Harvest Status",
+      "Last Checked",
+      "Last Successful Harvest",
+    ];
+    const body = evidence.rows.map((r) => {
+      const project = projectById(projects, r.projectId);
+      return [
+        project?.name || "",
+        project?.jurisdiction || "",
+        project?.permit_number || "",
+        r.portalStatus || "",
+        r.harvestStatus,
+        r.lastCheckedAt ? new Date(r.lastCheckedAt).toISOString() : "",
+        r.lastSuccessfulHarvestAt
+          ? new Date(r.lastSuccessfulHarvestAt).toISOString()
+          : "",
+      ];
+    });
     const csv = [header, ...body]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\n");
@@ -147,19 +174,21 @@ export function PortalHarvestQueue({
         body="Portal Harvest feeds both permit expediting and utility coordination. See which projects are synced, awaiting first harvest, or stalled, then drill into any project's live portal data."
         action={
           <div className="flex flex-wrap gap-2">
-            {onForceSyncAll ? (
-              <button
-                type="button"
-                className="pilot-button-ghost"
-                onClick={onForceSyncAll}
-                disabled={forceSyncing}
-              >
-                <RefreshCw className={`h-4 w-4 ${forceSyncing ? "animate-spin" : ""}`} />
-                Force Sync
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="pilot-button-ghost opacity-70"
+              disabled
+              title="A full portal harvest will be available here once the scraper action is connected."
+              data-testid="button-run-full-harvest-queue"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Run Full Harvest
+              <StatusPill tone="default" className="ml-1">
+                Upcoming
+              </StatusPill>
+            </button>
             <Link to="/projects" className="pilot-button-primary">
-              <Sparkles className="h-4 w-4" /> Add Portal Credential
+              <Sparkles className="h-4 w-4" /> Manage Project Credentials
             </Link>
           </div>
         }
@@ -167,36 +196,95 @@ export function PortalHarvestQueue({
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
-          label="Connected portals"
-          value={projectsLoading ? "—" : `${linkedCount}`}
-          detail="Projects with a linked credential"
+          label="Connected projects"
+          value={loading ? "—" : `${metrics.connectedProjects}`}
+          detail={
+            loading
+              ? "Projects linked to a portal credential"
+              : metrics.uniqueCredentials > 0
+                ? (
+                    <>
+                      Projects linked to a portal credential
+                      <br />
+                      <span className="text-muted-foreground">
+                        {metrics.uniqueCredentials} credential
+                        {metrics.uniqueCredentials === 1 ? "" : "s"}
+                      </span>
+                    </>
+                  )
+                : "Projects linked to a portal credential"
+          }
           icon={Cloud}
         />
         <MetricCard
-          label="Synced"
-          value={projectsLoading ? "—" : `${syncedCount}`}
-          detail="Portal data harvested at least once"
+          label="Up to date"
+          value={loading ? "—" : `${metrics.upToDate}`}
+          detail="Current harvest status is Synced"
           icon={Inbox}
         />
         <MetricCard
-          label="Awaiting first sync"
-          value={projectsLoading ? "—" : `${pendingCount}`}
-          detail="Linked, no harvest yet"
+          label="Awaiting first harvest"
+          value={loading ? "—" : `${metrics.awaitingFirstHarvest}`}
+          detail="Linked, but no successful harvest yet"
           icon={ShieldAlert}
         />
         <MetricCard
-          label="Stale (7d+)"
-          value={projectsLoading ? "—" : `${staleCount}`}
-          detail="Needs a Force Sync"
+          label="Needs attention"
+          value={loading ? "—" : `${metrics.needsAttention}`}
+          detail="Stale, failed, partial, or blocked projects"
           icon={TriangleAlert}
         />
       </div>
 
-      {staleCount + pendingCount > 0 ? (
+      {!loading && metrics.needsAttention > 0 ? (
         <AlertBanner
           tone="warn"
-          title={`${staleCount + pendingCount} project${staleCount + pendingCount === 1 ? "" : "s"} need attention`}
-          detail="Stale or pending portal syncs are flagged below. Open a project to run a live scrape or review its fallback options."
+          title={`${metrics.needsAttention} project${metrics.needsAttention === 1 ? "" : "s"} need attention`}
+          detail={
+            <>
+              <span>
+                Projects with failed, partial, stale, or blocked harvests are listed below.
+              </span>
+              {attentionBreakdownLines.length > 0 ? (
+                <span className="mt-1 block font-data text-xs">
+                  {attentionBreakdownLines.join(" · ")}
+                </span>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
+      {!loading &&
+      metrics.needsAttention === 0 &&
+      metrics.awaitingFirstHarvest === 0 &&
+      metrics.activeJobs === 0 &&
+      metrics.connectedProjects > 0 ? (
+        <AlertBanner
+          tone="info"
+          title="All connected projects are up to date"
+          detail="No failed, partial, stale, blocked, or missing harvests in the current queue."
+        />
+      ) : null}
+      {!loading && metrics.needsAttention === 0 && metrics.activeJobs > 0 ? (
+        <AlertBanner
+          tone="info"
+          title={`${metrics.activeJobs} project${metrics.activeJobs === 1 ? "" : "s"} actively harvesting`}
+          detail={formatAttentionBreakdownLines({
+            ...metrics.attentionBreakdown,
+            stale: 0,
+            partial: 0,
+            failed: 0,
+            credentialsRequired: 0,
+            humanActionRequired: 0,
+          }).join(" · ")}
+        />
+      ) : null}
+
+      {evidence.error ? (
+        <AlertBanner
+          tone="warn"
+          title="Harvest evidence partially unavailable"
+          detail={evidence.error}
         />
       ) : null}
 
@@ -205,13 +293,16 @@ export function PortalHarvestQueue({
           <div className="mb-4 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" className="gap-1.5" disabled>
               <Filter className="h-4 w-4" /> Filter
+              <StatusPill tone="default" className="ml-1">
+                Upcoming
+              </StatusPill>
             </Button>
             <Button
               variant="outline"
               size="sm"
               className="gap-1.5"
               onClick={handleExport}
-              disabled={rows.length === 0}
+              disabled={evidence.rows.length === 0}
             >
               <Download className="h-4 w-4" /> Export
             </Button>
@@ -222,13 +313,13 @@ export function PortalHarvestQueue({
             </Button>
           </div>
 
-          {projectsLoading ? (
+          {loading ? (
             <div className="space-y-3 p-1">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : rows.length === 0 ? (
+          ) : evidence.rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <FileUp className="h-10 w-10 text-muted-foreground" />
               <p className="font-tight font-semibold">No projects yet</p>
@@ -248,38 +339,46 @@ export function PortalHarvestQueue({
                     <th className="font-data">Jurisdiction</th>
                     <th className="font-data">Permit #</th>
                     <th className="font-data">Last checked</th>
-                    <th className="font-data">Status</th>
+                    <th className="font-data">Harvest status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {rows.map((row) => (
-                    <tr
-                      key={row.project.id}
-                      className={`cursor-pointer hover:bg-muted/30 ${
-                        row.project.id === selectedProjectId ? "bg-primary/5" : ""
-                      }`}
-                      onClick={() => onOpenProject(row.project.id)}
-                    >
-                      <td className="py-4 font-medium text-foreground">
-                        <div className="flex items-center gap-2">
-                          {row.project.name}
-                          {row.project.id === selectedProjectId ? (
-                            <ServicePill kind="permit">Active</ServicePill>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="text-muted-foreground">{row.project.jurisdiction || "—"}</td>
-                      <td className="font-mono text-xs text-muted-foreground">
-                        {row.project.permit_number || "—"}
-                      </td>
-                      <td className="font-data text-xs text-muted-foreground">
-                        {row.project.last_checked_at
-                          ? formatDistanceToNow(new Date(row.project.last_checked_at), { addSuffix: true })
-                          : "Never"}
-                      </td>
-                      <td>{renderQueueStatus(row)}</td>
-                    </tr>
-                  ))}
+                  {evidence.rows.map((row) => {
+                    const project = projectById(projects, row.projectId);
+                    if (!project) return null;
+                    return (
+                      <tr
+                        key={row.projectId}
+                        className={`cursor-pointer hover:bg-muted/30 ${
+                          row.projectId === selectedProjectId ? "bg-primary/5" : ""
+                        }`}
+                        onClick={() => onOpenProject(row.projectId)}
+                      >
+                        <td className="py-4 font-medium text-foreground">
+                          <div className="flex items-center gap-2">
+                            {project.name}
+                            {row.projectId === selectedProjectId ? (
+                              <ServicePill kind="permit">Active</ServicePill>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="text-muted-foreground">
+                          {project.jurisdiction || "—"}
+                        </td>
+                        <td className="font-mono text-xs text-muted-foreground">
+                          {project.permit_number || "—"}
+                        </td>
+                        <td className="font-data text-xs text-muted-foreground">
+                          {row.lastCheckedAt
+                            ? formatDistanceToNow(new Date(row.lastCheckedAt), {
+                                addSuffix: true,
+                              })
+                            : "Never"}
+                        </td>
+                        <td>{renderQueueStatus(row.harvestStatus)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -287,29 +386,50 @@ export function PortalHarvestQueue({
         </Panel>
 
         <div className="space-y-4">
-          <Panel title="Recent harvest" eyebrow="Latest checks">
-            {recentHarvest.length === 0 ? (
+          <Panel title="Recently checked projects" eyebrow="Latest checks">
+            {recentChecked.length === 0 ? (
               <p className="text-sm text-muted-foreground">No portal checks recorded yet.</p>
             ) : (
               <ul className="space-y-4">
-                {recentHarvest.map((row) => (
-                  <li
-                    key={row.project.id}
-                    className="cursor-pointer rounded-lg border border-border bg-muted/20 p-4 transition-colors hover:border-primary/40"
-                    onClick={() => onOpenProject(row.project.id)}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="pilot-kicker">{row.project.jurisdiction || row.project.name}</div>
-                      <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
-                        {formatDistanceToNow(new Date(row.project.last_checked_at!), { addSuffix: true })}
+                {recentChecked.map((row) => {
+                  const project = projectById(projects, row.projectId);
+                  const label = recentActivityLabel(row, project);
+                  return (
+                    <li
+                      key={row.projectId}
+                      className="cursor-pointer rounded-lg border border-border bg-muted/20 p-4 transition-colors hover:border-primary/40"
+                      onClick={() => onOpenProject(row.projectId)}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-mono text-sm font-semibold text-foreground">
+                          {label}
+                        </div>
+                        <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
+                          {row.lastCheckedAt
+                            ? formatDistanceToNow(new Date(row.lastCheckedAt), {
+                                addSuffix: true,
+                              })
+                            : "—"}
+                        </div>
                       </div>
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-foreground">{row.project.name}</div>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      {row.project.portal_status || (row.synced ? "Portal data synced." : "Awaiting harvest.")}
-                    </p>
-                  </li>
-                ))}
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {project?.jurisdiction || project?.name || "—"}
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                        Harvest: {row.harvestStatus}
+                        {row.portalStatus ? (
+                          <>
+                            <br />
+                            Portal status: {row.portalStatus}
+                          </>
+                        ) : null}
+                      </p>
+                      {!row.hasSuccessfulHarvest ? (
+                        <p className="mt-1 text-xs text-muted-foreground">No harvest yet</p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Panel>
@@ -317,32 +437,44 @@ export function PortalHarvestQueue({
           <Panel title="Fallback workflows" eyebrow="Operator playbook">
             {attentionRows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No stale or pending portals right now — all linked projects are synced.
+                No stale, failed, partial, or missing harvests right now — connected projects look
+                up to date.
               </p>
             ) : (
               <div className="space-y-3">
-                {attentionRows.map((row) => (
-                  <div key={row.project.id} className="rounded-lg border border-border bg-muted/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium text-foreground">{row.project.name}</div>
-                      <StatusPill tone={row.synced ? "warn" : "bad"}>
-                        {row.synced ? "Stale" : "Pending"}
-                      </StatusPill>
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                      {row.synced
-                        ? `Last checked ${row.daysSinceCheck ?? "?"} day${row.daysSinceCheck === 1 ? "" : "s"} ago. Force Sync inside the project to refresh.`
-                        : "Credential linked but no harvest has run yet. Open the project and Force Sync."}
-                    </p>
-                    <button
-                      type="button"
-                      className="pilot-button-ghost mt-3 py-1.5 text-xs"
-                      onClick={() => onOpenProject(row.project.id)}
+                {attentionRows.map((row) => {
+                  const project = projectById(projects, row.projectId);
+                  return (
+                    <div
+                      key={row.projectId}
+                      className="rounded-lg border border-border bg-muted/20 p-4"
                     >
-                      Open project <RefreshCw className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-medium text-foreground">
+                          {project?.permit_number || project?.name || row.projectId}
+                        </div>
+                        <StatusPill tone={harvestStatusTone(row.harvestStatus)}>
+                          {row.harvestStatus}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                        {row.portalStatus ? `Portal status: ${row.portalStatus}. ` : null}
+                        {row.harvestStatus === "Awaiting First Harvest"
+                          ? "Linked, but no successful harvest yet."
+                          : row.harvestStatus === "Stale"
+                            ? `Last successful harvest ${row.daysSinceSuccessfulHarvest ?? "?"} day${row.daysSinceSuccessfulHarvest === 1 ? "" : "s"} ago.`
+                            : `Needs attention (${row.attentionReasons.join(", ")}).`}
+                      </p>
+                      <button
+                        type="button"
+                        className="pilot-button-ghost mt-3 py-1.5 text-xs"
+                        onClick={() => onOpenProject(row.projectId)}
+                      >
+                        Open project <RefreshCw className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Panel>

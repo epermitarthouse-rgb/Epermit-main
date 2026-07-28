@@ -94,6 +94,17 @@ import {
 } from "@/lib/portalView";
 import { resolvePgcPortalFileOpenUrl } from "@/lib/pgcPortalFileUrl";
 import { cn } from "@/lib/utils";
+import {
+  buildPortalHarvestRow,
+  countSavedFiles,
+  deriveLogicalReports,
+  formatFileCompletionCaption,
+  formatReportCompletionCaption,
+  harvestStatusTone,
+  summarizeFileCompletion,
+  summarizeReportCompletion,
+  type LatestScrapeJobSummary,
+} from "@/lib/portalHarvestMetrics";
 
 /** Tab pills — presentation only; tab `value` and visibility unchanged. */
 const PORTAL_TAB_TRIGGER =
@@ -958,6 +969,8 @@ export default function PortalDataViewer() {
     null,
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [latestScrapeJob, setLatestScrapeJob] =
+    useState<LatestScrapeJobSummary | null>(null);
   const [expectedPortalType, setExpectedPortalType] = useState<string | null>(
     null,
   );
@@ -1339,6 +1352,35 @@ export default function PortalDataViewer() {
       setRefreshing(false);
     }
   }, [silentRefetch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLatestJob() {
+      if (!resolvedProjectId) {
+        setLatestScrapeJob(null);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("scrape_jobs")
+        .select(
+          "id, project_id, status, created_at, updated_at, completed_at, error_code, error_user_message",
+        )
+        .eq("project_id", resolvedProjectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        setLatestScrapeJob(null);
+        return;
+      }
+      setLatestScrapeJob((data as LatestScrapeJobSummary | null) ?? null);
+    }
+    void loadLatestJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedProjectId, scrape.isScraping, scrape.lastScrapeOutcome]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -3086,6 +3128,67 @@ export default function PortalDataViewer() {
     portalData.dashboardStatus ?? portalStatus,
   );
 
+  const logicalReports = deriveLogicalReports(reportsTab);
+  const reportCompletion = summarizeReportCompletion(logicalReports);
+  const reportCaption = formatReportCompletionCaption(reportCompletion);
+  const savedFileCount = countSavedFiles(filesTab?.folders);
+  const liveFileStats = liveFileResults.stats;
+  const fileCompletion = liveFileResults.active
+    ? summarizeFileCompletion({
+        downloaded: liveFileStats.uploaded,
+        failed: liveFileStats.failed,
+        pending: liveFileStats.inProgress,
+        expectedTotal:
+          liveFileStats.total > 0
+            ? liveFileStats.total
+            : liveFileStats.uploaded +
+                liveFileStats.failed +
+                liveFileStats.inProgress >
+              0
+              ? liveFileStats.uploaded +
+                liveFileStats.failed +
+                liveFileStats.inProgress
+              : null,
+      })
+    : summarizeFileCompletion({
+        downloaded: savedFileCount,
+        failed: 0,
+        expectedTotal: null,
+      });
+  const fileCaption = formatFileCompletionCaption(fileCompletion);
+
+  const selectedPermitLabel =
+    portalData.projectNum ||
+    resolvedPermitNumber ||
+    projects.find((p) => p.id === selectedProjectId)?.permit_number ||
+    "—";
+  const selectedJurisdiction =
+    portalData.location ||
+    portalData.jurisdiction ||
+    projects.find((p) => p.id === selectedProjectId)?.jurisdiction ||
+    portalData.description ||
+    null;
+
+  const harvestRow = buildPortalHarvestRow({
+    id: resolvedProjectId || selectedProjectId || "selected",
+    credential_id: resolvedCredentialId,
+    portal_status: portalStatus || portalData.dashboardStatus || null,
+    last_checked_at: lastCheckedAt,
+    hasPortalData: !!portalData && Object.keys(portalData.tabs || {}).length > 0,
+    latestJob: latestScrapeJob,
+    hasPartialArtifacts:
+      reportCompletion.partial > 0 ||
+      (reportCompletion.complete > 0 && reportCompletion.failed > 0),
+    isSessionScraping: scrape.isScraping,
+  });
+  const displayHarvestStatus = harvestRow.harvestStatus;
+  const lastSuccessfulHarvestStr = harvestRow.lastSuccessfulHarvestAt
+    ? `Last successful harvest: ${formatDistanceToNow(new Date(harvestRow.lastSuccessfulHarvestAt), { addSuffix: true })}`
+    : "No successful harvest yet";
+  const lastAttemptedHarvestStr = harvestRow.lastAttemptedAt
+    ? `Last attempted harvest: ${formatDistanceToNow(new Date(harvestRow.lastAttemptedAt), { addSuffix: true })}`
+    : null;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -3105,21 +3208,32 @@ export default function PortalDataViewer() {
               Portal Queue
             </Button>
             <Button
+              variant="ghost"
+              size="sm"
               onClick={handleManualRefresh}
               disabled={refreshing || scrape.isScraping}
               data-testid="button-refresh-portal-data"
-              className="pilot-button-primary"
+              className="pilot-button-ghost"
+              title="Re-reads saved portal_data from the database. Does not start a scrape."
             >
-              {refreshing || scrape.isScraping ? (
+              {refreshing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              {scrape.isScraping
-                ? "Harvesting…"
-                : refreshing
-                  ? "Refreshing…"
-                  : "Force Sync"}
+              Refresh saved data
+            </Button>
+            <Button
+              disabled
+              data-testid="button-run-full-harvest-detail"
+              className="pilot-button-primary opacity-70"
+              title="A full portal harvest will be available here once the scraper action is connected."
+            >
+              <RefreshCw className="h-4 w-4" />
+              Run Full Harvest
+              <StatusPill tone="default" className="ml-1">
+                Upcoming
+              </StatusPill>
             </Button>
           </div>
         }
@@ -3127,33 +3241,55 @@ export default function PortalDataViewer() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
-          label="Active project"
-          value={selectedProjectId ? "1" : "0"}
-          hint={portalData.projectNum || "Select a project in the shell"}
+          label="Selected project"
+          value={selectedPermitLabel}
+          hint={selectedJurisdiction || "Select a project in the shell"}
           icon={Cloud}
         />
         <MetricCard
           label="Harvest status"
-          value={scrape.isScraping ? "Live" : displayPortalStatus || "Idle"}
-          hint={lastCheckedStr || "No recent sync"}
+          value={displayHarvestStatus}
+          hint={
+            <>
+              {displayPortalStatus ? (
+                <span className="block">Portal status: {displayPortalStatus}</span>
+              ) : null}
+              <span className="block">{lastSuccessfulHarvestStr}</span>
+              {lastCheckedStr ? <span className="block">{lastCheckedStr}</span> : null}
+              {lastAttemptedHarvestStr ? (
+                <span className="block">{lastAttemptedHarvestStr}</span>
+              ) : null}
+            </>
+          }
           icon={Inbox}
         />
         <MetricCard
           label="Reports"
-          value={`${(portalData.tabs?.reports?.reportEntries ?? []).length + (portalData.tabs?.reports?.pdfs ?? []).length}`}
-          hint="Captured report artifacts"
+          value={reportCaption.value}
+          hint={
+            <>
+              <span className="block">{reportCaption.subtitle}</span>
+              {reportCaption.detail ? (
+                <span className="block">{reportCaption.detail}</span>
+              ) : null}
+            </>
+          }
           icon={FileText}
         />
         <MetricCard
           label="Files"
-          value={String(
-            (filesTab?.folders ?? []).reduce(
-              (sum: number, f: { files?: unknown[] }) =>
-                sum + (f.files?.length ?? 0),
-              0,
-            ) || (liveFileResults.active ? "…" : "0"),
-          )}
-          hint={liveFileResults.active ? "Live scrape files active" : "Saved file results"}
+          value={liveFileResults.active && savedFileCount === 0 ? "…" : fileCaption.value}
+          hint={
+            <>
+              <span className="block">{fileCaption.subtitle}</span>
+              {fileCaption.detail ? (
+                <span className="block">{fileCaption.detail}</span>
+              ) : null}
+              {liveFileResults.active ? (
+                <span className="block">Live scrape files active</span>
+              ) : null}
+            </>
+          }
           icon={FolderOpen}
         />
       </div>
@@ -3988,6 +4124,29 @@ export default function PortalDataViewer() {
               <p className="mt-3 text-muted-foreground max-w-2xl text-sm sm:text-base leading-relaxed dark:text-muted-foreground">
                 Stored report artifacts, live viewer links, screenshots, and extracted text used by the AI pipeline.
               </p>
+              <div className="mt-4 mb-2 rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                <div className="font-medium text-foreground">
+                  {reportCompletion.hasExpectedLogicalTotal &&
+                  reportCompletion.expectedLogicalTotal != null
+                    ? `${reportCompletion.complete} of ${reportCompletion.expectedLogicalTotal} complete`
+                    : `${reportCompletion.complete} of ${reportCompletion.logicalReports} complete`}
+                </div>
+                <div className="mt-1 text-xs leading-5">
+                  Complete {reportCompletion.complete} · Partial {reportCompletion.partial} · Failed{" "}
+                  {reportCompletion.failed} · Pending {reportCompletion.pending} · Skipped{" "}
+                  {reportCompletion.skipped}
+                  {reportCompletion.reportArtifactsTotal > 0 ? (
+                    <>
+                      <br />
+                      {reportCompletion.reportArtifactsDownloaded} of{" "}
+                      {reportCompletion.reportArtifactsTotal} artifacts downloaded
+                      {reportCompletion.reportArtifactsFailed > 0
+                        ? ` · ${reportCompletion.reportArtifactsFailed} failed`
+                        : ""}
+                    </>
+                  ) : null}
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground/90 mb-6 mt-4 dark:text-muted-foreground/90">
             Source data from the portal. For an actionable comment list and
             responses, use <strong className="text-foreground font-semibold dark:text-foreground">Comment Review</strong>.
@@ -4616,6 +4775,24 @@ export default function PortalDataViewer() {
             className="mt-8 pt-6 pb-10 bg-background focus-visible:outline-none"
             data-testid="tabcontent-files"
           >
+            <div className="mb-4 rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              <div className="pilot-kicker mb-1">Attachments</div>
+              <div className="font-medium text-foreground">
+                {fileCompletion.hasExpectedTotal && fileCompletion.expectedTotal != null
+                  ? `${fileCompletion.downloaded} of ${fileCompletion.expectedTotal} downloaded`
+                  : `${fileCompletion.downloaded} downloaded`}
+              </div>
+              <div className="mt-1 text-xs leading-5">
+                Downloaded {fileCompletion.downloaded} · Failed {fileCompletion.failed} · Pending{" "}
+                {fileCompletion.pending} · Skipped {fileCompletion.skipped}
+                {!fileCompletion.hasExpectedTotal ? (
+                  <>
+                    <br />
+                    Expected total unavailable
+                  </>
+                ) : null}
+              </div>
+            </div>
             <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
               <CardContent className="p-0">
                 <TabErrorBoundary tabName="Files">
@@ -5010,52 +5187,62 @@ export default function PortalDataViewer() {
             )}
           </Panel>
 
-          <Panel title="Recent harvest" eyebrow="Inbox">
+          <Panel title="Harvest snapshot" eyebrow="Inbox">
             <ul className="space-y-3">
               <li className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="pilot-kicker">Reports</div>
                   <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
-                    {(portalData.tabs?.reports?.reportEntries ?? []).length +
-                      (portalData.tabs?.reports?.pdfs ?? []).length}{" "}
-                    items
+                    {reportCompletion.logicalReports} logical
                   </div>
                 </div>
-                <div className="mt-2 text-sm font-medium text-foreground">Captured report artifacts</div>
+                <div className="mt-2 text-sm font-medium text-foreground">
+                  Harvest: {displayHarvestStatus}
+                </div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Open the Reports tab to review harvested PDFs and report entries.
+                  {reportCaption.subtitle}
+                  {reportCompletion.reportArtifactsTotal > 0
+                    ? ` · ${reportCompletion.reportArtifactsDownloaded} of ${reportCompletion.reportArtifactsTotal} artifacts`
+                    : ""}
+                  {displayPortalStatus ? (
+                    <>
+                      <br />
+                      Portal status: {displayPortalStatus}
+                    </>
+                  ) : null}
                 </p>
               </li>
               <li className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="pilot-kicker">Files</div>
                   <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
-                    {(filesTab?.folders ?? []).reduce(
-                      (sum: number, f: { files?: unknown[] }) => sum + (f.files?.length ?? 0),
-                      0,
-                    )}{" "}
-                    files
+                    {fileCaption.value}
                   </div>
                 </div>
                 <div className="mt-2 text-sm font-medium text-foreground">
                   {liveFileResults.active ? "Live scrape files active" : "Saved file results"}
                 </div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Use the Files tab for folders, attachments, and comment-linked documents.
+                  {fileCaption.subtitle}
+                  {fileCaption.detail ? ` · ${fileCaption.detail}` : ""}
                 </p>
               </li>
               <li className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="pilot-kicker">Sync</div>
+                  <div className="pilot-kicker">Timestamps</div>
                   <div className="font-data text-[11px] uppercase tracking-wider text-muted-foreground">
-                    {lastCheckedStr || "—"}
+                    {lastCheckedAt
+                      ? formatDistanceToNow(new Date(lastCheckedAt), { addSuffix: true })
+                      : "—"}
                   </div>
                 </div>
                 <div className="mt-2 text-sm font-medium text-foreground">
-                  {scrape.isScraping ? "Harvest running" : "Last portal sync"}
+                  {scrape.isScraping ? "Harvest running" : "Last checked"}
                 </div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Force Sync refreshes portal_data for the active project without leaving this page.
+                  {lastSuccessfulHarvestStr}.{" "}
+                  {lastAttemptedHarvestStr ? `${lastAttemptedHarvestStr}. ` : null}
+                  Refresh saved data reloads portal_data from the database and does not start a scrape.
                 </p>
               </li>
             </ul>
@@ -5065,24 +5252,36 @@ export default function PortalDataViewer() {
             <div className="space-y-3">
               <div className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-foreground">Force Sync</div>
-                  <StatusPill tone={scrape.isScraping ? "info" : "good"}>
-                    {scrape.isScraping ? "Active" : "Ready"}
-                  </StatusPill>
+                  <div className="text-sm font-medium text-foreground">Run Full Harvest</div>
+                  <StatusPill tone="default">Upcoming</StatusPill>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Re-run harvest when portal feeds lag or after credential rotation in Settings.
+                  A full portal harvest will be available here once the scraper action is connected.
                 </p>
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-foreground">Credential check</div>
-                  <StatusPill tone={!selectedProjectId ? "warn" : "default"}>
-                    {!selectedProjectId ? "Blocked" : "Configured via Settings"}
+                  <div className="text-sm font-medium text-foreground">Retry Failed Items</div>
+                  <StatusPill tone="default">Upcoming</StatusPill>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Retry only failed reports, attachments, or files from the latest harvest.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">Credential configuration</div>
+                  <StatusPill tone={!resolvedCredentialId ? "warn" : "default"}>
+                    {!selectedProjectId
+                      ? "No project selected"
+                      : resolvedCredentialId
+                        ? "Credential linked"
+                        : "No credential linked"}
                   </StatusPill>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Portal credentials stay server-side. Manage them in Settings — passwords are never shown here.
+                  Informational only — live credential validation is not run from this page. Manage
+                  credentials in Settings; passwords are never shown here.
                 </p>
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-4">
@@ -5092,21 +5291,23 @@ export default function PortalDataViewer() {
                     tone={
                       scrape.isScraping
                         ? "info"
-                        : scrape.lastScrapeOutcome === "error"
-                          ? "bad"
-                          : scrape.lastScrapeOutcome === "done"
-                            ? "good"
-                            : "default"
+                        : harvestStatusTone(displayHarvestStatus)
                     }
                   >
                     {scrape.isScraping
-                      ? scrape.scrapeJobStatus || "Queued"
-                      : scrape.lastScrapeOutcome || "Idle"}
+                      ? scrape.scrapeJobStatus || "Running"
+                      : latestScrapeJob
+                        ? latestScrapeJob.status
+                        : "No active harvest"}
                   </StatusPill>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {scrape.scrapeLiveMessage ||
-                    "Live job status appears here while a harvest is running."}
+                  {scrape.isScraping
+                    ? scrape.scrapeLiveMessage ||
+                      "Live job status appears here while a harvest is running."
+                    : latestScrapeJob
+                      ? `Latest recorded job status: ${latestScrapeJob.status}. Current job status: ${displayHarvestStatus}.`
+                      : "No active harvest. Live progress controls are Upcoming until a job is running."}
                 </p>
               </div>
             </div>
