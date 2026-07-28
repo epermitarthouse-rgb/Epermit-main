@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Briefcase, ChevronDown, KeyRound } from "lucide-react";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { formFieldsFromSelectedProject } from "@/lib/quickScrapeFormState";
 
 const PERMIT_NUMBER_STORAGE_KEY_PREFIX = "epermit:permitNumber";
 
@@ -88,18 +89,6 @@ export function ActiveProjectControl() {
       void supabase.removeChannel(channel);
     };
   }, [user?.id, fetchCredentials]);
-
-  useEffect(() => {
-    if (!selectedProject?.selectedProjectId) {
-      setSelectedCredentialId("");
-      return;
-    }
-    if (loading) return;
-    const p = projects.find((pr) => pr.id === selectedProject.selectedProjectId);
-    if (!p) return;
-    const cid = p.credential_id;
-    setSelectedCredentialId(cid ? String(cid) : "");
-  }, [selectedProject?.selectedProjectId, projects, loading]);
 
   const detectPortalTypeFromUrl = (
     url?: string | null,
@@ -181,20 +170,6 @@ export function ActiveProjectControl() {
     ? projects.find((p) => p.id === selectedProject.selectedProjectId)
     : null;
 
-  useEffect(() => {
-    if (!user) {
-      setPermitNumber("");
-      return;
-    }
-    try {
-      const key = `${PERMIT_NUMBER_STORAGE_KEY_PREFIX}:${user.id}`;
-      const raw = localStorage.getItem(key);
-      setPermitNumber(raw ?? "");
-    } catch {
-      setPermitNumber("");
-    }
-  }, [user?.id]);
-
   const persistPermitNumber = useCallback(
     (value: string) => {
       if (!user) return;
@@ -209,6 +184,63 @@ export function ActiveProjectControl() {
     },
     [user?.id],
   );
+
+  // Draft permit only when no project is selected (create-project flow).
+  // Never restore a user-scoped draft over a selected project's permit.
+  useEffect(() => {
+    if (!user) {
+      setPermitNumber("");
+      return;
+    }
+    if (selectedProject?.selectedProjectId) return;
+    try {
+      const key = `${PERMIT_NUMBER_STORAGE_KEY_PREFIX}:${user.id}`;
+      const raw = localStorage.getItem(key);
+      setPermitNumber(raw ?? "");
+    } catch {
+      setPermitNumber("");
+    }
+  }, [user?.id, selectedProject?.selectedProjectId]);
+
+  const selectedProjectId = selectedProject?.selectedProjectId ?? null;
+  const selectedProjectPermit = selectedProjectData?.permit_number ?? null;
+  const selectedProjectCredentialId = selectedProjectData?.credential_id ?? null;
+  const hasSelectedProjectRow = !!selectedProjectData;
+  const syncedProjectIdRef = useRef<string | null>(null);
+
+  // Selected project UUID is source of truth: on project change, sync permit +
+  // credential together. Credential also tracks same-project DB updates.
+  // Do not overwrite an in-progress permit edit when only credential refreshes.
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setSelectedCredentialId("");
+      syncedProjectIdRef.current = null;
+      return;
+    }
+    if (loading || !hasSelectedProjectRow) return;
+    const fields = formFieldsFromSelectedProject({
+      id: selectedProjectId,
+      permit_number: selectedProjectPermit,
+      credential_id: selectedProjectCredentialId,
+    });
+    if (!fields) return;
+
+    const projectChanged = syncedProjectIdRef.current !== selectedProjectId;
+    syncedProjectIdRef.current = selectedProjectId;
+
+    setSelectedCredentialId(fields.credentialId);
+    if (projectChanged) {
+      setPermitNumber(fields.permitNumber);
+      persistPermitNumber(fields.permitNumber);
+    }
+  }, [
+    selectedProjectId,
+    selectedProjectPermit,
+    selectedProjectCredentialId,
+    hasSelectedProjectRow,
+    loading,
+    persistPermitNumber,
+  ]);
 
   const handlePermitBlur = useCallback(async () => {
     const trimmed = permitNumber.trim();
@@ -240,15 +272,6 @@ export function ActiveProjectControl() {
     updateProject,
     fetchProjects,
   ]);
-
-  useEffect(() => {
-    if (!selectedProjectData) return;
-    const projectPermit = String(selectedProjectData.permit_number ?? "").trim();
-    if (projectPermit && !permitNumber.trim()) {
-      setPermitNumber(projectPermit);
-      persistPermitNumber(projectPermit);
-    }
-  }, [selectedProjectData?.id, selectedProjectData?.permit_number]);
 
   const handleSelectValueChange = useCallback(
     (v: string) => {

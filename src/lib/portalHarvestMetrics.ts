@@ -134,6 +134,7 @@ export interface ReportArtifactInput {
   fileSlug?: string | null;
   sourcePath?: string | null;
   scrapeRunId?: string | null;
+  scrapeJobId?: string | null;
   pdfUrl?: string | null;
   excelUrl?: string | null;
   pdfDownloaded?: boolean;
@@ -142,6 +143,25 @@ export interface ReportArtifactInput {
   error?: string | null;
   pdfError?: string | null;
   excelError?: string | null;
+  pdfStatus?: ArtifactStatus | null;
+  excelStatus?: ArtifactStatus | null;
+  logicalStatus?: LogicalReportStatus | null;
+  pdfExportedAt?: string | null;
+  excelExportedAt?: string | null;
+}
+
+/** SSRS ReportViewer URLs are live portal links — never count as downloaded artifacts. */
+export function isSsrsReportViewerUrl(url: string | null | undefined): boolean {
+  const s = String(url || "").trim();
+  if (!s) return false;
+  return /ReportViewer\.aspx/i.test(s);
+}
+
+/** Prefer Supabase storage public URLs for downloadable report artifacts. */
+export function isStorageBackedReportUrl(url: string | null | undefined): boolean {
+  const s = String(url || "").trim();
+  if (!s || isSsrsReportViewerUrl(s)) return false;
+  return /\/storage\/v1\/object\/public\//i.test(s) || /^https?:\/\//i.test(s);
 }
 
 export interface LogicalReport {
@@ -255,13 +275,21 @@ function artifactStatusFromFlags(opts: {
   downloaded?: boolean;
   error?: string | null;
   unavailable?: boolean;
+  explicitStatus?: ArtifactStatus | null;
 }): ArtifactStatus {
+  if (opts.explicitStatus) return opts.explicitStatus;
   if (opts.unavailable) return "not_available";
   if (opts.error && String(opts.error).trim()) return "failed";
-  if (opts.downloaded === true || (opts.url && String(opts.url).trim().length > 8)) {
-    return "success";
+  const url = String(opts.url || "").trim();
+  if (url && isSsrsReportViewerUrl(url)) {
+    // Viewer-only links are not downloaded artifacts.
+    return opts.downloaded === false ? "pending" : "pending";
   }
-  if (opts.downloaded === false && opts.url == null) return "pending";
+  if (url && isStorageBackedReportUrl(url)) return "success";
+  if (opts.downloaded === true && url) return "success";
+  // Local download flag without a storage URL is not harvest success.
+  if (opts.downloaded === true && !url) return "pending";
+  if (opts.downloaded === false && !url) return "pending";
   return "pending";
 }
 
@@ -342,9 +370,15 @@ export function deriveLogicalReports(reportsTab: {
   if (entries.length > 0) {
     for (const entry of entries) {
       const formats: LogicalReport["artifacts"] = [];
-      const expectsPdf = entry.pdfDownloaded != null || entry.pdfUrl != null;
-      const expectsExcel = entry.excelDownloaded != null || entry.excelUrl != null;
-      if (expectsPdf || entry.pdfUrl || entry.pdfDownloaded) {
+      // PGC / ProjectDox: every logical report expects PDF + Excel.
+      const expectsBothFormats =
+        entry.pdfDownloaded != null ||
+        entry.excelDownloaded != null ||
+        entry.pdfStatus != null ||
+        entry.excelStatus != null ||
+        !!entry.pdfUrl ||
+        !!entry.excelUrl;
+      if (expectsBothFormats || entry.pdfUrl || entry.pdfDownloaded != null) {
         formats.push({
           format: "pdf",
           status: artifactStatusFromFlags({
@@ -352,10 +386,11 @@ export function deriveLogicalReports(reportsTab: {
             downloaded: entry.pdfDownloaded,
             error: entry.pdfError || entry.error,
             unavailable: entry.exportUnavailable && !entry.pdfUrl && !entry.pdfDownloaded,
+            explicitStatus: entry.pdfStatus ?? null,
           }),
         });
       }
-      if (expectsExcel || entry.excelUrl || entry.excelDownloaded) {
+      if (expectsBothFormats || entry.excelUrl || entry.excelDownloaded != null) {
         formats.push({
           format: "excel",
           status: artifactStatusFromFlags({
@@ -363,6 +398,7 @@ export function deriveLogicalReports(reportsTab: {
             downloaded: entry.excelDownloaded,
             error: entry.excelError,
             unavailable: entry.exportUnavailable && !entry.excelUrl && !entry.excelDownloaded,
+            explicitStatus: entry.excelStatus ?? null,
           }),
         });
       }
@@ -373,6 +409,10 @@ export function deriveLogicalReports(reportsTab: {
         });
       }
       upsert(entry, formats);
+      const logical = map.get(reportDedupeKey(entry));
+      if (logical && entry.logicalStatus) {
+        logical.status = entry.logicalStatus;
+      }
     }
     return Array.from(map.values());
   }
@@ -520,6 +560,188 @@ export function fileCompletionFromCounts(counts: {
 
 export function countSavedFiles(folders: Array<{ files?: unknown[] }> | null | undefined): number {
   return (folders ?? []).reduce((sum, f) => sum + (f.files?.length ?? 0), 0);
+}
+
+export interface PortalFileLike {
+  name?: string | null;
+  fileId?: string | null;
+  downloadStatus?: string | null;
+  downloadError?: string | null;
+  publicUrl?: string | null;
+  viewUrl?: string | null;
+  downloadUrl?: string | null;
+  fileSizeKB?: number | null;
+  uploadedDate?: string | null;
+  status?: string | null;
+}
+
+export interface PortalFolderLike {
+  name?: string | null;
+  folderName?: string | null;
+  parentFolder?: string | null;
+  folderID?: string | number | null;
+  filesCount?: number | null;
+  fileCount?: number | null;
+  files?: PortalFileLike[] | null;
+}
+
+export interface PortalFolderCompletion {
+  folderKey: string;
+  folderName: string;
+  parentFolder: string | null;
+  discovered: number;
+  downloaded: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+}
+
+export interface PortalFilesHarvestSummary {
+  foldersTotal: number;
+  populatedFolders: number;
+  parentFolders: number;
+  discovered: number;
+  downloaded: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+  /** True when discovered === downloaded+failed+pending+skipped (always for classified rows). */
+  reconciles: boolean;
+  folders: PortalFolderCompletion[];
+  /** Incomplete harvest: some success plus remaining failed/pending work. */
+  isPartial: boolean;
+  /** At least one durable downloaded file exists. */
+  hasUsableDownloads: boolean;
+}
+
+function isStorageUrl(url: string | null | undefined): boolean {
+  return /supabase\.co\/storage\//i.test(String(url || "").trim());
+}
+
+/**
+ * Classify a persisted portal_data file row. Missing status + no storage URL = pending
+ * (discovered but not downloaded) — never treat as success.
+ */
+export function classifyPortalFileArtifactStatus(
+  file: PortalFileLike | null | undefined,
+): ArtifactStatus {
+  if (!file) return "pending";
+  const st = String(file.downloadStatus || "").trim().toLowerCase();
+  if (st === "ok" || st === "success" || st === "uploaded" || st === "downloaded") {
+    return "success";
+  }
+  if (st === "failed" || st.startsWith("failed_")) return "failed";
+  if (st === "activation_skipped" || st.startsWith("skipped")) return "skipped";
+  if (st === "pending" || st === "discovered" || st === "queued" || st === "downloading") {
+    return "pending";
+  }
+  if (
+    isStorageUrl(file.publicUrl) ||
+    isStorageUrl(file.viewUrl) ||
+    isStorageUrl(file.downloadUrl)
+  ) {
+    return "success";
+  }
+  return "pending";
+}
+
+export function summarizePortalFilesFromFolders(
+  folders: PortalFolderLike[] | null | undefined,
+): PortalFilesHarvestSummary {
+  const list = folders ?? [];
+  const parents = new Set<string>();
+  const folderSummaries: PortalFolderCompletion[] = [];
+  let discovered = 0;
+  let downloaded = 0;
+  let failed = 0;
+  let pending = 0;
+  let skipped = 0;
+  let populatedFolders = 0;
+
+  for (const folder of list) {
+    const files = folder.files ?? [];
+    const parent = folder.parentFolder ? String(folder.parentFolder) : null;
+    if (parent) parents.add(parent);
+    const folderName = String(folder.folderName || folder.name || "Folder");
+    let fDown = 0;
+    let fFail = 0;
+    let fPend = 0;
+    let fSkip = 0;
+    for (const file of files) {
+      discovered += 1;
+      const status = classifyPortalFileArtifactStatus(file);
+      if (status === "success") {
+        downloaded += 1;
+        fDown += 1;
+      } else if (status === "failed") {
+        failed += 1;
+        fFail += 1;
+      } else if (status === "skipped") {
+        skipped += 1;
+        fSkip += 1;
+      } else {
+        pending += 1;
+        fPend += 1;
+      }
+    }
+    if (files.length > 0) populatedFolders += 1;
+    folderSummaries.push({
+      folderKey: `${parent || ""}::${folder.folderID || folderName}`,
+      folderName,
+      parentFolder: parent,
+      discovered: files.length,
+      downloaded: fDown,
+      failed: fFail,
+      pending: fPend,
+      skipped: fSkip,
+    });
+  }
+
+  const sumParts = downloaded + failed + pending + skipped;
+  return {
+    foldersTotal: list.length,
+    populatedFolders,
+    parentFolders: parents.size,
+    discovered,
+    downloaded,
+    failed,
+    pending,
+    skipped,
+    reconciles: discovered === sumParts,
+    folders: folderSummaries,
+    isPartial:
+      downloaded > 0 && (failed > 0 || pending > 0),
+    hasUsableDownloads: downloaded > 0,
+  };
+}
+
+/** True when reports or files show incomplete required work after some success. */
+export function harvestArtifactsIndicatePartial(input: {
+  reportCompletion?: ReportCompletionSummary | null;
+  filesSummary?: PortalFilesHarvestSummary | null;
+}): boolean {
+  const reports = input.reportCompletion;
+  const files = input.filesSummary;
+  if (
+    reports &&
+    (reports.partial > 0 ||
+      (reports.complete > 0 && (reports.failed > 0 || reports.pending > 0)))
+  ) {
+    return true;
+  }
+  if (files?.isPartial) return true;
+  // Reports all pending/failed but files partially downloaded (or vice versa).
+  if (
+    files &&
+    files.hasUsableDownloads &&
+    reports &&
+    reports.logicalReports > 0 &&
+    reports.complete === 0 &&
+    (reports.failed > 0 || reports.pending > 0)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function deriveLastSuccessfulHarvestAt(
@@ -739,6 +961,22 @@ export function formatReportCompletionCaption(summary: ReportCompletionSummary):
             : undefined,
     };
   }
+  if (summary.logicalReports > 0 && summary.complete < summary.logicalReports) {
+    return {
+      value: `${summary.complete} of ${summary.logicalReports}`,
+      subtitle: `${summary.complete} of ${summary.logicalReports} complete`,
+      detail: [
+        summary.partial > 0 ? `${summary.partial} partial` : null,
+        summary.failed > 0 ? `${summary.failed} failed` : null,
+        summary.pending > 0 ? `${summary.pending} pending` : null,
+        summary.reportArtifactsTotal > 0
+          ? `${summary.reportArtifactsDownloaded} of ${summary.reportArtifactsTotal} artifacts downloaded`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    };
+  }
   return {
     value: String(summary.logicalReports),
     subtitle:
@@ -760,13 +998,17 @@ export function formatFileCompletionCaption(summary: FileCompletionSummary): {
   detail?: string;
 } {
   if (summary.hasExpectedTotal && summary.expectedTotal != null) {
+    const parts: string[] = [];
+    if (summary.failed > 0) parts.push(`${summary.failed} failed`);
+    if (summary.pending > 0) parts.push(`${summary.pending} pending`);
+    if (summary.skipped > 0) parts.push(`${summary.skipped} skipped`);
     return {
       value: `${summary.downloaded} of ${summary.expectedTotal}`,
       subtitle:
-        summary.failed > 0
-          ? `${summary.failed} failed`
+        parts.length > 0
+          ? parts.join(" · ")
           : `${summary.downloaded} files downloaded`,
-      detail: summary.failed > 0 ? `${summary.failed} failed` : undefined,
+      detail: parts.length > 0 ? parts.join(" · ") : undefined,
     };
   }
   return {

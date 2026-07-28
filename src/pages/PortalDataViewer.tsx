@@ -96,12 +96,16 @@ import { resolvePgcPortalFileOpenUrl } from "@/lib/pgcPortalFileUrl";
 import { cn } from "@/lib/utils";
 import {
   buildPortalHarvestRow,
-  countSavedFiles,
+  classifyPortalFileArtifactStatus,
   deriveLogicalReports,
   formatFileCompletionCaption,
   formatReportCompletionCaption,
+  harvestArtifactsIndicatePartial,
   harvestStatusTone,
+  isSsrsReportViewerUrl,
+  isStorageBackedReportUrl,
   summarizeFileCompletion,
+  summarizePortalFilesFromFolders,
   summarizeReportCompletion,
   type LatestScrapeJobSummary,
 } from "@/lib/portalHarvestMetrics";
@@ -251,6 +255,7 @@ interface FilesTabData {
 
 interface ReportEntryDownload {
   fileSlug?: string;
+  sourceReportId?: string | null;
   reportName: string;
   reportType?: string;
   reportDescription?: string;
@@ -262,6 +267,14 @@ interface ReportEntryDownload {
   excelUrl?: string | null;
   excelDownloaded?: boolean;
   pdfDownloaded?: boolean;
+  pdfStatus?: string | null;
+  excelStatus?: string | null;
+  logicalStatus?: string | null;
+  pdfError?: string | null;
+  excelError?: string | null;
+  pdfExportedAt?: string | null;
+  excelExportedAt?: string | null;
+  scrapeJobId?: string | null;
   /** PGC: no navigate URL / export path (e.g. missing WFlowInstanceID and no live link) */
   exportUnavailable?: boolean;
 }
@@ -3131,7 +3144,7 @@ export default function PortalDataViewer() {
   const logicalReports = deriveLogicalReports(reportsTab);
   const reportCompletion = summarizeReportCompletion(logicalReports);
   const reportCaption = formatReportCompletionCaption(reportCompletion);
-  const savedFileCount = countSavedFiles(filesTab?.folders);
+  const portalFilesSummary = summarizePortalFilesFromFolders(filesTab?.folders);
   const liveFileStats = liveFileResults.stats;
   const fileCompletion = liveFileResults.active
     ? summarizeFileCompletion({
@@ -3151,9 +3164,15 @@ export default function PortalDataViewer() {
               : null,
       })
     : summarizeFileCompletion({
-        downloaded: savedFileCount,
-        failed: 0,
-        expectedTotal: null,
+        downloaded: portalFilesSummary.downloaded,
+        failed: portalFilesSummary.failed,
+        pending: portalFilesSummary.pending,
+        skipped: portalFilesSummary.skipped,
+        // Discovery rows in portal_data are a reliable expected total for PGC/ProjectDox.
+        expectedTotal:
+          portalFilesSummary.discovered > 0
+            ? portalFilesSummary.discovered
+            : null,
       });
   const fileCaption = formatFileCompletionCaption(fileCompletion);
 
@@ -3176,9 +3195,10 @@ export default function PortalDataViewer() {
     last_checked_at: lastCheckedAt,
     hasPortalData: !!portalData && Object.keys(portalData.tabs || {}).length > 0,
     latestJob: latestScrapeJob,
-    hasPartialArtifacts:
-      reportCompletion.partial > 0 ||
-      (reportCompletion.complete > 0 && reportCompletion.failed > 0),
+    hasPartialArtifacts: harvestArtifactsIndicatePartial({
+      reportCompletion,
+      filesSummary: portalFilesSummary,
+    }),
     isSessionScraping: scrape.isScraping,
   });
   const displayHarvestStatus = harvestRow.harvestStatus;
@@ -4195,13 +4215,20 @@ export default function PortalDataViewer() {
                           : null;
 
                         const statusRaw = statusCol ? row[statusCol] ?? "" : "";
+                        const pgcRowEntry =
+                          isPgcEplan
+                            ? reportEntryByReportName.get(reportName) || null
+                            : null;
                         const statusLabel = statusCol
                           ? isMdAvolveProjectDox && rowEntry
                             ? montgomeryReportStatusForRow(
                                 String(statusRaw),
                                 rowEntry,
                               ).text
-                            : String(statusRaw).trim() || "—"
+                            : isPgcEplan && pgcRowEntry?.logicalStatus
+                              ? String(pgcRowEntry.logicalStatus)
+                              : String(statusRaw).trim() ||
+                                (isPgcEplan ? "Pending" : "—")
                           : "—";
 
                         return (
@@ -4304,8 +4331,74 @@ export default function PortalDataViewer() {
                                                               ent.reportUrl,
                                                             ).trim()
                                                           : null);
+                                                    const pdfHref =
+                                                      ent?.pdfUrl &&
+                                                      isStorageBackedReportUrl(
+                                                        ent.pdfUrl,
+                                                      ) &&
+                                                      !isSsrsReportViewerUrl(
+                                                        ent.pdfUrl,
+                                                      )
+                                                        ? String(ent.pdfUrl).trim()
+                                                        : null;
+                                                    const excelHref =
+                                                      ent?.excelUrl &&
+                                                      isStorageBackedReportUrl(
+                                                        ent.excelUrl,
+                                                      ) &&
+                                                      !isSsrsReportViewerUrl(
+                                                        ent.excelUrl,
+                                                      )
+                                                        ? String(
+                                                            ent.excelUrl,
+                                                          ).trim()
+                                                        : null;
+                                                    const pdfStatusLabel =
+                                                      ent?.pdfStatus ||
+                                                      (pdfHref
+                                                        ? "success"
+                                                        : ent?.pdfError
+                                                          ? "failed"
+                                                          : "pending");
+                                                    const excelStatusLabel =
+                                                      ent?.excelStatus ||
+                                                      (excelHref
+                                                        ? "success"
+                                                        : ent?.excelError
+                                                          ? "failed"
+                                                          : "pending");
                                                     return (
                                                       <>
+                                                        <div className="flex w-full flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                          <Badge
+                                                            variant="outline"
+                                                            className="text-[10px] uppercase tracking-wide"
+                                                          >
+                                                            PDF: {pdfStatusLabel}
+                                                          </Badge>
+                                                          <Badge
+                                                            variant="outline"
+                                                            className="text-[10px] uppercase tracking-wide"
+                                                          >
+                                                            Excel: {excelStatusLabel}
+                                                          </Badge>
+                                                          {ent?.logicalStatus ? (
+                                                            <Badge
+                                                              variant="outline"
+                                                              className="text-[10px] uppercase tracking-wide"
+                                                            >
+                                                              {ent.logicalStatus}
+                                                            </Badge>
+                                                          ) : null}
+                                                        </div>
+                                                        {(ent?.pdfError ||
+                                                          ent?.excelError) && (
+                                                          <p className="w-full text-xs text-destructive">
+                                                            {[ent.pdfError, ent.excelError]
+                                                              .filter(Boolean)
+                                                              .join(" · ")}
+                                                          </p>
+                                                        )}
                                                         {viewerHref ? (
                                                           <Button
                                                             asChild
@@ -4325,7 +4418,7 @@ export default function PortalDataViewer() {
                                                             </a>
                                                           </Button>
                                                         ) : null}
-                                                        {ent?.pdfUrl ? (
+                                                        {pdfHref ? (
                                                           <Button
                                                             asChild
                                                             variant="ghost"
@@ -4334,7 +4427,7 @@ export default function PortalDataViewer() {
                                                             )}
                                                           >
                                                             <a
-                                                              href={ent.pdfUrl}
+                                                              href={pdfHref}
                                                               target="_blank"
                                                               rel="noreferrer"
                                                               title="PDF exported from SSRS and stored for this project (binary file)"
@@ -4344,7 +4437,7 @@ export default function PortalDataViewer() {
                                                             </a>
                                                           </Button>
                                                         ) : null}
-                                                        {ent?.excelUrl ? (
+                                                        {excelHref ? (
                                                           <Button
                                                             asChild
                                                             variant="ghost"
@@ -4353,9 +4446,7 @@ export default function PortalDataViewer() {
                                                             )}
                                                           >
                                                             <a
-                                                              href={
-                                                                ent.excelUrl
-                                                              }
+                                                              href={excelHref}
                                                               target="_blank"
                                                               rel="noreferrer"
                                                               title="Excel export from SSRS (not a substitute for the PDF)"
@@ -4785,12 +4876,27 @@ export default function PortalDataViewer() {
               <div className="mt-1 text-xs leading-5">
                 Downloaded {fileCompletion.downloaded} · Failed {fileCompletion.failed} · Pending{" "}
                 {fileCompletion.pending} · Skipped {fileCompletion.skipped}
+                {!liveFileResults.active && portalFilesSummary.populatedFolders > 0 ? (
+                  <>
+                    <br />
+                    {portalFilesSummary.populatedFolders} populated folder
+                    {portalFilesSummary.populatedFolders === 1 ? "" : "s"}
+                    {portalFilesSummary.parentFolders > 0
+                      ? ` · ${portalFilesSummary.parentFolders} parent`
+                      : ""}
+                    {portalFilesSummary.foldersTotal > portalFilesSummary.populatedFolders
+                      ? ` · ${portalFilesSummary.foldersTotal} folder rows total`
+                      : ""}
+                  </>
+                ) : null}
                 {!fileCompletion.hasExpectedTotal ? (
                   <>
                     <br />
                     Expected total unavailable
                   </>
                 ) : null}
+                <br />
+                Scope: latest saved portal_data snapshot (not cumulative history)
               </div>
             </div>
             <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
@@ -4910,6 +5016,15 @@ export default function PortalDataViewer() {
                             (sum, f) => sum + (f.commentCount || 0),
                             0,
                           ) ?? 0;
+                        const folderCompletion = summarizePortalFilesFromFolders([
+                          folder,
+                        ]);
+                        const folderBadge =
+                          folderCompletion.discovered > 0
+                            ? folderCompletion.failed + folderCompletion.pending > 0
+                              ? `${folderCompletion.downloaded} of ${folderCompletion.discovered}`
+                              : `${folderCompletion.downloaded} downloaded`
+                            : "0 files";
                         return (
                           <Collapsible
                             key={folderKey}
@@ -4949,11 +5064,13 @@ export default function PortalDataViewer() {
                                 <Badge
                                   variant="outline"
                                   className="shrink-0 border-border bg-card px-2 py-0.5 text-xs font-mono font-semibold tabular-nums text-foreground"
+                                  title={
+                                    folderCompletion.failed + folderCompletion.pending > 0
+                                      ? `${folderCompletion.failed} failed · ${folderCompletion.pending} pending`
+                                      : undefined
+                                  }
                                 >
-                                  {folder.fileCount ??
-                                    folder.files?.length ??
-                                    0}{" "}
-                                  files
+                                  {folderBadge}
                                 </Badge>
                                 {totalComments > 0 && (
                                   <Badge className="shrink-0 border border-primary/30 bg-primary/12 text-xs font-semibold text-foreground">
@@ -4988,14 +5105,19 @@ export default function PortalDataViewer() {
                                   <TableBody>
                                     {(folder.files ?? []).map((file, fIdx) => {
                                       const fileKey = `${folderKey}--${file.name}-${fIdx}`;
-                                      const fileOpenUrl = isPgcEplan
-                                        ? resolvePgcPortalFileOpenUrl(file)
-                                        : String(
-                                            file.publicUrl ||
-                                              file.viewUrl ||
-                                              file.downloadUrl ||
-                                              "",
-                                          ).trim() || null;
+                                      const artifactStatus =
+                                        classifyPortalFileArtifactStatus(file);
+                                      const fileOpenUrl =
+                                        artifactStatus === "success"
+                                          ? isPgcEplan
+                                            ? resolvePgcPortalFileOpenUrl(file)
+                                            : String(
+                                                file.publicUrl ||
+                                                  file.viewUrl ||
+                                                  file.downloadUrl ||
+                                                  "",
+                                              ).trim() || null
+                                          : null;
                                       const hasComments =
                                         Array.isArray(file.comments) &&
                                         file.comments.length > 0;
@@ -5040,11 +5162,7 @@ export default function PortalDataViewer() {
                                                     {file.name}
                                                   </span>
                                                 )}
-                                                {(file.downloadStatus ===
-                                                  "failed" ||
-                                                  file.downloadStatus?.startsWith(
-                                                    "failed_",
-                                                  )) && (
+                                                {artifactStatus === "failed" ? (
                                                   <Badge
                                                     className="bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0 shrink-0"
                                                     title={
@@ -5055,7 +5173,26 @@ export default function PortalDataViewer() {
                                                   >
                                                     Failed
                                                   </Badge>
-                                                )}
+                                                ) : null}
+                                                {artifactStatus === "pending" ? (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="border-warning/40 text-warning text-[10px] px-1.5 py-0 shrink-0"
+                                                    title="Discovered but not downloaded"
+                                                    data-testid={`badge-pending-${fi}-${fIdx}`}
+                                                  >
+                                                    Pending
+                                                  </Badge>
+                                                ) : null}
+                                                {artifactStatus === "skipped" ? (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] px-1.5 py-0 shrink-0"
+                                                    title={file.downloadError || "Skipped"}
+                                                  >
+                                                    Skipped
+                                                  </Badge>
+                                                ) : null}
                                               </div>
                                             </TableCell>
                                             <TableCell className="!text-foreground whitespace-nowrap text-sm">

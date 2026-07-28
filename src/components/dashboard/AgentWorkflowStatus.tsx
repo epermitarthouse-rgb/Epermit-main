@@ -58,6 +58,10 @@ import {
   isWashingtonStyleProjectDoxCredential,
 } from "@/lib/portalView";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
+import {
+  buildQuickScrapeRequestIdentity,
+  resolveQuickScrapeSubmitFields,
+} from "@/lib/quickScrapeFormState";
 
 const SCRAPER_URL = getScraperBaseUrl();
 
@@ -1101,26 +1105,36 @@ export function AgentWorkflowStatus() {
     arlingtonOpts?: ArlingtonScrapeTabOpts,
     runOpts?: { arlingtonPortalMonitor?: boolean },
   ) => {
-    const projectIdToUse = projectBySelectedId?.id ?? latestProjectId;
-    const permitNumberToUse =
-      projectBySelectedId?.permit_number ?? latestPermitNumber;
+    // Selected project UUID is source of truth — never fall back to another
+    // project's permit (e.g. latest Washington B2606607) after a project switch.
+    const submitFields = resolveQuickScrapeSubmitFields({
+      selectedProjectId,
+      selectedProject: projectBySelectedId,
+    });
 
-    if (!projectIdToUse) {
-      toast.error(
-        "No project found. Select a project in the sidebar or create one first.",
-      );
+    if (!submitFields.ok) {
+      if (submitFields.reason === "no_project" || submitFields.reason === "project_mismatch") {
+        toast.error(
+          "No project found. Select a project in the header Active Project control or create one first.",
+        );
+      } else if (submitFields.reason === "missing_permit") {
+        toast.error(
+          "Permit / Application # is required. Set it on the project (Edit Project or header Active Project), then try again.",
+        );
+      } else {
+        toast.error(
+          "No portal credential linked to this project. Select a credential in the header Active Project control (or Edit Project), then try again.",
+        );
+      }
       return;
     }
+
+    const projectIdToUse = submitFields.projectId;
+    const permitNumberToUse = submitFields.permitNumber;
+    const credentialId = submitFields.credentialId;
 
     if (!session?.access_token) {
       toast.error("You must be logged in to run this check.");
-      return;
-    }
-
-    if (!permitNumberToUse || String(permitNumberToUse).trim() === "") {
-      toast.error(
-        "Permit / Application # is required. Set it on the project (Edit Project or header Active Project), then try again.",
-      );
       return;
     }
 
@@ -1139,20 +1153,6 @@ export function AgentWorkflowStatus() {
     toast.info("Chain Step 1/5: Portal Scraping...");
 
     try {
-      const { data: projectRow } = await supabase
-        .from("projects")
-        .select("credential_id")
-        .eq("id", projectIdToUse)
-        .maybeSingle();
-
-      const credentialId = projectRow?.credential_id;
-
-      if (!credentialId) {
-        throw new Error(
-          "No portal credential linked to this project. Select a credential in the header Active Project control (or Edit Project), then try again.",
-        );
-      }
-
       const { data: credRow } = await supabase
         .from("portal_credentials")
         .select("login_url")
@@ -1281,10 +1281,12 @@ export function AgentWorkflowStatus() {
         });
 
         const scrapeBody: Record<string, unknown> = {
-          sessionId,
-          permitNumber: String(permitNumberToUse).trim(),
-          userId: user!.id,
-          projectId: projectIdToUse,
+          ...buildQuickScrapeRequestIdentity({
+            sessionId,
+            userId: user!.id,
+            projectId: projectIdToUse,
+            permitNumber: permitNumberToUse,
+          }),
         };
 
         if (useArlingtonCustomTabs) {
@@ -1382,7 +1384,7 @@ export function AgentWorkflowStatus() {
       setPortalStatusText("Error");
       setChainPhase("idle");
       const msg = error instanceof Error ? error.message : String(error);
-      const projectId = projectBySelectedId?.id ?? latestProjectId;
+      const projectId = selectedProjectId ?? projectBySelectedId?.id ?? null;
       if (projectId) {
         await logChainFailure(projectId, "portal-scraper", msg);
       }

@@ -50,10 +50,80 @@ interface PortalPdf {
   text?: string;
   pages?: number;
   error?: string;
+  excelError?: string;
   info?: { source?: string };
+  /** Storage-backed PDF (never SSRS ReportViewer). */
+  pdfUrl?: string;
+  /** Storage-backed Excel/XLSX for comment parser (never viewer URL or PDF). */
+  excelUrl?: string;
   /** Montgomery Phase A: Excel grid rows from scraper (`excel` source). */
   structuredRows?: MontgomeryPortalStructuredExcelRow[];
   structuredRowsSource?: string;
+}
+
+function isSsrsReportViewerUrl(url: string | null | undefined): boolean {
+  return /ReportViewer\.aspx/i.test(String(url || ""));
+}
+
+function isStorageBackedExcelUrl(url: string | null | undefined): boolean {
+  const s = String(url || "").trim();
+  if (!s || isSsrsReportViewerUrl(s)) return false;
+  if (/\.pdf(\?|$)/i.test(s)) return false;
+  return (
+    /\/storage\/v1\/object\/public\//i.test(s) ||
+    /\.(xlsx|xls)(\?|$)/i.test(s) ||
+    /^https?:\/\//i.test(s)
+  );
+}
+
+/**
+ * Prefer Review Comments entries that have successful Excel (structuredRows or storage excelUrl).
+ * Never treat viewer URLs or PDF URLs as Excel.
+ */
+function selectReviewCommentsPdfForParser(pdfs: PortalPdf[]): {
+  selected: PortalPdf[];
+  excelMissing: boolean;
+  reason?: string;
+} {
+  const reviewPdfs = pdfs.filter((p) => isReviewCommentsReportPdf(p));
+  if (reviewPdfs.length === 0) {
+    return { selected: [], excelMissing: false, reason: "no_matching_pdf" };
+  }
+
+  const withExcelRows = reviewPdfs.filter(
+    (p) =>
+      Array.isArray(p.structuredRows) &&
+      p.structuredRows.length > 0 &&
+      String(p.structuredRowsSource || "").toLowerCase() !== "pdf",
+  );
+  if (withExcelRows.length > 0) {
+    return { selected: withExcelRows, excelMissing: false };
+  }
+
+  const withExcelUrl = reviewPdfs.filter((p) =>
+    isStorageBackedExcelUrl(p.excelUrl),
+  );
+  if (withExcelUrl.length > 0) {
+    return { selected: withExcelUrl, excelMissing: false };
+  }
+
+  // PGC/Montgomery exports require Excel for the comment parser agent.
+  const exportBacked = reviewPdfs.filter((p) => isPgcExportReviewCommentsPdf(p));
+  if (exportBacked.length > 0) {
+    return {
+      selected: [],
+      excelMissing: true,
+      reason: "excel_export_missing",
+    };
+  }
+
+  // Non-export fallbacks (e.g. DOM bridge text) may still parse from text.
+  const withText = reviewPdfs.filter((p) => pdfHasParseableReviewCommentsContent(p));
+  return {
+    selected: withText,
+    excelMissing: false,
+    reason: withText.length ? undefined : "no_matching_pdf",
+  };
 }
 
 /** Keep aligned with src/lib/pgcReviewCommentsText.ts */
@@ -999,12 +1069,28 @@ serve(async (req) => {
     }
 
     const pdfs = portalData.tabs?.reports?.pdfs ?? [];
-    let pdfsToProcess = pdfs.filter(
-      (p): p is PortalPdf =>
-        isReviewCommentsReportPdf(p) &&
-        Array.isArray(p.structuredRows) &&
-        p.structuredRows.length > 0,
-    );
+    let pdfsToProcess: PortalPdf[] = [];
+    const excelSelection = selectReviewCommentsPdfForParser(pdfs);
+    if (excelSelection.excelMissing) {
+      console.warn(
+        "[comment-parser] Review Comments Excel missing — refusing viewer URL / PDF-as-Excel fallback",
+      );
+      return new Response(
+        JSON.stringify({
+          parsed_count: 0,
+          skipped_count: 0,
+          insert_error_count: 0,
+          next_cursor: { pdfIndex: 0 },
+          done: true,
+          total_pdfs: 0,
+          reason: "excel_export_missing",
+          message:
+            "Plan Review - Review Comments Excel/XLSX was not downloaded. Comment parser requires the Excel export (not the ReportViewer URL or PDF).",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    pdfsToProcess = excelSelection.selected;
 
     if (pdfsToProcess.length === 0) {
       const domFallbackPdf = buildPgcDomWorkflowBucketsFallbackPdf(portalData);
@@ -1030,7 +1116,7 @@ serve(async (req) => {
           next_cursor: { pdfIndex: 0 },
           done: true,
           total_pdfs: 0,
-          reason: "no_matching_pdf",
+          reason: excelSelection.reason || "no_matching_pdf",
           message: "No Review Comments reports with text or structuredRows in portal_data.tabs.reports.pdfs",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
