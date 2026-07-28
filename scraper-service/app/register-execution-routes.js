@@ -4095,8 +4095,40 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
 
   const reportEntries = (reportsPayload?.reports || []).map((r) => {
     const exportUnavailable = !!r.exportUnavailable;
+    const pdfUrl =
+      r.pdfPublicUrl && isSupabaseStoragePublicUrl(r.pdfPublicUrl)
+        ? r.pdfPublicUrl
+        : null;
+    const excelUrl =
+      r.excelPublicUrl && isSupabaseStoragePublicUrl(r.excelPublicUrl)
+        ? r.excelPublicUrl
+        : null;
+    const pdfStatus =
+      r.pdfStatus ||
+      pgcEplan.pgcComputeReportFormatStatus({
+        downloaded: !!r.pdfDownloaded,
+        publicUrl: pdfUrl,
+        error: r.pdfError,
+        attempted: r.pdfAttempted !== false && (r.pdfDownloaded != null || !!r.pdfError),
+        uploadFailed: !!r.pdfUploadFailed,
+      });
+    const excelStatus =
+      r.excelStatus ||
+      pgcEplan.pgcComputeReportFormatStatus({
+        downloaded: !!r.excelDownloaded,
+        publicUrl: excelUrl,
+        error: r.excelError,
+        attempted:
+          r.excelAttempted !== false &&
+          (r.excelDownloaded != null || !!r.excelError),
+        uploadFailed: !!r.excelUploadFailed,
+      });
+    const logicalStatus =
+      r.logicalStatus ||
+      pgcEplan.pgcComputeLogicalReportStatus(pdfStatus, excelStatus);
     return {
       fileSlug: r.fileSlug,
+      sourceReportId: r.sourceReportId || r.fileSlug || null,
       reportName: r.reportName,
       reportType: r.reportType || "",
       reportDescription: r.reportDescription || "",
@@ -4105,23 +4137,40 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
       viewerUrl: r.viewUrl || r.reportUrl || null,
       viewerReady: r.viewerReady,
       /** Binary PDF exported from SSRS and uploaded to storage (not Excel, not parsed text). */
-      pdfUrl: r.pdfPublicUrl || null,
-      excelUrl: r.excelPublicUrl || null,
-      excelDownloaded: r.excelDownloaded,
-      pdfDownloaded: r.pdfDownloaded,
+      pdfUrl,
+      excelUrl,
+      /** True only when storage-backed export succeeded. */
+      excelDownloaded: !!excelUrl,
+      pdfDownloaded: !!pdfUrl,
+      pdfStatus,
+      excelStatus,
+      logicalStatus,
+      pdfError: r.pdfError || null,
+      excelError: r.excelError || null,
+      pdfExportedAt: r.pdfExportedAt || r.pdfUploadedAt || null,
+      excelExportedAt: r.excelExportedAt || r.excelUploadedAt || null,
+      scrapeJobId: r.scrapeJobId || null,
       exportUnavailable,
     };
   });
 
   const reportsTableRows = reportEntries.map((r) => ({
     "REPORT NAME": r.reportName,
-    Status: r.viewerReady ? "Ready" : "Not ready",
+    Status: r.logicalStatus || "Pending",
   }));
   /** Washington-compatible pdfs[]: fileName, text, pages, url, pdfUrl, excelUrl, error, info */
   const reportsRaw = reportsPayload?.reports || [];
   const reportsPdfs = [];
   for (let i = 0; i < reportsRaw.length; i++) {
     const r = reportsRaw[i];
+    const storagePdf =
+      r.pdfPublicUrl && isSupabaseStoragePublicUrl(r.pdfPublicUrl)
+        ? r.pdfPublicUrl
+        : undefined;
+    const storageExcel =
+      r.excelPublicUrl && isSupabaseStoragePublicUrl(r.excelPublicUrl)
+        ? r.excelPublicUrl
+        : undefined;
     const pdfEntry = {
       fileName: r.reportName,
       /**
@@ -4133,11 +4182,18 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
         (r.viewUrl && String(r.viewUrl).trim()) ||
         (r.reportUrl && String(r.reportUrl).trim()) ||
         undefined,
-      pdfUrl: r.pdfPublicUrl || undefined,
-      excelUrl: r.excelPublicUrl || undefined,
+      pdfUrl: storagePdf,
+      excelUrl: storageExcel,
       pages: 0,
       text: "",
       info: { source: "pgc-export" },
+      pdfStatus: reportEntries[i]?.pdfStatus,
+      excelStatus: reportEntries[i]?.excelStatus,
+      logicalStatus: reportEntries[i]?.logicalStatus,
+      pdfError: r.pdfError || undefined,
+      excelError: r.excelError || undefined,
+      scrapeJobId: r.scrapeJobId || undefined,
+      sourceReportId: r.sourceReportId || r.fileSlug || undefined,
     };
     if (typeof r.screenshot === "string" && r.screenshot.length > 0) {
       pdfEntry.screenshot = r.screenshot;
@@ -4158,20 +4214,26 @@ async function mapPgcPipelineToPortalData(projectRow, pipelineResult) {
       );
     }
     if (isPgcReviewCommentsReportName(r.reportName)) {
-      const excelUrl = String(r.excelPublicUrl || r.excelHttpUrl || "").trim();
+      const excelUrl = String(storageExcel || "").trim();
       const hasLocalExcel = !!(r.excelPath && fs.existsSync(r.excelPath));
       if (hasLocalExcel || excelUrl) {
         console.log(
           `[PGC][reports][excel-structured] Review Comments Excel found report=${JSON.stringify(r.reportName)} localExcel=${hasLocalExcel} excelUrl=${excelUrl ? "yes" : "no"}`,
         );
+        await attachReviewCommentsStructuredRowsToPdfEntry({
+          pdfEntry,
+          reportName: r.reportName,
+          localExcelPath: r.excelPath,
+          excelUrl,
+          logTag: "PGC",
+        });
+      } else {
+        pdfEntry.excelError =
+          r.excelError || "excel_export_missing_for_comment_parser";
+        console.warn(
+          `[PGC][reports][excel-structured] Review Comments Excel missing report=${JSON.stringify(r.reportName)} — comment parser requires XLSX`,
+        );
       }
-      await attachReviewCommentsStructuredRowsToPdfEntry({
-        pdfEntry,
-        reportName: r.reportName,
-        localExcelPath: r.excelPath,
-        excelUrl,
-        logTag: "PGC",
-      });
     }
     reportsPdfs.push(pdfEntry);
   }
@@ -4312,8 +4374,18 @@ function mapPgcPortalFileEntry(f, fol) {
       String(f.downloadStatus || "")
         .toLowerCase()
         .startsWith("failed_"));
-  const downloadStatus =
-    f.downloadStatus || (openUrl ? "ok" : undefined);
+  const skipped =
+    activationSkipped ||
+    String(f.downloadStatus || "").toLowerCase().startsWith("skipped");
+  // Prefer explicit scraper status. Undownloaded discovered rows are pending —
+  // never omit status (UI previously counted bare file rows as "downloaded").
+  const downloadStatus = failed
+    ? String(f.downloadStatus || "failed")
+    : skipped
+      ? String(f.downloadStatus || "skipped")
+      : openUrl
+        ? String(f.downloadStatus || "ok")
+        : String(f.downloadStatus || "pending");
 
   return {
     name: f.name || "file",
@@ -4330,7 +4402,7 @@ function mapPgcPortalFileEntry(f, fol) {
     fileSizeKB: f.fileSizeKB ?? null,
     version: f.version ?? null,
     hasMarkups: f.hasMarkups ?? false,
-    ...(downloadStatus && { downloadStatus }),
+    downloadStatus,
     ...(failed &&
       f.downloadError && {
         downloadError: scrapeFileResults.sanitizeFailureMessage(f.downloadError),
@@ -5456,6 +5528,9 @@ function pgcPipelineOptsFromScrapeMode(scrapeMode) {
   if (m === "scrape_without_files") {
     return { ...none, skipFiles: true };
   }
+  // Files-only: harvest ProjectDox files; do NOT run SSRS report PDF/Excel exports.
+  // Prior reportEntries remain via tab merge (omit reports). Cancelled files jobs
+  // must leave report artifacts Pending — never silently rewrite them as missing.
   if (m === "scrape_files_only") {
     return {
       skipDetail: true,
@@ -5699,6 +5774,7 @@ async function scrapePgcAll(
           skipDetail: pgcOpts.skipDetail,
           skipWorkflow: pgcOpts.skipWorkflow,
           skipReview: pgcOpts.skipReview,
+          scrapeJobId: fileProgress?.scrapeJobId || session.scrapeJobId || null,
           uploadLocal,
           storagePrefix,
           onScrapeProgress: (event) => {

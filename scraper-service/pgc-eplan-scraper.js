@@ -6606,6 +6606,16 @@ function finalizePgcFolderFileUrls(filesOut) {
       if (isPgcEphemeralPortalFileUrl(f.viewUrl)) f.viewUrl = null;
       if (isPgcEphemeralPortalFileUrl(f.publicUrl)) f.publicUrl = null;
       if (isPgcEphemeralPortalFileUrl(f.downloadUrl)) f.downloadUrl = null;
+
+      // Discovered but not yet attempted (e.g. cancelled mid-folder) must not look
+      // like successful downloads when portal_data is rendered.
+      const hasStorage =
+        isSupabaseStoragePublicUrl(f.publicUrl) ||
+        isSupabaseStoragePublicUrl(f.viewUrl) ||
+        isSupabaseStoragePublicUrl(f.downloadUrl);
+      if (!f.downloadStatus && !hasStorage) {
+        f.downloadStatus = "pending";
+      }
     }
   }
 }
@@ -16809,11 +16819,116 @@ async function waitForReportViewerReady(page) {
 }
 
 /**
+ * Reject HTML/login/empty payloads that SSRS sometimes returns instead of PDF/XLSX.
+ * @param {Buffer | Uint8Array | null | undefined} buf
+ * @param {string} format EXCELOPENXML | PDF
+ * @returns {{ ok: boolean, error?: string, byteLength?: number }}
+ */
+function pgcValidateReportExportBuffer(buf, format) {
+  if (!buf || buf.length < 64) {
+    return { ok: false, error: "export_empty_or_too_small" };
+  }
+  const head = Buffer.from(buf.slice(0, 320)).toString("utf8").toLowerCase();
+  if (
+    head.includes("<html") ||
+    head.includes("<!doctype") ||
+    head.includes("sessionended") ||
+    head.includes("useridsessionidmapping") ||
+    (head.includes("login") &&
+      (head.includes("<form") ||
+        head.includes("password") ||
+        head.includes("signin")))
+  ) {
+    return { ok: false, error: "export_rejected_html_or_login_page" };
+  }
+  const fmt = String(format || "").toUpperCase();
+  if (fmt === "PDF") {
+    if (!Buffer.from(buf.slice(0, 4)).equals(Buffer.from("%PDF"))) {
+      return { ok: false, error: "export_rejected_not_pdf" };
+    }
+  } else if (fmt === "EXCELOPENXML" || fmt === "EXCEL") {
+    if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
+      return { ok: false, error: "export_rejected_not_xlsx" };
+    }
+  }
+  return { ok: true, byteLength: buf.length };
+}
+
+/**
+ * @param {string} destPath
+ * @param {string} format
+ * @returns {Promise<{ ok: boolean, error?: string, byteLength?: number }>}
+ */
+async function pgcValidateReportExportFile(destPath, format) {
+  try {
+    const buf = await fs.promises.readFile(destPath);
+    const v = pgcValidateReportExportBuffer(buf, format);
+    if (!v.ok) {
+      try {
+        await fs.promises.unlink(destPath);
+      } catch (_) {}
+    }
+    return v;
+  } catch (e) {
+    return {
+      ok: false,
+      error: (e && e.message) || "export_file_unreadable",
+    };
+  }
+}
+
+/**
+ * Per-format harvest status for portal_data / Portal Harvest.
+ * Storage-backed public URL is required for final success (viewer URLs never count).
+ * Local download without upload yet stays pending (upload step finalizes).
+ * @param {{ downloaded?: boolean, publicUrl?: string | null, error?: string | null, attempted?: boolean, skipped?: boolean, uploadFailed?: boolean }} opts
+ * @returns {"success"|"failed"|"pending"|"skipped"}
+ */
+function pgcComputeReportFormatStatus(opts = {}) {
+  if (opts.skipped) return "skipped";
+  const pub = String(opts.publicUrl || "").trim();
+  if (pub && isSupabaseStoragePublicUrl(pub)) return "success";
+  if (pub && /ReportViewer\.aspx/i.test(pub)) {
+    // Viewer URL leaked into artifact field — never treat as downloaded.
+    if (opts.error) return "failed";
+    return opts.attempted ? "failed" : "pending";
+  }
+  const err = String(opts.error || "").trim();
+  if (err || opts.uploadFailed) return "failed";
+  // Binary on disk but not uploaded yet — pending until storage URL exists.
+  if (opts.downloaded && !pub) return "pending";
+  if (opts.attempted && !opts.downloaded) return "failed";
+  return "pending";
+}
+
+/**
+ * Logical report status from PDF + Excel format statuses.
+ * @param {string} pdfStatus
+ * @param {string} excelStatus
+ * @returns {"Complete"|"Partial"|"Failed"|"Pending"|"Skipped"}
+ */
+function pgcComputeLogicalReportStatus(pdfStatus, excelStatus) {
+  const statuses = [pdfStatus, excelStatus].filter(
+    (s) => s && s !== "skipped" && s !== "not_available",
+  );
+  if (statuses.length === 0) return "Pending";
+  const success = statuses.filter((s) => s === "success").length;
+  const failed = statuses.filter((s) => s === "failed").length;
+  const pending = statuses.filter((s) => s === "pending").length;
+  if (success === statuses.length) return "Complete";
+  if (success > 0 && (failed > 0 || pending > 0)) return "Partial";
+  if (failed > 0 && success === 0 && pending === 0) return "Failed";
+  if (failed > 0 && pending > 0 && success === 0) return "Partial";
+  return "Pending";
+}
+
+/**
  * GET with rs:Format= when client export does not emit a Playwright download (some hosts).
  * @param {import('playwright').Page} page
  * @param {string} viewerPageUrl
  * @param {string} format
  * @param {string} destPath
+ * @returns {Promise<{ ok: boolean, error?: string }>}
  */
 async function tryPgcReportExportViaHttp(page, viewerPageUrl, format, destPath) {
   const exportUrl = pgcReportViewerUrlWithFormat(viewerPageUrl, format);
@@ -16824,26 +16939,21 @@ async function tryPgcReportExportViaHttp(page, viewerPageUrl, format, destPath) 
     });
     const status = res.status();
     const buf = Buffer.from(await res.body());
-    if (status >= 400 || buf.length < 64) return false;
-    const head = buf.slice(0, 240).toString("utf8").toLowerCase();
-    if (
-      head.includes("<html") ||
-      head.includes("sessionended") ||
-      head.includes("login") ||
-      head.includes("useridsessionidmapping")
-    ) {
-      return false;
+    if (status >= 400) {
+      return { ok: false, error: `http_status_${status}` };
     }
-    if (format === "PDF") {
-      if (!buf.slice(0, 4).equals(Buffer.from("%PDF"))) return false;
-    } else if (format === "EXCELOPENXML") {
-      if (buf.slice(0, 2).toString("binary") !== "PK") return false;
+    const validated = pgcValidateReportExportBuffer(buf, format);
+    if (!validated.ok) {
+      return { ok: false, error: validated.error || "http_export_invalid" };
     }
     await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
     await fs.promises.writeFile(destPath, buf);
-    return true;
-  } catch (_) {
-    return false;
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: (e && e.message) || "http_export_failed",
+    };
   }
 }
 
@@ -16879,17 +16989,31 @@ async function exportReportFormat(
     const download = await downloadPromise;
     await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
     await download.saveAs(destPath);
+    const validated = await pgcValidateReportExportFile(destPath, format);
+    if (!validated.ok) {
+      throw new Error(validated.error || "export_validation_failed");
+    }
   }
 
   const handle =
     viewerHandle || (await waitForPgcReportViewerHandle(page, 15000));
   if (!handle) {
     const base = viewerPageUrlForHttp || page.url();
-    if (
-      base &&
-      (await tryPgcReportExportViaHttp(page, base, format, destPath))
-    ) {
-      return { ok: true, retries: 0, viaHttp: true };
+    if (base) {
+      const httpRes = await tryPgcReportExportViaHttp(
+        page,
+        base,
+        format,
+        destPath,
+      );
+      if (httpRes.ok) {
+        return { ok: true, retries: 0, viaHttp: true };
+      }
+      return {
+        ok: false,
+        error: httpRes.error || "report viewer not ready",
+        retries: 0,
+      };
     }
     return { ok: false, error: "report viewer not ready", retries: 0 };
   }
@@ -16908,11 +17032,24 @@ async function exportReportFormat(
       return { ok: true, retries: 1 };
     } catch (secondErr) {
       const base = viewerPageUrlForHttp || page.url();
-      if (
-        base &&
-        (await tryPgcReportExportViaHttp(page, base, format, destPath))
-      ) {
-        return { ok: true, retries: 1, viaHttp: true };
+      if (base) {
+        const httpRes = await tryPgcReportExportViaHttp(
+          page,
+          base,
+          format,
+          destPath,
+        );
+        if (httpRes.ok) {
+          return { ok: true, retries: 1, viaHttp: true };
+        }
+        return {
+          ok: false,
+          error:
+            httpRes.error ||
+            (secondErr && secondErr.message) ||
+            String(secondErr),
+          retries: 1,
+        };
       }
       return {
         ok: false,
@@ -17526,8 +17663,12 @@ async function processPgcSsrReportsForProject(
       const navigateUrl = liveUrl || spec.fallbackUrl;
       const navSource = liveUrl ? "live" : spec.fallbackUrl ? "fallback" : "none";
 
+      const scrapeJobId =
+        opts.scrapeJobId != null ? String(opts.scrapeJobId).trim() : "";
+      const exportedAtBase = new Date().toISOString();
       const entry = {
         fileSlug: spec.fileSlug,
+        sourceReportId: spec.fileSlug,
         reportName: spec.reportName,
         reportType: hit?.reportType || "",
         reportDescription: hit?.reportDescription || "",
@@ -17548,7 +17689,18 @@ async function processPgcSsrReportsForProject(
         pdfPath: null,
         excelRetries: null,
         pdfRetries: null,
+        excelAttempted: false,
+        pdfAttempted: false,
+        excelError: null,
+        pdfError: null,
+        excelStatus: "pending",
+        pdfStatus: "pending",
+        excelExportedAt: null,
+        pdfExportedAt: null,
+        scrapeJobId: scrapeJobId || null,
+        projectID,
         exportUnavailable: false,
+        logicalStatus: "Pending",
       };
 
       const failShot = path.join(
@@ -17556,8 +17708,37 @@ async function processPgcSsrReportsForProject(
         `pgc-reports-failed-${safePid}-${spec.fileSlug}.png`,
       );
 
+      const finalizeEntryStatuses = () => {
+        entry.excelStatus = pgcComputeReportFormatStatus({
+          downloaded: entry.excelDownloaded,
+          publicUrl: entry.excelPublicUrl,
+          error: entry.excelError,
+          attempted: entry.excelAttempted,
+        });
+        entry.pdfStatus = pgcComputeReportFormatStatus({
+          downloaded: entry.pdfDownloaded,
+          publicUrl: entry.pdfPublicUrl,
+          error: entry.pdfError,
+          attempted: entry.pdfAttempted,
+        });
+        entry.logicalStatus = pgcComputeLogicalReportStatus(
+          entry.pdfStatus,
+          entry.excelStatus,
+        );
+        if (entry.excelDownloaded || entry.pdfDownloaded) {
+          entry.viewerReady = true;
+        }
+      };
+
       if (!navigateUrl) {
         entry.exportUnavailable = true;
+        entry.excelAttempted = true;
+        entry.pdfAttempted = true;
+        entry.excelError = !wfid
+          ? "export_skipped_no_wflow_instance_id"
+          : "export_skipped_no_viewer_url";
+        entry.pdfError = entry.excelError;
+        finalizeEntryStatuses();
         if (!wfid) {
           console.log(
             `[PGC] Reports | export skipped no wfid | ${spec.reportName}`,
@@ -17601,7 +17782,7 @@ async function processPgcSsrReportsForProject(
         });
         await activePage.waitForTimeout(TASK8_REPORT_POST_NAV_MS);
 
-        const viewerHandle = await waitForPgcReportViewerHandle(activePage);
+        let viewerHandle = await waitForPgcReportViewerHandle(activePage);
         entry.viewerReady = !!viewerHandle;
 
         const shotB64 = await capturePgcReportScreenshotBase64(
@@ -17617,85 +17798,10 @@ async function processPgcSsrReportsForProject(
 
         const excelPath = path.join(outDir, `${spec.fileSlug}.xlsx`);
         const pdfPath = path.join(outDir, `${spec.fileSlug}.pdf`);
-        const viewerUrlForHttp = activePage.url();
 
-        if (!viewerHandle) {
-          const xResHttp = await exportReportFormat(
-            activePage,
-            "EXCELOPENXML",
-            excelPath,
-            null,
-            viewerUrlForHttp,
-          );
-          entry.excelDownloaded = xResHttp.ok;
-          entry.excelPath = xResHttp.ok ? excelPath : null;
-          entry.excelRetries = xResHttp.retries;
-          if (xResHttp.ok) {
-            console.log(`[PGC] Reports | excel ok | ${spec.reportName}`);
-          } else {
-            console.log(`[PGC] Reports | excel fail | ${spec.reportName}`);
-            pgcProgress.pgcLogDetail("task8_excel_fail", {
-              reportName: spec.reportName,
-              error: xResHttp.error,
-            });
-            if (isScraperDebugArtifactsEnabled()) {
-              try {
-                await activePage.screenshot({ path: failShot, fullPage: true });
-                pgcProgress.pgcLogDetail("task8_report_fail_shot", {
-                  reportName: spec.reportName,
-                  path: failShot,
-                });
-              } catch (_) {}
-            }
-            reports.push(entry);
-            pgcEmitScrapeProgress(onProgress, {
-              event_type: "report_failed",
-              reportName: spec.reportName,
-              user_message: `Report failed: ${shortLabel}.`,
-              progress_current: reportNum,
-              progress_total: reportTotal,
-              technical_message: `[PGC] Reports | excel fail | ${spec.reportName}`,
-            });
-            continue;
-          }
-
-          const pResHttp = await exportReportFormat(
-            activePage,
-            "PDF",
-            pdfPath,
-            null,
-            viewerUrlForHttp,
-          );
-          entry.pdfDownloaded = pResHttp.ok;
-          entry.pdfPath = pResHttp.ok ? pdfPath : null;
-          entry.pdfRetries = pResHttp.retries;
-          if (pResHttp.ok) {
-            console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
-          } else {
-            console.log(`[PGC] Reports | pdf fail | ${spec.reportName}`);
-            pgcProgress.pgcLogDetail("task8_pdf_fail", {
-              reportName: spec.reportName,
-              error: pResHttp.error,
-            });
-          }
-          if (entry.excelDownloaded || entry.pdfDownloaded) entry.viewerReady = true;
-          reports.push(entry);
-          const httpOk = !!(entry.excelDownloaded || entry.pdfDownloaded);
-          pgcEmitScrapeProgress(onProgress, {
-            event_type: httpOk ? "report_completed" : "report_failed",
-            reportName: spec.reportName,
-            user_message: httpOk
-              ? `Report complete: ${shortLabel}.`
-              : `Report failed: ${shortLabel}.`,
-            progress_current: reportNum,
-            progress_total: reportTotal,
-            technical_message: httpOk
-              ? `[PGC] Reports | complete | ${spec.reportName}`
-              : `[PGC] Reports | failed | ${spec.reportName}`,
-          });
-          continue;
-        }
-
+        // Always attempt both formats. One logical report = PDF + Excel artifacts.
+        entry.excelAttempted = true;
+        let viewerUrlForHttp = activePage.url() || navigateUrl;
         const xRes = await exportReportFormat(
           activePage,
           "EXCELOPENXML",
@@ -17706,53 +17812,100 @@ async function processPgcSsrReportsForProject(
         entry.excelDownloaded = xRes.ok;
         entry.excelPath = xRes.ok ? excelPath : null;
         entry.excelRetries = xRes.retries;
+        entry.excelError = xRes.ok ? null : xRes.error || "excel_export_failed";
         if (xRes.ok) {
+          entry.excelExportedAt = new Date().toISOString();
           console.log(`[PGC] Reports | excel ok | ${spec.reportName}`);
         } else {
-          console.log(`[PGC] Reports | excel fail | ${spec.reportName}`);
+          console.log(
+            `[PGC] Reports | excel fail | ${spec.reportName} | ${entry.excelError}`,
+          );
           pgcProgress.pgcLogDetail("task8_excel_fail", {
             reportName: spec.reportName,
-            error: xRes.error,
+            error: entry.excelError,
           });
         }
 
+        // Re-settle viewer before PDF (SSRS often drops $find after first export).
         await activePage.waitForTimeout(1000);
-        const viewerHandlePdf =
-          (await waitForPgcReportViewerHandle(activePage)) || viewerHandle;
-        const rvStill = !!viewerHandlePdf;
-        if (!rvStill) {
-          pgcProgress.pgcLogDetail("task8_pdf_skip_not_ready", {
-            reportName: spec.reportName,
-          });
-          console.log(`[PGC] Reports | pdf fail | ${spec.reportName}`);
-        } else {
-          const pRes = await exportReportFormat(
-            activePage,
-            "PDF",
-            pdfPath,
-            viewerHandlePdf,
-            viewerUrlForHttp,
-          );
-          entry.pdfDownloaded = pRes.ok;
-          entry.pdfPath = pRes.ok ? pdfPath : null;
-          entry.pdfRetries = pRes.retries;
-          if (pRes.ok) {
-            console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
-          } else {
-            console.log(`[PGC] Reports | pdf fail | ${spec.reportName}`);
-            pgcProgress.pgcLogDetail("task8_pdf_fail", {
+        let viewerHandlePdf = await waitForPgcReportViewerHandle(
+          activePage,
+          15000,
+        );
+        if (!viewerHandlePdf) {
+          try {
+            await activePage.goto(navigateUrl, {
+              waitUntil: "domcontentloaded",
+              timeout: 30000,
+            });
+            await activePage.waitForTimeout(TASK8_REPORT_POST_NAV_MS);
+            viewerHandlePdf = await waitForPgcReportViewerHandle(
+              activePage,
+              30000,
+            );
+          } catch (reNavErr) {
+            pgcProgress.pgcLogDetail("task8_pdf_renav_error", {
               reportName: spec.reportName,
-              error: pRes.error,
+              error: (reNavErr && reNavErr.message) || String(reNavErr),
             });
           }
         }
+        viewerUrlForHttp = activePage.url() || navigateUrl;
+        entry.pdfAttempted = true;
+        const pRes = await exportReportFormat(
+          activePage,
+          "PDF",
+          pdfPath,
+          viewerHandlePdf,
+          viewerUrlForHttp,
+        );
+        entry.pdfDownloaded = pRes.ok;
+        entry.pdfPath = pRes.ok ? pdfPath : null;
+        entry.pdfRetries = pRes.retries;
+        entry.pdfError = pRes.ok ? null : pRes.error || "pdf_export_failed";
+        if (pRes.ok) {
+          entry.pdfExportedAt = new Date().toISOString();
+          console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
+        } else {
+          console.log(
+            `[PGC] Reports | pdf fail | ${spec.reportName} | ${entry.pdfError}`,
+          );
+          pgcProgress.pgcLogDetail("task8_pdf_fail", {
+            reportName: spec.reportName,
+            error: entry.pdfError,
+          });
+        }
+
+        if (!entry.excelDownloaded && !entry.pdfDownloaded) {
+          entry.exportUnavailable = !/ReportViewer\.aspx/i.test(
+            String(entry.viewUrl || navigateUrl || ""),
+          );
+          if (isScraperDebugArtifactsEnabled()) {
+            try {
+              await activePage.screenshot({ path: failShot, fullPage: true });
+              pgcProgress.pgcLogDetail("task8_report_fail_shot", {
+                reportName: spec.reportName,
+                path: failShot,
+              });
+            } catch (_) {}
+          }
+        }
       } catch (e) {
+        const msg = (e && e.message) || String(e);
         pgcProgress.pgcLogDetail("task8_report_page_error", {
           fileSlug: spec.fileSlug,
           reportName: spec.reportName,
-          error: (e && e.message) || String(e),
+          error: msg,
         });
         console.log(`[PGC] Reports | error | ${spec.reportName} | page`);
+        if (!entry.excelAttempted) {
+          entry.excelAttempted = true;
+          entry.excelError = msg;
+        }
+        if (!entry.pdfAttempted) {
+          entry.pdfAttempted = true;
+          entry.pdfError = msg;
+        }
         if (isScraperDebugArtifactsEnabled()) {
           try {
             await activePage.screenshot({ path: failShot, fullPage: true });
@@ -17760,19 +17913,25 @@ async function processPgcSsrReportsForProject(
         }
       }
 
-      if (entry.excelDownloaded || entry.pdfDownloaded) entry.viewerReady = true;
-      const reportOk = !!(entry.excelDownloaded || entry.pdfDownloaded);
+      if (!entry.excelExportedAt && entry.excelDownloaded) {
+        entry.excelExportedAt = exportedAtBase;
+      }
+      if (!entry.pdfExportedAt && entry.pdfDownloaded) {
+        entry.pdfExportedAt = exportedAtBase;
+      }
+      finalizeEntryStatuses();
+      const reportOk =
+        entry.logicalStatus === "Complete" ||
+        entry.logicalStatus === "Partial";
       pgcEmitScrapeProgress(onProgress, {
         event_type: reportOk ? "report_completed" : "report_failed",
         reportName: spec.reportName,
         user_message: reportOk
-          ? `Report complete: ${shortLabel}.`
+          ? `Report ${entry.logicalStatus.toLowerCase()}: ${shortLabel}.`
           : `Report failed: ${shortLabel}.`,
         progress_current: reportNum,
         progress_total: reportTotal,
-        technical_message: reportOk
-          ? `[PGC] Reports | complete | ${spec.reportName}`
-          : `[PGC] Reports | failed | ${spec.reportName}`,
+        technical_message: `[PGC] Reports | ${entry.logicalStatus} | ${spec.reportName} | pdf=${entry.pdfStatus} excel=${entry.excelStatus}`,
       });
       reports.push(entry);
     }
@@ -17806,18 +17965,29 @@ async function processPgcSsrReportsForProject(
       reports,
     };
     const foundCount = gridRows.length;
+    const pdfOk = reports.filter((r) => r.pdfDownloaded).length;
+    const excelOk = reports.filter((r) => r.excelDownloaded).length;
+    const completeCount = reports.filter(
+      (r) => r.logicalStatus === "Complete",
+    ).length;
+    const partialCount = reports.filter(
+      (r) => r.logicalStatus === "Partial",
+    ).length;
+    const failedCount = reports.filter(
+      (r) => r.logicalStatus === "Failed",
+    ).length;
     const exportedCount = reports.filter(
       (r) => r.excelDownloaded || r.pdfDownloaded,
     ).length;
     console.log(
-      `[PGC] Reports | summary | ${projectID} | found:${foundCount} exported:${exportedCount}`,
+      `[PGC] Reports | summary | ${projectID} | found:${foundCount} logical:${reports.length} complete:${completeCount} partial:${partialCount} failed:${failedCount} pdfOk:${pdfOk} excelOk:${excelOk} exportedAny:${exportedCount}`,
     );
     pgcEmitScrapeProgress(onProgress, {
       event_type: "section_completed",
-      user_message: `Reports section complete (${exportedCount} of ${foundCount} exported).`,
+      user_message: `Reports section complete (${completeCount} of ${reports.length} complete; PDF ${pdfOk}/${reports.length}, Excel ${excelOk}/${reports.length}).`,
       progress_current: reportTotal,
       progress_total: reportTotal,
-      technical_message: `[PGC] Reports | summary | ${projectID} | found:${foundCount} exported:${exportedCount}`,
+      technical_message: `[PGC] Reports | summary | ${projectID} | found:${foundCount} complete:${completeCount} pdfOk:${pdfOk} excelOk:${excelOk}`,
     });
     pgcProgress.pgcLogDetail("task8_report_export_payload", {
       ...payload,
@@ -18200,7 +18370,7 @@ async function scrapeSingleProjectDetails(page, project, bases, dashboardUrl) {
  * @param {object} proj row from collectAllProjects
  * @param {string[]} bases from resolvePgcWebUiBases
  * @param {string} dashboardUrl
- * @param {{ skipReports?: boolean, skipFiles?: boolean, skipDetail?: boolean, skipWorkflow?: boolean, skipReview?: boolean, uploadLocal?: (localPath: string, storageKey: string) => Promise<string|null>, storagePrefix?: string, recoveryCredentials?: { email: string, password: string, loginUrl?: string, credentialsSource?: string } | null, relaunchBrowserAndRecover?: ((args: { projectID: string, project: object, dashboardUrl: string, reason?: string }) => Promise<import('playwright').Page | null>) | null }} [opts]
+ * @param {{ skipReports?: boolean, skipFiles?: boolean, skipDetail?: boolean, skipWorkflow?: boolean, skipReview?: boolean, scrapeJobId?: string | null, uploadLocal?: (localPath: string, storageKey: string) => Promise<string|null>, storagePrefix?: string, recoveryCredentials?: { email: string, password: string, loginUrl?: string, credentialsSource?: string } | null, relaunchBrowserAndRecover?: ((args: { projectID: string, project: object, dashboardUrl: string, reason?: string }) => Promise<import('playwright').Page | null>) | null }} [opts]
  */
 async function runPgcProductionPipeline(
   page,
@@ -18469,6 +18639,7 @@ async function runPgcProductionPipeline(
     reportsPayload = await processPgcSsrReportsForProject(page, proj, wfid, {
       dashboardUrl: dashboardUrlForReports,
       onScrapeProgress: opts.onScrapeProgress,
+      scrapeJobId: opts.scrapeJobId || null,
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {
@@ -18477,6 +18648,26 @@ async function runPgcProductionPipeline(
           String(r.reportName || slug).trim().length > 80
             ? `${String(r.reportName || slug).trim().slice(0, 77)}…`
             : String(r.reportName || slug).trim();
+        const refreshFormatStatuses = () => {
+          r.excelStatus = pgcComputeReportFormatStatus({
+            downloaded: r.excelDownloaded,
+            publicUrl: r.excelPublicUrl,
+            error: r.excelError,
+            attempted: r.excelAttempted,
+            uploadFailed: !!r.excelUploadFailed,
+          });
+          r.pdfStatus = pgcComputeReportFormatStatus({
+            downloaded: r.pdfDownloaded,
+            publicUrl: r.pdfPublicUrl,
+            error: r.pdfError,
+            attempted: r.pdfAttempted,
+            uploadFailed: !!r.pdfUploadFailed,
+          });
+          r.logicalStatus = pgcComputeLogicalReportStatus(
+            r.pdfStatus,
+            r.excelStatus,
+          );
+        };
         try {
           if (r.excelPath && fs.existsSync(r.excelPath)) {
             pgcEmitScrapeProgress(opts.onScrapeProgress, {
@@ -18489,7 +18680,20 @@ async function runPgcProductionPipeline(
               r.excelPath,
               `${storagePrefix}/reports/${slug}.xlsx`,
             );
-            if (u) r.excelPublicUrl = u;
+            if (u && isSupabaseStoragePublicUrl(u)) {
+              r.excelPublicUrl = u;
+              r.excelUploadedAt = new Date().toISOString();
+              r.excelUploadFailed = false;
+            } else {
+              r.excelUploadFailed = true;
+              r.excelError = r.excelError || "excel_upload_failed";
+              console.warn(
+                `[PGC] Reports | excel upload failed | ${r.reportName || slug}`,
+              );
+            }
+          } else if (r.excelDownloaded) {
+            r.excelUploadFailed = true;
+            r.excelError = r.excelError || "excel_local_file_missing";
           }
           if (r.pdfPath && fs.existsSync(r.pdfPath)) {
             pgcEmitScrapeProgress(opts.onScrapeProgress, {
@@ -18502,11 +18706,53 @@ async function runPgcProductionPipeline(
               r.pdfPath,
               `${storagePrefix}/reports/${slug}.pdf`,
             );
-            if (u) r.pdfPublicUrl = u;
+            if (u && isSupabaseStoragePublicUrl(u)) {
+              r.pdfPublicUrl = u;
+              r.pdfUploadedAt = new Date().toISOString();
+              r.pdfUploadFailed = false;
+            } else {
+              r.pdfUploadFailed = true;
+              r.pdfError = r.pdfError || "pdf_upload_failed";
+              console.warn(
+                `[PGC] Reports | pdf upload failed | ${r.reportName || slug}`,
+              );
+            }
+          } else if (r.pdfDownloaded) {
+            r.pdfUploadFailed = true;
+            r.pdfError = r.pdfError || "pdf_local_file_missing";
           }
         } catch (e) {
           console.warn("[PGC] report upload:", e.message || e);
+          if (r.excelDownloaded && !r.excelPublicUrl) {
+            r.excelUploadFailed = true;
+            r.excelError = r.excelError || (e && e.message) || "excel_upload_failed";
+          }
+          if (r.pdfDownloaded && !r.pdfPublicUrl) {
+            r.pdfUploadFailed = true;
+            r.pdfError = r.pdfError || (e && e.message) || "pdf_upload_failed";
+          }
         }
+        refreshFormatStatuses();
+      }
+    } else if (reportsPayload.reports?.length) {
+      // No uploader — keep local download flags; statuses stay pending until storage.
+      for (const r of reportsPayload.reports) {
+        r.excelStatus = pgcComputeReportFormatStatus({
+          downloaded: r.excelDownloaded,
+          publicUrl: r.excelPublicUrl,
+          error: r.excelError,
+          attempted: r.excelAttempted,
+        });
+        r.pdfStatus = pgcComputeReportFormatStatus({
+          downloaded: r.pdfDownloaded,
+          publicUrl: r.pdfPublicUrl,
+          error: r.pdfError,
+          attempted: r.pdfAttempted,
+        });
+        r.logicalStatus = pgcComputeLogicalReportStatus(
+          r.pdfStatus,
+          r.excelStatus,
+        );
       }
     }
   }
@@ -19014,9 +19260,14 @@ module.exports = {
   exportReportFormat,
   capturePgcReportScreenshotBase64,
   tryPgcReportExportViaHttp,
+  pgcValidateReportExportBuffer,
+  pgcValidateReportExportFile,
+  pgcComputeReportFormatStatus,
+  pgcComputeLogicalReportStatus,
   normalizeReportName,
   pgcReportViewerUrlWithFormat,
   waitForPgcReportsGridReady,
   pgcReportRowMatchesAnyTarget,
   pgcReportNamesLooselyMatch,
+  PGC_TARGET_REPORT_NAMES,
 };
