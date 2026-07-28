@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { formFieldsFromSelectedProject } from "@/lib/quickScrapeFormState";
+import { isRadixSelectPortalTarget } from "@/lib/radixSelectPortal";
 
 const PERMIT_NUMBER_STORAGE_KEY_PREFIX = "epermit:permitNumber";
 
@@ -328,6 +329,15 @@ export function ActiveProjectControl() {
     if (createNewProject && permitNumber.trim()) setNewProjectName(permitNumber.trim());
   }, [createNewProject, permitNumber]);
 
+  const keepPopoverOpenForSelectPortal = useCallback(
+    (event: { target: EventTarget | null; preventDefault: () => void }) => {
+      if (isRadixSelectPortalTarget(event.target)) {
+        event.preventDefault();
+      }
+    },
+    [],
+  );
+
   if (!selectedProject || !user) return null;
 
   const triggerLabel = selectedProjectData
@@ -337,7 +347,7 @@ export function ActiveProjectControl() {
       : "Select project";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -352,7 +362,13 @@ export function ActiveProjectControl() {
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-3">
+      <PopoverContent
+        align="end"
+        className="w-80 space-y-3"
+        onPointerDownOutside={keepPopoverOpenForSelectPortal}
+        onFocusOutside={keepPopoverOpenForSelectPortal}
+        onInteractOutside={keepPopoverOpenForSelectPortal}
+      >
         <div className="pilot-kicker">Active project</div>
         <div className="space-y-1">
           <Label htmlFor="header-permit-number" className="text-xs text-muted-foreground">
@@ -377,12 +393,16 @@ export function ActiveProjectControl() {
           <Select
             value={selectedProject.selectedProjectId ?? "__none__"}
             onValueChange={handleSelectValueChange}
-            disabled={loading || (!permitNumber.trim() && projects.length === 0)}
+            disabled={loading || projects.length === 0}
           >
             <SelectTrigger className={FIELD_CLASS} data-testid="header-project-select">
               <SelectValue placeholder="Select a project" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              className="z-[200] max-h-64"
+              data-testid="header-project-select-content"
+            >
               <SelectItem value="__none__">Select a project</SelectItem>
               {projects.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
@@ -403,7 +423,7 @@ export function ActiveProjectControl() {
               <SelectTrigger className={FIELD_CLASS} data-testid="select-header-credential">
                 <SelectValue placeholder="Select credential" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[200] max-h-64">
                 <SelectItem value="__none__">None (select a credential)</SelectItem>
                 {sidebarCredentials.map((cred) => (
                   <SelectItem key={cred.id} value={cred.id}>
