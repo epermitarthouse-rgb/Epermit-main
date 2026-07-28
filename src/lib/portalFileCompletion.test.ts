@@ -147,6 +147,68 @@ describe("PGC reports + partial harvest signal", () => {
     assert.ok(reports.partial + reports.pending + reports.failed >= 1);
   });
 
+  it("COM-00317 viewer-only reports: 3 logical, 6 artifacts, 0 downloaded", () => {
+    const names = [
+      "Dynamic Review - Department Review Status",
+      "Dynamic Review - Workflow Routing Slip",
+      "Plan Review - Review Comments",
+    ];
+    const logical = deriveLogicalReports({
+      reportEntries: names.map((reportName) => ({
+        reportName,
+        pdfDownloaded: false,
+        excelDownloaded: false,
+        viewerUrl: `https://eplans.princegeorgescountymd.gov/ProjectDox/ReportViewer.aspx?ReportPath=${encodeURIComponent(reportName)}`,
+      })),
+    });
+    const reports = summarizeReportCompletion(logical);
+    assert.equal(reports.logicalReports, 3);
+    assert.equal(reports.reportArtifactsTotal, 6);
+    assert.equal(reports.reportArtifactsDownloaded, 0);
+    assert.equal(reports.pending, 3);
+    assert.equal(reports.complete, 0);
+  });
+
+  it("does not count ReportViewer URL as a downloaded PDF/Excel artifact", () => {
+    const logical = deriveLogicalReports({
+      reportEntries: [
+        {
+          reportName: "Plan Review - Review Comments",
+          pdfUrl:
+            "https://eplans.example/ProjectDox/ReportViewer.aspx?rs:Format=PDF",
+          excelUrl:
+            "https://eplans.example/ProjectDox/ReportViewer.aspx?rs:Format=EXCELOPENXML",
+          pdfDownloaded: true,
+          excelDownloaded: true,
+        },
+      ],
+    });
+    const reports = summarizeReportCompletion(logical);
+    assert.equal(reports.reportArtifactsDownloaded, 0);
+  });
+
+  it("failed export errors surface as Failed not double-counted formats", () => {
+    const logical = deriveLogicalReports({
+      reportEntries: [
+        {
+          reportName: "Plan Review - Review Comments",
+          pdfDownloaded: false,
+          excelDownloaded: false,
+          pdfError: "export_rejected_html_or_login_page",
+          excelError: "export_rejected_html_or_login_page",
+          pdfStatus: "failed",
+          excelStatus: "failed",
+          logicalStatus: "Failed",
+        },
+      ],
+    });
+    const reports = summarizeReportCompletion(logical);
+    assert.equal(reports.logicalReports, 1);
+    assert.equal(reports.failed, 1);
+    assert.equal(reports.reportArtifactsTotal, 2);
+    assert.equal(reports.reportArtifactsFailed, 2);
+  });
+
   it("marks harvest partial when files downloaded but many remain pending", () => {
     const filesSummary = summarizePortalFilesFromFolders([
       {

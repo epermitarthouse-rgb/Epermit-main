@@ -285,8 +285,8 @@ describe("report deduplication", () => {
         {
           reportName: "Plan Review - Review Comments",
           fileSlug: "review-comments",
-          pdfUrl: "https://example.com/a.pdf",
-          excelUrl: "https://example.com/a.xlsx",
+          pdfUrl: "https://example.supabase.co/storage/v1/object/public/a.pdf",
+          excelUrl: "https://example.supabase.co/storage/v1/object/public/a.xlsx",
           pdfDownloaded: true,
           excelDownloaded: true,
         },
