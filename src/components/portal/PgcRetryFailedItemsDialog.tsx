@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,14 @@ function liveStateLabel(state?: FailedItemRetryLiveState | null): string | null 
   }
 }
 
+function attemptStatusLabel(status: string): string {
+  if (status === "success") return "Succeeded";
+  if (status === "failed") return "Failed";
+  if (status === "skipped") return "Skipped";
+  if (status === "not_available") return "Not available";
+  return status;
+}
+
 export function PgcRetryFailedItemsDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -75,6 +83,11 @@ export function PgcRetryFailedItemsDialog(props: {
   retryableIdsRef.current = retryableIds;
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
+  const [historyOpenIds, setHistoryOpenIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!open) setHistoryOpenIds(new Set());
+  }, [open]);
 
   // While open: only prune invalid IDs. Never expand to all (parent sets all on open).
   useEffect(() => {
@@ -110,6 +123,15 @@ export function PgcRetryFailedItemsDialog(props: {
     onRetrySelected(snapshot);
   };
 
+  const toggleHistory = (id: string) => {
+    setHistoryOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-border bg-card text-card-foreground">
@@ -117,8 +139,8 @@ export function PgcRetryFailedItemsDialog(props: {
           <DialogTitle className="font-serif text-xl">Retry failed items</DialogTitle>
           <p className="text-sm text-muted-foreground">
             {counts.total} failed item{counts.total === 1 ? "" : "s"} · {counts.retryable}{" "}
-            retryable · {counts.notRetryable} not retryable. Pending files are not included —
-            use Run Full Harvest when available.
+            retryable · {counts.notRetryable} not retryable. Each artifact is listed once
+            (latest attempt). Older attempts stay under Attempt history.
           </p>
           {summaryLine ? (
             <p className="text-sm font-medium text-foreground">{summaryLine}</p>
@@ -164,6 +186,8 @@ export function PgcRetryFailedItemsDialog(props: {
                 <ul className="divide-y divide-border">
                   {group.items.map((item) => {
                     const live = liveStateLabel(item.liveState);
+                    const history = (item.attempts || []).slice(1);
+                    const historyOpen = historyOpenIds.has(item.id);
                     return (
                       <li key={item.id} className="flex gap-3 px-3 py-3">
                         <Checkbox
@@ -213,6 +237,38 @@ export function PgcRetryFailedItemsDialog(props: {
                               ? ` — ${item.notRetryableReason}`
                               : ""}
                           </p>
+                          {history.length > 0 ? (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+                                onClick={() => toggleHistory(item.id)}
+                              >
+                                {historyOpen
+                                  ? "Hide attempt history"
+                                  : `Attempt history (${history.length})`}
+                              </button>
+                              {historyOpen ? (
+                                <ul className="mt-1 space-y-1 border-l border-border pl-3">
+                                  {history.map((attempt, idx) => (
+                                    <li
+                                      key={`${item.id}-hist-${idx}-${attempt.at || ""}`}
+                                      className="text-[11px] text-muted-foreground"
+                                    >
+                                      <span className="font-medium text-foreground/80">
+                                        {attemptStatusLabel(attempt.status)}
+                                      </span>
+                                      {" · "}
+                                      {attempt.at
+                                        ? new Date(attempt.at).toLocaleString()
+                                        : "—"}
+                                      {attempt.reason ? ` · ${attempt.reason}` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </li>
                     );

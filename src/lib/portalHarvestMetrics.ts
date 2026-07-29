@@ -573,6 +573,8 @@ export interface PortalFileLike {
   fileSizeKB?: number | null;
   uploadedDate?: string | null;
   status?: string | null;
+  version?: string | number | null;
+  retryCount?: number | null;
 }
 
 export interface PortalFolderLike {

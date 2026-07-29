@@ -55,8 +55,8 @@ describe("buildPgcRetryPipelineOpts", () => {
   });
 });
 
-describe("merge helpers — duplicate prevention / preserve success", () => {
-  it("preserves untargeted successful files when merging folders", () => {
+describe("merge helpers — fileId in-place update / no duplicates", () => {
+  it("merges by fileId: failed→ok with storage URL and retryCount", () => {
     const prior = [
       {
         folderID: "f1",
@@ -66,6 +66,7 @@ describe("merge helpers — duplicate prevention / preserve success", () => {
             fileId: "111",
             name: "fail.pdf",
             downloadStatus: "failed",
+            downloadError: "viewer_tab_missing",
             retryCount: 1,
           },
           {
@@ -82,7 +83,12 @@ describe("merge helpers — duplicate prevention / preserve success", () => {
         folderID: "f1",
         name: "Drawings",
         files: [
-          { fileId: "111", name: "fail.pdf", downloadStatus: "ok", publicUrl: "https://x.supabase.co/storage/v1/object/public/fail.pdf" },
+          {
+            fileId: "111",
+            name: "fail.pdf",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/fail.pdf",
+          },
           { fileId: "222", name: "ok.pdf", downloadStatus: "pending" },
         ],
       },
@@ -92,13 +98,231 @@ describe("merge helpers — duplicate prevention / preserve success", () => {
       next,
       ["111"],
     );
-    const byId = Object.fromEntries(
-      merged[0].files.map((f) => [f.fileId, f]),
-    );
+    const byId = Object.fromEntries(merged[0].files.map((f) => [f.fileId, f]));
+    assert.equal(merged[0].files.length, 2);
     assert.equal(byId["111"].downloadStatus, "ok");
+    assert.equal(
+      byId["111"].publicUrl,
+      "https://x.supabase.co/storage/v1/object/public/fail.pdf",
+    );
+    assert.equal(byId["111"].downloadError, undefined);
     assert.equal(byId["111"].retryCount, 2);
     assert.equal(byId["222"].downloadStatus, "ok");
     assert.match(byId["222"].publicUrl, /ok\.pdf/);
+  });
+
+  it("does not keep both failed and successful rows for the same fileId", () => {
+    const prior = [
+      {
+        folderID: "f1",
+        name: "Drawings",
+        files: [
+          {
+            fileId: "111",
+            name: "a.pdf",
+            downloadStatus: "failed",
+            downloadError: "publish_menu_not_opened",
+          },
+        ],
+      },
+      {
+        folderID: "f2",
+        name: "Other",
+        files: [
+          {
+            fileId: "111",
+            name: "a.pdf",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/a.pdf",
+          },
+        ],
+      },
+    ];
+    const next = [
+      {
+        folderID: "f1",
+        name: "Drawings",
+        files: [
+          {
+            fileId: "111",
+            name: "a.pdf",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/a2.pdf",
+          },
+        ],
+      },
+    ];
+    const merged = pgcRetry.mergeFolderFilesPreservingUntargeted(
+      prior,
+      next,
+      ["111"],
+    );
+    const all = merged.flatMap((f) => f.files);
+    const matches = all.filter((f) => f.fileId === "111");
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].downloadStatus, "ok");
+  });
+
+  it("keeps updated failure reason + retry count when retry fails again", () => {
+    const prior = [
+      {
+        folderID: "f1",
+        name: "Drawings",
+        files: [
+          {
+            fileId: "5113090",
+            name: "a.pdf",
+            downloadStatus: "failed",
+            downloadError: "viewer_tab_missing",
+            retryCount: 1,
+          },
+        ],
+      },
+    ];
+    const next = [
+      {
+        folderID: "f1",
+        name: "Drawings",
+        files: [
+          {
+            fileId: "5113090",
+            name: "a.pdf",
+            downloadStatus: "failed",
+            downloadError: "publish_menu_not_opened",
+          },
+        ],
+      },
+    ];
+    const merged = pgcRetry.mergeFolderFilesPreservingUntargeted(
+      prior,
+      next,
+      ["5113090"],
+    );
+    const f = merged[0].files[0];
+    assert.equal(f.downloadStatus, "failed");
+    assert.equal(f.downloadError, "publish_menu_not_opened");
+    assert.equal(f.retryCount, 2);
+  });
+
+  it("recalculates counts: 379 ok / 42 failed → 383 ok / 38 failed after 4 success / 1 fail", () => {
+    const okFiles = Array.from({ length: 379 }, (_, i) => ({
+      fileId: `ok-${i}`,
+      name: `ok-${i}.pdf`,
+      downloadStatus: "ok",
+      publicUrl: `https://x.supabase.co/storage/v1/object/public/ok-${i}.pdf`,
+    }));
+    const failedFiles = Array.from({ length: 42 }, (_, i) => ({
+      fileId: `fail-${i}`,
+      name: `fail-${i}.pdf`,
+      downloadStatus: "failed",
+      downloadError: "viewer_tab_missing",
+      retryCount: 0,
+    }));
+    const prior = [
+      {
+        folderID: "f1",
+        name: "All",
+        files: [...okFiles, ...failedFiles],
+      },
+    ];
+    const targeted = ["fail-0", "fail-1", "fail-2", "fail-3", "fail-4"];
+    const next = [
+      {
+        folderID: "f1",
+        name: "All",
+        files: [
+          {
+            fileId: "fail-0",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/r0.pdf",
+          },
+          {
+            fileId: "fail-1",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/r1.pdf",
+          },
+          {
+            fileId: "fail-2",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/r2.pdf",
+          },
+          {
+            fileId: "fail-3",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/r3.pdf",
+          },
+          {
+            fileId: "fail-4",
+            downloadStatus: "failed",
+            downloadError: "publish_menu_not_opened",
+          },
+        ],
+      },
+    ];
+    const before = pgcRetry.summarizeFolderDownloadCounts(prior);
+    assert.equal(before.ok, 379);
+    assert.equal(before.failed, 42);
+    assert.equal(before.total, 421);
+
+    const merged = pgcRetry.mergeFolderFilesPreservingUntargeted(
+      prior,
+      next,
+      targeted,
+    );
+    const after = pgcRetry.summarizeFolderDownloadCounts(merged);
+    assert.equal(after.ok, 383);
+    assert.equal(after.failed, 38);
+    assert.equal(after.total, 421);
+    assert.equal(merged[0].files.length, 421);
+    assert.equal(merged[0].fileCount, 421);
+    assert.equal(merged[0].filesCount, 421);
+
+    const stillFailed = merged[0].files.find((f) => f.fileId === "fail-4");
+    assert.equal(stillFailed.downloadStatus, "failed");
+    assert.equal(stillFailed.downloadError, "publish_menu_not_opened");
+    assert.equal(stillFailed.retryCount, 1);
+  });
+
+  it("preserves prior folders not present in next", () => {
+    const prior = [
+      {
+        folderID: "a",
+        name: "A",
+        files: [{ fileId: "1", downloadStatus: "ok", publicUrl: "https://x/a" }],
+      },
+      {
+        folderID: "b",
+        name: "B",
+        files: [
+          {
+            fileId: "2",
+            downloadStatus: "failed",
+            downloadError: "x",
+            retryCount: 0,
+          },
+        ],
+      },
+    ];
+    const next = [
+      {
+        folderID: "b",
+        name: "B",
+        files: [
+          {
+            fileId: "2",
+            downloadStatus: "ok",
+            publicUrl: "https://x.supabase.co/storage/v1/object/public/b.pdf",
+          },
+        ],
+      },
+    ];
+    const merged = pgcRetry.mergeFolderFilesPreservingUntargeted(prior, next, [
+      "2",
+    ]);
+    assert.equal(merged.length, 2);
+    assert.ok(merged.some((f) => f.folderID === "a"));
+    const b = merged.find((f) => f.folderID === "b");
+    assert.equal(b.files[0].downloadStatus, "ok");
   });
 
   it("merges report PDF/Excel retry without wiping successful sibling format", () => {
@@ -143,6 +367,58 @@ describe("merge helpers — duplicate prevention / preserve success", () => {
       pgcRetry.pgcReportStoragePath("drawings/p/pgc/COM", "plan-review-comments", "excel"),
       "drawings/p/pgc/COM/reports/plan-review-comments.xlsx",
     );
+  });
+});
+
+describe("filterFolderIdsForTargetedRetry", () => {
+  it("only includes folders that contain selected fileIds", () => {
+    const byFolder = new Map([
+      ["f1", [{ file: { fileId: "111" } }, { file: { fileId: "222" } }]],
+      ["f2", [{ file: { fileId: "333" } }]],
+      ["f3", [{ file: { fileId: "444" } }]],
+    ]);
+    const filtered = pgcRetry.filterFolderIdsForTargetedRetry(
+      ["f1", "f2", "f3"],
+      byFolder,
+      ["111", "444"],
+    );
+    assert.deepEqual(filtered, ["f1", "f3"]);
+  });
+
+  it("returns all folders when no targeted ids", () => {
+    assert.deepEqual(
+      pgcRetry.filterFolderIdsForTargetedRetry(["a", "b"], new Map(), []),
+      ["a", "b"],
+    );
+  });
+});
+
+describe("applyFileUpdatesByFileId / portalFilePatchFromScrapeRow", () => {
+  it("applies uploaded scrape row onto failed portal file", () => {
+    const folders = [
+      {
+        folderID: "f1",
+        name: "Drawings",
+        files: [
+          {
+            fileId: "5113096",
+            downloadStatus: "failed",
+            downloadError: "x",
+            retryCount: 0,
+          },
+        ],
+      },
+    ];
+    const update = pgcRetry.portalFilePatchFromScrapeRow({
+      portal_file_id: "5113096",
+      status: "uploaded",
+      public_url: "https://x.supabase.co/storage/v1/object/public/a.pdf",
+      file_name: "a.pdf",
+    });
+    const merged = pgcRetry.applyFileUpdatesByFileId(folders, [update]);
+    assert.equal(merged[0].files[0].downloadStatus, "ok");
+    assert.match(merged[0].files[0].publicUrl, /a\.pdf/);
+    assert.equal(merged[0].files[0].retryCount, 1);
   });
 });
 

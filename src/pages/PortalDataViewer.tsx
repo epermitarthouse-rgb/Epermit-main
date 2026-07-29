@@ -112,11 +112,10 @@ import {
 import { getExpandedReportCardLayoutClasses } from "@/lib/portalReportCardLayout";
 import {
   buildPgcRetryArtifactPayload,
-  collectPortalFailedItems,
-  countRetryableFailedItems,
   harvestStatusAfterRetry,
   mapReportArtifactStatusToRetryLiveState,
   mapScrapeFileStatusToRetryLiveState,
+  selectCurrentFailedInventory,
   summarizeRetryLiveResults,
   type PortalFailedItem,
 } from "@/lib/portalHarvestFailedItems";
@@ -1066,6 +1065,13 @@ export default function PortalDataViewer() {
     () => new Set(),
   );
   const [retrySummaryLine, setRetrySummaryLine] = useState<string | null>(null);
+  /** Project-wide SFR rows for failed-inventory dedupe (card + modal share this). */
+  const [pgcFailedInventorySfr, setPgcFailedInventorySfr] = useState<
+    ScrapeFileResult[]
+  >([]);
+  /** When set, harvest totals stay on portal_data (not job-only 4/5 stats). */
+  const retryScrapeJobIdRef = useRef<string | null>(null);
+  const pendingRetryPortalRefreshRef = useRef(false);
   const fetchIdRef = useRef(0);
 
   useEffect(() => {
@@ -1565,60 +1571,110 @@ export default function PortalDataViewer() {
   const pgcRetryFolders = portalData?.tabs?.files?.folders;
   const pgcRetryReportEntries = portalData?.tabs?.reports?.reportEntries ?? [];
 
-  const pgcFailedItems = useMemo(() => {
-    if (!isPgcEplanPortal) return [] as PortalFailedItem[];
-    return collectPortalFailedItems({
-      scrapeFileResults: liveFileResults.rows,
+  const refetchPgcFailedInventorySfr = useCallback(async () => {
+    if (!isPgcEplanPortal || !resolvedProjectId) {
+      setPgcFailedInventorySfr([]);
+      return [] as ScrapeFileResult[];
+    }
+    try {
+      // Include uploaded/skipped so newer success supersedes historical failures.
+      const { data } = await supabase
+        .from("scrape_file_results")
+        .select("*")
+        .eq("project_id", resolvedProjectId)
+        .in("status", ["failed", "uploaded", "skipped"])
+        .order("updated_at", { ascending: false })
+        .limit(2000);
+      const rows = (data as ScrapeFileResult[]) || [];
+      setPgcFailedInventorySfr(rows);
+      return rows;
+    } catch {
+      return [] as ScrapeFileResult[];
+    }
+  }, [isPgcEplanPortal, resolvedProjectId]);
+
+  useEffect(() => {
+    if (!isPgcEplanPortal || !resolvedProjectId) {
+      setPgcFailedInventorySfr([]);
+      return;
+    }
+    void refetchPgcFailedInventorySfr();
+    // Intentionally only when project / portal type changes — retry completion
+    // calls refetchPgcFailedInventorySfr explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPgcEplanPortal, resolvedProjectId]);
+
+  // Merge live job rows into inventory so in-flight retry status is visible.
+  const pgcInventorySfrForSelect = useMemo(() => {
+    if (!isPgcEplanPortal) return [] as ScrapeFileResult[];
+    if (liveFileResults.rows.length === 0) return pgcFailedInventorySfr;
+    const byKey = new Map<string, ScrapeFileResult>();
+    for (const row of pgcFailedInventorySfr) {
+      byKey.set(
+        `${row.scrape_job_id}|${row.portal_file_id}|${row.file_version || ""}`,
+        row,
+      );
+    }
+    for (const row of liveFileResults.rows) {
+      byKey.set(
+        `${row.scrape_job_id}|${row.portal_file_id}|${row.file_version || ""}`,
+        row,
+      );
+    }
+    return [...byKey.values()];
+  }, [isPgcEplanPortal, pgcFailedInventorySfr, liveFileResults.rows]);
+
+  /** Exact same selector for operator card counts and retry modal rows. */
+  const pgcFailedInventory = useMemo(() => {
+    if (!isPgcEplanPortal) {
+      return {
+        items: [] as PortalFailedItem[],
+        counts: { total: 0, retryable: 0, notRetryable: 0 },
+      };
+    }
+    return selectCurrentFailedInventory({
+      projectId: resolvedProjectId,
+      scrapeFileResults: pgcInventorySfrForSelect,
       folders: pgcRetryFolders,
       reportEntries: pgcRetryReportEntries,
+      portalSnapshotAt: lastCheckedAt,
     });
   }, [
     isPgcEplanPortal,
-    liveFileResults.rows,
+    resolvedProjectId,
+    pgcInventorySfrForSelect,
     pgcRetryFolders,
     pgcRetryReportEntries,
+    lastCheckedAt,
   ]);
 
-  const pgcFailedCounts = useMemo(
-    () => countRetryableFailedItems(pgcFailedItems),
-    [pgcFailedItems],
-  );
+  const pgcFailedItems = pgcFailedInventory.items;
+  const pgcFailedCounts = pgcFailedInventory.counts;
 
   const openRetryFailedDialog = useCallback(async () => {
     setRetrySummaryLine(null);
-    let items = pgcFailedItems;
-    if (isPgcEplanPortal && resolvedProjectId) {
-      try {
-        const { data } = await supabase
-          .from("scrape_file_results")
-          .select("*")
-          .eq("project_id", resolvedProjectId)
-          .eq("status", "failed")
-          .order("updated_at", { ascending: false })
-          .limit(500);
-        if (data?.length) {
-          items = collectPortalFailedItems({
-            scrapeFileResults: data as ScrapeFileResult[],
-            folders: pgcRetryFolders,
-            reportEntries: pgcRetryReportEntries,
-          });
-        }
-      } catch {
-        // Fall back to in-memory failed items from portal_data + live rows.
-      }
-    }
-    setRetryFailedItems(items);
+    // Refresh SFR inventory, then open modal on the same selector as the card.
+    const rows = await refetchPgcFailedInventorySfr();
+    const inventory = selectCurrentFailedInventory({
+      projectId: resolvedProjectId,
+      scrapeFileResults: rows.length ? rows : pgcInventorySfrForSelect,
+      folders: pgcRetryFolders,
+      reportEntries: pgcRetryReportEntries,
+      portalSnapshotAt: lastCheckedAt,
+    });
+    setRetryFailedItems(inventory.items);
     // Select-all only when the dialog is opened — never again on submit/remount.
     setRetrySelectedIds(
-      new Set(items.filter((i) => i.retryable).map((i) => i.id)),
+      new Set(inventory.items.filter((i) => i.retryable).map((i) => i.id)),
     );
     setRetryFailedOpen(true);
   }, [
-    pgcFailedItems,
-    isPgcEplanPortal,
+    refetchPgcFailedInventorySfr,
     resolvedProjectId,
+    pgcInventorySfrForSelect,
     pgcRetryFolders,
     pgcRetryReportEntries,
+    lastCheckedAt,
   ]);
 
   const handleRetrySelectedIdsChange = useCallback((next: Set<string>) => {
@@ -1665,6 +1721,8 @@ export default function PortalDataViewer() {
           permitNumber: resolvedPermitNumber,
           artifacts: payload,
         });
+        retryScrapeJobIdRef.current = result.jobId ? String(result.jobId) : null;
+        pendingRetryPortalRefreshRef.current = true;
         scrape.startScrapeSession(
           result.sessionId,
           resolvedProjectId,
@@ -1768,16 +1826,24 @@ export default function PortalDataViewer() {
 
   const wasRetryScrapingRef = useRef(false);
   useEffect(() => {
-    if (!retryFailedOpen || !isPgcEplanPortal) {
+    if (!isPgcEplanPortal) {
       wasRetryScrapingRef.current = false;
       return;
     }
     if (scrape.isScraping) {
-      wasRetryScrapingRef.current = true;
+      // Only arm completion refresh after retry scrape actually starts.
+      if (
+        pendingRetryPortalRefreshRef.current ||
+        retryScrapeJobIdRef.current
+      ) {
+        wasRetryScrapingRef.current = true;
+      }
       return;
     }
+    // Do not refresh merely because pending was set — wait until scraping was observed.
     if (!wasRetryScrapingRef.current) return;
     wasRetryScrapingRef.current = false;
+    pendingRetryPortalRefreshRef.current = false;
     const summary = summarizeRetryLiveResults(retryFailedItems);
     const filesSummary = summarizePortalFilesFromFolders(
       portalData?.tabs?.files?.folders,
@@ -1793,22 +1859,47 @@ export default function PortalDataViewer() {
         filesSummary.downloaded > 0 ||
         reportComplete > 0,
     });
-    setRetrySummaryLine(
-      `${summary.succeeded} succeeded, ${summary.stillFailed} still failed` +
-        (summary.humanActionRequired
-          ? `, ${summary.humanActionRequired} need human action`
-          : "") +
-        ` · harvest ${harvestNext}`,
-    );
-    void silentRefetch();
+    if (retryFailedOpen) {
+      setRetrySummaryLine(
+        `${summary.succeeded} succeeded, ${summary.stillFailed} still failed` +
+          (summary.humanActionRequired
+            ? `, ${summary.humanActionRequired} need human action`
+            : "") +
+          ` · harvest ${harvestNext}`,
+      );
+    }
+    // Reload portal_data + SFR inventory; modal syncs from shared selector below.
+    void silentRefetch()
+      .then(() => refetchPgcFailedInventorySfr())
+      .finally(() => {
+        retryScrapeJobIdRef.current = null;
+      });
   }, [
-    retryFailedOpen,
     isPgcEplanPortal,
     scrape.isScraping,
+    retryFailedOpen,
     retryFailedItems,
     portalData?.tabs?.files?.folders,
     portalData?.tabs?.reports,
     silentRefetch,
+    refetchPgcFailedInventorySfr,
+  ]);
+
+  // Keep open modal on the same current-failed inventory as the operator card.
+  useEffect(() => {
+    if (!retryFailedOpen || scrape.isScraping || retryFailedBusy) return;
+    setRetryFailedItems(pgcFailedItems);
+    setRetrySelectedIds((prev) => {
+      const valid = new Set(
+        pgcFailedItems.filter((i) => i.retryable).map((i) => i.id),
+      );
+      return new Set([...prev].filter((id) => valid.has(id)));
+    });
+  }, [
+    retryFailedOpen,
+    scrape.isScraping,
+    retryFailedBusy,
+    pgcFailedItems,
   ]);
 
   const retryFailedDialog =
@@ -3466,34 +3557,41 @@ export default function PortalDataViewer() {
   const reportCaption = formatReportCompletionCaption(reportCompletion);
   const portalFilesSummary = summarizePortalFilesFromFolders(filesTab?.folders);
   const liveFileStats = liveFileResults.stats;
-  const fileCompletion = liveFileResults.active
-    ? summarizeFileCompletion({
-        downloaded: liveFileStats.uploaded,
-        failed: liveFileStats.failed,
-        pending: liveFileStats.inProgress,
-        expectedTotal:
-          liveFileStats.total > 0
-            ? liveFileStats.total
-            : liveFileStats.uploaded +
-                liveFileStats.failed +
-                liveFileStats.inProgress >
-              0
-              ? liveFileStats.uploaded +
-                liveFileStats.failed +
-                liveFileStats.inProgress
+  const isTargetedRetryLive =
+    Boolean(retryScrapeJobIdRef.current) &&
+    Boolean(scrape.activeJobId) &&
+    String(retryScrapeJobIdRef.current) === String(scrape.activeJobId);
+  // Targeted retry jobs only touch a few files — keep overall harvest totals
+  // on portal_data so the UI does not collapse to e.g. 4/5 mid-retry.
+  const fileCompletion =
+    liveFileResults.active && !isTargetedRetryLive
+      ? summarizeFileCompletion({
+          downloaded: liveFileStats.uploaded,
+          failed: liveFileStats.failed,
+          pending: liveFileStats.inProgress,
+          expectedTotal:
+            liveFileStats.total > 0
+              ? liveFileStats.total
+              : liveFileStats.uploaded +
+                  liveFileStats.failed +
+                  liveFileStats.inProgress >
+                0
+                ? liveFileStats.uploaded +
+                  liveFileStats.failed +
+                  liveFileStats.inProgress
+                : null,
+        })
+      : summarizeFileCompletion({
+          downloaded: portalFilesSummary.downloaded,
+          failed: portalFilesSummary.failed,
+          pending: portalFilesSummary.pending,
+          skipped: portalFilesSummary.skipped,
+          // Discovery rows in portal_data are a reliable expected total for PGC/ProjectDox.
+          expectedTotal:
+            portalFilesSummary.discovered > 0
+              ? portalFilesSummary.discovered
               : null,
-      })
-    : summarizeFileCompletion({
-        downloaded: portalFilesSummary.downloaded,
-        failed: portalFilesSummary.failed,
-        pending: portalFilesSummary.pending,
-        skipped: portalFilesSummary.skipped,
-        // Discovery rows in portal_data are a reliable expected total for PGC/ProjectDox.
-        expectedTotal:
-          portalFilesSummary.discovered > 0
-            ? portalFilesSummary.discovered
-            : null,
-      });
+        });
   const fileCaption = formatFileCompletionCaption(fileCompletion);
 
   const selectedPermitLabel =

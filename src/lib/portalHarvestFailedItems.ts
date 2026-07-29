@@ -1,7 +1,9 @@
 /**
  * Collect and group retryable failed Portal Harvest artifacts (PGC-focused).
- * Sources: scrape_file_results (failed) + report PDF/Excel artifact statuses.
- * Pending items are intentionally excluded — full harvest remains a separate action.
+ *
+ * Historical scrape_file_results attempts are retained for audit/history, but the
+ * UI and retry action expose **one current record per stable artifact identity**.
+ * Latest attempt status wins: success removes the artifact from the failed list.
  */
 
 import {
@@ -25,8 +27,27 @@ export type PortalFailedItemSource =
   | "portal_file"
   | "report_artifact";
 
+export type FailedAttemptStatus =
+  | "failed"
+  | "success"
+  | "skipped"
+  | "pending"
+  | "not_available";
+
+export interface FailedArtifactAttempt {
+  status: FailedAttemptStatus;
+  at: string | null;
+  reason?: string | null;
+  source: PortalFailedItemSource;
+  fileVersion?: string | null;
+  scrapeJobId?: string | null;
+}
+
 export interface PortalFailedItem {
+  /** Stable UI/selection id (= identityKey). */
   id: string;
+  /** Stable artifact identity used for dedupe across sources/jobs. */
+  identityKey: string;
   name: string;
   folder: string;
   artifactType: FailedArtifactType;
@@ -39,11 +60,14 @@ export interface PortalFailedItem {
   /** File retry identity */
   fileId?: string | null;
   fileVersion?: string | null;
+  folderId?: string | null;
   /** Report retry identity */
   reportSlug?: string | null;
   reportName?: string | null;
   format?: "pdf" | "excel";
   liveState?: FailedItemRetryLiveState;
+  /** Older attempts for optional history UI (latest is the current item). */
+  attempts?: FailedArtifactAttempt[];
 }
 
 export interface PortalFailedItemsGroup {
@@ -72,15 +96,31 @@ export interface PortalReportEntryLike {
 }
 
 export interface CollectPortalFailedItemsInput {
+  projectId?: string | null;
   scrapeFileResults?: ScrapeFileResult[] | null;
   folders?: PortalFolderLike[] | null;
   reportEntries?: PortalReportEntryLike[] | null;
+  /** projects.last_checked_at — used as portal snapshot timestamp. */
+  portalSnapshotAt?: string | null;
   /** When true (default), skip pending artifacts even if present in sources. */
   excludePending?: boolean;
 }
 
 function normStatus(s: string | null | undefined): string {
   return String(s || "").trim().toLowerCase();
+}
+
+function normalizeFileName(name: string | null | undefined): string {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function parseAttemptTs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const t = Date.parse(String(value));
+  return Number.isFinite(t) ? t : 0;
 }
 
 function isFailedStatus(status: string | null | undefined): boolean {
@@ -186,111 +226,267 @@ export function assessReportArtifactRetryability(input: {
   return { retryable: true };
 }
 
-function fileFailedItemId(fileId: string, version: string, source: string): string {
-  return `file:${source}:${fileId}:${version || ""}`;
+/**
+ * Stable identity for current-status dedupe.
+ * Prefer projectId + fileId; reports include format; fallback folder + filename.
+ */
+export function failedArtifactIdentityKey(input: {
+  projectId?: string | null;
+  artifactType: FailedArtifactType;
+  fileId?: string | null;
+  folderId?: string | null;
+  folder?: string | null;
+  name?: string | null;
+  reportSlug?: string | null;
+  reportName?: string | null;
+  format?: "pdf" | "excel" | null;
+}): string {
+  const project = String(input.projectId || "_").trim() || "_";
+  if (input.artifactType === "file") {
+    const fileId = String(input.fileId || "").trim();
+    if (fileId) return `file:${project}:${fileId}`;
+    const folderPart =
+      String(input.folderId || "").trim() ||
+      String(input.folder || "").trim().toLowerCase() ||
+      "_";
+    const namePart = normalizeFileName(input.name) || "_";
+    return `file-name:${project}:${folderPart}:${namePart}`;
+  }
+  const slug =
+    String(input.reportSlug || "").trim() ||
+    String(input.reportName || "").trim() ||
+    "_";
+  const format = input.format || input.artifactType;
+  return `report:${project}:${slug}:${format}`;
 }
 
-function reportFailedItemId(
-  slugOrName: string,
-  format: "pdf" | "excel",
-): string {
-  return `report:${slugOrName}:${format}`;
+function attemptStatusFromScrapeRow(status: string | null | undefined): FailedAttemptStatus {
+  const st = normStatus(status);
+  if (st === "uploaded" || st === "success" || st === "ok") return "success";
+  if (st === "failed" || st.startsWith("failed_")) return "failed";
+  if (st === "skipped" || st.startsWith("skipped")) return "skipped";
+  if (
+    st === "not_available" ||
+    st === "unavailable" ||
+    st === "not available"
+  ) {
+    return "not_available";
+  }
+  return "pending";
 }
 
-function collectFromScrapeFileResults(
-  rows: ScrapeFileResult[],
-): PortalFailedItem[] {
-  const out: PortalFailedItem[] = [];
-  for (const row of rows) {
-    if (normStatus(row.status) !== "failed") continue;
-    const fileId = String(row.portal_file_id || "").trim();
-    const version = String(row.file_version || "").trim();
-    const folder = [row.parent_folder, row.folder_name]
-      .map((x) => String(x || "").trim())
-      .filter(Boolean)
-      .join(" / ") || "Files";
-    const failureReason =
-      String(row.failure_message || row.failure_code || "Download failed").trim() ||
-      "Download failed";
-    const assess = assessFileRetryability({
-      fileId,
-      name: row.file_name,
-      failureReason,
+function attemptStatusFromPortalFile(
+  file: PortalFileLike,
+): FailedAttemptStatus {
+  const classified = classifyPortalFileArtifactStatus(file);
+  if (classified === "success") return "success";
+  if (classified === "failed") return "failed";
+  if (classified === "skipped" || classified === "not_available") {
+    return classified === "not_available" ? "not_available" : "skipped";
+  }
+  return "pending";
+}
+
+function sortAttemptsNewestFirst(
+  attempts: FailedArtifactAttempt[],
+): FailedArtifactAttempt[] {
+  return [...attempts].sort((a, b) => {
+    const dt = parseAttemptTs(b.at) - parseAttemptTs(a.at);
+    if (dt !== 0) return dt;
+    // Prefer scrape_file_results over portal snapshot on exact ties.
+    if (a.source !== b.source) {
+      if (a.source === "scrape_file_results") return -1;
+      if (b.source === "scrape_file_results") return 1;
+    }
+    return 0;
+  });
+}
+
+type MutableArtifact = {
+  identityKey: string;
+  artifactType: FailedArtifactType;
+  name: string;
+  folder: string;
+  folderId?: string | null;
+  fileId?: string | null;
+  fileVersion?: string | null;
+  reportSlug?: string | null;
+  reportName?: string | null;
+  format?: "pdf" | "excel";
+  exportUnavailable?: boolean | null;
+  attempts: FailedArtifactAttempt[];
+  portalRetryCount?: number;
+};
+
+function upsertArtifact(
+  map: Map<string, MutableArtifact>,
+  draft: Omit<MutableArtifact, "attempts"> & {
+    attempt: FailedArtifactAttempt;
+  },
+): void {
+  const existing = map.get(draft.identityKey);
+  if (!existing) {
+    map.set(draft.identityKey, {
+      identityKey: draft.identityKey,
+      artifactType: draft.artifactType,
+      name: draft.name,
+      folder: draft.folder,
+      folderId: draft.folderId,
+      fileId: draft.fileId,
+      fileVersion: draft.fileVersion,
+      reportSlug: draft.reportSlug,
+      reportName: draft.reportName,
+      format: draft.format,
+      exportUnavailable: draft.exportUnavailable,
+      portalRetryCount: draft.portalRetryCount,
+      attempts: [draft.attempt],
     });
-    const metaRetry =
-      row && typeof (row as { metadata?: { retryCount?: number } }).metadata ===
-        "object"
-        ? Number(
-            (row as { metadata?: { retryCount?: number } }).metadata?.retryCount,
-          ) || 0
-        : 0;
-    out.push({
-      id: fileFailedItemId(fileId || row.id, version, "sfr"),
-      name: String(row.file_name || fileId || "File").trim() || "File",
-      folder,
+    return;
+  }
+  existing.attempts.push(draft.attempt);
+  if (draft.name) existing.name = draft.name;
+  if (draft.folder) existing.folder = draft.folder;
+  if (draft.folderId) existing.folderId = draft.folderId;
+  if (draft.fileId) existing.fileId = draft.fileId;
+  if (draft.fileVersion) existing.fileVersion = draft.fileVersion;
+  if (draft.reportSlug) existing.reportSlug = draft.reportSlug;
+  if (draft.reportName) existing.reportName = draft.reportName;
+  if (draft.format) existing.format = draft.format;
+  if (draft.portalRetryCount != null) {
+    existing.portalRetryCount = Math.max(
+      Number(existing.portalRetryCount) || 0,
+      Number(draft.portalRetryCount) || 0,
+    );
+  }
+  if (draft.exportUnavailable != null) {
+    existing.exportUnavailable = draft.exportUnavailable;
+  }
+}
+
+function collectAttemptsFromScrapeFileResults(
+  map: Map<string, MutableArtifact>,
+  rows: ScrapeFileResult[],
+  projectId: string | null | undefined,
+): void {
+  for (const row of rows) {
+    const fileId = String(row.portal_file_id || "").trim();
+    const name = String(row.file_name || fileId || "File").trim() || "File";
+    const folder =
+      [row.parent_folder, row.folder_name]
+        .map((x) => String(x || "").trim())
+        .filter(Boolean)
+        .join(" / ") || "Files";
+    const identityKey = failedArtifactIdentityKey({
+      projectId: projectId || row.project_id,
       artifactType: "file",
-      failureReason,
-      lastAttempt: row.updated_at || row.created_at || null,
-      retryCount: metaRetry,
-      retryable: assess.retryable,
-      notRetryableReason: assess.notRetryableReason,
-      source: "scrape_file_results",
+      fileId,
+      folder,
+      name,
+    });
+    const status = attemptStatusFromScrapeRow(row.status);
+    // History keeps all terminal-ish attempts; pending noise is omitted.
+    if (status === "pending") continue;
+    upsertArtifact(map, {
+      identityKey,
+      artifactType: "file",
+      name,
+      folder,
       fileId: fileId || null,
-      fileVersion: version || null,
+      fileVersion: String(row.file_version || "").trim() || null,
+      attempt: {
+        status,
+        at: row.updated_at || row.created_at || null,
+        reason:
+          status === "failed"
+            ? String(
+                row.failure_message || row.failure_code || "Download failed",
+              ).trim() || "Download failed"
+            : null,
+        source: "scrape_file_results",
+        fileVersion: String(row.file_version || "").trim() || null,
+        scrapeJobId: row.scrape_job_id || null,
+      },
     });
   }
-  return out;
 }
 
-function collectFromPortalFolders(
+function collectAttemptsFromPortalFolders(
+  map: Map<string, MutableArtifact>,
   folders: PortalFolderLike[],
-  seenFileKeys: Set<string>,
-): PortalFailedItem[] {
-  const out: PortalFailedItem[] = [];
+  projectId: string | null | undefined,
+  portalSnapshotAt: string | null | undefined,
+): void {
   for (const folder of folders) {
-    const folderLabel = [folder.parentFolder, folder.folderName || folder.name]
-      .map((x) => String(x || "").trim())
-      .filter(Boolean)
-      .join(" / ") || "Files";
+    const folderId = String(
+      (folder as { folderID?: string | null; folderId?: string | null })
+        .folderID ||
+        (folder as { folderId?: string | null }).folderId ||
+        "",
+    ).trim();
+    const folderLabel =
+      [folder.parentFolder, folder.folderName || folder.name]
+        .map((x) => String(x || "").trim())
+        .filter(Boolean)
+        .join(" / ") || "Files";
     for (const file of folder.files || []) {
-      const status = classifyPortalFileArtifactStatus(file as PortalFileLike);
-      if (status !== "failed") continue;
+      const status = attemptStatusFromPortalFile(file as PortalFileLike);
+      // Portal snapshot contributes current success/failed/skipped; skip pure pending.
+      if (status === "pending") continue;
       const fileId = String(file.fileId || "").trim();
-      const version = "";
-      const key = `${fileId}|${version}`;
-      if (fileId && seenFileKeys.has(key)) continue;
-      if (fileId) seenFileKeys.add(key);
-      const failureReason =
-        String(file.downloadError || file.downloadStatus || "Download failed").trim() ||
-        "Download failed";
-      const assess = assessFileRetryability({
-        fileId,
-        name: file.name,
-        failureReason,
-      });
-      out.push({
-        id: fileFailedItemId(fileId || String(file.name || "file"), version, "portal"),
-        name: String(file.name || fileId || "File").trim() || "File",
-        folder: folderLabel,
+      const name = String(file.name || fileId || "File").trim() || "File";
+      const identityKey = failedArtifactIdentityKey({
+        projectId,
         artifactType: "file",
-        failureReason,
-        lastAttempt: file.uploadedDate ? String(file.uploadedDate) : null,
-        retryCount: Number((file as { retryCount?: number }).retryCount) || 0,
-        retryable: assess.retryable,
-        notRetryableReason: assess.notRetryableReason,
-        source: "portal_file",
+        fileId,
+        folderId,
+        folder: folderLabel,
+        name,
+      });
+      const reason =
+        status === "failed"
+          ? String(
+              file.downloadError || file.downloadStatus || "Download failed",
+            ).trim() || "Download failed"
+          : null;
+      const uploadedDate = file.uploadedDate
+        ? String(file.uploadedDate).trim()
+        : "";
+      // Prefer last_checked_at / uploadedDate. Undated portal success still
+      // overrides undated historical failures so recovered files leave the list.
+      const attemptAt =
+        portalSnapshotAt ||
+        uploadedDate ||
+        (status === "success" ? "9999-12-31T23:59:59.000Z" : null);
+      upsertArtifact(map, {
+        identityKey,
+        artifactType: "file",
+        name,
+        folder: folderLabel,
+        folderId: folderId || null,
         fileId: fileId || null,
-        fileVersion: null,
+        fileVersion:
+          file.version != null ? String(file.version).trim() || null : null,
+        portalRetryCount:
+          Number((file as { retryCount?: number }).retryCount) || 0,
+        attempt: {
+          status,
+          at: attemptAt,
+          reason,
+          source: "portal_file",
+          fileVersion:
+            file.version != null ? String(file.version).trim() || null : null,
+        },
       });
     }
   }
-  return out;
 }
 
-function collectFromReportEntries(
+function collectAttemptsFromReportEntries(
+  map: Map<string, MutableArtifact>,
   entries: PortalReportEntryLike[],
-): PortalFailedItem[] {
-  const out: PortalFailedItem[] = [];
+  projectId: string | null | undefined,
+  portalSnapshotAt: string | null | undefined,
+): void {
   for (const entry of entries) {
     const reportName = String(entry.reportName || "").trim() || "Report";
     const slug =
@@ -302,78 +498,192 @@ function collectFromReportEntries(
         format === "pdf" ? entry.pdfExportedAt : entry.excelExportedAt;
       const url = format === "pdf" ? entry.pdfUrl : entry.excelUrl;
       const st = normStatus(status);
-
-      // Never include pending or successful artifacts.
       if (!st || st === "pending" || st === "discovered" || st === "queued") {
         continue;
       }
+      let attemptStatus: FailedAttemptStatus;
       if (isSuccessStatus(st) || (url && isSuccessStatus(st || "success"))) {
+        attemptStatus = "success";
+      } else if (isFailedStatus(st)) {
+        attemptStatus = "failed";
+      } else if (isNotAvailableStatus(st)) {
+        attemptStatus = "not_available";
+      } else {
         continue;
       }
-      // Include failed + not_available-with-error (shown as not retryable).
-      const include =
-        isFailedStatus(st) ||
-        (isNotAvailableStatus(st) && (!!error || !!entry.exportUnavailable));
-      if (!include) continue;
-
-      const assess = assessReportArtifactRetryability({
-        reportName,
+      // Keep not_available only when there is an error signal (retry dialog history).
+      if (
+        attemptStatus === "not_available" &&
+        !error &&
+        !entry.exportUnavailable
+      ) {
+        continue;
+      }
+      const identityKey = failedArtifactIdentityKey({
+        projectId,
+        artifactType: format,
         reportSlug: slug,
+        reportName,
         format,
-        status,
-        error,
-        exportUnavailable: entry.exportUnavailable,
       });
-      const retries =
-        format === "pdf"
-          ? Number(entry.pdfRetries ?? entry.retryCount) || 0
-          : Number(entry.excelRetries ?? entry.retryCount) || 0;
-      out.push({
-        id: reportFailedItemId(slug, format),
+      upsertArtifact(map, {
+        identityKey,
+        artifactType: format,
         name: reportName,
         folder: "Reports",
-        artifactType: format,
-        failureReason:
-          String(error || status || `${format.toUpperCase()} export failed`).trim() ||
-          `${format.toUpperCase()} export failed`,
-        lastAttempt: exportedAt ? String(exportedAt) : null,
-        retryCount: retries,
-        retryable: assess.retryable,
-        notRetryableReason: assess.notRetryableReason,
-        source: "report_artifact",
         reportSlug: slug,
         reportName,
         format,
+        exportUnavailable: entry.exportUnavailable,
+        portalRetryCount:
+          format === "pdf"
+            ? Number(entry.pdfRetries ?? entry.retryCount) || 0
+            : Number(entry.excelRetries ?? entry.retryCount) || 0,
+        attempt: {
+          status: attemptStatus,
+          at: exportedAt || portalSnapshotAt || null,
+          reason:
+            attemptStatus === "failed" || attemptStatus === "not_available"
+              ? String(
+                  error || status || `${format.toUpperCase()} export failed`,
+                ).trim() || `${format.toUpperCase()} export failed`
+              : null,
+          source: "report_artifact",
+        },
       });
     }
   }
-  return out;
 }
 
-/** Collect failed harvest items. Pending artifacts are never included. */
+function toPortalFailedItem(artifact: MutableArtifact): PortalFailedItem | null {
+  const attempts = sortAttemptsNewestFirst(artifact.attempts);
+  if (attempts.length === 0) return null;
+  const current = attempts[0];
+  // Only current failures (and not-available-with-error) appear in the failed inventory.
+  if (current.status === "success" || current.status === "skipped") {
+    return null;
+  }
+  if (current.status === "pending") return null;
+  if (current.status !== "failed" && current.status !== "not_available") {
+    return null;
+  }
+
+  const failureReason =
+    String(current.reason || "Download failed").trim() || "Download failed";
+  const failedAttemptCount = attempts.filter((a) => a.status === "failed").length;
+  const retryCount = Math.max(
+    Number(artifact.portalRetryCount) || 0,
+    Math.max(0, failedAttemptCount - 1),
+  );
+
+  let retryable = false;
+  let notRetryableReason: string | undefined;
+  if (artifact.artifactType === "file") {
+    const assess = assessFileRetryability({
+      fileId: artifact.fileId,
+      name: artifact.name,
+      failureReason,
+    });
+    retryable = current.status === "failed" && assess.retryable;
+    notRetryableReason = assess.notRetryableReason;
+    if (current.status === "not_available") {
+      retryable = false;
+      notRetryableReason =
+        notRetryableReason || "Artifact marked Not available — not a retry target";
+    }
+  } else {
+    const assess = assessReportArtifactRetryability({
+      reportName: artifact.reportName,
+      reportSlug: artifact.reportSlug,
+      format: artifact.format || artifact.artifactType,
+      status: current.status,
+      error: failureReason,
+      exportUnavailable: artifact.exportUnavailable,
+    });
+    retryable = current.status === "failed" && assess.retryable;
+    notRetryableReason = assess.notRetryableReason;
+  }
+
+  // Prefer latest attempt's version for retry targeting.
+  const latestVersion =
+    current.fileVersion ||
+    attempts.find((a) => a.fileVersion)?.fileVersion ||
+    artifact.fileVersion ||
+    null;
+
+  return {
+    id: artifact.identityKey,
+    identityKey: artifact.identityKey,
+    name: artifact.name,
+    folder: artifact.folder,
+    artifactType: artifact.artifactType,
+    failureReason,
+    lastAttempt: current.at,
+    retryCount,
+    retryable,
+    notRetryableReason,
+    source: current.source,
+    fileId: artifact.fileId || null,
+    fileVersion: latestVersion,
+    folderId: artifact.folderId || null,
+    reportSlug: artifact.reportSlug || null,
+    reportName: artifact.reportName || null,
+    format: artifact.format,
+    attempts,
+  };
+}
+
+/**
+ * Collect current failed harvest items — one row per stable artifact identity.
+ * Historical attempts remain on `item.attempts` for optional UI history.
+ */
 export function collectPortalFailedItems(
   input: CollectPortalFailedItemsInput,
 ): PortalFailedItem[] {
-  const items: PortalFailedItem[] = [];
-  const sfr = input.scrapeFileResults || [];
-  const fromSfr = collectFromScrapeFileResults(sfr);
-  items.push(...fromSfr);
-
-  const seenFileKeys = new Set(
-    fromSfr
-      .map((i) => `${String(i.fileId || "").trim()}|${String(i.fileVersion || "").trim()}`)
-      .filter((k) => !k.startsWith("|")),
+  const map = new Map<string, MutableArtifact>();
+  const projectId = input.projectId || null;
+  collectAttemptsFromScrapeFileResults(
+    map,
+    input.scrapeFileResults || [],
+    projectId,
   );
-  items.push(...collectFromPortalFolders(input.folders || [], seenFileKeys));
-  items.push(...collectFromReportEntries(input.reportEntries || []));
+  collectAttemptsFromPortalFolders(
+    map,
+    input.folders || [],
+    projectId,
+    input.portalSnapshotAt,
+  );
+  collectAttemptsFromReportEntries(
+    map,
+    input.reportEntries || [],
+    projectId,
+    input.portalSnapshotAt,
+  );
 
-  // Defensive: never return pending-classified portal files.
-  return items.filter((item) => {
-    if (item.artifactType === "file" && item.source === "portal_file") {
-      return true;
-    }
-    return true;
+  const out: PortalFailedItem[] = [];
+  for (const artifact of map.values()) {
+    const item = toPortalFailedItem(artifact);
+    if (item) out.push(item);
+  }
+  return out.sort((a, b) => {
+    const folderCmp = a.folder.localeCompare(b.folder);
+    if (folderCmp !== 0) return folderCmp;
+    return a.name.localeCompare(b.name);
   });
+}
+
+/**
+ * Shared selector for operator card + retry modal counts.
+ * Always run card and modal through this (or collectPortalFailedItems + this).
+ */
+export function selectCurrentFailedInventory(
+  input: CollectPortalFailedItemsInput,
+): {
+  items: PortalFailedItem[];
+  counts: { total: number; retryable: number; notRetryable: number };
+} {
+  const items = collectPortalFailedItems(input);
+  return { items, counts: countRetryableFailedItems(items) };
 }
 
 export function groupFailedItemsByFolderAndType(

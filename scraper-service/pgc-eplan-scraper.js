@@ -14293,9 +14293,34 @@ async function harvestProjectFilesAndSampleDownloads(
     if (devControls?.maxFolders > 0) {
       folderIdsToProcess = folderIdsToProcess.slice(0, devControls.maxFolders);
     }
+    // Targeted retry: only activate/traverse folders that contain selected fileIds.
+    const explicitRetryIds = Array.isArray(devControls?.explicitFileIds)
+      ? devControls.explicitFileIds.map(String)
+      : [];
+    if (devControls?.retrySelectedOnly && explicitRetryIds.length > 0) {
+      const beforeFolderCount = folderIdsToProcess.length;
+      try {
+        const pgcRetryLib = require("./lib/pgc-retry-artifacts.js");
+        folderIdsToProcess = pgcRetryLib.filterFolderIdsForTargetedRetry(
+          folderIdsToProcess,
+          byFolder,
+          explicitRetryIds,
+        );
+      } catch (_) {
+        folderIdsToProcess = folderIdsToProcess.filter((folderID) => {
+          const rows = byFolder.get(folderID) || [];
+          return rows.some((r) =>
+            explicitRetryIds.includes(String(r.file?.fileId || "")),
+          );
+        });
+      }
+      console.log(
+        `[PGC] Targeted retry folder filter | selectedFiles=${explicitRetryIds.length} folders=${folderIdsToProcess.length}/${beforeFolderCount}`,
+      );
+    }
     if (devControls) {
       console.log(
-        `[PGC] Dev harvest controls | folders=${folderIdsToProcess.length} maxFilesPerFolder=${devControls.maxFilesPerFolder ?? "all"} explicitFileIds=${devControls.explicitFileIds?.length ?? 0}`,
+        `[PGC] Dev harvest controls | folders=${folderIdsToProcess.length} maxFilesPerFolder=${devControls.maxFilesPerFolder ?? "all"} explicitFileIds=${devControls.explicitFileIds?.length ?? 0} retrySelectedOnly=${!!devControls.retrySelectedOnly}`,
       );
     }
 

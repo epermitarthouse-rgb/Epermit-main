@@ -4434,6 +4434,7 @@ function mapPgcPortalFileEntry(f, fol) {
         ? String(f.downloadStatus || "ok")
         : String(f.downloadStatus || "pending");
 
+  const retryCount = Number(f.retryCount);
   return {
     name: f.name || "file",
     fileId: f.fileId,
@@ -4450,6 +4451,7 @@ function mapPgcPortalFileEntry(f, fol) {
     version: f.version ?? null,
     hasMarkups: f.hasMarkups ?? false,
     downloadStatus,
+    ...(Number.isFinite(retryCount) && retryCount > 0 ? { retryCount } : {}),
     ...(failed &&
       f.downloadError && {
         downloadError: scrapeFileResults.sanitizeFailureMessage(f.downloadError),
@@ -6038,17 +6040,52 @@ async function scrapePgcAll(
             .maybeSingle();
           const priorTabs = existingRow?.portal_data?.tabs || {};
           const cur = session.data[project.id];
-          if (cur?.tabs?.files?.folders && priorTabs.files?.folders) {
-            const targetedIds = pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(
-              retryArtifacts,
-            );
-            cur.tabs.files.folders =
+          if (!cur.tabs || typeof cur.tabs !== "object") cur.tabs = {};
+          const targetedIds =
+            pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(retryArtifacts);
+
+          // Always reconcile files by fileId against prior portal_data — even when
+          // the harvest was marked non-authoritative and tabs.files was omitted.
+          let nextFolders = cur?.tabs?.files?.folders;
+          if (
+            (!Array.isArray(nextFolders) || nextFolders.length === 0) &&
+            Array.isArray(pipelineResult.filesOut?.folders)
+          ) {
+            nextFolders = pipelineResult.filesOut.folders.map((fol) => ({
+              folderID: fol.folderID ?? null,
+              folderName: fol.folderName || null,
+              parentFolder: fol.parentFolder || null,
+              name: fol.folderName || `Folder ${fol.folderID}`,
+              filesCount: fol.filesCount ?? (fol.files?.length ?? 0),
+              fileCount: fol.filesCount || (fol.files?.length ?? 0),
+              files: (fol.files || []).map((f) => mapPgcPortalFileEntry(f, fol)),
+            }));
+          }
+          if (
+            Array.isArray(priorTabs.files?.folders) &&
+            priorTabs.files.folders.length > 0 &&
+            Array.isArray(nextFolders)
+          ) {
+            const mergedFolders =
               pgcRetryArtifacts.mergeFolderFilesPreservingUntargeted(
                 priorTabs.files.folders,
-                cur.tabs.files.folders,
+                nextFolders,
                 targetedIds,
               );
+            const counts =
+              pgcRetryArtifacts.summarizeFolderDownloadCounts(mergedFolders);
+            cur.tabs.files = {
+              ...(priorTabs.files || {}),
+              ...(cur.tabs.files || {}),
+              folders: mergedFolders,
+              keyValues: priorTabs.files?.keyValues || [],
+              tables: priorTabs.files?.tables || [],
+            };
+            console.log(
+              `[PGC] Retry files merge by fileId | targeted=${targetedIds.length} totals=${counts.ok}ok/${counts.failed}failed/${counts.total}total`,
+            );
           }
+
           if (cur?.tabs?.reports && priorTabs.reports?.reportEntries) {
             const mergedEntries =
               pgcRetryArtifacts.mergeReportEntriesPreservingSuccess(
@@ -6124,6 +6161,37 @@ async function scrapePgcAll(
     console.error(`    ❌ PGC Supabase sync failed — session status set to "error"`);
     return { withWarnings: false, syncOk: false };
   }
+
+  // Belt-and-suspenders: apply this retry job's terminal SFR rows onto portal_data
+  // by stable fileId so successful retries always replace the original failed row.
+  if (
+    pgcRetrySelected &&
+    retryArtifacts &&
+    supabaseProjectId &&
+    session._scrapeJobId &&
+    typeof hashPortalData === "function"
+  ) {
+    const targetedIds =
+      pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(retryArtifacts);
+    if (targetedIds.length > 0) {
+      const targetedReconcile =
+        await scrapeFileResults.reconcileTargetedFileResultsIntoPortalData(
+          supabase,
+          {
+            projectId: supabaseProjectId,
+            scrapeJobId: session._scrapeJobId,
+            targetedFileIds: targetedIds,
+            hashPortalData,
+          },
+        );
+      if (!targetedReconcile.ok && !targetedReconcile.skipped) {
+        console.warn(
+          `[PGC] Targeted file reconcile skipped: ${targetedReconcile.reason || "unknown"}`,
+        );
+      }
+    }
+  }
+
   const withWarnings = !!session._pgcScrapeWarnings;
   session.status = withWarnings ? "partial_success" : "done";
   mirrorSessionProgress(
