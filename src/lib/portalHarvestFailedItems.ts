@@ -106,6 +106,16 @@ export interface CollectPortalFailedItemsInput {
   excludePending?: boolean;
 }
 
+/** Coerce unknown portal/SFR payloads to a dense array (skip null/undefined holes). */
+function asArray<T>(value: unknown): T[] {
+  if (!Array.isArray(value)) return [];
+  const out: T[] = [];
+  for (const item of value) {
+    if (item != null) out.push(item as T);
+  }
+  return out;
+}
+
 function normStatus(s: string | null | undefined): string {
   return String(s || "").trim().toLowerCase();
 }
@@ -368,7 +378,7 @@ function collectAttemptsFromScrapeFileResults(
   rows: ScrapeFileResult[],
   projectId: string | null | undefined,
 ): void {
-  for (const row of rows) {
+  for (const row of asArray<ScrapeFileResult>(rows)) {
     const fileId = String(row.portal_file_id || "").trim();
     const name = String(row.file_name || fileId || "File").trim() || "File";
     const folder =
@@ -416,7 +426,7 @@ function collectAttemptsFromPortalFolders(
   projectId: string | null | undefined,
   portalSnapshotAt: string | null | undefined,
 ): void {
-  for (const folder of folders) {
+  for (const folder of asArray<PortalFolderLike>(folders)) {
     const folderId = String(
       (folder as { folderID?: string | null; folderId?: string | null })
         .folderID ||
@@ -428,7 +438,7 @@ function collectAttemptsFromPortalFolders(
         .map((x) => String(x || "").trim())
         .filter(Boolean)
         .join(" / ") || "Files";
-    for (const file of folder.files || []) {
+    for (const file of asArray<PortalFileLike>(folder.files)) {
       const status = attemptStatusFromPortalFile(file as PortalFileLike);
       // Portal snapshot contributes current success/failed/skipped; skip pure pending.
       if (status === "pending") continue;
@@ -487,7 +497,7 @@ function collectAttemptsFromReportEntries(
   projectId: string | null | undefined,
   portalSnapshotAt: string | null | undefined,
 ): void {
-  for (const entry of entries) {
+  for (const entry of asArray<PortalReportEntryLike>(entries)) {
     const reportName = String(entry.reportName || "").trim() || "Report";
     const slug =
       String(entry.fileSlug || entry.sourceReportId || "").trim() || reportName;
@@ -642,20 +652,21 @@ export function collectPortalFailedItems(
 ): PortalFailedItem[] {
   const map = new Map<string, MutableArtifact>();
   const projectId = input.projectId || null;
+  // Truthy non-arrays (e.g. `{}` from bad merges) must not reach `for…of`.
   collectAttemptsFromScrapeFileResults(
     map,
-    input.scrapeFileResults || [],
+    asArray<ScrapeFileResult>(input.scrapeFileResults),
     projectId,
   );
   collectAttemptsFromPortalFolders(
     map,
-    input.folders || [],
+    asArray<PortalFolderLike>(input.folders),
     projectId,
     input.portalSnapshotAt,
   );
   collectAttemptsFromReportEntries(
     map,
-    input.reportEntries || [],
+    asArray<PortalReportEntryLike>(input.reportEntries),
     projectId,
     input.portalSnapshotAt,
   );
@@ -690,7 +701,7 @@ export function groupFailedItemsByFolderAndType(
   items: PortalFailedItem[],
 ): PortalFailedItemsGroup[] {
   const map = new Map<string, PortalFailedItemsGroup>();
-  for (const item of items) {
+  for (const item of asArray<PortalFailedItem>(items)) {
     const key = `${item.folder}::${item.artifactType}`;
     let group = map.get(key);
     if (!group) {
@@ -711,13 +722,14 @@ export function countRetryableFailedItems(items: PortalFailedItem[]): {
   retryable: number;
   notRetryable: number;
 } {
+  const list = asArray<PortalFailedItem>(items);
   let retryable = 0;
   let notRetryable = 0;
-  for (const item of items) {
+  for (const item of list) {
     if (item.retryable) retryable += 1;
     else notRetryable += 1;
   }
-  return { total: items.length, retryable, notRetryable };
+  return { total: list.length, retryable, notRetryable };
 }
 
 export interface PgcRetryArtifactPayload {

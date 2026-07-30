@@ -278,6 +278,60 @@ describe("collectPortalFailedItems — latest-per-identity", () => {
     assert.equal(card.items.length, 39);
   });
 
+  it("does not throw on non-array folders, null report entries, or sparse SFR rows", () => {
+    // Regression: blank Portal Harvest crash — useMemo called selectCurrentFailedInventory
+    // with malformed portal payloads (truthy non-array folders / null holes).
+    assert.doesNotThrow(() => {
+      selectCurrentFailedInventory({
+        projectId: "proj-1",
+        folders: { length: 1 } as unknown as CollectPortalFailedItemsInput["folders"],
+        scrapeFileResults: null,
+        reportEntries: null,
+      });
+    });
+    const withNullHoles = selectCurrentFailedInventory({
+      projectId: "proj-1",
+      folders: [
+        null,
+        {
+          name: "Drawings",
+          files: [
+            null,
+            {
+              fileId: "5113090",
+              name: "A-122A.pdf",
+              downloadStatus: "failed",
+              downloadError: "publish_menu_not_opened",
+            },
+          ],
+        },
+      ] as unknown as CollectPortalFailedItemsInput["folders"],
+      scrapeFileResults: [
+        null,
+        sfr({
+          portal_file_id: "5113090",
+          status: "failed",
+          failure_message: "publish_menu_not_opened",
+          updated_at: "2026-07-28T12:00:00Z",
+        }),
+      ] as unknown as ScrapeFileResult[],
+      reportEntries: [
+        null,
+        { reportName: "Plan Review", pdfStatus: "failed", pdfError: "export failed" },
+      ] as unknown as CollectPortalFailedItemsInput["reportEntries"],
+    });
+    assert.ok(withNullHoles.counts.total >= 1);
+    assert.equal(
+      groupFailedItemsByFolderAndType(null as unknown as PortalFailedItem[]).length,
+      0,
+    );
+    assert.deepEqual(countRetryableFailedItems(undefined as unknown as PortalFailedItem[]), {
+      total: 0,
+      retryable: 0,
+      notRetryable: 0,
+    });
+  });
+
   it("outside and modal counts always match via selectCurrentFailedInventory", () => {
     const input: CollectPortalFailedItemsInput = {
       projectId: "proj-1",

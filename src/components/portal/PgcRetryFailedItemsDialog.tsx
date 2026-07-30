@@ -65,13 +65,14 @@ export function PgcRetryFailedItemsDialog(props: {
   const {
     open,
     onOpenChange,
-    items,
+    items: itemsProp,
     selectedIds,
     onSelectedIdsChange,
     busy,
     summaryLine,
     onRetrySelected,
   } = props;
+  const items = Array.isArray(itemsProp) ? itemsProp : [];
   const groups = useMemo(() => groupFailedItemsByFolderAndType(items), [items]);
   const counts = useMemo(() => countRetryableFailedItems(items), [items]);
   const retryableIds = useMemo(
@@ -118,8 +119,11 @@ export function PgcRetryFailedItemsDialog(props: {
   const selectedItems = items.filter((i) => selectedIds.has(i.id) && i.retryable);
 
   const handleRetryClick = () => {
+    // Block double submit while start/scrape is pending.
+    if (busy) return;
     // Snapshot at click time so later item/live-state updates cannot expand it.
     const snapshot = items.filter((i) => selectedIds.has(i.id) && i.retryable);
+    if (snapshot.length === 0) return;
     onRetrySelected(snapshot);
   };
 

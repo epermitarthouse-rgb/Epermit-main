@@ -120,6 +120,11 @@ import {
   type PortalFailedItem,
 } from "@/lib/portalHarvestFailedItems";
 import { startPgcFailedArtifactsRetry } from "@/lib/pgcRetryFailedApi";
+import {
+  canSubmitPgcRetryStart,
+  createPgcRetryStartUiState,
+  reducePgcRetryStartUi,
+} from "@/lib/pgcRetryFailedStartUx";
 import { PgcRetryFailedItemsDialog } from "@/components/portal/PgcRetryFailedItemsDialog";
 import { toast } from "sonner";
 
@@ -1065,6 +1070,7 @@ export default function PortalDataViewer() {
     () => new Set(),
   );
   const [retrySummaryLine, setRetrySummaryLine] = useState<string | null>(null);
+  const [retryStartError, setRetryStartError] = useState<string | null>(null);
   /** Project-wide SFR rows for failed-inventory dedupe (card + modal share this). */
   const [pgcFailedInventorySfr, setPgcFailedInventorySfr] = useState<
     ScrapeFileResult[]
@@ -1072,6 +1078,8 @@ export default function PortalDataViewer() {
   /** When set, harvest totals stay on portal_data (not job-only 4/5 stats). */
   const retryScrapeJobIdRef = useRef<string | null>(null);
   const pendingRetryPortalRefreshRef = useRef(false);
+  /** Sync guard — setState alone cannot block double-clicks in the same tick. */
+  const retryStartInFlightRef = useRef(false);
   const fetchIdRef = useRef(0);
 
   useEffect(() => {
@@ -1568,8 +1576,14 @@ export default function PortalDataViewer() {
    * stays identical across queue / loading / empty / Accela / ProjectDox paths.
    */
   const isPgcEplanPortal = portalData?.portalSubtype === "pgc-eplan";
-  const pgcRetryFolders = portalData?.tabs?.files?.folders;
-  const pgcRetryReportEntries = portalData?.tabs?.reports?.reportEntries ?? [];
+  // Guard non-array / sparse portal payloads — selectCurrentFailedInventory also
+  // coerces, but keep call sites defensive during initial load and post-modal close.
+  const rawRetryFolders = portalData?.tabs?.files?.folders;
+  const pgcRetryFolders = Array.isArray(rawRetryFolders) ? rawRetryFolders : [];
+  const rawRetryReportEntries = portalData?.tabs?.reports?.reportEntries;
+  const pgcRetryReportEntries = Array.isArray(rawRetryReportEntries)
+    ? rawRetryReportEntries
+    : [];
 
   const refetchPgcFailedInventorySfr = useCallback(async () => {
     if (!isPgcEplanPortal || !resolvedProjectId) {
@@ -1607,15 +1621,21 @@ export default function PortalDataViewer() {
   // Merge live job rows into inventory so in-flight retry status is visible.
   const pgcInventorySfrForSelect = useMemo(() => {
     if (!isPgcEplanPortal) return [] as ScrapeFileResult[];
-    if (liveFileResults.rows.length === 0) return pgcFailedInventorySfr;
+    const inventoryRows = Array.isArray(pgcFailedInventorySfr)
+      ? pgcFailedInventorySfr.filter(Boolean)
+      : [];
+    const liveRows = Array.isArray(liveFileResults?.rows)
+      ? liveFileResults.rows.filter(Boolean)
+      : [];
+    if (liveRows.length === 0) return inventoryRows;
     const byKey = new Map<string, ScrapeFileResult>();
-    for (const row of pgcFailedInventorySfr) {
+    for (const row of inventoryRows) {
       byKey.set(
         `${row.scrape_job_id}|${row.portal_file_id}|${row.file_version || ""}`,
         row,
       );
     }
-    for (const row of liveFileResults.rows) {
+    for (const row of liveRows) {
       byKey.set(
         `${row.scrape_job_id}|${row.portal_file_id}|${row.file_version || ""}`,
         row,
@@ -1653,6 +1673,7 @@ export default function PortalDataViewer() {
 
   const openRetryFailedDialog = useCallback(async () => {
     setRetrySummaryLine(null);
+    setRetryStartError(null);
     // Refresh SFR inventory, then open modal on the same selector as the card.
     const rows = await refetchPgcFailedInventorySfr();
     const inventory = selectCurrentFailedInventory({
@@ -1684,8 +1705,24 @@ export default function PortalDataViewer() {
   const handleRetrySelectedFailed = useCallback(
     async (selected: PortalFailedItem[]) => {
       if (!isPgcEplanPortal) return;
+
+      const selectedList = Array.isArray(selected) ? selected : [];
+      const selectedIds = selectedList.map((s) => s.id);
+      // Sync ref + pure gate — blocks double submit while start is pending.
+      let ui = createPgcRetryStartUiState({
+        open: retryFailedOpen,
+        selectedIds,
+        starting: retryFailedBusy || retryStartInFlightRef.current,
+        startError: retryStartError,
+      });
+      ui = reducePgcRetryStartUi(ui, { type: "submit" });
+      if (!ui.starting || !canSubmitPgcRetryStart({ ...ui, starting: false })) {
+        return;
+      }
+      if (retryStartInFlightRef.current || retryFailedBusy) return;
+
       // Trust the click-time snapshot from the dialog — never re-expand from UI state.
-      const payload = buildPgcRetryArtifactPayload(selected);
+      const payload = buildPgcRetryArtifactPayload(selectedList);
       if (
         (payload.files.length === 0 && payload.reports.length === 0) ||
         !session?.access_token ||
@@ -1694,19 +1731,29 @@ export default function PortalDataViewer() {
         !resolvedProjectId ||
         !resolvedPermitNumber
       ) {
-        toast.error(
-          !session?.access_token
-            ? "Sign in required to retry failed items."
-            : !resolvedCredentialId
-              ? "Link a portal credential before retrying."
-              : "No retryable failed items selected.",
+        const errMsg = !session?.access_token
+          ? "Sign in required to retry failed items."
+          : !resolvedCredentialId
+            ? "Link a portal credential before retrying."
+            : "No retryable failed items selected.";
+        ui = reducePgcRetryStartUi(
+          { ...ui, open: true, selectedIds, starting: true },
+          { type: "start_failed", error: errMsg },
         );
+        setRetryFailedOpen(ui.open);
+        setRetryStartError(ui.startError);
+        setRetrySummaryLine(ui.startError);
+        toast.error(errMsg);
         return;
       }
+
+      retryStartInFlightRef.current = true;
       setRetryFailedBusy(true);
+      setRetryStartError(null);
+      setRetrySummaryLine(null);
       setRetryFailedItems((prev) =>
         prev.map((item) =>
-          selected.some((s) => s.id === item.id)
+          selectedList.some((s) => s.id === item.id)
             ? { ...item, liveState: "queued" as const }
             : item,
         ),
@@ -1721,6 +1768,11 @@ export default function PortalDataViewer() {
           permitNumber: resolvedPermitNumber,
           artifacts: payload,
         });
+        // Backend accepted the job — close modal immediately; progress continues on-page.
+        ui = reducePgcRetryStartUi(
+          { ...ui, open: true, selectedIds, starting: true },
+          { type: "start_succeeded", jobId: result.jobId },
+        );
         retryScrapeJobIdRef.current = result.jobId ? String(result.jobId) : null;
         pendingRetryPortalRefreshRef.current = true;
         scrape.startScrapeSession(
@@ -1729,38 +1781,44 @@ export default function PortalDataViewer() {
           resolvedPermitNumber,
           result.jobId,
         );
-        setRetryFailedItems((prev) =>
-          prev.map((item) =>
-            selected.some((s) => s.id === item.id)
-              ? { ...item, liveState: "retrying" as const }
-              : item,
-          ),
-        );
+        setRetryFailedOpen(ui.open);
+        setRetrySelectedIds(new Set(ui.selectedIds));
+        setRetryStartError(null);
+        setRetrySummaryLine(null);
         toast.success(
-          `Retry started for ${selected.length} failed item${selected.length === 1 ? "" : "s"}.`,
+          `Retry started for ${selectedList.length} failed item${selectedList.length === 1 ? "" : "s"}.`,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (msg === "SCRAPER_OFFLINE") {
-          toast.error(
-            "Local Scraper is not running. Start scraper-service, then retry.",
-          );
-        } else {
-          toast.error(msg || "Failed to start retry");
-        }
+        const display =
+          msg === "SCRAPER_OFFLINE"
+            ? "Local Scraper is not running. Start scraper-service, then retry."
+            : msg || "Failed to start retry";
+        ui = reducePgcRetryStartUi(
+          { ...ui, open: true, selectedIds, starting: true },
+          { type: "start_failed", error: display },
+        );
+        setRetryFailedOpen(ui.open);
+        setRetryStartError(ui.startError);
+        setRetrySummaryLine(ui.startError);
+        toast.error(display);
         setRetryFailedItems((prev) =>
           prev.map((item) =>
-            selected.some((s) => s.id === item.id)
+            selectedList.some((s) => s.id === item.id)
               ? { ...item, liveState: "failed" as const }
               : item,
           ),
         );
       } finally {
+        retryStartInFlightRef.current = false;
         setRetryFailedBusy(false);
       }
     },
     [
       isPgcEplanPortal,
+      retryFailedOpen,
+      retryFailedBusy,
+      retryStartError,
       session?.access_token,
       resolvedCredentialId,
       user?.id,
@@ -1908,13 +1966,16 @@ export default function PortalDataViewer() {
         open={retryFailedOpen}
         onOpenChange={(next) => {
           setRetryFailedOpen(next);
-          if (!next) setRetrySelectedIds(new Set());
+          if (!next) {
+            setRetrySelectedIds(new Set());
+            setRetryStartError(null);
+          }
         }}
-        items={retryFailedItems}
+        items={Array.isArray(retryFailedItems) ? retryFailedItems : []}
         selectedIds={retrySelectedIds}
         onSelectedIdsChange={handleRetrySelectedIdsChange}
         busy={retryFailedBusy || scrape.isScraping}
-        summaryLine={retrySummaryLine}
+        summaryLine={retryStartError || retrySummaryLine}
         onRetrySelected={(selected) => {
           void handleRetrySelectedFailed(selected);
         }}
