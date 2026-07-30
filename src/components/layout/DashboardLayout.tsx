@@ -136,7 +136,7 @@ function AppHeader({
           </AuthGatedLink>
 
           <Link
-            to="/demos"
+            to="/demo/mcdonalds"
             className="pilot-button-primary inline-flex shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
             aria-label="Request Demo"
           >
@@ -187,7 +187,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
   const scrape = useScrapeOptional();
 
   const handleSignOut = async () => {
-    scrape?.clearAccelaBrowserSession();
+    scrape?.resetScrapeUi();
     await signOut();
     toast.success("Signed out successfully");
     navigate("/");

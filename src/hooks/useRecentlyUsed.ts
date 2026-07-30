@@ -22,7 +22,9 @@ const PAGE_TITLES: Record<string, string> = {
   "/jurisdictions/map": "Jurisdiction Map",
   "/jurisdictions/compare": "Compare Jurisdictions",
   "/permit-intelligence": "Permit Intelligence",
+  "/demo/mcdonalds": "Demo",
   "/demos": "Demos",
+  "/onboarding/authorization": "Client Authorization (LOA)",
   "/pricing": "Pricing",
   "/contact": "Contact",
   "/faq": "FAQ",
@@ -31,7 +33,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/consolidation-calculator": "Consolidation Calculator",
   "/response-matrix": "Response Matrix",
   "/comment-review": "Comment Review",
-  "/classified-comments": "Classified Comments",
+  // Legacy path — redirects to Response Matrix
+  "/classified-comments": "Response Matrix",
 };
 
 // Pages to exclude from tracking

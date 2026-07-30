@@ -41,6 +41,7 @@ export default {
           amber: "hsl(var(--pilot-amber))",
           rose: "hsl(var(--pilot-rose))",
           line: "hsl(var(--pilot-line))",
+          ink: "hsl(var(--pilot-ink))",
         },
         brand: {
           orange: "hsl(var(--brand-orange))",

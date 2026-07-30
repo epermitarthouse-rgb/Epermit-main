@@ -4,9 +4,38 @@ import type { StatusTone } from "@/components/design/ProductPrimitives";
 export function scrapeStatusTone(status: string | null | undefined): StatusTone {
   const s = (status || "").toLowerCase();
   if (["completed", "success", "succeeded"].includes(s)) return "good";
-  if (["queued", "pending", "running", "in_progress", "scraping"].includes(s)) return "info";
-  if (["failed", "error", "cancelled", "canceled", "timeout"].includes(s)) return "bad";
-  if (["partial", "warning"].includes(s)) return "warn";
+  if (
+    ["queued", "pending", "running", "resuming", "in_progress", "scraping", "loading"].includes(
+      s,
+    )
+  ) {
+    return "info";
+  }
+  if (
+    [
+      "failed",
+      "failed_unrecoverable",
+      "error",
+      "cancelled",
+      "canceled",
+      "timeout",
+      "unavailable",
+    ].includes(s)
+  ) {
+    return "bad";
+  }
+  if (
+    [
+      "partial",
+      "partial_external_blocker",
+      "warning",
+      "completed_with_warnings",
+      "rate_limited",
+      "waiting_user",
+    ].includes(s)
+  ) {
+    return "warn";
+  }
   return "default";
 }
 

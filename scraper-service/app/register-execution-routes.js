@@ -92,10 +92,42 @@ const arlingtonOrchestration = require("../lib/arlington-orchestration.js");
 const { startArlingtonDurableWorkerLoop } = require("../lib/arlington-durable-worker-loop.js");
 const { startUciDurableWorkerLoop } = require("./services/uci/uci-durable-worker-loop.js");
 const { mirrorSessionProgress } = require("../lib/session-progress.js");
+const {
+  shouldAbort,
+  bindSessionCancelChecker,
+} = require("../lib/scrape-job-cancellation.js");
 
 function publishScrapeOrchestration(session, opts = {}) {
   if (typeof session.publishScrapeProgress !== "function") return;
   void session.publishScrapeProgress(opts).catch(() => {});
+}
+
+/** Durable + memory cancel gate for session scrapers. */
+async function sessionCancelRequested(session, supabaseClient = null) {
+  try {
+    let supabase = supabaseClient || null;
+    if (!supabase) {
+      try {
+        supabase = require("../lib/supabase-admin.js").getSupabaseAdmin();
+      } catch (_) {
+        supabase = null;
+      }
+    }
+    return shouldAbort(session, supabase);
+  } catch (_) {
+    return !!session?._cancelRequested;
+  }
+}
+
+function attachSessionCancelChecker(session, supabaseClient) {
+  if (!session) return async () => false;
+  if (session._isCancelRequestedBound && typeof session._isCancelRequested === "function") {
+    return session._isCancelRequested;
+  }
+  const checker = bindSessionCancelChecker(session, supabaseClient);
+  session._isCancelRequested = checker;
+  session._isCancelRequestedBound = true;
+  return checker;
 }
 
 const MONTGOMERY_RETRIEVE_TIMEOUT_MS = 120000;
@@ -2008,13 +2040,23 @@ app.post("/api/scrape", async (req, res) => {
     }
   }
 
+  attachSessionCancelChecker(session, supabase);
+
   async function finalizeSessionScrapeJob(statusHint) {
     if (typeof session.finalizeScrapeJob !== "function") return;
     try {
+      const cancelled =
+        statusHint === "cancelled" ||
+        (await sessionCancelRequested(session, supabase));
       const status =
         statusHint ||
-        (session._cancelRequested ? "cancelled" : session.status);
-      await session.finalizeScrapeJob(status);
+        (cancelled ? "cancelled" : session.status);
+      if (cancelled || status === "cancelled") {
+        session._cancelRequested = true;
+        session._scrapeEventsSuppressed = true;
+        session.status = "cancelled";
+      }
+      await session.finalizeScrapeJob(cancelled ? "cancelled" : status);
     } catch (err) {
       console.warn("[scrape-events] finalizeSessionScrapeJob:", err.message);
     }
@@ -2323,7 +2365,7 @@ app.post("/api/scrape", async (req, res) => {
       arlingtonScrapeTabsArg,
     )
       .then(async () => {
-        if (session._cancelRequested) {
+        if (await sessionCancelRequested(session, supabase)) {
           console.log("   🛑 Accela scrape was cancelled — not marking as done");
           await finalizeSessionScrapeJob("cancelled");
           return;
@@ -2691,7 +2733,13 @@ app.post("/api/scrape", async (req, res) => {
       userId,
       scrapeMode || "montgomery_quick",
     )
-      .then(() => finalizeSessionScrapeJob("done"))
+      .then(async (result) => {
+        if (result?.cancelled || (await sessionCancelRequested(session, supabase))) {
+          session.status = "cancelled";
+          return finalizeSessionScrapeJob("cancelled");
+        }
+        return finalizeSessionScrapeJob("done");
+      })
       .catch(async (err) => {
       session.status = "error";
       mirrorSessionProgress(session, `Error: ${err.message}`, {
@@ -2770,7 +2818,13 @@ app.post("/api/scrape", async (req, res) => {
       userId,
       howardScrapeMode,
     )
-      .then(() => finalizeSessionScrapeJob("done"))
+      .then(async (result) => {
+        if (result?.cancelled || (await sessionCancelRequested(session, supabase))) {
+          session.status = "cancelled";
+          return finalizeSessionScrapeJob("cancelled");
+        }
+        return finalizeSessionScrapeJob("done");
+      })
       .catch(async (err) => {
       session.status = "error";
       mirrorSessionProgress(session, `Error: ${err.message}`, {
@@ -2891,7 +2945,13 @@ app.post("/api/scrape", async (req, res) => {
     effectiveTargetFolders,
     filesSyncTargetHint,
   )
-    .then(() => finalizeSessionScrapeJob("done"))
+    .then(async (result) => {
+      if (result?.cancelled || (await sessionCancelRequested(session, supabase))) {
+        session.status = "cancelled";
+        return finalizeSessionScrapeJob("cancelled");
+      }
+      return finalizeSessionScrapeJob("done");
+    })
     .catch(async (err) => {
     session.status = "error";
     mirrorSessionProgress(session, `Error: ${err.message}`, {
@@ -5069,9 +5129,10 @@ async function scrapeHowardAll(
     };
 
     for (let i = 0; i < projects.length; i++) {
-      if (session._cancelRequested) {
+      if (await sessionCancelRequested(session)) {
         console.log("   🛑 Howard scrape cancelled");
-        return;
+        session.status = "cancelled";
+        return { cancelled: true };
       }
       const project = projects[i];
       mirrorSessionProgress(session, `${project.projectNum} → Howard harvest`, {
@@ -5106,8 +5167,14 @@ async function scrapeHowardAll(
             _howardOmitTabs: omitTabs,
             uploadLocal,
             storagePrefix,
+            isCancelRequested: () => sessionCancelRequested(session),
           },
         );
+        if (pipelineResult?.cancelled || (await sessionCancelRequested(session))) {
+          console.log("   🛑 Howard scrape cancelled mid-pipeline");
+          session.status = "cancelled";
+          return { cancelled: true };
+        }
 
         session.data[project.id] = await mapHowardPipelineToPortalData(
           project,
@@ -5134,6 +5201,12 @@ async function scrapeHowardAll(
       session.progress++;
     }
 
+    if (await sessionCancelRequested(session)) {
+      console.log("   🛑 Howard scrape cancelled — skipping sync, not marking as done");
+      session.status = "cancelled";
+      return { cancelled: true };
+    }
+
     mirrorSessionProgress(session, "Howard scraping complete! Syncing...", {
       event_type: "save_started",
       stage: "save",
@@ -5148,9 +5221,10 @@ async function scrapeHowardAll(
       null,
     );
 
-    if (session._cancelRequested) {
+    if (await sessionCancelRequested(session)) {
       console.log("   🛑 Howard scrape cancelled — not marking as done");
-      return;
+      session.status = "cancelled";
+      return { cancelled: true };
     }
     if (!howardSyncOk) {
       session.status = "error";
@@ -5318,9 +5392,10 @@ async function scrapeMontgomeryAll(
   };
 
   for (let i = 0; i < projects.length; i++) {
-    if (session._cancelRequested) {
+    if (await sessionCancelRequested(session)) {
       console.log("   🛑 Montgomery scrape cancelled");
-      return;
+      session.status = "cancelled";
+      return { cancelled: true };
     }
     const project = projects[i];
     mirrorSessionProgress(session, `${project.projectNum} → Montgomery harvest`, {
@@ -5355,6 +5430,7 @@ async function scrapeMontgomeryAll(
           _montgomeryOmitTabs: omitTabs,
           uploadLocal,
           storagePrefix,
+          isCancelRequested: () => sessionCancelRequested(session),
           harvestFiles: async (pipelinePage, pipelineProj, pipelineWebUiBase) =>
             extractMontgomeryFilesTabLightweight(
               pipelinePage,
@@ -5366,6 +5442,11 @@ async function scrapeMontgomeryAll(
             ),
         },
       );
+      if (pipelineResult?.cancelled || (await sessionCancelRequested(session))) {
+        console.log("   🛑 Montgomery scrape cancelled mid-pipeline");
+        session.status = "cancelled";
+        return { cancelled: true };
+      }
 
       session.data[project.id] = await mapMontgomeryPipelineToPortalData(
         project,
@@ -5399,9 +5480,10 @@ async function scrapeMontgomeryAll(
   });
   console.log(`\n✅ [Montgomery] Done! Syncing to Supabase...`);
 
-  if (session._cancelRequested) {
+  if (await sessionCancelRequested(session)) {
     console.log("   🛑 Montgomery scrape cancelled — not marking as done");
-    return;
+    session.status = "cancelled";
+    return { cancelled: true };
   }
 
   const hasFileProgressJob =
@@ -5775,7 +5857,7 @@ async function scrapePgcAll(
   };
 
   for (let i = 0; i < projects.length; i++) {
-    if (session._cancelRequested) {
+    if (await sessionCancelRequested(session)) {
       console.log("   🛑 PGC scrape cancelled");
       session.status = "cancelled";
       return { cancelled: true, withWarnings: !!session._pgcScrapeWarnings };
@@ -5809,6 +5891,9 @@ async function scrapePgcAll(
         dashboardUrl: dashUrl,
         reason,
       }) => {
+        if (await sessionCancelRequested(session)) {
+          throw new Error("pgc_cancelled_before_relaunch");
+        }
         try {
           if (session.browser) await session.browser.close().catch(() => {});
         } catch (_) {}
@@ -5922,7 +6007,7 @@ async function scrapePgcAll(
               _sessionId,
               rearmSessionIdleTimeout,
             ),
-          isCancelRequested: () => !!session._cancelRequested,
+          isCancelRequested: () => sessionCancelRequested(session),
           onFileAttemptStart: async (fields) => {
             if (!fileProgress) return;
             const base = {
@@ -6136,6 +6221,12 @@ async function scrapePgcAll(
     session.progress++;
   }
 
+  if (await sessionCancelRequested(session)) {
+    console.log("   🛑 PGC scrape cancelled — skipping sync, not marking as done");
+    session.status = "cancelled";
+    return { withWarnings: !!session._pgcScrapeWarnings, cancelled: true };
+  }
+
   mirrorSessionProgress(session, "PGC scraping complete! Syncing...", {
     event_type: "save_started",
     stage: "save",
@@ -6150,7 +6241,7 @@ async function scrapePgcAll(
     null,
   );
 
-  if (session._cancelRequested) {
+  if (await sessionCancelRequested(session)) {
     console.log("   🛑 PGC scrape cancelled — not marking as done");
     return { withWarnings: !!session._pgcScrapeWarnings, cancelled: true };
   }
@@ -6246,9 +6337,10 @@ async function scrapeAll(
   console.log(`\n🔍 Scraping ${projects.length} projects...`);
 
   for (let pi = 0; pi < projects.length; pi++) {
-    if (session._cancelRequested) {
+    if (await sessionCancelRequested(session)) {
       console.log("   🛑 Scrape cancelled by user — aborting project loop");
-      return;
+      session.status = "cancelled";
+      return { cancelled: true };
     }
     const project = projects[pi];
     console.log(
@@ -6265,9 +6357,10 @@ async function scrapeAll(
     };
 
     for (const tab of tabsToScrape) {
-      if (session._cancelRequested) {
+      if (await sessionCancelRequested(session)) {
         console.log("   🛑 Scrape cancelled by user — aborting tab loop");
-        return;
+        session.status = "cancelled";
+        return { cancelled: true };
       }
       let targetLabel = null;
       if (tab.key === "files") {
@@ -6703,6 +6796,12 @@ async function scrapeAll(
     }
   }
 
+  if (await sessionCancelRequested(session)) {
+    console.log("   🛑 Scrape was cancelled — skipping sync, not marking as done");
+    session.status = "cancelled";
+    return { cancelled: true };
+  }
+
   mirrorSessionProgress(session, "Scraping complete! Syncing to database...", {
     event_type: "save_started",
     stage: "save",
@@ -6718,9 +6817,10 @@ async function scrapeAll(
     filesSyncTargetHint || targetFolder,
   );
 
-  if (session._cancelRequested) {
+  if (await sessionCancelRequested(session)) {
     console.log("   🛑 Scrape was cancelled — not marking as done");
-    return;
+    session.status = "cancelled";
+    return { cancelled: true };
   }
   if (!genericSyncOk) {
     session.status = "error";

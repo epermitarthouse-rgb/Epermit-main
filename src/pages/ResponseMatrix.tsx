@@ -43,16 +43,18 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useGroundedDraftQueue } from "@/hooks/useGroundedDraftQueue";
-import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, MessageSquare, AlertTriangle, Filter } from "lucide-react";
+import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, MessageSquare, AlertTriangle, Filter, RefreshCw, FileSearch } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ExportPackageDialog } from "@/components/response-matrix/ExportPackageDialog";
 import { ResponseMatrixExportMenu } from "@/components/response-matrix/ResponseMatrixExportMenu";
 import { SuggestedResponsePanel } from "@/components/response-matrix/SuggestedResponsePanel";
+import { CommentWorkflowEntry } from "@/components/response-matrix/CommentWorkflowEntry";
 import { useProjectTeam } from "@/hooks/useProjectTeam";
 import { effectiveResponseStatus, responseStatusBadgeClass } from "@/lib/responseApproval";
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
@@ -642,6 +644,7 @@ export default function ResponseMatrix() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filterPending = searchParams.get("filter") === "pending";
   const scoringView = searchParams.get("view") === "scoring";
+  const disciplineFilter = searchParams.get("discipline")?.trim() || "all";
   const setMatrixView = useCallback(
     (v: "reconciliation" | "scoring") => {
       const next = new URLSearchParams(searchParams);
@@ -657,7 +660,17 @@ export default function ResponseMatrix() {
     else next.set("filter", "pending");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, filterPending]);
+  const setDisciplineFilter = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value || value === "all") next.delete("discipline");
+      else next.set("discipline", value);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const [saving, setSaving] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
   const timerRef = useRef<ReviewTimerHandle>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
@@ -729,15 +742,38 @@ export default function ResponseMatrix() {
       })),
     });
   }
-  const rows =
-    filterPending && withoutMetadata.length > 0
-      ? withoutMetadata.filter(
-          (r) =>
-            (r.status ?? "").toLowerCase() === "pending" ||
-            r.response_text == null ||
-            String(r.response_text).trim() === ""
-        )
-      : withoutMetadata;
+  const disciplineOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of withoutMetadata) {
+      const d = r.discipline?.trim();
+      if (d) keys.add(d);
+      else keys.add("Unclassified");
+    }
+    return Array.from(keys).sort((a, b) => {
+      if (a === "Unclassified") return 1;
+      if (b === "Unclassified") return -1;
+      return a.localeCompare(b);
+    });
+  }, [withoutMetadata]);
+
+  const rows = useMemo(() => {
+    let next = withoutMetadata;
+    if (filterPending && withoutMetadata.length > 0) {
+      next = next.filter(
+        (r) =>
+          (r.status ?? "").toLowerCase() === "pending" ||
+          r.response_text == null ||
+          String(r.response_text).trim() === "",
+      );
+    }
+    if (disciplineFilter !== "all") {
+      next = next.filter((r) => {
+        const d = r.discipline?.trim() || "Unclassified";
+        return d === disciplineFilter;
+      });
+    }
+    return next;
+  }, [withoutMetadata, filterPending, disciplineFilter]);
 
   const lastSubmittedDraft = useMemo(() => {
     return [...allDrafts]
@@ -1100,6 +1136,59 @@ export default function ResponseMatrix() {
     }
   }, [projectId, queryClient]);
 
+  /** Re-runs the discipline model on every parsed row (from former Classified Comments page). */
+  const refreshClassifications = useCallback(async () => {
+    if (!projectId) {
+      toast.error("Select a project first");
+      return;
+    }
+    setReclassifying(true);
+    try {
+      const { count: totalInDb, error: countErr } = await supabase
+        .from("parsed_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId);
+      if (countErr) throw countErr;
+      const loaded = totalInDb ?? 0;
+      if (loaded === 0) {
+        toast.info("No parsed comments in the database for this project yet.");
+        return;
+      }
+      toast.info(`Sending ${loaded} parsed comment(s) to the discipline classifier…`);
+
+      const { data, error } = await supabase.functions.invoke("discipline-classifier-agent", {
+        body: { project_id: projectId, reclassify_all: true },
+      });
+      if (error) throw error;
+
+      const payload = data as {
+        code?: number;
+        message?: string;
+        classified_count?: number;
+        rows_sent?: number;
+        parsed_comments_total?: number;
+      };
+      if (payload?.code != null && payload.code >= 400) {
+        throw new Error(payload.message ?? `Classifier returned ${payload.code}`);
+      }
+
+      const rowsSent = payload?.rows_sent ?? 0;
+      const updated = payload?.classified_count ?? 0;
+      const total = payload?.parsed_comments_total ?? loaded;
+
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
+      toast.success(
+        `Discipline classifier: updated ${updated} row(s) (processed ${rowsSent} of ${total} parsed comment(s)).`,
+      );
+    } catch (e) {
+      console.error("[ResponseMatrix] discipline-classifier-agent", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Classifier failed: ${msg}`);
+    } finally {
+      setReclassifying(false);
+    }
+  }, [projectId, queryClient]);
+
   const runRouteComments = useCallback(async () => {
     if (!projectId) {
       toast.error("Select a project first");
@@ -1305,6 +1394,24 @@ export default function ResponseMatrix() {
             >
               <Filter className="h-4 w-4" /> {filterPending ? "Pending only" : "Filter"}
             </Button>
+            {disciplineOptions.length > 0 ? (
+              <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
+                <SelectTrigger
+                  className="h-9 w-[160px] text-xs"
+                  data-testid="matrix-discipline-filter"
+                >
+                  <SelectValue placeholder="Discipline" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All disciplines</SelectItem>
+                  {disciplineOptions.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -1378,6 +1485,8 @@ export default function ResponseMatrix() {
         detail="Provider markups and permit review comments share scoring, approval, and export workflows so filings and service requests stay aligned. All rows are live parsed comments — never mocked."
       />
 
+      <CommentWorkflowEntry projectId={projectId} onNavigate={navigate} />
+
       <div className="w-full min-w-0 space-y-4">
         <Panel
           title="Reconciliation queue"
@@ -1449,12 +1558,36 @@ export default function ResponseMatrix() {
                     Run Auto Routing
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    onClick={() => runActionsMenuItem(refreshClassifications)}
+                    disabled={!projectId || reclassifying || pipelineBusy}
+                    data-testid="menu-refresh-classifications"
+                  >
+                    {reclassifying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                    Refresh Classifications
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => runActionsMenuItem(runResumePipeline)}
                     disabled={!projectId || pipelineBusy}
                     data-testid="menu-resume-pipeline"
                   >
                     {pipelineResuming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
                     Resume Pipeline
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() =>
+                      runActionsMenuItem(() =>
+                        navigate(
+                          projectId
+                            ? `/comment-review?project_id=${encodeURIComponent(projectId)}`
+                            : "/comment-review",
+                        ),
+                      )
+                    }
+                    data-testid="menu-upload-parse-comments"
+                  >
+                    <FileSearch className="h-4 w-4 mr-2" />
+                    Upload &amp; Parse Comments
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => runActionsMenuItem(() => setExportDialogOpen(true))}
@@ -1643,17 +1776,43 @@ export default function ResponseMatrix() {
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-sm">
               {filterPending
                 ? "No pending comments for this project."
-                : "Run the Comment Parser agent to extract comments from your portal reports."}
+                : disciplineFilter !== "all"
+                  ? `No comments in discipline “${disciplineFilter}”.`
+                  : "Upload or load portal comments in Comment Review, then return here to draft and approve responses."}
             </p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate("/dashboard")}>
-              Go to Dashboard
-            </Button>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {!filterPending && disciplineFilter === "all" ? (
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() =>
+                    navigate(
+                      projectId
+                        ? `/comment-review?project_id=${encodeURIComponent(projectId)}`
+                        : "/comment-review",
+                    )
+                  }
+                  data-testid="matrix-empty-upload-parse"
+                >
+                  <FileSearch className="h-4 w-4" />
+                  Upload &amp; Parse Comments
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
+                Go to Dashboard
+              </Button>
+            </div>
           </div>
         ) : (
           <>
-          {filterPending && (
-            <p className="text-sm text-muted-foreground mb-2">
-              <Badge variant="secondary">Showing pending comments only</Badge>
+          {(filterPending || disciplineFilter !== "all") && (
+            <p className="text-sm text-muted-foreground mb-2 flex flex-wrap gap-2">
+              {filterPending ? (
+                <Badge variant="secondary">Showing pending comments only</Badge>
+              ) : null}
+              {disciplineFilter !== "all" ? (
+                <Badge variant="secondary">Discipline: {disciplineFilter}</Badge>
+              ) : null}
             </p>
           )}
           <p className="text-sm text-muted-foreground mb-2">{matrixSourceLabel}</p>

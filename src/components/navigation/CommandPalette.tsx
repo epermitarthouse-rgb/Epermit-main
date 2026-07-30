@@ -51,7 +51,29 @@ const navigationItems = [
 
 const toolItems = [
   { name: "AI Compliance", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code"] },
-  { name: "Response Matrix", href: "/response-matrix", icon: Table2, keywords: ["response", "matrix", "comments", "responses"] },
+  {
+    name: "Response Matrix",
+    href: "/response-matrix",
+    icon: Table2,
+    keywords: [
+      "response",
+      "matrix",
+      "comments",
+      "responses",
+      "classified",
+      "discipline",
+      "draft",
+      "approve",
+      "export",
+    ],
+  },
+  {
+    name: "Comment Review",
+    href: "/comment-review",
+    icon: FileText,
+    keywords: ["comment", "review", "upload", "parse", "letter", "approve rows"],
+    requiresAuth: true,
+  },
   { name: "Utility Coordination", href: "/uci", icon: Database, keywords: ["uci", "utility", "coordination", "pepco"] },
   { name: "UCI · Load Profile", href: "/uci?section=load-profile", icon: Database, keywords: ["uci", "load", "profile"] },
   { name: "UCI · Application Prep", href: "/uci?section=application-builder", icon: Database, keywords: ["uci", "application", "builder", "prep"] },
@@ -66,7 +88,21 @@ const jurisdictionItems = [
 ];
 
 const resourceItems = [
+  {
+    name: "Demo",
+    href: "/demo/mcdonalds",
+    icon: PlayCircle,
+    keywords: ["demo", "mcdonalds", "executive", "tour"],
+    requiresAuth: true,
+  },
   { name: "Demos", href: "/demos", icon: PlayCircle, keywords: ["demos", "examples", "videos"] },
+  {
+    name: "Client Authorization (LOA)",
+    href: "/onboarding/authorization",
+    icon: FileText,
+    keywords: ["loa", "authorization", "onboarding", "letter", "signature"],
+    requiresAuth: true,
+  },
   { name: "Pricing", href: "/pricing", icon: DollarSign, keywords: ["pricing", "plans", "cost"] },
   { name: "FAQ", href: "/faq", icon: HelpCircle, keywords: ["faq", "questions", "help"] },
   { name: "Documentation", href: "/api-docs", icon: FileQuestion, keywords: ["docs", "api", "documentation"] },

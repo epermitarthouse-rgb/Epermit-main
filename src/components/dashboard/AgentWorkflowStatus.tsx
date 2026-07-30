@@ -1150,7 +1150,6 @@ export function AgentWorkflowStatus() {
     setRouterResult(null);
     setPortalStatus("checking");
     setPortalStatusText("Connecting...");
-    toast.info("Chain Step 1/5: Portal Scraping...");
 
     try {
       const { data: credRow } = await supabase
@@ -1184,7 +1183,7 @@ export function AgentWorkflowStatus() {
         if (persisted?.sessionId) return persisted.sessionId;
         const legacyActive = `${scrape.activeSessionId || ""}`.trim();
         if (legacyActive) return legacyActive;
-        const legacyScrape = getPersistedScrapeSessionForProject(projId);
+        const legacyScrape = getPersistedScrapeSessionForProject(projId, user?.id);
         if (legacyScrape?.sessionId) return legacyScrape.sessionId;
         return null;
       };
@@ -1230,7 +1229,6 @@ export function AgentWorkflowStatus() {
             "[Arlington][AccelaSession] stale session detected; clearing and re-login",
           );
           scrape.clearAccelaBrowserSession(projectIdToUse);
-          toast.info("Reconnecting to Arlington Accela...");
         }
 
         let sessionId: string | null = null;
@@ -1239,7 +1237,7 @@ export function AgentWorkflowStatus() {
         }
 
         if (!sessionId) {
-          toast.info(
+          setPortalStatusText(
             forceFreshLogin ? "Reconnecting to portal..." : "Logging into portal...",
           );
 
@@ -1272,7 +1270,7 @@ export function AgentWorkflowStatus() {
             );
           }
         } else {
-          toast.info("Using active portal session...");
+          setPortalStatusText("Using active portal session...");
         }
 
         scrape.setAccelaSessionId(sessionId, {
@@ -1356,13 +1354,13 @@ export function AgentWorkflowStatus() {
         };
 
         if (scrapePayload.currentlyRunningJobId) {
-          toast.info("Your scrape is queued — finishing the current worker cycle first.");
+          setPortalStatusText("Your scrape is queued — finishing the current worker cycle first.");
         } else if ((scrapePayload.queuePosition ?? 0) > 0) {
-          toast.info("Your scrape is queued — it will run next.");
+          setPortalStatusText("Your scrape is queued — it will run next.");
         } else if (scrapePayload.reusedExistingJob) {
-          toast.info("Scrape already running — attached to existing job.");
+          setPortalStatusText("Scrape already running — attached to existing job.");
         } else {
-          toast.success("Scraping started — you can continue using the app.");
+          setPortalStatusText("Scraping started");
         }
         scrape.startScrapeSession(
           sessionId,
@@ -2090,9 +2088,15 @@ export function AgentWorkflowStatus() {
       description: commentParserDescription,
       action: (
         <Button size="sm" variant="outline" asChild className="mt-2" data-testid="link-comment-review">
-          <Link to="/comment-review">
+          <Link
+            to={
+              selectedProjectId
+                ? `/comment-review?project_id=${encodeURIComponent(selectedProjectId)}`
+                : "/comment-review"
+            }
+          >
             <ExternalLink className="h-4 w-4 mr-2" />
-            Open Comment Review
+            Upload &amp; Parse Comments
           </Link>
         </Button>
       ),
@@ -2103,9 +2107,15 @@ export function AgentWorkflowStatus() {
       description: classifierDescription,
       action: (
         <Button size="sm" variant="outline" asChild className="mt-2" data-testid="link-classified-comments">
-          <Link to="/classified-comments">
+          <Link
+            to={
+              selectedProjectId
+                ? `/response-matrix?project_id=${encodeURIComponent(selectedProjectId)}`
+                : "/response-matrix"
+            }
+          >
             <ExternalLink className="h-4 w-4 mr-2" />
-            View Classified Comments
+            Open Response Matrix
           </Link>
         </Button>
       ),

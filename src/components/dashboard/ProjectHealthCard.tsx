@@ -165,7 +165,7 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
     pending_comments > 0
       ? "Resolve comments"
       : total_comments === 0 && hasReviewCommentsReport
-        ? "Open Comment Review"
+        ? "Upload & parse comments"
         : total_comments === 0
           ? "Run Manual Check"
           : deadlineNear
@@ -177,7 +177,8 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
     if (pending_comments > 0) {
       navigate(`/response-matrix?project_id=${encodeURIComponent(projectId)}&filter=pending`);
     } else if (total_comments === 0 && hasReviewCommentsReport) {
-      navigate("/comment-review");
+      // Parse/approve path — Comment Review upload workspace
+      navigate(`/comment-review?project_id=${encodeURIComponent(projectId)}`);
     } else if (total_comments === 0) {
       navigate("/dashboard");
     } else if (deadlineNear) {

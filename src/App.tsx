@@ -15,6 +15,8 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { MarketingLayout } from "@/components/layout/MarketingLayout";
 
 import Demos from "./pages/Demos";
+import DemoMcDonalds from "./pages/DemoMcDonalds";
+import OnboardingAuthorization from "./pages/OnboardingAuthorization";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import FAQ from "./pages/FAQ";
@@ -123,6 +125,12 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/projects/new" element={<Projects />} />
+                  <Route path="/demo/mcdonalds" element={<DemoMcDonalds />} />
+                  <Route path="/onboarding/authorization" element={<OnboardingAuthorization />} />
+                  <Route
+                    path="/delivery/authorization"
+                    element={<Navigate to="/onboarding/authorization" replace />}
+                  />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/jurisdictions/compare" element={<JurisdictionComparison />} />
                   <Route path="/jurisdiction-comparison" element={<JurisdictionComparison />} />

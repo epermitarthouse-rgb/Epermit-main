@@ -2901,6 +2901,18 @@ async function runHowardProductionPipeline(
   const storagePrefix = (opts.storagePrefix || "howard").replace(/^\/+|\/+$/g, "");
   const harvestFiles = opts.harvestFiles || null;
   const webUiBase = bases[0] || DEFAULT_HOWARD_WEBUI;
+  const isCancelRequested =
+    typeof opts.isCancelRequested === "function" ? opts.isCancelRequested : null;
+
+  async function cancelled() {
+    if (!isCancelRequested) return false;
+    try {
+      const v = isCancelRequested();
+      return !!(v && typeof v.then === "function" ? await v : v);
+    } catch (_) {
+      return false;
+    }
+  }
 
   const skipDetail = !!(omit.info && omit.status && omit.tasks);
   const skipFiles = !!omit.files;
@@ -2910,10 +2922,27 @@ async function runHowardProductionPipeline(
     `[Howard][mode] omit(files=${!!omit.files},reports=${!!omit.reports},info=${!!omit.info},status=${!!omit.status},tasks=${!!omit.tasks}) → run(files=${!skipFiles},reports=${!skipReports},detail=${!skipDetail})`,
   );
 
+  if (await cancelled()) {
+    return {
+      cancelled: true,
+      detailResult: { ok: true, out: null, skipped: true },
+      filesOut: { skipped: true },
+      reportsPayload: { skipped: true, reports: [] },
+    };
+  }
+
   /** @type {any} */
   let detailResult = { ok: true, out: null, skipped: true };
   if (!skipDetail) {
     detailResult = await scrapeHowardProjectDetails(page, proj, webUiBase, omit);
+  }
+  if (await cancelled()) {
+    return {
+      cancelled: true,
+      detailResult,
+      filesOut: { skipped: true },
+      reportsPayload: { skipped: true, reports: [] },
+    };
   }
 
   let wfid = extractWfidFromHowardStatusTab(detailResult.out?.statusTab);
@@ -2980,6 +3009,17 @@ async function runHowardProductionPipeline(
     },
   };
   if (!skipFiles) {
+    if (await cancelled()) {
+      return {
+        cancelled: true,
+        detailResult,
+        workflowPack,
+        reviewOut,
+        filesOut: { ...filesOut, skipped: true },
+        reportsPayload: { skipped: true, reports: [] },
+        _howardOmitTabs: omit,
+      };
+    }
     filesOut = harvestFiles
       ? await harvestFiles(page, proj, webUiBase)
       : await harvestHowardFilesByCategory(page, proj, webUiBase);
@@ -2987,6 +3027,17 @@ async function runHowardProductionPipeline(
 
   let reportsPayload = { skipped: true, reports: [] };
   if (!skipReports) {
+    if (await cancelled()) {
+      return {
+        cancelled: true,
+        detailResult,
+        workflowPack,
+        reviewOut,
+        filesOut,
+        reportsPayload,
+        _howardOmitTabs: omit,
+      };
+    }
     reportsPayload = await processHowardSsrReportsForProject(page, proj, wfid, {
       webUiBase,
       dashboardUrl,
@@ -2994,6 +3045,17 @@ async function runHowardProductionPipeline(
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {
+        if (await cancelled()) {
+          return {
+            cancelled: true,
+            detailResult,
+            workflowPack,
+            reviewOut,
+            filesOut,
+            reportsPayload,
+            _howardOmitTabs: omit,
+          };
+        }
         const slug = r.fileSlug || "report";
         try {
           if (r.excelPath && fs.existsSync(r.excelPath)) {
@@ -3021,6 +3083,18 @@ async function runHowardProductionPipeline(
         }
       }
     }
+  }
+
+  if (await cancelled()) {
+    return {
+      cancelled: true,
+      detailResult,
+      workflowPack,
+      reviewOut,
+      filesOut,
+      reportsPayload,
+      _howardOmitTabs: omit,
+    };
   }
 
   return {

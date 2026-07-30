@@ -14,10 +14,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ProgressLine, StatusPill } from "@/components/design/ProductPrimitives";
 import { scrapeStatusTone } from "@/adapters/scrapeStatusAdapter";
+import { resolvePanelDisplayStatus } from "@/lib/scrapeTerminalLifecycle";
 import {
   scrapeJobStatusLabel,
   type ScrapeEvent,
-  type ScrapeJob,
 } from "@/lib/scrapeJobTypes";
 import type { UseScrapeJobResult } from "@/hooks/useScrapeJob";
 
@@ -114,7 +114,6 @@ export function ScrapeProgressPanel({
 }: ScrapeProgressPanelProps) {
   const {
     job,
-    events,
     meaningfulEvents,
     currentMessage,
     progress,
@@ -124,12 +123,17 @@ export function ScrapeProgressPanel({
     isTerminal,
     isCancellable,
     reconnecting,
+    loading,
+    error,
   } = jobState;
 
   const [feedExpanded, setFeedExpanded] = useState(true);
   const [showTechnical, setShowTechnical] = useState(false);
 
-  const status = job?.status ?? "running";
+  const status = resolvePanelDisplayStatus(job?.status, {
+    loading,
+    error,
+  });
   const jurisdiction = job?.jurisdiction ?? "Portal";
   const progressPct =
     progress && progress.total > 0
@@ -137,6 +141,10 @@ export function ScrapeProgressPanel({
       : null;
 
   const technicalEvents = meaningfulEvents.filter((e) => e.technical_message?.trim());
+  const statusLabel =
+    status === "loading" || status === "unavailable"
+      ? scrapeJobStatusLabel(status)
+      : scrapeJobStatusLabel(status);
 
   if (minimized) {
     return (
@@ -180,7 +188,7 @@ export function ScrapeProgressPanel({
               Portal scrape
             </h3>
             <StatusPill tone={scrapeStatusTone(status)}>
-              {scrapeJobStatusLabel(status)}
+              {statusLabel}
             </StatusPill>
           </div>
           <p className="text-xs text-muted-foreground dark:text-ink-tertiary-dark">
@@ -216,6 +224,13 @@ export function ScrapeProgressPanel({
         <div className="flex items-center gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-md px-2 py-1.5">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           Still working… The portal may be on a slow step.
+        </div>
+      )}
+
+      {status === "unavailable" && (
+        <div className="flex items-center gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-md px-2 py-1.5">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          Progress unavailable. Waiting for job data…
         </div>
       )}
 

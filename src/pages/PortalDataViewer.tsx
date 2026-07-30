@@ -1785,9 +1785,6 @@ export default function PortalDataViewer() {
         setRetrySelectedIds(new Set(ui.selectedIds));
         setRetryStartError(null);
         setRetrySummaryLine(null);
-        toast.success(
-          `Retry started for ${selectedList.length} failed item${selectedList.length === 1 ? "" : "s"}.`,
-        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const display =
@@ -4648,8 +4645,10 @@ export default function PortalDataViewer() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground/90 mb-6 mt-4 dark:text-muted-foreground/90">
-            Source data from the portal. For an actionable comment list and
-            responses, use <strong className="text-foreground font-semibold dark:text-foreground">Comment Review</strong>.
+            Source data from the portal. Upload and parse comment letters in{" "}
+            <strong className="text-foreground font-semibold dark:text-foreground">Comment Review</strong>
+            ; view classified comments and draft responses in the{" "}
+            <strong className="text-foreground font-semibold dark:text-foreground">Response Matrix</strong>.
           </p>
           <Card className="border border-border bg-card shadow-none dark:border-border dark:bg-card/50">
             <CardContent className="p-0">
@@ -5075,6 +5074,7 @@ export default function PortalDataViewer() {
                                                 reportName.includes(
                                                   "Review Comments",
                                                 ) && (
+                                                  <>
                                                   <Button
                                                     variant="ghost"
                                                     className={cn(
@@ -5083,7 +5083,9 @@ export default function PortalDataViewer() {
                                                     )}
                                                     onClick={() =>
                                                       navigate(
-                                                        "/comment-review",
+                                                        selectedProjectId
+                                                          ? `/comment-review?project_id=${encodeURIComponent(selectedProjectId)}`
+                                                          : "/comment-review",
                                                         {
                                                           state: {
                                                             fromReports: true,
@@ -5093,8 +5095,27 @@ export default function PortalDataViewer() {
                                                     }
                                                   >
                                                     <ListChecks />
-                                                    Open Comment Review
+                                                    Upload &amp; Parse Comments
                                                   </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    className={cn(
+                                                      PORTAL_ACTION_BUTTON_AI,
+                                                      "w-full sm:w-auto",
+                                                    )}
+                                                    onClick={() =>
+                                                      navigate(
+                                                        selectedProjectId
+                                                          ? `/response-matrix?project_id=${encodeURIComponent(selectedProjectId)}`
+                                                          : "/response-matrix",
+                                                      )
+                                                    }
+                                                    data-testid="portal-open-response-matrix"
+                                                  >
+                                                    <ListChecks />
+                                                    Open Response Matrix
+                                                  </Button>
+                                                  </>
                                                 )}
                                           </div>
                                         </CardHeader>
