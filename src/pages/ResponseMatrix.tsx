@@ -643,13 +643,15 @@ export default function ResponseMatrix() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const filterPending = searchParams.get("filter") === "pending";
+  // View label only (Lovable parity): default = Reconciliation (Response column).
+  // `?view=scoring` swaps Response → AI Confidence. No reconciliation engine/backend.
   const scoringView = searchParams.get("view") === "scoring";
   const disciplineFilter = searchParams.get("discipline")?.trim() || "all";
   const setMatrixView = useCallback(
     (v: "reconciliation" | "scoring") => {
       const next = new URLSearchParams(searchParams);
       if (v === "scoring") next.set("view", "scoring");
-      else next.delete("view");
+      else next.delete("view"); // Reconciliation = default comment/response queue
       setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams],
@@ -1328,16 +1330,6 @@ export default function ResponseMatrix() {
     const rs = effectiveResponseStatus(r);
     return s === "approved" || rs === "Approved";
   }).length;
-  const crossServiceCount = withoutMetadata.filter((r) => {
-    const d = (r.discipline ?? "").toLowerCase();
-    return (
-      d.includes("utilit") ||
-      d.includes("electric") ||
-      d.includes("gas") ||
-      d.includes("water") ||
-      d.includes("telecom")
-    );
-  }).length;
 
   const runActionsMenuItem = useCallback((action: () => void) => {
     setActionsMenuOpen(false);
@@ -1356,6 +1348,7 @@ export default function ResponseMatrix() {
     <div className="min-h-[80vh] w-full min-w-0 space-y-6 overflow-x-hidden bg-background text-foreground">
       <style>{RESPONSE_MATRIX_STYLES}</style>
       <PageHeader
+        className="mb-0"
         eyebrow="Response Matrix"
         title="Comment reconciliation across permitting and utility coordination."
         body={
@@ -1367,90 +1360,103 @@ export default function ResponseMatrix() {
           </>
         }
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-md border border-border bg-card p-0.5 text-xs">
-              {(["reconciliation", "scoring"] as const).map((v) => {
-                const active = (v === "scoring") === scoringView;
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setMatrixView(v)}
-                    className={cn(
-                      "rounded px-3 py-1.5 capitalize transition-colors",
-                      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {v === "scoring" ? "AI Scoring" : "Reconciliation"}
-                  </button>
-                );
-              })}
-            </div>
-            <Button
-              variant={filterPending ? "default" : "outline"}
-              size="sm"
-              className="gap-1.5"
-              onClick={togglePendingFilter}
-            >
-              <Filter className="h-4 w-4" /> {filterPending ? "Pending only" : "Filter"}
-            </Button>
-            {disciplineOptions.length > 0 ? (
-              <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
-                <SelectTrigger
-                  className="h-9 w-[160px] text-xs"
-                  data-testid="matrix-discipline-filter"
+          <div
+            className="flex rounded-md border border-border bg-card p-0.5 text-xs"
+            role="group"
+            aria-label="Matrix view"
+          >
+            {(["reconciliation", "scoring"] as const).map((v) => {
+              const active = (v === "scoring") === scoringView;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setMatrixView(v)}
+                  aria-pressed={active}
+                  title={
+                    v === "scoring"
+                      ? "Show AI confidence column"
+                      : "Show response column (default queue view)"
+                  }
+                  className={cn(
+                    "rounded px-3 py-1.5 transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
                 >
-                  <SelectValue placeholder="Discipline" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All disciplines</SelectItem>
-                  {disciplineOptions.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
-              onClick={() =>
-                runBatchGrounded(
-                  rows
-                    .filter(
-                      (r) =>
-                        !r.response_text?.trim() ||
-                        (r.status ?? "").toLowerCase() === "pending" ||
-                        (r.status ?? "").toLowerCase() === "pending review",
-                    )
-                    .map((r) => r.id),
-                )
-              }
-            >
-              <Sparkles className="h-4 w-4" /> Auto-Draft
-            </Button>
-            <ServicePill kind="permit">Permit expediting</ServicePill>
-            <ServicePill kind="utility">Utility coordination</ServicePill>
-            {projectId && (
-              <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full border border-border bg-muted px-2 text-xs font-medium shrink-0">
-                {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/dashboard")}
-              className="shrink-0"
-              aria-label="Back to dashboard"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+                  {v === "scoring" ? "AI Scoring" : "Reconciliation"}
+                </button>
+              );
+            })}
           </div>
         }
       />
+
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Button
+          variant={filterPending ? "default" : "outline"}
+          size="sm"
+          className="gap-1.5"
+          onClick={togglePendingFilter}
+        >
+          <Filter className="h-4 w-4" /> {filterPending ? "Pending only" : "Filter"}
+        </Button>
+        {disciplineOptions.length > 0 ? (
+          <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
+            <SelectTrigger
+              className="h-9 w-[160px] text-xs"
+              data-testid="matrix-discipline-filter"
+            >
+              <SelectValue placeholder="Discipline" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All disciplines</SelectItem>
+              {disciplineOptions.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
+          onClick={() =>
+            runBatchGrounded(
+              rows
+                .filter(
+                  (r) =>
+                    !r.response_text?.trim() ||
+                    (r.status ?? "").toLowerCase() === "pending" ||
+                    (r.status ?? "").toLowerCase() === "pending review",
+                )
+                .map((r) => r.id),
+            )
+          }
+        >
+          <Sparkles className="h-4 w-4" /> Auto-Draft
+        </Button>
+        <ServicePill kind="permit">Permit expediting</ServicePill>
+        <ServicePill kind="utility">Utility coordination</ServicePill>
+        {projectId && (
+          <span className="inline-flex h-6 min-w-[24px] shrink-0 items-center justify-center rounded-full border border-border bg-muted px-2 text-xs font-medium">
+            {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
+          </span>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/dashboard")}
+          className="shrink-0"
+          aria-label="Back to dashboard"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
@@ -1473,8 +1479,18 @@ export default function ResponseMatrix() {
         />
         <MetricCard
           label="Cross-service"
-          value={`${crossServiceCount}`}
-          detail="Utility-facing items in the same queue"
+          value="—"
+          detail={
+            <span className="inline-flex flex-col items-start gap-1.5">
+              <span
+                className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 font-data text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                data-testid="badge-cross-service-upcoming"
+              >
+                Upcoming
+              </span>
+              Utility/provider comments will appear once real backend integration is available.
+            </span>
+          }
           icon={AlertCircle}
         />
       </div>
@@ -1489,8 +1505,8 @@ export default function ResponseMatrix() {
 
       <div className="w-full min-w-0 space-y-4">
         <Panel
-          title="Reconciliation queue"
-          eyebrow="Comment matrix"
+          title="Comment response queue"
+          eyebrow="Reconciliation view"
           action={
             <div className="flex flex-wrap items-center gap-2">
               <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />

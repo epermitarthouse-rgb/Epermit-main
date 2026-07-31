@@ -29,8 +29,9 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import mcdLogo from "@/assets/mcdonalds-logo.png";
 import GuidedTour, { type TourStep } from "@/components/permitpilot/GuidedTour";
+import { DemoDataBadge } from "@/components/permitpilot/DemoDataBadge";
 
-/** Routes that exist in PermitPilot today. */
+/** Routes that exist in PermitPilot today — wire real CTAs only for these. */
 const LIVE_ROUTES = new Set([
   "/onboarding/authorization",
   "/contact",
@@ -38,13 +39,6 @@ const LIVE_ROUTES = new Set([
   "/dashboard",
   "/uci",
 ]);
-
-function resolveDemoHref(to: string): string {
-  const path = to.split("?")[0];
-  if (LIVE_ROUTES.has(path)) return to;
-  // Preserve Lovable CTA targets visually via query; mark as Upcoming in click handler.
-  return to;
-}
 
 const tourSteps: TourStep[] = [
   {
@@ -110,12 +104,12 @@ const tourSteps: TourStep[] = [
   },
 ];
 
-// ---------- Data (Lovable static demo — labeled Mock in UI) ----------
+// ---------- Data (illustrative only — see docs/data-provenance.md) ----------
 
 const heroStats = [
   { value: "9–13 wk", label: "Legacy permit cycle", tone: "muted" as const, sub: "GC + expediter + AHJ email loops" },
   { value: "3–4 wk", label: "PermitPilot target cycle", tone: "primary" as const, sub: "AI-orchestrated, portal-native" },
-  { value: "72%", label: "Median cycle-time reduction", tone: "primary" as const, sub: "Across pilot rebuilds, East Coast" },
+  { value: "72%", label: "Median cycle-time reduction", tone: "primary" as const, sub: "Illustrative · East Coast rebuild model" },
   { value: "90%", label: "Fewer rework loops", tone: "primary" as const, sub: "DesignCheck catches comments pre-submittal" },
 ];
 
@@ -133,7 +127,7 @@ const painPoints = [
   {
     icon: Radio,
     title: "Portal blindness",
-    body: "42 jurisdictional portals, 42 UI patterns, one team refreshing tabs. Status changes get discovered days late.",
+    body: "50+ jurisdictions, dozens of UI patterns, one team refreshing tabs. Status changes get discovered days late.",
   },
   {
     icon: Cable,
@@ -144,7 +138,7 @@ const painPoints = [
 
 const agents = [
   { icon: FileSearch, name: "DesignCheck OCR", lane: "Detection", body: "Scans every drawing revision against the AHJ code base and prior comment history." },
-  { icon: Radio, name: "Portal Monitor", lane: "Detection", body: "Polls 42 jurisdictional portals on a 15-minute cadence, diffs status + comments." },
+  { icon: Radio, name: "Portal Monitor", lane: "Detection", body: "Polls 50+ jurisdictional portals on a 15-minute cadence, diffs status + comments." },
   { icon: Cable, name: "Utility Response Watch", lane: "Detection", body: "Tracks Dominion, Washington Gas, Loudoun Water, Fairfax DPWES ticket state changes." },
   { icon: GitBranch, name: "Comment Reconciler", lane: "Reasoning", body: "Clusters duplicate comments across reviewers and links each to a sheet + spec section." },
   { icon: Cpu, name: "Critical Path Recompute", lane: "Reasoning", body: "Rebuilds the schedule the moment any AHJ, utility, or inspector event lands." },
@@ -199,10 +193,10 @@ const utilityCase = [
 ];
 
 const roi = [
-  { icon: TrendingDown, kicker: "Time-to-open", value: "39 days", sub: "sooner per store, median across pilots" },
-  { icon: DollarSign, kicker: "Carrying cost", value: "$118k", sub: "avoided per store · financing + soft costs" },
-  { icon: Users, kicker: "GC + expediter", value: "0.7 FTE", sub: "reclaimed per active rebuild" },
-  { icon: Sparkles, kicker: "First-pass rate", value: "84%", sub: "of submittals accepted without comments" },
+  { icon: TrendingDown, kicker: "Time-to-open", value: "39 days", sub: "sooner per store · illustrative model" },
+  { icon: DollarSign, kicker: "Carrying cost", value: "$118k", sub: "illustrative per store · financing + soft costs" },
+  { icon: Users, kicker: "GC + expediter", value: "0.7 FTE", sub: "illustrative reclaim per active rebuild" },
+  { icon: Sparkles, kicker: "First-pass rate", value: "84%", sub: "illustrative first-pass acceptance rate" },
 ];
 
 const rollout = [
@@ -234,10 +228,39 @@ const SectionKicker = ({ children }: { children: React.ReactNode }) => (
 const riskDot = (r: string) =>
   r === "green" ? "bg-success" : r === "amber" ? "bg-warning" : "bg-destructive";
 
-const MockBadge = () => (
-  <span className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 font-data text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-    Mock
-  </span>
+/** Exact package disclosure banner — top of page only, scrolls away (not sticky). */
+const DemoRouteBanner = () => (
+  <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-accent/30 bg-accent/5 px-3 py-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <DemoDataBadge />
+      <p className="text-xs leading-5 text-muted-foreground">
+        Content on this page is illustrative for demonstration. See docs/data-provenance.md for the
+        full audit.
+      </p>
+    </div>
+  </div>
+);
+
+/**
+ * Internal-only / brand-clearance marker. Copy from package README §7 recommended notice draft.
+ * Brand/legal clearance is still missing — do not treat as public-ready.
+ */
+const InternalUnapprovedBanner = () => (
+  <div
+    role="status"
+    className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-5 text-foreground"
+  >
+    <span className="font-semibold uppercase tracking-wide text-warning">
+      Internal only · unapproved for public use
+    </span>
+    <p className="mt-1 text-muted-foreground">
+      Concept demonstration. Not affiliated with, endorsed by, or sponsored by McDonald&apos;s
+      Corporation. McDonald&apos;s and the Golden Arches logo are trademarks of McDonald&apos;s
+      Corporation, used here for identification only. All project data, cycle times, and financial
+      figures shown are illustrative and do not represent actual McDonald&apos;s projects or results.
+      Brand clearance is not confirmed — keep private until written approval exists.
+    </p>
+  </div>
 );
 
 const DemoNavLink = ({
@@ -255,7 +278,7 @@ const DemoNavLink = ({
 
   if (isLive) {
     return (
-      <Link to={resolveDemoHref(to)} className={className}>
+      <Link to={to} className={className}>
         {children}
       </Link>
     );
@@ -286,6 +309,11 @@ const DemoMcDonalds = () => {
 
   return (
     <div className="container-page space-y-14 pb-20">
+      <div className="space-y-0">
+        <DemoRouteBanner />
+        <InternalUnapprovedBanner />
+      </div>
+
       {/* HERO */}
       <section data-tour="hero" className="relative overflow-hidden rounded-2xl border border-border">
         <div className="absolute inset-0 bg-gradient-to-br from-[hsl(var(--pilot-ink))] via-background to-background/80" />
@@ -306,7 +334,7 @@ const DemoMcDonalds = () => {
               <div>
                 <SectionKicker>Executive Demo · July 2026</SectionKicker>
                 <div className="mt-0.5 font-tight text-sm font-semibold text-muted-foreground">
-                  McDonald's East Coast Rebuild Program · Commun-ET / PermitPilot
+                  McDonald&apos;s East Coast Rebuild Program · Commun-ET / PermitPilot
                 </div>
               </div>
             </div>
@@ -328,7 +356,7 @@ const DemoMcDonalds = () => {
                 See the AI workflow lanes
               </DemoNavLink>
               <Link to="/demos" className="pilot-button-ghost">
-                <PlayCircle className="h-4 w-4" /> Interactive demos
+                <PlayCircle className="h-4 w-4" /> Explore Interactive Demo
               </Link>
             </div>
           </div>
@@ -372,7 +400,7 @@ const DemoMcDonalds = () => {
           <div>
             <SectionKicker>Head-to-head cycle</SectionKicker>
             <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight md:text-3xl">
-              One McDonald's store · legacy vs PermitPilot.
+              One McDonald&apos;s store · legacy vs PermitPilot.
             </h2>
           </div>
           <div className="pilot-kicker text-muted-foreground">Scale: 1 cell ≈ ½ week</div>
@@ -397,7 +425,7 @@ const DemoMcDonalds = () => {
               icon={CheckCircle2}
               kicker="First-pass approval"
               value="34% → 84%"
-              sub="Across 12-store East Coast pilot"
+              sub="Illustrative 12-store East Coast model"
             />
           </div>
         </div>
@@ -454,7 +482,6 @@ const DemoMcDonalds = () => {
               <h3 className="truncate font-tight text-base font-bold">
                 MCD-231 · Leesburg VA · utility coordination
               </h3>
-              <MockBadge />
             </div>
             <span className="pilot-kicker shrink-0 text-success">
               All utilities cleared · 11 calendar days
@@ -520,9 +547,6 @@ const DemoMcDonalds = () => {
           >
             Open Cross-Utility Conflict Hunter <ArrowRight className="h-4 w-4" />
           </DemoNavLink>
-          <Link to="/uci" className="pilot-button-ghost mt-3">
-            Open Utility Coordination <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
       </section>
 
@@ -530,10 +554,7 @@ const DemoMcDonalds = () => {
       <section data-tour="portfolio" className="pilot-card overflow-hidden">
         <header className="flex flex-col gap-2 border-b border-border bg-muted/30 px-6 py-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <SectionKicker>Live portfolio</SectionKicker>
-              <MockBadge />
-            </div>
+            <SectionKicker>Live portfolio</SectionKicker>
             <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight md:text-3xl">
               12 East Coast rebuilds · 8 jurisdictions · one board.
             </h2>
@@ -591,13 +612,16 @@ const DemoMcDonalds = () => {
         </div>
       </section>
 
-      {/* ROI */}
+      {/* ROI — restate disclosure near high-risk figures (package recommendation) */}
       <section data-tour="roi">
-        <div className="mb-6">
-          <SectionKicker>What it's worth</SectionKicker>
-          <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight md:text-4xl">
-            Per-store impact, measured.
-          </h2>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <SectionKicker>What it&apos;s worth</SectionKicker>
+            <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              Per-store impact, illustrative.
+            </h2>
+          </div>
+          <DemoDataBadge />
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {roi.map((r) => (
@@ -647,7 +671,7 @@ const DemoMcDonalds = () => {
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
               Give us the twelve East Coast rebuild sites currently in queue and portal credentials.
-              We'll return baseline cycle times and the first AI-orchestrated submittal inside two
+              We&apos;ll return baseline cycle times and the first AI-orchestrated submittal inside two
               weeks.
             </p>
           </div>
@@ -662,14 +686,27 @@ const DemoMcDonalds = () => {
               <Calendar className="h-4 w-4" /> Schedule live walkthrough
             </Link>
             <Link to="/demos" className="pilot-button-ghost justify-center">
-              <PlayCircle className="h-4 w-4" /> Open interactive product demos
+              <PlayCircle className="h-4 w-4" /> Explore Interactive Demo
             </Link>
             <div className="pilot-kicker mt-2 text-center text-muted-foreground">
-              Commun-ET, LLC · PermitPilot for McDonald's East Coast
+              Commun-ET, LLC · PermitPilot for McDonald&apos;s East Coast
             </div>
           </div>
         </div>
       </section>
+
+      <footer className="border-t border-border pt-6 text-xs leading-5 text-muted-foreground">
+        <p>
+          Concept demonstration. Not affiliated with, endorsed by, or sponsored by McDonald&apos;s
+          Corporation. McDonald&apos;s and the Golden Arches logo are trademarks of McDonald&apos;s
+          Corporation, used here for identification only. All project data, cycle times, and financial
+          figures shown are illustrative and do not represent actual McDonald&apos;s projects or
+          results.
+        </p>
+        <p className="mt-2 font-semibold uppercase tracking-wide text-warning">
+          Internal only · brand clearance not confirmed
+        </p>
+      </footer>
 
       <GuidedTour steps={tourSteps} autoStart launcherLabel="Guided tour" />
     </div>

@@ -24,8 +24,9 @@ const FIELD_CLASS =
  * not a large pinned sidebar block). Carries the full PP permit#/credential/create
  * workflow that previously lived in AppSidebar — moved, not deleted.
  *
- * Project/credential pickers are inline lists (not Radix Select). Select Content
- * portals outside Popover and races dismiss/focus, so option clicks never commit.
+ * Project/credential pickers are collapsed inline dropdowns (not always-expanded
+ * lists, and not portaled Radix Select). Nested Select/Popover Content portals
+ * outside this Popover and race dismiss/focus, so option clicks never commit.
  */
 export function ActiveProjectControl() {
   const { user } = useAuth();
@@ -33,6 +34,12 @@ export function ActiveProjectControl() {
   const { projects, loading, updateProject, fetchProjects, createProject } =
     useProjects();
   const [open, setOpen] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState("");
+  const [credentialPickerOpen, setCredentialPickerOpen] = useState(false);
+  const [credentialQuery, setCredentialQuery] = useState("");
+  const projectPickerRef = useRef<HTMLDivElement>(null);
+  const credentialPickerRef = useRef<HTMLDivElement>(null);
 
   const [sidebarCredentials, setSidebarCredentials] = useState<
     {
@@ -275,12 +282,48 @@ export function ActiveProjectControl() {
       if (!selectedProject) return;
       if (v === "__none__") {
         selectedProject.setSelectedProjectId(null);
-        return;
+      } else {
+        selectedProject.setSelectedProjectId(v);
       }
-      selectedProject.setSelectedProjectId(v);
+      setProjectPickerOpen(false);
+      setProjectQuery("");
     },
     [selectedProject],
   );
+
+  useEffect(() => {
+    if (!open) {
+      setProjectPickerOpen(false);
+      setProjectQuery("");
+      setCredentialPickerOpen(false);
+      setCredentialQuery("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!projectPickerOpen && !credentialPickerOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        projectPickerOpen &&
+        projectPickerRef.current &&
+        !projectPickerRef.current.contains(target)
+      ) {
+        setProjectPickerOpen(false);
+        setProjectQuery("");
+      }
+      if (
+        credentialPickerOpen &&
+        credentialPickerRef.current &&
+        !credentialPickerRef.current.contains(target)
+      ) {
+        setCredentialPickerOpen(false);
+        setCredentialQuery("");
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [projectPickerOpen, credentialPickerOpen]);
 
   const handleCreateNewProject = useCallback(async () => {
     const trimmed = permitNumber.trim();
@@ -336,6 +379,33 @@ export function ActiveProjectControl() {
   const projectPickerDisabled = loading || projects.length === 0;
   const selectedProjectValue = selectedProject.selectedProjectId ?? "__none__";
   const selectedCredentialValue = selectedCredentialId || "__none__";
+  const selectedCredential = sidebarCredentials.find(
+    (c) => c.id === selectedCredentialId,
+  );
+  const credentialTriggerLabel = selectedCredential
+    ? `${selectedCredential.jurisdiction}${
+        selectedCredential.portal_username
+          ? ` — ${selectedCredential.portal_username}`
+          : ""
+      }`
+    : "None (select a credential)";
+
+  const normalizedProjectQuery = projectQuery.trim().toLowerCase();
+  const filteredProjects = normalizedProjectQuery
+    ? projects.filter((p) => {
+        const haystack = `${p.name} ${p.permit_number ?? ""}`.toLowerCase();
+        return haystack.includes(normalizedProjectQuery);
+      })
+    : projects;
+
+  const normalizedCredentialQuery = credentialQuery.trim().toLowerCase();
+  const filteredCredentials = normalizedCredentialQuery
+    ? sidebarCredentials.filter((c) => {
+        const haystack =
+          `${c.jurisdiction} ${c.portal_username ?? ""}`.toLowerCase();
+        return haystack.includes(normalizedCredentialQuery);
+      })
+    : sidebarCredentials;
 
   const listItemClass = (active: boolean) =>
     cn(
@@ -351,7 +421,7 @@ export function ActiveProjectControl() {
         <button
           type="button"
           className="flex min-w-0 max-w-[7.5rem] shrink items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 text-left sm:max-w-[10rem] md:max-w-[12rem] xl:max-w-[16rem]"
-          title="Active project"
+          title={triggerLabel}
           data-testid="header-active-project"
         >
           <Briefcase className="h-4 w-4 shrink-0 text-primary" />
@@ -381,93 +451,170 @@ export function ActiveProjectControl() {
             Saved on the selected project for Quick Scrape.
           </p>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1" ref={projectPickerRef}>
           <Label className="text-xs text-muted-foreground">Project</Label>
-          <div
-            role="listbox"
-            aria-label="Select a project"
+          <button
+            type="button"
             data-testid="header-project-select"
+            aria-haspopup="listbox"
+            aria-expanded={projectPickerOpen}
+            disabled={projectPickerDisabled}
+            onClick={() => {
+              setCredentialPickerOpen(false);
+              setProjectPickerOpen((prev) => !prev);
+            }}
             className={cn(
-              "max-h-48 overflow-y-auto rounded-md border border-input bg-background",
+              "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm outline-none transition-colors",
+              "hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/25",
               projectPickerDisabled && "pointer-events-none opacity-50",
             )}
           >
-            <button
-              type="button"
-              role="option"
-              aria-selected={selectedProjectValue === "__none__"}
-              className={listItemClass(selectedProjectValue === "__none__")}
-              onClick={() => handleSelectValueChange("__none__")}
-              disabled={projectPickerDisabled}
-            >
-              Select a project
-            </button>
-            {projects.map((p) => {
-              const active = selectedProjectValue === p.id;
-              return (
+            <span className="min-w-0 flex-1 truncate">
+              {selectedProjectData?.name ?? "Select a project"}
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                projectPickerOpen && "rotate-180",
+              )}
+            />
+          </button>
+          {projectPickerOpen ? (
+            <div className="overflow-hidden rounded-md border border-input bg-background shadow-sm">
+              <Input
+                value={projectQuery}
+                onChange={(e) => setProjectQuery(e.target.value)}
+                placeholder="Search projects…"
+                className="h-9 rounded-none border-0 border-b border-input focus-visible:ring-0"
+                autoFocus
+                data-testid="header-project-search"
+              />
+              <div
+                role="listbox"
+                aria-label="Select a project"
+                className="max-h-44 overflow-y-auto"
+              >
                 <button
-                  key={p.id}
                   type="button"
                   role="option"
-                  aria-selected={active}
-                  data-testid={`header-project-option-${p.id}`}
-                  className={listItemClass(active)}
-                  onClick={() => handleSelectValueChange(p.id)}
-                  disabled={projectPickerDisabled}
+                  aria-selected={selectedProjectValue === "__none__"}
+                  className={listItemClass(selectedProjectValue === "__none__")}
+                  onClick={() => handleSelectValueChange("__none__")}
                 >
-                  <span className="min-w-0 break-words">
-                    {p.name}
-                    {p.permit_number ? ` · ${p.permit_number}` : ""}
-                  </span>
+                  Select a project
                 </button>
-              );
-            })}
-          </div>
+                {filteredProjects.map((p) => {
+                  const active = selectedProjectValue === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      data-testid={`header-project-option-${p.id}`}
+                      title={p.name}
+                      className={listItemClass(active)}
+                      onClick={() => handleSelectValueChange(p.id)}
+                    >
+                      <span className="min-w-0 truncate">{p.name}</span>
+                    </button>
+                  );
+                })}
+                {filteredProjects.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    No matching projects
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
         {sidebarCredentials.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-1" ref={credentialPickerRef}>
             <Label className="flex items-center gap-1 text-xs text-muted-foreground">
               <KeyRound className="h-3 w-3 text-primary" />
               Portal Credential
             </Label>
-            <div
-              role="listbox"
-              aria-label="Select credential"
+            <button
+              type="button"
               data-testid="select-header-credential"
-              className="max-h-40 overflow-y-auto rounded-md border border-input bg-background"
+              aria-haspopup="listbox"
+              aria-expanded={credentialPickerOpen}
+              onClick={() => {
+                setProjectPickerOpen(false);
+                setCredentialPickerOpen((prev) => !prev);
+              }}
+              className={cn(
+                "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm outline-none transition-colors",
+                "hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/25",
+              )}
             >
-              <button
-                type="button"
-                role="option"
-                aria-selected={selectedCredentialValue === "__none__"}
-                className={listItemClass(selectedCredentialValue === "__none__")}
-                onClick={() => {
-                  void handleCredentialChange("__none__");
-                }}
-              >
-                None (select a credential)
-              </button>
-              {sidebarCredentials.map((cred) => {
-                const active = selectedCredentialValue === cred.id;
-                return (
+              <span className="min-w-0 flex-1 truncate">{credentialTriggerLabel}</span>
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                  credentialPickerOpen && "rotate-180",
+                )}
+              />
+            </button>
+            {credentialPickerOpen ? (
+              <div className="overflow-hidden rounded-md border border-input bg-background shadow-sm">
+                <Input
+                  value={credentialQuery}
+                  onChange={(e) => setCredentialQuery(e.target.value)}
+                  placeholder="Search credentials…"
+                  className="h-9 rounded-none border-0 border-b border-input focus-visible:ring-0"
+                  autoFocus
+                />
+                <div
+                  role="listbox"
+                  aria-label="Select credential"
+                  className="max-h-40 overflow-y-auto"
+                >
                   <button
-                    key={cred.id}
                     type="button"
                     role="option"
-                    aria-selected={active}
-                    className={listItemClass(active)}
+                    aria-selected={selectedCredentialValue === "__none__"}
+                    className={listItemClass(selectedCredentialValue === "__none__")}
                     onClick={() => {
-                      void handleCredentialChange(cred.id);
+                      void handleCredentialChange("__none__");
+                      setCredentialPickerOpen(false);
+                      setCredentialQuery("");
                     }}
                   >
-                    <span className="min-w-0 break-words">
-                      {cred.jurisdiction}
-                      {cred.portal_username ? ` — ${cred.portal_username}` : ""}
-                    </span>
+                    None (select a credential)
                   </button>
-                );
-              })}
-            </div>
+                  {filteredCredentials.map((cred) => {
+                    const active = selectedCredentialValue === cred.id;
+                    const label = `${cred.jurisdiction}${
+                      cred.portal_username ? ` — ${cred.portal_username}` : ""
+                    }`;
+                    return (
+                      <button
+                        key={cred.id}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        title={label}
+                        className={listItemClass(active)}
+                        onClick={() => {
+                          void handleCredentialChange(cred.id);
+                          setCredentialPickerOpen(false);
+                          setCredentialQuery("");
+                        }}
+                      >
+                        <span className="min-w-0 truncate">{label}</span>
+                      </button>
+                    );
+                  })}
+                  {filteredCredentials.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      No matching credentials
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
         {!selectedProject.selectedProjectId && permitNumber.trim() && (

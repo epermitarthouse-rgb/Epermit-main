@@ -125,7 +125,10 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/projects/new" element={<Projects />} />
+                  {/* Executive demo is the primary Demo landing; Interactive Demos stay at /demos */}
+                  <Route path="/demo" element={<Navigate to="/demo/mcdonalds" replace />} />
                   <Route path="/demo/mcdonalds" element={<DemoMcDonalds />} />
+                  <Route path="/demo/mcd" element={<Navigate to="/demo/mcdonalds" replace />} />
                   <Route path="/onboarding/authorization" element={<OnboardingAuthorization />} />
                   <Route
                     path="/delivery/authorization"

@@ -27,13 +27,28 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between", className)}>
-      <div className="min-w-0 space-y-1.5">
+    <div
+      className={cn(
+        "mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between",
+        className,
+      )}
+    >
+      <div className="min-w-0 max-w-3xl flex-1 space-y-1.5">
         {eyebrow ? <p className="pilot-kicker">{eyebrow}</p> : null}
-        <h1 className="font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">{title}</h1>
-        {body ? <div className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">{body}</div> : null}
+        <h1 className="font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
+          {title}
+        </h1>
+        {body ? (
+          <div className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
+            {body}
+          </div>
+        ) : null}
       </div>
-      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+      {action ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
+          {action}
+        </div>
+      ) : null}
     </div>
   );
 }
