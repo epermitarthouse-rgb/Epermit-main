@@ -1,9 +1,16 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { computeNextSendAt } from "../_shared/scheduledReportNextSend.ts";
+import { resolveReportsFromEmail } from "../_shared/scheduledReportNextSend.ts";
+import {
+  classifyEmailSendOutcome,
+  classifyNoMatchOutcome,
+} from "../_shared/scheduledReportDelivery.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const REPORTS_FROM_EMAIL = Deno.env.get("REPORTS_FROM_EMAIL");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +27,8 @@ interface ScheduledReport {
   project_filter: string;
   status_filter: string;
   frequency: string;
+  day_of_week: number | null;
+  day_of_month: number | null;
   timezone: string;
   send_time: string;
   email_subject: string | null;
@@ -27,6 +36,7 @@ interface ScheduledReport {
   include_summary: boolean;
   include_details: boolean;
   include_pdf_attachment: boolean;
+  processing_claim_token: string | null;
 }
 
 interface ChecklistItem {
@@ -65,7 +75,6 @@ const DEFAULT_BRANDING: BrandingSettings = {
   unsubscribe_text: "This is an automated report. To manage your scheduled reports, visit your dashboard.",
 };
 
-// Helper to adjust color for gradient
 function adjustColor(hex: string, amount: number): string {
   const clamp = (num: number) => Math.min(255, Math.max(0, num));
   const color = hex.replace("#", "");
@@ -76,20 +85,18 @@ function adjustColor(hex: string, amount: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
-// Generate a simple text-based PDF report using base64 encoding
 function generatePDFReport(
   checklists: SavedChecklist[],
   projectName: string,
   reportName: string,
-  summary: { total: number; passed: number; failed: number; pending: number }
+  summary: { total: number; passed: number; failed: number; pending: number },
 ): string {
-  // Build PDF content as a formatted text document
   const now = new Date();
-  const dateStr = now.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   let content = `%PDF-1.4
@@ -114,9 +121,9 @@ BT
 (Inspection Checklists Report) Tj
 /F1 12 Tf
 0 -30 Td
-(Report: ${reportName.replace(/[()\\]/g, '')}) Tj
+(Report: ${reportName.replace(/[()\\]/g, "")}) Tj
 0 -20 Td
-(Project: ${projectName.replace(/[()\\]/g, '')}) Tj
+(Project: ${projectName.replace(/[()\\]/g, "")}) Tj
 0 -20 Td
 (Generated: ${dateStr}) Tj
 0 -40 Td
@@ -137,19 +144,17 @@ BT
 /F1 11 Tf
 `;
 
-  let yOffset = 0;
   const maxChecklists = Math.min(checklists.length, 15);
-  
+
   for (let i = 0; i < maxChecklists; i++) {
     const c = checklists[i];
-    const name = (c.name || 'Unnamed').replace(/[()\\]/g, '').substring(0, 50);
-    const type = (c.form_data?.inspectionType || 'N/A').replace(/[()\\]/g, '');
-    const status = (c.status || 'unknown').toUpperCase();
-    
+    const name = (c.name || "Unnamed").replace(/[()\\]/g, "").substring(0, 50);
+    const type = (c.form_data?.inspectionType || "N/A").replace(/[()\\]/g, "");
+    const status = (c.status || "unknown").toUpperCase();
+
     content += `0 -20 Td
 (${i + 1}. ${name} - ${type} [${status}]) Tj
 `;
-    yOffset += 20;
   }
 
   if (checklists.length > maxChecklists) {
@@ -165,7 +170,7 @@ ET
 endstream
 endobj
 6 0 obj
-${content.split('stream\n')[1].split('\nendstream')[0].length}
+${content.split("stream\n")[1].split("\nendstream")[0].length}
 endobj
 xref
 0 7
@@ -180,14 +185,97 @@ trailer
 startxref
 %%EOF`;
 
-  // Encode to base64
   const encoder = new TextEncoder();
   const data = encoder.encode(content);
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < data.length; i++) {
     binary += String.fromCharCode(data[i]);
   }
   return btoa(binary);
+}
+
+function nextSendForReport(report: ScheduledReport, after = new Date()): string {
+  return computeNextSendAt({
+    frequency: report.frequency === "monthly" ? "monthly" : "weekly",
+    dayOfWeek: report.day_of_week,
+    dayOfMonth: report.day_of_month,
+    sendTime: report.send_time || "09:00:00",
+    timezone: report.timezone || "UTC",
+    after,
+  });
+}
+
+async function releaseClaim(
+  supabase: ReturnType<typeof createClient>,
+  reportId: string,
+  claimToken: string | null,
+) {
+  let q = supabase
+    .from("scheduled_checklist_reports")
+    .update({
+      processing_claimed_at: null,
+      processing_claim_token: null,
+    })
+    .eq("id", reportId);
+  if (claimToken) {
+    q = q.eq("processing_claim_token", claimToken);
+  }
+  await q;
+}
+
+async function completeSuccessfulRun(
+  supabase: ReturnType<typeof createClient>,
+  report: ScheduledReport,
+) {
+  const now = new Date();
+  const nextSend = nextSendForReport(report, now);
+  let q = supabase
+    .from("scheduled_checklist_reports")
+    .update({
+      last_sent_at: now.toISOString(),
+      next_send_at: nextSend,
+      processing_claimed_at: null,
+      processing_claim_token: null,
+    })
+    .eq("id", report.id);
+  if (report.processing_claim_token) {
+    q = q.eq("processing_claim_token", report.processing_claim_token);
+  }
+  await q;
+}
+
+async function insertDeliveryLog(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    report: ScheduledReport;
+    recipientEmails: string[];
+    successfulCount: number;
+    failedCount: number;
+    failedEmails: string[];
+    status: string;
+    errorMessage: string | null;
+    checklistCount: number;
+  },
+) {
+  const { error: logError } = await supabase.from("scheduled_report_delivery_logs").insert({
+    report_id: params.report.id,
+    user_id: params.report.user_id,
+    report_name: params.report.name,
+    recipient_emails: params.recipientEmails,
+    recipient_count: params.recipientEmails.length,
+    successful_count: params.successfulCount,
+    failed_count: params.failedCount,
+    failed_emails: params.failedEmails,
+    status: params.status,
+    error_message: params.errorMessage,
+    sent_at: new Date().toISOString(),
+    is_test: false,
+    checklist_count: params.checklistCount,
+  });
+
+  if (logError) {
+    console.error(`Failed to log delivery for report ${params.report.id}:`, logError);
+  }
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -196,12 +284,34 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    if (!RESEND_API_KEY) {
+      console.error("RESEND_API_KEY not configured");
+      return new Response(
+        JSON.stringify({ error: "RESEND_API_KEY not configured" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
+    const fromAddress = resolveReportsFromEmail(
+      REPORTS_FROM_EMAIL,
+      "Insight|DesignCheck",
+    );
+    if (fromAddress.includes("localhost.invalid")) {
+      console.error("REPORTS_FROM_EMAIL not configured");
+      return new Response(
+        JSON.stringify({
+          error: "REPORTS_FROM_EMAIL not configured",
+          hint: "Set REPORTS_FROM_EMAIL to a verified Resend sender (e.g. reports@yourdomain.com)",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const now = new Date();
 
     console.log(`Processing scheduled checklist reports at ${now.toISOString()}`);
 
-    // Fetch branding settings
     const { data: brandingData } = await supabase
       .from("email_branding_settings")
       .select("*")
@@ -209,36 +319,34 @@ const handler = async (req: Request): Promise<Response> => {
       .single();
 
     const branding: BrandingSettings = brandingData || DEFAULT_BRANDING;
-    console.log("Using branding settings:", branding.header_text);
 
-    // Get all active scheduled reports that are due
-    const { data: dueReports, error: fetchError } = await supabase
-      .from("scheduled_checklist_reports")
-      .select("*")
-      .eq("is_active", true)
-      .lte("next_send_at", now.toISOString());
+    // Atomically claim due schedules (prevents duplicate sends on overlap/retry)
+    const { data: dueReports, error: claimError } = await supabase.rpc(
+      "claim_due_scheduled_checklist_reports",
+      { p_limit: 25, p_lease_seconds: 900 },
+    );
 
-    if (fetchError) {
-      console.error("Error fetching scheduled reports:", fetchError);
-      throw fetchError;
+    if (claimError) {
+      console.error("Error claiming scheduled reports:", claimError);
+      throw claimError;
     }
 
     if (!dueReports || dueReports.length === 0) {
       console.log("No scheduled reports due");
       return new Response(
         JSON.stringify({ message: "No reports due", processed: 0 }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
 
-    console.log(`Found ${dueReports.length} reports due`);
+    console.log(`Claimed ${dueReports.length} reports`);
 
     let processedCount = 0;
     let errorCount = 0;
+    let noMatchCount = 0;
 
     for (const report of dueReports as ScheduledReport[]) {
       try {
-        // Fetch user's checklists based on filters
         let query = supabase
           .from("saved_inspection_checklists")
           .select("*")
@@ -254,25 +362,37 @@ const handler = async (req: Request): Promise<Response> => {
         if (checklistError) {
           console.error(`Error fetching checklists for report ${report.id}:`, checklistError);
           errorCount++;
+          // Transient DB error — release claim, leave next_send_at due for retry
+          await releaseClaim(supabase, report.id, report.processing_claim_token);
           continue;
         }
 
-        // Filter by project if needed
         let filteredChecklists = checklists || [];
         if (report.project_filter && report.project_filter !== "all") {
           filteredChecklists = filteredChecklists.filter(
-            (c: SavedChecklist) => c.form_data?.projectName === report.project_filter
+            (c: SavedChecklist) => c.form_data?.projectName === report.project_filter,
           );
         }
 
         if (filteredChecklists.length === 0) {
-          console.log(`No checklists found for report ${report.id}, skipping`);
-          // Still update next_send_at
-          await updateNextSendTime(supabase, report);
+          const outcome = classifyNoMatchOutcome();
+          console.log(`No checklists found for report ${report.id}; logging ${outcome.status}`);
+          await insertDeliveryLog(supabase, {
+            report,
+            recipientEmails: [],
+            successfulCount: 0,
+            failedCount: 0,
+            failedEmails: [],
+            status: outcome.status,
+            errorMessage: "No matching checklists for this schedule's filters",
+            checklistCount: 0,
+          });
+          await completeSuccessfulRun(supabase, report);
+          noMatchCount++;
+          processedCount++;
           continue;
         }
 
-        // Generate summary statistics
         const allItems = filteredChecklists.flatMap((c: SavedChecklist) => [
           ...(c.checklist_items || []),
           ...(c.custom_items || []),
@@ -285,44 +405,54 @@ const handler = async (req: Request): Promise<Response> => {
           pending: allItems.filter((i: ChecklistItem) => i.status === "pending").length,
         };
 
-        // Build email HTML with branding
         const projectName = report.project_filter !== "all" ? report.project_filter : "All Projects";
-        const emailSubject = report.email_subject || `${report.frequency === "weekly" ? "Weekly" : "Monthly"} Inspection Report - ${projectName}`;
-        const emailIntro = report.email_intro || `Here is your ${report.frequency} inspection checklists report.`;
+        const emailSubject = report.email_subject ||
+          `${report.frequency === "weekly" ? "Weekly" : "Monthly"} Inspection Report - ${projectName}`;
+        const emailIntro = report.email_intro ||
+          `Here is your ${report.frequency} inspection checklists report.`;
 
-        const emailHtml = buildEmailHtml(
-          report.recipient_name || "",
-          projectName,
-          emailIntro,
-          filteredChecklists,
-          summary,
-          report.include_summary,
-          report.include_details,
-          branding
-        );
-
-        // Parse multiple recipients (comma-separated)
         const recipientEmails = report.recipient_email
-          .split(',')
+          .split(",")
           .map((e: string) => e.trim())
-          .filter((e: string) => e.length > 0 && e.includes('@'));
+          .filter((e: string) => e.length > 0 && e.includes("@"));
 
-        const recipientNames = (report.recipient_name || '')
-          .split(',')
+        const recipientNames = (report.recipient_name || "")
+          .split(",")
           .map((n: string) => n.trim());
 
-        console.log(`Sending report ${report.id} to ${recipientEmails.length} recipient(s), PDF attachment: ${report.include_pdf_attachment}`);
-
-        // Generate PDF if attachment is enabled
-        let pdfBase64: string | null = null;
-        if (report.include_pdf_attachment && filteredChecklists.length > 0) {
-          pdfBase64 = generatePDFReport(filteredChecklists, projectName, report.name, summary);
-          console.log(`Generated PDF attachment for report ${report.id}`);
+        if (recipientEmails.length === 0) {
+          await insertDeliveryLog(supabase, {
+            report,
+            recipientEmails: [],
+            successfulCount: 0,
+            failedCount: 0,
+            failedEmails: [],
+            status: "failed",
+            errorMessage: "No valid recipient emails configured",
+            checklistCount: filteredChecklists.length,
+          });
+          // Configuration error — advance so we do not tight-loop every 15m
+          await completeSuccessfulRun(supabase, report);
+          errorCount++;
+          continue;
         }
 
-        // Send to all recipients in parallel
+        console.log(
+          `Sending report ${report.id} to ${recipientEmails.length} recipient(s), PDF: ${report.include_pdf_attachment}`,
+        );
+
+        let pdfBase64: string | null = null;
+        if (report.include_pdf_attachment && filteredChecklists.length > 0) {
+          pdfBase64 = generatePDFReport(
+            filteredChecklists,
+            projectName,
+            report.name,
+            summary,
+          );
+        }
+
         const emailPromises = recipientEmails.map(async (email: string, index: number) => {
-          const recipientName = recipientNames[index] || '';
+          const recipientName = recipientNames[index] || "";
           const personalizedHtml = buildEmailHtml(
             recipientName,
             projectName,
@@ -331,21 +461,23 @@ const handler = async (req: Request): Promise<Response> => {
             summary,
             report.include_summary,
             report.include_details,
-            branding
+            branding,
           );
 
-          const emailPayload: any = {
-            from: "Insight|DesignCheck <onboarding@resend.dev>",
+          const emailPayload: Record<string, unknown> = {
+            from: fromAddress,
             to: [email],
             subject: emailSubject,
             html: personalizedHtml,
           };
 
-          // Add PDF attachment if enabled
           if (pdfBase64) {
             emailPayload.attachments = [
               {
-                filename: `inspection-report-${projectName.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`,
+                filename:
+                  `inspection-report-${projectName.replace(/[^a-zA-Z0-9]/g, "-")}-${
+                    new Date().toISOString().split("T")[0]
+                  }.pdf`,
                 content: pdfBase64,
               },
             ];
@@ -366,62 +498,43 @@ const handler = async (req: Request): Promise<Response> => {
             return { success: false, email };
           }
 
-          console.log(`Successfully sent report to ${email}`);
           return { success: true, email };
         });
 
         const results = await Promise.all(emailPromises);
-        const failedEmails = results.filter(r => !r.success);
-        const successfulEmails = results.filter(r => r.success);
+        const failedEmails = results.filter((r) => !r.success).map((r) => r.email);
+        const successfulEmails = results.filter((r) => r.success).map((r) => r.email);
+        const outcome = classifyEmailSendOutcome(
+          successfulEmails.length,
+          failedEmails.length,
+        );
 
-        // Determine overall status
-        let deliveryStatus = 'success';
-        if (failedEmails.length === recipientEmails.length) {
-          deliveryStatus = 'failed';
-        } else if (failedEmails.length > 0) {
-          deliveryStatus = 'partial';
-        }
+        await insertDeliveryLog(supabase, {
+          report,
+          recipientEmails,
+          successfulCount: outcome.successfulCount,
+          failedCount: outcome.failedCount,
+          failedEmails,
+          status: outcome.status,
+          errorMessage: failedEmails.length > 0
+            ? `Failed to send to: ${failedEmails.join(", ")}`
+            : null,
+          checklistCount: filteredChecklists.length,
+        });
 
-        // Log delivery to history
-        const { error: logError } = await supabase
-          .from('scheduled_report_delivery_logs')
-          .insert({
-            report_id: report.id,
-            user_id: report.user_id,
-            report_name: report.name,
-            recipient_emails: recipientEmails,
-            recipient_count: recipientEmails.length,
-            successful_count: successfulEmails.length,
-            failed_count: failedEmails.length,
-            failed_emails: failedEmails.map(f => f.email),
-            status: deliveryStatus,
-            error_message: failedEmails.length > 0 ? `Failed to send to: ${failedEmails.map(f => f.email).join(', ')}` : null,
-            sent_at: new Date().toISOString(),
-          });
-
-        if (logError) {
-          console.error(`Failed to log delivery for report ${report.id}:`, logError);
-        }
-
-        if (failedEmails.length === recipientEmails.length) {
-          // All failed
-          console.error(`All emails failed for report ${report.id}`);
+        if (outcome.advanceSchedule) {
+          await completeSuccessfulRun(supabase, report);
+          processedCount++;
+        } else {
+          // Complete failure — keep claim lease so next reclaim waits ~p_lease_seconds
+          // (next_send_at stays due; temp failures remain retryable after lease expiry)
+          console.error(`All emails failed for report ${report.id}; will retry after claim lease`);
           errorCount++;
-          continue;
         }
-
-        if (failedEmails.length > 0) {
-          console.warn(`Some emails failed for report ${report.id}:`, failedEmails.map(f => f.email));
-        }
-
-        console.log(`Successfully sent report ${report.id} to ${recipientEmails.length - failedEmails.length}/${recipientEmails.length} recipients`);
-
-        // Update last_sent_at and next_send_at
-        await updateNextSendTime(supabase, report);
-        processedCount++;
       } catch (err) {
         console.error(`Error processing report ${report.id}:`, err);
         errorCount++;
+        await releaseClaim(supabase, report.id, report.processing_claim_token);
       }
     }
 
@@ -430,36 +543,18 @@ const handler = async (req: Request): Promise<Response> => {
         message: "Scheduled reports processed",
         processed: processedCount,
         errors: errorCount,
+        no_match: noMatchCount,
       }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } },
     );
   } catch (error: any) {
     console.error("Error in process-scheduled-checklist-reports:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
     );
   }
 };
-
-async function updateNextSendTime(supabase: any, report: ScheduledReport) {
-  const now = new Date();
-  let nextSend = new Date();
-
-  if (report.frequency === "weekly") {
-    nextSend.setDate(nextSend.getDate() + 7);
-  } else {
-    nextSend.setMonth(nextSend.getMonth() + 1);
-  }
-
-  await supabase
-    .from("scheduled_checklist_reports")
-    .update({
-      last_sent_at: now.toISOString(),
-      next_send_at: nextSend.toISOString(),
-    })
-    .eq("id", report.id);
-}
 
 function buildEmailHtml(
   recipientName: string,
@@ -469,16 +564,16 @@ function buildEmailHtml(
   summary: { total: number; passed: number; failed: number; pending: number },
   includeSummary: boolean,
   includeDetails: boolean,
-  branding: BrandingSettings
+  branding: BrandingSettings,
 ): string {
   const greeting = recipientName ? `Hi ${recipientName},` : "Hi,";
   const primaryColor = branding.primary_color || "#0f4c5c";
   const gradientEnd = adjustColor(primaryColor, 30);
   const headerText = branding.header_text || "Inspection Report";
   const footerText = branding.footer_text || "Best regards,\nThe Insight|DesignCheck Team";
-  const unsubscribeText = branding.unsubscribe_text || "This is an automated report. To manage your scheduled reports, visit your dashboard.";
+  const unsubscribeText = branding.unsubscribe_text ||
+    "This is an automated report. To manage your scheduled reports, visit your dashboard.";
 
-  // Logo HTML
   const logoHtml = branding.logo_url
     ? `<img src="${branding.logo_url}" alt="Logo" style="max-height: 48px; margin-bottom: 16px;" />`
     : "";
@@ -513,11 +608,17 @@ function buildEmailHtml(
   let detailsSection = "";
   if (includeDetails && checklists.length > 0) {
     const checklistRows = checklists.slice(0, 10).map((c) => {
-      const statusColor = c.status === "signed" ? "#16a34a" : c.status === "completed" ? "#2563eb" : "#ca8a04";
+      const statusColor = c.status === "signed"
+        ? "#16a34a"
+        : c.status === "completed"
+        ? "#2563eb"
+        : "#ca8a04";
       return `
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${c.name}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${c.form_data?.inspectionType || "N/A"}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${
+        c.form_data?.inspectionType || "N/A"
+      }</td>
           <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
             <span style="background: ${statusColor}20; color: ${statusColor}; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
               ${c.status}
@@ -542,12 +643,17 @@ function buildEmailHtml(
             ${checklistRows}
           </tbody>
         </table>
-        ${checklists.length > 10 ? `<p style="color: #64748b; font-size: 14px; margin-top: 12px;">... and ${checklists.length - 10} more checklists</p>` : ""}
+        ${
+      checklists.length > 10
+        ? `<p style="color: #64748b; font-size: 14px; margin-top: 12px;">... and ${
+          checklists.length - 10
+        } more checklists</p>`
+        : ""
+    }
       </div>
     `;
   }
 
-  // Format footer text (convert newlines to <br>)
   const formattedFooter = footerText.replace(/\n/g, "<br>");
 
   return `

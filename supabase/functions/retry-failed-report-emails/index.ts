@@ -1,9 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveReportsFromEmail } from "../_shared/scheduledReportNextSend.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const REPORTS_FROM_EMAIL = Deno.env.get("REPORTS_FROM_EMAIL");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -204,6 +206,20 @@ const handler = async (req: Request): Promise<Response> => {
       </div>
     `;
 
+    const fromAddress = resolveReportsFromEmail(
+      REPORTS_FROM_EMAIL,
+      branding.header_text || "Insight|DesignCheck",
+    );
+    if (fromAddress.includes("localhost.invalid")) {
+      return new Response(
+        JSON.stringify({
+          error: "REPORTS_FROM_EMAIL not configured",
+          hint: "Set REPORTS_FROM_EMAIL to a verified Resend sender",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
     // Send emails to each failed recipient
     const results: { email: string; success: boolean; error?: string }[] = [];
 
@@ -218,7 +234,7 @@ const handler = async (req: Request): Promise<Response> => {
             Authorization: `Bearer ${RESEND_API_KEY}`,
           },
           body: JSON.stringify({
-            from: `${branding.header_text} <onboarding@resend.dev>`,
+            from: fromAddress,
             to: [email],
             subject: emailSubject,
             html: emailHtml,

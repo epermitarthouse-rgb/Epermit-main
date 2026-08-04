@@ -43,12 +43,51 @@ import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { useAuth } from "@/hooks/useAuth";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import { usePortalHarvestEvidence } from "@/hooks/usePortalHarvestEvidence";
 import { useProjects } from "@/hooks/useProjects";
+import { useScrapeOptional } from "@/contexts/ScrapeContext";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { supabase } from "@/lib/supabase";
 import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
+import type { HarvestQueueStatus } from "@/lib/portalHarvestMetrics";
 import { PROJECT_STATUS_CONFIG, type Project } from "@/types/project";
 import { cn } from "@/lib/utils";
+
+type WorkflowTab = "intake" | "health" | "inspections" | "calculations";
+
+const WORKFLOW_TABS = new Set<WorkflowTab>(["intake", "health", "inspections", "calculations"]);
+
+/** Honest dashboard Portal column — never invent Synced from portal_data alone. */
+function formatDashboardPortalLabel(
+  harvestStatus: HarvestQueueStatus | undefined,
+  hasPortalData: boolean,
+): string {
+  if (!harvestStatus) {
+    return hasPortalData ? "Has portal data" : "—";
+  }
+  switch (harvestStatus) {
+    case "Synced":
+      return "Synced";
+    case "Stale":
+      return "Stale";
+    case "Partial":
+      return "Partial";
+    case "Failed":
+      return "Failed";
+    case "Awaiting First Harvest":
+      return "Not harvested";
+    case "Queued":
+      return "Queued";
+    case "Running":
+      return "Running";
+    case "Human Action Required":
+      return "Needs attention";
+    case "Credentials Required":
+      return hasPortalData ? "Has portal data" : "—";
+    default:
+      return hasPortalData ? "Has portal data" : "—";
+  }
+}
 
 interface SavedCalculation {
   id: string;
@@ -79,11 +118,38 @@ export default function Dashboard() {
   const { isComplete: gettingStartedComplete } = useGettingStarted();
   const { selectedProjectId, setSelectedProjectId } = useSelectedProject();
   const { projects, loading: projectsLoading } = useProjects();
+  const harvestEvidence = usePortalHarvestEvidence(projects);
+  const scrape = useScrapeOptional();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [calculations, setCalculations] = useState<SavedCalculation[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [workflowTab, setWorkflowTab] = useState<WorkflowTab>(() => {
+    const raw = searchParams.get("workflow") ?? searchParams.get("tab");
+    return raw && WORKFLOW_TABS.has(raw as WorkflowTab) ? (raw as WorkflowTab) : "intake";
+  });
+
+  useEffect(() => {
+    const raw = searchParams.get("workflow") ?? searchParams.get("tab");
+    if (raw && WORKFLOW_TABS.has(raw as WorkflowTab)) {
+      setWorkflowTab(raw as WorkflowTab);
+    }
+  }, [searchParams]);
+
+  const harvestByProjectId = useMemo(() => {
+    const map = new Map<string, (typeof harvestEvidence.rows)[number]>();
+    for (const row of harvestEvidence.rows) {
+      map.set(row.projectId, row);
+    }
+    return map;
+  }, [harvestEvidence.rows]);
+
+  const hasLiveHarvestProcess =
+    Boolean(scrape?.isScraping) ||
+    harvestEvidence.rows.some(
+      (row) => row.harvestStatus === "Running" || row.harvestStatus === "Queued",
+    );
 
   useEffect(() => {
     if (searchParams.get("checkout") === "success") {
@@ -153,31 +219,44 @@ export default function Dashboard() {
     const active = projects.filter((p) => p.status !== "approved");
     const corrections = projects.filter((p) => p.status === "corrections");
     const inReview = projects.filter((p) => p.status === "in_review" || p.status === "submitted");
-    const withPortal = projects.filter((p) => !!p.portal_status || !!p.portal_data);
+    const withPortal = projects.filter(
+      (p) => !!p.credential_id || harvestEvidence.harvestedProjectIds.has(p.id),
+    );
     return [
       {
         value: String(active.length),
         label: "Active Projects",
+        helper: "Excludes approved",
         accent: "bg-primary/10",
       },
       {
         value: String(inReview.length),
         label: "In Review / Submitted",
+        helper: "Portfolio",
         accent: "bg-[hsl(var(--pilot-cyan)/0.12)]",
       },
       {
         value: String(withPortal.length),
         label: "Portal-linked",
+        helper: "Credential or harvest data",
         accent: "bg-[hsl(var(--pilot-teal)/0.12)]",
       },
       {
         value: String(corrections.length),
         label: "Corrections Needed",
+        helper: "Portfolio",
         accent: "bg-destructive/10",
         tone: "bad" as const,
       },
     ];
-  }, [projects]);
+  }, [projects, harvestEvidence.harvestedProjectIds]);
+
+  const openIntakePipelineTab = () => {
+    setWorkflowTab("intake");
+    const next = new URLSearchParams(searchParams);
+    next.set("workflow", "intake");
+    setSearchParams(next, { replace: true });
+  };
 
   const portfolio = useMemo(
     () =>
@@ -266,33 +345,41 @@ export default function Dashboard() {
         </nav>
 
         {/* KPI cards — Lovable composition, PP counts */}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {projectsLoading
-            ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="pilot-card p-6">
-                  <Skeleton className="h-12 w-16" />
-                  <Skeleton className="mt-3 h-3 w-28" />
-                </div>
-              ))
-            : kpis.map((s) => (
-                <article key={s.label} className="pilot-card relative overflow-hidden p-6">
-                  <div
-                    className={cn(
-                      "pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full",
-                      s.accent,
-                    )}
-                  />
-                  <div
-                    className={cn(
-                      "relative font-display text-5xl font-semibold leading-none tracking-tight",
-                      s.tone === "bad" ? "text-destructive" : "text-foreground",
-                    )}
-                  >
-                    {s.value}
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Portfolio
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {projectsLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="pilot-card p-6">
+                    <Skeleton className="h-12 w-16" />
+                    <Skeleton className="mt-3 h-3 w-28" />
                   </div>
-                  <div className="pilot-kicker relative mt-3">{s.label}</div>
-                </article>
-              ))}
+                ))
+              : kpis.map((s) => (
+                  <article key={s.label} className="pilot-card relative overflow-hidden p-6">
+                    <div
+                      className={cn(
+                        "pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full",
+                        s.accent,
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        "relative font-display text-5xl font-semibold leading-none tracking-tight",
+                        s.tone === "bad" ? "text-destructive" : "text-foreground",
+                      )}
+                    >
+                      {s.value}
+                    </div>
+                    <div className="pilot-kicker relative mt-3">{s.label}</div>
+                    {s.helper ? (
+                      <p className="relative mt-1 text-[11px] text-muted-foreground">{s.helper}</p>
+                    ) : null}
+                  </article>
+                ))}
+          </div>
         </div>
 
         {!subscription.subscribed && (
@@ -341,12 +428,26 @@ export default function Dashboard() {
         <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
           <section className="pilot-card overflow-hidden">
             <header className="flex items-center justify-between gap-3 border-b border-border p-5">
-              <div className="flex items-center gap-3">
-                <h2 className="font-tight text-lg font-bold">Active Projects</h2>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
-                  {projects.length} total
-                </span>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-tight text-lg font-bold">Projects</h2>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      hasLiveHarvestProcess
+                        ? "border-success/30 bg-success/10 text-success"
+                        : "border-border bg-muted/60 text-muted-foreground",
+                    )}
+                  >
+                    {hasLiveHarvestProcess ? (
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+                    ) : null}
+                    {projects.length} total projects
+                  </span>
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Portfolio
+                </p>
               </div>
               <Link
                 to="/projects"
@@ -411,7 +512,10 @@ export default function Dashboard() {
                           </StatusPill>
                         </td>
                         <td className="px-5 py-4 text-muted-foreground">
-                          {row.portal_status || (row.portal_data ? "Synced" : "—")}
+                          {formatDashboardPortalLabel(
+                            harvestByProjectId.get(row.id)?.harvestStatus,
+                            harvestEvidence.harvestedProjectIds.has(row.id),
+                          )}
                         </td>
                         <td className="px-5 py-4 font-data text-xs text-muted-foreground">
                           {isValid(new Date(row.updated_at))
@@ -428,7 +532,12 @@ export default function Dashboard() {
 
           <section className="pilot-card flex flex-col">
             <header className="flex items-center justify-between border-b border-border p-5">
-              <h2 className="font-tight text-lg font-bold">Intelligence &amp; Alerts</h2>
+              <div>
+                <h2 className="font-tight text-lg font-bold">Intelligence &amp; Alerts</h2>
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Portfolio
+                </p>
+              </div>
               <Brain className="h-5 w-5 text-muted-foreground" />
             </header>
             <div className="relative flex-1 space-y-5 p-5">
@@ -492,7 +601,19 @@ export default function Dashboard() {
           title="Workflow Tools"
           className="p-0"
         >
-          <Tabs defaultValue="intake" className="w-full">
+          <Tabs
+            value={workflowTab}
+            onValueChange={(value) => {
+              const nextTab = WORKFLOW_TABS.has(value as WorkflowTab)
+                ? (value as WorkflowTab)
+                : "intake";
+              setWorkflowTab(nextTab);
+              const next = new URLSearchParams(searchParams);
+              next.set("workflow", nextTab);
+              setSearchParams(next, { replace: true });
+            }}
+            className="w-full"
+          >
             <div className="border-b border-border px-5 pt-5">
               <TabsList className="h-auto flex-wrap justify-start bg-transparent p-0">
                 <TabsTrigger value="intake" className="gap-1.5">
@@ -516,12 +637,21 @@ export default function Dashboard() {
             </div>
 
             <TabsContent value="intake" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Selected Project
+              </p>
               <AgentWorkflowStatus />
             </TabsContent>
 
             <TabsContent value="health" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Selected Project
+              </p>
               {selectedProjectId ? (
-                <ProjectHealthCard projectId={selectedProjectId} />
+                <ProjectHealthCard
+                  projectId={selectedProjectId}
+                  onRunManualCheck={openIntakePipelineTab}
+                />
               ) : (
                 <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-10 text-center">
                   <HeartPulse className="h-8 w-8 text-muted-foreground" />
@@ -534,6 +664,9 @@ export default function Dashboard() {
             </TabsContent>
 
             <TabsContent value="inspections" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Portfolio
+              </p>
               <div className="grid items-stretch gap-6 lg:grid-cols-2">
                 <InspectionsPunchListWidget />
                 <RecentChecklistsWidget />
@@ -541,6 +674,9 @@ export default function Dashboard() {
             </TabsContent>
 
             <TabsContent value="calculations" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Portfolio
+              </p>
               {loading ? (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {[1, 2, 3].map((i) => (

@@ -10,6 +10,8 @@ import { useMemo } from "react";
 
 interface ProjectHealthCardProps {
   projectId: string | null;
+  /** Opens Intake Pipeline (or equivalent) without auto-starting a scrape. */
+  onRunManualCheck?: () => void;
 }
 
 interface ProjectRow {
@@ -34,7 +36,7 @@ function hoursBetween(start: Date, end: Date): number {
   return Math.floor(ms / (1000 * 60 * 60));
 }
 
-export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
+export function ProjectHealthCard({ projectId, onRunManualCheck }: ProjectHealthCardProps) {
   const navigate = useNavigate();
   const { data, isLoading } = useQuery({
     queryKey: ["project-health", projectId],
@@ -98,10 +100,14 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
     enabled: !!projectId,
   });
 
-  const healthPercent = data
-    ? (data.total_comments > 0 ? Math.round(((data.total_comments - data.pending_comments) / data.total_comments) * 100) : 100)
-    : 100;
-  const strokeOffset = useMemo(() => 283 - (283 * healthPercent) / 100, [healthPercent]);
+  const hasReviewData = Boolean(data && data.total_comments > 0);
+  const healthPercent = hasReviewData && data
+    ? Math.round(((data.total_comments - data.pending_comments) / data.total_comments) * 100)
+    : null;
+  const strokeOffset = useMemo(
+    () => (healthPercent == null ? 283 : 283 - (283 * healthPercent) / 100),
+    [healthPercent],
+  );
 
   if (!projectId) return null;
   if (isLoading) {
@@ -128,7 +134,14 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
     hasReviewCommentsReport,
   } = data;
 
-  const ringColor = healthPercent > 70 ? "emerald" : healthPercent >= 30 ? "amber" : "red";
+  const ringColor =
+    healthPercent == null
+      ? "neutral"
+      : healthPercent > 70
+        ? "emerald"
+        : healthPercent >= 30
+          ? "amber"
+          : "red";
 
   const lastCheckText =
     lastCheckedAt == null
@@ -150,9 +163,11 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
   const statusVariant =
     deadline != null && (daysUntilDeadline ?? 0) < 0
       ? "red"
-      : pending_comments > 0
-        ? "orange"
-        : "green";
+      : !hasReviewData
+        ? "neutral"
+        : pending_comments > 0
+          ? "orange"
+          : "green";
 
   const deadlineNear =
     deadline != null && daysUntilDeadline != null && daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
@@ -177,10 +192,14 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
     if (pending_comments > 0) {
       navigate(`/response-matrix?project_id=${encodeURIComponent(projectId)}&filter=pending`);
     } else if (total_comments === 0 && hasReviewCommentsReport) {
-      // Parse/approve path — Comment Review upload workspace
       navigate(`/comment-review?project_id=${encodeURIComponent(projectId)}`);
     } else if (total_comments === 0) {
-      navigate("/dashboard");
+      // Open Intake Pipeline (or Portal Harvest) — never auto-start scrape.
+      if (onRunManualCheck) {
+        onRunManualCheck();
+      } else {
+        navigate(`/portal-data?projectId=${encodeURIComponent(projectId)}`);
+      }
     } else if (deadlineNear) {
       navigate(`/response-matrix?project_id=${encodeURIComponent(projectId)}`);
     }
@@ -222,14 +241,15 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
                 "transition-[stroke-dashoffset] duration-1000 ease-out",
                 ringColor === "emerald" && "stroke-emerald-500",
                 ringColor === "amber" && "stroke-amber-500",
-                ringColor === "red" && "stroke-red-500"
+                ringColor === "red" && "stroke-red-500",
+                ringColor === "neutral" && "stroke-ink-tertiary-light/40",
               )}
               strokeDasharray="283"
               strokeDashoffset={strokeOffset}
             />
           </svg>
           <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-ink-primary-light">
-            {healthPercent}%
+            {healthPercent == null ? "—" : `${healthPercent}%`}
           </span>
         </div>
       </CardHeader>
@@ -320,10 +340,17 @@ export function ProjectHealthCard({ projectId }: ProjectHealthCardProps) {
                 "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border",
                 statusVariant === "green" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
                 statusVariant === "orange" && "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-                statusVariant === "red" && "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                statusVariant === "red" && "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+                statusVariant === "neutral" && "bg-cream-sunken/60 text-ink-secondary-light border-cream-sunken",
               )}
             >
-              {statusVariant === "green" ? "On track" : statusVariant === "orange" ? "Action required" : "Deadline passed"}
+              {statusVariant === "neutral"
+                ? "No review data"
+                : statusVariant === "green"
+                  ? "On track"
+                  : statusVariant === "orange"
+                    ? "Action required"
+                    : "Deadline passed"}
             </span>
             <Button size="sm" variant="outline" disabled={allClear} onClick={handleActionClick}>
               {buttonLabel}

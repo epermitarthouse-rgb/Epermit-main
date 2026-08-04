@@ -43,11 +43,28 @@ interface Project {
   name: string;
 }
 
+interface ChecklistStats {
+  total: number;
+  signed: number;
+  completed: number;
+  inProgress: number;
+  draft: number;
+}
+
+const EMPTY_STATS: ChecklistStats = {
+  total: 0,
+  signed: 0,
+  completed: 0,
+  inProgress: 0,
+  draft: 0,
+};
+
 export function RecentChecklistsWidget() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [checklists, setChecklists] = useState<SavedChecklist[]>([]);
   const [projects, setProjects] = useState<Record<string, Project>>({});
+  const [stats, setStats] = useState<ChecklistStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,20 +73,26 @@ export function RecentChecklistsWidget() {
     const fetchChecklists = async () => {
       setLoading(true);
       
-      // Fetch recent saved checklists
-      const { data, error } = await supabase
-        .from('saved_inspection_checklists')
-        .select('id, name, status, checklist_items, updated_at, project_id, form_data')
-        .order('updated_at', { ascending: false })
-        .limit(5);
+      // Recent list (5) + full portfolio status counts (never treat last-5 as totals)
+      const [recentRes, statusRes] = await Promise.all([
+        supabase
+          .from('saved_inspection_checklists')
+          .select('id, name, status, checklist_items, updated_at, project_id, form_data')
+          .order('updated_at', { ascending: false })
+          .limit(5),
+        supabase.from('saved_inspection_checklists').select('status'),
+      ]);
 
-      if (error) {
-        console.error('Error fetching checklists:', error);
+      if (recentRes.error) {
+        console.error('Error fetching checklists:', recentRes.error);
         setLoading(false);
         return;
       }
+      if (statusRes.error) {
+        console.error('Error fetching checklist stats:', statusRes.error);
+      }
 
-      const checklistData = (data || []).map(item => ({
+      const checklistData = (recentRes.data || []).map(item => ({
         ...item,
         checklist_items: Array.isArray(item.checklist_items) 
           ? (item.checklist_items as unknown as ChecklistItem[])
@@ -78,6 +101,15 @@ export function RecentChecklistsWidget() {
       }));
 
       setChecklists(checklistData);
+
+      const statusRows = statusRes.data || [];
+      setStats({
+        total: statusRows.length,
+        signed: statusRows.filter((c) => c.status === 'signed').length,
+        completed: statusRows.filter((c) => c.status === 'completed').length,
+        inProgress: statusRows.filter((c) => c.status === 'in_progress').length,
+        draft: statusRows.filter((c) => c.status === 'draft').length,
+      });
 
       // Fetch project names for checklists with project_id
       const projectIds = checklistData
@@ -207,15 +239,6 @@ export function RecentChecklistsWidget() {
     );
   };
 
-  // Calculate stats
-  const stats = {
-    total: checklists.length,
-    signed: checklists.filter(c => c.status === 'signed').length,
-    completed: checklists.filter(c => c.status === 'completed').length,
-    inProgress: checklists.filter(c => c.status === 'in_progress').length,
-    draft: checklists.filter(c => c.status === 'draft').length,
-  };
-
   if (loading) {
     return (
       <Card className="rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream dark:bg-cream-raised dark:text-ink-primary-light">
@@ -247,12 +270,12 @@ export function RecentChecklistsWidget() {
           </Button>
         </div>
         <CardDescription className="text-ink-secondary-light">
-          Your recently saved inspection checklists
+          Portfolio · Recent 5 listed below; stats count all saved checklists
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Quick Stats */}
-        {checklists.length > 0 && (
+        {/* Quick Stats — full portfolio counts */}
+        {stats.total > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
             <div className="rounded-lg border border-cream-sunken/60 bg-cream-sunken/50 p-2 text-center">
               <p className="text-lg font-bold text-ink-primary-light">{stats.total}</p>
