@@ -178,7 +178,9 @@ import { UciComingSoonPanel } from "@/components/uci/UciComingSoonPanel";
 import {
   getUciNavSection,
   isUciDrawerTab,
+  uciSectionHref,
   UCI_DRAWER_TABS,
+  UCI_HUB_TILE_SECTIONS,
   type UciDrawerTab,
 } from "@/lib/uciNavSections";
 import {
@@ -2626,15 +2628,8 @@ export default function UciDashboard() {
             />
           ) : null}
 
-          {activeNavSection?.support === "mock" ? (
+          {activeNavSection?.support === "mock" || activeNavSection?.support === "partial" ? (
             <UciComingSoonPanel section={activeNavSection} />
-          ) : null}
-          {activeNavSection?.support === "partial" ? (
-            <AlertBanner
-              tone="warn"
-              title="Partial connection"
-              detail={activeNavSection.note}
-            />
           ) : null}
 
           {/*
@@ -2680,13 +2675,9 @@ export default function UciDashboard() {
           </div>
 
           {/*
-            Coordination modules — Lovable-style hub tile grid, but wired to
-            REAL PP capabilities only. Lovable's mock hub tiles (Conflict
-            Hunter, Easement/ROW, Provider Map, Miss Utility, Long-Lead,
-            Predictive Impact) have no PP equivalent yet and are
-            intentionally NOT shipped here — no fake modules/links. Always
-            rendered as the primary view — never gated on project selection
-            or provider/record load state.
+            Coordination modules — primary ops tiles + demoted sidebar modules
+            (Load Profile, Meter Set, Conflict Hunter, etc.) so capabilities
+            stay reachable after the Lovable-shaped UCI nav trim.
           */}
           <Panel eyebrow="UCI Hub" title="Coordination modules">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -2697,7 +2688,7 @@ export default function UciDashboard() {
                 }
                 className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
               >
-                <Zap className="mt-0.5 h-4 w-4 text-primary" />
+                <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle stages</div>
                   <div className="text-[11px] text-muted-foreground">
@@ -2712,7 +2703,7 @@ export default function UciDashboard() {
                 }
                 className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
               >
-                <Layers className="mt-0.5 h-4 w-4 text-primary" />
+                <Layers className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground group-hover:text-primary">Coordination records</div>
                   <div className="text-[11px] text-muted-foreground">
@@ -2732,7 +2723,7 @@ export default function UciDashboard() {
                     : "border-border bg-muted/30 hover:border-primary/50 hover:bg-primary/5",
                 )}
               >
-                <AlertTriangle className="mt-0.5 h-4 w-4 text-primary" />
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground group-hover:text-primary">Attention queue</div>
                   <div className="text-[11px] text-muted-foreground">{uciNeedsAttentionCount} flagged communication(s)</div>
@@ -2747,7 +2738,7 @@ export default function UciDashboard() {
                 }}
                 className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <RadioTower className="mt-0.5 h-4 w-4 text-primary" />
+                <RadioTower className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground group-hover:text-primary">Provider detail</div>
                   <div className="text-[11px] text-muted-foreground">
@@ -2764,7 +2755,7 @@ export default function UciDashboard() {
                 }}
                 className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
               >
-                <Plus className="mt-0.5 h-4 w-4 text-primary" />
+                <Plus className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground group-hover:text-primary">Setup</div>
                   <div className="text-[11px] text-muted-foreground">
@@ -2772,6 +2763,39 @@ export default function UciDashboard() {
                   </div>
                 </div>
               </button>
+              {UCI_HUB_TILE_SECTIONS.map((tile) => {
+                const Icon = tile.icon;
+                const href =
+                  tile.target.kind === "external"
+                    ? tile.target.href
+                    : uciSectionHref(tile.section);
+                return (
+                  <button
+                    key={tile.id}
+                    type="button"
+                    data-testid={`uci-hub-tile-${tile.id}`}
+                    onClick={() => navigate(href)}
+                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
+                  >
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
+                          {tile.label}
+                        </span>
+                        {tile.support === "mock" ? (
+                          <span className="shrink-0 rounded border border-border/70 bg-muted/50 px-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                            Soon
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {tile.hubDescription ?? tile.note ?? "Open module"}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </Panel>
 

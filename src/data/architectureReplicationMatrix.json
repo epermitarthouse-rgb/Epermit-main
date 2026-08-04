@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-24T20:32:01.918155+00:00",
+  "generatedAt": "2026-08-04T23:31:08.454781+00:00",
   "branch": "feat/lovable-ui-replication",
   "sourceCsv": "reference/lovable-ui/lovable-permitpilot-architecture-matrix.csv",
   "sourceMd": "reference/lovable-ui/lovable-permitpilot-architecture-matrix.md",
@@ -540,16 +540,17 @@
         "backendConnected": "Yes",
         "functionalStatus": "Working",
         "uiParity": "Partial \u2014 PermitPilot's hub is richer, but it is not embedded as a dashboard tab",
-        "functionalParity": "PermitPilot is ahead \u2014 Lovable's UCI tab is static mock content"
+        "functionalParity": "PermitPilot is ahead \u2014 Lovable's UCI tab is static mock content",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Fold into existing PP surface",
         "targetRoute": "/uci",
         "namingDecision": "Use \"Utility Coordination\" in the sidebar",
-        "navPlacement": "Its own expandable sidebar group, not a dashboard tab",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "/uci?section=overview",
         "dataIntegration": "None.",
-        "entryPointDecision": "Its own expandable sidebar group, not a dashboard tab"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the single canonical /uci entry point and its ErrorBoundary wrapper.",
@@ -1768,9 +1769,10 @@
         "dataSource": "Supabase permit applications, project documents, portal_credentials",
         "backendEndpoint": "permitwizard-preflight; permitwizard-execute; epermit-submit; document-preparation-agent",
         "backendConnected": "Yes",
-        "functionalStatus": "Working",
+        "functionalStatus": "Partial (WIP)",
         "uiParity": "Partial \u2014 Lovable's stepper chrome is cleaner; the underlying steps differ because PermitPilot's are real",
-        "functionalParity": "PermitPilot is far ahead \u2014 Lovable steps through a mock packet; PermitPilot runs preflight and executes real portal submissions"
+        "functionalParity": "PermitPilot is far ahead \u2014 Lovable steps through a mock packet; PermitPilot runs preflight and executes real portal submissions",
+        "auditNotes": "2026-08-05: PERMIT_FILING_WIP intentionally gates Start Pre-Flight; not a merge blocker."
       },
       "decisions": {
         "routeDecision": "Keep PP route",
@@ -1845,23 +1847,24 @@
         "route": "/response-matrix",
         "routeExists": "Yes",
         "sourceFiles": "src/pages/ResponseMatrix.tsx; src/pages/CommentReview.tsx; src/pages/ClassifiedComments.tsx",
-        "navEntry": "Sidebar \u2192 Response Matrix",
+        "navEntry": "Sidebar \u2192 Delivery \u203a Response Matrix; Comment Review via in-page CTAs",
         "auth": "Signed-in via ProtectedLayoutRoute",
         "dataSource": "Supabase parsed_comments, comment responses, project documents",
         "backendEndpoint": "parse-permit-comments; comment-parser-agent; discipline-classifier-agent; generate-response; generate-grounded-response; export-response-package",
         "backendConnected": "Yes",
         "functionalStatus": "Working",
         "uiParity": "Partial \u2014 Lovable's matrix grid, row density and status chips are the target styling",
-        "functionalParity": "PermitPilot is far ahead \u2014 Lovable drafts against mock comments; PermitPilot parses real comment letters and generates grounded responses"
+        "functionalParity": "PermitPilot is far ahead \u2014 Lovable drafts against mock comments; PermitPilot parses real comment letters and generates grounded responses",
+        "auditNotes": " | 2026-08-05: intentional IA \u2014 Matrix is comment entrance."
       },
       "decisions": {
         "routeDecision": "Keep PP route",
         "targetRoute": "/response-matrix",
         "namingDecision": "Keep \"Response Matrix\"",
-        "navPlacement": "Delivery group in the sidebar",
+        "navPlacement": "Delivery group; Comment Review intentionally omitted from hybridNav",
         "deepLinkPattern": "n/a",
         "dataIntegration": "None.",
-        "entryPointDecision": "Delivery group in the sidebar"
+        "entryPointDecision": "Delivery \u203a Response Matrix \u2014 primary comment-workflow entrance; CTAs to /comment-review"
       },
       "work": {
         "preserve": "Preserve comment parsing, discipline classification, grounded response generation, citation references and the export package path. Response text generation must keep going through the existing edge functions.",
@@ -2754,16 +2757,17 @@
         "backendConnected": "Yes",
         "functionalStatus": "Working (contextual)",
         "uiParity": "Weak \u2014 no cross-project document browser",
-        "functionalParity": "Strong on storage and ingestion; missing only the aggregate view"
+        "functionalParity": "Strong on storage and ingestion; missing only the aggregate view",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Defer",
         "targetRoute": "Undecided \u2014 a cross-project document view could be added later",
         "namingDecision": "If built, use \"Documents\"",
-        "navPlacement": "Omit from PermitPilot navigation",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "n/a",
         "dataIntegration": "A cross-project document listing query respecting RLS.",
-        "entryPointDecision": "Omit from PermitPilot navigation"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve ingestion, storage paths, RLS scoping and the document mapping used by permit filing.",
@@ -3000,16 +3004,17 @@
         "backendConnected": "Yes",
         "functionalStatus": "Working",
         "uiParity": "Partial \u2014 PermitPilot's hub already exceeds Lovable's; alignment is about chrome, not content",
-        "functionalParity": "PermitPilot is far ahead \u2014 Lovable's hub is static mock KPIs"
+        "functionalParity": "PermitPilot is far ahead \u2014 Lovable's hub is static mock KPIs",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Keep PP route",
         "targetRoute": "/uci",
         "namingDecision": "Use \"Utility Coordination\" as the group label and \"Overview\" for this section",
-        "navPlacement": "Expandable sidebar group with section children",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "/uci?section=overview",
         "dataIntegration": "None.",
-        "entryPointDecision": "Expandable sidebar group with section children"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the live scraper integration, coordination records, stage rail, attention queue, per-project scoping and the ErrorBoundary wrapper.",
@@ -3082,16 +3087,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Partial",
         "uiParity": "Partial \u2014 per-record submission tracking exists; no cross-project submissions table",
-        "functionalParity": "Partial \u2014 real per-record submissions, no portfolio-wide view"
+        "functionalParity": "Partial \u2014 real per-record submissions, no portfolio-wide view",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=submissions",
         "namingDecision": "Use Lovable label \"Submissions\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"submissions\") \u2192 tab \"application-prep\"",
         "dataIntegration": "A cross-project submissions rollup query, if a portfolio view is later required.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve per-record submission and tracking behavior in the Application prep drawer tab.",
@@ -3164,16 +3170,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Partial",
         "uiParity": "Partial \u2014 per-record portal communications exist; no cross-project inbox",
-        "functionalParity": "Partial \u2014 real portal messages per record, no unified inbox"
+        "functionalParity": "Partial \u2014 real portal messages per record, no unified inbox",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=communications",
         "namingDecision": "Use Lovable label \"Communications / Inbox\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"communications\") \u2192 tab \"communications\"",
         "dataIntegration": "A cross-project message rollup, if an inbox is later required.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve per-record portal communications retrieval.",
@@ -3246,16 +3253,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Partial",
         "uiParity": "Partial \u2014 per-record COS analysis exists; no predictive portfolio table",
-        "functionalParity": "Partial \u2014 real COS per record, no portfolio prediction"
+        "functionalParity": "Partial \u2014 real COS per record, no portfolio prediction",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=class-of-service",
         "namingDecision": "Use Lovable label \"Class of Service\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"class-of-service\") \u2192 tab \"cos\"",
         "dataIntegration": "A portfolio COS model, only if the client requires prediction.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve per-record COS analysis logic.",
@@ -3328,16 +3336,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Partial",
         "uiParity": "Weak \u2014 CIAC appears as generic cost rows, not a dedicated refund tracker",
-        "functionalParity": "Partial \u2014 CIAC amounts can be recorded; refund windows are not tracked"
+        "functionalParity": "Partial \u2014 CIAC amounts can be recorded; refund windows are not tracked",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=ciac",
         "namingDecision": "Use Lovable label \"CIAC & Refunds\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"ciac\") \u2192 tab \"costs\"",
         "dataIntegration": "A refund-window model (deposit date, refund deadline, status) before any tracker UI.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the existing cost-row model that CIAC entries use today.",
@@ -3410,16 +3419,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Partial",
         "uiParity": "Weak \u2014 energization dates exist; no multi-party choreography timeline",
-        "functionalParity": "Partial \u2014 real dates and meter-set/closeout data, no orchestration view"
+        "functionalParity": "Partial \u2014 real dates and meter-set/closeout data, no orchestration view",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=energization",
         "namingDecision": "Use Lovable label \"Energization\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"energization\") \u2192 tab \"costs\"",
         "dataIntegration": "A multi-party scheduling model, if choreography is required.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve energization dates and the meter-set/closeout checklist generation.",
@@ -3492,16 +3502,17 @@
         "backendConnected": "None",
         "functionalStatus": "Coming-soon panel (labelled, no data)",
         "uiParity": "None \u2014 labelled coming-soon panel only",
-        "functionalParity": "None \u2014 no 811 ticket domain in PermitPilot"
+        "functionalParity": "None \u2014 no 811 ticket domain in PermitPilot",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Do not build",
         "targetRoute": "/uci?section=miss-utility",
         "namingDecision": "Use Lovable label \"Miss Utility\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"miss-utility\")",
         "dataIntegration": "An 811 ticket domain plus a real integration with the state notification centre.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the coming-soon panel's explicit 'no backend yet' labelling.",
@@ -3574,16 +3585,17 @@
         "backendConnected": "None",
         "functionalStatus": "Coming-soon panel (labelled, no data)",
         "uiParity": "None \u2014 labelled coming-soon panel only",
-        "functionalParity": "None \u2014 no graph/nodes backend"
+        "functionalParity": "None \u2014 no graph/nodes backend",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Do not build",
         "targetRoute": "/uci?section=knowledge-graph",
         "namingDecision": "Use Lovable label \"Knowledge Graph\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"knowledge-graph\")",
         "dataIntegration": "A graph schema plus an entity-resolution pipeline.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the coming-soon labelling.",
@@ -3902,16 +3914,17 @@
         "backendConnected": "None",
         "functionalStatus": "Coming-soon panel (labelled, no data)",
         "uiParity": "None \u2014 labelled coming-soon panel only",
-        "functionalParity": "None \u2014 no conflict-detection service"
+        "functionalParity": "None \u2014 no conflict-detection service",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Do not build",
         "targetRoute": "/uci?section=conflict-hunter",
         "namingDecision": "Use Lovable label \"Conflict Hunter\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"conflict-hunter\")",
         "dataIntegration": "A cross-utility conflict detection service with real geometry and schedule inputs.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the coming-soon labelling.",
@@ -3984,16 +3997,17 @@
         "backendConnected": "None",
         "functionalStatus": "Coming-soon panel (labelled, no data)",
         "uiParity": "None \u2014 labelled coming-soon panel only",
-        "functionalParity": "None \u2014 no easement/ROW domain"
+        "functionalParity": "None \u2014 no easement/ROW domain",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Do not build",
         "targetRoute": "/uci?section=easement",
         "namingDecision": "Use Lovable label \"Easement / Right of Way\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"easement\")",
         "dataIntegration": "An easement/ROW domain with document linkage.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve the coming-soon labelling.",
@@ -4066,16 +4080,17 @@
         "backendConnected": "Yes",
         "functionalStatus": "Working",
         "uiParity": "Partial \u2014 PermitPilot's load profile lives in a drawer tab rather than a page",
-        "functionalParity": "Strong on both sides; PermitPilot's version is real and has test coverage"
+        "functionalParity": "Strong on both sides; PermitPilot's version is real and has test coverage",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=load-profile",
         "namingDecision": "Use Lovable label \"Load Profile\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"load-profile\") \u2192 tab \"load-profile\"",
         "dataIntegration": "None.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve load-profile upload, parsing and analysis logic, including its existing vitest coverage.",
@@ -4148,16 +4163,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Partial",
         "uiParity": "Weak \u2014 checklist generation exists; no sequencing/scheduling UI",
-        "functionalParity": "Partial \u2014 real meter-set and closeout checklist generation, no choreography"
+        "functionalParity": "Partial \u2014 real meter-set and closeout checklist generation, no choreography",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Deep link (query param)",
         "targetRoute": "/uci?section=meter-set",
         "namingDecision": "Use Lovable label \"Meter Set\" in the UCI sidebar",
-        "navPlacement": "UCI expandable sidebar group; no top-level nav entry",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "uciSectionHref(\"meter-set\") \u2192 tab \"costs\"",
         "dataIntegration": "A scheduling model before any sequencing UI.",
-        "entryPointDecision": "UCI expandable sidebar group; no top-level nav entry"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve meter-set and closeout checklist generation.",
@@ -6280,16 +6296,17 @@
         "backendConnected": "Partial",
         "functionalStatus": "Portal comms real; no threads",
         "uiParity": "Weak \u2014 no thread list UI",
-        "functionalParity": "Partial \u2014 real outbound messaging, no threaded inbox"
+        "functionalParity": "Partial \u2014 real outbound messaging, no threaded inbox",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Defer",
         "targetRoute": "Undecided",
         "namingDecision": "n/a \u2014 label not adopted",
-        "navPlacement": "Omit from PermitPilot navigation",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "n/a",
         "dataIntegration": "A message thread domain with participants, read state and notification fan-out.",
-        "entryPointDecision": "Omit from PermitPilot navigation"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "Preserve all transactional email functions and per-record portal communications.",
@@ -6450,7 +6467,7 @@
         "routeDecision": "Keep PP route",
         "targetRoute": "/admin",
         "namingDecision": "Keep \"Admin\"",
-        "navPlacement": "Admin area entry; not in the main sidebar for non-admins",
+        "navPlacement": "Admin group defaultOpen: true when isAdmin; Overview/Jurisdictions/Feature Flags/Shadow Mode/Architecture Replication + preview stubs",
         "deepLinkPattern": "/admin/jurisdictions, /admin/feature-flags, /admin/shadow-mode",
         "dataIntegration": "None.",
         "entryPointDecision": "Admin area entry; not in the main sidebar for non-admins"
@@ -7175,14 +7192,15 @@
         "route": "/demos",
         "routeExists": "Yes",
         "sourceFiles": "src/pages/Demos.tsx; src/components/layout/MarketingLayout.tsx",
-        "navEntry": "Marketing nav \u2192 Demos",
+        "navEntry": "Command \u203a Demo \u2192 /demo/mcdonalds; interactive /demos secondary",
         "auth": "Public",
         "dataSource": "Curated demo content",
         "backendEndpoint": "None",
         "backendConnected": "None (marketing content)",
         "functionalStatus": "Working",
         "uiParity": "Weak \u2014 Lovable has a single client-branded guided tour; PermitPilot has a public demo index",
-        "functionalParity": "Comparable intent (sales demonstration), different structure"
+        "functionalParity": "Comparable intent (sales demonstration), different structure",
+        "auditNotes": "2026-08-05: intentional Demo IA (Lovable + interactive)."
       },
       "decisions": {
         "routeDecision": "Fold into existing PP surface",
@@ -8923,16 +8941,17 @@
         "backendConnected": "Node scraper service on Railway",
         "functionalStatus": "Working",
         "uiParity": "Working",
-        "functionalParity": "Working"
+        "functionalParity": "Working",
+        "auditNotes": "2026-08-05: UCI_PRIMARY_NAV_SECTIONS Soon-only; UCI_HUB_TILE_SECTIONS for demoted modules; no Hub child."
       },
       "decisions": {
         "routeDecision": "Preserve. Any scraper change deploys to Railway development only, never production, and never as part of a styling change.",
         "targetRoute": "`scraper-service HTTP API (/api/uci and others)`",
         "namingDecision": "Live utility scraper service",
-        "navPlacement": "Keep existing",
+        "navPlacement": "Intelligence \u203a expandable Utility Coordination; Lovable-shaped Soon children; hub tiles for demoted modules",
         "deepLinkPattern": "`scraper-service HTTP API (/api/uci and others)`",
         "dataIntegration": "Reuse current PermitPilot backend",
-        "entryPointDecision": "Keep existing entry point"
+        "entryPointDecision": "Parent /uci hub; children /uci?section=\u2026 or /uci/application-builder"
       },
       "work": {
         "preserve": "The real Playwright engine behind Portal Harvest jurisdiction scrapes AND UCI. Lovable has no backend. Do not change scraper behavior for UI styling. The real data engine behind UCI and portal harvest. Lovable has no backend at all.",
@@ -9461,5 +9480,7 @@
         "isUiOnly": false
       }
     }
-  ]
+  ],
+  "iaSnapshotAt": "2026-08-05",
+  "iaSnapshotNotes": "PermitPilot hybridNav IA: Comment Review via Response Matrix; Classified Comments redirect; Permit Filing WIP; UCI Soon-only primary children + hub tiles; Admin defaultOpen; Demo\u2192McDonalds."
 }

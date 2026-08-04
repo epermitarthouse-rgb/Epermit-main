@@ -28,7 +28,7 @@ export function UciComingSoonPanel({ section }: { section: UciNavSection }) {
             <Construction className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span>
               No mock records, fake actions, or simulated submissions are available from this
-              panel. Use Overview and your coordination drawer for live UCI work.
+              panel. Use the Utility Coordination hub and coordination drawer for live UCI work.
             </span>
           </p>
         </div>

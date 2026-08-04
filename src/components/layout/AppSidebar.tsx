@@ -84,7 +84,18 @@ export function AppSidebar() {
       );
     }
     if (href === "/uci") {
-      return location.pathname === "/uci" || location.pathname.startsWith("/uci/");
+      // Parent hub only — child sections / UCI Builder use their own items.
+      return location.pathname === "/uci" && !location.search.includes("section=");
+    }
+    if (href.includes("?")) {
+      const [path, query] = href.split("?");
+      if (location.pathname !== path) return false;
+      const want = new URLSearchParams(query);
+      const have = new URLSearchParams(location.search);
+      for (const [key, value] of want.entries()) {
+        if (have.get(key) !== value) return false;
+      }
+      return true;
     }
     return location.pathname === href;
   };

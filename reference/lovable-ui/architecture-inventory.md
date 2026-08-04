@@ -1,6 +1,6 @@
 # Architecture Inventory
 
-_Hand-curated documentation of every route, page, entry point, and functional surface. Cross-checked against `src/App.tsx`, `src/components/permitpilot/data.ts`, and `src/pages/*`. Audited 2026-07-24. Mirror of `/architecture-inventory` (`src/pages/ArchitectureInventory.tsx`)._
+_Hand-curated documentation of every route, page, entry point, and functional surface. Cross-checked against `src/App.tsx`, `src/components/permitpilot/data.ts`, and `src/pages/*`. Audited 2026-07-24; feat IA snapshot 2026-08-05. Mirror of `/architecture-inventory` (`src/pages/ArchitectureInventory.tsx`)._
 
 ## Summary
 
@@ -577,6 +577,40 @@ Internal
 - `/uci/application-builder` — UCI Application Builder — backend: UI only
 - `/settings` — Settings — backend: UI only
 - `/admin/endpoints` — Endpoints — backend: UI only
+
+## PermitPilot feat IA snapshot (2026-08-05)
+
+_Source of truth for live sidebar: `src/components/layout/hybridNav.ts` + `UciSidebarNav` / `uciNavSections.ts`. This Lovable mirror inventory remains useful for route cataloging; the notes below record intentional PermitPilot IA on `feat/lovable-ui-replication`._
+
+### Hybrid sidebar (shipped)
+
+| Group | Items / notes |
+|-------|----------------|
+| **Command** | Dashboard, Projects, Permit Queue (Soon), **Demo → `/demo/mcdonalds`** (interactive `/demos` secondary) |
+| **Onboarding** | Client Authorization (LOA) |
+| **Delivery** | Permit Filing (`PERMIT_FILING_WIP` Start Pre-Flight), **Response Matrix** (comment-workflow entrance), Portal Harvest, Operations Board |
+| **Intelligence** | DesignCheck, **Code Analyzer**, expandable **Utility Coordination** (Lovable-shaped children, **Soon-only** badges), Jurisdiction Map, Provider Compare, Permit Intelligence |
+| **Resources** | Checklists, Reference Library, Utility Coverage (Soon), Glossary (Soon), Analytics, Messages (Soon), ROI, Tool Consolidation, Pricing |
+| **Admin** | `defaultOpen: true` — Overview, Jurisdictions, Feature Flags, Shadow Mode, Architecture Replication, Authorizations/Members/Audit (preview Soon) |
+| **Help & Support** | Documentation, FAQ, Contact, Design preview, Settings |
+
+### Intentional IA (not missing product)
+
+| Topic | Decision |
+|-------|----------|
+| **Comment Review** | Route `/comment-review` remains live; **not** in `hybridNav`. Enter via Response Matrix Upload & Parse / Review Parsed CTAs (+ Command Palette). |
+| **Classified Comments** | `/classified-comments` **redirects** to Response Matrix; classify stays on Matrix. |
+| **Permit Filing Pre-Flight** | Intentionally WIP/Soon (`PERMIT_FILING_WIP`); not a parity blocker vs main’s enabled button. |
+| **UCI nav** | Primary children: Submissions, Inbox, Class of Service, CIAC & Refunds, Energization, Miss Utility 811, Knowledge Graph, UCI Builder — all **Soon** chrome. Hub child removed. Demoted modules (Load Profile, Meter Set, Conflict Hunter, Easement, Portfolio, Provider Map) remain as **hub tiles**. Partial support rendered as Coming Soon panels. |
+| **Demos** | Primary Command › Demo = Lovable McDonald’s; interactive demos at `/demos`. |
+
+### Related docs
+
+- `docs/current-ui-inventory.json` — updated navigationItems / route notes (2026-08-05)
+- `docs/audits/main-vs-feat-functional-parity-audit.md` — merge-readiness; intentional IA accepted
+- Admin checklist UI: `/admin/architecture-replication`
+
+---
 
 ## Architecture Replication Notes
 

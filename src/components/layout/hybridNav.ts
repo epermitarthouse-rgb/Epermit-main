@@ -147,24 +147,19 @@ export const hybridNavGroups: HybridNavGroup[] = [
         requiresAuth: true,
       },
       {
-        title: "Code Compliance Analyzer",
+        title: "Code Analyzer",
         href: "/code-compliance",
         icon: ShieldCheck,
         description: "Check code compliance",
         requiresAuth: true,
       },
       {
+        // Rendered as expandable UciSidebarNav (Lovable UCI children + Soon badges).
         title: "Utility Coordination",
         href: "/uci",
         icon: RadioTower,
         description: "Utility provider lifecycle",
         requiresAuth: true,
-      },
-      {
-        title: "Permit Intelligence",
-        href: "/permit-intelligence",
-        icon: Search,
-        description: "Search permit data",
       },
       {
         title: "Jurisdiction Map",
@@ -177,6 +172,12 @@ export const hybridNavGroups: HybridNavGroup[] = [
         href: "/jurisdictions/compare",
         icon: Scale,
         description: "Side-by-side comparison",
+      },
+      {
+        title: "Permit Intelligence",
+        href: "/permit-intelligence",
+        icon: Search,
+        description: "Search permit data",
       },
     ],
   },
@@ -248,7 +249,8 @@ export const hybridNavGroups: HybridNavGroup[] = [
   {
     label: "Admin",
     requiresAdmin: true,
-    defaultOpen: false,
+    // Match main: Admin group is always expanded when visible (isAdmin).
+    defaultOpen: true,
     items: [
       { title: "Overview", href: "/admin", icon: Shield, description: "Admin home" },
       {
@@ -355,9 +357,9 @@ export const pageTitles: Record<string, string> = {
   // Legacy path redirects to Response Matrix; title kept for shell flash only
   "/classified-comments": "Response Matrix",
   "/designcheck": "DesignCheck",
-  "/code-compliance": "Code Compliance Analyzer",
+  "/code-compliance": "Code Analyzer",
   "/uci": "Utility Coordination",
-  "/uci/application-builder": "UCI · Commercial Service Application",
+  "/uci/application-builder": "UCI Builder",
   "/permit-intelligence": "Permit Intelligence",
   "/jurisdictions/map": "Jurisdiction Map",
   "/jurisdictions/compare": "Provider Compare",

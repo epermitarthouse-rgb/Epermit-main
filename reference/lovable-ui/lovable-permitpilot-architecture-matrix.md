@@ -15,7 +15,9 @@
 >   the code change. A row whose status is stale is worse than no row at all.
 > - **Branch:** all work described here belongs on `feat/lovable-ui-replication`. Never on `main`.
 >
-> **Last audited:** 2026-07-25 · **Generated:** 2026-07-24 19:01 UTC
+> **IA snapshot 2026-08-05 (feat):** Hybrid sidebar via `hybridNav.ts`. Comment Review via Response Matrix (not primary nav). Classified Comments → Matrix redirect. Permit Filing Start Pre-Flight WIP. UCI Lovable-shaped Soon children + hub tiles. Admin `defaultOpen`. Demo → `/demo/mcdonalds`. See `architecture-inventory.md` § PermitPilot feat IA snapshot.
+>
+> **Last audited:** 2026-07-25 · **IA snapshot:** 2026-08-05 · **Generated:** 2026-07-24 19:01 UTC
 
 ## Provenance
 

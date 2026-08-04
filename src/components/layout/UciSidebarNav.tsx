@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/collapsible";
 import {
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -22,21 +21,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  UCI_NAV_SECTIONS,
+  UCI_PRIMARY_NAV_SECTIONS,
   uciSectionHref,
-  type UciNavSupport,
+  uciSidebarBadgeLabel,
 } from "@/lib/uciNavSections";
-import { cn } from "@/lib/utils";
-
-function supportBadge(support: UciNavSupport): string | null {
-  if (support === "mock") return "Soon";
-  if (support === "partial") return "Partial";
-  return null;
-}
 
 /**
- * Expandable "Utility Coordination" sidebar entry with Lovable-style child items.
- * Active/Partial → deep links into /uci?section=… · Mock → coming-soon panel.
+ * Expandable "Utility Coordination" sidebar entry with Lovable-shaped children.
+ * Parent → `/uci` hub. Children use deep-links / builder route; badges are
+ * Soon only (no Partial). Badge sits in flex flow so it never overlaps labels.
  */
 export function UciSidebarNav() {
   const location = useLocation();
@@ -63,64 +56,58 @@ export function UciSidebarNav() {
     <Collapsible defaultOpen={onUci} className="group/uci-nav">
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton isActive={onUci} tooltip="Utility Coordination">
+          <SidebarMenuButton
+            isActive={location.pathname === "/uci" && !activeSection}
+            tooltip="Utility Coordination"
+          >
             <RadioTower />
-            <span className="truncate">Utility Coordination</span>
-            <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform group-data-[state=open]/uci-nav:rotate-180" />
+            <span className="min-w-0 flex-1 truncate">Utility Coordination</span>
+            <ChevronDown className="ml-1 h-4 w-4 shrink-0 transition-transform group-data-[state=open]/uci-nav:rotate-180" />
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <SidebarMenuSub>
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton
-                asChild
-                isActive={location.pathname === "/uci" && !activeSection}
-              >
-                <AuthGatedNavLink to="/uci" end>
-                  Hub
-                </AuthGatedNavLink>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-            {UCI_NAV_SECTIONS.map((item) => {
+            {UCI_PRIMARY_NAV_SECTIONS.map((item) => {
               const href =
                 item.target.kind === "external"
                   ? item.target.href
                   : uciSectionHref(item.section);
-              const badge = supportBadge(item.support);
+              const badge = uciSidebarBadgeLabel(item.support);
               const isActive =
                 item.target.kind === "external"
                   ? location.pathname.startsWith(item.target.href)
                   : onUci && activeSection === item.section;
-              const button = (
+
+              const row = (
                 <SidebarMenuSubButton
                   asChild
                   isActive={isActive}
-                  className={cn(item.support === "mock" && "opacity-90")}
+                  className="h-auto min-h-7 py-1 pr-1.5 [&>span:last-child]:overflow-visible"
                 >
-                  <AuthGatedNavLink to={href}>
-                    <item.icon className="h-3.5 w-3.5" />
-                    <span className="truncate">{item.label}</span>
+                  <AuthGatedNavLink
+                    to={href}
+                    className="flex w-full min-w-0 items-center gap-2"
+                  >
+                    <item.icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
+                    <span
+                      className="pointer-events-none shrink-0 rounded border border-border/70 bg-muted/50 px-1 py-0 font-mono text-[9px] font-medium uppercase leading-4 tracking-wider text-muted-foreground"
+                      aria-label="Coming soon"
+                    >
+                      {badge}
+                    </span>
                   </AuthGatedNavLink>
                 </SidebarMenuSubButton>
               );
 
               return (
-                <SidebarMenuSubItem key={item.id} className="relative">
-                  {item.support === "mock" ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>{button}</TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        Coming soon — {item.note}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    button
-                  )}
-                  {badge ? (
-                    <SidebarMenuBadge className="border border-border/70 bg-muted/50 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                      {badge}
-                    </SidebarMenuBadge>
-                  ) : null}
+                <SidebarMenuSubItem key={item.id} className="min-w-0">
+                  <Tooltip>
+                    <TooltipTrigger asChild>{row}</TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      Coming soon — {item.note ?? item.label}
+                    </TooltipContent>
+                  </Tooltip>
                 </SidebarMenuSubItem>
               );
             })}

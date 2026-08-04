@@ -21,6 +21,12 @@ import {
 /**
  * Expandable UCI sidebar + deep-link (`/uci?section=`) vocabulary.
  * Lovable labels; PermitPilot destinations only (no fake routes).
+ *
+ * Primary Intelligence silhouette (expand under Utility Coordination):
+ * Submissions · Inbox · Class of Service · CIAC · Energization ·
+ * Miss Utility 811 · Knowledge Graph · UCI Builder
+ *
+ * Demoted items stay reachable via hub tiles / drawer / existing routes.
  */
 export type UciNavSupport = "active" | "partial" | "mock";
 
@@ -74,8 +80,14 @@ export type UciNavSection = {
     | { kind: "drawer-tab"; tab: UciDrawerTab }
     | { kind: "external"; href: string }
     | { kind: "coming-soon" };
-  /** Short copy for Partial / Mock banners */
+  /** Short copy for Coming Soon / WIP banners */
   note?: string;
+  /** Lovable-shaped Utility Coordination expand children */
+  primaryNav?: boolean;
+  /** Demoted from sidebar — keep reachable from UCI hub tiles */
+  hubTile?: boolean;
+  /** Optional hub tile subtitle */
+  hubDescription?: string;
 };
 
 export const UCI_DRAWER_TABS: { id: UciDrawerTab; label: string; pepcoOnly?: boolean }[] = [
@@ -91,6 +103,11 @@ export const UCI_DRAWER_TABS: { id: UciDrawerTab; label: string; pepcoOnly?: boo
   { id: "costs", label: "Costs & equipment" },
 ];
 
+/**
+ * Full UCI section catalog (deep-links + hub). Sidebar uses
+ * {@link UCI_PRIMARY_NAV_SECTIONS} only — no Partial badges in the shell
+ * (whole UCI is WIP → Coming Soon / Soon).
+ */
 export const UCI_NAV_SECTIONS: UciNavSection[] = [
   {
     id: "overview",
@@ -100,51 +117,58 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     section: "overview",
     target: { kind: "hub", anchor: "uci-hub" },
     note: "UCI hub — KPIs, stage rail, records, attention queue",
+    primaryNav: false,
+    hubTile: false,
   },
   {
     id: "submissions",
-    label: "Submissions",
+    label: "UCI · Submissions",
     icon: Radio,
-    support: "partial",
+    support: "mock",
     section: "submissions",
     target: { kind: "drawer-tab", tab: "application-prep" },
-    note: "Per-record submission & tracking in Application prep. Cross-project submissions hub is not connected yet.",
+    note: "Coming soon — cross-project submissions hub. Per-record Application prep remains in the coordination drawer.",
+    primaryNav: true,
   },
   {
     id: "communications",
-    label: "Communications / Inbox",
+    label: "UCI · Inbox",
     icon: Inbox,
-    support: "partial",
+    support: "mock",
     section: "communications",
     target: { kind: "drawer-tab", tab: "communications" },
-    note: "Per-record portal communications. Cross-project inbox is not connected yet.",
+    note: "Coming soon — cross-project inbox. Per-record portal communications remain in the coordination drawer.",
+    primaryNav: true,
   },
   {
     id: "class-of-service",
-    label: "Class of Service",
+    label: "UCI · Class of Service",
     icon: FileCheck2,
-    support: "partial",
+    support: "mock",
     section: "class-of-service",
     target: { kind: "drawer-tab", tab: "cos" },
-    note: "Per-record COS analysis. Predictive portfolio COS table is not connected yet.",
+    note: "Coming soon — portfolio COS table. Per-record COS analysis remains in the coordination drawer.",
+    primaryNav: true,
   },
   {
     id: "ciac",
-    label: "CIAC & Refunds",
+    label: "UCI · CIAC & Refunds",
     icon: DollarSign,
-    support: "partial",
+    support: "mock",
     section: "ciac",
     target: { kind: "drawer-tab", tab: "costs" },
-    note: "CIAC can be recorded as cost rows. Dedicated refund-window tracker is not connected yet.",
+    note: "Coming soon — dedicated CIAC / refund-window tracker. Cost rows remain in the coordination drawer.",
+    primaryNav: true,
   },
   {
     id: "energization",
-    label: "Energization",
+    label: "UCI · Energization",
     icon: Zap,
-    support: "partial",
+    support: "mock",
     section: "energization",
     target: { kind: "drawer-tab", tab: "costs" },
-    note: "Energization dates + meter-set/closeout. Multi-party choreography timeline is not connected yet.",
+    note: "Coming soon — multi-party energization choreography. Meter-set / closeout remain in the coordination drawer.",
+    primaryNav: true,
   },
   {
     id: "load-profile",
@@ -153,6 +177,40 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     support: "active",
     section: "load-profile",
     target: { kind: "drawer-tab", tab: "load-profile" },
+    note: "Open a coordination record, then use the Load profile drawer tab.",
+    primaryNav: false,
+    hubTile: true,
+    hubDescription: "Drawer · load analysis",
+  },
+  {
+    id: "miss-utility",
+    label: "UCI · Miss Utility 811",
+    icon: Ticket,
+    support: "mock",
+    section: "miss-utility",
+    target: { kind: "coming-soon" },
+    note: "No PermitPilot backend for 811 / Miss Utility tickets yet.",
+    primaryNav: true,
+  },
+  {
+    id: "knowledge-graph",
+    label: "UCI · Knowledge Graph",
+    icon: Network,
+    support: "mock",
+    section: "knowledge-graph",
+    target: { kind: "coming-soon" },
+    note: "No PermitPilot graph/nodes backend yet.",
+    primaryNav: true,
+  },
+  {
+    id: "application-builder",
+    label: "UCI Builder",
+    icon: Cable,
+    support: "mock",
+    section: "application-builder",
+    target: { kind: "external", href: "/uci/application-builder" },
+    note: "Coming soon — full Lovable builder surface. Live package/load APIs remain on /uci/application-builder; owner/billing & Agent QA are not connected.",
+    primaryNav: true,
   },
   {
     id: "provider-map",
@@ -162,42 +220,21 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     section: "provider-map",
     target: { kind: "external", href: "/jurisdictions/map" },
     note: "Opens the real Jurisdiction Map (not a mock provider map).",
-  },
-  {
-    id: "application-builder",
-    label: "Application Builder",
-    icon: Cable,
-    support: "partial",
-    section: "application-builder",
-    target: { kind: "external", href: "/uci/application-builder" },
-    note: "Lovable-style UCI Builder with live package/load APIs. Owner/billing & Agent QA remain Coming Soon. Drawer Application prep is unchanged.",
+    primaryNav: false,
+    hubTile: true,
+    hubDescription: "Jurisdiction Map",
   },
   {
     id: "meter-set",
     label: "Meter Set",
     icon: PlugZap,
-    support: "partial",
+    support: "mock",
     section: "meter-set",
     target: { kind: "drawer-tab", tab: "costs" },
-    note: "Meter-set & closeout checklist generation. Richer scheduling UI is not connected yet.",
-  },
-  {
-    id: "miss-utility",
-    label: "Miss Utility",
-    icon: Ticket,
-    support: "mock",
-    section: "miss-utility",
-    target: { kind: "coming-soon" },
-    note: "No PermitPilot backend for 811 / Miss Utility tickets yet.",
-  },
-  {
-    id: "knowledge-graph",
-    label: "Knowledge Graph",
-    icon: Network,
-    support: "mock",
-    section: "knowledge-graph",
-    target: { kind: "coming-soon" },
-    note: "No PermitPilot graph/nodes backend yet.",
+    note: "Coming soon — richer meter-set scheduling. Closeout checklist remains in the coordination drawer Costs tab.",
+    primaryNav: false,
+    hubTile: true,
+    hubDescription: "Drawer · meter-set / closeout",
   },
   {
     id: "conflict-hunter",
@@ -207,6 +244,9 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     section: "conflict-hunter",
     target: { kind: "coming-soon" },
     note: "No conflict-detection service yet.",
+    primaryNav: false,
+    hubTile: true,
+    hubDescription: "Coming soon",
   },
   {
     id: "easement",
@@ -216,6 +256,9 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     section: "easement",
     target: { kind: "coming-soon" },
     note: "No easement / ROW domain yet.",
+    primaryNav: false,
+    hubTile: true,
+    hubDescription: "Coming soon",
   },
   {
     id: "portfolio",
@@ -225,8 +268,17 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     section: "portfolio",
     target: { kind: "coming-soon" },
     note: "Hub KPIs are live project rollups; firm-wide quarterly Mission Control is not connected yet.",
+    primaryNav: false,
+    hubTile: true,
+    hubDescription: "Coming soon",
   },
 ];
+
+/** Lovable UCI children under Utility Coordination (Soon badges only). */
+export const UCI_PRIMARY_NAV_SECTIONS: UciNavSection[] = UCI_NAV_SECTIONS.filter((s) => s.primaryNav);
+
+/** Demoted capabilities — hub tiles so features are not orphaned. */
+export const UCI_HUB_TILE_SECTIONS: UciNavSection[] = UCI_NAV_SECTIONS.filter((s) => s.hubTile);
 
 export function getUciNavSection(id: string | null | undefined): UciNavSection | undefined {
   if (!id) return undefined;
@@ -244,6 +296,11 @@ export function uciSectionHref(section: UciNavSectionId, extras?: { tab?: UciDra
   if (extras?.tab) params.set("tab", extras.tab);
   if (extras?.coordination) params.set("coordination", extras.coordination);
   return `/uci?${params.toString()}`;
+}
+
+/** Sidebar status chip — whole UCI WIP; never show Partial. */
+export function uciSidebarBadgeLabel(_support?: UciNavSupport): "Soon" {
+  return "Soon";
 }
 
 export const UCI_HUB_WRENCH_ICON = Wrench;
