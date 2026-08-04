@@ -24,6 +24,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Rocket,
   Loader2,
@@ -42,11 +44,22 @@ import {
   Phone,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import {
+  formatPermitFilingError,
+  resolveProjectIdForFiling,
+} from '@/lib/permitFilingErrors';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects } from '@/hooks/useProjects';
 import type { Project } from '@/types/project';
 import { PROJECT_TYPE_LABELS, coerceProjectTypeForDb } from '@/types/project';
+import { AlertBanner } from '@/components/design/ProductPrimitives';
+import {
+  PERMIT_FILING_WIP,
+  PERMIT_FILING_WIP_LABEL,
+  PERMIT_FILING_WIP_NOTE,
+  PERMIT_FILING_WIP_PREFLIGHT_TOOLTIP,
+} from './permitFilingWip';
 
 interface Professional {
   id: string;
@@ -306,6 +319,8 @@ export function StartFilingDialog({
   const [loadingCredentials, setLoadingCredentials] = useState(false);
   const [municipalities, setMunicipalities] = useState<MunicipalityConfig[]>([]);
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
+  /** Project created in this dialog session — reused on retry so filing failure does not spawn duplicates. */
+  const [sessionCreatedProjectId, setSessionCreatedProjectId] = useState<string | null>(null);
 
   const [createMode, setCreateMode] = useState(!project);
   const [newProjectName, setNewProjectName] = useState('');
@@ -337,31 +352,39 @@ export function StartFilingDialog({
     }
   }, [open, user]);
 
+  // Initialize once per open. Do not re-init when parent syncs a project created
+  // in this session — that would wipe filing fields and break retry.
   useEffect(() => {
-    if (open) {
-      setCreateMode(!project);
-      if (project) {
-        setPropertyAddress(project.address || '');
-        setScopeOfWork(project.description || '');
-        setConstructionValue(project.estimated_value?.toString() || '');
-        setSquareFootage(project.square_footage?.toString() || '');
-      } else {
-        setPropertyAddress('');
-        setScopeOfWork('');
-        setConstructionValue('');
-        setSquareFootage('');
-      }
-      setNewProjectName('');
-      setNewProjectAddress('');
-      setNewProjectJurisdiction('');
-      setNewProjectType('');
-      setPermitType('');
-      setNumberOfStories('');
-      setOwnerName('');
-      setOwnerPhone('');
-      setOwnerEmail('');
+    if (!open) {
+      setSessionCreatedProjectId(null);
+      return;
     }
-  }, [open, project]);
+
+    setSessionCreatedProjectId(null);
+    setCreateMode(!project);
+    if (project) {
+      setPropertyAddress(project.address || '');
+      setScopeOfWork(project.description || '');
+      setConstructionValue(project.estimated_value?.toString() || '');
+      setSquareFootage(project.square_footage?.toString() || '');
+    } else {
+      setPropertyAddress('');
+      setScopeOfWork('');
+      setConstructionValue('');
+      setSquareFootage('');
+    }
+    setNewProjectName('');
+    setNewProjectAddress('');
+    setNewProjectJurisdiction('');
+    setNewProjectType('');
+    setPermitType('');
+    setNumberOfStories('');
+    setOwnerName('');
+    setOwnerPhone('');
+    setOwnerEmail('');
+    // project is intentionally read only at open time
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (createMode && newProjectAddress) {
@@ -410,6 +433,34 @@ export function StartFilingDialog({
   const selectedMunicipality = municipalities.find(
     (m) => m.municipality_key === selectedMunicipalityKey
   );
+
+  const municipalityOptions: ComboboxOption[] = municipalities.map((m) => {
+    const portalLabel = PORTAL_TYPE_LABELS[m.portal_type] || m.portal_type;
+    return {
+      value: m.municipality_key,
+      label: m.display_name,
+      keywords: [
+        m.display_name,
+        m.short_name,
+        m.state,
+        m.county || '',
+        m.portal_type,
+        portalLabel,
+        m.municipality_key,
+      ].join(' '),
+      description: m.short_name !== m.display_name ? m.short_name : undefined,
+      meta: (
+        <>
+          <Badge variant="secondary" className="text-xs">
+            {m.state}
+          </Badge>
+          <Badge variant="outline" className="text-xs">
+            {portalLabel}
+          </Badge>
+        </>
+      ),
+    };
+  });
 
   const filteredCredentials = selectedMunicipality
     ? credentials.filter((c) => matchCredentialToMunicipality(c, selectedMunicipality))
@@ -502,6 +553,11 @@ export function StartFilingDialog({
   const [documents, setDocuments] = useState<DocumentFile[]>([]);
 
   async function handleStartPreflight() {
+    if (PERMIT_FILING_WIP) {
+      toast.info(PERMIT_FILING_WIP_PREFLIGHT_TOOLTIP);
+      return;
+    }
+
     if (!user) {
       toast.error('You must be logged in');
       return;
@@ -535,9 +591,15 @@ export function StartFilingDialog({
     setSubmitting(true);
 
     try {
-      let projectId = project?.id;
+      const { projectId: resolvedId, shouldCreateProject } = resolveProjectIdForFiling({
+        createMode,
+        existingProjectId: project?.id,
+        sessionCreatedProjectId,
+      });
 
-      if (createMode) {
+      let projectId = resolvedId;
+
+      if (shouldCreateProject) {
         const newProject = await createProject({
           name: newProjectName.trim(),
           address: newProjectAddress.trim() || undefined,
@@ -553,6 +615,8 @@ export function StartFilingDialog({
         }
 
         projectId = newProject.id;
+        setSessionCreatedProjectId(newProject.id);
+        setCreateMode(false);
         onProjectCreated?.(newProject);
       }
 
@@ -607,7 +671,13 @@ export function StartFilingDialog({
             );
 
           if (profError) {
-            console.error('Failed to insert professionals:', profError);
+            console.error('Failed to insert professionals:', formatPermitFilingError(profError));
+            toast.warning(
+              formatPermitFilingError(
+                profError,
+                'Filing created, but professionals could not be saved.'
+              )
+            );
           }
         }
       }
@@ -628,7 +698,13 @@ export function StartFilingDialog({
           .insert(docInserts);
 
         if (docError) {
-          console.error('Failed to insert documents:', docError);
+          console.error('Failed to insert documents:', formatPermitFilingError(docError));
+          toast.warning(
+            formatPermitFilingError(
+              docError,
+              'Filing created, but document metadata could not be saved.'
+            )
+          );
         }
       }
 
@@ -647,9 +723,9 @@ export function StartFilingDialog({
       toast.success('Filing created! Pre-flight pipeline started.');
       onFilingStarted?.(filingId);
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to start filing:', err);
-      toast.error(err.message || 'Failed to create filing');
+      toast.error(formatPermitFilingError(err, 'Failed to create filing'));
     } finally {
       setSubmitting(false);
     }
@@ -664,19 +740,37 @@ export function StartFilingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh]">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2" data-testid="text-dialog-title">
+          <DialogTitle className="flex items-center gap-2 flex-wrap" data-testid="text-dialog-title">
             <Rocket className="h-5 w-5" />
             Start Permit Filing
+            {PERMIT_FILING_WIP && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                data-testid="badge-start-filing-wip"
+              >
+                {PERMIT_FILING_WIP_LABEL}
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription>
-            Select a municipality and provide project details to initiate the 9-agent autonomous filing pipeline.
+            {PERMIT_FILING_WIP
+              ? 'Browse the filing creation form for UI review. Starting pre-flight is disabled while this workflow is work in progress.'
+              : 'Select a municipality and provide project details to initiate the 9-agent autonomous filing pipeline.'}
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-4">
+        <ScrollArea className="flex-1 min-h-0 max-h-[60vh] pr-4">
           <div className="space-y-6">
+            {PERMIT_FILING_WIP && (
+              <AlertBanner
+                tone="warn"
+                title={PERMIT_FILING_WIP_LABEL}
+                detail={PERMIT_FILING_WIP_NOTE}
+              />
+            )}
             {createMode ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -783,26 +877,16 @@ export function StartFilingDialog({
               ) : (
                 <div className="space-y-2">
                   <Label>Jurisdiction *</Label>
-                  <Select value={selectedMunicipalityKey} onValueChange={handleMunicipalityChange}>
-                    <SelectTrigger data-testid="select-municipality">
-                      <SelectValue placeholder="Select municipality" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {municipalities.map((m) => (
-                        <SelectItem key={m.municipality_key} value={m.municipality_key}>
-                          <span className="flex items-center gap-2">
-                            <span>{m.display_name}</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {m.state}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {PORTAL_TYPE_LABELS[m.portal_type] || m.portal_type}
-                            </Badge>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableCombobox
+                    options={municipalityOptions}
+                    value={selectedMunicipalityKey}
+                    onValueChange={handleMunicipalityChange}
+                    placeholder="Select municipality"
+                    searchPlaceholder="Search by name, state, or portal type..."
+                    emptyText="No matching jurisdictions."
+                    data-testid="select-municipality"
+                    disabled={loadingMunicipalities}
+                  />
 
                   {selectedMunicipality && (
                     <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground" data-testid="text-municipality-context">
@@ -1201,7 +1285,7 @@ export function StartFilingDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -1209,14 +1293,23 @@ export function StartFilingDialog({
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleStartPreflight}
-            disabled={submitting || !isValid}
-            data-testid="button-start-preflight"
-          >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {createMode ? 'Create Project & Start Pre-Flight' : 'Start Pre-Flight'}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex" tabIndex={0}>
+                <Button
+                  onClick={handleStartPreflight}
+                  disabled={PERMIT_FILING_WIP || submitting || !isValid}
+                  data-testid="button-start-preflight"
+                >
+                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {createMode ? 'Create Project & Start Pre-Flight' : 'Start Pre-Flight'}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {PERMIT_FILING_WIP && (
+              <TooltipContent className="max-w-xs">{PERMIT_FILING_WIP_PREFLIGHT_TOOLTIP}</TooltipContent>
+            )}
+          </Tooltip>
         </DialogFooter>
       </DialogContent>
     </Dialog>

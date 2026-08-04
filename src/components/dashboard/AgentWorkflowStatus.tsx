@@ -186,6 +186,7 @@ function syncChainPhaseFromStages(
   nextAction: string,
 ): ChainPhase {
   if (nextAction === "complete") return "complete";
+  if (nextAction === "continue_enrichment") return "enrichment";
   if (!stages) return "intake";
   if (stages.auto_routing?.status === "running") return "router";
   if (stages.enrichment?.status === "running") return "enrichment";
@@ -536,20 +537,34 @@ export function AgentWorkflowStatus() {
     setEnrichmentRunning(true);
     setEnrichmentResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
-        body: {
-          project_id: projectIdToUse,
-          run_enrichment_only: true,
-          force_retry: true,
-        },
-      });
-      if (error) throw error;
-      const count = (data as { enrichment?: { enriched_count?: number } })?.enrichment?.enriched_count ?? 0;
-      setEnrichmentResult(count);
+      type EnrichmentPayload = {
+        enrichment?: { enriched_count?: number; error?: string; remaining?: number };
+        next_action?: string;
+      };
+      const maxContinues = 50;
+      let totalEnriched = 0;
+      for (let i = 0; i < maxContinues; i++) {
+        const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+          body: {
+            project_id: projectIdToUse,
+            run_enrichment_only: true,
+            force_retry: true,
+          },
+        });
+        if (error) throw error;
+        const payload = data as EnrichmentPayload;
+        if (payload?.enrichment?.error) {
+          toast.error(payload.enrichment.error);
+          return;
+        }
+        totalEnriched += payload?.enrichment?.enriched_count ?? 0;
+        if (payload?.next_action !== "continue_enrichment") break;
+      }
+      setEnrichmentResult(totalEnriched);
       await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
       await queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check"] });
       await queryClient.invalidateQueries({ queryKey: ["project_pipeline_run", projectIdToUse] });
-      toast.success(`${count} comment(s) enriched`);
+      toast.success(`${totalEnriched} comment(s) enriched`);
     } catch (e) {
       console.warn("Context reference engine failed:", e);
       toast.error("Enrichment failed");
@@ -996,7 +1011,7 @@ export function AgentWorkflowStatus() {
             break;
           }
 
-          if (nextAction === "poll_again") {
+          if (nextAction === "poll_again" || nextAction === "continue_enrichment") {
             if (cpData?.error === "timeout" || (cpData?.next_cursor != null && !cpData?.done)) {
               cursor = cpData?.error === "timeout" ? undefined : cpData.next_cursor;
             } else {

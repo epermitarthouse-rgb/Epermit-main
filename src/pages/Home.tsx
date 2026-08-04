@@ -10,6 +10,7 @@ import {
   RadioTower,
   ShieldCheck,
 } from "lucide-react";
+import communEtLogo from "@/assets/commun-et-logo-transparent.webp";
 import ianSwainPhoto from "@/assets/ian-swain.jpg";
 import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
 import { ContactForm } from "@/components/home/ContactForm";
@@ -229,8 +230,14 @@ export default function Home() {
             </a>
           </div>
           <div className="mt-6 flex items-center gap-4 border-t border-border pt-6">
-            <span className="flex h-12 w-12 items-center justify-center rounded-md bg-primary font-display text-xl font-semibold text-primary-foreground">
-              C
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center p-1">
+              <img
+                src={communEtLogo}
+                alt="Commun-ET, LLC"
+                width={48}
+                height={48}
+                className="h-full w-auto max-w-full object-contain"
+              />
             </span>
             <div>
               <div className="font-tight text-sm font-bold text-foreground">Commun-ET, LLC</div>

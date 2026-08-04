@@ -52,6 +52,7 @@ import ResponseMatrix from "./pages/ResponseMatrix";
 import PortalDataViewer from "./pages/PortalDataViewer";
 import ClassifiedComments from "./pages/ClassifiedComments";
 import PermitWizardFiling from "./pages/PermitWizardFiling";
+import OperationsBoard from "./pages/OperationsBoard";
 import BaltimorePortalHome from "./pages/baltimore/BaltimorePortalHome";
 import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
 import BaltimoreRecordsListPage from "./pages/baltimore/BaltimoreRecordsListPage";
@@ -129,7 +130,14 @@ const App = () => (
                   <Route path="/demo" element={<Navigate to="/demo/mcdonalds" replace />} />
                   <Route path="/demo/mcdonalds" element={<DemoMcDonalds />} />
                   <Route path="/demo/mcd" element={<Navigate to="/demo/mcdonalds" replace />} />
-                  <Route path="/onboarding/authorization" element={<OnboardingAuthorization />} />
+                  <Route
+                    path="/onboarding/authorization"
+                    element={
+                      <ErrorBoundary fallbackTitle="Letter of Authorization failed to load">
+                        <OnboardingAuthorization />
+                      </ErrorBoundary>
+                    }
+                  />
                   <Route
                     path="/delivery/authorization"
                     element={<Navigate to="/onboarding/authorization" replace />}
@@ -195,6 +203,7 @@ const App = () => (
                   <Route path="/response-matrix" element={<ResponseMatrix />} />
                   <Route path="/classified-comments" element={<ClassifiedComments />} />
                   <Route path="/portal-data" element={<PortalDataViewer />} />
+                  <Route path="/operations" element={<OperationsBoard />} />
                   <Route path="/permit-wizard-filing" element={<PermitWizardFiling />} />
                   {/* Baltimore Accela portal clone (UI only, mock data) */}
                   <Route path="/baltimore" element={<BaltimorePortalHome />} />

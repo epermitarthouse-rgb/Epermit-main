@@ -43,10 +43,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
+import { formatPermitFilingError, isMissingRelationError } from "@/lib/permitFilingErrors";
 import { toast } from "sonner";
 import { FilingReviewPanel } from "@/components/permit-wizard/FilingReviewPanel";
 import { StartFilingDialog } from "@/components/permit-wizard/StartFilingDialog";
 import { AgentRunDetail } from "@/components/permit-wizard/AgentRunDetail";
+import {
+  PERMIT_FILING_WIP,
+  PERMIT_FILING_WIP_ACTION_TOOLTIP,
+  PERMIT_FILING_WIP_LABEL,
+  PERMIT_FILING_WIP_NOTE,
+} from "@/components/permit-wizard/permitFilingWip";
 
 interface Municipality {
   id: string;
@@ -265,8 +272,10 @@ export default function PermitWizardFiling() {
   const [screenshots, setScreenshots] = useState<Array<{ id: string; filing_id: string; agent_name: string; step_name: string; screenshot_url: string; field_audit?: Record<string, unknown> | null; created_at: string }>>([]);
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [municipalityFilter, setMunicipalityFilter] = useState<string>("__all__");
+  const [filingAgentRuns, setFilingAgentRuns] = useState<AgentRun[]>([]);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) || null;
+  const PREFLIGHT_AGENT_COUNT = AGENT_CONFIG.filter((a) => a.layer === 1).length;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -327,13 +336,56 @@ export default function PermitWizardFiling() {
           ? data.find((f) => f.id === selectedFiling.id) || data[0]
           : data[0];
         setSelectedFiling(current);
+
+        const { data: runs, error: runsError } = await supabase
+          .from("agent_runs")
+          .select("*")
+          .in(
+            "filing_id",
+            data.map((f) => f.id),
+          )
+          .order("created_at", { ascending: true });
+        if (runsError) throw runsError;
+        setFilingAgentRuns(runs || []);
       } else {
         setSelectedFiling(null);
+        setFilingAgentRuns([]);
       }
     } catch (err) {
       console.error("Failed to fetch filings:", err);
+      setFilings([]);
+      setFilingAgentRuns([]);
+      setSelectedFiling(null);
+      toast.error(
+        formatPermitFilingError(err, "Failed to load filings"),
+        { id: isMissingRelationError(err) ? "permit-filings-missing" : undefined }
+      );
     }
   }, [user, selectedProjectId, selectedFiling]);
+
+  const getPreflightProgressLabel = useCallback(
+    (filingId: string) => {
+      const runs = filingAgentRuns.filter((r) => r.filing_id === filingId);
+      const preflightAgents = AGENT_CONFIG.filter((a) => a.layer === 1);
+      const completed = preflightAgents.filter((a) =>
+        runs.some((r) => r.agent_name === a.name && r.status === "completed"),
+      ).length;
+      const failed = preflightAgents.some((a) =>
+        runs.some((r) => r.agent_name === a.name && r.status === "failed"),
+      );
+      if (failed) return `${completed}/${PREFLIGHT_AGENT_COUNT} pre-flight (failed)`;
+      return `${completed}/${PREFLIGHT_AGENT_COUNT} pre-flight`;
+    },
+    [filingAgentRuns, PREFLIGHT_AGENT_COUNT],
+  );
+
+  const getProjectLabel = useCallback(
+    (projectId?: string) => {
+      if (!projectId) return "No project";
+      return projects.find((p) => p.id === projectId)?.name || "Project";
+    },
+    [projects],
+  );
 
   const fetchAgentRuns = useCallback(async () => {
     if (!selectedFiling) {
@@ -351,6 +403,12 @@ export default function PermitWizardFiling() {
       setAgentRuns(data || []);
     } catch (err) {
       console.error("Failed to fetch agent runs:", err);
+      setAgentRuns([]);
+      if (isMissingRelationError(err)) {
+        toast.error(formatPermitFilingError(err, "Failed to load agent runs"), {
+          id: "permit-agent-runs-missing",
+        });
+      }
     }
   }, [selectedFiling]);
 
@@ -473,8 +531,10 @@ export default function PermitWizardFiling() {
     }
     if (selectedFiling.filing_status === "awaiting_approval") {
       return {
-        text: `${selectedFiling.property_address || "This filing"} has cleared automated pre-flight checks and needs a human approval decision to continue to submission.`,
-        action: { label: "Review & Decide", onClick: () => setReviewDialogOpen(true) },
+        text: PERMIT_FILING_WIP
+          ? `${selectedFiling.property_address || "This filing"} shows an awaiting-approval state. Open Review to inspect the package — approval and execution are disabled while work is in progress.`
+          : `${selectedFiling.property_address || "This filing"} has cleared automated pre-flight checks and needs a human approval decision to continue to submission.`,
+        action: { label: PERMIT_FILING_WIP ? "Open Review" : "Review & Decide", onClick: () => setReviewDialogOpen(true) },
       };
     }
     if (blockedRun) {
@@ -485,12 +545,16 @@ export default function PermitWizardFiling() {
     }
     if (selectedFiling.filing_status === "submitted") {
       return {
-        text: "This filing has been submitted to the portal. Status monitoring will keep watching for jurisdiction updates.",
+        text: PERMIT_FILING_WIP
+          ? "This filing is marked submitted in data, but live status monitoring is still work in progress."
+          : "This filing has been submitted to the portal. Status monitoring will keep watching for jurisdiction updates.",
         action: null,
       };
     }
     return {
-      text: "Pipeline is progressing automatically. No action is needed right now — new steps will appear here as agents complete.",
+      text: PERMIT_FILING_WIP
+        ? "Pipeline UI is available for review. Pre-flight, execution, submission, and monitoring are not production-ready — treat agent status as incomplete."
+        : "Pipeline is progressing automatically. No action is needed right now — new steps will appear here as agents complete.",
       action: null,
     };
   })();
@@ -507,8 +571,25 @@ export default function PermitWizardFiling() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Permit Filing"
-        title="Phase · Filing workflow"
-        body="Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses with utility coordination dependencies surfaced in the same flow."
+        title={
+          <span className="inline-flex flex-wrap items-center gap-3">
+            Phase · Filing workflow
+            {PERMIT_FILING_WIP && (
+              <Badge
+                variant="outline"
+                className="align-middle text-sm font-semibold border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                data-testid="badge-permit-filing-wip"
+              >
+                {PERMIT_FILING_WIP_LABEL}
+              </Badge>
+            )}
+          </span>
+        }
+        body={
+          PERMIT_FILING_WIP
+            ? "Multi-municipality filing UI for review. Pre-flight, human approval, portal submission, and status monitoring are still being completed — not a production-ready workflow."
+            : "Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses with utility coordination dependencies surfaced in the same flow."
+        }
         action={
           <div className="flex flex-wrap items-center gap-2">
             <ServicePill kind="permit">Permit expediting</ServicePill>
@@ -536,6 +617,14 @@ export default function PermitWizardFiling() {
         }
       />
       <div className="space-y-6">
+        {PERMIT_FILING_WIP && (
+          <AlertBanner
+            tone="warn"
+            title={PERMIT_FILING_WIP_LABEL}
+            detail={PERMIT_FILING_WIP_NOTE}
+          />
+        )}
+
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard
             label="Total filings"
@@ -547,7 +636,15 @@ export default function PermitWizardFiling() {
             label="Awaiting approval"
             value={awaitingApprovalCount}
             icon={UserCheck}
-            detail={awaitingApprovalCount > 0 ? "Needs a review decision" : "Nothing pending review"}
+            detail={
+              PERMIT_FILING_WIP
+                ? awaitingApprovalCount > 0
+                  ? "Review UI available · decisions gated"
+                  : "Nothing pending review"
+                : awaitingApprovalCount > 0
+                ? "Needs a review decision"
+                : "Nothing pending review"
+            }
           />
           <MetricCard
             label="Agent pipeline"
@@ -566,8 +663,12 @@ export default function PermitWizardFiling() {
         {selectedFiling?.filing_status === "awaiting_approval" && (
           <AlertBanner
             tone="warn"
-            title="A filing is awaiting your review"
-            detail={`${selectedFiling.property_address || "This filing"} is ready for an approval decision. Open Review & Decide to continue the pipeline.`}
+            title="A filing is awaiting review"
+            detail={
+              PERMIT_FILING_WIP
+                ? `${selectedFiling.property_address || "This filing"} can be opened for package review. Final approval and execution remain disabled while work is in progress.`
+                : `${selectedFiling.property_address || "This filing"} is ready for an approval decision. Open Review & Decide to continue the pipeline.`
+            }
           />
         )}
         {selectedFiling?.filing_status === "failed" && (
@@ -578,24 +679,7 @@ export default function PermitWizardFiling() {
           />
         )}
 
-        {!selectedProjectId && !loading && filings.length === 0 && (
-          <div className="pilot-card border-dashed mb-6 border-2 flex flex-col items-center justify-center py-12 text-center">
-            <Bot className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="font-semibold mb-2" data-testid="text-no-project">Get Started with Permit Filing</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Start a new filing to create a project and initiate the autonomous permit filing pipeline, or select an existing project from the sidebar.
-            </p>
-            <Button
-              onClick={() => setStartDialogOpen(true)}
-              data-testid="button-start-filing-no-project"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Start New Filing
-            </Button>
-          </div>
-        )}
-
-        {selectedProjectId && loading && (
+        {loading && (
           <div className="space-y-4">
             <Skeleton className="h-40 w-full" />
             <div className="grid lg:grid-cols-3 gap-4">
@@ -606,7 +690,36 @@ export default function PermitWizardFiling() {
           </div>
         )}
 
-        {selectedProjectId && !loading && filings.length > 0 && municipalities.length > 0 && (
+        {!loading && filings.length === 0 && (
+          <div className="pilot-card border-dashed mb-6 border-2 flex flex-col items-center justify-center py-12 text-center">
+            {selectedProjectId ? (
+              <Rocket className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            ) : (
+              <Bot className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            )}
+            <h3 className="font-semibold mb-2" data-testid={selectedProjectId ? "text-no-filings" : "text-no-project"}>
+              {selectedProjectId ? "No Filings Yet" : "Get Started with Permit Filing"}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {PERMIT_FILING_WIP
+                ? selectedProjectId
+                  ? "No filings for this project yet. You can open Start New Filing to review the creation UI (pre-flight start is currently disabled)."
+                  : "Open Start New Filing to review the creation UI, or select a project from the sidebar. Pre-flight start is disabled while this workflow is work in progress."
+                : selectedProjectId
+                ? "Start a new filing to initiate the autonomous permit filing pipeline."
+                : "Start a new filing to create a project and initiate the autonomous permit filing pipeline, or select an existing project from the sidebar."}
+            </p>
+            <Button
+              onClick={() => setStartDialogOpen(true)}
+              data-testid={selectedProjectId ? "button-start-filing-empty" : "button-start-filing-no-project"}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Start New Filing
+            </Button>
+          </div>
+        )}
+
+        {!loading && filings.length > 0 && municipalities.length > 0 && (
           <div className="mb-4">
             <Select value={municipalityFilter} onValueChange={setMunicipalityFilter}>
               <SelectTrigger className="w-[260px]" data-testid="select-municipality-filter">
@@ -627,33 +740,22 @@ export default function PermitWizardFiling() {
           </div>
         )}
 
-        {selectedProjectId && !loading && filings.length === 0 && (
-          <div className="pilot-card border-dashed border-2 flex flex-col items-center justify-center py-12 text-center">
-            <Rocket className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="font-semibold mb-2" data-testid="text-no-filings">No Filings Yet</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Start a new filing to initiate the autonomous permit filing pipeline.
-            </p>
-            <Button
-              onClick={() => setStartDialogOpen(true)}
-              data-testid="button-start-filing-empty"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Start New Filing
-            </Button>
-          </div>
-        )}
-
-        {selectedProjectId && !loading && filings.length > 0 && (
-          <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+        {!loading && filings.length > 0 && (
+          <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
             <div className="space-y-4 lg:self-start">
-              <Panel eyebrow="Filing queue" title="Filings" className="lg:self-start">
-                <ScrollArea className="max-h-64">
+              <Panel
+                eyebrow="Filing queue"
+                title={`Filings (${filteredFilings.length})`}
+                className="lg:self-start"
+                data-testid="panel-filings-list"
+              >
+                <ScrollArea className="max-h-[28rem]">
                   <div className="space-y-2 pr-2">
                     {filteredFilings.map((filing) => {
                       const statusCfg = FILING_STATUS_CONFIG[filing.filing_status] || { label: filing.filing_status, className: "" };
                       const isSelected = selectedFiling?.id === filing.id;
                       const muniInfo = getMunicipalityInfo(filing.municipality);
+                      const needsReview = filing.filing_status === "awaiting_approval";
                       return (
                         <Card
                           key={filing.id}
@@ -661,8 +763,8 @@ export default function PermitWizardFiling() {
                           onClick={() => setSelectedFiling(filing)}
                           data-testid={`card-filing-${filing.id}`}
                         >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between gap-2 mb-1">
+                          <CardContent className="p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
                               <StatusPill
                                 tone={filingStatusTone(filing.filing_status)}
                                 data-testid={`badge-filing-status-${filing.id}`}
@@ -671,28 +773,66 @@ export default function PermitWizardFiling() {
                               </StatusPill>
                               <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                             </div>
-                            {muniInfo && (
-                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                <Badge variant="outline" className="text-xs" data-testid={`badge-filing-municipality-${filing.id}`}>
-                                  <Globe className="h-3 w-3 mr-1" />
-                                  {muniInfo.short_name} ({muniInfo.state})
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  {PORTAL_TYPE_LABELS[muniInfo.portal_type] || muniInfo.portal_type}
-                                </span>
-                              </div>
-                            )}
                             <p className="text-sm font-medium truncate" data-testid={`text-filing-address-${filing.id}`}>
                               {filing.property_address || "No address"}
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(filing.created_at).toLocaleDateString()}
+                            <p className="text-xs text-muted-foreground truncate" data-testid={`text-filing-project-${filing.id}`}>
+                              {getProjectLabel(filing.project_id)}
                             </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant="outline" className="text-xs" data-testid={`badge-filing-municipality-${filing.id}`}>
+                                <Globe className="h-3 w-3 mr-1" />
+                                {muniInfo
+                                  ? `${muniInfo.short_name} (${muniInfo.state})`
+                                  : filing.municipality || "No jurisdiction"}
+                              </Badge>
+                              {muniInfo && (
+                                <span className="text-xs text-muted-foreground">
+                                  {PORTAL_TYPE_LABELS[muniInfo.portal_type] || muniInfo.portal_type}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground" data-testid={`text-filing-preflight-${filing.id}`}>
+                              {getPreflightProgressLabel(filing.id)}
+                            </p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                              <span>Created {new Date(filing.created_at).toLocaleString()}</span>
+                              <span>Updated {new Date(filing.updated_at).toLocaleString()}</span>
+                            </div>
                             {filing.confirmation_number && (
-                              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1" data-testid={`text-confirmation-${filing.id}`}>
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400" data-testid={`text-confirmation-${filing.id}`}>
                                 Conf: {filing.confirmation_number}
                               </p>
                             )}
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedFiling(filing);
+                                }}
+                                data-testid={`button-open-filing-${filing.id}`}
+                              >
+                                Open
+                              </Button>
+                              {needsReview && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs pilot-button-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFiling(filing);
+                                    setReviewDialogOpen(true);
+                                  }}
+                                  data-testid={`button-review-filing-${filing.id}`}
+                                >
+                                  <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                  Review
+                                </Button>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       );
@@ -759,7 +899,7 @@ export default function PermitWizardFiling() {
                           className="pilot-button-primary"
                         >
                           <UserCheck className="h-4 w-4 mr-1" />
-                          Review & Decide
+                          {PERMIT_FILING_WIP ? "Open Review" : "Review & Decide"}
                         </Button>
                       )
                     }
@@ -856,10 +996,13 @@ export default function PermitWizardFiling() {
 
                   {selectedFiling.filing_status === "submitted" && (
                     <AlertBanner
-                      tone="good"
-                      title="Filing submitted successfully"
+                      tone={PERMIT_FILING_WIP ? "warn" : "good"}
+                      title={PERMIT_FILING_WIP ? "Marked submitted · monitoring WIP" : "Filing submitted successfully"}
                       detail={
                         <div className="space-y-0.5">
+                          {PERMIT_FILING_WIP && (
+                            <p>{PERMIT_FILING_WIP_ACTION_TOOLTIP}</p>
+                          )}
                           {selectedFiling.application_id && (
                             <p data-testid="text-application-id">Application ID: {selectedFiling.application_id}</p>
                           )}

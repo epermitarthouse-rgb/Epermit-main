@@ -16,7 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/projects": "Projects",
   "/analytics": "Analytics",
   "/settings": "Settings",
-  "/code-compliance": "AI Compliance",
+  "/code-compliance": "Compliance Analyzer",
   "/code-reference": "Code Library",
   "/roi-calculator": "ROI Calculator",
   "/jurisdictions/map": "Jurisdiction Map",

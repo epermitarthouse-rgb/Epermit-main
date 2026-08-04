@@ -21,4 +21,8 @@ describe("isDemoRoute", () => {
     assert.equal(isDemoRoute("/matrix/ai-workflow"), true);
     assert.equal(isDemoRoute("/utility/conflict-hunter"), true);
   });
+
+  it("keeps Operations Board on fabricated/demo provenance while mock sections exist", () => {
+    assert.equal(isDemoRoute("/operations"), true);
+  });
 });

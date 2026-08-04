@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import SignatureCanvas from "react-signature-canvas";
+import { SignatureCanvas } from "react-signature-canvas";
 import { z } from "zod";
-import { CheckCircle2, Eraser, FileSignature, Loader2, LogOut, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Eraser, FileSignature, Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import logoAsset from "@/assets/commun-et-logo.jpg";
+import communEtLogo from "@/assets/commun-et-logo-transparent.webp";
 
 const AUTHORIZATION_SCOPE =
   "Commun-ET LLC and all of its employees, officers, and duly authorized agents, representatives, and subcontractors";
@@ -42,14 +42,14 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const OnboardingAuthorization = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mode, setMode] = useState<"typed" | "drawn">("typed");
   const [typedSignature, setTypedSignature] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sigEmpty, setSigEmpty] = useState(true);
-  const sigPadRef = useRef<SignatureCanvas | null>(null);
+  const sigPadRef = useRef<InstanceType<typeof SignatureCanvas> | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth", { replace: true });
@@ -159,11 +159,25 @@ const OnboardingAuthorization = () => {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Redirecting to sign in…
+      </div>
+    );
+  }
+
   return (
     <div className="container-page space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="flex items-center gap-4">
-          <img src={logoAsset} alt="Commun-ET LLC" className="h-14 w-auto" />
+          <span className="inline-flex h-14 shrink-0 items-center justify-center">
+            <img
+              src={communEtLogo}
+              alt="Commun-ET LLC"
+              className="h-full w-auto max-w-full object-contain"
+            />
+          </span>
           <div>
             <div className="pilot-kicker text-primary">Onboarding · Client Authorization</div>
             <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">
@@ -181,13 +195,6 @@ const OnboardingAuthorization = () => {
           </span>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="font-data">{user?.email}</span>
-            <button
-              type="button"
-              onClick={() => signOut().then(() => navigate("/auth"))}
-              className="pilot-button-ghost"
-            >
-              <LogOut className="h-3.5 w-3.5" /> Sign out
-            </button>
           </div>
         </div>
       </header>
@@ -365,7 +372,8 @@ const OnboardingAuthorization = () => {
                       sigPadRef.current = el;
                     }}
                     penColor="#0b3d91"
-                    canvasProps={{ className: "h-40 w-full rounded-md" }}
+                    clearOnResize={false}
+                    canvasProps={{ className: "h-40 w-full rounded-md touch-none" }}
                     onEnd={() => setSigEmpty(false)}
                   />
                 </div>

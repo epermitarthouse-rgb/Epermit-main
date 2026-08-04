@@ -314,7 +314,7 @@ const DemoMcDonalds = () => {
         <InternalUnapprovedBanner />
       </div>
 
-      {/* HERO */}
+      {/* HERO — tour step 1 target (card only) */}
       <section data-tour="hero" className="relative overflow-hidden rounded-2xl border border-border">
         <div className="absolute inset-0 bg-gradient-to-br from-[hsl(var(--pilot-ink))] via-background to-background/80" />
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
@@ -368,29 +368,34 @@ const DemoMcDonalds = () => {
         </div>
       </section>
 
-      {/* PROBLEM */}
-      <section data-tour="problem" className="grid gap-6 lg:grid-cols-[1fr_1.6fr] lg:items-start">
-        <div>
-          <SectionKicker>The status quo</SectionKicker>
-          <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight md:text-4xl">
-            Where 9–13 weeks actually go.
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Every legacy rebuild loses the same weeks in the same places. Permit expediters chase
-            portals, utilities respond in sequence, and comment letters arrive as PDFs that nobody
-            has time to reconcile against the previous revision.
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {painPoints.map((p) => (
-            <div key={p.title} className="pilot-card p-4">
-              <div className="flex items-center gap-2">
-                <p.icon className="h-4 w-4 text-pilot-rose" />
-                <div className="font-tight text-sm font-bold uppercase tracking-wide">{p.title}</div>
+      {/* PROBLEM — tour step 2 target (section bounds only; no space-y margin) */}
+      <section
+        data-tour="problem"
+        className="rounded-2xl border border-border bg-card/40 p-6 md:p-8"
+      >
+        <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr] lg:items-start">
+          <div>
+            <SectionKicker>The status quo</SectionKicker>
+            <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              Where 9–13 weeks actually go.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Every legacy rebuild loses the same weeks in the same places. Permit expediters chase
+              portals, utilities respond in sequence, and comment letters arrive as PDFs that nobody
+              has time to reconcile against the previous revision.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {painPoints.map((p) => (
+              <div key={p.title} className="pilot-card p-4">
+                <div className="flex items-center gap-2">
+                  <p.icon className="h-4 w-4 text-pilot-rose" />
+                  <div className="font-tight text-sm font-bold uppercase tracking-wide">{p.title}</div>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{p.body}</p>
               </div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{p.body}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 

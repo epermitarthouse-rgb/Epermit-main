@@ -50,7 +50,7 @@ const navigationItems = [
 ];
 
 const toolItems = [
-  { name: "AI Compliance", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code"] },
+  { name: "Compliance Analyzer", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code", "analyzer"] },
   {
     name: "Response Matrix",
     href: "/response-matrix",

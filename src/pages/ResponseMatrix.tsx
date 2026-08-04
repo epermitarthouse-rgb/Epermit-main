@@ -1135,19 +1135,52 @@ export default function ResponseMatrix() {
     }
     setEnriching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
-        body: { project_id: projectId, run_enrichment_only: true, force_retry: true },
-      });
-      if (error) throw error;
-      const payload = data as { enrichment?: { enriched_count?: number; error?: string }; next_action?: string };
-      if (payload?.enrichment?.error) {
-        toast.error(payload.enrichment.error);
-        return;
+      type EnrichmentPayload = {
+        enrichment?: {
+          enriched_count?: number;
+          error?: string;
+          remaining?: number;
+          eligible_count?: number;
+          rounds?: number;
+          needs_continue?: boolean;
+        };
+        next_action?: string;
+      };
+
+      // Continue across batches/timeout budgets until all eligible rows are drained.
+      const maxContinues = 50;
+      let totalEnriched = 0;
+      let eligibleTotal: number | undefined;
+      let lastPayload: EnrichmentPayload | null = null;
+      for (let i = 0; i < maxContinues; i++) {
+        const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+          body: { project_id: projectId, run_enrichment_only: true, force_retry: true },
+        });
+        if (error) throw error;
+        const payload = data as EnrichmentPayload;
+        lastPayload = payload;
+        if (payload?.enrichment?.error) {
+          toast.error(payload.enrichment.error);
+          return;
+        }
+        if (eligibleTotal == null && typeof payload?.enrichment?.eligible_count === "number") {
+          eligibleTotal = payload.enrichment.eligible_count;
+        }
+        totalEnriched += payload?.enrichment?.enriched_count ?? 0;
+        if (payload?.next_action !== "continue_enrichment") break;
       }
-      const enrichedCount = payload?.enrichment?.enriched_count ?? 0;
-      toast.success(`Enriched ${enrichedCount} comments`);
-      queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check", projectId] });
+
+      const remaining = lastPayload?.enrichment?.remaining ?? 0;
+      toast.success(
+        remaining > 0
+          ? `Enriched ${totalEnriched} comments (${remaining} still need codes)`
+          : eligibleTotal != null
+            ? `Enriched ${totalEnriched} of ${eligibleTotal} eligible comments`
+            : `Enriched ${totalEnriched} comments`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check"] });
+      await queryClient.invalidateQueries({ queryKey: ["project_pipeline_run", projectId] });
     } catch (e) {
       console.warn("Run enrichment failed:", e);
       toast.error("Run enrichment failed");

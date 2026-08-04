@@ -123,6 +123,13 @@ export const hybridNavGroups: HybridNavGroup[] = [
         description: "Gather & view portal data",
         requiresAuth: true,
       },
+      {
+        title: "Operations Board",
+        href: "/operations",
+        icon: Table2,
+        description: "Reimbursables, scope & PM workflow (mixed live/mock)",
+        requiresAuth: true,
+      },
     ],
   },
   {
@@ -130,7 +137,7 @@ export const hybridNavGroups: HybridNavGroup[] = [
     defaultOpen: true,
     items: [
       {
-        title: "Code Analyzer",
+        title: "Compliance Analyzer",
         href: "/code-compliance",
         icon: ShieldCheck,
         description: "Check code compliance",
@@ -318,10 +325,11 @@ export const pageTitles: Record<string, string> = {
   "/permit-wizard-filing": "Permit Filing",
   "/response-matrix": "Response Matrix",
   "/portal-data": "Portal Harvest",
+  "/operations": "Operations Board",
   "/comment-review": "Comment Review",
   // Legacy path redirects to Response Matrix; title kept for shell flash only
   "/classified-comments": "Response Matrix",
-  "/code-compliance": "Code Compliance Analyzer",
+  "/code-compliance": "Compliance Analyzer",
   "/uci": "Utility Coordination",
   "/permit-intelligence": "Permit Intelligence",
   "/jurisdictions/map": "Jurisdiction Map",
