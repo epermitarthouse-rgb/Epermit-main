@@ -8,6 +8,13 @@ attached_assets
 .config
 supabase/.temp
 
+# Never upload local secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
 # Local junk / large generated datasets — never upload to Railway
 Insight Layer.zip
 docs/strategy
