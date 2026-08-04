@@ -51,6 +51,33 @@ describe("UciDashboard coordination drawer open/close behavior", () => {
     assert.match(block, /uci-records-table/);
   });
 
+  it("does not re-force preferred drawer tab when searchParams identity changes", () => {
+    // Regression: Submissions (?section=submissions → application-prep) left the
+    // section effect depending on setSearchParams. RR recreates that callback on
+    // every query change, so clicking Overview/Portal sync/etc. immediately
+    // snapped the drawer back to Application prep.
+    const block = extractBlock(
+      dashboardSource,
+      'if (section.target.kind === "drawer-tab")',
+      "return (",
+    );
+    assert.match(
+      block,
+      /\}, \[sectionParam, navigate\]\);/,
+      "section effect deps must be [sectionParam, navigate] only",
+    );
+    assert.doesNotMatch(
+      block,
+      /setSearchParams\s*,/,
+      "section effect must not depend on setSearchParams (unstable across tab clicks)",
+    );
+    assert.doesNotMatch(
+      block,
+      /detailOpen\s*,/,
+      "section effect must not depend on detailOpen (prefer openDetail tab mirror)",
+    );
+  });
+
   it("hydrates the drawer only from an explicit ?coordination= param", () => {
     const block = extractBlock(
       dashboardSource,

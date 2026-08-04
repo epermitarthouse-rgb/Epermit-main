@@ -2554,6 +2554,10 @@ export default function UciDashboard() {
       // Prefer the mapped drawer tab for the next explicit open / deep link.
       // Never auto-select a record or force the sheet open — that requires
       // row click or an explicit ?coordination= deep link.
+      // Only apply when `sectionParam` changes — not on every URL rewrite.
+      // react-router's `setSearchParams` is recreated whenever searchParams
+      // change; depending on it here re-forced Submissions → application-prep
+      // after every in-drawer tab click and stuck the sheet on Application prep.
       const tab = section.target.tab;
       setDrawerTab(tab);
 
@@ -2579,8 +2583,12 @@ export default function UciDashboard() {
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
+    // Intentionally omit setSearchParams / detailOpen from deps:
+    // - setSearchParams identity changes on every query update (RR 6)
+    // - detailOpen flips are handled by openDetail mirroring drawerTab
+    // Re-run only when the section deep-link itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- section deep-link orchestration
-  }, [sectionParam, detailOpen, navigate, setSearchParams]);
+  }, [sectionParam, navigate]);
 
   return (
     <div className="space-y-6">
