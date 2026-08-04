@@ -12,9 +12,6 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: "Viewer",
 };
 
-const DEFAULT_FROM = "PermitPilot <onboarding@resend.dev>";
-const DEFAULT_APP_URL = "https://epermit-main-nine.vercel.app";
-
 type CreateAndSendBody = {
   action: "create_and_send";
   project_id: string;
@@ -35,66 +32,6 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-function resolveFromAddress(): string {
-  const configured =
-    Deno.env.get("RESEND_FROM_EMAIL") ||
-    Deno.env.get("EMAIL_FROM") ||
-    Deno.env.get("RESEND_FROM");
-  if (!configured?.trim()) return DEFAULT_FROM;
-  const trimmed = configured.trim();
-  // Accept either "Name <email@domain>" or bare "email@domain"
-  if (trimmed.includes("<") && trimmed.includes(">")) return trimmed;
-  if (trimmed.includes("@")) return `PermitPilot <${trimmed}>`;
-  return DEFAULT_FROM;
-}
-
-function resolveAppBaseUrl(req: Request): string {
-  const configured = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL");
-  if (configured) return configured.replace(/\/$/, "");
-  const origin = req.headers.get("origin");
-  if (origin) return origin.replace(/\/$/, "");
-  return DEFAULT_APP_URL;
-}
-
-/** Map Resend/provider errors to FE-safe strings (never leak API keys/secrets). */
-function safeEmailProviderError(status: number, rawBody: string): string {
-  let message = "";
-  try {
-    const parsed = JSON.parse(rawBody);
-    message = String(parsed?.message || parsed?.error || "").trim();
-  } catch {
-    message = "";
-  }
-
-  const lower = message.toLowerCase();
-  if (
-    lower.includes("only send testing emails") ||
-    lower.includes("verify a domain") ||
-    (lower.includes("resend.dev") && lower.includes("domain"))
-  ) {
-    return "Email provider rejected the send: the sender domain is not verified for external recipients. Verify a domain in Resend and set RESEND_FROM_EMAIL, then resend from the Team tab.";
-  }
-  if (lower.includes("invalid api key") || lower.includes("unauthorized") || status === 401) {
-    return "Email provider authentication failed. Check RESEND_API_KEY, then resend from the Team tab.";
-  }
-  if (lower.includes("invalid `from`") || lower.includes("invalid from")) {
-    return "Email sender address is invalid. Set RESEND_FROM_EMAIL to a verified domain address, then resend from the Team tab.";
-  }
-  if (status === 429 || lower.includes("rate limit")) {
-    return "Email provider rate limit reached. Wait a moment, then resend from the Team tab.";
-  }
-  if (status >= 500) {
-    return "Email provider is temporarily unavailable. The invitation is saved — resend from the Team tab.";
-  }
-
-  // Generic fallback — do not forward raw provider bodies (may contain account emails/config).
-  return "Failed to send invitation email. The invitation is saved — resend from the Team tab.";
 }
 
 function buildEmailHtml(params: {
@@ -145,6 +82,14 @@ function buildEmailHtml(params: {
 </body>
 </html>`,
   };
+}
+
+function resolveAppBaseUrl(req: Request): string {
+  const configured = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL");
+  if (configured) return configured.replace(/\/$/, "");
+  const origin = req.headers.get("origin");
+  if (origin) return origin.replace(/\/$/, "");
+  return "https://epermit-main-production.up.railway.app";
 }
 
 serve(async (req: Request) => {
@@ -201,56 +146,24 @@ serve(async (req: Request) => {
   let role: string;
   let expiresAt: string;
   let projectId: string;
-  let invitationCreated = false;
 
   try {
     if (body.action === "create_and_send") {
-      const emailNorm = normalizeEmail(body.email);
-
-      // Reuse an existing pending invite for the same project+email so Invite
-      // retries do not revoke/recreate rows (Team-tab Resend stays the same path).
-      const { data: existingPending } = await supabaseAuth
-        .from("project_invitations")
-        .select("id, role")
-        .eq("project_id", body.project_id)
-        .eq("email", emailNorm)
-        .eq("status", "pending")
-        .maybeSingle();
-
-      // Same pending row + same role → resend (no duplicate rows). Role change uses create RPC (revokes + replaces).
-      if (existingPending?.id && existingPending.role === body.role) {
-        const { data, error } = await supabaseAuth.rpc("resend_project_team_invitation", {
-          p_invitation_id: existingPending.id,
-        });
-        if (error) throw error;
-        if (!data?.invitation_id || !data?.accept_token) {
-          throw new Error("Resend RPC returned incomplete data");
-        }
-        invitationId = data.invitation_id;
-        acceptToken = data.accept_token;
-        invitedEmail = data.email;
-        role = data.role;
-        expiresAt = data.expires_at;
-        projectId = body.project_id;
-        invitationCreated = false;
-      } else {
-        const { data, error } = await supabaseAuth.rpc("create_project_team_invitation", {
-          p_project_id: body.project_id,
-          p_email: body.email,
-          p_role: body.role,
-        });
-        if (error) throw error;
-        if (!data?.invitation_id || !data?.accept_token) {
-          throw new Error("Invitation RPC returned incomplete data");
-        }
-        invitationId = data.invitation_id;
-        acceptToken = data.accept_token;
-        invitedEmail = data.email;
-        role = data.role;
-        expiresAt = data.expires_at;
-        projectId = body.project_id;
-        invitationCreated = true;
+      const { data, error } = await supabaseAuth.rpc("create_project_team_invitation", {
+        p_project_id: body.project_id,
+        p_email: body.email,
+        p_role: body.role,
+      });
+      if (error) throw error;
+      if (!data?.invitation_id || !data?.accept_token) {
+        throw new Error("Invitation RPC returned incomplete data");
       }
+      invitationId = data.invitation_id;
+      acceptToken = data.accept_token;
+      invitedEmail = data.email;
+      role = data.role;
+      expiresAt = data.expires_at;
+      projectId = body.project_id;
     } else if (body.action === "resend") {
       const { data, error } = await supabaseAuth.rpc("resend_project_team_invitation", {
         p_invitation_id: body.invitation_id,
@@ -271,7 +184,6 @@ serve(async (req: Request) => {
         .eq("id", invitationId)
         .single();
       projectId = invRow?.project_id || "";
-      invitationCreated = false;
     } else {
       return new Response(
         JSON.stringify({ error: "Unknown action", email_sent: false }),
@@ -309,36 +221,16 @@ serve(async (req: Request) => {
   });
 
   if (!resendApiKey) {
-    console.error("RESEND_API_KEY missing; invitation saved without email");
     return new Response(
       JSON.stringify({
         invitation_id: invitationId,
         email_sent: false,
-        invitation_created: invitationCreated,
+        invitation_created: true,
         error: "Email service is temporarily unavailable. You can resend the invitation from the Team tab.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-
-  const fromAddress = resolveFromAddress();
-  console.log(
-    JSON.stringify({
-      event: "project_team_invite_send_attempt",
-      invitation_id: invitationId,
-      from_domain: fromAddress.includes("@")
-        ? fromAddress.replace(/.*@/, "").replace(">", "").trim()
-        : "unknown",
-      accept_host: (() => {
-        try {
-          return new URL(acceptUrl).host;
-        } catch {
-          return "invalid";
-        }
-      })(),
-      using_default_from: fromAddress === DEFAULT_FROM,
-    }),
-  );
 
   try {
     const emailRes = await fetch("https://api.resend.com/emails", {
@@ -348,7 +240,7 @@ serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: fromAddress,
+        from: "PermitPilot <onboarding@resend.dev>",
         to: [invitedEmail],
         subject: emailContent.subject,
         html: emailContent.html,
@@ -357,13 +249,13 @@ serve(async (req: Request) => {
 
     if (!emailRes.ok) {
       const errBody = await emailRes.text();
-      console.error("Resend error:", emailRes.status, errBody);
+      console.error("Resend error:", errBody);
       return new Response(
         JSON.stringify({
           invitation_id: invitationId,
           email_sent: false,
-          invitation_created: invitationCreated,
-          error: safeEmailProviderError(emailRes.status, errBody),
+          invitation_created: true,
+          error: "Failed to send invitation email. The invitation is saved — resend from the Team tab.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -377,7 +269,7 @@ serve(async (req: Request) => {
       JSON.stringify({
         invitation_id: invitationId,
         email_sent: true,
-        invitation_created: invitationCreated,
+        invitation_created: true,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -387,7 +279,7 @@ serve(async (req: Request) => {
       JSON.stringify({
         invitation_id: invitationId,
         email_sent: false,
-        invitation_created: invitationCreated,
+        invitation_created: true,
         error: "Email service error. The invitation is saved — resend from the Team tab.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

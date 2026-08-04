@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { mvpDocumentationData } from '@/lib/mvpDocumentationData';
 import { exportMVPDocumentationPDF } from '@/lib/mvpDocumentationPDF';
 import { toast } from 'sonner';
-import { MetricCard, PageHeader } from '@/components/design/ProductPrimitives';
 
 const MVPDocumentation = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -59,17 +58,25 @@ const MVPDocumentation = () => {
 
   return (
     <>
-      <div className="space-y-6">
-        <PageHeader
-          eyebrow="Documentation"
-          title="MVP Documentation Export"
-          body={`Generate a comprehensive PDF document containing all technical specifications, database schema, features, and architecture details of the ${data.appName} MVP.`}
-        />
+      <div className="container mx-auto py-8 px-4 max-w-6xl">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">MVP Documentation Export</h1>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Generate a comprehensive PDF document containing all technical specifications, database schema, features, and architecture details of the {data.appName} MVP.
+          </p>
+        </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {stats.map((stat) => (
-            <MetricCard key={stat.label} label={stat.label} value={stat.value} icon={stat.icon} />
+            <Card key={stat.label} className="text-center">
+              <CardContent className="pt-6">
+                <stat.icon className={`h-8 w-8 mx-auto mb-2 ${stat.color}`} />
+                <div className="text-3xl font-bold text-foreground">{stat.value}</div>
+                <div className="text-sm text-muted-foreground">{stat.label}</div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 

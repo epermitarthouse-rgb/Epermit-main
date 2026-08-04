@@ -21,27 +21,9 @@ async function downloadToTempFile(supabase, filePath, fileName, tempDir) {
     throw new Error(signError?.message ?? "Failed to create signed download URL");
   }
 
-  let response;
-  try {
-    response = await fetch(signed.signedUrl);
-  } catch (err) {
-    const { summarizeFetchError, formatFetchErrorLine } = require("./netErrors");
-    const summary = summarizeFetchError(err, signed.signedUrl);
-    const wrapped = new Error(`Storage download fetch failed: ${formatFetchErrorLine(summary)}`);
-    wrapped.cause = err;
-    wrapped.workerFetchSummary = summary;
-    throw wrapped;
-  }
+  const response = await fetch(signed.signedUrl);
   if (!response.ok || !response.body) {
-    let bodyPrefix = "";
-    try {
-      bodyPrefix = (await response.text()).slice(0, 200);
-    } catch {
-      /* ignore */
-    }
-    throw new Error(
-      `Storage download failed (${response.status})${bodyPrefix ? `: ${bodyPrefix}` : ""}`,
-    );
+    throw new Error(`Storage download failed (${response.status})`);
   }
 
   await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(tempPath));

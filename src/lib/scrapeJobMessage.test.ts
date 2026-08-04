@@ -91,7 +91,6 @@ describe("resolveScrapeCurrentMessage", () => {
       isStale: true,
       isTerminal: false,
     });
-    // Stale is a secondary badge — never replace the backend message.
-    assert.equal(message, "Opening record information.");
+    assert.equal(message, "Still working…");
   });
 });

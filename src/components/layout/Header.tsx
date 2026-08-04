@@ -9,8 +9,8 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 const navigation = [
   { name: "Home", href: "/" },
-  { name: "Code Compliance Analyzer", href: "/code-compliance" },
-  { name: "Reference Library", href: "/code-reference" },
+  { name: "AI Compliance", href: "/code-compliance" },
+  { name: "Code Library", href: "/code-reference" },
   { name: "Demos", href: "/demos" },
   { name: "Pricing", href: "/pricing" },
   { name: "Contact", href: "/contact" },

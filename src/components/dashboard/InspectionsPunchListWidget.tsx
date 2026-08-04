@@ -170,7 +170,7 @@ export function InspectionsPunchListWidget() {
               <ClipboardCheck className="h-5 w-5 shrink-0 text-gold-deep" />
               Inspections & Punch List
             </CardTitle>
-            <CardDescription className="text-ink-secondary-light">Portfolio · Upcoming tasks across all projects</CardDescription>
+            <CardDescription className="text-ink-secondary-light">Upcoming tasks across all projects</CardDescription>
           </div>
           <div className="flex gap-2 flex-shrink-0 flex-wrap">
             {overdueInspections > 0 && (

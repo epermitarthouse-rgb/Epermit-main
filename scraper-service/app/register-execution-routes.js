@@ -84,7 +84,6 @@ const {
 const scrapeEvents = require("../lib/scrape-events.js");
 const { SCRAPE_STAGES } = require("../lib/scrape-stages.js");
 const scrapeFileResults = require("../lib/scrape-file-results.js");
-const pgcRetryArtifacts = require("../lib/pgc-retry-artifacts.js");
 const scrapeLease = require("../lib/scrape-lease.js");
 const arlingtonDurableJob = require("../lib/arlington-durable-job.js");
 const arlingtonJobStore = require("../lib/arlington-job-store.js");
@@ -92,42 +91,10 @@ const arlingtonOrchestration = require("../lib/arlington-orchestration.js");
 const { startArlingtonDurableWorkerLoop } = require("../lib/arlington-durable-worker-loop.js");
 const { startUciDurableWorkerLoop } = require("./services/uci/uci-durable-worker-loop.js");
 const { mirrorSessionProgress } = require("../lib/session-progress.js");
-const {
-  shouldAbort,
-  bindSessionCancelChecker,
-} = require("../lib/scrape-job-cancellation.js");
 
 function publishScrapeOrchestration(session, opts = {}) {
   if (typeof session.publishScrapeProgress !== "function") return;
   void session.publishScrapeProgress(opts).catch(() => {});
-}
-
-/** Durable + memory cancel gate for session scrapers. */
-async function sessionCancelRequested(session, supabaseClient = null) {
-  try {
-    let supabase = supabaseClient || null;
-    if (!supabase) {
-      try {
-        supabase = require("../lib/supabase-admin.js").getSupabaseAdmin();
-      } catch (_) {
-        supabase = null;
-      }
-    }
-    return shouldAbort(session, supabase);
-  } catch (_) {
-    return !!session?._cancelRequested;
-  }
-}
-
-function attachSessionCancelChecker(session, supabaseClient) {
-  if (!session) return async () => false;
-  if (session._isCancelRequestedBound && typeof session._isCancelRequested === "function") {
-    return session._isCancelRequested;
-  }
-  const checker = bindSessionCancelChecker(session, supabaseClient);
-  session._isCancelRequested = checker;
-  session._isCancelRequestedBound = true;
-  return checker;
 }
 
 const MONTGOMERY_RETRIEVE_TIMEOUT_MS = 120000;
@@ -2040,23 +2007,13 @@ app.post("/api/scrape", async (req, res) => {
     }
   }
 
-  attachSessionCancelChecker(session, supabase);
-
   async function finalizeSessionScrapeJob(statusHint) {
     if (typeof session.finalizeScrapeJob !== "function") return;
     try {
-      const cancelled =
-        statusHint === "cancelled" ||
-        (await sessionCancelRequested(session, supabase));
       const status =
         statusHint ||
-        (cancelled ? "cancelled" : session.status);
-      if (cancelled || status === "cancelled") {
-        session._cancelRequested = true;
-        session._scrapeEventsSuppressed = true;
-        session.status = "cancelled";
-      }
-      await session.finalizeScrapeJob(cancelled ? "cancelled" : status);
+        (session._cancelRequested ? "cancelled" : session.status);
+      await session.finalizeScrapeJob(status);
     } catch (err) {
       console.warn("[scrape-events] finalizeSessionScrapeJob:", err.message);
     }
@@ -2365,7 +2322,7 @@ app.post("/api/scrape", async (req, res) => {
       arlingtonScrapeTabsArg,
     )
       .then(async () => {
-        if (await sessionCancelRequested(session, supabase)) {
+        if (session._cancelRequested) {
           console.log("   🛑 Accela scrape was cancelled — not marking as done");
           await finalizeSessionScrapeJob("cancelled");
           return;
@@ -2513,20 +2470,6 @@ app.post("/api/scrape", async (req, res) => {
     }
     console.log("[PGC] Credentials source: saved_portal_settings (session)");
     console.log("[PGC] Env credential fallback: disabled (server)");
-    const parsedRetryArtifacts = pgcRetryArtifacts.parsePgcRetryArtifacts(
-      req.body?.pgcRetryArtifacts,
-    );
-    if (String(scrapeMode || "").trim() === "scrape_retry_selected") {
-      if (!parsedRetryArtifacts) {
-        return res.status(400).json({
-          error:
-            "scrape_retry_selected requires pgcRetryArtifacts with at least one failed file or report artifact",
-        });
-      }
-      console.log(
-        `[PGC] Targeted failed-items retry | files=${parsedRetryArtifacts.files.length} reports=${parsedRetryArtifacts.reports.length}`,
-      );
-    }
     let targets;
     if (permitNumber != null && String(permitNumber).trim() !== "") {
       const permitNorm = String(permitNumber).trim();
@@ -2536,19 +2479,14 @@ app.post("/api/scrape", async (req, res) => {
           pgcEplan.pgcPermitKeysMatch(p.projectNum, permitNorm),
       );
       if (targets.length === 0) {
-        const pgcOptsEarly = pgcPipelineOptsFromScrapeMode(
-          scrapeMode || "all",
-          parsedRetryArtifacts,
-        );
+        const pgcOptsEarly = pgcPipelineOptsFromScrapeMode(scrapeMode || "all");
         const pgcFilesOnlyEarly =
           pgcOptsEarly.skipDetail &&
           !pgcOptsEarly.skipFiles &&
           pgcOptsEarly.skipReports &&
           pgcOptsEarly.skipWorkflow &&
           pgcOptsEarly.skipReview;
-        const pgcRetrySelectedEarly =
-          String(scrapeMode || "").trim() === "scrape_retry_selected";
-        if (pgcFilesOnlyEarly || pgcRetrySelectedEarly) {
+        if (pgcFilesOnlyEarly) {
           targets = [
             {
               id: permitNorm,
@@ -2561,7 +2499,7 @@ app.post("/api/scrape", async (req, res) => {
             },
           ];
           console.log(
-            `[PGC] ${pgcRetrySelectedEarly ? "Retry selected" : "Files Only"} scrape — no login session row for ${permitNorm}; will resolve on dashboard at scrape phase`,
+            `[PGC] Files Only scrape — no login session row for ${permitNorm}; will resolve on dashboard at scrape phase`,
           );
         } else {
           return res.status(404).json({
@@ -2585,46 +2523,20 @@ app.post("/api/scrape", async (req, res) => {
     publishScrapeOrchestration(session, {
       stage: SCRAPE_STAGES.OPENING_PROJECT,
       event_type: "scrape_started",
-      user_message:
-        String(scrapeMode || "").trim() === "scrape_retry_selected"
-          ? `Retrying selected failed PGC artifacts for ${targets.length} project(s).`
-          : `Opening ${targets.length} PGC project(s).`,
+      user_message: `Opening ${targets.length} PGC project(s).`,
       progress_current: 0,
       progress_total: targets.length,
       dedupeKey: "pgc_open",
       forceFeed: true,
     });
     res.json({
-      message:
-        String(scrapeMode || "").trim() === "scrape_retry_selected"
-          ? "PGC failed-items retry started"
-          : "PGC ePlan scraping started",
+      message: "PGC ePlan scraping started",
       total: session.total,
       portalType: "projectdox",
       portalSubtype: "pgc-eplan",
       jobId: scrapeJobId,
-      retrySelected: String(scrapeMode || "").trim() === "scrape_retry_selected",
     });
     scrapeLease.acquireScrapeLease(session, sessionId, rearmSessionIdleTimeout);
-    const retryFileIds = parsedRetryArtifacts
-      ? pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(parsedRetryArtifacts)
-      : [];
-    const baseDevControls =
-      parsePgcDevHarvestControls(req.body?.devHarvestControls) || {};
-    const mergedDevControls =
-      parsedRetryArtifacts &&
-      String(scrapeMode || "").trim() === "scrape_retry_selected"
-        ? {
-            ...baseDevControls,
-            ...(retryFileIds.length ? { explicitFileIds: retryFileIds } : {}),
-            ...(parsedRetryArtifacts.reports.length
-              ? { explicitReportTargets: parsedRetryArtifacts.reports }
-              : {}),
-            retrySelectedOnly: true,
-          }
-        : Object.keys(baseDevControls).length
-          ? baseDevControls
-          : null;
     scrapePgcAll(
       session,
       targets,
@@ -2633,8 +2545,7 @@ app.post("/api/scrape", async (req, res) => {
       userId,
       scrapeMode || "all",
       {
-        devHarvestControls: mergedDevControls,
-        pgcRetryArtifacts: parsedRetryArtifacts,
+        devHarvestControls: parsePgcDevHarvestControls(req.body?.devHarvestControls),
       },
     )
       .then((result) => {
@@ -2733,13 +2644,7 @@ app.post("/api/scrape", async (req, res) => {
       userId,
       scrapeMode || "montgomery_quick",
     )
-      .then(async (result) => {
-        if (result?.cancelled || (await sessionCancelRequested(session, supabase))) {
-          session.status = "cancelled";
-          return finalizeSessionScrapeJob("cancelled");
-        }
-        return finalizeSessionScrapeJob("done");
-      })
+      .then(() => finalizeSessionScrapeJob("done"))
       .catch(async (err) => {
       session.status = "error";
       mirrorSessionProgress(session, `Error: ${err.message}`, {
@@ -2818,13 +2723,7 @@ app.post("/api/scrape", async (req, res) => {
       userId,
       howardScrapeMode,
     )
-      .then(async (result) => {
-        if (result?.cancelled || (await sessionCancelRequested(session, supabase))) {
-          session.status = "cancelled";
-          return finalizeSessionScrapeJob("cancelled");
-        }
-        return finalizeSessionScrapeJob("done");
-      })
+      .then(() => finalizeSessionScrapeJob("done"))
       .catch(async (err) => {
       session.status = "error";
       mirrorSessionProgress(session, `Error: ${err.message}`, {
@@ -2945,13 +2844,7 @@ app.post("/api/scrape", async (req, res) => {
     effectiveTargetFolders,
     filesSyncTargetHint,
   )
-    .then(async (result) => {
-      if (result?.cancelled || (await sessionCancelRequested(session, supabase))) {
-        session.status = "cancelled";
-        return finalizeSessionScrapeJob("cancelled");
-      }
-      return finalizeSessionScrapeJob("done");
-    })
+    .then(() => finalizeSessionScrapeJob("done"))
     .catch(async (err) => {
     session.status = "error";
     mirrorSessionProgress(session, `Error: ${err.message}`, {
@@ -4494,7 +4387,6 @@ function mapPgcPortalFileEntry(f, fol) {
         ? String(f.downloadStatus || "ok")
         : String(f.downloadStatus || "pending");
 
-  const retryCount = Number(f.retryCount);
   return {
     name: f.name || "file",
     fileId: f.fileId,
@@ -4511,7 +4403,6 @@ function mapPgcPortalFileEntry(f, fol) {
     version: f.version ?? null,
     hasMarkups: f.hasMarkups ?? false,
     downloadStatus,
-    ...(Number.isFinite(retryCount) && retryCount > 0 ? { retryCount } : {}),
     ...(failed &&
       f.downloadError && {
         downloadError: scrapeFileResults.sanitizeFailureMessage(f.downloadError),
@@ -5129,10 +5020,9 @@ async function scrapeHowardAll(
     };
 
     for (let i = 0; i < projects.length; i++) {
-      if (await sessionCancelRequested(session)) {
+      if (session._cancelRequested) {
         console.log("   🛑 Howard scrape cancelled");
-        session.status = "cancelled";
-        return { cancelled: true };
+        return;
       }
       const project = projects[i];
       mirrorSessionProgress(session, `${project.projectNum} → Howard harvest`, {
@@ -5167,14 +5057,8 @@ async function scrapeHowardAll(
             _howardOmitTabs: omitTabs,
             uploadLocal,
             storagePrefix,
-            isCancelRequested: () => sessionCancelRequested(session),
           },
         );
-        if (pipelineResult?.cancelled || (await sessionCancelRequested(session))) {
-          console.log("   🛑 Howard scrape cancelled mid-pipeline");
-          session.status = "cancelled";
-          return { cancelled: true };
-        }
 
         session.data[project.id] = await mapHowardPipelineToPortalData(
           project,
@@ -5201,12 +5085,6 @@ async function scrapeHowardAll(
       session.progress++;
     }
 
-    if (await sessionCancelRequested(session)) {
-      console.log("   🛑 Howard scrape cancelled — skipping sync, not marking as done");
-      session.status = "cancelled";
-      return { cancelled: true };
-    }
-
     mirrorSessionProgress(session, "Howard scraping complete! Syncing...", {
       event_type: "save_started",
       stage: "save",
@@ -5221,10 +5099,9 @@ async function scrapeHowardAll(
       null,
     );
 
-    if (await sessionCancelRequested(session)) {
+    if (session._cancelRequested) {
       console.log("   🛑 Howard scrape cancelled — not marking as done");
-      session.status = "cancelled";
-      return { cancelled: true };
+      return;
     }
     if (!howardSyncOk) {
       session.status = "error";
@@ -5392,10 +5269,9 @@ async function scrapeMontgomeryAll(
   };
 
   for (let i = 0; i < projects.length; i++) {
-    if (await sessionCancelRequested(session)) {
+    if (session._cancelRequested) {
       console.log("   🛑 Montgomery scrape cancelled");
-      session.status = "cancelled";
-      return { cancelled: true };
+      return;
     }
     const project = projects[i];
     mirrorSessionProgress(session, `${project.projectNum} → Montgomery harvest`, {
@@ -5430,7 +5306,6 @@ async function scrapeMontgomeryAll(
           _montgomeryOmitTabs: omitTabs,
           uploadLocal,
           storagePrefix,
-          isCancelRequested: () => sessionCancelRequested(session),
           harvestFiles: async (pipelinePage, pipelineProj, pipelineWebUiBase) =>
             extractMontgomeryFilesTabLightweight(
               pipelinePage,
@@ -5442,11 +5317,6 @@ async function scrapeMontgomeryAll(
             ),
         },
       );
-      if (pipelineResult?.cancelled || (await sessionCancelRequested(session))) {
-        console.log("   🛑 Montgomery scrape cancelled mid-pipeline");
-        session.status = "cancelled";
-        return { cancelled: true };
-      }
 
       session.data[project.id] = await mapMontgomeryPipelineToPortalData(
         project,
@@ -5480,10 +5350,9 @@ async function scrapeMontgomeryAll(
   });
   console.log(`\n✅ [Montgomery] Done! Syncing to Supabase...`);
 
-  if (await sessionCancelRequested(session)) {
+  if (session._cancelRequested) {
     console.log("   🛑 Montgomery scrape cancelled — not marking as done");
-    session.status = "cancelled";
-    return { cancelled: true };
+    return;
   }
 
   const hasFileProgressJob =
@@ -5647,7 +5516,7 @@ function cleanupPgcSuccessLocalArtifacts(pipelineResult) {
  * Map UI scrapeMode (PGC-specific strings from dashboard) to runPgcProductionPipeline skips.
  * Omits unchanged tabs in mapPgcPipelineToPortalData so Supabase merge keeps prior data.
  */
-function pgcPipelineOptsFromScrapeMode(scrapeMode, retryArtifacts = null) {
+function pgcPipelineOptsFromScrapeMode(scrapeMode) {
   const m = String(scrapeMode ?? "all").trim();
   const none = {
     skipDetail: false,
@@ -5688,10 +5557,6 @@ function pgcPipelineOptsFromScrapeMode(scrapeMode, retryArtifacts = null) {
       skipFiles: true,
       skipReports: true,
     };
-  }
-  // Targeted failed-artifact retry — never a full scrape; tabs driven by selection.
-  if (m === "scrape_retry_selected") {
-    return pgcRetryArtifacts.buildPgcRetryPipelineOpts(retryArtifacts);
   }
   if (m === "scrape_all" || m === "all") return { ...none };
   if (m === "standard") {
@@ -5744,12 +5609,6 @@ function parsePgcDevHarvestControls(raw) {
       ),
     ];
   }
-  if (Array.isArray(raw.explicitReportTargets) && raw.explicitReportTargets.length > 0) {
-    out.explicitReportTargets = raw.explicitReportTargets;
-  }
-  if (raw.retrySelectedOnly === true) {
-    out.retrySelectedOnly = true;
-  }
   if (process.env.NODE_ENV === "production" && Object.keys(out).length === 0) {
     return null;
   }
@@ -5765,18 +5624,13 @@ async function scrapePgcAll(
   scrapeMode,
   extraOpts = {},
 ) {
-  const retryArtifacts =
-    extraOpts.pgcRetryArtifacts ||
-    pgcRetryArtifacts.parsePgcRetryArtifacts(extraOpts.pgcRetryArtifactsRaw);
-  const pgcOpts = pgcPipelineOptsFromScrapeMode(scrapeMode, retryArtifacts);
+  const pgcOpts = pgcPipelineOptsFromScrapeMode(scrapeMode);
   const pgcFilesOnly =
     pgcOpts.skipDetail &&
     !pgcOpts.skipFiles &&
     pgcOpts.skipReports &&
     pgcOpts.skipWorkflow &&
     pgcOpts.skipReview;
-  const pgcRetrySelected =
-    String(scrapeMode || "").trim() === "scrape_retry_selected";
 
   session._scrapeCumulativeBytes = 0;
   session._downloadedHashes = new Map();
@@ -5793,31 +5647,11 @@ async function scrapePgcAll(
     );
     uploadedCheckpointMap =
       scrapeFileResults.buildUploadedCheckpointMap(priorRows);
-  }
-  if (pgcRetrySelected && supabaseProjectId && supabase) {
-    try {
-      const { data: priorOk } = await supabase
-        .from("scrape_file_results")
-        .select(
-          "portal_file_id, file_version, public_url, storage_path, status",
-        )
-        .eq("project_id", supabaseProjectId)
-        .in("status", ["uploaded", "skipped"])
-        .limit(5000);
-      const seeded = scrapeFileResults.buildUploadedCheckpointMap(priorOk || []);
-      for (const [k, v] of seeded) {
-        if (!uploadedCheckpointMap.has(k)) uploadedCheckpointMap.set(k, v);
-      }
-    } catch (seedErr) {
-      console.warn(
-        `[PGC] Retry checkpoint seed skipped: ${seedErr?.message || seedErr}`,
+    if (uploadedCheckpointMap.size > 0) {
+      console.log(
+        `[PGC] Resuming harvest with ${uploadedCheckpointMap.size} checkpointed file(s)`,
       );
     }
-  }
-  if (uploadedCheckpointMap.size > 0) {
-    console.log(
-      `[PGC] Resuming harvest with ${uploadedCheckpointMap.size} checkpointed file(s)`,
-    );
   }
 
   const devHarvestControls =
@@ -5832,7 +5666,7 @@ async function scrapePgcAll(
 
   const dash = session.dashboardUrl || pgcEplan.PGC_DASHBOARD_URL;
 
-  if ((pgcFilesOnly || pgcRetrySelected) && projects.length === 1 && session.page) {
+  if (pgcFilesOnly && projects.length === 1 && session.page) {
     const resolved = await pgcEplan.resolvePgcExplicitTargetOnDashboard(
       session.page,
       dash,
@@ -5843,7 +5677,7 @@ async function scrapePgcAll(
     } else {
       session._pgcExplicitTargetResolveFailed = true;
       console.warn(
-        `[PGC] ${pgcRetrySelected ? "Retry selected" : "Files Only"} explicit target not resolved on dashboard before harvest | permit=${projects[0].projectNum} projectId=${projects[0].projectId}`,
+        `[PGC] Files Only explicit target not resolved on dashboard before harvest | permit=${projects[0].projectNum} projectId=${projects[0].projectId}`,
       );
     }
   }
@@ -5857,7 +5691,7 @@ async function scrapePgcAll(
   };
 
   for (let i = 0; i < projects.length; i++) {
-    if (await sessionCancelRequested(session)) {
+    if (session._cancelRequested) {
       console.log("   🛑 PGC scrape cancelled");
       session.status = "cancelled";
       return { cancelled: true, withWarnings: !!session._pgcScrapeWarnings };
@@ -5891,9 +5725,6 @@ async function scrapePgcAll(
         dashboardUrl: dashUrl,
         reason,
       }) => {
-        if (await sessionCancelRequested(session)) {
-          throw new Error("pgc_cancelled_before_relaunch");
-        }
         try {
           if (session.browser) await session.browser.close().catch(() => {});
         } catch (_) {}
@@ -5926,20 +5757,6 @@ async function scrapePgcAll(
         console.log(`[PGC] Browser relaunched (${reason || "task6"})`);
         return relPage;
       };
-      let priorReportEntries = null;
-      if (pgcRetrySelected && supabaseProjectId && !pgcOpts.skipReports) {
-        try {
-          const { data: priorProj } = await supabase
-            .from("projects")
-            .select("portal_data")
-            .eq("id", supabaseProjectId)
-            .maybeSingle();
-          priorReportEntries =
-            priorProj?.portal_data?.tabs?.reports?.reportEntries || null;
-        } catch (_) {
-          priorReportEntries = null;
-        }
-      }
       const pipelineResult = await pgcEplan.runPgcProductionPipeline(
         page,
         {
@@ -5960,7 +5777,6 @@ async function scrapePgcAll(
           scrapeJobId: fileProgress?.scrapeJobId || session.scrapeJobId || null,
           uploadLocal,
           storagePrefix,
-          priorReportEntries,
           onScrapeProgress: (event) => {
             if (event.progress_current != null) {
               session.progress = Number(event.progress_current);
@@ -6000,14 +5816,13 @@ async function scrapePgcAll(
           fileProgress,
           uploadedCheckpointMap,
           devHarvestControls,
-          pgcRetryArtifacts: retryArtifacts,
           refreshScrapeLease: () =>
             scrapeLease.refreshScrapeLease(
               session,
               _sessionId,
               rearmSessionIdleTimeout,
             ),
-          isCancelRequested: () => sessionCancelRequested(session),
+          isCancelRequested: () => !!session._cancelRequested,
           onFileAttemptStart: async (fields) => {
             if (!fileProgress) return;
             const base = {
@@ -6018,11 +5833,7 @@ async function scrapePgcAll(
               parentFolder: fields.parentFolder,
             };
             await scrapeFileResults.upsertFileDiscovered(fileProgress, base);
-            if (pgcRetrySelected) {
-              await scrapeFileResults.markFileRetrying(fileProgress, base);
-            } else {
-              await scrapeFileResults.markFileDownloading(fileProgress, base);
-            }
+            await scrapeFileResults.markFileDownloading(fileProgress, base);
           },
           onFileFailed: async (fields) => {
             if (!fileProgress) return;
@@ -6116,85 +5927,6 @@ async function scrapePgcAll(
         project,
         pipelineResult,
       );
-      if (pgcRetrySelected && retryArtifacts && supabaseProjectId) {
-        try {
-          const { data: existingRow } = await supabase
-            .from("projects")
-            .select("portal_data")
-            .eq("id", supabaseProjectId)
-            .maybeSingle();
-          const priorTabs = existingRow?.portal_data?.tabs || {};
-          const cur = session.data[project.id];
-          if (!cur.tabs || typeof cur.tabs !== "object") cur.tabs = {};
-          const targetedIds =
-            pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(retryArtifacts);
-
-          // Always reconcile files by fileId against prior portal_data — even when
-          // the harvest was marked non-authoritative and tabs.files was omitted.
-          let nextFolders = cur?.tabs?.files?.folders;
-          if (
-            (!Array.isArray(nextFolders) || nextFolders.length === 0) &&
-            Array.isArray(pipelineResult.filesOut?.folders)
-          ) {
-            nextFolders = pipelineResult.filesOut.folders.map((fol) => ({
-              folderID: fol.folderID ?? null,
-              folderName: fol.folderName || null,
-              parentFolder: fol.parentFolder || null,
-              name: fol.folderName || `Folder ${fol.folderID}`,
-              filesCount: fol.filesCount ?? (fol.files?.length ?? 0),
-              fileCount: fol.filesCount || (fol.files?.length ?? 0),
-              files: (fol.files || []).map((f) => mapPgcPortalFileEntry(f, fol)),
-            }));
-          }
-          if (
-            Array.isArray(priorTabs.files?.folders) &&
-            priorTabs.files.folders.length > 0 &&
-            Array.isArray(nextFolders)
-          ) {
-            const mergedFolders =
-              pgcRetryArtifacts.mergeFolderFilesPreservingUntargeted(
-                priorTabs.files.folders,
-                nextFolders,
-                targetedIds,
-              );
-            const counts =
-              pgcRetryArtifacts.summarizeFolderDownloadCounts(mergedFolders);
-            cur.tabs.files = {
-              ...(priorTabs.files || {}),
-              ...(cur.tabs.files || {}),
-              folders: mergedFolders,
-              keyValues: priorTabs.files?.keyValues || [],
-              tables: priorTabs.files?.tables || [],
-            };
-            console.log(
-              `[PGC] Retry files merge by fileId | targeted=${targetedIds.length} totals=${counts.ok}ok/${counts.failed}failed/${counts.total}total`,
-            );
-          }
-
-          if (cur?.tabs?.reports && priorTabs.reports?.reportEntries) {
-            const mergedEntries =
-              pgcRetryArtifacts.mergeReportEntriesPreservingSuccess(
-                priorTabs.reports.reportEntries,
-                cur.tabs.reports.reportEntries || [],
-                retryArtifacts.reports || [],
-              );
-            cur.tabs.reports.reportEntries = mergedEntries;
-            cur.tabs.reports.tables = [
-              {
-                headers: ["REPORT NAME", "Status"],
-                rows: mergedEntries.map((r) => ({
-                  "REPORT NAME": r.reportName,
-                  Status: r.logicalStatus || "Pending",
-                })),
-              },
-            ];
-          }
-        } catch (mergeErr) {
-          console.warn(
-            `[PGC] Retry portal_data merge skipped: ${mergeErr?.message || mergeErr}`,
-          );
-        }
-      }
       cleanupPgcSuccessLocalArtifacts(pipelineResult);
     } catch (err) {
       console.error(`   ❌ [PGC] ${project.projectNum}:`, err.message);
@@ -6221,12 +5953,6 @@ async function scrapePgcAll(
     session.progress++;
   }
 
-  if (await sessionCancelRequested(session)) {
-    console.log("   🛑 PGC scrape cancelled — skipping sync, not marking as done");
-    session.status = "cancelled";
-    return { withWarnings: !!session._pgcScrapeWarnings, cancelled: true };
-  }
-
   mirrorSessionProgress(session, "PGC scraping complete! Syncing...", {
     event_type: "save_started",
     stage: "save",
@@ -6241,7 +5967,7 @@ async function scrapePgcAll(
     null,
   );
 
-  if (await sessionCancelRequested(session)) {
+  if (session._cancelRequested) {
     console.log("   🛑 PGC scrape cancelled — not marking as done");
     return { withWarnings: !!session._pgcScrapeWarnings, cancelled: true };
   }
@@ -6252,37 +5978,6 @@ async function scrapePgcAll(
     console.error(`    ❌ PGC Supabase sync failed — session status set to "error"`);
     return { withWarnings: false, syncOk: false };
   }
-
-  // Belt-and-suspenders: apply this retry job's terminal SFR rows onto portal_data
-  // by stable fileId so successful retries always replace the original failed row.
-  if (
-    pgcRetrySelected &&
-    retryArtifacts &&
-    supabaseProjectId &&
-    session._scrapeJobId &&
-    typeof hashPortalData === "function"
-  ) {
-    const targetedIds =
-      pgcRetryArtifacts.explicitFileIdsFromRetryArtifacts(retryArtifacts);
-    if (targetedIds.length > 0) {
-      const targetedReconcile =
-        await scrapeFileResults.reconcileTargetedFileResultsIntoPortalData(
-          supabase,
-          {
-            projectId: supabaseProjectId,
-            scrapeJobId: session._scrapeJobId,
-            targetedFileIds: targetedIds,
-            hashPortalData,
-          },
-        );
-      if (!targetedReconcile.ok && !targetedReconcile.skipped) {
-        console.warn(
-          `[PGC] Targeted file reconcile skipped: ${targetedReconcile.reason || "unknown"}`,
-        );
-      }
-    }
-  }
-
   const withWarnings = !!session._pgcScrapeWarnings;
   session.status = withWarnings ? "partial_success" : "done";
   mirrorSessionProgress(
@@ -6337,10 +6032,9 @@ async function scrapeAll(
   console.log(`\n🔍 Scraping ${projects.length} projects...`);
 
   for (let pi = 0; pi < projects.length; pi++) {
-    if (await sessionCancelRequested(session)) {
+    if (session._cancelRequested) {
       console.log("   🛑 Scrape cancelled by user — aborting project loop");
-      session.status = "cancelled";
-      return { cancelled: true };
+      return;
     }
     const project = projects[pi];
     console.log(
@@ -6357,10 +6051,9 @@ async function scrapeAll(
     };
 
     for (const tab of tabsToScrape) {
-      if (await sessionCancelRequested(session)) {
+      if (session._cancelRequested) {
         console.log("   🛑 Scrape cancelled by user — aborting tab loop");
-        session.status = "cancelled";
-        return { cancelled: true };
+        return;
       }
       let targetLabel = null;
       if (tab.key === "files") {
@@ -6796,12 +6489,6 @@ async function scrapeAll(
     }
   }
 
-  if (await sessionCancelRequested(session)) {
-    console.log("   🛑 Scrape was cancelled — skipping sync, not marking as done");
-    session.status = "cancelled";
-    return { cancelled: true };
-  }
-
   mirrorSessionProgress(session, "Scraping complete! Syncing to database...", {
     event_type: "save_started",
     stage: "save",
@@ -6817,10 +6504,9 @@ async function scrapeAll(
     filesSyncTargetHint || targetFolder,
   );
 
-  if (await sessionCancelRequested(session)) {
+  if (session._cancelRequested) {
     console.log("   🛑 Scrape was cancelled — not marking as done");
-    session.status = "cancelled";
-    return { cancelled: true };
+    return;
   }
   if (!genericSyncOk) {
     session.status = "error";

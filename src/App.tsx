@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LeadCaptureProvider } from "@/contexts/LeadCaptureContext";
 import { LeadCaptureModal } from "@/components/lead-capture/LeadCaptureModal";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -10,13 +10,12 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { ProtectedLayoutRoute } from "@/components/auth/ProtectedRoute";
-import { HomeRoute } from "@/components/auth/HomeRoute";
+import { PublicOnlyRoute } from "@/components/auth/PublicOnlyRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { MarketingLayout } from "@/components/layout/MarketingLayout";
 
+import LandingPage from "./pages/LandingPage";
 import Demos from "./pages/Demos";
-import DemoMcDonalds from "./pages/DemoMcDonalds";
-import OnboardingAuthorization from "./pages/OnboardingAuthorization";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import FAQ from "./pages/FAQ";
@@ -33,14 +32,11 @@ import Analytics from "./pages/Analytics";
 import AdminPanel from "./pages/AdminPanel";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
-import ArchitectureReplicationChecklist from "./pages/ArchitectureReplicationChecklist";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
 import CodeCompliance from "./pages/CodeCompliance";
-import DesignCheck from "./pages/DesignCheck";
-import UciApplicationBuilder from "./pages/UciApplicationBuilder";
 import CodeReferenceLibrary from "./pages/CodeReferenceLibrary";
 import ROICalculator from "./pages/ROICalculator";
 import ConsolidationCalculator from "./pages/ConsolidationCalculator";
@@ -54,7 +50,6 @@ import ResponseMatrix from "./pages/ResponseMatrix";
 import PortalDataViewer from "./pages/PortalDataViewer";
 import ClassifiedComments from "./pages/ClassifiedComments";
 import PermitWizardFiling from "./pages/PermitWizardFiling";
-import OperationsBoard from "./pages/OperationsBoard";
 import BaltimorePortalHome from "./pages/baltimore/BaltimorePortalHome";
 import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
 import BaltimoreRecordsListPage from "./pages/baltimore/BaltimoreRecordsListPage";
@@ -62,13 +57,6 @@ import BaltimoreRecordDetailPage from "./pages/baltimore/BaltimoreRecordDetailPa
 import UciDashboard from "./pages/UciDashboard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
-import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder";
-import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
-import UtilityCoveragePlaceholder from "./pages/placeholders/UtilityCoveragePlaceholder";
-import MessagesPlaceholder from "./pages/placeholders/MessagesPlaceholder";
-import AdminAuthorizationsPlaceholder, {
-  AdminPreviewPlaceholder,
-} from "./pages/placeholders/AdminPreviewPlaceholders";
 
 const queryClient = new QueryClient();
 
@@ -85,10 +73,15 @@ const App = () => (
             <LeadCaptureModal />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<HomeRoute />} />
+                <Route
+                  path="/"
+                  element={
+                    <PublicOnlyRoute>
+                      <LandingPage />
+                    </PublicOnlyRoute>
+                  }
+                />
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/login" element={<Navigate to="/auth" replace />} />
-                <Route path="/signup" element={<Navigate to="/auth" state={{ authView: "signup" }} replace />} />
                 <Route
                   path="/demos"
                   element={
@@ -129,30 +122,12 @@ const App = () => (
                 <Route element={<ProtectedLayoutRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/projects" element={<Projects />} />
-                  <Route path="/projects/new" element={<Projects />} />
-                  {/* Executive demo is the primary Demo landing; Interactive Demos stay at /demos */}
-                  <Route path="/demo" element={<Navigate to="/demo/mcdonalds" replace />} />
-                  <Route path="/demo/mcdonalds" element={<DemoMcDonalds />} />
-                  <Route path="/demo/mcd" element={<Navigate to="/demo/mcdonalds" replace />} />
-                  <Route
-                    path="/onboarding/authorization"
-                    element={
-                      <ErrorBoundary fallbackTitle="Letter of Authorization failed to load">
-                        <OnboardingAuthorization />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/delivery/authorization"
-                    element={<Navigate to="/onboarding/authorization" replace />}
-                  />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/jurisdictions/compare" element={<JurisdictionComparison />} />
                   <Route path="/jurisdiction-comparison" element={<JurisdictionComparison />} />
                   <Route path="/jurisdictions/map" element={<JurisdictionMapPage />} />
                   <Route path="/jurisdictions/:stateCode" element={<StateLandingPage />} />
                   <Route path="/permit-intelligence" element={<PermitIntelligence />} />
-                  <Route path="/designcheck" element={<DesignCheck />} />
                   <Route path="/code-compliance" element={<CodeCompliance />} />
                   <Route path="/code-reference" element={<CodeReferenceLibrary />} />
                   <Route path="/roi-calculator" element={<ROICalculator />} />
@@ -162,60 +137,17 @@ const App = () => (
                     <Route path="jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
-                    <Route
-                      path="architecture-replication"
-                      element={<ArchitectureReplicationChecklist />}
-                    />
-                    <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
-                    <Route
-                      path="members"
-                      element={
-                        <AdminPreviewPlaceholder
-                          title="Members"
-                          integrationNote="Preview only (PD-5). Keep PermitPilot user_roles and project invites until decided — do not treat as live workspace approvals."
-                        />
-                      }
-                    />
-                    <Route
-                      path="audit"
-                      element={
-                        <AdminPreviewPlaceholder
-                          title="Audit log"
-                          integrationNote="Preview only (PD-5). Requires access_audit_log writers before export/filter are live."
-                        />
-                      }
-                    />
                   </Route>
                   <Route path="/mvp-documentation" element={<MVPDocumentation />} />
                   <Route path="/api-docs" element={<APIDocumentation />} />
                   <Route path="/checklist-history" element={<ChecklistHistory />} />
-                  <Route path="/checklists" element={<ChecklistHistory />} />
-                  <Route path="/permit-queue" element={<PermitQueuePlaceholder />} />
-                  <Route path="/reference/glossary" element={<GlossaryPlaceholder />} />
-                  <Route
-                    path="/reference/utility-coverage"
-                    element={<UtilityCoveragePlaceholder />}
-                  />
-                  {/* Alias after specific /reference/* routes so children win ranking */}
-                  <Route path="/reference" element={<Navigate to="/code-reference" replace />} />
-                  <Route path="/messages" element={<MessagesPlaceholder />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route
                     path="/uci"
                     element={
-                      <div className="min-h-screen bg-background">
+                      <div className="min-h-screen bg-background px-4 py-6 sm:px-6">
                         <ErrorBoundary fallbackTitle="Utility Coordination dashboard failed to load">
                           <UciDashboard />
-                        </ErrorBoundary>
-                      </div>
-                    }
-                  />
-                  <Route
-                    path="/uci/application-builder"
-                    element={
-                      <div className="min-h-screen bg-background">
-                        <ErrorBoundary fallbackTitle="UCI Builder failed to load">
-                          <UciApplicationBuilder />
                         </ErrorBoundary>
                       </div>
                     }
@@ -225,7 +157,6 @@ const App = () => (
                   <Route path="/response-matrix" element={<ResponseMatrix />} />
                   <Route path="/classified-comments" element={<ClassifiedComments />} />
                   <Route path="/portal-data" element={<PortalDataViewer />} />
-                  <Route path="/operations" element={<OperationsBoard />} />
                   <Route path="/permit-wizard-filing" element={<PermitWizardFiling />} />
                   {/* Baltimore Accela portal clone (UI only, mock data) */}
                   <Route path="/baltimore" element={<BaltimorePortalHome />} />

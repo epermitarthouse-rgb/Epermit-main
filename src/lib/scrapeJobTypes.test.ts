@@ -24,15 +24,4 @@ describe("scrape job terminal status consistency", () => {
     expect(scrapeOutcomeFromJobStatus("completed_with_warnings")).toBe("done");
     expect(scrapeOutcomeFromJobStatus("partial_external_blocker")).toBe("done");
   });
-
-  it("maps failed_unrecoverable to error terminal outcome", () => {
-    expect(scrapeOutcomeFromJobStatus("failed_unrecoverable")).toBe("error");
-    expect(isScrapeJobTerminal("failed_unrecoverable")).toBe(true);
-  });
-
-  it("cancelling is non-terminal so widget keeps polling", () => {
-    expect(isScrapeJobTerminal("cancelling")).toBe(false);
-    expect(SCRAPE_JOB_TERMINAL_STATUSES).not.toContain("cancelling");
-    expect(scrapeOutcomeFromJobStatus("cancelling")).toBe(null);
-  });
 });

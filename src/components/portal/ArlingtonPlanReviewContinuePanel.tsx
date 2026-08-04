@@ -169,11 +169,11 @@ export function ArlingtonPlanReviewContinuePanel({
     const legacyActive = `${scrape?.activeSessionId || ""}`.trim();
     if (legacyActive) return legacyActive;
     if (projId) {
-      const legacyScrape = getPersistedScrapeSessionForProject(projId, user?.id);
+      const legacyScrape = getPersistedScrapeSessionForProject(projId);
       if (legacyScrape?.sessionId) return legacyScrape.sessionId;
     }
     return null;
-  }, [scrape?.accelaSessionId, scrape?.activeSessionId, projId, user?.id]);
+  }, [scrape?.accelaSessionId, scrape?.activeSessionId, projId]);
 
   const runResume = useCallback(async () => {
     setLastMessage(null);

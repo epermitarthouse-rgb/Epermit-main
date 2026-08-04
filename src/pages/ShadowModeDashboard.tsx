@@ -45,7 +45,8 @@ import {
   CircleDot,
 } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
-import { MetricCard, PageHeader, Panel } from "@/components/design/ProductPrimitives";
+import { Section } from "@/components/ui/Section";
+import { Eyebrow, EyebrowDark, SectionTitle } from "@/components/ui/Typography";
 import { cn } from "@/lib/utils";
 
 interface OverallMetrics {
@@ -161,6 +162,7 @@ function StatCard({
   active = false,
   glowColor,
   onClick,
+  tone = "default",
 }: {
   title: string;
   value: string | number;
@@ -170,6 +172,7 @@ function StatCard({
   active?: boolean;
   glowColor?: string;
   onClick?: () => void;
+  tone?: "default" | "obsidian";
 }) {
   const variantStyles = {
     default: "border-border",
@@ -177,27 +180,49 @@ function StatCard({
     warning: "border-warning/35 bg-warning/[0.08]",
     danger: "border-destructive/35 bg-destructive/[0.06]",
   };
+  const obsidianVariantStyles = {
+    default: "card-obsidian border-teal/20",
+    success: "card-obsidian border-teal/30 bg-teal/[0.06]",
+    warning: "card-obsidian border-gold/30 bg-gold/[0.06]",
+    danger: "card-obsidian border-destructive/35 bg-destructive/[0.08]",
+  };
   const iconStyles = {
-    default: "text-muted-foreground",
-    success: "text-success",
-    warning: "text-warning",
+    default: tone === "obsidian" ? "text-ink-secondary-dark" : "text-muted-foreground",
+    success: "text-teal",
+    warning: "text-gold",
     danger: "text-destructive",
   };
+  const titleClass =
+    tone === "obsidian" ? "text-xs font-medium text-ink-secondary-dark" : "text-sm font-medium text-muted-foreground";
+  const valueClass = tone === "obsidian" ? "text-2xl font-bold text-ink-primary-dark font-display" : "text-2xl font-bold";
+  const subtitleClass =
+    tone === "obsidian" ? "text-xs text-ink-tertiary-dark mt-1" : "text-xs text-muted-foreground mt-1";
 
   return (
-    <MetricCard
-      label={title}
-      value={value}
-      icon={Icon}
-      detail={subtitle}
+    <Card
       className={cn(
         "cursor-pointer transition-transform duration-150 hover:scale-[1.03]",
-        variantStyles[variant],
+        tone === "obsidian" ? obsidianVariantStyles[variant] : variantStyles[variant],
         active && glowColor ? `ring-2 ${glowColor} shadow-lg` : "",
       )}
       data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, "-")}`}
       onClick={onClick}
-    />
+    >
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className={titleClass}>
+          {title}
+        </CardTitle>
+        <Icon className={cn("h-4 w-4", iconStyles[variant])} />
+      </CardHeader>
+      <CardContent>
+        <div className={valueClass} data-testid={`stat-value-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+          {value}
+        </div>
+        {subtitle && (
+          <p className={subtitleClass}>{subtitle}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -476,19 +501,19 @@ function ShadowModeDashboardInner() {
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <Card key={i}>
+              <Card key={i} className="card-obsidian border-teal/15">
                 <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-24 bg-obsidian-sunken" />
                 </CardHeader>
                 <CardContent>
-                  <Skeleton className="h-8 w-16" />
-                  <Skeleton className="h-3 w-32 mt-2" />
+                  <Skeleton className="h-8 w-16 bg-obsidian-sunken" />
+                  <Skeleton className="h-3 w-32 mt-2 bg-obsidian-sunken" />
                 </CardContent>
               </Card>
             ))}
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
+            <Card className="card-cream">
               <CardHeader>
                 <Skeleton className="h-5 w-40" />
               </CardHeader>
@@ -498,7 +523,7 @@ function ShadowModeDashboardInner() {
                 ))}
               </CardContent>
             </Card>
-            <Card>
+            <Card className="card-cream">
               <CardHeader>
                 <Skeleton className="h-5 w-40" />
               </CardHeader>
@@ -577,6 +602,7 @@ function ShadowModeDashboardInner() {
       <Button
         variant="outline"
         size="sm"
+        className="border-cream-sunken bg-cream-raised shadow-sm hover:bg-cream-sunken"
         onClick={() => navigate("/admin")}
         data-testid="button-back-admin"
       >
@@ -586,6 +612,7 @@ function ShadowModeDashboardInner() {
       <Button
         variant="outline"
         size="sm"
+        className="border-cream-sunken bg-cream-raised shadow-sm hover:bg-cream-sunken"
         onClick={exportWeeklyReport}
         disabled={exporting}
         data-testid="button-export-report"
@@ -600,6 +627,7 @@ function ShadowModeDashboardInner() {
       <Button
         variant="outline"
         size="sm"
+        className="border-cream-sunken bg-cream-raised shadow-sm hover:bg-cream-sunken"
         onClick={() => { fetchMetrics(selectedProjectId, true); fetchPredictions(selectedProjectId); fetchCircuitBreaker(selectedProjectId); }}
         disabled={refreshing}
         data-testid="button-refresh-metrics"
@@ -622,40 +650,50 @@ function ShadowModeDashboardInner() {
       maxWidthClass="max-w-7xl"
       breadcrumbs={[{ label: "Shadow Mode" }]}
     >
-      <div className="space-y-6" data-testid="shadow-mode-dashboard">
-        <PageHeader
-          eyebrow="Shadow mode"
-          title="Shadow Mode Dashboard"
-          body="AI pipeline testing & baseline comparison — measure how autonomous classifications align with expeditor decisions before live deployment."
-          action={shadowModeActions}
-        />
+      <div className="space-y-0" data-testid="shadow-mode-dashboard">
+        <Section variant="cream" className="py-10 sm:py-12">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <Eyebrow className="mb-2">Shadow mode</Eyebrow>
+              <SectionTitle className="text-ink-primary-light !text-3xl sm:!text-[2.35rem] leading-tight">
+                Shadow Mode Dashboard
+              </SectionTitle>
+              <p className="text-ink-secondary-light mt-2 max-w-2xl text-sm sm:text-base leading-relaxed">
+                AI pipeline testing & baseline comparison — measure how autonomous classifications align with expeditor decisions before live deployment.
+              </p>
+            </div>
+            {shadowModeActions}
+          </div>
+        </Section>
 
-        <Panel>
-          <div className="flex items-start gap-3" data-testid="text-explainer">
-            <Info className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-            <p className="text-sm text-muted-foreground leading-relaxed">
+        <Section variant="cream" className="py-6 pt-0">
+          <div className="flex items-start gap-3 rounded-xl card-cream p-4 sm:p-5" data-testid="text-explainer">
+            <Info className="h-5 w-5 text-teal mt-0.5 shrink-0" />
+            <p className="text-sm text-ink-secondary-light leading-relaxed">
               Shadow Mode safely runs the AI pipeline in parallel with historical human data. It compares the AI&apos;s autonomous classifications against actual expeditor decisions to mathematically prove system accuracy before live deployment.
             </p>
           </div>
 
           {selectedProjectId && (
             <div className="flex items-center gap-2 mt-4">
-              <Badge variant="secondary" className="text-xs" data-testid="badge-project-filtered">
+              <Badge variant="secondary" className="text-xs border border-cream-sunken bg-cream-raised" data-testid="badge-project-filtered">
                 Filtered by sidebar project
               </Badge>
             </div>
           )}
 
           {error && (
-            <Card className="border-destructive/40 mt-4">
+            <Card className="card-cream border-destructive/40 mt-4">
               <CardContent className="pt-6">
                 <p className="text-destructive text-sm" data-testid="text-error-message">{error}</p>
               </CardContent>
             </Card>
           )}
-        </Panel>
+        </Section>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Section variant="obsidian" className="py-12 sm:py-14">
+          <EyebrowDark className="mb-6">Live metrics</EyebrowDark>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Predictions"
           value={overall.total_predictions}
@@ -664,6 +702,7 @@ function ShadowModeDashboardInner() {
           active={activeFilter === "total"}
           glowColor="ring-[hsl(var(--chart-2)_/_0.55)]"
           onClick={() => toggleFilter("total")}
+          tone="obsidian"
         />
         <StatCard
           title="Overall Accuracy"
@@ -680,6 +719,7 @@ function ShadowModeDashboardInner() {
           active={activeFilter === "accuracy"}
           glowColor="ring-primary/60"
           onClick={() => toggleFilter("accuracy")}
+          tone="obsidian"
         />
         <StatCard
           title="Avg Confidence"
@@ -696,6 +736,7 @@ function ShadowModeDashboardInner() {
           active={activeFilter === "confidence"}
           glowColor="ring-success/55"
           onClick={() => toggleFilter("confidence")}
+          tone="obsidian"
         />
         <StatCard
           title="Mismatches"
@@ -706,19 +747,20 @@ function ShadowModeDashboardInner() {
           active={activeFilter === "mismatches"}
           glowColor="ring-destructive/55"
           onClick={() => toggleFilter("mismatches")}
+          tone="obsidian"
         />
       </div>
 
       <Card
         data-testid="card-high-risk-errors"
-        className={`cursor-pointer transition-transform duration-150 hover:scale-[1.01] ${confidentButWrongCount > 0 ? "border-destructive/40 bg-destructive/[0.08]" : "border-primary/25 bg-primary/[0.05]"} ${activeFilter === "high-risk" ? "ring-2 ring-destructive/55 shadow-lg" : ""}`}
+        className={`card-obsidian mt-6 cursor-pointer transition-transform duration-150 hover:scale-[1.01] ${confidentButWrongCount > 0 ? "border-destructive/40 bg-destructive/[0.08]" : "border-teal/25 bg-teal/[0.05]"} ${activeFilter === "high-risk" ? "ring-2 ring-destructive/55 shadow-lg" : ""}`}
         onClick={() => toggleFilter("high-risk")}
       >
         <div className="flex items-center gap-3 px-4 py-3">
-          <ShieldAlert className={`h-5 w-5 ${confidentButWrongCount > 0 ? "text-destructive" : "text-primary"} shrink-0`} />
+          <ShieldAlert className={`h-5 w-5 ${confidentButWrongCount > 0 ? "text-destructive" : "text-teal"} shrink-0`} />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">
+              <span className="text-sm font-semibold text-ink-primary-dark">
                 {confidentButWrongCount} High-Risk Error{confidentButWrongCount !== 1 ? "s" : ""}
               </span>
               {confidentButWrongCount > 0 ? (
@@ -726,12 +768,12 @@ function ShadowModeDashboardInner() {
                   Calibration Risk
                 </Badge>
               ) : (
-                <Badge variant="default" className="text-[10px] px-1.5 py-0 border-0">
+                <Badge variant="default" className="bg-teal text-cream text-[10px] px-1.5 py-0 border-0">
                   Clean
                 </Badge>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-ink-secondary-dark mt-0.5">
               {confidentButWrongCount > 0
                 ? "Predictions where the AI was ≥80% confident but gave the wrong answer. Click to filter the table below."
                 : "No predictions with ≥80% confidence scored as mismatches. Click to verify."}
@@ -739,11 +781,13 @@ function ShadowModeDashboardInner() {
           </div>
         </div>
       </Card>
+        </Section>
 
-        <Panel title="Validation & progress">
+        <Section variant="cream" className="py-12 sm:py-14">
+          <Eyebrow className="mb-6">Validation &amp; progress</Eyebrow>
 
-      <Card data-testid="card-agent-performance" className="py-0 shadow-sm">
-        <div className="flex items-center gap-3 px-4 py-2 border-b">
+      <Card data-testid="card-agent-performance" className="card-cream py-0 shadow-sm">
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-cream-sunken">
           <BarChart3 className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-medium whitespace-nowrap">Agent Performance</span>
           {agents.length === 0 ? (
@@ -808,7 +852,7 @@ function ShadowModeDashboardInner() {
         </div>
       </Card>
 
-      <Card data-testid="card-baseline-metrics" className="py-0 mt-4 shadow-sm">
+      <Card data-testid="card-baseline-metrics" className="card-cream py-0 mt-4 shadow-sm">
         <div className="flex items-center gap-3 px-4 py-3">
           <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-medium whitespace-nowrap">Baseline Metrics</span>
@@ -841,7 +885,7 @@ function ShadowModeDashboardInner() {
         </div>
       </Card>
 
-      <Card data-testid="card-validation-gate" className="py-0 mt-4 shadow-sm">
+      <Card data-testid="card-validation-gate" className="card-cream py-0 mt-4 shadow-sm">
         <div className="flex items-center gap-3 px-4 py-3">
           <Trophy className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-medium whitespace-nowrap">Validation Gate Progress</span>
@@ -889,22 +933,28 @@ function ShadowModeDashboardInner() {
           </div>
         </div>
       </Card>
-        </Panel>
+        </Section>
 
-        <Panel eyebrow="Validation proof" title="Prediction comparison">
-          <p className="text-sm text-muted-foreground -mt-2 mb-4">
-            Side-by-side view of AI predictions vs. human expeditor decisions
-          </p>
+        <Section variant="obsidian" className="py-12 sm:py-14">
+          <div className="text-center max-w-2xl mx-auto mb-8 px-2">
+            <EyebrowDark>Validation proof</EyebrowDark>
+            <SectionTitle className="text-ink-primary-dark mt-3 !text-2xl sm:!text-3xl">
+              Prediction comparison
+            </SectionTitle>
+            <p className="text-sm text-ink-secondary-dark mt-2 leading-relaxed">
+              Side-by-side view of AI predictions vs. human expeditor decisions
+            </p>
+          </div>
 
-      <Card data-testid="card-prediction-comparison">
-        <CardHeader className="border-b">
+      <Card data-testid="card-prediction-comparison" className="card-obsidian border-teal/20">
+        <CardHeader className="border-b border-teal/15">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
-              <Target className="h-5 w-5 text-primary shrink-0" />
-              <span className="font-semibold text-foreground text-base">Results</span>
+              <Target className="h-5 w-5 text-teal shrink-0" />
+              <span className="font-semibold text-ink-primary-dark text-base">Results</span>
             </div>
             {activeFilter !== "total" && (
-              <Badge variant="outline" className="text-xs shrink-0" data-testid="badge-active-filter">
+              <Badge variant="outline" className="text-xs border-teal/40 text-teal bg-teal/5 shrink-0" data-testid="badge-active-filter">
                 {activeFilter === "mismatches" && "Showing Mismatches Only"}
                 {activeFilter === "accuracy" && "Showing Matches Only"}
                 {activeFilter === "confidence" && "Sorted by Confidence ↑"}
@@ -915,13 +965,13 @@ function ShadowModeDashboardInner() {
         </CardHeader>
         <CardContent className="pt-6">
           {displayedPredictions.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
+            <p className="text-sm text-ink-secondary-dark text-center py-8">
               {predictions.length === 0
                 ? "No predictions recorded yet. Enable Shadow Mode on a project and run the pipeline to see results."
                 : "No rows match the active filter."}
             </p>
           ) : (
-            <div className="rounded-md border overflow-auto max-h-[500px]">
+            <div className="rounded-md border border-teal/25 overflow-auto max-h-[500px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -956,7 +1006,7 @@ function ShadowModeDashboardInner() {
                             <span className={isExpanded ? "" : "line-clamp-2"}>{fullText}</span>
                             {isLong && (
                               <button
-                                className="text-xs text-primary hover:underline mt-0.5 block"
+                                className="text-xs text-teal hover:underline mt-0.5 block"
                                 onClick={() => toggleRowExpand(pred.id)}
                                 data-testid={`button-expand-${pred.id}`}
                               >
@@ -997,11 +1047,11 @@ function ShadowModeDashboardInner() {
           )}
         </CardContent>
       </Card>
-        </Panel>
+        </Section>
 
-        <Panel>
+        <Section variant="cream" className="py-12 sm:pb-16">
 
-      <Card data-testid="card-audit-trail" className="shadow-sm">
+      <Card data-testid="card-audit-trail" className="card-cream shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
@@ -1054,7 +1104,7 @@ function ShadowModeDashboardInner() {
           )}
         </CardContent>
       </Card>
-        </Panel>
+        </Section>
       </div>
     </AdminPageShell>
   );

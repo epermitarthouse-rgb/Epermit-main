@@ -24337,20 +24337,6 @@ async function extractAttachments(
       baltimoreDlState,
     };
     for (let pageIdx = 0; pageIdx < 50; pageIdx++) {
-      if (session?._cancelRequested) {
-        console.log(`${iframeDlTag} cancelled — stopping attachment downloads`);
-        break;
-      }
-      if (session?._scrapeJobId && supabase) {
-        try {
-          const { shouldAbort } = require("./lib/scrape-job-cancellation.js");
-          if (await shouldAbort(session, supabase)) {
-            session._cancelRequested = true;
-            console.log(`${iframeDlTag} cancelled — stopping attachment downloads`);
-            break;
-          }
-        } catch (_) {}
-      }
       const pageReady = await waitForBaltimoreAttachmentContentReady(
         fr,
         `baltimore_p${pageIdx}`,
@@ -24378,7 +24364,6 @@ async function extractAttachments(
       );
 
       for (const row of batch) {
-        if (session?._cancelRequested) break;
         if (seenNames.has(row.name)) continue;
         seenNames.add(row.name);
         row._baltimorePageIndex = pageIdx;
@@ -24394,7 +24379,6 @@ async function extractAttachments(
           console.log(`${iframeDlTag} FAIL ${row.name} ${e.message}`);
         }
       }
-      if (session?._cancelRequested) break;
 
       const nextPb = await baltimoreParseAttachmentNextPostBack(fr);
       if (!nextPb) {
@@ -24441,20 +24425,6 @@ async function extractAttachments(
   if (!baltimoreAttachmentFrame) {
   for (let ai = 0; ai < attachments.length; ai++) {
     const att = attachments[ai];
-    if (session?._cancelRequested) {
-      console.log("       🛑 Attachments download cancelled — leaving remaining pending");
-      break;
-    }
-    if (session?._scrapeJobId && supabase) {
-      try {
-        const { shouldAbort } = require("./lib/scrape-job-cancellation.js");
-        if (await shouldAbort(session, supabase)) {
-          session._cancelRequested = true;
-          console.log("       🛑 Attachments download cancelled — leaving remaining pending");
-          break;
-        }
-      } catch (_) {}
-    }
     if (session)
       mirrorSessionProgress(session, `Attachments → downloading ${ai + 1}/${attachments.length}: ${att.name}`);
     console.log(
@@ -25258,33 +25228,11 @@ async function scrapeAccelaRecord(
     }
   }
 
-  const {
-    shouldAbort: accelaShouldAbort,
-  } = require("./lib/scrape-job-cancellation.js");
-
-  async function accelaCancelRequested() {
-    try {
-      return await accelaShouldAbort(session, supabase);
-    } catch (_) {
-      return !!session._cancelRequested;
-    }
-  }
-
   try {
-    if (await accelaCancelRequested()) {
-      session.status = "cancelled";
-      session._cancelRequested = true;
-      return { cancelled: true };
-    }
     session.arlingtonPartialSuccessPlanReviewFailed = false;
     mirrorSessionProgress(session, `${permitNumber} → Searching...`);
     await searchPermit(page, portalUrl, permitNumber);
     checkTimeout();
-    if (await accelaCancelRequested()) {
-      session.status = "cancelled";
-      session._cancelRequested = true;
-      return { cancelled: true };
-    }
 
     mirrorSessionProgress(session, `${permitNumber} → Record Header`);
     const header = await extractRecordHeader(page);
@@ -25448,11 +25396,6 @@ async function scrapeAccelaRecord(
       (!page._isBaltimore && !page._isFairfax && !page._isArlington) ||
       (page._isArlington && wantsArlingtonAttachments);
     if (wantsAttachmentsTab) {
-      if (await accelaCancelRequested()) {
-        session.status = "cancelled";
-        session._cancelRequested = true;
-        return { cancelled: true };
-      }
       try {
         mirrorSessionProgress(session, `${permitNumber} → Attachments`);
         /** @type {Record<string, unknown> | null} */
@@ -27407,15 +27350,7 @@ async function runArlingtonPlanReviewAutoContinueLoop(opts) {
     new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
   while (cycle < maxCycles) {
-    let cancelHit = !!session._cancelRequested;
-    if (!cancelHit && session._scrapeJobId && supabase) {
-      try {
-        const { shouldAbort } = require("./lib/scrape-job-cancellation.js");
-        cancelHit = await shouldAbort(session, supabase);
-      } catch (_) {}
-    }
-    if (cancelHit) {
-      session._cancelRequested = true;
+    if (session._cancelRequested) {
       stoppedReason = "cancelled";
       finalStatus = "partial_success_plan_review_pending";
       break;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -83,7 +83,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MetricCard, PageHeader, Panel } from "@/components/design/ProductPrimitives";
+import { Section } from "@/components/ui/Section";
+import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
 
 interface ParserSummary {
   total: number;
@@ -1725,124 +1726,123 @@ export default function CommentReview() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-[80vh] flex items-center justify-center bg-cream">
+        <Loader2 className="h-8 w-8 animate-spin text-teal" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Comment Review"
-        title="Comment Review"
-        body={
-          <>
-            <p>
-              Review parsed jurisdiction comments, classifier outputs, statuses, disciplines, and
-              applicant/reviewer discussion history.
-            </p>
-            <p className="mt-1 text-muted-foreground/80">
-              Comments from the portal report &quot;Plan Review - Review Comments&quot; for the selected
-              project.
-            </p>
-          </>
-        }
-        action={
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/dashboard")}
-            className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        }
-      />
-
-      {projectId ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="outline"
-            className="border-primary/40 bg-primary/10 text-primary font-normal"
-            data-testid="comment-review-active-project"
-          >
-            Active project: {activeProject?.name ?? projectId.slice(0, 8) + "…"}
-          </Badge>
-          {projectIdFromUrl && (
-            <span className="text-xs text-muted-foreground">from URL</span>
-          )}
+    <div className="min-h-[80vh] bg-cream">
+      <Section variant="cream" className="pt-10 pb-8 border-b border-cream-sunken">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
+          <div className="flex items-start gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/dashboard")}
+              className="text-ink-secondary-light hover:text-ink-primary-light shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <Eyebrow>COMMENT REVIEW</Eyebrow>
+              <h1 className="mt-3 font-display text-4xl sm:text-5xl text-ink-primary-light leading-tight">
+                Comment <em className="text-gold italic">Review</em>
+              </h1>
+              <p className="mt-3 text-ink-secondary-light max-w-2xl text-sm sm:text-base leading-relaxed">
+                Review parsed jurisdiction comments, classifier outputs, statuses, disciplines, and applicant/reviewer discussion history.
+              </p>
+              <p className="text-sm text-ink-tertiary-light mt-2 max-w-2xl">
+                Comments from the portal report &quot;Plan Review - Review Comments&quot; for the selected project.
+              </p>
+              {projectId ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="border-teal/40 bg-teal/10 text-teal font-normal"
+                    data-testid="comment-review-active-project"
+                  >
+                    Active project: {activeProject?.name ?? projectId.slice(0, 8) + "…"}
+                  </Badge>
+                  {projectIdFromUrl && (
+                    <span className="text-xs text-ink-tertiary-light">from URL</span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-warning-foreground mt-3">
+                  Select a project in the sidebar or open Comment Review with ?projectId=
+                </p>
+              )}
+            </div>
+          </div>
         </div>
-      ) : (
-        <p className="text-sm text-warning-foreground">
-          Select a project in the sidebar or open Comment Review with ?projectId=
-        </p>
-      )}
+      </Section>
 
-      {projectId && portalComments.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <MetricCard label="Total comments" value={portalComments.length} />
-          <MetricCard label="Portal comments" value={rawRefComments.length} />
-          <MetricCard label="Manual letter" value={manualLetterComments.length} />
-          <MetricCard label="Fallback parsed" value={fallbackLlmComments.length} />
-        </div>
-      )}
-
-      <div className="space-y-4">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 space-y-4 py-6">
         {!projectId ? (
-          <Panel>
-            <p className="py-10 text-center text-muted-foreground">
+          <Card className="border-dashed border-cream-sunken bg-cream-raised/80 shadow-cream">
+            <CardContent className="py-10 text-center text-ink-secondary-light space-y-2">
               Select a project in the sidebar to view and load comments from the portal.
-            </p>
-          </Panel>
+            </CardContent>
+          </Card>
         ) : commentsLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-teal" />
           </div>
         ) : renderedSavedComments.length === 0 && !noCommentsInPortal ? (
-          <Panel title="No comments loaded">
-            <p className="text-sm text-muted-foreground">
-              Load comments from the portal report &quot;Plan Review - Review Comments&quot; for this project.
-            </p>
-            {(parserDetail?.message || parserDetail?.reason) && (
-              <p className="mt-2 text-sm text-warning-foreground rounded-md border border-warning/35 bg-warning/10 px-3 py-2 whitespace-pre-wrap">
-                {parserDetail.message ||
-                  (parserDetail.reason ? `Reason: ${parserDetail.reason}` : "")}
-              </p>
-            )}
-            <Button className="mt-4" onClick={loadFromPortal} disabled={loadingFromPortal}>
-              {loadingFromPortal ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              {loadingFromPortal ? "Loading…" : "Load comments from portal"}
-            </Button>
-          </Panel>
+          <Card className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream">
+            <CardHeader>
+              <CardTitle>No comments loaded</CardTitle>
+              <CardDescription className="space-y-2">
+                <span>
+                  Load comments from the portal report &quot;Plan Review - Review Comments&quot; for this project.
+                </span>
+                {(parserDetail?.message || parserDetail?.reason) && (
+                  <p className="text-sm text-warning-foreground rounded-md border border-warning/35 bg-warning/10 px-3 py-2 whitespace-pre-wrap">
+                    {parserDetail.message ||
+                      (parserDetail.reason ? `Reason: ${parserDetail.reason}` : "")}
+                  </p>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="gold" onClick={loadFromPortal} disabled={loadingFromPortal}>
+                {loadingFromPortal ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                {loadingFromPortal ? "Loading…" : "Load comments from portal"}
+              </Button>
+            </CardContent>
+          </Card>
         ) : noCommentsInPortal && renderedSavedComments.length === 0 ? (
-          <Panel>
-            <p className="text-center text-muted-foreground">
-              No comments found in the portal for this project. The &quot;Plan Review - Review Comments&quot; report may be empty or not yet available.
-            </p>
-            {parserDetail?.message && (
-              <p className="mt-2 text-sm text-warning-foreground whitespace-pre-wrap rounded-md border border-warning/25 bg-warning/8 px-3 py-2">
-                {parserDetail.message}
+          <Card className="border-dashed border-cream-sunken bg-cream-raised/60 shadow-cream">
+            <CardContent className="py-8 text-center text-ink-secondary-light space-y-2">
+              <p>
+                No comments found in the portal for this project. The &quot;Plan Review - Review Comments&quot; report may be empty or not yet available.
               </p>
-            )}
-          </Panel>
+              {parserDetail?.message && (
+                <p className="text-sm text-warning-foreground whitespace-pre-wrap rounded-md border border-warning/25 bg-warning/8 px-3 py-2">
+                  {parserDetail.message}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         ) : (
-          <Panel>
-            <div className="overflow-hidden rounded-lg border border-border">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3 sm:px-5">
+          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream p-4 sm:p-5">
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm dark:border-obsidian-raised dark:bg-obsidian dark:shadow-inner">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3 sm:px-5 dark:border-obsidian-raised dark:bg-obsidian-raised">
                 <div className="min-w-0">
-                  <h2 className="font-tight text-xl font-bold text-foreground sm:text-2xl">
+                  <SectionTitle className="!text-xl sm:!text-2xl text-foreground dark:text-ink-primary-dark">
                     {savedCommentsTitle}
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  </SectionTitle>
+                  <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">
                     {savedCommentsSubtitle}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Render source: <span className="font-mono text-primary">{renderSource}</span>
+                  <p className="mt-1 text-xs text-muted-foreground dark:text-ink-tertiary-dark">
+                    Render source: <span className="font-mono text-teal">{renderSource}</span>
                     {renderSource === "fallback_llm" ? " (fallback mode active)" : ""}
                   </p>
                   {parserDetail?.reconciliation?.warning && (
@@ -1859,7 +1859,7 @@ export default function CommentReview() {
                     onClick={() => {
                       void loadFromPortal();
                     }}
-                    className="shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+                    className="shrink-0 border-teal/40 bg-teal/10 text-teal hover:bg-teal/15"
                   >
                     {loadingFromPortal ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1980,7 +1980,7 @@ export default function CommentReview() {
                 </Table>
               </div>
             </div>
-          </Panel>
+          </div>
         )}
 
         {projectId && (
@@ -1988,7 +1988,7 @@ export default function CommentReview() {
             type="single"
             collapsible
             defaultValue="add-comments"
-            className="pilot-card w-full"
+            className="w-full rounded-xl border border-cream-sunken bg-cream-raised shadow-cream dark:border-obsidian-raised dark:bg-obsidian/30"
           >
             <AccordionItem value="add-comments" className="border-border px-1">
               <AccordionTrigger className="text-sm font-medium hover:no-underline">
@@ -2181,7 +2181,7 @@ export default function CommentReview() {
                 </Button>
                 <AlertDialogAction asChild>
                   <Button
-                    variant="default"
+                    variant="gold"
                     onClick={() => {
                       setPendingConfirm(null);
                       void executeApproveAll({ replaceScope: "none" });

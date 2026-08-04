@@ -9,10 +9,8 @@ const corsHeaders = {
 
 /** Comments per OpenAI call — balances context window vs number of round-trips. */
 const BATCH_SIZE = 20;
-/** Default rounds when caller does not pass max_rounds (pipeline passes 1 per invoke). */
-const DEFAULT_MAX_ROUNDS = 1;
-/** Absolute hard cap even if caller requests more (avoids edge timeouts / infinite loops). */
-const ABSOLUTE_MAX_ROUNDS = 200;
+/** Hard cap on batches per invocation (avoids edge timeouts and infinite loops). */
+const MAX_ROUNDS = 200;
 
 const SYSTEM_PROMPT = `You are a building code expert. For each permit review comment, extract:
 1. code_reference: The specific code section referenced or most relevant 
@@ -34,13 +32,6 @@ type ParsedRow = {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
-  let totalEnriched = 0;
-  let rounds = 0;
-  let eligibleBefore: number | null = null;
-  let totalFetched = 0;
-  let lastError: string | undefined;
-  let haltedReason: string | undefined;
 
   try {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -96,11 +87,6 @@ serve(async (req) => {
       );
     }
 
-    const requestedRounds = typeof body.max_rounds === "number" && body.max_rounds > 0
-      ? Math.floor(body.max_rounds)
-      : DEFAULT_MAX_ROUNDS;
-    const maxRounds = Math.min(requestedRounds, ABSOLUTE_MAX_ROUNDS);
-
     const { data: project } = await supabase
       .from("projects")
       .select("id, user_id")
@@ -113,33 +99,13 @@ serve(async (req) => {
       );
     }
 
-    const { count: eligibleCount, error: eligibleErr } = await supabase
-      .from("parsed_comments")
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", projectId)
-      .or("code_reference.is.null,code_reference.eq.");
-    if (eligibleErr) {
-      console.error("context-reference-engine: eligible count error", eligibleErr);
-      return new Response(
-        JSON.stringify({ code: 500, message: eligibleErr.message, enriched_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-    eligibleBefore = eligibleCount ?? 0;
-
-    console.log(
-      JSON.stringify({
-        event: "context-reference-engine.start",
-        project_id: projectId,
-        eligible_before: eligibleBefore,
-        batch_size: BATCH_SIZE,
-        max_rounds: maxRounds,
-      }),
-    );
-
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+    let totalEnriched = 0;
+    let rounds = 0;
+    let lastError: string | undefined;
+    let haltedReason: string | undefined;
 
-    while (rounds < maxRounds) {
+    while (true) {
       const { data: rows, error: fetchError } = await supabase
         .from("parsed_comments")
         .select("id, original_text, discipline, code_reference, response_text")
@@ -151,17 +117,7 @@ serve(async (req) => {
       if (fetchError) {
         console.error("context-reference-engine: fetch error", fetchError);
         return new Response(
-          JSON.stringify({
-            code: 500,
-            message: fetchError.message,
-            enriched_count: totalEnriched,
-            rounds,
-            eligible_count: eligibleBefore,
-            fetched_count: totalFetched,
-            remaining: Math.max(0, (eligibleBefore ?? 0) - totalEnriched),
-            has_more: (eligibleBefore ?? 0) - totalEnriched > 0,
-            halted_reason: fetchError.message,
-          }),
+          JSON.stringify({ code: 500, message: fetchError.message, enriched_count: totalEnriched, rounds }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -171,31 +127,33 @@ serve(async (req) => {
         break;
       }
 
-      rounds++;
-      totalFetched += comments.length;
+      if (rounds >= MAX_ROUNDS) {
+        const { count } = await supabase
+          .from("parsed_comments")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId)
+          .or("code_reference.is.null,code_reference.eq.");
+        const remaining = count ?? 0;
+        haltedReason =
+          `Reached max rounds (${MAX_ROUNDS}); ${remaining} comments may still need enrichment — run the chain again`;
+        break;
+      }
 
+      rounds++;
       const userMessage = JSON.stringify(
         comments.map((c) => ({ id: c.id, original_text: c.original_text, discipline: c.discipline ?? "" })),
       );
 
-      let content: string | undefined;
-      try {
-        const response = await openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
-          max_tokens: 4096,
-        });
-        content = response.choices?.[0]?.message?.content;
-      } catch (e) {
-        lastError = e instanceof Error ? e.message : "OpenAI request failed";
-        haltedReason = lastError;
-        console.error("context-reference-engine: openai error", e);
-        break;
-      }
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: 4096,
+      });
 
+      const content = response.choices?.[0]?.message?.content;
       if (!content || typeof content !== "string") {
         lastError = "No response from model";
         haltedReason = lastError;
@@ -216,25 +174,17 @@ serve(async (req) => {
 
       let roundEnriched = 0;
       let roundMeaningful = 0;
-      let roundSkippedNoOutput = 0;
-      let roundUpdateErrors = 0;
 
-      for (let i = 0; i < comments.length; i++) {
+      for (let i = 0; i < comments.length && i < parsed.length; i++) {
         const row = comments[i];
         const out = parsed[i];
-        const codeRef = typeof out?.code_reference === "string" ? out.code_reference.trim() : "";
-        const suggested = typeof out?.suggested_response === "string" ? out.suggested_response.trim() : "";
+        const codeRef = typeof out?.code_reference === "string" ? out.code_reference.trim() : null;
+        const suggested = typeof out?.suggested_response === "string" ? out.suggested_response.trim() : null;
         const setResponse = Boolean(suggested && (!row.response_text || !row.response_text.trim()));
 
-        // Only persist when we have a usable code ref and/or a new draft response.
-        // Avoid writing null code_reference (keeps row eligible; prevents false "enriched" counts).
-        if (!codeRef && !setResponse) {
-          roundSkippedNoOutput++;
-          continue;
-        }
-
-        const updates: { code_reference?: string; response_text?: string } = {};
-        if (codeRef) updates.code_reference = codeRef;
+        const updates: { code_reference: string | null; response_text?: string | null } = {
+          code_reference: codeRef || null,
+        };
         if (setResponse) updates.response_text = suggested;
 
         const { error: updateError } = await supabase
@@ -242,36 +192,18 @@ serve(async (req) => {
           .update(updates)
           .eq("id", row.id);
 
-        if (updateError) {
-          roundUpdateErrors++;
-          continue;
-        }
-
-        roundEnriched++;
-        if (codeRef || setResponse) {
-          roundMeaningful++;
+        if (!updateError) {
+          roundEnriched++;
+          if ((codeRef && codeRef.length > 0) || setResponse) {
+            roundMeaningful++;
+          }
         }
       }
 
       totalEnriched += roundEnriched;
 
-      console.log(
-        JSON.stringify({
-          event: "context-reference-engine.batch",
-          project_id: projectId,
-          round: rounds,
-          fetched: comments.length,
-          enriched: roundEnriched,
-          skipped_no_output: roundSkippedNoOutput,
-          update_errors: roundUpdateErrors,
-          total_enriched: totalEnriched,
-        }),
-      );
-
       if (roundEnriched === 0) {
-        haltedReason = roundUpdateErrors > 0
-          ? "No database updates succeeded for this batch"
-          : "Model returned no usable code_reference or suggested_response; stopping to avoid repeating the same batch";
+        haltedReason = "No database updates succeeded for this batch";
         break;
       }
 
@@ -282,36 +214,12 @@ serve(async (req) => {
       }
     }
 
-    const { count: remainingCount } = await supabase
-      .from("parsed_comments")
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", projectId)
-      .or("code_reference.is.null,code_reference.eq.");
-    const remaining = remainingCount ?? 0;
-    const hasMore = remaining > 0 && !haltedReason;
-
     const payload: Record<string, unknown> = {
       enriched_count: totalEnriched,
       rounds,
-      eligible_count: eligibleBefore,
-      fetched_count: totalFetched,
-      remaining,
-      has_more: hasMore,
-      batch_size: BATCH_SIZE,
     };
-    if (haltedReason) {
-      payload.halted_reason = haltedReason;
-      payload.warning = haltedReason;
-    }
+    if (haltedReason) payload.warning = haltedReason;
     if (lastError && !haltedReason) payload.error = lastError;
-
-    console.log(
-      JSON.stringify({
-        event: "context-reference-engine.done",
-        project_id: projectId,
-        ...payload,
-      }),
-    );
 
     return new Response(JSON.stringify(payload), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -320,14 +228,8 @@ serve(async (req) => {
     console.error("context-reference-engine:", error);
     return new Response(
       JSON.stringify({
-        enriched_count: totalEnriched,
-        rounds,
-        eligible_count: eligibleBefore,
-        fetched_count: totalFetched,
-        remaining: eligibleBefore != null ? Math.max(0, eligibleBefore - totalEnriched) : undefined,
-        has_more: eligibleBefore != null ? eligibleBefore - totalEnriched > 0 : undefined,
+        enriched_count: 0,
         error: error instanceof Error ? error.message : "Unknown error",
-        halted_reason: error instanceof Error ? error.message : "Unknown error",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

@@ -137,7 +137,7 @@ export function ProjectCard({
             </Badge>
             {project.project_type ? (
               <Badge variant="outline" className={cn('border-border/60 bg-muted/40 font-tight text-[10px] font-medium normal-case tracking-normal dark:border-white/20 dark:bg-white/10', cardPrimary)}>
-                {PROJECT_TYPE_LABELS[project.project_type] ?? project.project_type}
+                {PROJECT_TYPE_LABELS[project.project_type]}
               </Badge>
             ) : null}
           </div>

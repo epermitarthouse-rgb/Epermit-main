@@ -172,27 +172,7 @@ async function publishScrapeProgress(supabase, session, opts = {}) {
   const projectId = session?._scrapeProjectId;
   if (!jobId || !projectId) return null;
 
-  try {
-    const {
-      shouldSuppressProgress,
-      isJobCancelled,
-    } = require("./scrape-job-cancellation.js");
-    if (shouldSuppressProgress(session)) return null;
-    if (await isJobCancelled(supabase, jobId)) {
-      session._scrapeEventsSuppressed = true;
-      session._cancelRequested = true;
-      return null;
-    }
-  } catch (_) {}
-
   const normalized = buildNormalizedEvent(session, opts);
-  if (
-    normalized.event_type !== "scrape_cancelled" &&
-    normalized.event_type !== "scrape_cancelling" &&
-    (session?._cancelRequested || session?._scrapeEventsSuppressed)
-  ) {
-    return null;
-  }
   applySessionMirror(session, normalized);
 
   const metadata = buildEventMetadata(normalized);

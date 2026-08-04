@@ -218,43 +218,6 @@ describe("Arlington durable scrape cancellation", () => {
     assert.equal(await pollArlingtonJobCancelled(supabase, row.id), true);
   });
 
-  it("poll treats cancelling as cancel signal", async () => {
-    const { supabase, row } = createJobStore({ status: "cancelling" });
-    assert.equal(await pollArlingtonJobCancelled(supabase, row.id), true);
-    assert.equal(isArlingtonJobCancelled(row), true);
-  });
-
-  it("DB-only cancel without session flag stops worker (replica-safe)", async () => {
-    const accela = require("../accela-scraper.js");
-    const original = accela.runArlingtonWorkerBoundedPhase;
-    let phaseCalls = 0;
-    accela.runArlingtonWorkerBoundedPhase = async () => {
-      phaseCalls += 1;
-      throw new Error("should not run bounded phase");
-    };
-    try {
-      const { supabase, row } = createJobStore({
-        status: "cancelling",
-        metadata: { arlington: { terminalReason: "user_cancelled" } },
-      });
-      const result = await executeArlingtonWorkerCycle({
-        supabase,
-        job: { ...row },
-        workerId: "worker-replica",
-        sessions: {},
-        rearmSessionIdleTimeout: () => {},
-        cleanupSession: () => {},
-        hashPortalData: () => "hash",
-        uploadToSupabaseStorage: async () => null,
-        sanitizeStorageKey: (k) => k,
-      });
-      assert.equal(result.outcome, "cancelled");
-      assert.equal(phaseCalls, 0);
-    } finally {
-      accela.runArlingtonWorkerBoundedPhase = original;
-    }
-  });
-
   it("worker stops after persisted cancellation before session work", async () => {
     const accela = require("../accela-scraper.js");
     const original = accela.runArlingtonWorkerBoundedPhase;
@@ -309,20 +272,13 @@ describe("Arlington durable scrape cancellation", () => {
     assert.match(sql, /'user_cancelled'/);
   });
 
-  it("frontend cancel route uses shared requestCancel contract", () => {
+  it("frontend cancel route exists", () => {
     const routes = fs.readFileSync(
       path.join(__dirname, "..", "app/routes/session-api.routes.js"),
       "utf8",
     );
     assert.match(routes, /\/api\/scrape-jobs\/:jobId\/cancel/);
-    assert.match(routes, /requestCancel/);
-    assert.match(routes, /scrape-job-cancellation/);
-    const shared = fs.readFileSync(
-      path.join(__dirname, "..", "lib/scrape-job-cancellation.js"),
-      "utf8",
-    );
-    assert.match(shared, /cancel_arlington_scrape_job/);
-    assert.match(shared, /status:\s*"cancelling"/);
+    assert.match(routes, /cancel_arlington_scrape_job/);
   });
 
   it("frontend ScrapeContext uses durable jobId cancel", () => {

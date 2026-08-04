@@ -243,55 +243,8 @@ async function markFileRetrying(ctx, fields) {
   );
 }
 
-/**
- * After a successful retry upload, clear stale failed rows for the same
- * project + portal_file_id from earlier scrape jobs so UI failed queries
- * do not keep showing already-recovered files.
- */
-async function supersedeProjectFailedRowsForFile(ctx, fields) {
-  if (!ctx?.supabase || !ctx.projectId) return { ok: false };
-  const portalFileId = String(fields.portalFileId || "").trim();
-  if (!portalFileId) return { ok: false };
-  const now = new Date().toISOString();
-  try {
-    const patch = {
-      status: "uploaded",
-      public_url:
-        fields.publicUrl != null ? safeStr(fields.publicUrl, 800) : null,
-      storage_path:
-        fields.storagePath != null ? safeStr(fields.storagePath, 500) : null,
-      failure_code: null,
-      failure_message: null,
-      uploaded_at: now,
-      updated_at: now,
-      metadata: sanitizeRowMetadata({
-        ...(fields.metadata && typeof fields.metadata === "object"
-          ? fields.metadata
-          : {}),
-        superseded_by_retry: true,
-        superseded_by_job: ctx.scrapeJobId,
-      }),
-    };
-    let query = ctx.supabase
-      .from("scrape_file_results")
-      .update(patch)
-      .eq("project_id", ctx.projectId)
-      .eq("portal_file_id", portalFileId)
-      .eq("status", "failed");
-    if (ctx.scrapeJobId) {
-      query = query.neq("scrape_job_id", ctx.scrapeJobId);
-    }
-    const { error } = await query;
-    if (error) throw error;
-    return { ok: true };
-  } catch (err) {
-    logPersistenceError("supersedeProjectFailedRowsForFile", err);
-    return { ok: false };
-  }
-}
-
 async function markFileUploaded(ctx, fields) {
-  const result = await upsertFileRow(
+  return upsertFileRow(
     ctx,
     {
       ...basePatch(ctx, fields),
@@ -304,10 +257,6 @@ async function markFileUploaded(ctx, fields) {
     },
     "file_uploaded",
   );
-  if (result?.ok) {
-    await supersedeProjectFailedRowsForFile(ctx, fields);
-  }
-  return result;
 }
 
 async function markFileFailed(ctx, fields) {
@@ -578,121 +527,6 @@ async function reconcileRunFilesToPortalData(supabase, opts) {
   }
 }
 
-/**
- * PGC targeted retry: update existing portal_data file rows in place by fileId
- * from this job's scrape_file_results. Never replaces the whole files tab with
- * only the retry job's rows (that would wipe untargeted successes).
- */
-async function reconcileTargetedFileResultsIntoPortalData(supabase, opts) {
-  const projectId = opts?.projectId ? String(opts.projectId).trim() : "";
-  const scrapeJobId = opts?.scrapeJobId ? String(opts.scrapeJobId).trim() : "";
-  const hashPortalData = opts?.hashPortalData;
-  const targetedFileIds = [
-    ...new Set(
-      [...(opts?.targetedFileIds || [])]
-        .map((x) => String(x || "").trim())
-        .filter(Boolean),
-    ),
-  ];
-
-  if (
-    !supabase ||
-    !projectId ||
-    !scrapeJobId ||
-    typeof hashPortalData !== "function" ||
-    targetedFileIds.length === 0
-  ) {
-    return { ok: false, reason: "invalid_args" };
-  }
-
-  try {
-    const pgcRetry = require("./pgc-retry-artifacts.js");
-    const rows = await listRunFiles(supabase, scrapeJobId);
-    const terminal = rows.filter(
-      (r) =>
-        TERMINAL_FILE_STATUSES.has(r.status) &&
-        targetedFileIds.includes(String(r.portal_file_id || "").trim()),
-    );
-    if (!terminal.length) {
-      return { ok: true, skipped: true, reason: "no_terminal_targeted_rows" };
-    }
-
-    const updates = [];
-    for (const row of terminal) {
-      const u = pgcRetry.portalFilePatchFromScrapeRow(row);
-      // Retry count is already bumped during in-session merge; do not double-count.
-      if (u) updates.push({ ...u, bumpRetry: false });
-    }
-    if (!updates.length) {
-      return { ok: true, skipped: true, reason: "no_patches" };
-    }
-
-    const { data: projectRows, error: readErr } = await supabase
-      .from("projects")
-      .select("id, portal_data, portal_data_hash")
-      .eq("id", projectId)
-      .limit(1);
-    if (readErr) throw readErr;
-    const existingRow =
-      projectRows && projectRows.length > 0 ? projectRows[0] : null;
-    if (!existingRow) return { ok: false, reason: "project_not_found" };
-
-    const latestPortalData =
-      existingRow.portal_data && typeof existingRow.portal_data === "object"
-        ? JSON.parse(JSON.stringify(existingRow.portal_data))
-        : {};
-    const existingTabs =
-      latestPortalData.tabs && typeof latestPortalData.tabs === "object"
-        ? latestPortalData.tabs
-        : {};
-    const priorFolders = existingTabs.files?.folders || [];
-    if (!Array.isArray(priorFolders) || priorFolders.length === 0) {
-      return { ok: false, reason: "no_prior_files_tab" };
-    }
-
-    const mergedFolders = pgcRetry.applyFileUpdatesByFileId(
-      priorFolders,
-      updates,
-    );
-    const counts = pgcRetry.summarizeFolderDownloadCounts(mergedFolders);
-    const mergedPortalData = {
-      ...latestPortalData,
-      tabs: {
-        ...existingTabs,
-        files: {
-          ...(existingTabs.files || {}),
-          folders: mergedFolders,
-          keyValues: existingTabs.files?.keyValues || [],
-          tables: existingTabs.files?.tables || [],
-        },
-      },
-    };
-    const mergedHash = hashPortalData(mergedPortalData);
-
-    const { error: updateErr } = await supabase
-      .from("projects")
-      .update({
-        portal_data: mergedPortalData,
-        portal_data_hash: mergedHash,
-        last_checked_at: new Date().toISOString(),
-      })
-      .eq("id", projectId);
-    if (updateErr) throw updateErr;
-
-    console.log(
-      `[file-reconcile-targeted] ok project=${projectId} job=${scrapeJobId} updated=${updates.length} totals=${counts.ok}ok/${counts.failed}failed/${counts.total}total`,
-    );
-    return {
-      ok: true,
-      updated: updates.length,
-      counts,
-    };
-  } catch (err) {
-    logPersistenceError("reconcileTargetedFileResultsIntoPortalData", err);
-    return { ok: false, reason: "reconcile_error" };
-  }
-}
-
 module.exports = {
   TERMINAL_FILE_STATUSES,
   createFileProgressContext,
@@ -702,14 +536,12 @@ module.exports = {
   markFileUploaded,
   markFileFailed,
   markFileSkipped,
-  supersedeProjectFailedRowsForFile,
   listRunFiles,
   buildUploadedCheckpointMap,
   checkpointKeyForFile,
   buildFilesTabFromRows,
   portalFileEntryFromRow,
   reconcileRunFilesToPortalData,
-  reconcileTargetedFileResultsIntoPortalData,
   sanitizeFailureMessage,
   downloadStatusFromRow,
 };

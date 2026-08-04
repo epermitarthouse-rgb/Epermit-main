@@ -1,86 +1,39 @@
 export type ProjectStatus = 'draft' | 'submitted' | 'in_review' | 'corrections' | 'approved';
 
-/**
- * Live Postgres `public.project_type` enum values.
- * Source of truth: supabase/migrations/20260113050946_… + generated
- * `Database["public"]["Enums"]["project_type"]`.
- *
- * Migration `20260308000001_expand_project_types.sql` adds more labels in-repo
- * but is not applied on the shared production DB — do not offer those values
- * in create/edit forms until that migration is deliberately applied.
- */
-export const PROJECT_TYPE_VALUES = [
-  'new_construction',
-  'renovation',
-  'addition',
-  'tenant_improvement',
-  'demolition',
-  'other',
-] as const;
-
-export type ProjectType = (typeof PROJECT_TYPE_VALUES)[number];
-
-/**
- * Map expanded UI / pre-migration labels → live DB enum.
- * Keeps create/update from failing if a stale client still sends expanded values.
- */
-export const PROJECT_TYPE_ALIASES: Record<string, ProjectType> = {
-  interior_renovation: 'renovation',
-  exterior_renovation: 'renovation',
-  change_of_use: 'other',
-  foundation: 'new_construction',
-  structural_modification: 'renovation',
-  mep_upgrade: 'renovation',
-  fire_protection: 'renovation',
-  roofing: 'renovation',
-  facade: 'renovation',
-  site_work: 'other',
-  excavation: 'other',
-  sheeting_shoring: 'other',
-  crane_derrick: 'other',
-  solar_installation: 'other',
-  sign_awning: 'other',
-  elevator_conveyance: 'other',
-  pool_spa: 'addition',
-  retaining_wall: 'other',
-  deck_porch: 'addition',
-  fence_gate: 'other',
-  accessory_structure: 'addition',
-  historic_preservation: 'renovation',
-  accessibility_ada: 'renovation',
-  environmental_remediation: 'other',
-  right_of_way: 'other',
-  grading_sediment: 'other',
-  temporary_structure: 'other',
-};
-
-export function isProjectType(value: unknown): value is ProjectType {
-  return (
-    typeof value === 'string' &&
-    (PROJECT_TYPE_VALUES as readonly string[]).includes(value)
-  );
-}
-
-/** Coerce any form/API string to a live DB project_type, or undefined if empty. */
-export function coerceProjectTypeForDb(
-  value: string | null | undefined,
-): ProjectType | undefined {
-  if (value == null) return undefined;
-  const trimmed = String(value).trim();
-  if (!trimmed) return undefined;
-  if (isProjectType(trimmed)) return trimmed;
-  const aliased = PROJECT_TYPE_ALIASES[trimmed];
-  if (aliased) return aliased;
-  return undefined;
-}
-
-export function getProjectTypeLabel(value: string | null | undefined): string {
-  if (!value) return '';
-  if (isProjectType(value)) return PROJECT_TYPE_LABELS[value];
-  const aliased = PROJECT_TYPE_ALIASES[value];
-  if (aliased) return PROJECT_TYPE_LABELS[aliased];
-  return value;
-}
+export type ProjectType =
+  | 'new_construction'
+  | 'renovation'
+  | 'addition'
+  | 'tenant_improvement'
+  | 'demolition'
+  | 'interior_renovation'
+  | 'exterior_renovation'
+  | 'change_of_use'
+  | 'foundation'
+  | 'structural_modification'
+  | 'mep_upgrade'
+  | 'fire_protection'
+  | 'roofing'
+  | 'facade'
+  | 'site_work'
+  | 'excavation'
+  | 'sheeting_shoring'
+  | 'crane_derrick'
+  | 'solar_installation'
+  | 'sign_awning'
+  | 'elevator_conveyance'
+  | 'pool_spa'
+  | 'retaining_wall'
+  | 'deck_porch'
+  | 'fence_gate'
+  | 'accessory_structure'
+  | 'historic_preservation'
+  | 'accessibility_ada'
+  | 'environmental_remediation'
+  | 'right_of_way'
+  | 'grading_sediment'
+  | 'temporary_structure'
+  | 'other';
 
 export interface Project {
   id: string;
@@ -183,6 +136,33 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   addition: 'Addition',
   tenant_improvement: 'Tenant Improvement',
   demolition: 'Demolition',
+  interior_renovation: 'Interior Renovation',
+  exterior_renovation: 'Exterior Renovation',
+  change_of_use: 'Change of Use / Occupancy',
+  foundation: 'Foundation',
+  structural_modification: 'Structural Modification',
+  mep_upgrade: 'MEP (Mechanical / Electrical / Plumbing)',
+  fire_protection: 'Fire Protection / Suppression',
+  roofing: 'Roofing',
+  facade: 'Facade / Exterior Cladding',
+  site_work: 'Site Work / Grading',
+  excavation: 'Excavation',
+  sheeting_shoring: 'Sheeting & Shoring',
+  crane_derrick: 'Crane / Derrick',
+  solar_installation: 'Solar Installation',
+  sign_awning: 'Sign / Awning / Canopy',
+  elevator_conveyance: 'Elevator / Conveyance',
+  pool_spa: 'Pool / Spa',
+  retaining_wall: 'Retaining Wall',
+  deck_porch: 'Deck / Porch / Patio',
+  fence_gate: 'Fence / Gate',
+  accessory_structure: 'Accessory Structure / Shed',
+  historic_preservation: 'Historic Preservation',
+  accessibility_ada: 'Accessibility / ADA Compliance',
+  environmental_remediation: 'Environmental Remediation',
+  right_of_way: 'Right-of-Way / Public Space',
+  grading_sediment: 'Grading / Sediment Control',
+  temporary_structure: 'Temporary Structure',
   other: 'Other',
 };
 

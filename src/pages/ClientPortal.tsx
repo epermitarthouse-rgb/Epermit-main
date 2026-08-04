@@ -21,7 +21,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Project, PROJECT_STATUS_CONFIG, ProjectStatus, getProjectTypeLabel } from '@/types/project';
+import { Project, PROJECT_STATUS_CONFIG, PROJECT_TYPE_LABELS, ProjectStatus } from '@/types/project';
 
 interface PortalData {
   project: Project;
@@ -233,7 +233,7 @@ export default function ClientPortal() {
                   <Building2 className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Project Type</p>
-                    <p className="font-medium">{getProjectTypeLabel(project.project_type)}</p>
+                    <p className="font-medium">{PROJECT_TYPE_LABELS[project.project_type]}</p>
                   </div>
                 </div>
               )}

@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,8 +38,6 @@ import {
   ToggleLeft,
   FolderKanban,
   Plus,
-  BookOpen,
-  Table as TableIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -65,7 +62,7 @@ import {
   type ComplianceBatchProgress,
 } from "@/lib/complianceBatchProcessor";
 import { cn } from "@/lib/utils";
-import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
+import { EDITORIAL_FORM_CARD, DATA_INTELLIGENCE_PANEL } from "@/components/layout/editorialPageChrome";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
 import { useProjects } from "@/hooks/useProjects";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
@@ -136,7 +133,7 @@ const severityConfig = {
   critical: {
     icon: AlertCircle,
     color: "text-destructive",
-    bg: "bg-muted/30 dark:bg-muted/40",
+    bg: "bg-muted/30 dark:bg-obsidian-sunken/40",
     border: "border-destructive",
     stripe: "bg-destructive",
     iconBg: "bg-destructive/15",
@@ -145,7 +142,7 @@ const severityConfig = {
   warning: {
     icon: AlertTriangle,
     color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-muted/30 dark:bg-muted/40",
+    bg: "bg-muted/30 dark:bg-obsidian-sunken/40",
     border: "border-amber-500 dark:border-amber-400",
     stripe: "bg-amber-500 dark:bg-amber-400",
     iconBg: "bg-amber-500/15",
@@ -154,7 +151,7 @@ const severityConfig = {
   advisory: {
     icon: Info,
     color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-muted/30 dark:bg-muted/40",
+    bg: "bg-muted/30 dark:bg-obsidian-sunken/40",
     border: "border-blue-500 dark:border-blue-400",
     stripe: "bg-blue-500 dark:bg-blue-400",
     iconBg: "bg-blue-500/15",
@@ -1073,26 +1070,6 @@ export function AIComplianceAnalyzer() {
     return groups;
   }, [completedBatchFiles, loadedExistingResults]);
 
-  /** Aggregate KPI strip across every analyzed file's real results — never seeded. */
-  const aggregateFindingStats = useMemo(() => {
-    let critical = 0;
-    let warnings = 0;
-    let advisory = 0;
-    let filesWithResults = 0;
-    for (const group of resultGroups) {
-      const groupResults = [group.ibcResult, group.localResult].filter(
-        (r): r is AnalysisResult => Boolean(r),
-      );
-      if (groupResults.length > 0) filesWithResults += 1;
-      for (const result of groupResults) {
-        critical += result.summary.critical ?? 0;
-        warnings += result.summary.warnings ?? 0;
-        advisory += result.summary.advisory ?? 0;
-      }
-    }
-    return { critical, warnings, advisory, filesWithResults };
-  }, [resultGroups]);
-
   const [fileResultTabs, setFileResultTabs] = useState<Record<string, "ibc" | "local">>({});
 
   const renderFileResultGroup = (group: {
@@ -1116,7 +1093,7 @@ export function AIComplianceAnalyzer() {
             value={tab}
             onValueChange={(v) => setFileResultTabs((prev) => ({ ...prev, [group.id]: v as "ibc" | "local" }))}
           >
-            <div className={cn("pilot-card border-border bg-card", "p-2")}>
+            <div className={cn(DATA_INTELLIGENCE_PANEL, "p-2")}>
               <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent p-0 h-auto shadow-none border-0">
                 <TabsTrigger value="ibc" className="flex items-center gap-2">
                   <Scale className="h-4 w-4" />
@@ -1132,48 +1109,48 @@ export function AIComplianceAnalyzer() {
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className={cn("pilot-card border-border bg-card", "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
             <CardContent className="pt-6 text-center">
               <div className={`text-4xl font-bold ${getScoreColor(groupResult.summary.overallScore ?? 0)}`}>
                 {groupResult.summary.overallScore ?? 0}%
               </div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Compliance Score</p>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Compliance Score</p>
             </CardContent>
           </Card>
-          <Card className={"pilot-card border-border bg-card"}>
+          <Card className={DATA_INTELLIGENCE_PANEL}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-foreground dark:text-foreground">
+              <div className="text-4xl font-bold text-foreground dark:text-ink-primary-dark">
                 {groupResult.summary.totalIssues ?? 0}
               </div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Total Issues</p>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Total Issues</p>
             </CardContent>
           </Card>
-          <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-destructive")}>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-destructive")}>
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-destructive">{groupResult.summary.critical ?? 0}</div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Critical</p>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Critical</p>
             </CardContent>
           </Card>
-          <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{groupResult.summary.warnings ?? 0}</div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Warnings</p>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Warnings</p>
             </CardContent>
           </Card>
-          <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
+          <Card className={cn(DATA_INTELLIGENCE_PANEL, "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{groupResult.summary.advisory ?? 0}</div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Advisory</p>
+              <p className="text-sm text-muted-foreground mt-1 dark:text-ink-secondary-dark">Advisory</p>
             </CardContent>
           </Card>
         </div>
 
         {groupIssues.length > 0 && (
-          <Card className={"pilot-card border-border bg-card"}>
+          <Card className={DATA_INTELLIGENCE_PANEL}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-foreground dark:text-foreground">Resolution Progress</span>
-                <span className="text-sm text-muted-foreground dark:text-muted-foreground">
+                <span className="text-sm font-medium text-foreground dark:text-ink-primary-dark">Resolution Progress</span>
+                <span className="text-sm text-muted-foreground dark:text-ink-secondary-dark">
                   {resolvedInGroup} / {groupIssues.length} resolved
                 </span>
               </div>
@@ -1183,13 +1160,13 @@ export function AIComplianceAnalyzer() {
         )}
 
         {groupResult.jurisdictionNotes && (
-          <Card className={cn("pilot-card border-border bg-card", "border-teal/25 shadow-sm")}>
+          <Card className={cn(EDITORIAL_FORM_CARD, "border-teal/25 shadow-cream")}>
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
                 <Info className="h-5 w-5 text-teal mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-medium mb-1 text-foreground">Jurisdiction Notes</p>
-                  <p className="text-sm text-muted-foreground">{groupResult.jurisdictionNotes}</p>
+                  <p className="font-medium mb-1 text-ink-primary-light">Jurisdiction Notes</p>
+                  <p className="text-sm text-ink-secondary-light">{groupResult.jurisdictionNotes}</p>
                 </div>
               </div>
             </CardContent>
@@ -1287,40 +1264,40 @@ export function AIComplianceAnalyzer() {
     const progressPercent = issues.length > 0 ? (resolvedInResult / issues.length) * 100 : 0;
 
     return (
-      <Card className={cn("pilot-card border-border bg-card", "overflow-hidden shadow-lg")}>
+      <Card className={cn(DATA_INTELLIGENCE_PANEL, "overflow-hidden shadow-lg")}>
         {/* Header with progress */}
-        <CardHeader className="pb-4 border-b border-border/40 bg-muted/20 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-muted/35">
+        <CardHeader className="pb-4 border-b border-border/40 bg-muted/20 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-obsidian-sunken/35">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Source file</p>
-              <CardTitle className="flex items-center gap-2 text-lg text-foreground dark:text-foreground">
+              <CardTitle className="flex items-center gap-2 text-lg text-foreground dark:text-ink-primary-dark">
                 <File className="h-4 w-4 text-teal shrink-0" />
                 <span className="truncate">{fileName}</span>
               </CardTitle>
-              <CardDescription className="mt-1 text-muted-foreground dark:text-muted-foreground">
+              <CardDescription className="mt-1 text-muted-foreground dark:text-ink-secondary-dark">
                 Review each finding and take action on suggested fixes
               </CardDescription>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-primary-deep">{resolvedInResult}/{issues.length}</div>
-              <div className="text-xs text-muted-foreground dark:text-muted-foreground">Issues Resolved</div>
+              <div className="text-2xl font-bold text-gold-deep">{resolvedInResult}/{issues.length}</div>
+              <div className="text-xs text-muted-foreground dark:text-ink-secondary-dark">Issues Resolved</div>
             </div>
           </div>
           {/* Progress bar */}
           <div className="mt-4">
             <Progress value={progressPercent} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-1">{Math.round(progressPercent)}% complete</p>
+            <p className="text-xs text-ink-secondary-dark mt-1">{Math.round(progressPercent)}% complete</p>
           </div>
         </CardHeader>
 
         <CardContent className="p-0">
           <Tabs defaultValue="all" className="w-full">
             {/* Severity filter tabs */}
-            <div className="border-b border-border/40 bg-muted/15 px-4 py-3 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-muted/25">
-              <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/50 border border-border/50 dark:bg-card/40 dark:border-[hsl(var(--border-obsidian-strong)/0.28)]">
+            <div className="border-b border-border/40 bg-muted/15 px-4 py-3 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-obsidian-sunken/25">
+              <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/50 border border-border/50 dark:bg-obsidian-raised/40 dark:border-[hsl(var(--border-obsidian-strong)/0.28)]">
                 <TabsTrigger 
                   value="all" 
-                  className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm py-2 dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-foreground"
+                  className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm py-2 dark:data-[state=active]:bg-obsidian-sunken dark:data-[state=active]:text-ink-primary-dark"
                 >
                   <span className="flex items-center gap-1.5">
                     <span className="hidden sm:inline">All</span>
@@ -1365,9 +1342,9 @@ export function AIComplianceAnalyzer() {
                 <ScrollArea className="h-[520px]">
                   <div className="p-4 space-y-3">
                     {filteredIssues(tab).length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center py-12 text-ink-secondary-dark">
                         <CheckCircle2 className="h-12 w-12 mb-3 text-teal" />
-                        <p className="font-medium text-foreground">No {tab === "all" ? "" : tab} issues found</p>
+                        <p className="font-medium text-ink-primary-dark">No {tab === "all" ? "" : tab} issues found</p>
                         <p className="text-sm">Great work! This section is clear.</p>
                       </div>
                     ) : (
@@ -1384,7 +1361,7 @@ export function AIComplianceAnalyzer() {
                             transition={{ delay: index * 0.03, duration: 0.2 }}
                             className={`group relative rounded-xl border-l-4 border shadow-sm transition-all duration-200 ${
                               response
-                                ? "border-l-teal/25 border-border/40 bg-muted/20 opacity-70 dark:border-[hsl(var(--border-obsidian-strong)/0.28)] dark:bg-muted/20"
+                                ? "border-l-teal/25 border-border/40 bg-muted/20 opacity-70 dark:border-[hsl(var(--border-obsidian-strong)/0.28)] dark:bg-obsidian-sunken/20"
                                 : `${config.border} border-l-4 ${config.bg} hover:shadow-lg`
                             }`}
                           >
@@ -1398,7 +1375,7 @@ export function AIComplianceAnalyzer() {
                                       <Icon className={`h-5 w-5 ${config.color}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <h4 className="font-semibold text-foreground leading-tight">{issue.title}</h4>
+                                      <h4 className="font-semibold text-ink-primary-dark leading-tight">{issue.title}</h4>
                                       <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                         <Badge variant="outline" className="text-xs font-normal gap-1">
                                           <span>{categoryIcons[issue.category]}</span>
@@ -1429,29 +1406,29 @@ export function AIComplianceAnalyzer() {
                                   </div>
 
                                   {/* Description */}
-                                  <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                                  <p className="text-sm text-ink-secondary-dark leading-relaxed mb-3">
                                     {issue.description}
                                   </p>
 
                                   {/* Location and Code info */}
                                   <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm mb-3">
                                     <div className="flex items-center gap-1.5">
-                                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className="text-muted-foreground">{issue.location}</span>
+                                      <MapPin className="h-3.5 w-3.5 text-ink-tertiary-dark" />
+                                      <span className="text-ink-secondary-dark">{issue.location}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5">
-                                      <Scale className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className="text-muted-foreground">{issue.codeReference} ({issue.codeYear})</span>
+                                      <Scale className="h-3.5 w-3.5 text-ink-tertiary-dark" />
+                                      <span className="text-ink-secondary-dark">{issue.codeReference} ({issue.codeYear})</span>
                                     </div>
                                   </div>
 
                                   {/* Suggested fix box */}
-                                  <div className="p-3 rounded-lg bg-muted/40 border border-border/50 dark:bg-card/35 dark:border-[hsl(var(--border-obsidian-strong)/0.35)]">
+                                  <div className="p-3 rounded-lg bg-muted/40 border border-border/50 dark:bg-obsidian-raised/35 dark:border-[hsl(var(--border-obsidian-strong)/0.35)]">
                                     <div className="flex items-center gap-2 mb-1.5">
                                       <CheckCircle2 className="h-4 w-4 text-teal" />
-                                      <span className="text-sm font-medium text-foreground">Suggested Fix</span>
+                                      <span className="text-sm font-medium text-ink-primary-dark">Suggested Fix</span>
                                     </div>
-                                    <p className="text-sm text-muted-foreground leading-relaxed">
+                                    <p className="text-sm text-ink-secondary-dark leading-relaxed">
                                       {response?.modifiedResponse || issue.suggestedFix}
                                     </p>
                                   </div>
@@ -1482,7 +1459,7 @@ export function AIComplianceAnalyzer() {
                                       size="sm"
                                       variant="ghost"
                                       onClick={() => handleReject(fileId, issue)}
-                                      className="gap-1.5 text-muted-foreground hover:text-foreground"
+                                      className="gap-1.5 text-ink-secondary-dark hover:text-ink-primary-dark"
                                     >
                                       <X className="h-3.5 w-3.5" />
                                       N/A
@@ -1508,20 +1485,20 @@ export function AIComplianceAnalyzer() {
   return (
     <div className="space-y-6">
       {/* Upload & Configuration Card */}
-      <Card className={"pilot-card border-border bg-card"}>
+      <Card className={EDITORIAL_FORM_CARD}>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
+          <CardTitle className="flex items-center gap-2 text-ink-primary-light">
             <Shield className="h-5 w-5 text-teal" />
             AI Code Compliance Analyzer
           </CardTitle>
-          <CardDescription className="text-muted-foreground">
+          <CardDescription className="text-ink-secondary-light">
             Upload architectural drawings to automatically detect building code violations using AI vision analysis
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Project Selection - Required for saving */}
           <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-foreground">
+            <Label className="flex items-center gap-2 text-ink-primary-light">
               <FolderKanban className="h-4 w-4" />
               Project (required to save analysis)
             </Label>
@@ -1544,7 +1521,7 @@ export function AIComplianceAnalyzer() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">
-                  <span className="text-muted-foreground">No project (analysis won&apos;t be saved)</span>
+                  <span className="text-ink-secondary-light">No project (analysis won&apos;t be saved)</span>
                 </SelectItem>
                 <SelectItem value="__create_new__">
                   <span className="flex items-center gap-1.5 text-teal">
@@ -1602,7 +1579,7 @@ export function AIComplianceAnalyzer() {
               </div>
             )}
             {!selectedProjectId && !showNewProjectInput && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-ink-secondary-light mt-1">
                 Select a project to save the file and AI results to the database
               </p>
             )}
@@ -1610,10 +1587,10 @@ export function AIComplianceAnalyzer() {
 
           {/* Load Previously Analyzed Document */}
           {selectedProjectId && documentsWithAnalysis.length > 0 && (
-            <Card className={cn("pilot-card border-border bg-card", "bg-background/80")}>
+            <Card className={cn(EDITORIAL_FORM_CARD, "bg-cream/80")}>
               <CardContent className="pt-4">
                 <div className="space-y-3">
-                  <p className="font-medium text-sm text-foreground">Load previously analyzed document</p>
+                  <p className="font-medium text-sm text-ink-primary-light">Load previously analyzed document</p>
                   <div className="flex flex-wrap gap-2">
                     <Select
                       value={selectedDocumentId || ""}
@@ -1651,7 +1628,7 @@ export function AIComplianceAnalyzer() {
           {/* Configuration Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-foreground">
+              <Label className="flex items-center gap-2 text-ink-primary-light">
                 <MapPin className="h-4 w-4" />
                 Jurisdiction
               </Label>
@@ -1666,7 +1643,7 @@ export function AIComplianceAnalyzer() {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-foreground">
+              <Label className="flex items-center gap-2 text-ink-primary-light">
                 <Building2 className="h-4 w-4" />
                 Project Type
               </Label>
@@ -1681,7 +1658,7 @@ export function AIComplianceAnalyzer() {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-foreground">
+              <Label className="flex items-center gap-2 text-ink-primary-light">
                 <Calendar className="h-4 w-4" />
                 Code Year
               </Label>
@@ -1700,14 +1677,14 @@ export function AIComplianceAnalyzer() {
 
           {/* Analysis Mode Toggle - only show for jurisdictions with amendments */}
           {hasLocalAmendments && (
-            <Card className={cn("pilot-card border-border bg-card", "border-teal/20 shadow-sm")}>
+            <Card className={cn(EDITORIAL_FORM_CARD, "border-teal/20 shadow-cream")}>
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Scale className="h-5 w-5 text-teal" />
                     <div>
-                      <p className="font-medium text-foreground">Dual Code Analysis</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-medium text-ink-primary-light">Dual Code Analysis</p>
+                      <p className="text-sm text-ink-secondary-light">
                         This jurisdiction has local amendments. Choose analysis mode:
                       </p>
                     </div>
@@ -1737,7 +1714,7 @@ export function AIComplianceAnalyzer() {
           {/* Upload Area */}
           <div
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-              dragActive ? "border-teal bg-teal/[0.06]" : "border-primary/35 hover:border-primary/55 bg-muted/25"
+              dragActive ? "border-teal bg-teal/[0.06]" : "border-gold/35 hover:border-gold/55 bg-cream-sunken/25"
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -1757,7 +1734,7 @@ export function AIComplianceAnalyzer() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {files.map((f) => (
-                    <div key={f.id} className="relative rounded-lg border border-border bg-card p-3 shadow-inner">
+                    <div key={f.id} className="relative rounded-lg border border-cream-sunken bg-cream-raised p-3 shadow-inner">
                       {f.status === "pending" && (
                         <Button
                           variant="ghost"
@@ -1829,11 +1806,11 @@ export function AIComplianceAnalyzer() {
               <label htmlFor="drawing-upload" className="cursor-pointer">
                 <div className="space-y-2">
                   <div className="flex justify-center gap-4 pt-4">
-                    <FileImage className="h-12 w-12 text-primary-deep/75" />
+                    <FileImage className="h-12 w-12 text-gold-deep/75" />
                     <Upload className="h-12 w-12 text-teal" />
                   </div>
-                  <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-lg font-medium text-ink-primary-light">Drop drawings here or click to browse</p>
+                  <p className="text-sm text-ink-secondary-light">
                     Up to {COMPLIANCE_MAX_BATCH_FILES} drawings per batch. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
                     PDFs currently analyze page 1 only.
                   </p>
@@ -1868,6 +1845,18 @@ export function AIComplianceAnalyzer() {
                 Retry failed files ({failedFileCount})
               </Button>
             )}
+            {currentResult && (
+              <>
+                <Button variant="outlineGold" size="lg" onClick={exportReportPDF}>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export PDF
+                </Button>
+                <Button variant="ghost" size="lg" onClick={exportReportJSON}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export JSON
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Progress Bar */}
@@ -1880,7 +1869,7 @@ export function AIComplianceAnalyzer() {
                 className="space-y-2"
               >
                 <Progress value={batchProgressValue} className="h-2" />
-                <p className="text-sm text-center text-muted-foreground">
+                <p className="text-sm text-center text-ink-secondary-light">
                   {batchProgressLabel}
                   {batchProgress.currentFileName ? ` — ${batchProgress.currentFileName}` : ""}
                 </p>
@@ -1897,85 +1886,9 @@ export function AIComplianceAnalyzer() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
+            className="space-y-10"
           >
-            {/* Findings KPI strip — aggregated across every analyzed file's real results */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard
-                label="Critical"
-                value={aggregateFindingStats.critical}
-                icon={AlertCircle}
-                detail="Blocking issues across all analyzed files"
-              />
-              <MetricCard
-                label="Warnings"
-                value={aggregateFindingStats.warnings}
-                icon={AlertTriangle}
-                detail="Should be resolved before submission"
-              />
-              <MetricCard
-                label="Advisory"
-                value={aggregateFindingStats.advisory}
-                icon={Info}
-                detail="Informational, non-blocking notes"
-              />
-              <MetricCard
-                label="Files analyzed"
-                value={aggregateFindingStats.filesWithResults}
-                icon={FileText}
-                detail={`${completedBatchFiles.length} in this batch session`}
-              />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-              <div className="space-y-10">
-                {resultGroups.map((group) => renderFileResultGroup(group))}
-              </div>
-
-              <aside className="space-y-4 lg:self-start">
-                <Panel eyebrow="Actions" title="Export report">
-                  <div className="space-y-2">
-                    <Button
-                      variant="outlineGold"
-                      className="w-full justify-start"
-                      onClick={exportReportPDF}
-                      disabled={!currentResult}
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export PDF
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={exportReportJSON}
-                      disabled={!currentResult}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Export JSON
-                    </Button>
-                  </div>
-                </Panel>
-
-                <Panel eyebrow="Cross-reference" title="Related tools">
-                  <div className="space-y-2 text-sm">
-                    <Link
-                      to="/code-reference"
-                      className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-foreground transition-colors hover:border-primary/60 hover:text-primary"
-                    >
-                      <BookOpen className="h-4 w-4 text-primary" />
-                      Code Reference Library
-                    </Link>
-                    <Link
-                      to="/response-matrix"
-                      className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-foreground transition-colors hover:border-primary/60 hover:text-primary"
-                    >
-                      <TableIcon className="h-4 w-4 text-primary" />
-                      Response Matrix
-                    </Link>
-                  </div>
-                </Panel>
-              </aside>
-            </div>
+            {resultGroups.map((group) => renderFileResultGroup(group))}
           </motion.div>
         )}
       </AnimatePresence>

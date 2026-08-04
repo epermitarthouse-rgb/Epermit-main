@@ -54,7 +54,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useScheduledReports, CreateScheduledReportData } from '@/hooks/useScheduledReports';
 import { useSavedChecklists } from '@/hooks/useSavedChecklists';
 import { ReportDeliveryHistory } from './ReportDeliveryHistory';
@@ -247,12 +246,10 @@ export function ScheduledReportsManager() {
 
       if (error) throw error;
 
-      toast.success(
-        `Test email ([TEST]) sent to ${formData.recipient_email.split(',')[0].trim()}. Not logged in History/Analytics.`,
-      );
+      toast.success(`Test email sent to ${formData.recipient_email.split(',')[0].trim()}`);
     } catch (err: any) {
       console.error('Error sending test email:', err);
-      toast.error(err?.message || 'Failed to send test email');
+      toast.error('Failed to send test email');
     } finally {
       setSendingTest(false);
     }
@@ -277,17 +274,6 @@ export function ScheduledReportsManager() {
 
   return (
     <div className="space-y-6">
-      <Alert>
-        <Clock className="h-4 w-4" />
-        <AlertTitle>Automatic delivery — Work in Progress</AlertTitle>
-        <AlertDescription>
-          You can create, edit, preview, and send test emails now. Recurring automatic
-          delivery is implemented in code but not yet enabled in production (scheduler
-          migration + sender domain pending deploy confirmation). Test emails are labeled
-          [TEST] and do not appear in Delivery History or Analytics.
-        </AlertDescription>
-      </Alert>
-
       <Tabs defaultValue="schedules" className="w-full">
         <div className="flex items-center justify-between mb-4">
           <TabsList>
@@ -443,34 +429,32 @@ export function ScheduledReportsManager() {
         setDialogOpen(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="max-w-lg max-h-[90vh] min-w-0 overflow-x-hidden overflow-y-auto">
-          <DialogHeader className="min-w-0 pr-8">
-            <DialogTitle className="flex items-center gap-2 min-w-0">
-              <CalendarDays className="h-5 w-5 shrink-0 text-primary" />
-              <span className="min-w-0 break-words">
-                {editingReport ? 'Edit Scheduled Report' : 'Schedule Recurring Report'}
-              </span>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-primary" />
+              {editingReport ? 'Edit Scheduled Report' : 'Schedule Recurring Report'}
             </DialogTitle>
-            <DialogDescription className="text-left break-words">
+            <DialogDescription>
               {editingReport 
                 ? 'Update the settings for this scheduled report.'
                 : 'Set up automatic email delivery of your checklist reports.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-w-0 space-y-4">
-            <div className="min-w-0">
+          <div className="space-y-4">
+            <div>
               <Label htmlFor="report-name">Report Name *</Label>
               <Input
                 id="report-name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Weekly Inspection Summary"
-                className="mt-1.5 w-full min-w-0"
+                className="mt-1.5"
               />
             </div>
 
-            <div className="min-w-0">
+            <div>
               <Label htmlFor="recipient-email">Recipient Email(s) *</Label>
               <Input
                 id="recipient-email"
@@ -478,35 +462,35 @@ export function ScheduledReportsManager() {
                 value={formData.recipient_email}
                 onChange={(e) => setFormData({ ...formData, recipient_email: e.target.value })}
                 placeholder="email@example.com, another@example.com"
-                className="mt-1.5 w-full min-w-0"
+                className="mt-1.5"
               />
-              <p className="text-xs text-muted-foreground mt-1 break-words">
+              <p className="text-xs text-muted-foreground mt-1">
                 Separate multiple emails with commas
               </p>
             </div>
 
-            <div className="min-w-0">
+            <div>
               <Label htmlFor="recipient-name">Recipient Name(s)</Label>
               <Input
                 id="recipient-name"
                 value={formData.recipient_name}
                 onChange={(e) => setFormData({ ...formData, recipient_name: e.target.value })}
                 placeholder="John Doe, Jane Smith"
-                className="mt-1.5 w-full min-w-0"
+                className="mt-1.5"
               />
-              <p className="text-xs text-muted-foreground mt-1 break-words">
+              <p className="text-xs text-muted-foreground mt-1">
                 Optional: names in the same order as emails
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <Label>Frequency</Label>
                 <Select
                   value={formData.frequency}
                   onValueChange={(v) => setFormData({ ...formData, frequency: v as 'weekly' | 'monthly' })}
                 >
-                  <SelectTrigger className="mt-1.5 w-full min-w-0">
+                  <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -515,7 +499,7 @@ export function ScheduledReportsManager() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-0">
+              <div>
                 {formData.frequency === 'weekly' ? (
                   <>
                     <Label>Day of Week</Label>
@@ -523,7 +507,7 @@ export function ScheduledReportsManager() {
                       value={String(formData.day_of_week)}
                       onValueChange={(v) => setFormData({ ...formData, day_of_week: parseInt(v) })}
                     >
-                      <SelectTrigger className="mt-1.5 w-full min-w-0">
+                      <SelectTrigger className="mt-1.5">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -542,7 +526,7 @@ export function ScheduledReportsManager() {
                       value={String(formData.day_of_month)}
                       onValueChange={(v) => setFormData({ ...formData, day_of_month: parseInt(v) })}
                     >
-                      <SelectTrigger className="mt-1.5 w-full min-w-0">
+                      <SelectTrigger className="mt-1.5">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -558,23 +542,23 @@ export function ScheduledReportsManager() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <Label>Send Time</Label>
                 <Input
                   type="time"
                   value={formData.send_time || '09:00'}
                   onChange={(e) => setFormData({ ...formData, send_time: e.target.value })}
-                  className="mt-1.5 w-full min-w-0"
+                  className="mt-1.5"
                 />
               </div>
-              <div className="min-w-0">
+              <div>
                 <Label>Timezone</Label>
                 <Select
                   value={formData.timezone}
                   onValueChange={(v) => setFormData({ ...formData, timezone: v })}
                 >
-                  <SelectTrigger className="mt-1.5 w-full min-w-0">
+                  <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -588,33 +572,33 @@ export function ScheduledReportsManager() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <Label>Project Filter</Label>
                 <Select
                   value={formData.project_filter}
                   onValueChange={(v) => setFormData({ ...formData, project_filter: v })}
                 >
-                  <SelectTrigger className="mt-1.5 w-full min-w-0">
+                  <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Projects</SelectItem>
                     {projectNames.map((name) => (
                       <SelectItem key={name} value={name}>
-                        <span className="truncate">{name}</span>
+                        {name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-0">
+              <div>
                 <Label>Status Filter</Label>
                 <Select
                   value={formData.status_filter}
                   onValueChange={(v) => setFormData({ ...formData, status_filter: v })}
                 >
-                  <SelectTrigger className="mt-1.5 w-full min-w-0">
+                  <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -628,18 +612,18 @@ export function ScheduledReportsManager() {
               </div>
             </div>
 
-            <div className="min-w-0">
+            <div>
               <Label htmlFor="email-subject">Custom Email Subject</Label>
               <Input
                 id="email-subject"
                 value={formData.email_subject}
                 onChange={(e) => setFormData({ ...formData, email_subject: e.target.value })}
                 placeholder="Leave empty for default subject"
-                className="mt-1.5 w-full min-w-0"
+                className="mt-1.5"
               />
             </div>
 
-            <div className="min-w-0">
+            <div>
               <Label htmlFor="email-intro">Custom Email Introduction</Label>
               <Textarea
                 id="email-intro"
@@ -647,92 +631,80 @@ export function ScheduledReportsManager() {
                 onChange={(e) => setFormData({ ...formData, email_intro: e.target.value })}
                 placeholder="Custom message to include in the email..."
                 rows={3}
-                className="mt-1.5 w-full min-w-0"
+                className="mt-1.5"
               />
             </div>
 
-            <div className="flex items-start gap-2 border-t pt-4 min-w-0">
-              <Switch
-                id="include-summary"
-                checked={formData.include_summary}
-                onCheckedChange={(v) => setFormData({ ...formData, include_summary: v })}
-                className="mt-0.5 shrink-0"
-              />
-              <Label htmlFor="include-summary" className="min-w-0 break-words leading-snug">
-                Include Summary Statistics
-              </Label>
+            <div className="flex items-center justify-between border-t pt-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="include-summary"
+                  checked={formData.include_summary}
+                  onCheckedChange={(v) => setFormData({ ...formData, include_summary: v })}
+                />
+                <Label htmlFor="include-summary">Include Summary Statistics</Label>
+              </div>
             </div>
 
-            <div className="flex items-start gap-2 min-w-0">
-              <Switch
-                id="include-details"
-                checked={formData.include_details}
-                onCheckedChange={(v) => setFormData({ ...formData, include_details: v })}
-                className="mt-0.5 shrink-0"
-              />
-              <Label htmlFor="include-details" className="min-w-0 break-words leading-snug">
-                Include Checklist Details
-              </Label>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="include-details"
+                  checked={formData.include_details}
+                  onCheckedChange={(v) => setFormData({ ...formData, include_details: v })}
+                />
+                <Label htmlFor="include-details">Include Checklist Details</Label>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1 min-w-0 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-              <div className="flex items-start gap-2 min-w-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <Switch
                   id="include-pdf"
                   checked={formData.include_pdf_attachment}
                   onCheckedChange={(v) => setFormData({ ...formData, include_pdf_attachment: v })}
-                  className="mt-0.5 shrink-0"
                 />
-                <Label htmlFor="include-pdf" className="min-w-0 break-words leading-snug">
-                  Attach PDF Report
-                </Label>
+                <Label htmlFor="include-pdf">Attach PDF Report</Label>
               </div>
-              <p className="text-xs text-muted-foreground pl-10 sm:pl-0 sm:shrink-0 sm:pt-0.5 break-words">
+              <p className="text-xs text-muted-foreground">
                 Include downloadable PDF
               </p>
             </div>
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <div className="flex w-full min-w-0 flex-wrap gap-2 sm:mr-auto sm:w-auto">
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <div className="flex gap-2 sm:mr-auto">
               <Button
                 variant="outline"
                 onClick={() => setPreviewOpen(true)}
-                className="min-w-0 flex-1 sm:flex-none"
               >
-                <Eye className="h-4 w-4 mr-2 shrink-0" />
+                <Eye className="h-4 w-4 mr-2" />
                 Preview
               </Button>
               <Button
                 variant="outline"
                 onClick={handleSendTestEmail}
                 disabled={sendingTest || !formData.recipient_email.trim()}
-                className="min-w-0 flex-1 sm:flex-none"
               >
                 {sendingTest ? (
-                  <Loader2 className="h-4 w-4 mr-2 shrink-0 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <TestTube className="h-4 w-4 mr-2 shrink-0" />
+                  <TestTube className="h-4 w-4 mr-2" />
                 )}
                 Send Test
               </Button>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDialogOpen(false);
-                resetForm();
-              }}
-              className="w-full sm:w-auto"
-            >
+            <Button variant="outline" onClick={() => {
+              setDialogOpen(false);
+              resetForm();
+            }}>
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
               disabled={!formData.name.trim() || !formData.recipient_email.trim()}
-              className="w-full sm:w-auto"
             >
-              <Send className="h-4 w-4 mr-2 shrink-0" />
+              <Send className="h-4 w-4 mr-2" />
               {editingReport ? 'Save Changes' : 'Create Schedule'}
             </Button>
           </DialogFooter>

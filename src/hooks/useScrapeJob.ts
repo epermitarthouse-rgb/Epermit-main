@@ -7,14 +7,6 @@ import {
   type ScrapeJob,
 } from "@/lib/scrapeJobTypes";
 import { resolveScrapeCurrentMessage } from "@/lib/scrapeJobMessage";
-import {
-  beginPollRequest,
-  bumpPollGeneration,
-  canApplyPollResult,
-  createPollGenerationGate,
-  finishPollRequest,
-} from "@/lib/scrapePollRaceGuard";
-import { isOwnedScrapeJob } from "@/lib/scrapeJobOwnership";
 
 const POLL_INTERVAL_MS = 8000;
 const STALE_ACTIVITY_MS = 2 * 60 * 1000;
@@ -47,14 +39,6 @@ function mergeEvents(prev: ScrapeEvent[], incoming: ScrapeEvent[]): ScrapeEvent[
   return [...byId.values()].sort((a, b) => a.sequence - b.sequence);
 }
 
-export interface UseScrapeJobOptions {
-  /** When false, no fetch / poll / realtime. */
-  enabled?: boolean;
-  /** Current authenticated user — required for ownership filter after fetch. */
-  userId?: string | null;
-  tenantId?: string | null;
-}
-
 export interface UseScrapeJobResult {
   job: ScrapeJob | null;
   events: ScrapeEvent[];
@@ -70,46 +54,23 @@ export interface UseScrapeJobResult {
   reconnecting: boolean;
   error: string | null;
   loading: boolean;
-  ownershipRejected: boolean;
   refetch: () => Promise<void>;
 }
 
 export function useScrapeJob(
   jobId: string | null | undefined,
   startedAtMs?: number | null,
-  options?: UseScrapeJobOptions,
 ): UseScrapeJobResult {
-  const enabled = options?.enabled !== false && Boolean(jobId);
-  const userId = `${options?.userId || ""}`.trim() || null;
-  const tenantId = options?.tenantId ?? null;
-
   const [job, setJob] = useState<ScrapeJob | null>(null);
   const [events, setEvents] = useState<ScrapeEvent[]>([]);
-  const [loading, setLoading] = useState(Boolean(enabled));
+  const [loading, setLoading] = useState(Boolean(jobId));
   const [reconnecting, setReconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ownershipRejected, setOwnershipRejected] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const lastSequenceRef = useRef(0);
   const pollBackoffRef = useRef(POLL_INTERVAL_MS);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollGateRef = useRef(createPollGenerationGate());
   const consecutiveFailuresRef = useRef(0);
-  const jobIdRef = useRef(jobId);
-  jobIdRef.current = jobId;
-
-  const applyJobIfOwned = useCallback(
-    (row: ScrapeJob | null): ScrapeJob | null => {
-      if (!row) return null;
-      if (userId && !isOwnedScrapeJob(row, { userId, tenantId })) {
-        setOwnershipRejected(true);
-        return null;
-      }
-      setOwnershipRejected(false);
-      return row;
-    },
-    [tenantId, userId],
-  );
 
   const fetchJob = useCallback(async () => {
     if (!jobId) return null;
@@ -141,33 +102,13 @@ export function useScrapeJob(
   );
 
   const refetch = useCallback(async () => {
-    if (!enabled || !jobId) return;
-    const generation = pollGateRef.current.generation;
-    const controller = beginPollRequest(pollGateRef.current, generation);
-    if (!controller) return;
+    if (!jobId) return;
     try {
       const [jobRow, eventRows] = await Promise.all([
         fetchJob(),
         fetchEventsSince(0),
       ]);
-      if (
-        !canApplyPollResult(
-          pollGateRef.current,
-          generation,
-          jobId,
-          jobIdRef.current,
-        )
-      ) {
-        return;
-      }
-      const owned = applyJobIfOwned(jobRow);
-      if (owned) setJob(owned);
-      else if (jobRow && userId) {
-        setJob(null);
-        setError("Scrape job is not owned by the current user");
-      } else if (jobRow) {
-        setJob(jobRow);
-      }
+      if (jobRow) setJob(jobRow);
       if (eventRows.length > 0) {
         setEvents((prev) => mergeEvents(prev, eventRows));
         lastSequenceRef.current = Math.max(
@@ -180,60 +121,28 @@ export function useScrapeJob(
       consecutiveFailuresRef.current = 0;
       pollBackoffRef.current = POLL_INTERVAL_MS;
     } catch (err: unknown) {
-      if (
-        !canApplyPollResult(
-          pollGateRef.current,
-          generation,
-          jobId,
-          jobIdRef.current,
-        )
-      ) {
-        return;
-      }
       setError(err instanceof Error ? err.message : "Failed to load scrape progress");
       setReconnecting(true);
     } finally {
-      finishPollRequest(pollGateRef.current, controller);
-      if (
-        canApplyPollResult(
-          pollGateRef.current,
-          generation,
-          jobId,
-          jobIdRef.current,
-        )
-      ) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
-  }, [applyJobIfOwned, enabled, fetchEventsSince, fetchJob, jobId, userId]);
+  }, [fetchEventsSince, fetchJob, jobId]);
 
   useEffect(() => {
-    if (!enabled || !jobId) {
-      bumpPollGeneration(pollGateRef.current);
+    if (!jobId) {
       setJob(null);
       setEvents([]);
       setLoading(false);
-      setOwnershipRejected(false);
-      setError(null);
-      setReconnecting(false);
       return;
     }
-    bumpPollGeneration(pollGateRef.current);
     lastSequenceRef.current = 0;
     setEvents([]);
     setLoading(true);
-    setOwnershipRejected(false);
     void refetch();
-  }, [enabled, jobId, refetch]);
+  }, [jobId, refetch]);
 
-  const isTerminal = isScrapeJobTerminal(job?.status);
-
-  // Realtime — tear down when terminal or disabled
   useEffect(() => {
-    if (!enabled || !jobId || isTerminal) return;
-
-    const expectedJobId = jobId;
-    const generationAtSubscribe = pollGateRef.current.generation;
+    if (!jobId) return;
 
     const jobChannel = supabase
       .channel(`scrape-job-${jobId}`)
@@ -246,22 +155,9 @@ export function useScrapeJob(
           filter: `id=eq.${jobId}`,
         },
         (payload) => {
-          if (
-            !canApplyPollResult(
-              pollGateRef.current,
-              generationAtSubscribe,
-              expectedJobId,
-              jobIdRef.current,
-            )
-          ) {
-            return;
-          }
-          const next = applyJobIfOwned(payload.new as ScrapeJob);
-          if (next) {
-            setJob(next);
-            setReconnecting(false);
-            consecutiveFailuresRef.current = 0;
-          }
+          setJob(payload.new as ScrapeJob);
+          setReconnecting(false);
+          consecutiveFailuresRef.current = 0;
         },
       )
       .subscribe((status) => {
@@ -281,16 +177,6 @@ export function useScrapeJob(
           filter: `job_id=eq.${jobId}`,
         },
         (payload) => {
-          if (
-            !canApplyPollResult(
-              pollGateRef.current,
-              generationAtSubscribe,
-              expectedJobId,
-              jobIdRef.current,
-            )
-          ) {
-            return;
-          }
           const row = payload.new as ScrapeEvent;
           setEvents((prev) => mergeEvents(prev, [row]));
           lastSequenceRef.current = Math.max(lastSequenceRef.current, row.sequence);
@@ -303,54 +189,21 @@ export function useScrapeJob(
       void supabase.removeChannel(jobChannel);
       void supabase.removeChannel(eventsChannel);
     };
-  }, [applyJobIfOwned, enabled, isTerminal, jobId]);
+  }, [jobId]);
 
-  // Durable poll — single poller; stop when terminal
   useEffect(() => {
-    if (!enabled || !jobId || isTerminal) {
-      if (pollTimerRef.current) {
-        clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-      return;
-    }
-
-    const expectedJobId = jobId;
-    let cancelled = false;
+    if (!jobId || isScrapeJobTerminal(job?.status)) return;
 
     const schedulePoll = () => {
       pollTimerRef.current = setTimeout(async () => {
-        if (cancelled) return;
-        const generation = pollGateRef.current.generation;
-        const controller = beginPollRequest(pollGateRef.current, generation);
-        if (!controller) {
-          if (!cancelled) schedulePoll();
-          return;
-        }
-
         let jobRow: ScrapeJob | null = null;
         try {
           const [fetchedJob, newEvents] = await Promise.all([
             fetchJob(),
             fetchEventsSince(lastSequenceRef.current),
           ]);
-          if (
-            cancelled ||
-            !canApplyPollResult(
-              pollGateRef.current,
-              generation,
-              expectedJobId,
-              jobIdRef.current,
-            )
-          ) {
-            return;
-          }
-          jobRow = applyJobIfOwned(fetchedJob);
+          jobRow = fetchedJob;
           if (jobRow) setJob(jobRow);
-          else if (fetchedJob && userId) {
-            setOwnershipRejected(true);
-            setJob(null);
-          }
           if (newEvents.length > 0) {
             setEvents((prev) => mergeEvents(prev, newEvents));
             lastSequenceRef.current = Math.max(
@@ -362,29 +215,14 @@ export function useScrapeJob(
           pollBackoffRef.current = POLL_INTERVAL_MS;
           setReconnecting(false);
         } catch {
-          if (
-            cancelled ||
-            !canApplyPollResult(
-              pollGateRef.current,
-              generation,
-              expectedJobId,
-              jobIdRef.current,
-            )
-          ) {
-            return;
-          }
           consecutiveFailuresRef.current += 1;
           setReconnecting(true);
           pollBackoffRef.current = Math.min(
             MAX_POLL_BACKOFF_MS,
             POLL_INTERVAL_MS * 2 ** Math.min(consecutiveFailuresRef.current, 3),
           );
-        } finally {
-          finishPollRequest(pollGateRef.current, controller);
         }
-
-        const terminalNow = isScrapeJobTerminal(jobRow?.status);
-        if (!cancelled && !terminalNow) {
+        if (!isScrapeJobTerminal(jobRow?.status)) {
           schedulePoll();
         }
       }, pollBackoffRef.current);
@@ -392,19 +230,14 @@ export function useScrapeJob(
 
     schedulePoll();
     return () => {
-      cancelled = true;
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
     };
-  }, [
-    applyJobIfOwned,
-    enabled,
-    fetchEventsSince,
-    fetchJob,
-    isTerminal,
-    jobId,
-    userId,
-  ]);
+  }, [fetchEventsSince, fetchJob, job?.status, jobId]);
+
+  useEffect(() => {
+    if (!jobId || !isScrapeJobTerminal(job?.status)) return;
+    void refetch();
+  }, [job?.completed_at, job?.status, jobId, refetch]);
 
   useEffect(() => {
     const startMs =
@@ -424,18 +257,11 @@ export function useScrapeJob(
     };
 
     setElapsedTime(computeElapsed());
-    if (endMs != null || !enabled) return;
+    if (endMs != null) return;
 
     const id = setInterval(() => setElapsedTime(computeElapsed()), 1000);
     return () => clearInterval(id);
-  }, [
-    enabled,
-    job?.cancelled_at,
-    job?.completed_at,
-    job?.started_at,
-    job?.status,
-    startedAtMs,
-  ]);
+  }, [job?.completed_at, job?.started_at, job?.status, startedAtMs]);
 
   const meaningfulEvents = useMemo(
     () => dedupeFeedEvents(events.filter((e) => !isScrapeHeartbeatEvent(e.event_type))),
@@ -462,12 +288,8 @@ export function useScrapeJob(
     return Date.now() - Date.parse(lastActivityAt) > STALE_ACTIVITY_MS;
   }, [job, lastActivityAt]);
 
-  const isCancellable = Boolean(
-    job &&
-      !isTerminal &&
-      job.status !== "waiting_user" &&
-      job.status !== "cancelling",
-  );
+  const isTerminal = isScrapeJobTerminal(job?.status);
+  const isCancellable = Boolean(job && !isTerminal && job.status !== "waiting_user");
 
   const progress =
     job?.progress_current != null &&
@@ -499,7 +321,6 @@ export function useScrapeJob(
     reconnecting,
     error,
     loading,
-    ownershipRejected,
     refetch,
   };
 }

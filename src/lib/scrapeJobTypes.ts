@@ -14,7 +14,6 @@ export type ScrapeJobStatus =
   | "partial"
   | "rate_limited"
   | "waiting_user"
-  | "cancelling"
   | "completed"
   | "completed_with_warnings"
   | "partial_external_blocker"
@@ -25,8 +24,6 @@ export type ScrapeJobStatus =
 export interface ScrapeJob {
   id: string;
   project_id: string;
-  user_id?: string | null;
-  tenant_id?: string | null;
   jurisdiction: string;
   portal_type: string | null;
   permit_number: string | null;
@@ -85,8 +82,6 @@ export function scrapeJobStatusLabel(status: ScrapeJobStatus | string): string {
       return "Waiting to retry";
     case "waiting_user":
       return "Waiting for User";
-    case "cancelling":
-      return "Cancelling";
     case "completed":
       return "Completed";
     case "completed_with_warnings":
@@ -94,14 +89,9 @@ export function scrapeJobStatusLabel(status: ScrapeJobStatus | string): string {
     case "partial_external_blocker":
       return "Stopped (External Blocker)";
     case "failed":
-    case "failed_unrecoverable":
       return "Failed";
     case "cancelled":
       return "Cancelled";
-    case "loading":
-      return "Loading";
-    case "unavailable":
-      return "Unavailable";
     default:
       return status;
   }
@@ -116,13 +106,8 @@ export function scrapeJobStatusBadgeClass(status: string): string {
     case "partial_external_blocker":
       return "bg-orange-500/15 text-orange-200 border-orange-500/35";
     case "failed":
-    case "failed_unrecoverable":
       return "bg-red-500/15 text-red-200 border-red-500/35";
     case "cancelled":
-    case "cancelling":
-      return "bg-slate-500/15 text-slate-200 border-slate-500/35";
-    case "loading":
-    case "unavailable":
       return "bg-slate-500/15 text-slate-200 border-slate-500/35";
     case "waiting_user":
       return "bg-sky-500/15 text-sky-200 border-sky-500/35";
@@ -147,8 +132,6 @@ export function durableScrapePortalLabel(
       return liveMessage?.trim() || "Running";
     case "rate_limited":
       return "Waiting to retry";
-    case "cancelling":
-      return "Cancelling";
     case "cancelled":
       return "Cancelled";
     case "completed":
@@ -184,8 +167,7 @@ export function durableScrapePortalStepStatus(
     status === "resuming" ||
     status === "partial" ||
     status === "rate_limited" ||
-    status === "waiting_user" ||
-    status === "cancelling"
+    status === "waiting_user"
   ) {
     return "checking";
   }
@@ -204,6 +186,6 @@ export function scrapeOutcomeFromJobStatus(
     return "done";
   }
   if (status === "cancelled") return "cancelled";
-  if (status === "failed" || status === "failed_unrecoverable") return "error";
+  if (status === "failed") return "error";
   return null;
 }

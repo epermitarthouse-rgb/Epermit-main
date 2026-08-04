@@ -29,8 +29,7 @@ function isUciDurableJobsEnabled() {
  */
 function isUciPortalSyncJobCancelled(job) {
   if (!job) return false;
-  const status = `${job.status || ""}`.toLowerCase();
-  if (status === "cancelled" || status === "cancelling") return true;
+  if (`${job.status || ""}`.toLowerCase() === "cancelled") return true;
   const uci =
     job?.metadata?.uci && typeof job.metadata.uci === "object"
       ? /** @type {Record<string, unknown>} */ (job.metadata.uci)

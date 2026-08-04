@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Loader2, Sparkles, Info, KeyRound } from 'lucide-react';
-import { Project, ProjectType, PROJECT_TYPE_LABELS, PROJECT_TYPE_VALUES, coerceProjectTypeForDb } from '@/types/project';
+import { Project, ProjectType, PROJECT_TYPE_LABELS } from '@/types/project';
 import { CreateProjectData, UpdateProjectData } from '@/hooks/useProjects';
 import { JurisdictionLookup } from './JurisdictionLookup';
 import { toast } from 'sonner';
@@ -53,8 +53,7 @@ const FIELD_INFO = {
   name: "A unique, descriptive name for your project (e.g., 'Smith Residence Addition' or '123 Main St Renovation')",
   project_type: "The category that best describes your construction work. This helps determine required permits and inspections.",
   jurisdiction: "The city, county, or municipality where the project is located. This determines which building codes apply.",
-  permit_number:
-    "Portal permit or application/record number used by Quick Scrape (e.g. Accela record ID). Required to start a scrape for this project.",
+  permit_number: "The official permit number assigned by the jurisdiction after approval. Leave blank until assigned.",
   address: "The physical street address where construction will take place.",
   project_url: "Optional direct link to the project page in the jurisdiction portal. Used by the Portal Monitor Agent as a deep link.",
   city: "The city or town where the project is located.",
@@ -93,9 +92,7 @@ const projectSchema = z.object({
   state: z.string().optional(),
   zip_code: z.string().trim().regex(/^(\d{5}(-\d{4})?)?$/, "Invalid ZIP code format").optional(),
   jurisdiction: z.string().trim().max(200, "Jurisdiction must be less than 200 characters").optional(),
-  project_type: z
-    .union([z.enum(PROJECT_TYPE_VALUES), z.literal("")])
-    .optional(),
+  project_type: z.string().optional(),
   description: z.string().trim().max(2000, "Description must be less than 2000 characters").optional(),
   estimated_value: z.string().optional().refine((val) => !val || !isNaN(parseFloat(val)), "Must be a valid number"),
   square_footage: z.string().optional().refine((val) => !val || !isNaN(parseInt(val)), "Must be a valid number"),
@@ -228,7 +225,7 @@ export function ProjectFormDialog({
         state: project.state || '',
         zip_code: project.zip_code || '',
         jurisdiction: project.jurisdiction || '',
-        project_type: coerceProjectTypeForDb(project.project_type) || '',
+        project_type: project.project_type || '',
         description: project.description || '',
         estimated_value: project.estimated_value?.toString() || '',
         square_footage: project.square_footage?.toString() || '',
@@ -298,27 +295,21 @@ export function ProjectFormDialog({
 
   const validateForm = (showAllErrors = false): boolean => {
     const result = projectSchema.safeParse(formData);
-    const newErrors: FormErrors = {};
-
+    
     if (!result.success) {
+      const newErrors: FormErrors = {};
       result.error.errors.forEach((err) => {
         const field = err.path[0] as keyof FormErrors;
         if (showAllErrors || touched.has(field)) {
           newErrors[field] = err.message;
         }
       });
+      setErrors(newErrors);
+      return false;
     }
-
-    // Scrape contract: a linked portal credential needs a project permit/application number.
-    if (formData.credential_id && !formData.permit_number.trim()) {
-      if (showAllErrors || touched.has("permit_number")) {
-        newErrors.permit_number =
-          "Permit / Application Number is required when a portal credential is linked.";
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    setErrors({});
+    return true;
   };
 
   const handleChange = (field: string, value: string) => {
@@ -358,69 +349,44 @@ export function ProjectFormDialog({
       return;
     }
     
-    const permitFee = formData.permit_fee ? parseFloat(formData.permit_fee) : undefined;
-    const expeditorCost = formData.expeditor_cost ? parseFloat(formData.expeditor_cost) : undefined;
-
+    const permitFee = formData.permit_fee ? parseFloat(formData.permit_fee) : 0;
+    const expeditorCost = formData.expeditor_cost ? parseFloat(formData.expeditor_cost) : 0;
+    
     const data: CreateProjectData | UpdateProjectData = {
       name: formData.name.trim(),
       address: formData.address.trim() || undefined,
+      project_url: formData.project_url.trim() || undefined,
       city: formData.city.trim() || undefined,
       state: formData.state || undefined,
       zip_code: formData.zip_code.trim() || undefined,
       jurisdiction: formData.jurisdiction.trim() || undefined,
-      project_type: coerceProjectTypeForDb(formData.project_type),
+      project_type: formData.project_type || undefined,
       description: formData.description.trim() || undefined,
       estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : undefined,
       square_footage: formData.square_footage ? parseInt(formData.square_footage) : undefined,
       deadline: formData.deadline ? new Date(formData.deadline).toISOString() : undefined,
       notes: formData.notes.trim() || undefined,
+      permit_fee: permitFee,
+      expeditor_cost: expeditorCost,
+      total_cost: permitFee + expeditorCost,
+      client_name: formData.client_name.trim() || null,
+      client_email: formData.client_email.trim() || null,
+      service_type: formData.service_type.trim() || null,
+      contract_value: formData.contract_value.trim()
+        ? parseFloat(formData.contract_value)
+        : null,
+      reimbursement_amount: formData.reimbursement_amount.trim()
+        ? parseFloat(formData.reimbursement_amount)
+        : null,
+      reimbursement_description:
+        formData.reimbursement_description.trim() || null,
     };
 
-    // Optional portal deep-link — omit when empty so create does not send unknown/blank columns.
-    if (formData.project_url.trim()) {
-      data.project_url = formData.project_url.trim();
+    if (project && formData.permit_number) {
+      (data as UpdateProjectData).permit_number = formData.permit_number.trim();
     }
 
-    // Fees: only send when the user entered a value (create) or when editing.
-    if (permitFee !== undefined) {
-      data.permit_fee = permitFee;
-    }
-    if (expeditorCost !== undefined) {
-      data.expeditor_cost = expeditorCost;
-    }
-    if (permitFee !== undefined || expeditorCost !== undefined) {
-      data.total_cost = (permitFee || 0) + (expeditorCost || 0);
-    }
-
-    // Billing fields — include only when set on create; allow null clears on edit.
-    const clientName = formData.client_name.trim();
-    const clientEmail = formData.client_email.trim();
-    const serviceType = formData.service_type.trim();
-    const contractValue = formData.contract_value.trim();
-    const reimbursementAmount = formData.reimbursement_amount.trim();
-    const reimbursementDescription = formData.reimbursement_description.trim();
-
-    if (project) {
-      data.client_name = clientName || null;
-      data.client_email = clientEmail || null;
-      data.service_type = serviceType || null;
-      data.contract_value = contractValue ? parseFloat(contractValue) : null;
-      data.reimbursement_amount = reimbursementAmount ? parseFloat(reimbursementAmount) : null;
-      data.reimbursement_description = reimbursementDescription || null;
-      data.credential_id = formData.credential_id || null;
-      if (formData.permit_number.trim()) {
-        data.permit_number = formData.permit_number.trim();
-      }
-    } else {
-      if (clientName) data.client_name = clientName;
-      if (clientEmail) data.client_email = clientEmail;
-      if (serviceType) data.service_type = serviceType;
-      if (contractValue) data.contract_value = parseFloat(contractValue);
-      if (reimbursementAmount) data.reimbursement_amount = parseFloat(reimbursementAmount);
-      if (reimbursementDescription) data.reimbursement_description = reimbursementDescription;
-      if (formData.credential_id) data.credential_id = formData.credential_id;
-      if (formData.permit_number.trim()) data.permit_number = formData.permit_number.trim();
-    }
+    data.credential_id = formData.credential_id || null;
 
     await onSubmit(data);
   };
@@ -514,28 +480,23 @@ export function ProjectFormDialog({
                 <FieldError error={errors.jurisdiction} />
               </div>
 
-              <div>
-                <Label htmlFor="permit_number" className="flex items-center">
-                  Permit / Application Number
-                  {formData.credential_id ? (
-                    <span className="ml-1 text-destructive">*</span>
-                  ) : null}
-                  <FieldInfo info={FIELD_INFO.permit_number} />
-                </Label>
-                <Input
-                  id="permit_number"
-                  value={formData.permit_number}
-                  onChange={(e) => handleChange('permit_number', e.target.value)}
-                  onBlur={() => handleBlur('permit_number')}
-                  placeholder="e.g., B2508799 or BP-2024-12345"
-                  className={errors.permit_number ? 'border-destructive' : ''}
-                  data-testid="input-permit-number"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Used by Quick Scrape to find the portal record. You can also set it later in Edit Project or the header Active Project control.
-                </p>
-                <FieldError error={errors.permit_number} />
-              </div>
+              {project && (
+                <div>
+                  <Label htmlFor="permit_number" className="flex items-center">
+                    Permit Number
+                    <FieldInfo info={FIELD_INFO.permit_number} />
+                  </Label>
+                  <Input
+                    id="permit_number"
+                    value={formData.permit_number}
+                    onChange={(e) => handleChange('permit_number', e.target.value)}
+                    onBlur={() => handleBlur('permit_number')}
+                    placeholder="e.g., BP-2024-12345"
+                    className={errors.permit_number ? 'border-destructive' : ''}
+                  />
+                  <FieldError error={errors.permit_number} />
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="credential_id" className="flex items-center">
@@ -545,23 +506,7 @@ export function ProjectFormDialog({
                 </Label>
                 <Select
                   value={formData.credential_id}
-                  onValueChange={(value) => {
-                    const next = value === '__none__' ? '' : value;
-                    setFormData(prev => ({ ...prev, credential_id: next }));
-                    setTouched(prev => new Set(prev).add('credential_id').add('permit_number'));
-                    if (next && !formData.permit_number.trim()) {
-                      setErrors(prev => ({
-                        ...prev,
-                        permit_number:
-                          "Permit / Application Number is required when a portal credential is linked.",
-                      }));
-                    } else if (!next) {
-                      setErrors(prev => {
-                        const { permit_number: _removed, ...rest } = prev;
-                        return rest;
-                      });
-                    }
-                  }}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, credential_id: value === '__none__' ? '' : value }))}
                 >
                   <SelectTrigger data-testid="select-credential">
                     <SelectValue placeholder="Select credential" />

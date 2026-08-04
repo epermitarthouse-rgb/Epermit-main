@@ -2,55 +2,21 @@
 
 require("dotenv").config();
 
-const { getSupabaseAdmin, probeSupabaseConnectivity, preferIpv4Dns } = require("./lib/supabase");
+const { getSupabaseAdmin } = require("./lib/supabase");
 const { downloadToTempFile, removeTempFile } = require("./lib/download");
 const { extractPdfPagesFromFile } = require("./lib/pdfExtract");
 const { extractDocxPage } = require("./lib/docxExtract");
 const { chunkPage, isIngestSupported, vectorToPg } = require("./lib/chunk");
 const { embedTexts, getOpenAIClient } = require("./lib/embed");
-const { summarizeFetchError, formatFetchErrorLine, redactFetchTarget } = require("./lib/netErrors");
 
 const POLL_MS = Number(process.env.INGESTION_POLL_INTERVAL_MS) || 3000;
 const CONCURRENCY = Math.max(1, Number(process.env.INGESTION_CONCURRENCY) || 1);
 const TEMP_DIR = process.env.INGESTION_TEMP_DIR || undefined;
-const MAX_BACKOFF_MS = Number(process.env.INGESTION_MAX_BACKOFF_MS) || 60_000;
-const MIN_BACKOFF_MS = Number(process.env.INGESTION_MIN_BACKOFF_MS) || 5_000;
 
 const LOW_TEXT_MSG =
   "Document prepared with limited text. OCR may be needed for scanned/image-based sheets.";
 
 let activeJobs = 0;
-let consecutivePollFailures = 0;
-let nextPollDelayMs = POLL_MS;
-let lastPollErrorLogAt = 0;
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function computeBackoffMs(failures) {
-  const exp = Math.min(MAX_BACKOFF_MS, MIN_BACKOFF_MS * 2 ** Math.max(0, failures - 1));
-  const jitter = Math.floor(Math.random() * 500);
-  return Math.max(POLL_MS, exp + jitter);
-}
-
-function logPollError(error) {
-  const now = Date.now();
-  // Bound log flood: at most once per 15s while infra is down.
-  if (now - lastPollErrorLogAt < 15_000 && consecutivePollFailures > 1) {
-    return;
-  }
-  lastPollErrorLogAt = now;
-
-  const summary =
-    error?.workerFetchSummary ||
-    summarizeFetchError(error, process.env.SUPABASE_URL);
-  console.error(
-    `[worker] poll error (#${consecutivePollFailures}):`,
-    formatFetchErrorLine(summary),
-  );
-  console.error("[worker] poll error detail:", JSON.stringify(summary));
-}
 
 async function updateJob(supabase, jobId, fields) {
   await supabase.from("document_ingestion_jobs").update(fields).eq("id", jobId);
@@ -69,20 +35,9 @@ async function claimNextJob(supabase) {
     .limit(1);
 
   if (error) {
-    consecutivePollFailures += 1;
-    nextPollDelayMs = computeBackoffMs(consecutivePollFailures);
-    logPollError(error);
+    console.error("[worker] poll error:", error.message);
     return null;
   }
-
-  if (consecutivePollFailures > 0) {
-    console.log(
-      `[worker] poll recovered after ${consecutivePollFailures} failure(s); resuming ${POLL_MS}ms interval`,
-    );
-  }
-  consecutivePollFailures = 0;
-  nextPollDelayMs = POLL_MS;
-
   if (!pending?.length) return null;
 
   const candidate = pending[0];
@@ -100,13 +55,7 @@ async function claimNextJob(supabase) {
     .select("*")
     .maybeSingle();
 
-  if (claimError) {
-    consecutivePollFailures += 1;
-    nextPollDelayMs = computeBackoffMs(consecutivePollFailures);
-    logPollError(claimError);
-    return null;
-  }
-  if (!claimed) return null;
+  if (claimError || !claimed) return null;
 
   await updateDocument(supabase, claimed.document_id, {
     ai_ingestion_status: "processing",
@@ -162,8 +111,6 @@ async function processJob(job) {
   };
 
   try {
-    console.log(`[worker] claimed job ${job.id} document=${job.document_id}`);
-
     const { data: doc, error: docError } = await supabase
       .from("project_documents")
       .select("id, file_name, file_path, file_type, document_type")
@@ -267,7 +214,7 @@ async function processJob(job) {
       docStatus = "low_text";
       errorMsg = "Very little text extracted. Scanned PDF OCR is not enabled in this phase.";
     } else if (stats.lowTextPages > 0 && stats.lowTextPages >= Math.ceil((stats.totalPages || 1) * 0.3)) {
-      finalStatus = "partial";
+      finalStatus = stats.failedPages > 0 ? "partial" : "partial";
       docStatus = "partial";
       errorMsg = LOW_TEXT_MSG;
     } else if (stats.lowTextPages > 0 || stats.failedPages > 0) {
@@ -301,21 +248,19 @@ async function processJob(job) {
       `[worker] job ${job.id} ${finalStatus}: ${stats.totalChunks} chunks, ${stats.processedPages}/${stats.totalPages} pages`,
     );
   } catch (err) {
-    const summary = err?.workerFetchSummary || summarizeFetchError(err);
-    const msg = formatFetchErrorLine(summary);
+    const msg = err instanceof Error ? err.message : String(err);
     console.error(`[worker] job ${job.id} failed:`, msg);
-    console.error(`[worker] job ${job.id} detail:`, JSON.stringify(summary));
 
     const now = new Date().toISOString();
     await updateJob(supabase, job.id, {
       status: "failed",
       completed_at: now,
-      error: summary.message || msg,
+      error: msg,
       progress: { phase: "failed" },
     });
     await updateDocument(supabase, job.document_id, {
       ai_ingestion_status: "failed",
-      ai_ingestion_error: summary.message || msg,
+      ai_ingestion_error: msg,
     });
   } finally {
     await removeTempFile(tempPath);
@@ -338,16 +283,10 @@ async function pollOnce() {
 }
 
 async function main() {
-  preferIpv4Dns();
-
-  const supabaseHost = redactFetchTarget(process.env.SUPABASE_URL || "").host;
   console.log("[document-ingestion-worker] started — polling for ingestion jobs", {
     pollMs: POLL_MS,
     concurrency: CONCURRENCY,
     tempDir: TEMP_DIR || "(system tmp)",
-    supabaseHost,
-    node: process.version,
-    maxBackoffMs: MAX_BACKOFF_MS,
   });
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -359,25 +298,14 @@ async function main() {
     process.exit(1);
   }
 
-  const ok = await probeSupabaseConnectivity();
-  if (!ok) {
-    console.error(
-      "[worker] startup probe failed — will keep polling with bounded backoff (pending jobs remain retryable)",
-    );
-    consecutivePollFailures = 1;
-    nextPollDelayMs = computeBackoffMs(1);
-  }
-
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       await pollOnce();
     } catch (err) {
-      consecutivePollFailures += 1;
-      nextPollDelayMs = computeBackoffMs(consecutivePollFailures);
-      logPollError(err);
+      console.error("[worker] poll loop error:", err);
     }
-    await sleep(nextPollDelayMs);
+    await new Promise((r) => setTimeout(r, POLL_MS));
   }
 }
 
