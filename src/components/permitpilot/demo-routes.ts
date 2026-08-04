@@ -24,9 +24,18 @@ const REAL_OR_REFERENCE_EXACT = new Set<string>([
   "/utility/load-profile",
   "/reference/glossary",
   "/reference/utility-coverage",
+  "/messages",
   "/utility-map",
   "/utility/provider-map",
   "/code-compliance",
+  "/code-reference",
+  "/checklists",
+  "/checklist-history",
+  "/analytics",
+  // Mixed live findings + Coming Soon panels; section badges only (not whole-page fabricated).
+  "/designcheck",
+  // Mixed live UCI package/load APIs + Coming Soon owner/billing/QA sections.
+  "/uci/application-builder",
   "/demos",
 ]);
 

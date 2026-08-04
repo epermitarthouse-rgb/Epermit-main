@@ -39,6 +39,8 @@ import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
 import CodeCompliance from "./pages/CodeCompliance";
+import DesignCheck from "./pages/DesignCheck";
+import UciApplicationBuilder from "./pages/UciApplicationBuilder";
 import CodeReferenceLibrary from "./pages/CodeReferenceLibrary";
 import ROICalculator from "./pages/ROICalculator";
 import ConsolidationCalculator from "./pages/ConsolidationCalculator";
@@ -62,6 +64,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
 import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder";
 import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
+import UtilityCoveragePlaceholder from "./pages/placeholders/UtilityCoveragePlaceholder";
+import MessagesPlaceholder from "./pages/placeholders/MessagesPlaceholder";
 import AdminAuthorizationsPlaceholder, {
   AdminPreviewPlaceholder,
 } from "./pages/placeholders/AdminPreviewPlaceholders";
@@ -148,6 +152,7 @@ const App = () => (
                   <Route path="/jurisdictions/map" element={<JurisdictionMapPage />} />
                   <Route path="/jurisdictions/:stateCode" element={<StateLandingPage />} />
                   <Route path="/permit-intelligence" element={<PermitIntelligence />} />
+                  <Route path="/designcheck" element={<DesignCheck />} />
                   <Route path="/code-compliance" element={<CodeCompliance />} />
                   <Route path="/code-reference" element={<CodeReferenceLibrary />} />
                   <Route path="/roi-calculator" element={<ROICalculator />} />
@@ -187,6 +192,13 @@ const App = () => (
                   <Route path="/checklists" element={<ChecklistHistory />} />
                   <Route path="/permit-queue" element={<PermitQueuePlaceholder />} />
                   <Route path="/reference/glossary" element={<GlossaryPlaceholder />} />
+                  <Route
+                    path="/reference/utility-coverage"
+                    element={<UtilityCoveragePlaceholder />}
+                  />
+                  {/* Alias after specific /reference/* routes so children win ranking */}
+                  <Route path="/reference" element={<Navigate to="/code-reference" replace />} />
+                  <Route path="/messages" element={<MessagesPlaceholder />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route
                     path="/uci"
@@ -194,6 +206,16 @@ const App = () => (
                       <div className="min-h-screen bg-background">
                         <ErrorBoundary fallbackTitle="Utility Coordination dashboard failed to load">
                           <UciDashboard />
+                        </ErrorBoundary>
+                      </div>
+                    }
+                  />
+                  <Route
+                    path="/uci/application-builder"
+                    element={
+                      <div className="min-h-screen bg-background">
+                        <ErrorBoundary fallbackTitle="UCI Builder failed to load">
+                          <UciApplicationBuilder />
                         </ErrorBoundary>
                       </div>
                     }

@@ -31,6 +31,8 @@ import {
   User,
   Table2,
   Database,
+  Inbox,
+  Network,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { isPublicShellHref } from "@/lib/authGatedNav";
@@ -50,6 +52,13 @@ const navigationItems = [
 ];
 
 const toolItems = [
+  {
+    name: "DesignCheck",
+    href: "/designcheck",
+    icon: Shield,
+    keywords: ["designcheck", "design check", "readiness", "compliance", "presubmittal", "pre-submittal"],
+    requiresAuth: true,
+  },
   { name: "Code Compliance Analyzer", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code", "analyzer"] },
   {
     name: "Response Matrix",
@@ -77,7 +86,13 @@ const toolItems = [
   { name: "Utility Coordination", href: "/uci", icon: Database, keywords: ["uci", "utility", "coordination", "pepco"] },
   { name: "UCI · Load Profile", href: "/uci?section=load-profile", icon: Database, keywords: ["uci", "load", "profile"] },
   { name: "UCI · Application Prep", href: "/uci?section=application-builder", icon: Database, keywords: ["uci", "application", "builder", "prep"] },
-  { name: "Code Library", href: "/code-reference", icon: BookOpen, keywords: ["library", "reference", "codes"] },
+  { name: "UCI Builder", href: "/uci/application-builder", icon: Database, keywords: ["uci", "application", "builder", "commercial service"] },
+  {
+    name: "Reference Library",
+    href: "/code-reference",
+    icon: BookOpen,
+    keywords: ["library", "reference", "codes", "code library"],
+  },
   { name: "ROI Calculator", href: "/roi-calculator", icon: Calculator, keywords: ["roi", "calculator", "savings"] },
 ];
 
@@ -103,11 +118,25 @@ const resourceItems = [
     keywords: ["loa", "authorization", "onboarding", "letter", "signature"],
     requiresAuth: true,
   },
+  { name: "Checklists", href: "/checklist-history", icon: FileText, keywords: ["checklists", "checklist history"], requiresAuth: true },
+  {
+    name: "Utility Coverage",
+    href: "/reference/utility-coverage",
+    icon: Network,
+    keywords: ["utility", "coverage", "providers", "coming soon"],
+  },
+  { name: "Glossary", href: "/reference/glossary", icon: BookOpen, keywords: ["glossary", "terms", "coming soon"], requiresAuth: true },
+  {
+    name: "Messages",
+    href: "/messages",
+    icon: Inbox,
+    keywords: ["messages", "inbox", "coming soon"],
+    requiresAuth: true,
+  },
   { name: "Pricing", href: "/pricing", icon: DollarSign, keywords: ["pricing", "plans", "cost"] },
   { name: "FAQ", href: "/faq", icon: HelpCircle, keywords: ["faq", "questions", "help"] },
   { name: "Documentation", href: "/api-docs", icon: FileQuestion, keywords: ["docs", "api", "documentation"] },
   { name: "Permit Queue", href: "/permit-queue", icon: FileText, keywords: ["queue", "filings", "coming soon"], requiresAuth: true },
-  { name: "Glossary", href: "/reference/glossary", icon: BookOpen, keywords: ["glossary", "terms", "coming soon"], requiresAuth: true },
   { name: "Contact", href: "/contact", icon: Mail, keywords: ["contact", "support", "email"] },
 ];
 

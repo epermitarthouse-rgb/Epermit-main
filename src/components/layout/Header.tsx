@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 const navigation = [
   { name: "Home", href: "/" },
   { name: "Code Compliance Analyzer", href: "/code-compliance" },
-  { name: "Code Library", href: "/code-reference" },
+  { name: "Reference Library", href: "/code-reference" },
   { name: "Demos", href: "/demos" },
   { name: "Pricing", href: "/pricing" },
   { name: "Contact", href: "/contact" },

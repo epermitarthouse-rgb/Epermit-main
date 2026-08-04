@@ -435,6 +435,8 @@ export default function UciDashboard() {
   const [projectSwitchConfirmOpen, setProjectSwitchConfirmOpen] = useState(false);
   const projectDataGenerationRef = useRef(0);
   const currentProjectIdRef = useRef<string | null>(null);
+  /** Blocks ?coordination= hydration briefly after an intentional drawer close (URL update race). */
+  const suppressCoordinationHydrationRef = useRef(false);
   const sectionParam = searchParams.get("section");
   const coordinationParam = searchParams.get("coordination");
   const tabParam = searchParams.get("tab");
@@ -1103,10 +1105,19 @@ export default function UciDashboard() {
     setDetailOpen(true);
     setSearchParams(
       (prev) => {
-        if (prev.get("coordination") === id) return prev;
         const next = new URLSearchParams(prev);
-        next.set("coordination", id);
-        return next;
+        let changed = false;
+        if (prev.get("coordination") !== id) {
+          next.set("coordination", id);
+          changed = true;
+        }
+        // Preserve an explicit ?tab= deep link; otherwise mirror the preferred tab
+        // (e.g. Submissions → application-prep set by section navigation).
+        if (!prev.get("tab") && drawerTab) {
+          next.set("tab", drawerTab);
+          changed = true;
+        }
+        return changed ? next : prev;
       },
       { replace: true },
     );
@@ -2452,6 +2463,11 @@ export default function UciDashboard() {
     (open: boolean) => {
       setDetailOpen(open);
       if (!open) {
+        // Clear selected coordination detail so section effects / URL hydration
+        // cannot immediately reopen the drawer. Do not touch the global project.
+        suppressCoordinationHydrationRef.current = true;
+        setDetailId(null);
+        setDetail(null);
         setSearchParams(
           (prev) => {
             if (!prev.get("coordination") && !prev.get("tab")) return prev;
@@ -2484,7 +2500,12 @@ export default function UciDashboard() {
   );
 
   useEffect(() => {
-    if (coordinationParam && coordinationParam !== detailId) {
+    if (!coordinationParam) {
+      suppressCoordinationHydrationRef.current = false;
+      return;
+    }
+    if (suppressCoordinationHydrationRef.current) return;
+    if (coordinationParam !== detailId) {
       void openDetail(coordinationParam);
     }
     // openDetail is intentionally stable enough for deep-link hydration
@@ -2530,49 +2551,36 @@ export default function UciDashboard() {
     }
 
     if (section.target.kind === "drawer-tab") {
+      // Prefer the mapped drawer tab for the next explicit open / deep link.
+      // Never auto-select a record or force the sheet open — that requires
+      // row click or an explicit ?coordination= deep link.
       const tab = section.target.tab;
       setDrawerTab(tab);
-      setSearchParams(
-        (prev) => {
-          if (prev.get("tab") === tab) return prev;
-          const next = new URLSearchParams(prev);
-          next.set("tab", tab);
-          return next;
-        },
-        { replace: true },
-      );
 
-      if (detailId) {
-        if (!detailOpen) setDetailOpen(true);
+      if (detailOpen) {
+        // Drawer already open: switch tab in place (and mirror into URL).
+        setSearchParams(
+          (prev) => {
+            if (prev.get("tab") === tab) return prev;
+            const next = new URLSearchParams(prev);
+            next.set("tab", tab);
+            return next;
+          },
+          { replace: true },
+        );
         return;
       }
 
-      const targetId = uciAttentionRecords[0]?.id ?? records[0]?.id;
-      if (targetId) {
-        void openDetail(targetId);
-        return;
-      }
-
-      if (!recordsLoading) {
-        toast.info("Open a coordination record to use this section");
-        requestAnimationFrame(() => {
-          document
-            .getElementById("uci-records-table")
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      }
+      // Drawer closed: do not write ?tab= / reopen via URL — openDetail will
+      // persist tab when the user explicitly selects a record.
+      requestAnimationFrame(() => {
+        document
+          .getElementById("uci-records-table")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- section deep-link orchestration
-  }, [
-    sectionParam,
-    detailId,
-    detailOpen,
-    records,
-    recordsLoading,
-    uciAttentionRecords,
-    navigate,
-    setSearchParams,
-  ]);
+  }, [sectionParam, detailOpen, navigate, setSearchParams]);
 
   return (
     <div className="space-y-6">

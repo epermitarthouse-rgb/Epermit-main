@@ -72,7 +72,10 @@ export function UciSidebarNav() {
         <CollapsibleContent>
           <SidebarMenuSub>
             <SidebarMenuSubItem>
-              <SidebarMenuSubButton asChild isActive={onUci && !activeSection}>
+              <SidebarMenuSubButton
+                asChild
+                isActive={location.pathname === "/uci" && !activeSection}
+              >
                 <AuthGatedNavLink to="/uci" end>
                   Hub
                 </AuthGatedNavLink>

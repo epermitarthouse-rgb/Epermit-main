@@ -64,7 +64,8 @@ export type UciNavSection = {
   /**
    * Where the click lands:
    * - hub: stay on hub (scroll/highlight)
-   * - drawer-tab: open coordination drawer on this tab (needs a record)
+   * - drawer-tab: prefer this drawer tab after an explicit record selection
+   *   (or ?coordination= deep link); section navigation alone must not open the drawer
    * - external: navigate away from /uci
    * - coming-soon: show non-functional preview on hub
    */
@@ -166,10 +167,10 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     id: "application-builder",
     label: "Application Builder",
     icon: Cable,
-    support: "active",
+    support: "partial",
     section: "application-builder",
-    target: { kind: "drawer-tab", tab: "application-prep" },
-    note: "Real Application prep (build / map docs / review / submit).",
+    target: { kind: "external", href: "/uci/application-builder" },
+    note: "Lovable-style UCI Builder with live package/load APIs. Owner/billing & Agent QA remain Coming Soon. Drawer Application prep is unchanged.",
   },
   {
     id: "meter-set",
