@@ -38,8 +38,7 @@ import { PortalCredentialsManager } from "@/components/settings/PortalCredential
 import { MicrosoftMailboxConnector } from "@/components/settings/MicrosoftMailboxConnector";
 import { ArchitectProfileManager } from "@/components/settings/ArchitectProfileManager";
 import { ExportBrandingManager } from "@/components/settings/ExportBrandingManager";
-import { EditorialPageHeader } from "@/components/layout/EditorialPageHeader";
-import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
+import { PageHeader } from "@/components/design/ProductPrimitives";
 import { cn } from "@/lib/utils";
 
 // Validation schemas
@@ -361,85 +360,68 @@ export default function Settings() {
     );
   }
 
+  const settingsTabTrigger =
+    "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/15 data-[state=active]:text-primary text-muted-foreground hover:bg-muted/50 hover:text-foreground";
+
   return (
-    <div className="min-h-screen bg-cream text-ink-primary-light">
-      <EditorialPageHeader
-        eyebrow="ACCOUNT"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Account"
         title="Settings"
-        description="Manage your profile, security, notifications, portals, branding, and data cleanup."
-        icon={User}
-        iconClassName="text-teal"
+        body="Manage your profile, security, notifications, portals, branding, and data cleanup — for both permit expediting and utility coordination work."
       />
 
-      <section className="py-4 sm:py-8">
-        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6">
-          {/* Tabs */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Tabs defaultValue="profile" className="space-y-6">
-              <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/45 p-1 text-ink-secondary-light sm:grid-cols-4 lg:grid-cols-7">
-                <TabsTrigger
-                  value="profile"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <User className="h-4 w-4" />
-                  <span className="hidden sm:inline">Profile</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="security"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <Lock className="h-4 w-4" />
-                  <span className="hidden sm:inline">Security</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="notifications"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <Bell className="h-4 w-4" />
-                  <span className="hidden sm:inline">Notifications</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="portals"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <KeyRound className="h-4 w-4" />
-                  <span className="hidden sm:inline">Portal Credentials</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="architect"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                  data-testid="tab-architect-profile"
-                >
-                  <Stamp className="h-4 w-4" />
-                  <span className="hidden sm:inline">Architect</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="branding"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                  data-testid="tab-export-branding"
-                >
-                  <FileSignature className="h-4 w-4" />
-                  <span className="hidden sm:inline">Export Branding</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="cleanup"
-                  className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  <Database className="h-4 w-4" />
-                  <span className="hidden sm:inline">Clean Up Data</span>
-                </TabsTrigger>
-              </TabsList>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Tabs defaultValue="profile" className="space-y-6">
+          <TabsList className="pilot-card flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1.5">
+            <TabsTrigger value="profile" className={settingsTabTrigger}>
+              <User className="h-4 w-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="security" className={settingsTabTrigger}>
+              <Lock className="h-4 w-4" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className={settingsTabTrigger}>
+              <Bell className="h-4 w-4" />
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger value="portals" className={settingsTabTrigger}>
+              <KeyRound className="h-4 w-4" />
+              Portal Credentials
+            </TabsTrigger>
+            <TabsTrigger
+              value="architect"
+              className={settingsTabTrigger}
+              data-testid="tab-architect-profile"
+            >
+              <Stamp className="h-4 w-4" />
+              Architect
+            </TabsTrigger>
+            <TabsTrigger
+              value="branding"
+              className={settingsTabTrigger}
+              data-testid="tab-export-branding"
+            >
+              <FileSignature className="h-4 w-4" />
+              Export Branding
+            </TabsTrigger>
+            <TabsTrigger value="cleanup" className={settingsTabTrigger}>
+              <Database className="h-4 w-4" />
+              Clean Up Data
+            </TabsTrigger>
+          </TabsList>
 
               {/* Profile Tab */}
               <TabsContent value="profile">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Profile Information</CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Update your personal information and company details
                     </CardDescription>
                   </CardHeader>
@@ -453,107 +435,109 @@ export default function Settings() {
                       </div>
                     ) : (
                       <>
-                        {/* Email (read-only) */}
-                        <div className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            Email
-                          </Label>
-                          <Input
-                            value={user?.email || ""}
-                            disabled
-                            className="bg-muted"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Email cannot be changed
-                          </p>
-                        </div>
-
-                        {/* Full Name */}
-                        <div className="space-y-2">
-                          <Label htmlFor="full_name" className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            Full Name
-                          </Label>
-                          <Input
-                            id="full_name"
-                            value={profile.full_name || ""}
-                            onChange={(e) => handleProfileChange("full_name", e.target.value)}
-                            placeholder="Enter your full name"
-                          />
-                          {profileErrors.full_name && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.full_name}
+                        <div className="grid gap-5 md:grid-cols-2">
+                          {/* Email (read-only) */}
+                          <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              Email
+                            </Label>
+                            <Input
+                              value={user?.email || ""}
+                              disabled
+                              className="bg-muted"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Email cannot be changed
                             </p>
-                          )}
-                        </div>
+                          </div>
 
-                        {/* Company Name */}
-                        <div className="space-y-2">
-                          <Label htmlFor="company_name" className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-muted-foreground" />
-                            Company Name
-                          </Label>
-                          <Input
-                            id="company_name"
-                            value={profile.company_name || ""}
-                            onChange={(e) => handleProfileChange("company_name", e.target.value)}
-                            placeholder="Enter your company name"
-                          />
-                          {profileErrors.company_name && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.company_name}
-                            </p>
-                          )}
-                        </div>
+                          {/* Full Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor="full_name" className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              Full Name
+                            </Label>
+                            <Input
+                              id="full_name"
+                              value={profile.full_name || ""}
+                              onChange={(e) => handleProfileChange("full_name", e.target.value)}
+                              placeholder="Enter your full name"
+                            />
+                            {profileErrors.full_name && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.full_name}
+                              </p>
+                            )}
+                          </div>
 
-                        {/* Job Title */}
-                        <div className="space-y-2">
-                          <Label htmlFor="job_title" className="flex items-center gap-2">
-                            <Briefcase className="h-4 w-4 text-muted-foreground" />
-                            Job Title
-                          </Label>
-                          <Input
-                            id="job_title"
-                            value={profile.job_title || ""}
-                            onChange={(e) => handleProfileChange("job_title", e.target.value)}
-                            placeholder="Enter your job title"
-                          />
-                          {profileErrors.job_title && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.job_title}
-                            </p>
-                          )}
-                        </div>
+                          {/* Company Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor="company_name" className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              Company Name
+                            </Label>
+                            <Input
+                              id="company_name"
+                              value={profile.company_name || ""}
+                              onChange={(e) => handleProfileChange("company_name", e.target.value)}
+                              placeholder="Enter your company name"
+                            />
+                            {profileErrors.company_name && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.company_name}
+                              </p>
+                            )}
+                          </div>
 
-                        {/* Phone */}
-                        <div className="space-y-2">
-                          <Label htmlFor="phone" className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            Phone Number
-                          </Label>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            value={profile.phone || ""}
-                            onChange={(e) => handleProfileChange("phone", e.target.value)}
-                            placeholder="Enter your phone number"
-                          />
-                          {profileErrors.phone && (
-                            <p className="text-xs text-destructive flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              {profileErrors.phone}
-                            </p>
-                          )}
+                          {/* Job Title */}
+                          <div className="space-y-2">
+                            <Label htmlFor="job_title" className="flex items-center gap-2">
+                              <Briefcase className="h-4 w-4 text-muted-foreground" />
+                              Job Title
+                            </Label>
+                            <Input
+                              id="job_title"
+                              value={profile.job_title || ""}
+                              onChange={(e) => handleProfileChange("job_title", e.target.value)}
+                              placeholder="Enter your job title"
+                            />
+                            {profileErrors.job_title && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.job_title}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Phone */}
+                          <div className="space-y-2">
+                            <Label htmlFor="phone" className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              Phone Number
+                            </Label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              value={profile.phone || ""}
+                              onChange={(e) => handleProfileChange("phone", e.target.value)}
+                              placeholder="Enter your phone number"
+                            />
+                            {profileErrors.phone && (
+                              <p className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {profileErrors.phone}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <Separator />
 
                         <Button
-                          variant="gold"
+                          variant="default"
                           onClick={handleProfileSave}
                           disabled={profileSaving}
                         >
@@ -572,10 +556,10 @@ export default function Settings() {
 
               {/* Security Tab */}
               <TabsContent value="security">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Change Password</CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Update your password to keep your account secure
                     </CardDescription>
                   </CardHeader>
@@ -616,69 +600,71 @@ export default function Settings() {
                       )}
                     </div>
 
-                    {/* New Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">New Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="newPassword"
-                          type={showNewPassword ? "text" : "password"}
-                          value={passwords.newPassword}
-                          onChange={(e) => {
-                            setPasswords((prev) => ({ ...prev, newPassword: e.target.value }));
-                            setPasswordErrors((prev) => ({ ...prev, newPassword: "" }));
-                          }}
-                          placeholder="Enter new password"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={() => setShowNewPassword(!showNewPassword)}
-                        >
-                          {showNewPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {/* New Password */}
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="newPassword"
+                            type={showNewPassword ? "text" : "password"}
+                            value={passwords.newPassword}
+                            onChange={(e) => {
+                              setPasswords((prev) => ({ ...prev, newPassword: e.target.value }));
+                              setPasswordErrors((prev) => ({ ...prev, newPassword: "" }));
+                            }}
+                            placeholder="Enter new password"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        {passwordErrors.newPassword && (
+                          <p className="text-xs text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {passwordErrors.newPassword}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Must be at least 8 characters
+                        </p>
                       </div>
-                      {passwordErrors.newPassword && (
-                        <p className="text-xs text-destructive flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {passwordErrors.newPassword}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Must be at least 8 characters
-                      </p>
-                    </div>
 
-                    {/* Confirm Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        value={passwords.confirmPassword}
-                        onChange={(e) => {
-                          setPasswords((prev) => ({ ...prev, confirmPassword: e.target.value }));
-                          setPasswordErrors((prev) => ({ ...prev, confirmPassword: "" }));
-                        }}
-                        placeholder="Confirm new password"
-                      />
-                      {passwordErrors.confirmPassword && (
-                        <p className="text-xs text-destructive flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {passwordErrors.confirmPassword}
-                        </p>
-                      )}
+                      {/* Confirm Password */}
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          value={passwords.confirmPassword}
+                          onChange={(e) => {
+                            setPasswords((prev) => ({ ...prev, confirmPassword: e.target.value }));
+                            setPasswordErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                          }}
+                          placeholder="Confirm new password"
+                        />
+                        {passwordErrors.confirmPassword && (
+                          <p className="text-xs text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {passwordErrors.confirmPassword}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <Separator />
 
-                    <Button variant="gold" onClick={handlePasswordChange} disabled={passwordSaving}>
+                    <Button variant="default" onClick={handlePasswordChange} disabled={passwordSaving}>
                       {passwordSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -692,10 +678,10 @@ export default function Settings() {
 
               {/* Notifications Tab */}
               <TabsContent value="notifications">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle>Notification Preferences</CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Choose how you want to be notified about updates
                     </CardDescription>
                   </CardHeader>
@@ -704,7 +690,7 @@ export default function Settings() {
                     <div>
                       <h4 className="font-medium mb-4">Email Notifications</h4>
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailDeadlineReminders">Deadline Reminders</Label>
                             <p className="text-sm text-muted-foreground">
@@ -720,7 +706,7 @@ export default function Settings() {
 
                         <Separator />
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailInspectionReminders">Inspection Reminders</Label>
                             <p className="text-sm text-muted-foreground">
@@ -736,7 +722,7 @@ export default function Settings() {
 
                         <Separator />
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailProjectUpdates">Project Updates</Label>
                             <p className="text-sm text-muted-foreground">
@@ -752,7 +738,7 @@ export default function Settings() {
 
                         <Separator />
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-0.5">
                             <Label htmlFor="emailJurisdictionUpdates">Jurisdiction Updates</Label>
                             <p className="text-sm text-muted-foreground">
@@ -773,7 +759,7 @@ export default function Settings() {
                     {/* In-App Notifications */}
                     <div>
                       <h4 className="font-medium mb-4">In-App Notifications</h4>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="space-y-0.5">
                           <Label htmlFor="inAppNotifications">Enable In-App Notifications</Label>
                           <p className="text-sm text-muted-foreground">
@@ -790,7 +776,7 @@ export default function Settings() {
 
                     <Separator />
 
-                    <Button variant="gold" onClick={handleNotificationsSave} disabled={notificationsSaving}>
+                    <Button variant="default" onClick={handleNotificationsSave} disabled={notificationsSaving}>
                       {notificationsSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
@@ -822,13 +808,13 @@ export default function Settings() {
 
               {/* Clean Up Data Tab */}
               <TabsContent value="cleanup">
-                <Card className={cn(EDITORIAL_FORM_CARD)}>
+                <Card className="pilot-card border-border bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Trash2 className="h-5 w-5 text-ink-tertiary-light" />
+                      <Trash2 className="h-5 w-5 text-muted-foreground" />
                       Clean Up Data
                     </CardTitle>
-                    <CardDescription className="text-ink-secondary-light">
+                    <CardDescription className="text-muted-foreground">
                       Remove duplicate projects or empty test projects for your account
                     </CardDescription>
                   </CardHeader>
@@ -838,7 +824,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         For each permit number with multiple projects, keeps the most recently checked and deletes the rest (including their comments).
                       </p>
-                      <Button variant="outlineGold" onClick={handleRemoveDuplicateProjects} disabled={removingDuplicates}>
+                      <Button variant="outline" onClick={handleRemoveDuplicateProjects} disabled={removingDuplicates}>
                         {removingDuplicates ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
@@ -853,7 +839,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         Deletes all projects that have no portal data and no permit number (empty test entries).
                       </p>
-                      <Button variant="outlineGold" onClick={handleClearTestData} disabled={clearingTestData}>
+                      <Button variant="outline" onClick={handleClearTestData} disabled={clearingTestData}>
                         {clearingTestData ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
@@ -867,8 +853,6 @@ export default function Settings() {
               </TabsContent>
             </Tabs>
           </motion.div>
-        </div>
-      </section>
     </div>
   );
 }

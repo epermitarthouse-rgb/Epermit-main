@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Track A: Marketing Site Visual Export Map - Commun-ET</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&amp;family=Inter:wght@400;500&amp;family=Inter+Tight:wght@600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#914c00",
+                        "surface-container": "#fcebe0",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "surface-bright": "#fff8f5",
+                        "on-error-container": "#93000a",
+                        "outline": "#887365",
+                        "status-error": "#C5221F",
+                        "on-primary-container": "#572b00",
+                        "status-warning": "#B06000",
+                        "primary-fixed": "#ffdcc3",
+                        "on-tertiary-container": "#003a59",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "on-surface-variant": "#554337",
+                        "on-tertiary-fixed-variant": "#0e4b6e",
+                        "on-tertiary": "#ffffff",
+                        "secondary-container": "#d6e3fb",
+                        "secondary-fixed": "#d6e3fb",
+                        "inverse-on-surface": "#ffede3",
+                        "background-alt": "#F5F8FB",
+                        "on-tertiary-fixed": "#001e30",
+                        "inverse-primary": "#ffb77e",
+                        "status-success": "#137333",
+                        "inverse-surface": "#382e27",
+                        "on-background": "#221a13",
+                        "surface-container-high": "#f6e5da",
+                        "on-secondary-container": "#596579",
+                        "on-secondary-fixed": "#0f1c2d",
+                        "primary-fixed-dim": "#ffb77e",
+                        "secondary": "#535f73",
+                        "tertiary": "#2f6388",
+                        "outline-variant": "#dbc2b1",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#74a5cd",
+                        "tertiary-fixed-dim": "#9bccf6",
+                        "surface-border": "#E2E8F0",
+                        "on-surface": "#221a13",
+                        "surface": "#fff8f5",
+                        "tertiary-fixed": "#cbe6ff",
+                        "background": "#fff8f5",
+                        "secondary-fixed-dim": "#bac7de",
+                        "primary": "#914c00",
+                        "text-muted": "#64748B",
+                        "primary-container": "#e8882f",
+                        "surface-dim": "#e8d7cc",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#f1dfd5",
+                        "on-primary-fixed": "#2f1500",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#fff1e9",
+                        "surface-container-highest": "#f1dfd5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "xxl": "64px",
+                        "unit": "4px",
+                        "xl": "40px",
+                        "lg": "24px",
+                        "margin": "32px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "h3": ["Inter Tight"],
+                        "data-mono": ["JetBrains Mono"],
+                        "h1": ["Inter Tight"],
+                        "label-caps": ["Inter Tight"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "h2": ["Inter Tight"]
+                    },
+                    "fontSize": {
+                        "h3": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "data-mono": ["14px", { "lineHeight": "1.4", "fontWeight": "500" }],
+                        "h1": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "h2": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .fill-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        body {
+            background-color: #F5F8FB; /* background-alt override for main canvas */
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased flex flex-col min-h-screen">
+<!-- TopAppBar Semantic Shell Override due to administrative page intent -->
+<header class="bg-white/90 dark:bg-[#0E1B2C]/90 backdrop-blur-xl fixed top-0 w-full z-50 border-b border-slate-200 dark:border-white/10 shadow-sm dark:shadow-none">
+<div class="flex justify-between items-center h-20 px-6 lg:px-12 w-full mx-auto max-w-7xl">
+<div class="text-2xl font-black tracking-tighter text-[#1A5276] dark:text-white">Commun-ET</div>
+<!-- Administrative Page - Suppress Navigation -->
+<div class="hidden lg:flex items-center space-x-4">
+<span class="font-h3 text-h3 text-primary">Administrative Export Map</span>
+</div>
+</div>
+</header>
+<main class="flex-grow pt-[104px] pb-xxl px-margin max-w-7xl mx-auto w-full">
+<div class="mb-xl">
+<h1 class="font-h1 text-h1 text-on-surface mb-sm">Track A: Marketing Site</h1>
+<p class="font-body-lg text-body-lg text-text-muted">Lovable Implementation Visual Export Map</p>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-gutter">
+<!-- Section 1: Brand & Entry -->
+<section class="bg-surface-container-lowest border border-surface-border rounded shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary-container opacity-5 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+<h2 class="font-h2 text-h2 text-on-surface mb-md pb-xs border-b border-surface-border">Section 1: Brand &amp; Entry</h2>
+<div class="space-y-sm">
+<!-- Home Hero -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Home Hero</div>
+<div class="font-data-mono text-data-mono text-text-muted mt-xs">Ref: 8.1</div>
+</div>
+<a aria-label="View Home Hero Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_214}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+<!-- Get-Quote Conversational Form -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Get-Quote Conversational Form</div>
+<div class="font-data-mono text-data-mono text-text-muted mt-xs">Ref: 8.5</div>
+</div>
+<a aria-label="View Get-Quote Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_21}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+<!-- Meet an Expert -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Meet an Expert</div>
+<div class="font-data-mono text-data-mono text-text-muted mt-xs">Contact</div>
+</div>
+<a aria-label="View Meet an Expert Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_91}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+</div>
+</section>
+<!-- Section 2: Core Services -->
+<section class="bg-surface-container-lowest border border-surface-border rounded shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-tertiary-container opacity-5 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+<h2 class="font-h2 text-h2 text-on-surface mb-md pb-xs border-b border-surface-border">Section 2: Core Services</h2>
+<div class="space-y-sm">
+<!-- Permit Strategy -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Permit Strategy</div>
+</div>
+<a aria-label="View Permit Strategy Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_235}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+<!-- Utility Coordination -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Utility Coordination</div>
+</div>
+<a aria-label="View Utility Coordination Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_113}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+<!-- External Project Management -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">External Project Management</div>
+</div>
+<a aria-label="View External Project Management Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_222}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+</div>
+</section>
+<!-- Section 3: Jurisdiction Intelligence -->
+<section class="bg-surface-container-lowest border border-surface-border rounded shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary-container opacity-5 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+<h2 class="font-h2 text-h2 text-on-surface mb-md pb-xs border-b border-surface-border">Section 3: Jurisdiction Intelligence</h2>
+<div class="space-y-sm">
+<!-- Washington D.C. -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Washington D.C.</div>
+</div>
+<a aria-label="View Washington D.C. Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_227}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="location_city">location_city</span>
+</a>
+</div>
+<!-- Montgomery County -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Montgomery County</div>
+</div>
+<a aria-label="View Montgomery County Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_197}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="location_city">location_city</span>
+</a>
+</div>
+<!-- Baltimore City -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Baltimore City</div>
+</div>
+<a aria-label="View Baltimore City Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_221}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="location_city">location_city</span>
+</a>
+</div>
+</div>
+</section>
+<!-- Section 4: Content & Case Studies -->
+<section class="bg-surface-container-lowest border border-surface-border rounded shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-24 h-24 bg-tertiary-container opacity-5 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+<h2 class="font-h2 text-h2 text-on-surface mb-md pb-xs border-b border-surface-border">Section 4: Content &amp; Case Studies</h2>
+<div class="space-y-sm">
+<!-- Insights & News -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Insights &amp; News</div>
+<div class="font-data-mono text-data-mono text-text-muted mt-xs">Blog</div>
+</div>
+<a aria-label="View Insights &amp; News Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_191}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="article">article</span>
+</a>
+</div>
+<!-- Past Performance Overview -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Past Performance Overview</div>
+</div>
+<a aria-label="View Past Performance Overview Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_116}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="trending_up">trending_up</span>
+</a>
+</div>
+<!-- Case Study Detail -->
+<div class="flex items-center justify-between p-sm hover:bg-[#F8FAFC] transition-colors rounded border border-transparent hover:border-surface-border">
+<div>
+<div class="font-h3 text-h3 text-on-surface">Case Study Detail</div>
+</div>
+<a aria-label="View Case Study Detail Screen" class="flex items-center justify-center w-10 h-10 bg-white border border-surface-border rounded hover:border-primary-container hover:text-primary-container transition-colors" href="{{DATA:SCREEN:SCREEN_232}}">
+<span class="material-symbols-outlined text-text-muted hover:text-primary-container transition-colors" data-icon="analytics">analytics</span>
+</a>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

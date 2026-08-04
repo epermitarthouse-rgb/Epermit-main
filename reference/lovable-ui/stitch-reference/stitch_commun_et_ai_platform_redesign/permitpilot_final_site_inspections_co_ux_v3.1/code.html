@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot | Final Site Inspections &amp; CO Mission Control</title>
+<!-- Tailwind & Fonts -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Inter+Tight:wght@600;700;800;900&amp;family=Cormorant+Garamond:wght@600&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@100..900&amp;family=Inter:wght@100..900&amp;family=Inter+Tight:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-header {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .corner-flare-primary {
+            background: radial-gradient(circle at top right, rgba(232, 136, 47, 0.08) 0%, transparent 70%);
+        }
+        .corner-flare-secondary {
+            background: radial-gradient(circle at top right, rgba(83, 95, 115, 0.05) 0%, transparent 70%);
+        }
+        body {
+            background-color: #F5F8FB;
+        }
+        /* Custom scrollbar for data density */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #dbc2b1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #887365; }
+    </style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "primary": "#914c00",
+                "on-error-container": "#93000a",
+                "status-error": "#C5221F",
+                "primary-fixed-dim": "#ffb77e",
+                "on-primary-container": "#572b00",
+                "background-alt": "#F5F8FB",
+                "surface-container": "#fcebe0",
+                "primary-fixed": "#ffdcc3",
+                "primary-container": "#e8882f",
+                "outline": "#887365",
+                "status-success": "#137333",
+                "secondary": "#535f73",
+                "secondary-container": "#d6e3fb",
+                "surface-container-lowest": "#ffffff",
+                "on-secondary-container": "#596579",
+                "surface-tint": "#914c00",
+                "on-surface-variant": "#554337",
+                "on-secondary-fixed-variant": "#3b475a",
+                "inverse-primary": "#ffb77e",
+                "secondary-fixed-dim": "#bac7de",
+                "on-secondary-fixed": "#0f1c2d",
+                "surface-container-low": "#fff1e9",
+                "tertiary-container": "#74a5cd",
+                "on-error": "#ffffff",
+                "on-tertiary-container": "#003a59",
+                "on-tertiary-fixed-variant": "#0e4b6e",
+                "on-tertiary-fixed": "#001e30",
+                "on-secondary": "#ffffff",
+                "on-background": "#221a13",
+                "surface-dim": "#e8d7cc",
+                "tertiary-fixed": "#cbe6ff",
+                "on-primary-fixed-variant": "#6e3900",
+                "status-warning": "#B06000",
+                "surface-border": "#E2E8F0",
+                "outline-variant": "#dbc2b1",
+                "on-primary-fixed": "#2f1500",
+                "inverse-surface": "#382e27",
+                "on-surface": "#221a13",
+                "surface-variant": "#f1dfd5",
+                "surface-container-highest": "#f1dfd5",
+                "error": "#ba1a1a",
+                "surface": "#fff8f5",
+                "on-tertiary": "#ffffff",
+                "error-container": "#ffdad6",
+                "text-muted": "#64748B",
+                "on-primary": "#ffffff",
+                "tertiary": "#2f6388",
+                "inverse-on-surface": "#ffede3",
+                "tertiary-fixed-dim": "#9bccf6",
+                "surface-container-high": "#f6e5da",
+                "secondary-fixed": "#d6e3fb",
+                "surface-bright": "#fff8f5",
+                "background": "#fff8f5"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "md": "16px",
+                "xs": "4px",
+                "xl": "40px",
+                "gutter": "24px",
+                "unit": "4px",
+                "lg": "24px",
+                "margin": "32px",
+                "xxl": "64px",
+                "sm": "8px"
+        },
+        "fontFamily": {
+                "body-md": [
+                        "Inter"
+                ],
+                "h1": [
+                        "Inter Tight"
+                ],
+                "data-mono": [
+                        "JetBrains Mono"
+                ],
+                "body-lg": [
+                        "Inter"
+                ],
+                "body-sm": [
+                        "Inter"
+                ],
+                "h2": [
+                        "Inter Tight"
+                ],
+                "display-lg": [
+                        "Cormorant Garamond"
+                ],
+                "label-caps": [
+                        "Inter Tight"
+                ],
+                "h3": [
+                        "Inter Tight"
+                ]
+        },
+        "fontSize": {
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "400"
+                        }
+                ],
+                "h1": [
+                        "32px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "data-mono": [
+                        "14px",
+                        {
+                                "lineHeight": "1.4",
+                                "fontWeight": "500"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-sm": [
+                        "14px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "400"
+                        }
+                ],
+                "h2": [
+                        "24px",
+                        {
+                                "lineHeight": "1.3",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-caps": [
+                        "12px",
+                        {
+                                "lineHeight": "1.0",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "h3": [
+                        "20px",
+                        {
+                                "lineHeight": "1.4",
+                                "fontWeight": "600"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- Sidebar (Standard Component: SideNavBar) -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-inverse-surface dark:bg-on-background flex flex-col py-md px-sm shadow-2xl z-[60]">
+<!-- Brand Identity -->
+<div class="mb-xl px-sm">
+<div class="font-h2 text-h2 font-black text-on-primary-fixed bg-primary-container px-2 py-1 rounded inline-block mb-1">
+                PermitPilot
+            </div>
+<p class="font-label-caps text-label-caps text-on-secondary-fixed-variant opacity-70">Mission Control v3</p>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 space-y-1">
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center space-x-3 bg-primary text-on-primary font-bold rounded-lg mx-2 px-4 py-2 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-label-caps text-label-caps">Unified Matrix</span>
+</a>
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">domain</span>
+<span class="font-label-caps text-label-caps">Building Permits</span>
+</a>
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-label-caps text-label-caps">Raze Permits</span>
+</a>
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">electrical_services</span>
+<span class="font-label-caps text-label-caps">Utility Coordination</span>
+</a>
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-caps text-label-caps">Reports</span>
+</a>
+</nav>
+<!-- Footer Actions -->
+<div class="mt-auto border-t border-outline/20 pt-md space-y-1">
+<button class="w-full mb-md bg-primary-container text-on-primary-container font-bold py-2 rounded shadow-sm hover:brightness-110 transition-all">
+                New Permit
+            </button>
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+<a class="flex items-center space-x-3 text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+</div>
+</aside>
+<!-- Top App Bar (Standard Component: TopAppBar) -->
+<header class="fixed top-0 right-0 w-[calc(100%-256px)] z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-md flex items-center justify-between px-margin py-md border-b border-outline-variant shadow-sm h-20">
+<div class="flex flex-col">
+<h2 class="font-h1 text-h1 text-primary font-bold tracking-tight">Unified Task Matrix</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Project: Metropolis Tower A-2</p>
+</div>
+<!-- Unified Phase Navigator -->
+<div class="hidden lg:flex items-center space-x-2 bg-surface-container-low rounded-full p-1 border border-surface-border">
+<span class="px-3 py-1 text-[12px] font-label-caps text-on-surface-variant rounded-full">PLANNING</span>
+<span class="material-symbols-outlined text-[16px] text-outline-variant">chevron_right</span>
+<span class="px-3 py-1 text-[12px] font-label-caps text-on-surface-variant rounded-full">PERMITTING</span>
+<span class="material-symbols-outlined text-[16px] text-outline-variant">chevron_right</span>
+<span class="px-3 py-1 text-[12px] font-label-caps bg-primary text-on-primary rounded-full shadow-sm">FIELD OPS</span>
+<span class="material-symbols-outlined text-[16px] text-primary">arrow_right_alt</span>
+<span class="px-3 py-1 text-[12px] font-label-caps text-primary border border-primary/30 rounded-full bg-primary/5">CLOSEOUT</span>
+</div>
+<div class="flex items-center space-x-6">
+<!-- Search Bar -->
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="bg-surface-container-lowest border border-outline-variant rounded-full pl-10 pr-4 py-2 text-body-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all w-64" placeholder="Search tasks..." type="text"/>
+</div>
+<div class="flex items-center space-x-3">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-all">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-all">history</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-all">download</button>
+</div>
+<button class="bg-primary-container text-on-primary-container px-4 py-2 rounded font-bold hover:brightness-105 active:scale-95 transition-all text-body-sm">
+                Deploy Agent
+            </button>
+<img alt="Lead Coordinator" class="w-10 h-10 rounded-full border-2 border-primary/20" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-24 pb-xl px-margin min-h-screen">
+<!-- Back to Master Matrix Navigation -->
+<div class="mb-4 flex items-center space-x-2 text-body-sm text-on-surface-variant">
+<a class="hover:text-primary flex items-center group transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px] mr-1 group-hover:-translate-x-1 transition-transform">arrow_back</span>
+        Back to Master Matrix
+    </a>
+</div>
+<!-- Dashboard Header Hero -->
+<div class="mb-lg flex justify-between items-end">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-2">Final Site Inspections &amp; CO Mission Control</h1>
+<div class="flex space-x-4 items-center">
+<span class="bg-status-success/10 text-status-success font-label-caps text-label-caps px-2 py-1 rounded border border-status-success/20">AGENT ACTIVE</span>
+<span class="text-on-surface-variant font-body-sm flex items-center">
+<span class="material-symbols-outlined mr-1 text-[18px]">calendar_today</span>
+                        Targeting Final CO: Oct 24, 2024
+                    </span>
+<span class="text-on-surface-variant font-body-sm flex items-center">
+<span class="material-symbols-outlined mr-1 text-[18px]">warning</span>
+                        2 High-Risk Path Constraints
+                    </span>
+</div>
+</div>
+<div class="flex space-x-3">
+<button class="bg-surface-container-lowest border border-outline-variant px-4 py-2 rounded-lg font-bold text-primary flex items-center hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined mr-2">analytics</span>
+                    Optimization Report
+                </button>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold shadow-sm hover:brightness-110 transition-all flex items-center">
+<span class="material-symbols-outlined mr-2">rocket_launch</span>
+                    Submit &amp; Transition to Closeout
+                </button>
+</div>
+</div>
+<!-- Metric Grid -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter mb-lg">
+<div class="bg-white p-lg rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border corner-flare-primary relative overflow-hidden">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2">CLEARANCE PROGRESS</p>
+<div class="flex items-end justify-between">
+<span class="font-h1 text-h1 text-on-surface">82<span class="text-h3 opacity-50">%</span></span>
+<span class="text-status-success font-data-mono text-data-mono">+12% vs last wk</span>
+</div>
+<div class="mt-4 w-full bg-surface-container rounded-full h-1">
+<div class="bg-primary h-1 rounded-full" style="width: 82%"></div>
+</div>
+</div>
+<div class="bg-white p-lg rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border corner-flare-secondary relative overflow-hidden">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2">SYSTEM READINESS</p>
+<div class="flex items-end justify-between">
+<span class="font-h1 text-h1 text-on-surface">14<span class="text-h3 opacity-50">/18</span></span>
+<span class="bg-status-warning/10 text-status-warning font-label-caps text-[10px] px-1 rounded">PENDING RE-INSPECT</span>
+</div>
+</div>
+<div class="bg-white p-lg rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border corner-flare-secondary relative overflow-hidden">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2">CRITICAL PATH ITEMS</p>
+<div class="flex items-end justify-between">
+<span class="font-h1 text-h1 text-primary">02</span>
+<div class="text-right">
+<p class="text-[10px] text-on-surface-variant font-label-caps">IMPACT DELAY</p>
+<span class="text-status-error font-data-mono text-data-mono">4.5 DAYS</span>
+</div>
+</div>
+</div>
+<div class="bg-white p-lg rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border corner-flare-primary relative overflow-hidden">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2">CERTIFICATION STATUS</p>
+<div class="flex items-end justify-between">
+<span class="font-h2 text-h2 text-on-surface uppercase tracking-tight">Pre-Check</span>
+<span class="material-symbols-outlined text-primary text-[32px]">verified</span>
+</div>
+</div>
+</div>
+<!-- Mission Control Matrix -->
+<div class="space-y-lg">
+<!-- Section 1: Regulatory Clearances -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border overflow-hidden">
+<div class="bg-surface-container/30 px-lg py-md border-b border-surface-border flex justify-between items-center">
+<div class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-primary">gavel</span>
+<h3 class="font-h3 text-h3 text-on-surface">Regulatory Clearances</h3>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">3 ITEMS REQUIRED</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-bright border-b border-surface-border">
+<tr>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">ITEM</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">TRACKING #</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">PATH LABEL</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">COORDINATOR</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant text-center">STATUS</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">COMPLETION DATE</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-border">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-primary font-bold">HD</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Health Department Review</p>
+<p class="text-[12px] text-on-surface-variant">Commercial Kitchen &amp; Plumbing</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#REQ-8821-HC</td>
+<td class="px-lg py-4">
+<span class="bg-secondary/10 text-secondary font-label-caps text-[10px] px-2 py-0.5 rounded">REGULATORY-G1</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">J. Wright</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="bg-status-success/10 text-status-success font-label-caps text-[10px] px-2 py-1 rounded">APPROVED</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono">Sep 12, 2024</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group border-l-4 border-l-primary bg-primary/5">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container font-bold">FM</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Fire Marshal Approval</p>
+<p class="text-[12px] text-primary font-semibold flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-1">priority_high</span>
+                                                Critical Path Constraint
+                                            </p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#FM-990-ALPHA</td>
+<td class="px-lg py-4">
+<span class="bg-primary/20 text-primary font-label-caps text-[10px] px-2 py-0.5 rounded border border-primary/30">CRITICAL PATH</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">A. Miller</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<div class="flex flex-col items-center">
+<span class="bg-status-warning/10 text-status-warning font-label-caps text-[10px] px-2 py-1 rounded">PENDING FIELD</span>
+<span class="text-[10px] text-on-surface-variant mt-1">Visit Sch. Oct 02</span>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant italic">EST: OCT 04</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-primary font-bold">ZN</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Zoning Clearance</p>
+<p class="text-[12px] text-on-surface-variant">Landscaping &amp; Egress Verification</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#ZN-3342-X</td>
+<td class="px-lg py-4">
+<span class="bg-secondary/10 text-secondary font-label-caps text-[10px] px-2 py-0.5 rounded">REGULATORY-G2</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">S. Lopez</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="bg-status-success/10 text-status-success font-label-caps text-[10px] px-2 py-1 rounded">APPROVED</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono">Sep 28, 2024</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Section 2: On-Site Readiness -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border overflow-hidden">
+<div class="bg-surface-container/30 px-lg py-md border-b border-surface-border flex justify-between items-center">
+<div class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-primary">construction</span>
+<h3 class="font-h3 text-h3 text-on-surface">On-Site Readiness</h3>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">VERIFYING LIFE SAFETY</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-bright border-b border-surface-border">
+<tr>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">ITEM</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">TRACKING #</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">PATH LABEL</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">COORDINATOR</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant text-center">STATUS</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">COMPLETION DATE</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-border">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-primary font-bold">AD</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">ADA Compliance Walkthrough</p>
+<p class="text-[12px] text-on-surface-variant">Ramps, Entryways &amp; Restrooms</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#ACC-771</td>
+<td class="px-lg py-4">
+<span class="bg-secondary/10 text-secondary font-label-caps text-[10px] px-2 py-0.5 rounded">SITE-READY</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">R. Khan</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="bg-status-success/10 text-status-success font-label-caps text-[10px] px-2 py-1 rounded">VERIFIED</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono">Sep 30, 2024</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-primary font-bold">LS</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Life Safety Systems</p>
+<p class="text-[12px] text-on-surface-variant">Sprinklers, Alarms, Egress Lighting</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#LS-202</td>
+<td class="px-lg py-4">
+<span class="bg-secondary/10 text-secondary font-label-caps text-[10px] px-2 py-0.5 rounded">SITE-READY</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">A. Miller</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="bg-status-warning/10 text-status-warning font-label-caps text-[10px] px-2 py-1 rounded">RE-INSPECT REQ</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">PENDING</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-primary font-bold">MR</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Meter Releases</p>
+<p class="text-[12px] text-on-surface-variant">Electric &amp; Gas Utility Auth</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#UTIL-949</td>
+<td class="px-lg py-4">
+<span class="bg-secondary/10 text-secondary font-label-caps text-[10px] px-2 py-0.5 rounded">SITE-READY</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">J. Wright</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="bg-status-success/10 text-status-success font-label-caps text-[10px] px-2 py-1 rounded">RELEASED</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono">Sep 25, 2024</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Section 3: Occupancy Certification -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border overflow-hidden">
+<div class="bg-surface-container/30 px-lg py-md border-b border-surface-border flex justify-between items-center">
+<div class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-primary">verified_user</span>
+<h3 class="font-h3 text-h3 text-on-surface">Occupancy Certification</h3>
+</div>
+<span class="font-label-caps text-label-caps text-status-warning flex items-center">
+<span class="material-symbols-outlined text-[16px] mr-1">history_edu</span>
+                        Awaiting Dossier Completion
+                    </span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-bright border-b border-surface-border">
+<tr>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">ITEM</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">TRACKING #</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">PATH LABEL</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">COORDINATOR</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant text-center">STATUS</th>
+<th class="px-lg py-3 font-label-caps text-label-caps text-on-surface-variant">COMPLETION DATE</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-border">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-primary font-bold">TC</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Temporary CO (TCO)</p>
+<p class="text-[12px] text-on-surface-variant">Valid for 90 days if issued</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#TCO-DOC-01</td>
+<td class="px-lg py-4">
+<span class="bg-secondary/10 text-secondary font-label-caps text-[10px] px-2 py-0.5 rounded">OPTIONAL</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">Lead Cord.</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="text-on-surface-variant/40 font-label-caps text-[10px] px-2 py-1 rounded border border-outline-variant/30">N/A</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">—</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group border-l-4 border-l-primary bg-primary/5">
+<td class="px-lg py-4"><div class="mb-2 bg-status-error/10 text-status-error text-[10px] font-bold px-2 py-1 rounded border border-status-error/20 flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">warning</span>Pre-requisite missing: PEPCO meter set must be verified before Final CO filing.</div>
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container font-bold"><span class="material-symbols-outlined text-[18px]">verified</span></div>
+<div><p class="font-body-md font-semibold text-on-surface">Final CO Issuance</p><p class="text-[12px] text-status-error font-semibold flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">lock</span><a class="underline hover:text-error transition-colors" href="#">Blocked by: Meter-Set Choreographer (UCI Module)</a></p><p class="text-[12px] text-primary font-semibold flex items-center mt-1"><span class="material-symbols-outlined text-[14px] mr-1">star</span>Final Project Milestone</p></div>
+</div>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant">#FINAL-CO-MT-2024</td>
+<td class="px-lg py-4">
+<span class="bg-primary/20 text-primary font-label-caps text-[10px] px-2 py-0.5 rounded border border-primary/30">CRITICAL PATH</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center space-x-2">
+<img alt="Coordinator" class="w-5 h-5 rounded-full" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+<span class="text-body-sm">Lead Cord.</span>
+</div>
+</td>
+<td class="px-lg py-4 text-center">
+<span class="bg-outline-variant/20 text-outline font-label-caps text-[10px] px-2 py-1 rounded">LOCKED</span>
+</td>
+<td class="px-lg py-4 font-data-mono text-data-mono text-on-surface-variant italic">EST: OCT 24</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+<!-- System Intelligence & Logs -->
+<div class="mt-xl grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<div class="lg:col-span-2 bg-white rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border p-lg">
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-h3 text-h3 text-on-surface">Intelligence Feed</h4>
+<span class="font-label-caps text-[10px] text-primary px-2 py-0.5 border border-primary/30 rounded">REASONING ENGINE V4</span>
+</div>
+<div class="space-y-4">
+<div class="flex space-x-4 p-md bg-surface-container-low/50 rounded-lg border border-primary/10">
+<span class="material-symbols-outlined text-primary">psychology</span>
+<div>
+<p class="text-body-sm font-semibold">Critical Path Optimization Suggestion</p>
+<p class="text-body-sm text-on-surface-variant mt-1 leading-relaxed">The Fire Marshal approval delay (4.5 days) is cascading into the final HVAC balance report. I recommend pulling the 'Life Safety Systems' re-inspection forward to Oct 01 to overlap field visits.</p>
+<button class="mt-2 text-primary font-bold text-[12px] hover:underline">Apply Schedule Shift</button>
+</div>
+</div>
+<div class="flex space-x-4 p-md bg-surface-container-low/50 rounded-lg border border-primary/10">
+<span class="material-symbols-outlined text-primary">rule_folder</span>
+<div>
+<p class="text-body-sm font-semibold">Prerequisite Tracking Active</p>
+<p class="text-body-sm text-on-surface-variant mt-1 leading-relaxed">Verifying that all 3rd Party releases are fully synced with the DOB portal prior to TCO filing initiation.</p>
+<button class="mt-2 text-primary font-bold text-[12px] hover:underline">View Sync Status</button>
+</div>
+</div>
+<div class="flex space-x-4 p-md border border-surface-border rounded-lg">
+<span class="material-symbols-outlined text-on-surface-variant">description</span>
+<div>
+<p class="text-body-sm font-semibold">Document Integrity Check</p>
+<p class="text-body-sm text-on-surface-variant mt-1 leading-relaxed">All 14 scanned affidavits for Zoning have been verified. Metadata matches high-fidelity requirements for Final CO filing.</p>
+</div>
+</div>
+<div class="flex space-x-4 p-md border border-surface-border rounded-lg bg-surface-container-low/30"><span class="material-symbols-outlined text-tertiary">sync_alt</span><div><p class="text-body-sm font-semibold">Cross-Track Logic</p><p class="text-body-sm text-on-surface-variant mt-1 leading-relaxed">Your Health Department Approval (Track 7) is synced with the Equipment Cut Sheets (Track 1) for automated validation.</p></div></div></div>
+</div>
+<!-- Project Details Summary Card -->
+<div class="bg-white rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] border border-surface-border p-lg relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-5">
+<span class="material-symbols-outlined text-[80px]">architecture</span>
+</div>
+<h4 class="font-h3 text-h3 text-on-surface mb-md">Asset Metadata</h4>
+<div class="space-y-4">
+<div>
+<p class="font-label-caps text-[10px] text-on-surface-variant mb-1">PROJECT NAME</p>
+<p class="font-body-md font-semibold">Metropolis Tower A-2</p>
+</div>
+<div>
+<p class="font-label-caps text-[10px] text-on-surface-variant mb-1">LOCATION</p>
+<p class="font-body-sm">4400 Constitution Ave, NW</p>
+</div>
+<div class="pt-4 border-t border-surface-border">
+<div class="flex justify-between items-center mb-2">
+<span class="font-body-sm text-on-surface-variant">Square Footage</span>
+<span class="font-data-mono text-data-mono">420,000 SF</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body-sm text-on-surface-variant">Asset Class</span>
+<span class="font-body-sm font-semibold">Class-A Commercial</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Only for Home/Dashboard intent screens) -->
+<button class="fixed bottom-8 right-8 bg-primary text-on-primary w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 group">
+<span class="material-symbols-outlined text-[28px]">add</span>
+<span class="absolute right-16 bg-on-surface text-white px-3 py-1 rounded text-body-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">Add Task</span>
+</button>
+<script>
+        // Simple micro-interaction for hover states on rows
+        document.querySelectorAll('tr').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.style.transform = 'translateX(4px)';
+                row.style.transition = 'transform 0.2s ease-out';
+            });
+            row.addEventListener('mouseleave', () => {
+                row.style.transform = 'translateX(0)';
+            });
+        });
+    </script>
+</body></html>

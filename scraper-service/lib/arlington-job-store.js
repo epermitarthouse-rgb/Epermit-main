@@ -38,7 +38,8 @@ const NO_PROGRESS_CLAIM_THRESHOLD = 3;
 
 function isArlingtonJobCancelled(job) {
   if (!job) return false;
-  if (`${job.status || ""}`.toLowerCase() === "cancelled") return true;
+  const status = `${job.status || ""}`.toLowerCase();
+  if (status === "cancelled" || status === "cancelling") return true;
   const arlington =
     job?.metadata?.arlington && typeof job.metadata.arlington === "object"
       ? job.metadata.arlington

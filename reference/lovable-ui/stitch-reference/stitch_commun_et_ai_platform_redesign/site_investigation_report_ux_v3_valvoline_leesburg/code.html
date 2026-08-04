@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Site Investigation Report - Valvoline Leesburg</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['"Cormorant Garamond"', 'serif'],
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              DEFAULT: '#e8882f', // custom_color from theme
+              surface: '#fff8f5',
+              surfaceDim: '#e8d7cc',
+              surfaceBright: '#fff8f5',
+              surfaceContainerLowest: '#ffffff',
+              surfaceContainerLow: '#fff1e9',
+              surfaceContainer: '#faebe2',
+              primary: '#6b3600',
+              onPrimary: '#ffffff',
+              primaryContainer: '#a25500',
+              onPrimaryContainer: '#ffffff',
+              secondary: '#735844',
+              onSecondary: '#ffffff',
+              secondaryContainer: '#ffdfc9',
+              onSecondaryContainer: '#5b412f',
+              outline: '#83746a',
+              outlineVariant: '#d5c3b6',
+            }
+          },
+          borderRadius: {
+            'xl': '1rem', // ROUND_FOUR
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-styles">
+    body {
+      background-color: theme('colors.brand.surfaceContainerLowest');
+      color: theme('colors.gray.900');
+    }
+    
+    h1, h2, h3, h4, h5, h6 {
+      font-family: theme('fontFamily.serif');
+      color: theme('colors.brand.primary');
+    }
+
+    .table-header {
+      background-color: theme('colors.brand.surfaceContainerLow');
+      color: theme('colors.brand.secondary');
+    }
+
+    .table-cell-highlight {
+      background-color: theme('colors.green.100');
+    }
+
+    .table-cell-alert {
+      background-color: theme('colors.red.100');
+    }
+    
+    .nav-link {
+      transition: all 0.2s ease-in-out;
+    }
+    .nav-link:hover {
+      color: theme('colors.brand.DEFAULT');
+      background-color: theme('colors.brand.surfaceContainerLow');
+    }
+  </style>
+</head>
+<body class="font-sans antialiased text-gray-800 flex flex-col min-h-screen">
+<!-- BEGIN: Global Header -->
+<header class="bg-brand-surfaceContainerLowest border-b border-brand-outlineVariant sticky top-0 z-50">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex justify-between items-center h-20">
+<div class="flex items-center gap-6">
+<!-- Logo -->
+<a class="flex-shrink-0 flex items-center" href="#">
+<img alt="Commun-ET Logo" class="h-10 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5sC7mCw4T-b419JskkH3b4jGzYaNLVP_lGgCpTQjQAURMxnUFDL0pyzVryMXzNwFcWJ5lD8yyNWbt76JWbZ3dw_0RDY2FvJUQ1Ln9D3xGfBc8difz6pH-hoo_7GtxITL0LvOszPGpmVG6Xm92UISVk9O8VILXwtcmdr2mONDaAtJqmbaQYBRCqeR6QhM-1ULMJF60MnhzrhOBG3ikFZSw5vdt2DDnNmYtvl_NVZpeEbKGqbnkAcWjC2wFy_mKevN3dMf_wMSkNY8"/>
+</a>
+<!-- Project Context -->
+<div class="hidden sm:flex flex-col border-l border-brand-outlineVariant pl-6">
+<span class="text-xs font-semibold tracking-wider text-brand-secondary uppercase">Project Alpha-09</span>
+<h1 class="text-xl font-bold font-serif leading-tight text-gray-900">Valvoline - Leesburg, VA</h1>
+<span class="text-xs text-gray-500">Interplan # 2022.0452</span>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-4">
+<button class="inline-flex items-center px-4 py-2 border border-brand-outlineVariant text-sm font-medium rounded-xl text-brand-secondary bg-white hover:bg-brand-surfaceContainer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-DEFAULT shadow-sm" type="button">
+<svg class="mr-2 -ml-1 h-5 w-5 text-brand-secondary" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+            Export PDF
+          </button>
+<button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-brand-primary hover:bg-brand-primaryContainer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-DEFAULT" type="button">
+            Finalize Report
+          </button>
+</div>
+</div>
+</div>
+</header>
+<!-- END: Global Header -->
+<!-- BEGIN: Main Content Layout -->
+<div class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex gap-8 relative">
+<!-- BEGIN: Sidebar Navigation -->
+<aside class="w-64 flex-shrink-0 hidden lg:block relative">
+<nav aria-label="Sidebar" class="sticky top-28 space-y-1">
+<h3 class="px-3 text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-2">Table of Contents</h3>
+<a class="nav-link text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md" href="#summary">
+<span class="truncate">SIS Phase 1 Summary</span>
+</a>
+<a class="nav-link text-gray-600 hover:text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md pl-6" href="#timing">
+<span class="truncate">Timing Overview</span>
+</a>
+<a class="nav-link text-gray-600 hover:text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md pl-6" href="#issues">
+<span class="truncate">Development / Design Issues</span>
+</a>
+<a class="nav-link text-gray-600 hover:text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md pl-6" href="#fees">
+<span class="truncate">Fee Schedule</span>
+</a>
+<div class="mt-4 pt-4 border-t border-gray-200">
+<a class="nav-link text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md" href="#zoning">
+<span class="truncate">Zoning Summary</span>
+</a>
+<a class="nav-link text-gray-600 hover:text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md pl-6" href="#zoning-planning">
+<span class="truncate">Zoning &amp; Planning</span>
+</a>
+</div>
+<div class="mt-4 pt-4 border-t border-gray-200">
+<a class="nav-link text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md" href="#civil">
+<span class="truncate">Civil / Site Review</span>
+</a>
+<a class="nav-link text-gray-900 group flex items-center px-3 py-2 text-sm font-medium rounded-md" href="#utilities">
+<span class="truncate">Utility Summary</span>
+</a>
+</div>
+</nav>
+</aside>
+<!-- END: Sidebar Navigation -->
+<!-- BEGIN: Report Content -->
+<main class="flex-1 min-w-0 bg-white rounded-xl shadow-sm border border-brand-outlineVariant p-8 lg:p-12">
+<!-- Report Header -->
+<div class="text-center mb-16 pb-8 border-b border-brand-outlineVariant">
+<h1 class="text-4xl font-serif font-bold text-gray-900 mb-2">2022 Site Investigation Report</h1>
+<h2 class="text-2xl font-serif text-brand-primary mb-6">Proposed Valvoline Instant Oil Change</h2>
+<div class="inline-block text-left bg-brand-surfaceContainerLow p-6 rounded-xl border border-brand-outlineVariant/50">
+<p class="text-lg font-medium text-gray-900">VIOC – 530 Compass Point Plaza, SE</p>
+<p class="text-gray-600 mb-4">Leesburg, VA 20175</p>
+<div class="text-sm text-gray-500 space-y-1">
+<p><span class="font-medium text-gray-700">Date:</span> May 31, 2022</p>
+<p><span class="font-medium text-gray-700">Prepared By:</span> INTERPLAN</p>
+</div>
+</div>
+</div>
+<!-- BEGIN: Phase 1 Summary -->
+<section class="mb-16 scroll-mt-28" id="summary">
+<h2 class="text-3xl font-serif font-bold text-brand-primary mb-6 pb-2 border-b-2 border-brand-surfaceDim">Basic Site Information - Phase 1</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-0 overflow-hidden border border-brand-outlineVariant rounded-xl">
+<div class="flex border-b border-brand-outlineVariant">
+<div class="w-1/3 bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">VIOC Project Name:</div>
+<div class="w-2/3 p-3 text-sm">Leesburg, VA</div>
+</div>
+<div class="flex border-b md:border-l border-brand-outlineVariant">
+<div class="w-1/3 bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">Proposed Prototype:</div>
+<div class="w-2/3 p-3 text-sm">67' x 31' = 2,077sf x 2 = 4,154sf</div>
+</div>
+<div class="flex border-b border-brand-outlineVariant">
+<div class="w-1/3 bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">Street Address:</div>
+<div class="w-2/3 p-3 text-sm">530 Compass Point Plaza SE</div>
+</div>
+<div class="flex border-b md:border-l border-brand-outlineVariant">
+<div class="w-1/3 bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">City / State / Date:</div>
+<div class="w-2/3 p-3 text-sm">Leesburg, VA  |  5.31.2022</div>
+</div>
+<div class="flex border-b border-brand-outlineVariant">
+<div class="w-1/3 bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">Jurisdiction:</div>
+<div class="w-2/3 p-3 text-sm">Town of Leesburg and Loudoun County, VA</div>
+</div>
+<div class="flex border-b md:border-l border-brand-outlineVariant">
+<div class="w-1/3 bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">Parcel Number:</div>
+<div class="w-2/3 p-3 text-sm">2344 8944 8000</div>
+</div>
+<div class="flex col-span-1 md:col-span-2 border-b border-brand-outlineVariant">
+<div class="w-[16.666%] bg-brand-surfaceContainer text-sm font-semibold p-3 border-r border-brand-outlineVariant text-gray-700">Site/Lot Size:</div>
+<div class="w-[83.333%] p-3 text-sm">±45,477sf/1.044 acre</div>
+</div>
+</div>
+</section>
+<!-- END: Phase 1 Summary -->
+<!-- BEGIN: Timing Overview -->
+<section class="mb-16 scroll-mt-28" id="timing">
+<h2 class="text-3xl font-serif font-bold text-brand-primary mb-6 pb-2 border-b-2 border-brand-surfaceDim">Timing Summary (calendar days)</h2>
+<p class="text-sm text-red-600 italic mb-4">Phase 1 (Review, Update and Confirm through Permit In Hand) – Highlight any changes and describe below in comment section.</p>
+<div class="overflow-x-auto border border-brand-outlineVariant rounded-xl">
+<table class="min-w-full divide-y divide-brand-outlineVariant text-sm">
+<tbody class="divide-y divide-brand-outlineVariant bg-white">
+<!-- Row 1 -->
+<tr>
+<td class="w-1/3 px-4 py-3 bg-brand-surfaceContainer font-medium">Due Diligence (SIR Time):</td>
+<td class="w-[15%] px-4 py-3 text-right bg-green-100 font-bold border-r border-brand-outlineVariant">28 Days</td>
+<td class="w-[35%] px-4 py-3 bg-brand-surfaceContainer font-medium border-l border-brand-outlineVariant">Master Building Permit Approval:</td>
+<td class="w-[15%] px-4 py-3 text-right">98 Days</td>
+</tr>
+<!-- Row 2 -->
+<tr>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium">Construction Documents: (A/E Timing)</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold border-r border-brand-outlineVariant">42 Days</td>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium border-l border-brand-outlineVariant">MEP Plan Review and Approval:</td>
+<td class="px-4 py-3 text-right bg-gray-50 text-gray-500">98 Days</td>
+</tr>
+<!-- Row 3 -->
+<tr>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium">Pre-Application Meeting</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold border-r border-brand-outlineVariant">21 Days</td>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium border-l border-brand-outlineVariant">Permit Ready: (GC, AHJ, &amp; Administrative Tasks)</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold">7 Days</td>
+</tr>
+<!-- Row 4 -->
+<tr>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium text-red-600 font-bold">CP Amendment</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold text-red-600 border-r border-brand-outlineVariant">270 Days</td>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium border-l border-brand-outlineVariant">Permit in Hand (Ready for GC to pick-up):</td>
+<td class="px-4 py-3 text-right bg-gray-50 text-gray-500">1 Days</td>
+</tr>
+<!-- Row 5 -->
+<tr>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium">Site Plan / Civil Engineering Review (includes water, sewer, storm)</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold border-r border-brand-outlineVariant">237 Days</td>
+<td class="px-4 py-3 bg-brand-surfaceContainer font-medium border-l border-brand-outlineVariant">Other: Grading Permit</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold">60 Days</td>
+</tr>
+<!-- Totals -->
+<tr class="bg-brand-surfaceContainerLowest border-t-2 border-brand-outline">
+<td class="px-4 py-3 font-medium">Zoning Permit</td>
+<td class="px-4 py-3 text-right bg-green-100 font-bold border-r border-brand-outlineVariant">14 Days</td>
+<td class="px-4 py-3 font-bold text-lg text-brand-primary border-l border-brand-outlineVariant text-right">Total Time:</td>
+<td class="px-4 py-3 text-right bg-green-500 text-white font-bold text-lg">679 Days</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- END: Timing Overview -->
+<!-- BEGIN: Fee Schedule -->
+<section class="mb-16 scroll-mt-28" id="fees">
+<h2 class="text-3xl font-serif font-bold text-brand-primary mb-6 pb-2 border-b-2 border-brand-surfaceDim">Insert Fee Schedule</h2>
+<div class="bg-gray-50 p-6 rounded-xl border border-gray-200">
+<div class="space-y-4">
+<div class="pb-2 border-b border-gray-300">
+<h4 class="font-bold text-gray-800 uppercase tracking-wide text-xs mb-2">Town of Leesburg Department of Planning &amp; Zoning</h4>
+<div class="flex justify-between text-sm py-1">
+<span>Concept Plan Amendment (flat fee)</span>
+<span>$ 10,000.00</span>
+</div>
+<div class="flex justify-between text-sm py-1">
+<span>Special Exception (flat fee for buildings &lt; 9,999sf)</span>
+<span>7,500.00</span>
+</div>
+<div class="flex justify-between text-sm py-1">
+<span>Site Plan / Engineering Review Submittal Fee</span>
+<span>10,400.00</span>
+</div>
+</div>
+<div class="pb-2 border-b border-gray-300">
+<h4 class="font-bold text-gray-800 uppercase tracking-wide text-xs mb-2 mt-4">Utilities</h4>
+<div class="flex justify-between text-sm py-1">
+<span>Sewer Connection Fee (flat fee)</span>
+<span>120.00</span>
+</div>
+<div class="flex justify-between text-sm py-1">
+<span>Water Connection Fee (flat fee)</span>
+<span>120.00</span>
+</div>
+<div class="flex justify-between text-sm py-1">
+<span>Sewer and Water Availability Fee</span>
+<span>11,975.00</span>
+</div>
+</div>
+<div class="pb-2 border-b border-gray-300">
+<h4 class="font-bold text-gray-800 uppercase tracking-wide text-xs mb-2 mt-4">Loudoun County Building &amp; Development</h4>
+<div class="flex justify-between text-sm py-1">
+<span>Building Permit Fee</span>
+<span>1,485.28</span>
+</div>
+<div class="flex justify-between text-sm py-1">
+<span>NPDES Permit Fee (flat fee)</span>
+<span>3,890.00</span>
+</div>
+</div>
+<div class="pt-4 flex justify-between items-center">
+<span class="text-xl font-bold font-serif text-brand-primary">Total Estimated Fees:</span>
+<span class="text-xl font-bold bg-brand-surfaceContainerLow px-4 py-2 rounded-lg border border-brand-outlineVariant">$ 63,390.28</span>
+</div>
+<p class="text-xs text-gray-500 italic mt-4">The illustrative costs are used for estimating permitting fees and are subject to adjustments according to the formulas shown when the actual costs are known.</p>
+</div>
+</div>
+</section>
+<!-- END: Fee Schedule -->
+<!-- BEGIN: Zoning Summary -->
+<section class="mb-16 scroll-mt-28" id="zoning">
+<h2 class="text-3xl font-serif font-bold text-brand-primary mb-6 pb-2 border-b-2 border-brand-surfaceDim">Zoning Summary</h2>
+<div class="bg-white border border-brand-outlineVariant rounded-xl overflow-hidden shadow-sm">
+<div class="grid grid-cols-1 divide-y divide-brand-outlineVariant text-sm">
+<div class="p-4 bg-brand-surfaceContainerLow font-semibold text-brand-primary text-lg border-b-2 border-brand-outlineVariant">
+              Zoning &amp; Planning – Phase 2
+            </div>
+<div class="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-brand-outlineVariant">
+<div class="p-4 bg-brand-surfaceContainer font-medium text-gray-700 md:col-span-1">Current Zoning Classification:</div>
+<div class="p-4 md:col-span-3">Community Retail / Commercial (B-3)</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-brand-outlineVariant">
+<div class="p-4 bg-brand-surfaceContainer font-medium text-gray-700 md:col-span-1">Overlay or AHJ Master Plan Area:</div>
+<div class="p-4 md:col-span-3 text-red-700 font-medium bg-red-50">Describe: approved CP and proffers supersedes zoning code requirements</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-brand-outlineVariant">
+<div class="p-4 bg-brand-surfaceContainer font-medium text-gray-700 md:col-span-1">Is Zoning Process Required?</div>
+<div class="p-4 md:col-span-3">
+<div class="flex items-center gap-4 mb-2">
+<span class="font-bold">Yes [X] No [ ]</span>
+</div>
+<div class="bg-gray-50 p-3 rounded text-sm border border-gray-200">
+<span class="font-semibold">Describe Process:</span> approval of a Special Exception to allow for the proposed use is required and can be submitted, reviewed and approved concurrently with the CP Amendment which will be handled by the property owner/landlord.
+                </div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-brand-outlineVariant">
+<div class="p-4 bg-brand-surfaceContainer font-medium text-gray-700 md:col-span-1">Zoning Process Fees:</div>
+<div class="p-4 md:col-span-3">
+                Concept Plan Amendment (flat fee) = $10,000.00<br/>
+                Special Exception (flat fee for buildings &lt; 9,999sf) = $7,500.00
+              </div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Zoning Summary -->
+</main>
+<!-- END: Report Content -->
+</div>
+<!-- END: Main Content Layout -->
+</body></html>

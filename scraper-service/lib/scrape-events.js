@@ -116,8 +116,9 @@ function applySessionStatusFromScrapeEvent(session, scrapeJobStatus) {
     session.status = "error";
     return;
   }
-  if (s === "cancelled") {
-    session.status = "cancelled";
+  if (s === "cancelled" || s === "cancelling") {
+    session.status = s === "cancelling" ? "cancelled" : "cancelled";
+    if (s === "cancelling") session._cancelRequested = true;
     return;
   }
   if (s === "waiting_user" || s === "mfa_required") {
@@ -314,17 +315,21 @@ async function createScrapeJob(supabase, fields) {
   }
 }
 
-async function updateScrapeJob(supabase, jobId, patch) {
+async function updateScrapeJob(supabase, jobId, patch, opts = {}) {
   if (!jobId) return false;
   try {
     const payload = { ...patch };
     if (payload.metadata) payload.metadata = sanitizeMetadata(payload.metadata);
-    const { error } = await supabase
-      .from("scrape_jobs")
-      .update(payload)
-      .eq("id", jobId)
-      .neq("status", "cancelled")
-      .is("completed_at", null);
+    let query = supabase.from("scrape_jobs").update(payload).eq("id", jobId);
+    if (opts.force) {
+      // Used by cancel finalize transitions (cancelling → cancelled).
+    } else {
+      query = query
+        .neq("status", "cancelled")
+        .neq("status", "cancelling")
+        .is("completed_at", null);
+    }
+    const { error } = await query;
     if (error) throw error;
     return true;
   } catch (err) {
@@ -340,6 +345,22 @@ async function emitScrapeEvent(supabase, jobId, projectId, event) {
     if (!eventType) return null;
     const isHeartbeat = eventType === "heartbeat";
     const skipJobPatch = Boolean(event.skip_job_patch);
+
+    // Suppress non-cancel events once the job is cancelling/cancelled.
+    if (
+      eventType !== "scrape_cancelled" &&
+      eventType !== "scrape_cancelling" &&
+      !isHeartbeat
+    ) {
+      try {
+        const {
+          isJobCancelled,
+        } = require("./scrape-job-cancellation.js");
+        if (await isJobCancelled(supabase, jobId)) {
+          return null;
+        }
+      } catch (_) {}
+    }
 
     const userMessage = safeStr(event.user_message, 500) || "Working…";
     const technicalMessage = sanitizeTechnicalMessage(event.technical_message);
@@ -488,21 +509,14 @@ async function markScrapeFailed(supabase, jobId, projectId, opts = {}) {
 
 async function markScrapeCancelled(supabase, jobId, projectId, opts = {}) {
   if (!jobId) return;
-  const now = new Date().toISOString();
-  await updateScrapeJob(supabase, jobId, {
-    status: "cancelled",
-    cancelled_at: now,
-    completed_at: now,
-    last_activity_at: now,
-    current_stage: "cancelled",
-    current_user_message: opts.user_message || "Scrape cancelled.",
-  });
-  await emitScrapeEvent(supabase, jobId, projectId, {
-    event_type: "scrape_cancelled",
-    stage: "cancelled",
-    status: "cancelled",
+  const {
+    finalizeCancelled,
+  } = require("./scrape-job-cancellation.js");
+  await finalizeCancelled(supabase, jobId, projectId, {
     user_message: opts.user_message || "Scrape cancelled.",
     technical_message: opts.technical_message,
+    cancellation_reason: opts.cancellation_reason || "user_cancelled",
+    emitEvent: opts.emitEvent !== false,
   });
 }
 

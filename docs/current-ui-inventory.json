@@ -1,0 +1,427 @@
+{
+  "meta": {
+    "project": "PermitPilot / Epermit",
+    "auditDate": "2026-07-21",
+    "repoRoot": "/Users/javerianaveed/epermit/Epermit-main",
+    "lovableDocsPresent": false,
+    "gapAnalysisGenerated": false,
+    "sources": [
+      "src/App.tsx",
+      "src/pages/**",
+      "src/components/**",
+      "src/hooks/**",
+      "src/lib/**",
+      "src/contexts/**",
+      "scraper-service/**",
+      "supabase/migrations/**",
+      "supabase/functions/**",
+      "document-ingestion-worker/**",
+      "uci/** (docs only)"
+    ]
+  },
+  "implementationStatusLegend": [
+    "implemented",
+    "partial",
+    "mocked",
+    "blocked",
+    "legacy",
+    "unrouted",
+    "dev"
+  ],
+  "routes": [
+    { "path": "/", "page": "LandingPage", "access": "public-only", "status": "implemented", "nav": ["sidebar-home", "marketing"] },
+    { "path": "/auth", "page": "Auth", "access": "public", "status": "implemented", "nav": ["marketing-cta"] },
+    { "path": "/demos", "page": "Demos", "access": "public", "status": "implemented", "nav": ["sidebar-resources", "marketing"] },
+    { "path": "/pricing", "page": "Pricing", "access": "public", "status": "implemented", "nav": ["sidebar-resources", "marketing"] },
+    { "path": "/contact", "page": "Contact", "access": "public", "status": "implemented", "nav": ["sidebar-help", "marketing"] },
+    { "path": "/faq", "page": "FAQ", "access": "public", "status": "implemented", "nav": ["sidebar-help", "marketing"] },
+    { "path": "/install", "page": "Install", "access": "public", "status": "implemented", "nav": ["unlinked"] },
+    { "path": "/portal/:token", "page": "ClientPortal", "access": "token-public", "status": "implemented", "nav": ["share-link"] },
+    { "path": "/embed/:token", "page": "EmbedWidget", "access": "token-public", "status": "implemented", "nav": ["embed"] },
+    { "path": "/invite/:token", "page": "InviteAcceptPage", "access": "token-public", "status": "implemented", "nav": ["email-invite"] },
+    { "path": "/dashboard", "page": "Dashboard", "access": "protected", "status": "implemented", "nav": ["sidebar-main"] },
+    { "path": "/projects", "page": "Projects", "access": "protected", "status": "implemented", "nav": ["sidebar", "mobile"] },
+    { "path": "/analytics", "page": "Analytics", "access": "protected", "status": "implemented", "nav": ["sidebar-resources"] },
+    { "path": "/jurisdictions/compare", "page": "JurisdictionComparison", "access": "protected", "status": "implemented", "nav": ["sidebar-resources"] },
+    { "path": "/jurisdiction-comparison", "page": "JurisdictionComparison", "access": "protected", "status": "legacy", "nav": ["unlinked-alias"] },
+    { "path": "/jurisdictions/map", "page": "JurisdictionMapPage", "access": "protected", "status": "implemented", "nav": ["sidebar-resources"] },
+    { "path": "/jurisdictions/:stateCode", "page": "StateLandingPage", "access": "protected", "status": "implemented", "nav": ["from-map"] },
+    { "path": "/permit-intelligence", "page": "PermitIntelligence", "access": "protected", "status": "implemented", "nav": ["sidebar-intelligence"] },
+    { "path": "/code-compliance", "page": "CodeCompliance", "access": "protected", "status": "implemented", "nav": ["sidebar-intake"] },
+    { "path": "/code-reference", "page": "CodeReferenceLibrary", "access": "protected", "status": "implemented", "nav": ["sidebar-intelligence"] },
+    { "path": "/roi-calculator", "page": "ROICalculator", "access": "protected", "status": "implemented", "nav": ["sidebar-resources"] },
+    { "path": "/consolidation-calculator", "page": "ConsolidationCalculator", "access": "protected", "status": "implemented", "nav": ["sidebar-resources"] },
+    { "path": "/admin", "page": "AdminPanel", "access": "admin", "status": "implemented", "nav": ["sidebar-admin"] },
+    { "path": "/admin/jurisdictions", "page": "JurisdictionAdmin", "access": "admin", "status": "implemented", "nav": ["sidebar-admin"] },
+    { "path": "/admin/feature-flags", "page": "FeatureFlagsAdmin", "access": "admin", "status": "partial", "nav": ["sidebar-admin"], "notes": "localStorage flags only" },
+    { "path": "/admin/shadow-mode", "page": "ShadowModeDashboard", "access": "admin", "status": "implemented", "nav": ["sidebar-admin"] },
+    { "path": "/mvp-documentation", "page": "MVPDocumentation", "access": "protected", "status": "implemented", "nav": ["unlinked"] },
+    { "path": "/api-docs", "page": "APIDocumentation", "access": "protected", "status": "implemented", "nav": ["sidebar-help"] },
+    { "path": "/checklist-history", "page": "ChecklistHistory", "access": "protected", "status": "implemented", "nav": ["sidebar-resources"] },
+    { "path": "/settings", "page": "Settings", "access": "protected", "status": "implemented", "nav": ["header-settings"] },
+    { "path": "/uci", "page": "UciDashboard", "access": "protected", "status": "partial", "nav": ["sidebar-intake"] },
+    { "path": "/design-system-preview", "page": "EpermitDesignSystemPreview", "access": "protected", "status": "dev", "nav": ["sidebar-help"] },
+    { "path": "/comment-review", "page": "CommentReview", "access": "protected", "status": "implemented", "nav": ["sidebar-intake"] },
+    { "path": "/response-matrix", "page": "ResponseMatrix", "access": "protected", "status": "implemented", "nav": ["sidebar-response"] },
+    { "path": "/classified-comments", "page": "ClassifiedComments", "access": "protected", "status": "implemented", "nav": ["sidebar-intake"] },
+    { "path": "/portal-data", "page": "PortalDataViewer", "access": "protected", "status": "implemented", "nav": ["sidebar-intake", "mobile"] },
+    { "path": "/permit-wizard-filing", "page": "PermitWizardFiling", "access": "protected", "status": "implemented", "nav": ["sidebar-intake", "mobile"] },
+    { "path": "/baltimore", "page": "BaltimorePortalHome", "access": "protected", "status": "mocked", "nav": ["sidebar-intake"] },
+    { "path": "/baltimore/permits", "page": "BaltimorePermitsPage", "access": "protected", "status": "mocked", "nav": ["baltimore-sub"] },
+    { "path": "/baltimore/records", "page": "BaltimoreRecordsListPage", "access": "protected", "status": "mocked", "nav": ["baltimore-sub"] },
+    { "path": "/baltimore/records/:recordId", "page": "BaltimoreRecordDetailPage", "access": "protected", "status": "mocked", "nav": ["baltimore-sub"] },
+    { "path": "*", "page": "NotFound", "access": "public", "status": "implemented", "nav": [] }
+  ],
+  "pages": [
+    { "file": "src/pages/LandingPage.tsx", "export": "LandingPage", "routes": ["/"] },
+    { "file": "src/pages/CommunETLanding.tsx", "export": "CommunETLanding", "routes": ["via LandingPage"] },
+    { "file": "src/pages/Auth.tsx", "export": "Auth", "routes": ["/auth"] },
+    { "file": "src/pages/Demos.tsx", "export": "Demos", "routes": ["/demos"] },
+    { "file": "src/pages/Pricing.tsx", "export": "Pricing", "routes": ["/pricing"] },
+    { "file": "src/pages/Contact.tsx", "export": "Contact", "routes": ["/contact"] },
+    { "file": "src/pages/FAQ.tsx", "export": "FAQ", "routes": ["/faq"] },
+    { "file": "src/pages/Install.tsx", "export": "Install", "routes": ["/install"] },
+    { "file": "src/pages/ClientPortal.tsx", "export": "ClientPortal", "routes": ["/portal/:token"] },
+    { "file": "src/pages/EmbedWidget.tsx", "export": "EmbedWidget", "routes": ["/embed/:token"] },
+    { "file": "src/pages/InviteAccept.tsx", "export": "InviteAcceptPage", "routes": ["/invite/:token"] },
+    { "file": "src/pages/NotFound.tsx", "export": "NotFound", "routes": ["*"] },
+    { "file": "src/pages/Dashboard.tsx", "export": "Dashboard", "routes": ["/dashboard"] },
+    { "file": "src/pages/Projects.tsx", "export": "Projects", "routes": ["/projects"] },
+    { "file": "src/pages/Analytics.tsx", "export": "Analytics", "routes": ["/analytics"] },
+    { "file": "src/pages/JurisdictionComparison.tsx", "export": "JurisdictionComparison", "routes": ["/jurisdictions/compare", "/jurisdiction-comparison"] },
+    { "file": "src/pages/JurisdictionMapPage.tsx", "export": "JurisdictionMapPage", "routes": ["/jurisdictions/map"] },
+    { "file": "src/pages/StateLandingPage.tsx", "export": "StateLandingPage", "routes": ["/jurisdictions/:stateCode"] },
+    { "file": "src/pages/PermitIntelligence.tsx", "export": "PermitIntelligence", "routes": ["/permit-intelligence"] },
+    { "file": "src/pages/CodeCompliance.tsx", "export": "CodeCompliance", "routes": ["/code-compliance"] },
+    { "file": "src/pages/CodeReferenceLibrary.tsx", "export": "CodeReferenceLibrary", "routes": ["/code-reference"] },
+    { "file": "src/pages/ROICalculator.tsx", "export": "ROICalculator", "routes": ["/roi-calculator"] },
+    { "file": "src/pages/ConsolidationCalculator.tsx", "export": "ConsolidationCalculator", "routes": ["/consolidation-calculator"] },
+    { "file": "src/pages/AdminPanel.tsx", "export": "AdminPanel", "routes": ["/admin"] },
+    { "file": "src/pages/JurisdictionAdmin.tsx", "export": "JurisdictionAdmin", "routes": ["/admin/jurisdictions"] },
+    { "file": "src/pages/FeatureFlagsAdmin.tsx", "export": "FeatureFlagsAdmin", "routes": ["/admin/feature-flags"] },
+    { "file": "src/pages/ShadowModeDashboard.tsx", "export": "ShadowModeDashboard", "routes": ["/admin/shadow-mode"] },
+    { "file": "src/pages/MVPDocumentation.tsx", "export": "MVPDocumentation", "routes": ["/mvp-documentation"] },
+    { "file": "src/pages/APIDocumentation.tsx", "export": "APIDocumentation", "routes": ["/api-docs"] },
+    { "file": "src/pages/ChecklistHistory.tsx", "export": "ChecklistHistory", "routes": ["/checklist-history"] },
+    { "file": "src/pages/Settings.tsx", "export": "Settings", "routes": ["/settings"] },
+    { "file": "src/pages/UciDashboard.tsx", "export": "UciDashboard", "routes": ["/uci"] },
+    { "file": "src/pages/EpermitDesignSystemPreview.tsx", "export": "EpermitDesignSystemPreview", "routes": ["/design-system-preview"] },
+    { "file": "src/pages/CommentReview.tsx", "export": "CommentReview", "routes": ["/comment-review"] },
+    { "file": "src/pages/ResponseMatrix.tsx", "export": "ResponseMatrix", "routes": ["/response-matrix"] },
+    { "file": "src/pages/ClassifiedComments.tsx", "export": "ClassifiedComments", "routes": ["/classified-comments"] },
+    { "file": "src/pages/PortalDataViewer.tsx", "export": "PortalDataViewer", "routes": ["/portal-data"] },
+    { "file": "src/pages/PermitWizardFiling.tsx", "export": "PermitWizardFiling", "routes": ["/permit-wizard-filing"] },
+    { "file": "src/pages/baltimore/BaltimorePortalHome.tsx", "export": "BaltimorePortalHome", "routes": ["/baltimore"] },
+    { "file": "src/pages/baltimore/BaltimorePermitsPage.tsx", "export": "BaltimorePermitsPage", "routes": ["/baltimore/permits"] },
+    { "file": "src/pages/baltimore/BaltimoreRecordsListPage.tsx", "export": "BaltimoreRecordsListPage", "routes": ["/baltimore/records"] },
+    { "file": "src/pages/baltimore/BaltimoreRecordDetailPage.tsx", "export": "BaltimoreRecordDetailPage", "routes": ["/baltimore/records/:recordId"] },
+    { "file": "src/pages/Index.tsx", "export": "Index", "routes": [], "status": "unrouted" }
+  ],
+  "layouts": [
+    { "name": "DashboardLayout", "file": "src/components/layout/DashboardLayout.tsx", "providers": ["SelectedProjectProvider", "ScrapeProvider", "SidebarProvider"] },
+    { "name": "AppSidebar", "file": "src/components/layout/AppSidebar.tsx" },
+    { "name": "MarketingLayout", "file": "src/components/layout/MarketingLayout.tsx" },
+    { "name": "Layout", "file": "src/components/layout/Layout.tsx", "notes": "legacy public; often double-wrapped" },
+    { "name": "AdminLayout", "file": "src/components/admin/AdminLayout.tsx", "guard": "useRequireAdmin" },
+    { "name": "BaltimoreLayout", "file": "src/components/baltimore/BaltimoreLayout.tsx" },
+    { "name": "MobileBottomNav", "file": "src/components/layout/MobileBottomNav.tsx" }
+  ],
+  "navigationItems": [
+    { "group": "main", "title": "Home", "href": "/" },
+    { "group": "main", "title": "Dashboard", "href": "/dashboard" },
+    { "group": "intake", "title": "Permit Filing", "href": "/permit-wizard-filing", "requiresAuth": true },
+    { "group": "intake", "title": "Utility Coordination", "href": "/uci", "requiresAuth": true },
+    { "group": "intake", "title": "Portal Harvest", "href": "/portal-data", "requiresAuth": true },
+    { "group": "intake", "title": "Baltimore Portal", "href": "/baltimore", "requiresAuth": true },
+    { "group": "intake", "title": "Comment Review", "href": "/comment-review", "requiresAuth": true },
+    { "group": "intake", "title": "Classified Comments", "href": "/classified-comments", "requiresAuth": true },
+    { "group": "intake", "title": "AI Compliance", "href": "/code-compliance", "requiresAuth": true },
+    { "group": "response", "title": "Response Matrix", "href": "/response-matrix", "requiresAuth": true },
+    { "group": "projects", "title": "Projects", "href": "/projects", "requiresAuth": true },
+    { "group": "intelligence", "title": "Permit Intelligence", "href": "/permit-intelligence" },
+    { "group": "intelligence", "title": "Code Library", "href": "/code-reference" },
+    { "group": "resources", "title": "ROI Calculator", "href": "/roi-calculator" },
+    { "group": "resources", "title": "Tool Consolidation", "href": "/consolidation-calculator" },
+    { "group": "resources", "title": "Analytics", "href": "/analytics" },
+    { "group": "resources", "title": "Jurisdiction Map", "href": "/jurisdictions/map" },
+    { "group": "resources", "title": "Compare Jurisdictions", "href": "/jurisdictions/compare" },
+    { "group": "resources", "title": "Checklists", "href": "/checklist-history" },
+    { "group": "resources", "title": "Demos", "href": "/demos" },
+    { "group": "resources", "title": "Pricing", "href": "/pricing" },
+    { "group": "admin", "title": "Overview", "href": "/admin", "requiresAdmin": true },
+    { "group": "admin", "title": "Jurisdictions", "href": "/admin/jurisdictions", "requiresAdmin": true },
+    { "group": "admin", "title": "Feature Flags", "href": "/admin/feature-flags", "requiresAdmin": true },
+    { "group": "admin", "title": "Shadow Mode", "href": "/admin/shadow-mode", "requiresAdmin": true },
+    { "group": "help", "title": "Design preview", "href": "/design-system-preview" },
+    { "group": "help", "title": "Documentation", "href": "/api-docs" },
+    { "group": "help", "title": "FAQ", "href": "/faq" },
+    { "group": "help", "title": "Contact", "href": "/contact" }
+  ],
+  "componentFolders": [
+    "admin", "analytics", "animations", "auth", "baltimore", "checklists", "code-reference",
+    "collaboration", "comment-review", "compliance", "dashboard", "demos", "documents", "epermit",
+    "fairfax", "help", "home", "inspections", "jurisdictions", "layout", "lead-capture", "marketing",
+    "navigation", "notifications", "onboarding", "permit-wizard", "plans", "portal", "projects",
+    "pwa", "response-matrix", "scrape", "settings", "shadow", "shovels", "team", "uci", "ui", "widgets"
+  ],
+  "frontendActions": [
+    { "action": "signIn", "page": "/auth", "via": "useAuth.signIn" },
+    { "action": "signUp", "page": "/auth", "via": "useAuth.signUp" },
+    { "action": "signOut", "page": "DashboardLayout", "via": "useAuth.signOut + ScrapeContext clear" },
+    { "action": "selectProject", "via": "SelectedProjectContext" },
+    { "action": "createProject", "page": "/projects", "via": "useProjects" },
+    { "action": "startPortalLogin", "via": "POST /api/login" },
+    { "action": "startScrape", "via": "POST /api/scrape" },
+    { "action": "cancelScrape", "via": "POST /api/scrape/cancel/:sessionId or scrape-jobs cancel" },
+    { "action": "managePortalCredentials", "page": "/settings", "via": "/api/portal-credentials" },
+    { "action": "uciInitCoordination", "page": "/uci", "via": "initProjectCoordination" },
+    { "action": "uciTransition", "page": "/uci", "via": "transitionCoordination" },
+    { "action": "uciSubmitApplication", "page": "/uci", "via": "submitCoordinationApplication", "status": "partial" },
+    { "action": "uciPortalSync", "page": "/uci", "via": "POST /api/uci/coordination/:id/sync" },
+    { "action": "runCommentAgents", "pages": ["/comment-review", "/response-matrix", "/classified-comments"], "via": "Edge Functions" },
+    { "action": "permitWizardExecute", "page": "/permit-wizard-filing", "via": "permitwizard-preflight/execute" },
+    { "action": "stripeCheckout", "page": "/pricing", "via": "create-checkout" },
+    { "action": "acceptInvite", "page": "/invite/:token", "via": "accept_project_team_invitation RPC" },
+    { "action": "ingestDocument", "via": "ingest-project-document Edge + worker" }
+  ],
+  "apis": {
+    "scraperBaseUrlResolver": "src/lib/scraperBaseUrl.ts#getScraperBaseUrl",
+    "defaultProductionScraperUrl": "https://epermit-production.up.railway.app",
+    "frontendClients": [
+      "src/lib/supabase.ts",
+      "src/lib/uciApi.ts",
+      "src/lib/portalCredentialsApi.ts",
+      "src/lib/microsoftMailboxApi.ts"
+    ]
+  },
+  "backendRoutes": {
+    "groups": [
+      {
+        "name": "health-static",
+        "routes": ["GET /", "GET /api/health/playwright", "GET /view-file/*", "GET /__future/health"]
+      },
+      {
+        "name": "scrape-session",
+        "routes": [
+          "POST /api/login",
+          "POST /api/scrape",
+          "GET /api/progress/:sessionId",
+          "GET /api/data/:sessionId",
+          "POST /api/scrape/cancel/:sessionId",
+          "POST /api/scrape-jobs/:jobId/cancel",
+          "POST /api/logout/:sessionId",
+          "GET /api/export/:sessionId",
+          "POST /api/accela/plan-review/continue-downloads",
+          "POST /api/accela/plan-review/resume-downloads"
+        ]
+      },
+      {
+        "name": "credentials",
+        "routes": [
+          "GET /api/portal-credentials",
+          "POST /api/portal-credentials",
+          "PATCH /api/portal-credentials/:id",
+          "DELETE /api/portal-credentials/:id"
+        ]
+      },
+      {
+        "name": "filing-permitwizard",
+        "routes": [
+          "POST /api/filing/login",
+          "GET /api/filing/session/:token",
+          "POST /api/filing/file",
+          "POST /api/filing/submit",
+          "POST /api/filing/logout",
+          "POST /api/filing/reauth",
+          "POST /api/permitwizard/login",
+          "GET /api/permitwizard/session/:sessionToken",
+          "POST /api/permitwizard/reauth",
+          "POST /api/permitwizard/logout",
+          "GET /api/permitwizard/sessions/count",
+          "GET /api/permitwizard/wizard-steps",
+          "POST /api/permitwizard/file",
+          "POST /api/permitwizard/submit"
+        ]
+      },
+      {
+        "name": "documents-ai",
+        "routes": [
+          "POST /api/documents/convert-legacy-word",
+          "POST /api/analyze-drawing"
+        ]
+      },
+      {
+        "name": "integrations",
+        "routes": [
+          "GET /api/quickbooks/oauth/start",
+          "GET /api/quickbooks/oauth/callback",
+          "POST /api/quickbooks/invoice/trigger",
+          "GET /api/quickbooks/status",
+          "GET /api/microsoft/oauth/start",
+          "GET /api/microsoft/oauth/callback",
+          "GET /api/microsoft/mailbox/status",
+          "POST /api/microsoft/mailbox/test-read"
+        ]
+      },
+      {
+        "name": "uci",
+        "mount": "/api/uci",
+        "router": "scraper-service/app/routes/uci.routes.js",
+        "approximateEndpointCount": 45,
+        "highlights": [
+          "GET /providers",
+          "GET|POST projects/:projectId/provider-resolution/*",
+          "POST projects/:projectId/coordination/init",
+          "GET|POST coordination/:id/*",
+          "load-profile/*",
+          "document-processing/*",
+          "applications/*",
+          "discovery/pepco/*",
+          "sync + sync-runs",
+          "communications",
+          "costs",
+          "equipment",
+          "meter-set/prepare",
+          "closeout/prepare",
+          "portfolio_view",
+          "events/recent"
+        ]
+      }
+    ],
+    "edgeFunctions": [
+      "admin-drip-campaigns", "analyze-drawing", "auto-router-agent", "check-portal-status",
+      "check-subscription", "circuit-breaker-check", "comment-parser-agent", "context-reference-engine",
+      "create-checkout", "customer-portal", "discipline-classifier-agent", "document-preparation-agent",
+      "elevenlabs-tts", "epermit-submit", "export-response-package", "export-weekly-report",
+      "fetch-permit-data", "generate-grounded-response", "generate-response", "get-mapbox-token",
+      "guardian-quality-agent", "ingest-project-document", "intake-pipeline-agent", "license-validation-agent",
+      "parse-manual-comment-letter", "parse-permit-comments", "permit-classifier-agent", "permit-status-monitor",
+      "permitwizard-execute", "permitwizard-preflight", "process-drip-emails", "process-scheduled-checklist-reports",
+      "process-scheduled-notifications", "property-intelligence-agent", "retry-failed-report-emails",
+      "send-checklist-report", "send-checklist-signed-notification", "send-contact-email", "send-deadline-reminders",
+      "send-epermit-status-email", "send-inspection-reminders", "send-jurisdiction-notification",
+      "send-project-team-invitation", "send-test-scheduled-report", "send-welcome-email", "shadow-evaluator",
+      "shadow-metrics", "shovels-api", "stripe-webhook", "validate-completeness-agent", "validate-url"
+    ],
+    "edgeFunctionCount": 51
+  },
+  "services": [
+    { "name": "scraper-service", "entry": "scraper-service/server.js", "host": "Railway" },
+    { "name": "document-ingestion-worker", "entry": "document-ingestion-worker/worker.js", "host": "optional/local" },
+    { "name": "uci-access", "file": "scraper-service/app/services/uci/uci-access.service.js" },
+    { "name": "uci-transitions", "file": "scraper-service/app/services/uci/uci-transitions.service.js" },
+    { "name": "uci-load-profile", "file": "scraper-service/app/services/uci/uci-load-profile.service.js" },
+    { "name": "uci-application-submit", "file": "scraper-service/app/services/uci/uci-application-submit.service.js" },
+    { "name": "arlington-durable-worker", "file": "scraper-service/lib/arlington-durable-worker-loop.js" },
+    { "name": "uci-durable-worker", "file": "scraper-service/app/services/uci/uci-durable-worker-loop.js" }
+  ],
+  "databaseTables": [
+    "profiles", "user_roles", "tenants", "tenant_memberships", "projects", "project_team_members",
+    "project_invitations", "project_share_links", "project_activity", "staff_assignments",
+    "portal_credentials", "quickbooks_connections", "microsoft_mailbox_connections",
+    "project_documents", "project_document_chunks", "document_ingestion_jobs", "parsed_comments",
+    "document_comments", "document_annotations", "plan_markups", "response_package_drafts",
+    "comment_quality_checks", "company_branding", "architect_profiles",
+    "scrape_jobs", "scrape_events", "scrape_file_results", "project_pipeline_runs",
+    "utility_providers", "utility_provider_aliases", "coordination_records",
+    "coordination_stage_transitions", "coordination_applications", "coordination_communications",
+    "coordination_costs", "coordination_equipment", "coordination_milestones",
+    "permit_filings", "agent_runs", "property_intelligence", "license_validations",
+    "filing_documents", "filing_screenshots", "filing_professionals", "municipality_configs",
+    "epermit_submissions", "inspections", "punch_list_items", "inspection_photos",
+    "inspection_checklist_templates", "saved_inspection_checklists", "scheduled_checklist_reports",
+    "scheduled_report_delivery_logs", "jurisdictions", "jurisdiction_subscriptions",
+    "jurisdiction_notifications", "coverage_requests", "saved_calculations",
+    "shadow_predictions", "baseline_actions", "audit_trail", "admin_activity_log",
+    "scheduled_notifications", "user_drip_campaigns", "email_branding_settings"
+  ],
+  "views": ["project_analytics"],
+  "statusValues": {
+    "projects.status": ["draft", "submitted", "in_review", "corrections", "approved"],
+    "scrape_jobs.status": [
+      "queued", "running", "resuming", "rate_limited", "partial", "waiting_user",
+      "completed", "completed_with_warnings", "failed", "failed_unrecoverable", "cancelled"
+    ],
+    "scrape_file_results.status": ["discovered", "downloading", "uploaded", "retrying", "failed", "skipped"],
+    "project_pipeline_runs.status": ["pending", "running", "completed", "completed_with_warnings", "failed", "cancelled"],
+    "coordination_records.current_stage_state": [
+      "NOT_STARTED", "IN_PROGRESS", "AWAITING_UTILITY", "BLOCKED", "ESCALATED", "COMPLETED"
+    ],
+    "coordination_applications.draft_status": ["draft", "reviewed", "needs_changes", "submitted", "failed"],
+    "parsed_comments.status": ["Pending Review", "Pending", "Approved", "Rejected"],
+    "parsed_comments.response_status": [
+      "AI Generated", "Draft", "Awaiting Approval", "Approved", "Changes Requested"
+    ],
+    "permit_filings.filing_status": [
+      "preflight", "awaiting_approval", "approved", "filing", "submitted", "failed", "cancelled"
+    ],
+    "agent_runs.status": ["pending", "running", "completed", "failed", "escalated", "waiting_human"],
+    "document_ingestion_jobs.status": ["pending", "processing", "completed", "failed", "partial", "cancelled"],
+    "project_documents.ai_ingestion_status": [
+      "not_started", "queued", "processing", "completed", "failed", "low_text", "unsupported", "partial"
+    ],
+    "epermit_submissions.status": [
+      "pending", "submitted", "under_review", "additional_info_required", "approved", "denied", "cancelled", "expired"
+    ],
+    "user_roles.role": ["admin", "moderator", "user"],
+    "project_team_members.role": ["owner", "admin", "editor", "viewer"],
+    "tenant_memberships.role": ["owner", "admin", "member", "viewer"]
+  },
+  "roles": {
+    "platform": ["admin", "moderator", "user"],
+    "project": ["owner", "admin", "editor", "viewer"],
+    "tenant": ["owner", "admin", "member", "viewer"]
+  },
+  "permissions": [
+    { "name": "has_project_access", "scope": "project read/team" },
+    { "name": "has_project_editor_access", "scope": "project mutate" },
+    { "name": "has_project_admin_access", "scope": "team mgmt + response approval" },
+    { "name": "has_role(admin)", "scope": "platform admin UI/Edge" },
+    { "name": "can_access_tenant", "scope": "tenant + demo isolation" },
+    { "name": "has_uci_row_access", "scope": "UCI row read" },
+    { "name": "portal_credentials.user_id", "scope": "credential ownership" },
+    { "name": "scrape sessionId", "scope": "ephemeral scrape data (no JWT)", "risk": true }
+  ],
+  "workflowStages": {
+    "uci": [
+      { "stage": 1, "name": "Provider mapping", "status": "partial" },
+      { "stage": 2, "name": "Load profile", "status": "partial" },
+      { "stage": 3, "name": "Application prep", "status": "partial" },
+      { "stage": 4, "name": "Submission", "status": "partial", "blocked": "PEPCO live portal unless UCI_PEPCO_LIVE_SUBMISSION_ENABLED" },
+      { "stage": 5, "name": "Acknowledgment", "status": "partial" },
+      { "stage": 6, "name": "COS / design review", "status": "partial" },
+      { "stage": 7, "name": "Costs / CIAC", "status": "partial" },
+      { "stage": 8, "name": "Equipment", "status": "partial" },
+      { "stage": 9, "name": "Meter set", "status": "partial" },
+      { "stage": 10, "name": "Closeout", "status": "partial" }
+    ],
+    "scrape": ["login", "scrape", "progress", "files", "terminal"],
+    "commentResponse": ["parse", "classify", "generate", "approve", "export"],
+    "permitWizard": ["preflight", "awaiting_approval", "filing", "submitted"],
+    "documentIngestion": ["pending", "processing", "completed|partial|failed"]
+  },
+  "dataDependencies": {
+    "SelectedProjectContext": ["most authenticated feature pages"],
+    "ScrapeContext": ["portal harvest", "header scrape indicator", "logout cleanup"],
+    "AuthProvider": ["all protected routes", "subscription fields"],
+    "uciApi": ["/uci", "uci components"],
+    "projects.portal_data": ["/portal-data"],
+    "parsed_comments": ["/comment-review", "/response-matrix", "/classified-comments"],
+    "coordination_*": ["/uci"],
+    "scrape_jobs": ["AgentWorkflowStatus", "UCI sync", "Arlington"]
+  },
+  "hosting": {
+    "frontend": { "platform": "Vercel", "config": "vercel.json" },
+    "scraper": { "platform": "Railway", "config": "scraper-service/railway.toml", "dockerfile": "scraper-service/Dockerfile" },
+    "database": "Supabase"
+  },
+  "counts": {
+    "routedPaths": 41,
+    "pageTsxFilesApprox": 43,
+    "componentFolders": 40,
+    "hooks": 39,
+    "edgeFunctions": 51,
+    "migrations": 94,
+    "databaseTablesListed": 66
+  }
+}

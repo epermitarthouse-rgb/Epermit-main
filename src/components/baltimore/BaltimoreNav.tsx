@@ -24,7 +24,7 @@ export function BaltimoreNav({
   const isPermits = activeModule === "permits";
 
   return (
-    <div className="flex flex-col gap-2 text-ink-secondary-light">
+    <div className="flex flex-col gap-2 text-muted-foreground">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -45,12 +45,12 @@ export function BaltimoreNav({
         </BreadcrumbList>
       </Breadcrumb>
 
-      <nav className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-cream-sunken bg-cream-raised/90 px-2 py-2.5 text-sm rounded-t-xl shadow-inner">
+      <nav className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b bg-card/90 px-2 py-2.5 text-sm rounded-t-xl shadow-inner">
         <Link
           to="/baltimore"
           className={cn(
-            "font-medium transition-colors hover:text-gold-deep",
-            activeModule === "home" ? "text-gold-deep" : "text-ink-secondary-light",
+            "font-medium transition-colors hover:text-primary",
+            activeModule === "home" ? "text-primary" : "text-muted-foreground",
           )}
         >
           Home
@@ -58,20 +58,20 @@ export function BaltimoreNav({
         <Link
           to="/baltimore/permits"
           className={cn(
-            "font-medium transition-colors hover:text-gold-deep",
-            activeModule === "permits" ? "text-gold-deep" : "text-ink-secondary-light",
+            "font-medium transition-colors hover:text-primary",
+            activeModule === "permits" ? "text-primary" : "text-muted-foreground",
           )}
         >
           Permits and Inspections
         </Link>
         {isPermits && showSearchApplicationsLink && (
           <>
-            <span className="text-ink-tertiary-light">·</span>
+            <span className="text-muted-foreground/70">·</span>
             <Link
               to="/baltimore/records"
               className={cn(
-                "font-medium transition-colors hover:text-gold-deep",
-                permitsSubActive === "search" ? "text-gold-deep" : "text-ink-secondary-light",
+                "font-medium transition-colors hover:text-primary",
+                permitsSubActive === "search" ? "text-primary" : "text-muted-foreground",
               )}
             >
               Search Applications

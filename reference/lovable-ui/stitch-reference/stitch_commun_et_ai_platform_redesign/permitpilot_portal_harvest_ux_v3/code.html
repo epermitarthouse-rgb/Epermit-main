@@ -1,0 +1,363 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>PermitPilot - Portal Harvest UX v3</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Inter+Tight:wght@600;700&amp;family=Cormorant+Garamond:wght@600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "status-warning": "#B06000",
+                    "surface-tint": "#914c00",
+                    "surface-container-highest": "#f1dfd5",
+                    "on-tertiary-container": "#003a59",
+                    "error": "#ba1a1a",
+                    "secondary-fixed": "#d6e3fb",
+                    "secondary-container": "#d6e3fb",
+                    "tertiary-container": "#74a5cd",
+                    "on-primary-fixed-variant": "#6e3900",
+                    "on-secondary-fixed": "#0f1c2d",
+                    "on-primary-container": "#572b00",
+                    "on-secondary": "#ffffff",
+                    "primary-container": "#e8882f",
+                    "on-tertiary-fixed-variant": "#0e4b6e",
+                    "on-surface-variant": "#554337",
+                    "on-error-container": "#93000a",
+                    "surface-container-low": "#fff1e9",
+                    "surface": "#fff8f5",
+                    "inverse-surface": "#382e27",
+                    "surface-border": "#E2E8F0",
+                    "on-error": "#ffffff",
+                    "primary": "#914c00",
+                    "surface-dim": "#e8d7cc",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed": "#cbe6ff",
+                    "status-error": "#C5221F",
+                    "on-secondary-container": "#596579",
+                    "on-primary": "#ffffff",
+                    "tertiary-fixed-dim": "#9bccf6",
+                    "surface-container-high": "#f6e5da",
+                    "inverse-on-surface": "#ffede3",
+                    "secondary-fixed-dim": "#bac7de",
+                    "surface-variant": "#f1dfd5",
+                    "surface-container-lowest": "#ffffff",
+                    "on-background": "#221a13",
+                    "background": "#fff8f5",
+                    "on-surface": "#221a13",
+                    "tertiary": "#2f6388",
+                    "primary-fixed": "#ffdcc3",
+                    "on-secondary-fixed-variant": "#3b475a",
+                    "text-muted": "#64748B",
+                    "on-primary-fixed": "#2f1500",
+                    "status-success": "#137333",
+                    "outline-variant": "#dbc2b1",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#ffb77e",
+                    "secondary": "#535f73",
+                    "surface-container": "#fcebe0",
+                    "on-tertiary-fixed": "#001e30",
+                    "inverse-primary": "#ffb77e",
+                    "surface-bright": "#fff8f5",
+                    "background-alt": "#F5F8FB",
+                    "outline": "#887365"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "margin": "32px",
+                    "gutter": "24px",
+                    "lg": "24px",
+                    "xxl": "64px",
+                    "xl": "40px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "h3": ["Inter Tight"],
+                    "h2": ["Inter Tight"],
+                    "body-lg": ["Inter"],
+                    "display-lg": ["Cormorant Garamond"],
+                    "h1": ["Inter Tight"],
+                    "body-sm": ["Inter"],
+                    "label-caps": ["Inter Tight"],
+                    "data-mono": ["JetBrains Mono"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "h3": ["20px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                    "h2": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "fontWeight": "600"}],
+                    "h1": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "data-mono": ["14px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-alt text-on-surface font-body-md antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar (Predicted & Rendered) -->
+<nav class="w-64 h-screen fixed left-0 top-0 border-r border-white/10 bg-[#0E1B2C] dark:bg-[#070D16] flex flex-col h-full py-6 shadow-xl z-50">
+<div class="px-6 mb-8">
+<h1 class="font-h2 text-h2 text-white font-bold tracking-tighter">PermitPilot</h1>
+<p class="font-label-caps text-label-caps text-slate-400 mt-1 uppercase">A COMMUN-ET PRODUCT</p>
+</div>
+<div class="px-6 mb-6">
+<p class="font-label-caps text-label-caps text-slate-500 mb-2">Permit #*</p>
+<div class="bg-white/5 border border-white/10 rounded-DEFAULT p-2 flex items-center text-white font-data-mono text-data-mono text-sm mb-4">
+                ELEC-2025-02386
+            </div>
+<p class="font-label-caps text-label-caps text-slate-500 mb-2">Active Project</p>
+<button class="w-full bg-white/5 border border-white/10 rounded-DEFAULT p-2 flex items-center justify-between text-white hover:bg-white/10 transition-colors mb-4">
+<span class="font-data-mono text-data-mono text-sm truncate">ELEC-2025-02386</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+<p class="font-label-caps text-label-caps text-slate-500 mb-2">Portal Credential</p>
+<button class="w-full bg-white/5 border border-white/10 rounded-DEFAULT p-2 flex items-center justify-between text-white hover:bg-white/10 transition-colors">
+<span class="truncate text-sm font-medium">Fairfax County, VA</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+<div class="mt-3 flex items-start gap-2">
+<div class="w-4 h-4 mt-0.5 border border-white/30 rounded-sm flex items-center justify-center"></div>
+<span class="text-xs text-slate-400 leading-tight">Or create a new project for this permit</span>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto px-4">
+<p class="font-label-caps text-label-caps text-slate-500 px-2 mb-2 mt-4">INTAKE &amp; REVIEW</p>
+<ul class="space-y-1">
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-400 hover:text-white hover:bg-white/5 transition-colors scale-98 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-lg">rocket_launch</span>
+<span class="font-medium text-sm">Permit Filing</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-400 hover:text-white hover:bg-white/5 transition-colors scale-98 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-lg">share</span>
+<span class="font-medium text-sm">Utility Coordination</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT bg-[#E8882F]/10 text-[#E8882F] border-r-2 border-[#E8882F] font-bold scale-98 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-lg">language</span>
+<span class="font-medium text-sm">Portal Harvest</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-400 hover:text-white hover:bg-white/5 transition-colors scale-98 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-lg">domain</span>
+<span class="font-medium text-sm">Baltimore Portal</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-400 hover:text-white hover:bg-white/5 transition-colors scale-98 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-lg">rate_review</span>
+<span class="font-medium text-sm">Comment Review</span>
+</a>
+</li>
+</ul>
+</div>
+<div class="px-4 pt-4 border-t border-white/10 mt-auto">
+<ul class="space-y-1">
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+<span class="font-medium text-sm">Settings</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-lg">dark_mode</span>
+<span class="font-medium text-sm">Theme</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- TopNavBar (Predicted & Rendered) -->
+<header class="fixed top-0 right-0 left-64 h-16 border-b border-b border-slate-200 dark:border-white/10 bg-[#F8FAFC]/80 backdrop-blur-md dark:bg-[#0E1B2C]/80 shadow-sm z-40 flex justify-between items-center px-8">
+<div class="flex items-center gap-4 text-sm font-medium text-slate-600">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-lg">article</span> ELEC-2025-02386</span>
+<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-xs">ELEC-2025-02386</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-slate-500 hover:text-[#E8882F] transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<button class="text-slate-500 hover:text-[#E8882F] transition-colors"><span class="material-symbols-outlined">apps</span></button>
+<div class="w-8 h-8 rounded-full bg-slate-300 border border-surface-border overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a user in a well-lit studio environment, facing forward." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBaxZm9MsHOA9PTO2LtUGZUcg-f5opOi1CiGqsjNzbRRbP6YL8EYLhTXJkyaOS8XnMaH03TT9a9Woyrj9sA8b9moqgoWm7ZFmsA-yiRYMdcRdSsgMK0t1lahatVs9UOG-l7ENguQtHg3mNsHvpk_vVM_Qwac9Gmf5LsDC0K804ZrdJBNBBQwmNvp1eMhFbzTtSP14PiGZh_cO_DSQxhjO9llSuPkqNMPDq-TBuhup3xDNcHiPIzKfagjGZ-5DUxZYZFK42pthv2SW8">
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="ml-64 pt-16 flex-1 h-full overflow-y-auto bg-background-alt p-margin">
+<!-- Progress Bar -->
+<div class="mb-gutter max-w-5xl mx-auto">
+<div class="flex items-center justify-between relative">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-surface-border -z-10"></div>
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1/3 h-0.5 bg-primary-container -z-10"></div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-container text-white flex items-center justify-center text-xs font-bold ring-4 ring-background-alt">1</div>
+<span class="font-label-caps text-label-caps text-on-surface">SETUP</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-container text-white flex items-center justify-center text-xs font-bold ring-4 ring-background-alt">2</div>
+<span class="font-label-caps text-label-caps text-on-surface">FILING</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface text-text-muted border border-surface-border flex items-center justify-center text-xs font-bold ring-4 ring-background-alt">3</div>
+<span class="font-label-caps text-label-caps text-text-muted">HARVEST</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface text-text-muted border border-surface-border flex items-center justify-center text-xs font-bold ring-4 ring-background-alt">4</div>
+<span class="font-label-caps text-label-caps text-text-muted">REVIEW</span>
+</div>
+</div>
+</div>
+<div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Main Content Area -->
+<div class="lg:col-span-2 space-y-gutter">
+<!-- Portal Data Card -->
+<div class="bg-surface rounded-xl shadow-sm border border-surface-border overflow-hidden relative">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-container opacity-5 rounded-bl-full pointer-events-none"></div>
+<div class="p-lg border-b border-surface-border flex justify-between items-start">
+<div>
+<h2 class="font-h2 text-h2 text-on-surface flex items-center gap-2">Harvesting Jurisdictional Review Comments <span class="text-sm font-normal text-text-muted ml-2">Last checked: Just now</span></h2>
+<p class="text-on-surface-variant font-medium mt-1">Fairfax County, VA</p>
+<p class="text-text-muted text-sm">Citizen Access (Accela)</p>
+</div>
+<button class="flex items-center gap-2 px-3 py-1.5 border border-surface-border rounded-DEFAULT text-sm font-medium text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm">refresh</span> Refresh
+                        </button>
+</div>
+<div class="p-lg bg-[#1E293B] text-white">
+<p class="font-label-caps text-label-caps text-slate-400 mb-1">RECORD NUMBER</p>
+<p class="font-data-mono text-data-mono text-lg text-tertiary-fixed mb-4">ELEC-2025-02386</p>
+<p class="font-medium text-slate-200">Type: Tank Replacement - 5710 Telegraph Commercial Electrical</p>
+<p class="text-slate-400 text-sm mt-1">5710 TELEGRAPH RD ALEXANDRIA, VA 22303</p>
+</div>
+<div class="border-b border-surface-border bg-surface-container-lowest px-lg flex gap-6">
+<button class="py-3 font-medium text-primary border-b-2 border-primary">Record Details</button>
+<button class="py-3 font-medium text-text-muted hover:text-on-surface transition-colors">Attachments</button>
+</div>
+<div class="p-lg">
+<table class="w-full text-left text-sm">
+<tbody class="divide-y divide-surface-border">
+<tr>
+<th class="py-3 font-medium text-on-surface-variant w-1/3 align-top">Work Location</th>
+<td class="py-3 text-on-surface">5710 TELEGRAPH RD ALEXANDRIA, VA 22303</td>
+</tr>
+<tr>
+<th class="py-3 font-medium text-on-surface-variant w-1/3 align-top">Applicant</th>
+<td class="py-3 text-on-surface">Organization COMMUN-ET LLC United States Primary Phone: (202) 688-0484 permitting@commun-et.com Mailing 3901 CENTERVIEW DRIVE CHANTILLY, VA, 20151 United States</td>
+</tr>
+<tr>
+<th class="py-3 font-medium text-on-surface-variant w-1/3 align-top">Licensed Professional</th>
+<td class="py-3 text-on-surface">J M L INC 23 THERESA GARDEN PLACE Class A FREDERICKSBURG, VA, 22406 Contractor 2705130448</td>
+</tr>
+<tr>
+<th class="py-3 font-medium text-on-surface-variant w-1/3 align-top">Project Description</th>
+<td class="py-3 text-on-surface">Tank Replacement - 5710 Telegraph Electrical modifications to accommodate fuel remodel to include installation of new underground storage tanks, fuel product piping and fuel dispensers.</td>
+</tr>
+<tr>
+<th class="py-3 font-medium text-on-surface-variant w-1/3 align-top">Owner</th>
+<td class="py-3 text-on-surface">HESS RETAIL STORE LLC * 539 S MAIN ST C/O PROPERTY TAX DEPARTMENT FINDLAY OH 45840</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Recent Harvest Timeline / Search Results -->
+<div class="bg-surface rounded-xl shadow-sm border border-surface-border overflow-hidden">
+<div class="p-lg border-b border-surface-border bg-surface-container-lowest">
+<h3 class="font-h3 text-h3 text-on-surface">Search Results</h3>
+<p class="text-text-muted text-sm mt-1">5 record(s) found. Click a record number to view details.</p>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="bg-surface-container-low font-label-caps text-label-caps text-on-surface-variant">
+<tr>
+<th class="px-md py-3 font-medium tracking-wider">RECORD NUMBER</th>
+<th class="px-md py-3 font-medium tracking-wider">TYPE</th>
+<th class="px-md py-3 font-medium tracking-wider">STATUS</th>
+<th class="px-md py-3 font-medium tracking-wider">ADDRESS</th>
+<th class="px-md py-3 font-medium tracking-wider">OPENED DATE</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-border">
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer bg-primary-container/5">
+<td class="px-md py-3 font-data-mono text-primary font-medium">REC25-00000-008PQ</td>
+<td class="px-md py-3">Building</td>
+<td class="px-md py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-container/10 text-primary-container">In Progress</span></td>
+<td class="px-md py-3 text-text-muted">1234 E Fayette St</td>
+<td class="px-md py-3 text-text-muted">01/15/2025</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer">
+<td class="px-md py-3 font-data-mono text-tertiary font-medium">REC25-00000-007AB</td>
+<td class="px-md py-3">Electrical</td>
+<td class="px-md py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-status-success/10 text-status-success">Approved</span></td>
+<td class="px-md py-3 text-text-muted">500 N Charles St</td>
+<td class="px-md py-3 text-text-muted">12/01/2024</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors cursor-pointer">
+<td class="px-md py-3 font-data-mono text-tertiary font-medium">REC25-00000-006CD</td>
+<td class="px-md py-3">Building</td>
+<td class="px-md py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-status-warning/10 text-status-warning">Pending Review</span></td>
+<td class="px-md py-3 text-text-muted">2000 W Pratt St</td>
+<td class="px-md py-3 text-text-muted">02/01/2025</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Context & Guidance Sidebar -->
+<div class="space-y-gutter">
+<div class="bg-surface rounded-xl shadow-sm border border-surface-border p-lg">
+<div class="flex items-start gap-3 mb-4"><span class="material-symbols-outlined text-primary-container filled text-xl mt-0.5">sync</span><div><h3 class="font-h3 text-h3 text-on-surface">Active Scraping</h3><p class="text-sm text-text-muted mt-1">Currently harvesting review comments from the Fairfax County portal.</p></div></div>
+<div class="bg-surface-container-low rounded-lg p-md mb-4 border border-surface-border/50">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2">RECOMMENDED ACTION</p>
+<p class="text-sm text-on-surface mb-3">To ensure you have the latest record data, please trigger a manual refresh.</p>
+<button class="w-full bg-primary-container text-white py-2 rounded-DEFAULT font-medium text-sm hover:bg-primary transition-colors shadow-sm flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">sync</span> Manual Refresh
+                        </button>
+</div>
+<div class="text-xs text-text-muted border-t border-surface-border pt-4">
+<p class="mb-1"><strong>Last automated attempt:</strong> 2 hours ago</p>
+<p class=""><strong>System Status:</strong> Active Scraping</p>
+</div>
+</div>
+<div class="bg-[#0E1B2C] rounded-xl shadow-sm border border-[#0E1B2C] p-lg text-white relative overflow-hidden">
+<div class="absolute -bottom-8 -right-8 w-32 h-32 bg-[#E8882F] opacity-10 rounded-full blur-2xl"></div>
+<h3 class="font-h3 text-h3 mb-2 relative z-10">Intelligence Editorial</h3>
+<p class="text-sm text-slate-300 mb-4 relative z-10 leading-relaxed">The AI agent is currently parsing 42 comments from the Fairfax County portal. Review these in the Response Matrix once scraping is complete.</p>
+<button class="text-[#E8882F] text-sm font-medium flex items-center gap-1 hover:underline relative z-10">View Analysis <span class="material-symbols-outlined text-sm">arrow_forward</span></button>
+</div>
+</div>
+</div>
+</main>
+
+
+</body></html>

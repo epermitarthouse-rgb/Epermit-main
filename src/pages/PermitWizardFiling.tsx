@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { AlertBanner, MetricCard, PageHeader, Panel, ServicePill, StatusPill } from "@/components/design/ProductPrimitives";
+import { filingStatusTone } from "@/adapters/filingStatusAdapter";
+import { cn } from "@/lib/utils";
 import {
   Rocket,
   Loader2,
   RefreshCw,
+  Check,
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Clock,
   Shield,
   Bot,
   FileSearch,
@@ -42,10 +43,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
+import { formatPermitFilingError, isMissingRelationError } from "@/lib/permitFilingErrors";
 import { toast } from "sonner";
 import { FilingReviewPanel } from "@/components/permit-wizard/FilingReviewPanel";
 import { StartFilingDialog } from "@/components/permit-wizard/StartFilingDialog";
 import { AgentRunDetail } from "@/components/permit-wizard/AgentRunDetail";
+import {
+  PERMIT_FILING_WIP,
+  PERMIT_FILING_WIP_ACTION_TOOLTIP,
+  PERMIT_FILING_WIP_LABEL,
+  PERMIT_FILING_WIP_NOTE,
+} from "@/components/permit-wizard/permitFilingWip";
 
 interface Municipality {
   id: string;
@@ -129,6 +137,15 @@ const LAYER_LABELS: Record<number, string> = {
   3: "Post-Submission",
 };
 
+const STAGE_GROUPS: { name: string; agents: string[] }[] = [
+  { name: "Property & license intake", agents: ["property_intelligence", "license_validation"] },
+  { name: "Document prep & classification", agents: ["document_preparation", "permit_classifier"] },
+  { name: "Human review gate", agents: ["pre_submission_review"] },
+  { name: "Portal authentication & filing", agents: ["authentication", "form_filing"] },
+  { name: "Submission", agents: ["submission_finalization"] },
+  { name: "Status monitoring & issuance", agents: ["status_monitor"] },
+];
+
 const STATUS_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }> = {
   pending: { label: "Pending", variant: "secondary" },
   running: { label: "Running", variant: "default", className: "bg-blue-600 dark:bg-blue-500" },
@@ -148,7 +165,16 @@ const FILING_STATUS_CONFIG: Record<string, { label: string; className: string }>
   cancelled: { label: "Cancelled", className: "" },
 };
 
-function AgentCard({
+const AGENT_STATUS_TONE: Record<string, "default" | "good" | "warn" | "bad" | "info"> = {
+  pending: "default",
+  running: "info",
+  completed: "good",
+  failed: "bad",
+  escalated: "warn",
+  waiting_human: "warn",
+};
+
+function TaskRow({
   config,
   run,
   isActive,
@@ -159,46 +185,72 @@ function AgentCard({
   isActive: boolean;
   onClick: () => void;
 }) {
-  const Icon = config.icon;
   const status = run?.status || "pending";
   const badge = STATUS_BADGE[status] || STATUS_BADGE.pending;
+  const tone = AGENT_STATUS_TONE[status] || "default";
+  const isRunning = status === "running";
+  const isDone = status === "completed";
 
   return (
-    <Card
-      className={`cursor-pointer transition-colors ${isActive ? "border-primary" : ""}`}
-      onClick={onClick}
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-3 transition-colors",
+        isActive && "border-primary bg-primary/5",
+        run && "cursor-pointer",
+      )}
+      onClick={run ? onClick : undefined}
       data-testid={`card-agent-${config.name}`}
     >
-      <CardContent className="flex items-center gap-3 p-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted shrink-0">
-          {status === "running" ? (
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-          ) : status === "completed" ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          ) : status === "failed" ? (
-            <XCircle className="h-4 w-4 text-destructive" />
-          ) : status === "escalated" || status === "waiting_human" ? (
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-          ) : (
-            <Icon className="h-4 w-4 text-muted-foreground" />
-          )}
+      <span
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
+          isDone
+            ? "border-success bg-success/20 text-success"
+            : isRunning
+            ? "border-primary bg-primary/20 text-primary"
+            : status === "failed"
+            ? "border-destructive bg-destructive/10 text-destructive"
+            : status === "escalated" || status === "waiting_human"
+            ? "border-warning bg-warning/10 text-warning"
+            : "border-border text-muted-foreground",
+        )}
+      >
+        {isDone ? (
+          <Check className="h-3.5 w-3.5" />
+        ) : isRunning ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : status === "failed" ? (
+          <XCircle className="h-3.5 w-3.5" />
+        ) : status === "escalated" || status === "waiting_human" ? (
+          <AlertTriangle className="h-3.5 w-3.5" />
+        ) : (
+          <span className="block h-1.5 w-1.5 rounded-full bg-current" />
+        )}
+      </span>
+      <div className="min-w-[220px] flex-1">
+        <div className={cn("text-sm font-medium", isDone && "text-muted-foreground line-through")}>
+          {config.label}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground font-mono">{config.number}</span>
-            <span className="text-sm font-medium truncate">{config.label}</span>
-          </div>
-          {run?.started_at && (
-            <p className="text-xs text-muted-foreground">
-              {new Date(run.started_at).toLocaleTimeString()}
-            </p>
-          )}
+        <div className="mt-1 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-mono">{config.number}</span>
+          <ServicePill kind="permit">{LAYER_LABELS[config.layer]}</ServicePill>
         </div>
-        <Badge variant={badge.variant} className={badge.className} data-testid={`badge-agent-status-${config.name}`}>
-          {badge.label}
-        </Badge>
-      </CardContent>
-    </Card>
+      </div>
+      <StatusPill tone={tone} data-testid={`badge-agent-status-${config.name}`}>
+        {badge.label}
+      </StatusPill>
+      <Button
+        size="sm"
+        variant={isRunning ? "default" : "outline"}
+        disabled={!run}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+      >
+        {run ? "Open" : "Queued"} <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }
 
@@ -220,8 +272,10 @@ export default function PermitWizardFiling() {
   const [screenshots, setScreenshots] = useState<Array<{ id: string; filing_id: string; agent_name: string; step_name: string; screenshot_url: string; field_audit?: Record<string, unknown> | null; created_at: string }>>([]);
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [municipalityFilter, setMunicipalityFilter] = useState<string>("__all__");
+  const [filingAgentRuns, setFilingAgentRuns] = useState<AgentRun[]>([]);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) || null;
+  const PREFLIGHT_AGENT_COUNT = AGENT_CONFIG.filter((a) => a.layer === 1).length;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -282,13 +336,56 @@ export default function PermitWizardFiling() {
           ? data.find((f) => f.id === selectedFiling.id) || data[0]
           : data[0];
         setSelectedFiling(current);
+
+        const { data: runs, error: runsError } = await supabase
+          .from("agent_runs")
+          .select("*")
+          .in(
+            "filing_id",
+            data.map((f) => f.id),
+          )
+          .order("created_at", { ascending: true });
+        if (runsError) throw runsError;
+        setFilingAgentRuns(runs || []);
       } else {
         setSelectedFiling(null);
+        setFilingAgentRuns([]);
       }
     } catch (err) {
       console.error("Failed to fetch filings:", err);
+      setFilings([]);
+      setFilingAgentRuns([]);
+      setSelectedFiling(null);
+      toast.error(
+        formatPermitFilingError(err, "Failed to load filings"),
+        { id: isMissingRelationError(err) ? "permit-filings-missing" : undefined }
+      );
     }
   }, [user, selectedProjectId, selectedFiling]);
+
+  const getPreflightProgressLabel = useCallback(
+    (filingId: string) => {
+      const runs = filingAgentRuns.filter((r) => r.filing_id === filingId);
+      const preflightAgents = AGENT_CONFIG.filter((a) => a.layer === 1);
+      const completed = preflightAgents.filter((a) =>
+        runs.some((r) => r.agent_name === a.name && r.status === "completed"),
+      ).length;
+      const failed = preflightAgents.some((a) =>
+        runs.some((r) => r.agent_name === a.name && r.status === "failed"),
+      );
+      if (failed) return `${completed}/${PREFLIGHT_AGENT_COUNT} pre-flight (failed)`;
+      return `${completed}/${PREFLIGHT_AGENT_COUNT} pre-flight`;
+    },
+    [filingAgentRuns, PREFLIGHT_AGENT_COUNT],
+  );
+
+  const getProjectLabel = useCallback(
+    (projectId?: string) => {
+      if (!projectId) return "No project";
+      return projects.find((p) => p.id === projectId)?.name || "Project";
+    },
+    [projects],
+  );
 
   const fetchAgentRuns = useCallback(async () => {
     if (!selectedFiling) {
@@ -306,6 +403,12 @@ export default function PermitWizardFiling() {
       setAgentRuns(data || []);
     } catch (err) {
       console.error("Failed to fetch agent runs:", err);
+      setAgentRuns([]);
+      if (isMissingRelationError(err)) {
+        toast.error(formatPermitFilingError(err, "Failed to load agent runs"), {
+          id: "permit-agent-runs-missing",
+        });
+      }
     }
   }, [selectedFiling]);
 
@@ -373,6 +476,89 @@ export default function PermitWizardFiling() {
 
   const layerAgents = (layer: number) => AGENT_CONFIG.filter((a) => a.layer === layer);
 
+  const totalFilings = filings.length;
+  const awaitingApprovalCount = filings.filter((f) => f.filing_status === "awaiting_approval").length;
+  const municipalityCount = new Set(filings.map((f) => f.municipality).filter(Boolean)).size;
+  const selectedAgentCompleted = selectedFiling
+    ? agentRuns.filter((r) => r.status === "completed").length
+    : 0;
+  const agentProgressLabel = selectedFiling ? `${selectedAgentCompleted}/${AGENT_CONFIG.length}` : "—";
+  const agentProgressHint = selectedFiling
+    ? `${FILING_STATUS_CONFIG[selectedFiling.filing_status]?.label || selectedFiling.filing_status} · ${selectedFiling.property_address || "Selected filing"}`
+    : "Select a filing to see pipeline progress";
+
+  const stagePhases = (() => {
+    if (!selectedFiling) return [];
+    let currentAssigned = false;
+    return STAGE_GROUPS.map((group) => {
+      const statuses = group.agents.map((name) => getRunForAgent(name)?.status || "pending");
+      const done = statuses.every((s) => s === "completed");
+      const failed = statuses.some((s) => s === "failed");
+      const blocked = statuses.some((s) => s === "waiting_human" || s === "escalated");
+      const started = statuses.some((s) => s !== "pending");
+      const completedCount = statuses.filter((s) => s === "completed").length;
+
+      let summary: string;
+      if (failed) summary = "Blocked — an agent step failed here.";
+      else if (blocked) summary = "Waiting on a human review decision.";
+      else if (done) summary = "Completed for this filing.";
+      else if (started) summary = `${completedCount}/${group.agents.length} steps complete.`;
+      else summary = "Not started yet.";
+
+      let current = false;
+      if (!done && !currentAssigned) {
+        current = true;
+        currentAssigned = true;
+      }
+
+      return { name: group.name, done, current, failed, blocked, summary };
+    });
+  })();
+
+  const operatorGuidance = (() => {
+    if (!selectedFiling) {
+      return { text: "Select a filing from the queue to see live pipeline guidance and next steps.", action: null as null | { label: string; onClick: () => void } };
+    }
+    const failedRun = agentRuns.find((r) => r.status === "failed");
+    const blockedRun = agentRuns.find((r) => r.status === "waiting_human" || r.status === "escalated");
+    if (selectedFiling.filing_status === "failed" || failedRun) {
+      return {
+        text: failedRun?.error_message
+          ? `${AGENT_CONFIG.find((a) => a.name === failedRun.agent_name)?.label || failedRun.agent_name} failed: ${failedRun.error_message}`
+          : "A pipeline step failed for this filing. Review the agent log below before retrying.",
+        action: failedRun ? { label: "View agent log", onClick: () => { setSelectedAgentRun(failedRun); setAgentDetailOpen(true); } } : null,
+      };
+    }
+    if (selectedFiling.filing_status === "awaiting_approval") {
+      return {
+        text: PERMIT_FILING_WIP
+          ? `${selectedFiling.property_address || "This filing"} shows an awaiting-approval state. Open Review to inspect the package — approval and execution are disabled while work is in progress.`
+          : `${selectedFiling.property_address || "This filing"} has cleared automated pre-flight checks and needs a human approval decision to continue to submission.`,
+        action: { label: PERMIT_FILING_WIP ? "Open Review" : "Review & Decide", onClick: () => setReviewDialogOpen(true) },
+      };
+    }
+    if (blockedRun) {
+      return {
+        text: `${AGENT_CONFIG.find((a) => a.name === blockedRun.agent_name)?.label || blockedRun.agent_name} is waiting on a decision before the pipeline can continue.`,
+        action: { label: "View agent log", onClick: () => { setSelectedAgentRun(blockedRun); setAgentDetailOpen(true); } },
+      };
+    }
+    if (selectedFiling.filing_status === "submitted") {
+      return {
+        text: PERMIT_FILING_WIP
+          ? "This filing is marked submitted in data, but live status monitoring is still work in progress."
+          : "This filing has been submitted to the portal. Status monitoring will keep watching for jurisdiction updates.",
+        action: null,
+      };
+    }
+    return {
+      text: PERMIT_FILING_WIP
+        ? "Pipeline UI is available for review. Pre-flight, execution, submission, and monitoring are not production-ready — treat agent status as incomplete."
+        : "Pipeline is progressing automatically. No action is needed right now — new steps will appear here as agents complete.",
+      action: null,
+    };
+  })();
+
   if (authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
@@ -382,63 +568,118 @@ export default function PermitWizardFiling() {
   }
 
   return (
-    <section className="py-4 sm:py-6 md:py-8 lg:py-12 pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6">
-      <div className="max-w-7xl mr-auto ml-0 w-full min-w-0">
-        <motion.div
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <Rocket className="h-6 w-6" />
-              Permit Filing
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Multi-municipality 9-agent autonomous filing pipeline
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Permit Filing"
+        title={
+          <span className="inline-flex flex-wrap items-center gap-3">
+            Phase · Filing workflow
+            {PERMIT_FILING_WIP && (
+              <Badge
+                variant="outline"
+                className="align-middle text-sm font-semibold border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                data-testid="badge-permit-filing-wip"
+              >
+                {PERMIT_FILING_WIP_LABEL}
+              </Badge>
+            )}
+          </span>
+        }
+        body={
+          PERMIT_FILING_WIP
+            ? "Multi-municipality filing UI for review. Pre-flight, human approval, portal submission, and status monitoring are still being completed — not a production-ready workflow."
+            : "Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses with utility coordination dependencies surfaced in the same flow."
+        }
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <ServicePill kind="permit">Permit expediting</ServicePill>
+            <ServicePill kind="utility">Utility coordination</ServicePill>
             <Button
               variant="outline"
               size="sm"
               onClick={handleRefresh}
               disabled={refreshing}
               data-testid="button-refresh"
+              className="pilot-button-ghost"
             >
-              <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </Button>
             <Button
               onClick={() => setStartDialogOpen(true)}
               data-testid="button-start-filing"
+              className="pilot-button-primary"
             >
-              <Plus className="h-4 w-4 mr-1" />
+              <Plus className="mr-1 h-4 w-4" />
               Start New Filing
             </Button>
           </div>
-        </motion.div>
-
-        {!selectedProjectId && !loading && filings.length === 0 && (
-          <Card className="border-dashed mb-6">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <Bot className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <h3 className="font-semibold mb-2" data-testid="text-no-project">Get Started with Permit Filing</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Start a new filing to create a project and initiate the autonomous permit filing pipeline, or select an existing project from the sidebar.
-              </p>
-              <Button
-                onClick={() => setStartDialogOpen(true)}
-                data-testid="button-start-filing-no-project"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Start New Filing
-              </Button>
-            </CardContent>
-          </Card>
+        }
+      />
+      <div className="space-y-6">
+        {PERMIT_FILING_WIP && (
+          <AlertBanner
+            tone="warn"
+            title={PERMIT_FILING_WIP_LABEL}
+            detail={PERMIT_FILING_WIP_NOTE}
+          />
         )}
 
-        {selectedProjectId && loading && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <MetricCard
+            label="Total filings"
+            value={totalFilings}
+            icon={FileText}
+            detail={municipalityFilter === "__all__" ? "All municipalities" : "Filtered view active"}
+          />
+          <MetricCard
+            label="Awaiting approval"
+            value={awaitingApprovalCount}
+            icon={UserCheck}
+            detail={
+              PERMIT_FILING_WIP
+                ? awaitingApprovalCount > 0
+                  ? "Review UI available · decisions gated"
+                  : "Nothing pending review"
+                : awaitingApprovalCount > 0
+                ? "Needs a review decision"
+                : "Nothing pending review"
+            }
+          />
+          <MetricCard
+            label="Agent pipeline"
+            value={agentProgressLabel}
+            icon={Activity}
+            detail={agentProgressHint}
+          />
+          <MetricCard
+            label="Municipalities"
+            value={municipalityCount}
+            icon={Globe}
+            detail="Active portal jurisdictions in this view"
+          />
+        </div>
+
+        {selectedFiling?.filing_status === "awaiting_approval" && (
+          <AlertBanner
+            tone="warn"
+            title="A filing is awaiting review"
+            detail={
+              PERMIT_FILING_WIP
+                ? `${selectedFiling.property_address || "This filing"} can be opened for package review. Final approval and execution remain disabled while work is in progress.`
+                : `${selectedFiling.property_address || "This filing"} is ready for an approval decision. Open Review & Decide to continue the pipeline.`
+            }
+          />
+        )}
+        {selectedFiling?.filing_status === "failed" && (
+          <AlertBanner
+            tone="bad"
+            title="Filing failed"
+            detail="Check agent logs below for details on what went wrong before retrying."
+          />
+        )}
+
+        {loading && (
           <div className="space-y-4">
             <Skeleton className="h-40 w-full" />
             <div className="grid lg:grid-cols-3 gap-4">
@@ -449,7 +690,36 @@ export default function PermitWizardFiling() {
           </div>
         )}
 
-        {selectedProjectId && !loading && filings.length > 0 && municipalities.length > 0 && (
+        {!loading && filings.length === 0 && (
+          <div className="pilot-card border-dashed mb-6 border-2 flex flex-col items-center justify-center py-12 text-center">
+            {selectedProjectId ? (
+              <Rocket className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            ) : (
+              <Bot className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            )}
+            <h3 className="font-semibold mb-2" data-testid={selectedProjectId ? "text-no-filings" : "text-no-project"}>
+              {selectedProjectId ? "No Filings Yet" : "Get Started with Permit Filing"}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {PERMIT_FILING_WIP
+                ? selectedProjectId
+                  ? "No filings for this project yet. You can open Start New Filing to review the creation UI (pre-flight start is currently disabled)."
+                  : "Open Start New Filing to review the creation UI, or select a project from the sidebar. Pre-flight start is disabled while this workflow is work in progress."
+                : selectedProjectId
+                ? "Start a new filing to initiate the autonomous permit filing pipeline."
+                : "Start a new filing to create a project and initiate the autonomous permit filing pipeline, or select an existing project from the sidebar."}
+            </p>
+            <Button
+              onClick={() => setStartDialogOpen(true)}
+              data-testid={selectedProjectId ? "button-start-filing-empty" : "button-start-filing-no-project"}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Start New Filing
+            </Button>
+          </div>
+        )}
+
+        {!loading && filings.length > 0 && municipalities.length > 0 && (
           <div className="mb-4">
             <Select value={municipalityFilter} onValueChange={setMunicipalityFilter}>
               <SelectTrigger className="w-[260px]" data-testid="select-municipality-filter">
@@ -470,223 +740,311 @@ export default function PermitWizardFiling() {
           </div>
         )}
 
-        {selectedProjectId && !loading && filings.length === 0 && (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <Rocket className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <h3 className="font-semibold mb-2" data-testid="text-no-filings">No Filings Yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Start a new filing to initiate the autonomous permit filing pipeline.
-              </p>
-              <Button
-                onClick={() => setStartDialogOpen(true)}
-                data-testid="button-start-filing-empty"
+        {!loading && filings.length > 0 && (
+          <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
+            <div className="space-y-4 lg:self-start">
+              <Panel
+                eyebrow="Filing queue"
+                title={`Filings (${filteredFilings.length})`}
+                className="lg:self-start"
+                data-testid="panel-filings-list"
               >
-                <Plus className="h-4 w-4 mr-1" />
-                Start New Filing
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {selectedProjectId && !loading && filings.length > 0 && (
-          <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                Filing History
-              </h3>
-              <ScrollArea className="max-h-[calc(100vh-220px)]">
-                <div className="space-y-2 pr-2">
-                  {filteredFilings.map((filing) => {
-                    const statusCfg = FILING_STATUS_CONFIG[filing.filing_status] || { label: filing.filing_status, className: "" };
-                    const isSelected = selectedFiling?.id === filing.id;
-                    const muniInfo = getMunicipalityInfo(filing.municipality);
-                    return (
-                      <Card
-                        key={filing.id}
-                        className={`cursor-pointer transition-colors ${isSelected ? "border-primary" : ""}`}
-                        onClick={() => setSelectedFiling(filing)}
-                        data-testid={`card-filing-${filing.id}`}
-                      >
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <Badge className={statusCfg.className} data-testid={`badge-filing-status-${filing.id}`}>
-                              {statusCfg.label}
-                            </Badge>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                          </div>
-                          {muniInfo && (
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                <ScrollArea className="max-h-[28rem]">
+                  <div className="space-y-2 pr-2">
+                    {filteredFilings.map((filing) => {
+                      const statusCfg = FILING_STATUS_CONFIG[filing.filing_status] || { label: filing.filing_status, className: "" };
+                      const isSelected = selectedFiling?.id === filing.id;
+                      const muniInfo = getMunicipalityInfo(filing.municipality);
+                      const needsReview = filing.filing_status === "awaiting_approval";
+                      return (
+                        <Card
+                          key={filing.id}
+                          className={`cursor-pointer transition-colors ${isSelected ? "border-primary" : ""}`}
+                          onClick={() => setSelectedFiling(filing)}
+                          data-testid={`card-filing-${filing.id}`}
+                        >
+                          <CardContent className="p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <StatusPill
+                                tone={filingStatusTone(filing.filing_status)}
+                                data-testid={`badge-filing-status-${filing.id}`}
+                              >
+                                {statusCfg.label}
+                              </StatusPill>
+                              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                            </div>
+                            <p className="text-sm font-medium truncate" data-testid={`text-filing-address-${filing.id}`}>
+                              {filing.property_address || "No address"}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate" data-testid={`text-filing-project-${filing.id}`}>
+                              {getProjectLabel(filing.project_id)}
+                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <Badge variant="outline" className="text-xs" data-testid={`badge-filing-municipality-${filing.id}`}>
                                 <Globe className="h-3 w-3 mr-1" />
-                                {muniInfo.short_name} ({muniInfo.state})
+                                {muniInfo
+                                  ? `${muniInfo.short_name} (${muniInfo.state})`
+                                  : filing.municipality || "No jurisdiction"}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {PORTAL_TYPE_LABELS[muniInfo.portal_type] || muniInfo.portal_type}
-                              </span>
+                              {muniInfo && (
+                                <span className="text-xs text-muted-foreground">
+                                  {PORTAL_TYPE_LABELS[muniInfo.portal_type] || muniInfo.portal_type}
+                                </span>
+                              )}
                             </div>
-                          )}
-                          <p className="text-sm font-medium truncate" data-testid={`text-filing-address-${filing.id}`}>
-                            {filing.property_address || "No address"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(filing.created_at).toLocaleDateString()}
-                          </p>
-                          {filing.confirmation_number && (
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1" data-testid={`text-confirmation-${filing.id}`}>
-                              Conf: {filing.confirmation_number}
+                            <p className="text-xs text-muted-foreground" data-testid={`text-filing-preflight-${filing.id}`}>
+                              {getPreflightProgressLabel(filing.id)}
                             </p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                              <span>Created {new Date(filing.created_at).toLocaleString()}</span>
+                              <span>Updated {new Date(filing.updated_at).toLocaleString()}</span>
+                            </div>
+                            {filing.confirmation_number && (
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400" data-testid={`text-confirmation-${filing.id}`}>
+                                Conf: {filing.confirmation_number}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedFiling(filing);
+                                }}
+                                data-testid={`button-open-filing-${filing.id}`}
+                              >
+                                Open
+                              </Button>
+                              {needsReview && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs pilot-button-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFiling(filing);
+                                    setReviewDialogOpen(true);
+                                  }}
+                                  data-testid={`button-review-filing-${filing.id}`}
+                                >
+                                  <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                  Review
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                    {filteredFilings.length === 0 && filings.length > 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4" data-testid="text-no-filtered-filings">
+                        No filings match the selected municipality filter.
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </Panel>
+
+              {selectedFiling && (
+                <aside className="pilot-card p-5" data-testid="panel-workflow-stages">
+                  <p className="pilot-kicker mb-4">Workflow stages</p>
+                  <ol className="space-y-4">
+                    {stagePhases.map((phase, index) => (
+                      <li key={phase.name} className="flex gap-3">
+                        <div
+                          className={cn(
+                            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
+                            phase.failed
+                              ? "border-destructive bg-destructive/10 text-destructive"
+                              : phase.done
+                              ? "border-success bg-success/20 text-success"
+                              : phase.current
+                              ? "border-primary bg-primary/20 text-primary"
+                              : "border-border bg-muted text-muted-foreground",
                           )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                  {filteredFilings.length === 0 && filings.length > 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4" data-testid="text-no-filtered-filings">
-                      No filings match the selected municipality filter.
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
+                        >
+                          {phase.done ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                        </div>
+                        <div>
+                          <div className={cn("text-sm", phase.current ? "font-bold text-foreground" : "text-foreground/80")}>
+                            {phase.name}
+                          </div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">{phase.summary}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </aside>
+              )}
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               {selectedFiling && (
                 <>
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Activity className="h-5 w-5" />
-                          Agent Pipeline
-                        </CardTitle>
-                        {selectedFiling.filing_status === "awaiting_approval" && (
-                          <Button
-                            size="sm"
-                            onClick={() => setReviewDialogOpen(true)}
-                            data-testid="button-open-review"
-                          >
-                            <UserCheck className="h-4 w-4 mr-1" />
-                            Review & Decide
-                          </Button>
-                        )}
-                      </div>
-                      <CardDescription>
-                        {selectedFiling.property_address || "Filing"} — {FILING_STATUS_CONFIG[selectedFiling.filing_status]?.label || selectedFiling.filing_status}
-                        {(() => {
-                          const muni = getMunicipalityInfo(selectedFiling.municipality);
-                          return muni ? ` — ${muni.short_name} (${PORTAL_TYPE_LABELS[muni.portal_type] || muni.portal_type})` : "";
-                        })()}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        {[1, 2, 3].map((layer) => {
-                          const agents = layerAgents(layer);
-                          return (
-                            <div key={layer}>
-                              <div className="flex items-center gap-2 mb-3">
-                                <Badge variant="outline" data-testid={`badge-layer-${layer}`}>
-                                  Layer {layer}
-                                </Badge>
-                                <span className="text-sm font-medium text-muted-foreground">
-                                  {LAYER_LABELS[layer]}
-                                </span>
-                              </div>
-                              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                                {agents.map((agentCfg) => {
-                                  const agentRun = getRunForAgent(agentCfg.name);
-                                  return (
-                                    <AgentCard
-                                      key={agentCfg.name}
-                                      config={agentCfg}
-                                      run={agentRun}
-                                      isActive={selectedAgentRun?.agent_name === agentCfg.name && agentDetailOpen}
-                                      onClick={() => {
-                                        if (agentRun) {
-                                          setSelectedAgentRun(agentRun);
-                                          setAgentDetailOpen(true);
-                                        }
-                                      }}
-                                    />
-                                  );
-                                })}
-                              </div>
-                              {layer < 3 && <Separator className="mt-4" />}
+                  <Panel
+                    eyebrow="Operator queue"
+                    title={
+                      <span className="flex items-center gap-2">
+                        <Activity className="h-5 w-5" />
+                        Outstanding tasks
+                      </span>
+                    }
+                    action={
+                      selectedFiling.filing_status === "awaiting_approval" && (
+                        <Button
+                          size="sm"
+                          onClick={() => setReviewDialogOpen(true)}
+                          data-testid="button-open-review"
+                          className="pilot-button-primary"
+                        >
+                          <UserCheck className="h-4 w-4 mr-1" />
+                          {PERMIT_FILING_WIP ? "Open Review" : "Review & Decide"}
+                        </Button>
+                      )
+                    }
+                  >
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      {selectedFiling.property_address || "Filing"} — {FILING_STATUS_CONFIG[selectedFiling.filing_status]?.label || selectedFiling.filing_status}
+                      {(() => {
+                        const muni = getMunicipalityInfo(selectedFiling.municipality);
+                        return muni ? ` — ${muni.short_name} (${PORTAL_TYPE_LABELS[muni.portal_type] || muni.portal_type})` : "";
+                      })()}
+                    </p>
+                    <div className="space-y-5">
+                      {[1, 2, 3].map((layer) => {
+                        const agents = layerAgents(layer);
+                        return (
+                          <div key={layer}>
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                                Layer {layer} · {LAYER_LABELS[layer]}
+                              </span>
                             </div>
-                          );
-                        })}
+                            <div className="grid gap-2">
+                              {agents.map((agentCfg) => {
+                                const agentRun = getRunForAgent(agentCfg.name);
+                                return (
+                                  <TaskRow
+                                    key={agentCfg.name}
+                                    config={agentCfg}
+                                    run={agentRun}
+                                    isActive={selectedAgentRun?.agent_name === agentCfg.name && agentDetailOpen}
+                                    onClick={() => {
+                                      if (agentRun) {
+                                        setSelectedAgentRun(agentRun);
+                                        setAgentDetailOpen(true);
+                                      }
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Panel>
+
+                  <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                    <Panel title="Operator guidance" eyebrow="Co-pilot">
+                      <p className="text-sm leading-6 text-muted-foreground">{operatorGuidance.text}</p>
+                      {operatorGuidance.action && (
+                        <div className="mt-4">
+                          <Button size="sm" className="pilot-button-primary" onClick={operatorGuidance.action.onClick}>
+                            {operatorGuidance.action.label}
+                          </Button>
+                        </div>
+                      )}
+                    </Panel>
+
+                    <Panel title="Filing details" eyebrow="Reference">
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-border bg-muted/20 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-foreground">Municipality & portal</div>
+                            <StatusPill tone={selectedFiling.municipality ? "good" : "default"}>
+                              {selectedFiling.municipality ? "Assigned" : "Unassigned"}
+                            </StatusPill>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            {(() => {
+                              const muni = getMunicipalityInfo(selectedFiling.municipality);
+                              return muni
+                                ? `${muni.display_name} — ${PORTAL_TYPE_LABELS[muni.portal_type] || muni.portal_type} portal`
+                                : "No municipality has been matched to this filing yet.";
+                            })()}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-muted/20 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-foreground">Filing identifiers</div>
+                            <StatusPill tone={selectedFiling.confirmation_number ? "good" : "default"}>
+                              {selectedFiling.confirmation_number ? "Confirmed" : "Pending"}
+                            </StatusPill>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            {selectedFiling.application_id ? `Application: ${selectedFiling.application_id}. ` : ""}
+                            {selectedFiling.confirmation_number
+                              ? `Confirmation: ${selectedFiling.confirmation_number}.`
+                              : "No confirmation number yet — this appears once the portal accepts the submission."}
+                          </p>
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </Panel>
+                  </div>
 
                   {selectedFiling.filing_status === "submitted" && (
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
-                          <div>
-                            <p className="font-semibold" data-testid="text-submitted-title">Filing Submitted Successfully</p>
-                            {selectedFiling.application_id && (
-                              <p className="text-sm text-muted-foreground" data-testid="text-application-id">
-                                Application ID: {selectedFiling.application_id}
-                              </p>
-                            )}
-                            {selectedFiling.confirmation_number && (
-                              <p className="text-sm text-muted-foreground" data-testid="text-confirmation-number">
-                                Confirmation: {selectedFiling.confirmation_number}
-                              </p>
-                            )}
-                            {selectedFiling.submitted_at && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Submitted: {new Date(selectedFiling.submitted_at).toLocaleString()}
-                              </p>
-                            )}
-                          </div>
+                    <AlertBanner
+                      tone={PERMIT_FILING_WIP ? "warn" : "good"}
+                      title={PERMIT_FILING_WIP ? "Marked submitted · monitoring WIP" : "Filing submitted successfully"}
+                      detail={
+                        <div className="space-y-0.5">
+                          {PERMIT_FILING_WIP && (
+                            <p>{PERMIT_FILING_WIP_ACTION_TOOLTIP}</p>
+                          )}
+                          {selectedFiling.application_id && (
+                            <p data-testid="text-application-id">Application ID: {selectedFiling.application_id}</p>
+                          )}
+                          {selectedFiling.confirmation_number && (
+                            <p data-testid="text-confirmation-number">Confirmation: {selectedFiling.confirmation_number}</p>
+                          )}
+                          {selectedFiling.submitted_at && (
+                            <p className="text-xs opacity-80">
+                              Submitted: {new Date(selectedFiling.submitted_at).toLocaleString()}
+                            </p>
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
+                      }
+                    />
                   )}
 
                   {selectedFiling.filing_status === "failed" && (
-                    <Card className="border-destructive">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <XCircle className="h-6 w-6 text-destructive shrink-0" />
-                          <div>
-                            <p className="font-semibold text-destructive" data-testid="text-failed-title">Filing Failed</p>
-                            <p className="text-sm text-muted-foreground">
-                              Check agent logs for details on what went wrong.
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <AlertBanner
+                      tone="bad"
+                      title="Filing failed"
+                      detail="Check agent logs above for details on what went wrong."
+                    />
                   )}
 
                   {selectedFiling.approval_decision && (
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
+                    <Panel
+                      eyebrow={selectedFiling.approved_at ? new Date(selectedFiling.approved_at).toLocaleString() : undefined}
+                      title={
+                        <span className="flex items-center gap-2 text-base">
                           {selectedFiling.approval_decision === "approved" ? (
                             <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                           ) : (
                             <XCircle className="h-4 w-4 text-destructive" />
                           )}
                           Decision: {selectedFiling.approval_decision === "approved" ? "Approved" : "Rejected"}
-                        </CardTitle>
-                        {selectedFiling.approved_at && (
-                          <CardDescription>
-                            {new Date(selectedFiling.approved_at).toLocaleString()}
-                          </CardDescription>
-                        )}
-                      </CardHeader>
-                      {selectedFiling.approval_notes && (
-                        <CardContent>
-                          <p className="text-sm" data-testid="text-decision-notes">{selectedFiling.approval_notes}</p>
-                        </CardContent>
-                      )}
-                    </Card>
+                        </span>
+                      }
+                    >
+                      {selectedFiling.approval_notes ? (
+                        <p className="text-sm" data-testid="text-decision-notes">{selectedFiling.approval_notes}</p>
+                      ) : null}
+                    </Panel>
                   )}
                 </>
               )}
@@ -726,6 +1084,6 @@ export default function PermitWizardFiling() {
           }}
         />
       </div>
-    </section>
+    </div>
   );
 }

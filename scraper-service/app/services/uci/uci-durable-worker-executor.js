@@ -93,6 +93,7 @@ async function executeUciPortalSyncWorkerCycle(deps) {
     const summary = await runPortalSync(supabase, {
       coordinationRecordId,
       providerSlug: providerSlug || undefined,
+      isCancelRequested: () => pollUciPortalSyncJobCancelled(supabase, jobId),
     });
 
     await publishUciPortalSyncJobProgress(supabase, {
@@ -150,6 +151,11 @@ async function executeUciPortalSyncWorkerCycle(deps) {
     const code =
       err && typeof err === "object" ? String(/** @type {{ code?: unknown }} */ (err).code || "") : "";
     const message = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
+
+    if (code === "CANCELLED" || (await pollUciPortalSyncJobCancelled(supabase, jobId))) {
+      return { outcome: "cancelled" };
+    }
+
     const userMessage =
       code === "NO_PORTAL_SNAPSHOT"
         ? "No portal snapshot found. Run PEPCO discovery, then retry sync."

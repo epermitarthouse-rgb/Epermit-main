@@ -58,6 +58,10 @@ import {
   isWashingtonStyleProjectDoxCredential,
 } from "@/lib/portalView";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
+import {
+  buildQuickScrapeRequestIdentity,
+  resolveQuickScrapeSubmitFields,
+} from "@/lib/quickScrapeFormState";
 
 const SCRAPER_URL = getScraperBaseUrl();
 
@@ -182,6 +186,7 @@ function syncChainPhaseFromStages(
   nextAction: string,
 ): ChainPhase {
   if (nextAction === "complete") return "complete";
+  if (nextAction === "continue_enrichment") return "enrichment";
   if (!stages) return "intake";
   if (stages.auto_routing?.status === "running") return "router";
   if (stages.enrichment?.status === "running") return "enrichment";
@@ -532,20 +537,34 @@ export function AgentWorkflowStatus() {
     setEnrichmentRunning(true);
     setEnrichmentResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
-        body: {
-          project_id: projectIdToUse,
-          run_enrichment_only: true,
-          force_retry: true,
-        },
-      });
-      if (error) throw error;
-      const count = (data as { enrichment?: { enriched_count?: number } })?.enrichment?.enriched_count ?? 0;
-      setEnrichmentResult(count);
+      type EnrichmentPayload = {
+        enrichment?: { enriched_count?: number; error?: string; remaining?: number };
+        next_action?: string;
+      };
+      const maxContinues = 50;
+      let totalEnriched = 0;
+      for (let i = 0; i < maxContinues; i++) {
+        const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+          body: {
+            project_id: projectIdToUse,
+            run_enrichment_only: true,
+            force_retry: true,
+          },
+        });
+        if (error) throw error;
+        const payload = data as EnrichmentPayload;
+        if (payload?.enrichment?.error) {
+          toast.error(payload.enrichment.error);
+          return;
+        }
+        totalEnriched += payload?.enrichment?.enriched_count ?? 0;
+        if (payload?.next_action !== "continue_enrichment") break;
+      }
+      setEnrichmentResult(totalEnriched);
       await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
       await queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check"] });
       await queryClient.invalidateQueries({ queryKey: ["project_pipeline_run", projectIdToUse] });
-      toast.success(`${count} comment(s) enriched`);
+      toast.success(`${totalEnriched} comment(s) enriched`);
     } catch (e) {
       console.warn("Context reference engine failed:", e);
       toast.error("Enrichment failed");
@@ -992,7 +1011,7 @@ export function AgentWorkflowStatus() {
             break;
           }
 
-          if (nextAction === "poll_again") {
+          if (nextAction === "poll_again" || nextAction === "continue_enrichment") {
             if (cpData?.error === "timeout" || (cpData?.next_cursor != null && !cpData?.done)) {
               cursor = cpData?.error === "timeout" ? undefined : cpData.next_cursor;
             } else {
@@ -1101,26 +1120,36 @@ export function AgentWorkflowStatus() {
     arlingtonOpts?: ArlingtonScrapeTabOpts,
     runOpts?: { arlingtonPortalMonitor?: boolean },
   ) => {
-    const projectIdToUse = projectBySelectedId?.id ?? latestProjectId;
-    const permitNumberToUse =
-      projectBySelectedId?.permit_number ?? latestPermitNumber;
+    // Selected project UUID is source of truth — never fall back to another
+    // project's permit (e.g. latest Washington B2606607) after a project switch.
+    const submitFields = resolveQuickScrapeSubmitFields({
+      selectedProjectId,
+      selectedProject: projectBySelectedId,
+    });
 
-    if (!projectIdToUse) {
-      toast.error(
-        "No project found. Select a project in the sidebar or create one first.",
-      );
+    if (!submitFields.ok) {
+      if (submitFields.reason === "no_project" || submitFields.reason === "project_mismatch") {
+        toast.error(
+          "No project found. Select a project in the header Active Project control or create one first.",
+        );
+      } else if (submitFields.reason === "missing_permit") {
+        toast.error(
+          "Permit / Application # is required. Set it on the project (Edit Project or header Active Project), then try again.",
+        );
+      } else {
+        toast.error(
+          "No portal credential linked to this project. Select a credential in the header Active Project control (or Edit Project), then try again.",
+        );
+      }
       return;
     }
+
+    const projectIdToUse = submitFields.projectId;
+    const permitNumberToUse = submitFields.permitNumber;
+    const credentialId = submitFields.credentialId;
 
     if (!session?.access_token) {
       toast.error("You must be logged in to run this check.");
-      return;
-    }
-
-    if (!permitNumberToUse || String(permitNumberToUse).trim() === "") {
-      toast.error(
-        "Permit # is required. Set it in the sidebar: select the project, then enter Permit # under the project dropdown.",
-      );
       return;
     }
 
@@ -1136,23 +1165,8 @@ export function AgentWorkflowStatus() {
     setRouterResult(null);
     setPortalStatus("checking");
     setPortalStatusText("Connecting...");
-    toast.info("Chain Step 1/5: Portal Scraping...");
 
     try {
-      const { data: projectRow } = await supabase
-        .from("projects")
-        .select("credential_id")
-        .eq("id", projectIdToUse)
-        .maybeSingle();
-
-      const credentialId = projectRow?.credential_id;
-
-      if (!credentialId) {
-        throw new Error(
-          "No portal credential linked to this project. Select a credential in the sidebar dropdown under \"Portal Credential\", then try again.",
-        );
-      }
-
       const { data: credRow } = await supabase
         .from("portal_credentials")
         .select("login_url")
@@ -1184,7 +1198,7 @@ export function AgentWorkflowStatus() {
         if (persisted?.sessionId) return persisted.sessionId;
         const legacyActive = `${scrape.activeSessionId || ""}`.trim();
         if (legacyActive) return legacyActive;
-        const legacyScrape = getPersistedScrapeSessionForProject(projId);
+        const legacyScrape = getPersistedScrapeSessionForProject(projId, user?.id);
         if (legacyScrape?.sessionId) return legacyScrape.sessionId;
         return null;
       };
@@ -1230,7 +1244,6 @@ export function AgentWorkflowStatus() {
             "[Arlington][AccelaSession] stale session detected; clearing and re-login",
           );
           scrape.clearAccelaBrowserSession(projectIdToUse);
-          toast.info("Reconnecting to Arlington Accela...");
         }
 
         let sessionId: string | null = null;
@@ -1239,7 +1252,7 @@ export function AgentWorkflowStatus() {
         }
 
         if (!sessionId) {
-          toast.info(
+          setPortalStatusText(
             forceFreshLogin ? "Reconnecting to portal..." : "Logging into portal...",
           );
 
@@ -1272,7 +1285,7 @@ export function AgentWorkflowStatus() {
             );
           }
         } else {
-          toast.info("Using active portal session...");
+          setPortalStatusText("Using active portal session...");
         }
 
         scrape.setAccelaSessionId(sessionId, {
@@ -1281,10 +1294,12 @@ export function AgentWorkflowStatus() {
         });
 
         const scrapeBody: Record<string, unknown> = {
-          sessionId,
-          permitNumber: String(permitNumberToUse).trim(),
-          userId: user!.id,
-          projectId: projectIdToUse,
+          ...buildQuickScrapeRequestIdentity({
+            sessionId,
+            userId: user!.id,
+            projectId: projectIdToUse,
+            permitNumber: permitNumberToUse,
+          }),
         };
 
         if (useArlingtonCustomTabs) {
@@ -1354,13 +1369,13 @@ export function AgentWorkflowStatus() {
         };
 
         if (scrapePayload.currentlyRunningJobId) {
-          toast.info("Your scrape is queued — finishing the current worker cycle first.");
+          setPortalStatusText("Your scrape is queued — finishing the current worker cycle first.");
         } else if ((scrapePayload.queuePosition ?? 0) > 0) {
-          toast.info("Your scrape is queued — it will run next.");
+          setPortalStatusText("Your scrape is queued — it will run next.");
         } else if (scrapePayload.reusedExistingJob) {
-          toast.info("Scrape already running — attached to existing job.");
+          setPortalStatusText("Scrape already running — attached to existing job.");
         } else {
-          toast.success("Scraping started — you can continue using the app.");
+          setPortalStatusText("Scraping started");
         }
         scrape.startScrapeSession(
           sessionId,
@@ -1382,7 +1397,7 @@ export function AgentWorkflowStatus() {
       setPortalStatusText("Error");
       setChainPhase("idle");
       const msg = error instanceof Error ? error.message : String(error);
-      const projectId = projectBySelectedId?.id ?? latestProjectId;
+      const projectId = selectedProjectId ?? projectBySelectedId?.id ?? null;
       if (projectId) {
         await logChainFailure(projectId, "portal-scraper", msg);
       }
@@ -2088,9 +2103,15 @@ export function AgentWorkflowStatus() {
       description: commentParserDescription,
       action: (
         <Button size="sm" variant="outline" asChild className="mt-2" data-testid="link-comment-review">
-          <Link to="/comment-review">
+          <Link
+            to={
+              selectedProjectId
+                ? `/comment-review?project_id=${encodeURIComponent(selectedProjectId)}`
+                : "/comment-review"
+            }
+          >
             <ExternalLink className="h-4 w-4 mr-2" />
-            Open Comment Review
+            Upload &amp; Parse Comments
           </Link>
         </Button>
       ),
@@ -2101,9 +2122,15 @@ export function AgentWorkflowStatus() {
       description: classifierDescription,
       action: (
         <Button size="sm" variant="outline" asChild className="mt-2" data-testid="link-classified-comments">
-          <Link to="/classified-comments">
+          <Link
+            to={
+              selectedProjectId
+                ? `/response-matrix?project_id=${encodeURIComponent(selectedProjectId)}`
+                : "/response-matrix"
+            }
+          >
             <ExternalLink className="h-4 w-4 mr-2" />
-            View Classified Comments
+            Open Response Matrix
           </Link>
         </Button>
       ),

@@ -23,6 +23,8 @@ interface AdminPageShellProps {
   wrapperClassName?: string;
   /** Cream editorial chrome for in-app admin (vs gray legacy shell). */
   variant?: "default" | "editorial";
+  /** Lovable-style eyebrow above the title */
+  eyebrow?: string;
 }
 
 export function AdminPageShell({
@@ -32,33 +34,21 @@ export function AdminPageShell({
   children,
   actions,
   contentOnly,
-  maxWidthClass = "max-w-5xl",
+  maxWidthClass = "max-w-6xl",
   wrapperClassName,
   variant = "default",
+  eyebrow = "Admin Control Center",
 }: AdminPageShellProps) {
   const editorial = variant === "editorial";
   return (
-    <div
-      className={cn(
-        editorial ? "min-h-screen bg-cream py-6 text-ink-primary-light sm:py-8" : "min-h-screen bg-muted/30 py-6 sm:py-8",
-        wrapperClassName,
-      )}
-    >
-      <div className={cn(`w-full ${maxWidthClass} mx-auto px-4 sm:px-6`)}>
+    <div className={cn("space-y-6", wrapperClassName)}>
+      <div className={cn(`w-full ${maxWidthClass} mx-auto`)}>
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav
-            className={cn(
-              "flex items-center gap-1.5 text-sm mb-4",
-              editorial ? "text-ink-secondary-light" : "text-muted-foreground",
-            )}
+            className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground"
             aria-label="Breadcrumb"
           >
-            <Link
-              to="/admin"
-              className={cn(
-                editorial ? "hover:text-ink-primary-light transition-colors" : "hover:text-foreground transition-colors",
-              )}
-            >
+            <Link to="/admin" className="transition-colors hover:text-foreground">
               Admin
             </Link>
             {breadcrumbs.map((item, i) => (
@@ -67,51 +57,32 @@ export function AdminPageShell({
                 {item.href ? (
                   <Link
                     to={item.href}
-                    className={cn(
-                      editorial ? "hover:text-ink-primary-light transition-colors" : "hover:text-foreground transition-colors",
-                    )}
+                    className="transition-colors hover:text-foreground"
                   >
                     {item.label}
                   </Link>
                 ) : (
-                  <span
-                    className={cn(
-                      "font-medium",
-                      editorial ? "text-ink-primary-light" : "text-foreground",
-                    )}
-                  >
-                    {item.label}
-                  </span>
+                  <span className="font-medium text-foreground">{item.label}</span>
                 )}
               </span>
             ))}
           </nav>
         )}
         {!contentOnly && (
-          <div
-            className={cn(
-              "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6",
-              editorial && "border-b border-cream-sunken/70 pb-6",
-            )}
-          >
+          <header className="mb-6 flex flex-col gap-3 border-b border-border pb-6 md:flex-row md:items-end md:justify-between">
             <div>
-              <h1
-                className={cn(
-                  editorial
-                    ? "font-display text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl"
-                    : "text-2xl sm:text-3xl font-bold tracking-tight",
-                )}
-              >
+              <div className="pilot-kicker text-primary">{eyebrow}</div>
+              <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
                 {title}
               </h1>
               {description && (
-                <p className={cn("mt-1", editorial ? "text-ink-secondary-light" : "text-muted-foreground")}>
-                  {description}
-                </p>
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{description}</p>
               )}
             </div>
-            {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
-          </div>
+            {actions && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>
+            )}
+          </header>
         )}
         {children}
       </div>

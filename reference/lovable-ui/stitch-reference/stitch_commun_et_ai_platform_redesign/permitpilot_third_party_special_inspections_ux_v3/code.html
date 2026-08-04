@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Inter+Tight:wght@600;700;800;900&amp;family=Cormorant+Garamond:ital,wght@0,600;1,600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .grid-overlay {
+            background-size: 40px 40px;
+            background-image: radial-gradient(circle, #E2E8F0 1px, transparent 1px);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid #E2E8F0;
+        }
+        .cp-glow {
+            box-shadow: 0 0 15px rgba(145, 76, 0, 0.15);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .fill-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#914c00",
+                        "primary-container": "#e8882f",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#572b00",
+                        "surface": "#fff8f5",
+                        "surface-container": "#fcebe0",
+                        "surface-border": "#E2E8F0",
+                        "outline": "#887365",
+                        "outline-variant": "#dbc2b1",
+                        "secondary": "#535f73",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "on-surface": "#221a13",
+                        "on-surface-variant": "#554337",
+                        "inverse-surface": "#382e27",
+                    },
+                    fontFamily: {
+                        "label-caps": ["Inter Tight"],
+                        "h1": ["Inter Tight"],
+                        "h2": ["Inter Tight"],
+                        "h3": ["Inter Tight"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "data-mono": ["JetBrains Mono"],
+                    },
+                    spacing: {
+                        "md": "16px",
+                        "sm": "8px",
+                        "gutter": "24px",
+                        "margin": "32px",
+                        "lg": "24px"
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface font-body-md text-on-surface antialiased overflow-hidden">
+<!-- Side Navigation Shell -->
+<aside class="fixed left-0 top-0 h-screen w-64 bg-inverse-surface dark:bg-on-background flex flex-col py-md px-sm z-50 shadow-2xl">
+<div class="mb-xl px-4">
+<div class="font-h2 text-h2 font-black text-on-primary-fixed bg-primary-container px-2 py-1 rounded inline-block">PermitPilot</div>
+<p class="font-label-caps text-label-caps text-outline-variant mt-2 tracking-widest opacity-70">Mission Control v3</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined mr-3">grid_view</span>
+<span class="font-label-caps text-label-caps">Unified Matrix</span>
+</a>
+<a class="flex items-center bg-primary text-on-primary font-bold rounded-lg mx-2 px-4 py-2 scale-95 active:scale-90 transition-transform group shadow-lg" href="#">
+<span class="material-symbols-outlined mr-3 fill-icon">domain</span>
+<span class="font-label-caps text-label-caps">Building Permits</span>
+</a>
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined mr-3">description</span>
+<span class="font-label-caps text-label-caps">Raze Permits</span>
+</a>
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined mr-3">electrical_services</span>
+<span class="font-label-caps text-label-caps">Utility Coordination</span>
+</a>
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 hover:bg-primary-container/20 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined mr-3">analytics</span>
+<span class="font-label-caps text-label-caps">Reports</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-white/10 pt-md px-2 space-y-1">
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+<a class="flex items-center text-on-secondary-fixed-variant hover:text-on-primary-fixed px-4 py-2 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">help_outline</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen flex flex-col grid-overlay relative">
+<!-- Top App Bar -->
+<header class="fixed top-0 right-0 w-[calc(100%-256px)] z-40 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant px-margin py-md flex items-center justify-between shadow-sm">
+<div>
+<h1 class="font-h3 text-h3 text-primary font-bold tracking-tight">Unified Task Matrix</h1>
+<div class="flex gap-md mt-1">
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-all" href="#">Main table</a>
+<a class="font-label-caps text-label-caps text-primary border-b-2 border-primary font-semibold" href="#">Special Inspections</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-all" href="#">Gantt</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-all" href="#">Critical Path</a>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="pl-10 pr-4 py-2 bg-white/50 border border-outline-variant rounded-full text-sm focus:outline-none focus:border-primary-container w-64" placeholder="Search tasks..." type="text"/>
+</div>
+<button class="bg-primary-container text-on-primary-container font-label-caps text-label-caps px-4 py-2 rounded flex items-center gap-2 hover:opacity-90 transition-opacity">
+                    Deploy Agent <span class="material-symbols-outlined text-sm">auto_awesome</span>
+</button>
+<div class="flex gap-sm">
+<span class="material-symbols-outlined text-outline hover:text-primary cursor-pointer">notifications</span>
+<span class="material-symbols-outlined text-outline hover:text-primary cursor-pointer">history</span>
+</div>
+<img alt="Lead Coordinator" class="w-10 h-10 rounded-full border-2 border-primary-container shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKVQLm6fYKVRew3EUcQ9kwzs5Xj-Z2PrpRpZtn5pCucZr_Yz0eqj2SRxTmxmv7CdQ-tJu2vJdZt4SMhy-yhzRCGwtIdDoBFZclmzDa0TXi16e5Zkwble02QSXlQCMtfMTab78ma85qLgD3LuF9Ud4wdkflbKs_sQ-1ZjsivHRTZVgoB3gYryo7neoJWiwYeC4bkwK1e4FQDayBuG4d3JkA2ftf5ApOpILRrDG2Rig-r_sHyz0LrYosZtcsLQLSzRAyYtDYm-bEJoo"/>
+</div>
+</header>
+<!-- Page Header Section -->
+<div class="mt-32 px-margin">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-display-lg text-display-lg italic text-primary leading-tight">Third Party &amp; Special Inspections Mission Control</h2>
+<p class="font-body-lg text-on-surface-variant mt-2 max-w-2xl">
+                        Project ID: <span class="font-data-mono text-data-mono">PP-2024-X902</span> • 
+                        Location: <span class="font-semibold">Northwest Transit Terminal Hub</span> • 
+                        Phase: <span class="text-primary-container font-bold">Substructure Foundation</span>
+</p>
+</div>
+<div class="flex gap-sm">
+<div class="bg-white px-md py-sm rounded-lg border border-outline-variant flex flex-col items-center">
+<span class="font-label-caps text-label-caps opacity-50">COMPLETION</span>
+<span class="font-h2 text-h2 text-primary">64%</span>
+</div>
+<div class="bg-white px-md py-sm rounded-lg border border-outline-variant flex flex-col items-center">
+<span class="font-label-caps text-label-caps opacity-50">CRITICAL PATHS</span>
+<span class="font-h2 text-h2 text-status-error">03</span>
+</div>
+</div>
+</div>
+<!-- The Matrix -->
+<div class="space-y-gutter pb-xxl">
+<!-- Section: Agency Coordination -->
+<section class="glass-card rounded-xl overflow-hidden shadow-sm">
+<div class="bg-surface-container px-lg py-sm flex items-center justify-between border-b border-outline-variant">
+<h3 class="font-h3 text-h3 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">hub</span>
+                            Agency Coordination
+                        </h3>
+<span class="font-label-caps text-[10px] text-white bg-secondary px-2 py-0.5 rounded">3 TASKS ACTIVE</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-lowest/50 border-b border-outline-variant">
+<th class="px-lg py-md font-label-caps text-label-caps text-on-surface-variant">ITEM / DESCRIPTION</th>
+<th class="px-md py-md font-label-caps text-label-caps text-on-surface-variant">TRACKING #</th>
+<th class="px-md py-md font-label-caps text-label-caps text-on-surface-variant">PATH</th>
+<th class="px-md py-md font-label-caps text-label-caps text-on-surface-variant">COORDINATOR</th>
+<th class="px-md py-md font-label-caps text-label-caps text-on-surface-variant">STATUS</th>
+<th class="px-lg py-md font-label-caps text-label-caps text-on-surface-variant text-right">TARGET DATE</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-lg py-md font-semibold">Pre-construction Agency Meeting</td>
+<td class="px-md py-md font-data-mono text-sm">TRK-988-COORD</td>
+<td class="px-md py-md">
+<span class="px-2 py-0.5 bg-secondary/10 text-secondary font-label-caps text-[10px] rounded">NCP</span>
+</td>
+<td class="px-md py-md">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-container text-white text-[10px] flex items-center justify-center font-bold">CE</div>
+<span class="text-sm">Commun-ET</span>
+</div>
+</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-status-success/10 text-status-success font-label-caps text-[10px] rounded-full border border-status-success/20">COMPLETE</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm">2024-05-12</td>
+</tr>
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-lg py-md font-semibold">Structural Peer Review Alignment</td>
+<td class="px-md py-md font-data-mono text-sm">TRK-441-STR</td>
+<td class="px-md py-md">
+<span class="px-2 py-0.5 bg-status-error/10 text-status-error font-label-caps text-[10px] rounded border border-status-error/20">CP</span>
+</td>
+<td class="px-md py-md text-sm">Lead GC Team</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-status-warning/10 text-status-warning font-label-caps text-[10px] rounded-full border border-status-warning/20">IN PROGRESS</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm">2024-06-20</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Section: Field Inspections -->
+<section class="glass-card rounded-xl overflow-hidden shadow-sm">
+<div class="bg-surface-container px-lg py-sm flex items-center justify-between border-b border-outline-variant">
+<h3 class="font-h3 text-h3 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">construction</span>
+                            Field Inspections
+                        </h3>
+<span class="font-label-caps text-[10px] text-white bg-primary px-2 py-0.5 rounded">6 TASKS ACTIVE</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-lg py-md font-semibold w-1/4">Soil &amp; Bearing Capacity Test</td>
+<td class="px-md py-md font-data-mono text-sm w-48">FI-SO-002</td>
+<td class="px-md py-md w-24">
+<span class="px-2 py-0.5 bg-status-error/10 text-status-error font-label-caps text-[10px] rounded border border-status-error/20">CP</span>
+</td>
+<td class="px-md py-md">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-secondary text-white text-[10px] flex items-center justify-center font-bold">INS</div>
+<span class="text-sm">Special Inspector</span>
+</div>
+</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-status-success/10 text-status-success font-label-caps text-[10px] rounded-full border border-status-success/20">PASSED</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm">2024-06-15</td>
+</tr>
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-lg py-md font-semibold">Concrete Compressive Strength</td>
+<td class="px-md py-md font-data-mono text-sm">FI-CO-109</td>
+<td class="px-md py-md">
+<span class="px-2 py-0.5 bg-secondary/10 text-secondary font-label-caps text-[10px] rounded">NCP</span>
+</td>
+<td class="px-md py-md text-sm">Comm-ET Lab</td>
+<td class="px-md py-md flex items-center gap-2">
+<div class="w-24 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary-container" style="width: 75%"></div>
+</div>
+<span class="font-data-mono text-[10px]">75%</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm">2024-06-25</td>
+</tr>
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-lg py-md font-semibold">Welding &amp; Bolting Certification</td>
+<td class="px-md py-md font-data-mono text-sm">FI-ST-224</td>
+<td class="px-md py-md">
+<span class="px-2 py-0.5 bg-status-error/10 text-status-error font-label-caps text-[10px] rounded border border-status-error/20">CP</span>
+</td>
+<td class="px-md py-md text-sm">Steel Fabricator GC</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-status-warning/10 text-status-warning font-label-caps text-[10px] rounded-full border border-status-warning/20">PENDING</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm">2024-07-01</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Section: Reporting & Release -->
+<section class="glass-card rounded-xl overflow-hidden shadow-sm border-2 border-primary-container/30 cp-glow">
+<div class="bg-primary-container/10 px-lg py-sm flex items-center justify-between border-b border-primary-container/30">
+<h3 class="font-h3 text-h3 flex items-center gap-3 text-on-primary-container">
+<span class="material-symbols-outlined text-primary fill-icon">assignment_turned_in</span>
+                            Reporting &amp; Release
+                        </h3>
+<div class="flex items-center gap-4">
+<div class="flex -space-x-2">
+<img alt="Team Member" class="w-6 h-6 rounded-full border border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpTWJ9w-zu3eTvhA6m8i_D2YXdj7WlQyLNYK1Uq7eoE1rJPQwoyUxIld4NDk9Hh2GJaOh4HNHlUU2LE_uFblPTIXABEzHWXs56OOfX0YsO6x2FK3ammGhE2zgzD-rr375AbPqBGn-u-0f5W_DXu3IfXPxXFVRJkKF3Vba0gtTbTAD09N5-h7NKhlHTSz6G6dlPJK2XnkeZo3L3IQ_z3uJamG3WZXPBGjaTtTiqH_s5pr6jzUelG6ApXBb4nTP3BHEvcn_qjzlZPbE"/>
+<img alt="Team Member" class="w-6 h-6 rounded-full border border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqsElgijg_Dq0YmWyN9lkSjCS0EaIp3OJ2e0kaaeV9N4lOxH1xWEh3UMgg2pMpcTvJjWXCQ_x5ceOkPzGc-5cF3My9Y3maNMvxgOs8M6uoesVV0xnmpYAIgm42EEwLhZwIy2Vbmu_zAbukV9XyLdhvyII2pPHywVRtBhbQxKMbv5cPW4W_6DqPvSeZqMOKH0-gMir7E-7EOjFFSp94nZ-p-8M6I50qKjIXkC87KJUibid89K5E07XlXkHW6ZrElBviGsy8Gv_qGI8"/>
+</div>
+<span class="font-label-caps text-[10px] text-white bg-status-error px-2 py-0.5 rounded">CRITICAL RELEASE</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-lg py-md font-semibold w-1/4">SIR Monthly Submittal (May)</td>
+<td class="px-md py-md font-data-mono text-sm w-48">SIR-2024-05</td>
+<td class="px-md py-md w-24">
+<span class="px-2 py-0.5 bg-secondary/10 text-secondary font-label-caps text-[10px] rounded">NCP</span>
+</td>
+<td class="px-md py-md text-sm">Commun-ET</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-status-success/10 text-status-success font-label-caps text-[10px] rounded-full border border-status-success/20">FILED</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm">2024-05-30</td>
+</tr>
+<tr class="bg-primary/10 hover:bg-primary/20 transition-colors">
+<td class="px-lg py-md font-bold text-primary flex items-center gap-2">
+                                        Final Structural Release
+                                        <span class="material-symbols-outlined text-sm">warning</span>
+</td>
+<td class="px-md py-md font-data-mono text-sm font-bold">CERT-FINAL-S</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-status-error text-white font-label-caps text-[10px] rounded shadow-sm">CP</span>
+</td>
+<td class="px-md py-md text-sm font-semibold">Multiple Entities</td>
+<td class="px-md py-md">
+<span class="px-2 py-1 bg-on-surface/5 text-on-surface font-label-caps text-[10px] rounded-full border border-on-surface/20">LOCKED</span>
+</td>
+<td class="px-lg py-md text-right font-data-mono text-sm font-bold">2024-07-15</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+<!-- Float FAB Contextual Action -->
+<button class="fixed bottom-margin right-margin bg-primary text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group z-50">
+<span class="material-symbols-outlined text-3xl group-hover:rotate-90 transition-transform">add</span>
+<span class="absolute right-16 bg-inverse-surface text-white px-3 py-1 rounded text-xs font-label-caps opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Log Inspection</span>
+</button>
+<!-- Dynamic Grid Detail Background (Visual Only) -->
+<div class="absolute inset-0 pointer-events-none z-0 opacity-20">
+<div class="w-full h-full" style="background-image: linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px); background-size: 100px 100px;"></div>
+</div>
+</main>
+<script>
+        // Micro-interaction for row highlights
+        document.querySelectorAll('tr').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.classList.add('shadow-inner');
+            });
+            row.addEventListener('mouseleave', () => {
+                row.classList.remove('shadow-inner');
+            });
+        });
+    </script>
+</body></html>

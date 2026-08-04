@@ -15,6 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import { Shield, Send, Users, Bell, Loader2, Mail, Eye, Palette, Save, History, CheckCircle, XCircle, Clock, Calendar, Trash2, Building2, MailCheck, Flag, MapPin } from 'lucide-react';
 import { DripCampaignManager } from '@/components/admin/DripCampaignManager';
 import { AdminPageShell } from '@/components/admin/AdminPageShell';
+import { AlertBanner, MetricCard, Panel, StatusPill } from '@/components/design/ProductPrimitives';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
@@ -530,35 +531,67 @@ export default function AdminPanel() {
         <Flag className="mr-2 h-4 w-4" />
         Feature Flags
       </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/authorizations')}>
+        <History className="mr-2 h-4 w-4" />
+        Authorizations
+        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/members')}>
+        <Users className="mr-2 h-4 w-4" />
+        Members
+        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/audit')}>
+        <History className="mr-2 h-4 w-4" />
+        Audit Log
+        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+      </Button>
     </div>
   );
+
+  const totalSubscribers = jurisdictions.reduce((sum, j) => sum + j.subscriber_count, 0);
+
+  const deliveryStats = {
+    success: activityLogs.filter((l) => l.delivery_status === 'success').length,
+    partial: activityLogs.filter((l) => l.delivery_status === 'partial').length,
+    failed: activityLogs.filter((l) => l.delivery_status === 'failed').length,
+    pending: activityLogs.filter((l) => l.delivery_status === 'pending').length,
+  };
+  const emailSentCount = activityLogs.filter((l) => l.email_sent).length;
+  const mostRecentFailure = activityLogs.find((l) => l.delivery_status === 'failed');
 
   return (
     <>
       <AdminPageShell
-        variant="editorial"
-        title="Admin Panel"
-        description="Notifications, drip campaigns, activity log, and email branding."
+        title="Workspace Operations"
+        description="Notifications, drip campaigns, activity log, and email branding — live PermitPilot admin controls."
         breadcrumbs={[{ label: 'Overview' }]}
         actions={adminQuickLinks}
+        eyebrow="Admin Control Center"
       >
         <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-4">
+            <MetricCard label="Jurisdictions" value={jurisdictions.length} icon={Building2} detail="Subscribed for notifications" />
+            <MetricCard label="Subscriptions" value={totalSubscribers} icon={Users} detail="Active jurisdiction subscribers" />
+            <MetricCard label="Activity events" value={activityLogs.length} icon={History} detail="Recent admin actions logged" />
+            <MetricCard label="Scheduled" value={scheduledNotifications.length} icon={Calendar} detail="Pending / processing sends" />
+          </div>
 
             <Tabs defaultValue="notifications" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/40 p-1 text-ink-secondary-light">
-              <TabsTrigger value="notifications" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+            <TabsList className="pilot-card flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1.5">
+              <TabsTrigger value="notifications" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <Bell className="h-4 w-4" />
                 Notifications
               </TabsTrigger>
-              <TabsTrigger value="drip" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+              <TabsTrigger value="drip" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <MailCheck className="h-4 w-4" />
                 Drip Campaigns
               </TabsTrigger>
-              <TabsTrigger value="activity" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+              <TabsTrigger value="activity" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <History className="h-4 w-4" />
                 Activity Log
               </TabsTrigger>
-              <TabsTrigger value="branding" className="flex items-center gap-2 data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm">
+              <TabsTrigger value="branding" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
                 <Palette className="h-4 w-4" />
                 Email Branding
               </TabsTrigger>
@@ -569,34 +602,6 @@ export default function AdminPanel() {
             </TabsContent>
 
             <TabsContent value="notifications" className="space-y-6">
-              {/* Stats Cards */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Jurisdictions with Subscribers
-                    </CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{jurisdictions.length}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Total Subscriptions
-                    </CardTitle>
-                    <Bell className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {jurisdictions.reduce((sum, j) => sum + j.subscriber_count, 0)}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
               {/* Send Notification Card */}
               <Card>
                 <CardHeader>
@@ -995,108 +1000,153 @@ export default function AdminPanel() {
             </TabsContent>
 
             <TabsContent value="activity" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <History className="h-5 w-5" />
-                    Notification Activity Log
-                  </CardTitle>
-                  <CardDescription>
-                    Track all notifications sent from the admin panel with timestamps, sender info, and delivery status.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingLogs ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                  ) : activityLogs.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No activity logs yet.</p>
-                      <p className="text-sm">Logs will appear here when you send notifications.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {activityLogs.map((log) => (
-                        <div 
-                          key={log.id} 
-                          className="border rounded-lg p-4 space-y-3"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-semibold">
-                                  {log.notification_title || 'Untitled Notification'}
-                                </h4>
-                                {log.delivery_status === 'success' && (
-                                  <Badge variant="default" className="bg-green-500">
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    Success
-                                  </Badge>
-                                )}
-                                {log.delivery_status === 'partial' && (
-                                  <Badge variant="secondary" className="bg-yellow-500 text-white">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    Partial
-                                  </Badge>
-                                )}
-                                {log.delivery_status === 'failed' && (
-                                  <Badge variant="destructive">
-                                    <XCircle className="h-3 w-3 mr-1" />
-                                    Failed
-                                  </Badge>
-                                )}
-                                {log.delivery_status === 'pending' && (
-                                  <Badge variant="outline">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    Pending
-                                  </Badge>
+              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <History className="h-5 w-5" />
+                      Notification Activity Log
+                    </CardTitle>
+                    <CardDescription>
+                      Track all notifications sent from the admin panel with timestamps, sender info, and delivery status.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingLogs ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    ) : activityLogs.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No activity logs yet.</p>
+                        <p className="text-sm">Logs will appear here when you send notifications.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {activityLogs.map((log) => (
+                          <div 
+                            key={log.id} 
+                            className="border rounded-lg p-4 space-y-3"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-semibold">
+                                    {log.notification_title || 'Untitled Notification'}
+                                  </h4>
+                                  {log.delivery_status === 'success' && (
+                                    <Badge variant="default" className="bg-green-500">
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      Success
+                                    </Badge>
+                                  )}
+                                  {log.delivery_status === 'partial' && (
+                                    <Badge variant="secondary" className="bg-yellow-500 text-white">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Partial
+                                    </Badge>
+                                  )}
+                                  {log.delivery_status === 'failed' && (
+                                    <Badge variant="destructive">
+                                      <XCircle className="h-3 w-3 mr-1" />
+                                      Failed
+                                    </Badge>
+                                  )}
+                                  {log.delivery_status === 'pending' && (
+                                    <Badge variant="outline">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Pending
+                                    </Badge>
+                                  )}
+                                </div>
+                                {log.jurisdiction_name && (
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    Jurisdiction: {log.jurisdiction_name}
+                                  </p>
                                 )}
                               </div>
-                              {log.jurisdiction_name && (
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Jurisdiction: {log.jurisdiction_name}
-                                </p>
-                              )}
+                              <div className="text-right text-sm text-muted-foreground shrink-0">
+                                <p>{format(new Date(log.created_at), 'MMM d, yyyy')}</p>
+                                <p>{format(new Date(log.created_at), 'h:mm a')}</p>
+                              </div>
                             </div>
-                            <div className="text-right text-sm text-muted-foreground shrink-0">
-                              <p>{format(new Date(log.created_at), 'MMM d, yyyy')}</p>
-                              <p>{format(new Date(log.created_at), 'h:mm a')}</p>
+
+                            <div className="flex flex-wrap gap-4 text-sm">
+                              <div className="flex items-center gap-1.5">
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                                <span>{log.subscriber_count} subscriber{log.subscriber_count !== 1 ? 's' : ''}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <span>{log.email_sent ? 'Email sent' : 'In-app only'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <span>by {log.admin_email}</span>
+                              </div>
                             </div>
+
+                            {log.notification_message && (
+                              <p className="text-sm text-muted-foreground line-clamp-2 bg-muted/50 p-2 rounded">
+                                {log.notification_message}
+                              </p>
+                            )}
+
+                            {log.error_message && (
+                              <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">
+                                Error: {log.error_message}
+                              </p>
+                            )}
                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-                          <div className="flex flex-wrap gap-4 text-sm">
-                            <div className="flex items-center gap-1.5">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span>{log.subscriber_count} subscriber{log.subscriber_count !== 1 ? 's' : ''}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Mail className="h-4 w-4 text-muted-foreground" />
-                              <span>{log.email_sent ? 'Email sent' : 'In-app only'}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <span>by {log.admin_email}</span>
-                            </div>
-                          </div>
+                <aside className="space-y-4 lg:self-start">
+                  <Panel eyebrow="Last 50 events" title="Delivery health">
+                    {loadingLogs ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    ) : activityLogs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No notification activity yet.</p>
+                    ) : (
+                      <ul className="space-y-2 text-sm">
+                        <li className="flex items-center justify-between rounded border border-border bg-muted/30 px-3 py-2">
+                          <span>Delivered</span>
+                          <StatusPill tone="good">{deliveryStats.success}</StatusPill>
+                        </li>
+                        <li className="flex items-center justify-between rounded border border-border bg-muted/30 px-3 py-2">
+                          <span>Partial delivery</span>
+                          <StatusPill tone="warn">{deliveryStats.partial}</StatusPill>
+                        </li>
+                        <li className="flex items-center justify-between rounded border border-border bg-muted/30 px-3 py-2">
+                          <span>Failed</span>
+                          <StatusPill tone={deliveryStats.failed > 0 ? "bad" : "default"}>{deliveryStats.failed}</StatusPill>
+                        </li>
+                        <li className="flex items-center justify-between rounded border border-border bg-muted/30 px-3 py-2">
+                          <span>Pending</span>
+                          <StatusPill tone="default">{deliveryStats.pending}</StatusPill>
+                        </li>
+                        <li className="flex items-center justify-between rounded border border-border bg-muted/30 px-3 py-2">
+                          <span>Emails sent</span>
+                          <StatusPill tone="info">{emailSentCount}</StatusPill>
+                        </li>
+                      </ul>
+                    )}
+                  </Panel>
 
-                          {log.notification_message && (
-                            <p className="text-sm text-muted-foreground line-clamp-2 bg-muted/50 p-2 rounded">
-                              {log.notification_message}
-                            </p>
-                          )}
-
-                          {log.error_message && (
-                            <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">
-                              Error: {log.error_message}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                  {mostRecentFailure && (
+                    <AlertBanner
+                      tone="bad"
+                      title="Recent delivery failure"
+                      detail={`"${mostRecentFailure.notification_title || 'Untitled'}" to ${mostRecentFailure.jurisdiction_name || 'a jurisdiction'} — ${mostRecentFailure.error_message || 'check the log for details'}.`}
+                    />
                   )}
-                </CardContent>
-              </Card>
+                </aside>
+              </div>
             </TabsContent>
           </Tabs>
 

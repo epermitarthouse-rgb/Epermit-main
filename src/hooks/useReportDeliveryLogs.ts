@@ -13,10 +13,12 @@ export interface ReportDeliveryLog {
   successful_count: number;
   failed_count: number;
   failed_emails: string[];
-  status: 'success' | 'partial' | 'failed';
+  status: 'success' | 'partial' | 'failed' | 'no_match';
   error_message: string | null;
   sent_at: string;
   created_at: string;
+  is_test?: boolean;
+  checklist_count?: number | null;
 }
 
 export function useReportDeliveryLogs(reportId?: string) {
@@ -34,6 +36,8 @@ export function useReportDeliveryLogs(reportId?: string) {
 
     try {
       setLoading(true);
+      // Production analytics/history only. Send Test does not write logs.
+      // Client-filter is_test so History still works before the column migration lands.
       let query = supabase
         .from('scheduled_report_delivery_logs')
         .select('*')
@@ -47,7 +51,10 @@ export function useReportDeliveryLogs(reportId?: string) {
       const { data, error } = await query;
 
       if (error) throw error;
-      setLogs((data || []) as ReportDeliveryLog[]);
+      const productionLogs = ((data || []) as ReportDeliveryLog[]).filter(
+        (log) => log.is_test !== true,
+      );
+      setLogs(productionLogs);
     } catch (err) {
       console.error('Error fetching delivery logs:', err);
     } finally {

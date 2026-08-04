@@ -4,11 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, Phone, MapPin, Loader2, CheckCircle2, Send } from "lucide-react";
+import { Mail, Phone, MapPin, Loader2, CheckCircle2, Send, CalendarClock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { Panel, StatusPill } from "@/components/design/ProductPrimitives";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -21,7 +20,7 @@ const Contact = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
     }));
@@ -29,7 +28,7 @@ const Contact = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.message) {
       toast.error("Please fill in all fields");
       return;
@@ -38,7 +37,7 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-contact-email', {
+      const { error } = await supabase.functions.invoke("send-contact-email", {
         body: formData,
       });
 
@@ -57,192 +56,174 @@ const Contact = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-20">
-        <div className="max-w-4xl mx-auto">
-          <motion.div 
-            className="text-center mb-12"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
-            <p className="text-muted-foreground text-lg">
-              Get in touch with our team — we typically respond within 24 hours
-            </p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 gap-8">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle>Send a Message</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isSubmitted ? (
-                    <motion.div 
-                      className="text-center py-8"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                    >
-                      <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle2 className="h-8 w-8 text-accent" />
-                      </div>
-                      <h3 className="text-xl font-semibold mb-2">Message Sent!</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Thank you for reaching out. We'll get back to you within 24 hours.
-                      </p>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setIsSubmitted(false)}
-                      >
-                        Send Another Message
-                      </Button>
-                    </motion.div>
-                  ) : (
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="firstName">First Name</Label>
-                          <Input 
-                            id="firstName"
-                            name="firstName"
-                            placeholder="John" 
-                            value={formData.firstName}
-                            onChange={handleChange}
-                            disabled={isSubmitting}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="lastName">Last Name</Label>
-                          <Input 
-                            id="lastName"
-                            name="lastName"
-                            placeholder="Doe" 
-                            value={formData.lastName}
-                            onChange={handleChange}
-                            disabled={isSubmitting}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input 
-                          id="email"
-                          name="email"
-                          type="email" 
-                          placeholder="john@company.com" 
-                          value={formData.email}
-                          onChange={handleChange}
-                          disabled={isSubmitting}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="message">Message</Label>
-                        <Textarea 
-                          id="message"
-                          name="message"
-                          placeholder="Tell us about your permit management needs..." 
-                          rows={4} 
-                          value={formData.message}
-                          onChange={handleChange}
-                          disabled={isSubmitting}
-                        />
-                      </div>
-                      <Button 
-                        type="submit" 
-                        className="w-full bg-accent hover:bg-accent/90"
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="mr-2 h-4 w-4" />
-                            Send Message
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-            
-            <motion.div 
-              className="space-y-6"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="space-y-6">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                        <Mail className="h-5 w-5 text-accent" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Email</p>
-                        <a 
-                          href="mailto:hello@commun-et.com" 
-                          className="text-muted-foreground hover:text-accent transition-colors"
-                        >
-                          hello@commun-et.com
-                        </a>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                        <Phone className="h-5 w-5 text-accent" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Phone</p>
-                        <a 
-                          href="tel:+15551234567" 
-                          className="text-muted-foreground hover:text-accent transition-colors"
-                        >
-                          (555) 123-4567
-                        </a>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                        <MapPin className="h-5 w-5 text-accent" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Office</p>
-                        <p className="text-muted-foreground">
-                          123 Main St, Suite 100<br />
-                          San Francisco, CA 94105
-                        </p>
-                      </div>
-                    </div>
+      <div className="container mx-auto max-w-5xl space-y-6 px-4 py-12 md:py-16">
+        <header className="text-center">
+          <div className="pilot-kicker text-primary">Support</div>
+          <h1 className="mt-2 font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">
+            Contact Us
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground md:text-base">
+            Get in touch with our team — we typically respond within 24 hours.
+          </p>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+          <Panel eyebrow="Send a Message" title="How can we help?">
+            {isSubmitted ? (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-success/30 bg-success/10">
+                  <CheckCircle2 className="h-7 w-7 text-success" />
+                </div>
+                <h3 className="font-tight text-xl font-bold text-foreground">Message Sent!</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Thank you for reaching out. We'll get back to you within 24 hours.
+                </p>
+                <Button variant="outline" className="mt-5" onClick={() => setIsSubmitted(false)}>
+                  Send Another Message
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName" className="pilot-kicker text-foreground/80">
+                      First Name
+                    </Label>
+                    <Input
+                      id="firstName"
+                      name="firstName"
+                      className="pilot-input"
+                      placeholder="John"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                      disabled={isSubmitting}
+                    />
                   </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-accent/5 border-accent/20">
-                <CardContent className="pt-6">
-                  <h3 className="font-semibold mb-2">Need immediate help?</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Schedule a free 15-minute consultation with our permit experts.
-                  </p>
-                  <Button variant="outline" className="w-full" asChild>
-                    <a href="https://calendly.com" target="_blank" rel="noopener noreferrer">
-                      Book a Call
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName" className="pilot-kicker text-foreground/80">
+                      Last Name
+                    </Label>
+                    <Input
+                      id="lastName"
+                      name="lastName"
+                      className="pilot-input"
+                      placeholder="Doe"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="pilot-kicker text-foreground/80">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    className="pilot-input"
+                    placeholder="john@company.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="message" className="pilot-kicker text-foreground/80">
+                    Message
+                  </Label>
+                  <Textarea
+                    id="message"
+                    name="message"
+                    className="pilot-input min-h-[120px]"
+                    placeholder="Tell us about your permit management needs..."
+                    rows={4}
+                    value={formData.message}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <Button type="submit" className="pilot-button-primary w-full" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Message
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
+          </Panel>
+
+          <div className="space-y-4">
+            <Panel eyebrow="Reach us" title="Direct channels">
+              <div className="space-y-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Email</p>
+                    <a
+                      href="mailto:hello@commun-et.com"
+                      className="text-sm text-muted-foreground transition-colors hover:text-primary"
+                    >
+                      hello@commun-et.com
                     </a>
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Phone className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Phone</p>
+                    <a
+                      href="tel:+15551234567"
+                      className="text-sm text-muted-foreground transition-colors hover:text-primary"
+                    >
+                      (555) 123-4567
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Office</p>
+                    <p className="text-sm text-muted-foreground">
+                      123 Main St, Suite 100
+                      <br />
+                      San Francisco, CA 94105
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Panel>
+
+            <Panel eyebrow="Consultation" title="Need immediate help?">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Schedule a free 15-minute consultation with our permit experts.
+                </p>
+                <StatusPill tone="info">
+                  <CalendarClock className="mr-1 h-3 w-3" />
+                  15 min
+                </StatusPill>
+              </div>
+              <Button variant="outline" className="pilot-button-ghost mt-4 w-full" asChild>
+                <a href="https://calendly.com" target="_blank" rel="noopener noreferrer">
+                  Book a Call
+                </a>
+              </Button>
+            </Panel>
           </div>
         </div>
       </div>

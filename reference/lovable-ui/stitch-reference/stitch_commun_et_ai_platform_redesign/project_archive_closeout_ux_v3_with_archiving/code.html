@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot - Project Closeout</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&amp;family=Inter:wght@400;500&amp;family=Inter+Tight:wght@600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary": "#914c00",
+                      "on-tertiary-fixed-variant": "#0e4b6e",
+                      "tertiary": "#2f6388",
+                      "background-alt": "#F5F8FB",
+                      "on-tertiary-container": "#003a59",
+                      "secondary-fixed": "#d6e3fb",
+                      "tertiary-fixed": "#cbe6ff",
+                      "surface-tint": "#914c00",
+                      "surface-border": "#E2E8F0",
+                      "surface-variant": "#f1dfd5",
+                      "surface-container-highest": "#f1dfd5",
+                      "primary-fixed": "#ffdcc3",
+                      "on-tertiary": "#ffffff",
+                      "status-success": "#137333",
+                      "on-primary-fixed": "#2f1500",
+                      "outline": "#887365",
+                      "status-warning": "#B06000",
+                      "surface-container-high": "#f6e5da",
+                      "secondary": "#535f73",
+                      "on-tertiary-fixed": "#001e30",
+                      "tertiary-container": "#74a5cd",
+                      "on-surface-variant": "#554337",
+                      "on-primary-container": "#572b00",
+                      "on-primary": "#ffffff",
+                      "surface-bright": "#fff8f5",
+                      "secondary-container": "#d6e3fb",
+                      "surface-dim": "#e8d7cc",
+                      "on-secondary-container": "#596579",
+                      "text-muted": "#64748B",
+                      "on-secondary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "on-error-container": "#93000a",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-container": "#fcebe0",
+                      "primary-fixed-dim": "#ffb77e",
+                      "surface": "#fff8f5",
+                      "secondary-fixed-dim": "#bac7de",
+                      "on-surface": "#221a13",
+                      "tertiary-fixed-dim": "#9bccf6",
+                      "background": "#fff8f5",
+                      "inverse-surface": "#382e27",
+                      "inverse-on-surface": "#ffede3",
+                      "on-error": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "on-secondary-fixed": "#0f1c2d",
+                      "outline-variant": "#dbc2b1",
+                      "on-background": "#221a13",
+                      "primary-container": "#e8882f",
+                      "surface-container-low": "#fff1e9",
+                      "on-primary-fixed-variant": "#6e3900",
+                      "inverse-primary": "#ffb77e",
+                      "on-secondary-fixed-variant": "#3b475a",
+                      "status-error": "#C5221F"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "xs": "4px",
+                      "sm": "8px",
+                      "xxl": "64px",
+                      "unit": "4px",
+                      "md": "16px",
+                      "xl": "40px",
+                      "margin": "32px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "h2": [
+                              "Inter Tight"
+                      ],
+                      "h3": [
+                              "Inter Tight"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "label-caps": [
+                              "Inter Tight"
+                      ],
+                      "display-lg": [
+                              "Cormorant Garamond"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "h1": [
+                              "Inter Tight"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "data-mono": [
+                              "JetBrains Mono"
+                      ]
+              },
+              "fontSize": {
+                      "h2": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.3",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "h3": [
+                              "20px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "1.0",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "1.1",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "h1": [
+                              "32px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "data-mono": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Ambient Background */
+        body {
+            background-color: theme('colors.background-alt');
+        }
+        
+        /* Soft Drop Shadows for Canvas */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(14, 27, 44, 0.02);
+            border: 1px solid theme('colors.surface-border');
+        }
+        
+        /* Decorative Flare */
+        .corner-flare {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle at top right, theme('colors.primary-fixed'), transparent 70%);
+            opacity: 0.3;
+            pointer-events: none;
+            border-top-right-radius: inherit;
+        }
+
+        .corner-flare-success {
+             background: radial-gradient(circle at top right, #c3e6cb, transparent 70%);
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased min-h-screen flex flex-col font-body-md text-body-md">
+<!-- TopNavBar (Web) -->
+<header class="hidden md:flex justify-between items-center px-margin py-md w-full bg-surface/80 dark:bg-surface/80 backdrop-blur-md shadow-sm border-b border-surface-border docked full-width top-0 z-50 transition-transform scale-95 active:scale-90">
+<div class="flex items-center gap-md">
+<span class="font-display-lg text-h2 text-primary font-bold">PermitPilot</span>
+</div>
+<!-- Search (on_left) -->
+<div class="relative flex-grow max-w-md ml-margin">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-text-muted text-body-lg">search</span>
+<input class="w-full pl-xl pr-md py-sm rounded-DEFAULT border border-surface-border bg-surface-container-lowest focus:border-primary focus:ring-0 text-body-sm font-body-sm placeholder-text-muted transition-colors" placeholder="Search projects..." type="text"/>
+</div>
+<nav class="flex items-center gap-lg ml-auto mr-xl">
+<a class="text-secondary-fixed-variant font-medium hover:text-primary-container transition-colors font-label-caps text-label-caps" href="#">Setup</a>
+<a class="text-secondary-fixed-variant font-medium hover:text-primary-container transition-colors font-label-caps text-label-caps" href="#">Permit Filing</a>
+<a class="text-secondary-fixed-variant font-medium hover:text-primary-container transition-colors font-label-caps text-label-caps" href="#">Utility Coordination</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-label-caps text-label-caps" href="#">Closeout</a>
+</nav>
+<div class="flex items-center gap-md">
+<button class="bg-primary text-on-primary px-md py-sm rounded-DEFAULT font-label-caps text-label-caps hover:bg-primary-container transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
+                Create Project
+            </button>
+<button class="text-secondary-fixed-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-secondary-fixed-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-variant border border-surface-border overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA4c0yJK-Zut0CwSbBhOPtRHsHeDhryYgM_WhaCiG7_5Ix4Rak7ZXMISuFpMrwPLuj9mr-vFjUgIUCO2caD9EIAIeC8vAV7WMUAe5oWK0_ukD446y9HukrYVcC_erv-UlpO2qOYroe7V6bHcXCSrpez5IhYK5NP0UJk8JgjPjI1CkeWCQQFKh2VrkiJ23t4EZEh4te0_kOJAmDJx129EZHShFG1q98vuD5teBiK8H6uPnHpmhLmadsZul_kzLFKRQZv7e7R4LynhIQ"/>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col h-full py-lg px-md bg-surface-container-low dark:bg-surface-container-low fixed left-0 top-0 w-64 border-r border-surface-border flat no shadows z-40 pt-24 translate-x-1 duration-200">
+<!-- Header -->
+<div class="mb-lg px-sm">
+<div class="flex items-center gap-sm mb-sm">
+<div class="w-10 h-10 rounded-DEFAULT bg-primary-container flex items-center justify-center text-on-primary">
+<span class="font-h3 text-h3">NM</span>
+</div>
+<div>
+<h2 class="font-h3 text-h3 text-on-surface truncate w-40">North Main Substation</h2>
+<p class="font-label-caps text-label-caps text-text-muted">Utility Corridor A-12</p>
+</div>
+</div>
+<button class="w-full bg-surface-container-lowest border border-surface-border text-primary font-label-caps text-label-caps py-sm rounded-DEFAULT flex items-center justify-center gap-xs hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-[16px]">analytics</span>
+                    Analyze Conflicts
+                 </button>
+</div>
+<!-- Nav Links -->
+<nav class="flex-1 flex flex-col gap-xs">
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                     Dashboard
+                 </a>
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-primary font-bold bg-primary-fixed-dim/20 font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined fill-icon">description</span>
+                     Documents
+                 </a>
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">map</span>
+                     Map View
+                 </a>
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+                     AI Agent
+                 </a>
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">event_upcoming</span>
+                     Timeline
+                 </a>
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">folder_shared</span>
+                     Resources
+                 </a>
+</nav>
+<!-- Footer Nav -->
+<div class="mt-auto border-t border-surface-border pt-sm">
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">help</span>
+                     Help Center
+                 </a>
+<a class="flex items-center gap-md px-sm py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">download</span>
+                     Export Data
+                 </a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="flex-1 ml-0 md:ml-64 p-margin pt-24 md:pt-margin overflow-y-auto">
+<!-- Hero Header -->
+<div class="mb-xl flex justify-between items-end">
+<div>
+<h1 class="font-display-lg text-display-lg text-primary mb-xs">Mission Complete</h1>
+<p class="font-body-lg text-body-lg text-text-muted max-w-2xl">Project archiving and final handover for Phase 4. All critical milestones have been successfully verified and sealed.</p>
+</div>
+<div class="hidden md:flex gap-md">
+<button class="bg-surface-container-lowest border border-surface-border text-on-surface px-md py-sm rounded-DEFAULT font-label-caps text-label-caps hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">print</span>
+                        Print Summary
+                    </button>
+<button class="bg-primary text-on-primary px-md py-sm rounded-DEFAULT font-label-caps text-label-caps hover:bg-primary-container transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] flex items-center gap-xs" onclick="document.getElementById('archive-modal').classList.remove('hidden')"><span class="material-symbols-outlined text-[16px]">inventory_2</span>Archive Project</button>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Left Column: Status & Packages -->
+<div class="lg:col-span-8 space-y-gutter">
+<!-- Status Tracker Bento Box -->
+<div class="glass-panel rounded-xl p-lg relative overflow-hidden">
+<div class="corner-flare corner-flare-success"></div>
+<h2 class="font-h3 text-h3 mb-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-status-success fill-icon">verified</span>
+                             Closeout Pipeline Verified
+                         </h2>
+<div class="space-y-md relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-surface-border">
+<!-- Step 1 -->
+<div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+<div class="flex items-center justify-center w-8 h-8 rounded-full border-2 border-status-success bg-status-success/10 text-status-success shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+<span class="material-symbols-outlined text-[16px] font-bold">check</span>
+</div>
+<div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] glass-panel border-l-4 border-l-status-success p-md rounded-DEFAULT">
+<div class="flex justify-between items-start mb-xs">
+<h3 class="font-h2 text-h3 text-on-surface">Final Energization</h3>
+<span class="font-label-caps text-label-caps text-status-success bg-status-success/10 px-sm py-xs rounded-full">Completed</span>
+</div>
+<p class="font-body-sm text-body-sm text-text-muted font-data-mono text-data-mono">Substation Grid Sync: Confirmed 14:02 EST</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+<div class="flex items-center justify-center w-8 h-8 rounded-full border-2 border-status-success bg-status-success/10 text-status-success shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+<span class="material-symbols-outlined text-[16px] font-bold">check</span>
+</div>
+<div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] glass-panel border-l-4 border-l-status-success p-md rounded-DEFAULT">
+<div class="flex justify-between items-start mb-xs">
+<h3 class="font-h2 text-h3 text-on-surface">Inspector Release Transmission</h3>
+<span class="font-label-caps text-label-caps text-status-success bg-status-success/10 px-sm py-xs rounded-full">Approved</span>
+</div>
+<p class="font-body-sm text-body-sm text-text-muted font-data-mono text-data-mono">Doc ID: IRT-992-B logged to municipal server</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Final Handover Package -->
+<div class="glass-panel rounded-xl p-lg">
+<div class="flex justify-between items-center mb-md border-b border-surface-border pb-sm">
+<h2 class="font-h2 text-h2 text-on-surface">Final Handover Package</h2>
+<button class="text-primary font-label-caps text-label-caps hover:text-primary-container flex items-center gap-xs">
+                                 Download All <span class="material-symbols-outlined text-[16px]">download</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<!-- Card 1 -->
+<div class="border border-surface-border rounded-DEFAULT p-md hover:bg-surface-container-lowest transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-DEFAULT bg-surface-container-high flex items-center justify-center text-primary mb-sm group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">architecture</span>
+</div>
+<h3 class="font-h3 text-h3 text-on-surface mb-xs">As-Built Drawings</h3>
+<p class="font-body-sm text-body-sm text-text-muted mb-md line-clamp-2">Final schematics reflecting all field modifications and utility tie-ins.</p>
+<div class="flex items-center justify-between text-text-muted font-label-caps text-label-caps">
+<span>PDF • 14.2 MB</span>
+<span class="material-symbols-outlined text-[18px] group-hover:text-primary transition-colors">download</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="border border-surface-border rounded-DEFAULT p-md hover:bg-surface-container-lowest transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-DEFAULT bg-surface-container-high flex items-center justify-center text-primary mb-sm group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">handshake</span>
+</div>
+<h3 class="font-h3 text-h3 text-on-surface mb-xs">Service Agreements</h3>
+<p class="font-body-sm text-body-sm text-text-muted mb-md line-clamp-2">Executed contracts with municipal water, power, and telecommunications.</p>
+<div class="flex items-center justify-between text-text-muted font-label-caps text-label-caps">
+<span>ZIP • 8.5 MB</span>
+<span class="material-symbols-outlined text-[18px] group-hover:text-primary transition-colors">download</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="border border-surface-border rounded-DEFAULT p-md hover:bg-surface-container-lowest transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-DEFAULT bg-surface-container-high flex items-center justify-center text-primary mb-sm group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">summarize</span>
+</div>
+<h3 class="font-h3 text-h3 text-on-surface mb-xs">Closeout Memo</h3>
+<p class="font-body-sm text-body-sm text-text-muted mb-md line-clamp-2">Executive summary, final cost analysis, and sign-off records.</p>
+<div class="flex items-center justify-between text-text-muted font-label-caps text-label-caps">
+<span>PDF • 2.1 MB</span>
+<span class="material-symbols-outlined text-[18px] group-hover:text-primary transition-colors">download</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Context & Sidebar -->
+<div class="lg:col-span-4 space-y-gutter">
+<!-- Context Sidebar -->
+<div class="glass-panel rounded-xl p-lg bg-surface-container-lowest border-l-4 border-l-primary relative overflow-hidden">
+<div class="corner-flare"></div>
+<div class="flex items-center gap-sm mb-md text-primary">
+<span class="material-symbols-outlined fill-icon text-h2">local_library</span>
+<h3 class="font-h2 text-h3 text-on-surface">Institutional Memory</h3>
+</div>
+<div class="prose prose-sm text-body-sm font-body-sm text-on-surface-variant space-y-sm">
+<p>Proper archiving is critical for maintaining long-term infrastructure health. The handover package serves as the definitive legal and technical record for the North Main Substation.</p>
+<p><strong>Why this matters:</strong></p>
+<ul class="list-disc pl-md space-y-xs text-text-muted">
+<li>Future maintenance relies on accurate As-Builts.</li>
+<li>Dispute resolution requires verifiable service agreements.</li>
+<li>Compliance audits necessitate complete inspection trails.</li>
+</ul>
+</div>
+<div class="mt-lg pt-sm border-t border-surface-border">
+<div class="flex items-center gap-sm text-text-muted font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-[16px]">info</span>
+                                Records are retained for 25 years.
+                            </div>
+</div>
+</div>
+<!-- Quick Metrics -->
+<div class="glass-panel rounded-xl p-lg">
+<h3 class="font-label-caps text-label-caps text-text-muted mb-md uppercase tracking-wider">Project Audit Trail</h3>
+<div class="space-y-sm">
+<div class="flex justify-between items-center py-xs border-b border-surface-border/50">
+<span class="font-body-sm text-body-sm text-on-surface">Total Documents Sealed</span>
+<span class="font-data-mono text-data-mono font-bold">142</span>
+</div>
+<div class="flex justify-between items-center py-xs border-b border-surface-border/50">
+<span class="font-body-sm text-body-sm text-on-surface">Agencies Coordinated</span>
+<span class="font-data-mono text-data-mono font-bold">6</span>
+</div>
+<div class="flex justify-between items-center py-xs border-b border-surface-border/50">
+<span class="font-body-sm text-body-sm text-on-surface">Inspections Passed</span>
+<span class="font-data-mono text-data-mono font-bold">28</span>
+</div>
+<div class="flex justify-between items-center py-xs">
+<span class="font-body-sm text-body-sm text-on-surface">Days Active</span>
+<span class="font-data-mono text-data-mono font-bold">312</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

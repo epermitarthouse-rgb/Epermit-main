@@ -10,8 +10,9 @@ import { JurisdictionTrendsChart } from '@/components/analytics/JurisdictionTren
 import { ProjectTypeBreakdownCard } from '@/components/analytics/ProjectTypeBreakdownCard';
 import { DateRangeFilter, DateRange, PresetRange, getPresetDateRange } from '@/components/analytics/DateRangeFilter';
 import { AnalyticsExport } from '@/components/analytics/AnalyticsExport';
-import { EditorialPageHeader } from '@/components/layout/EditorialPageHeader';
-import { Loader2, BarChart3 } from 'lucide-react';
+import { PageHeader, Panel } from '@/components/design/ProductPrimitives';
+import { EmptyState } from '@/components/design/EmptyState';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -35,8 +36,8 @@ export default function Analytics() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center bg-cream">
-        <Loader2 className="h-8 w-8 animate-spin text-teal" />
+      <div className="flex min-h-[50vh] items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -46,64 +47,53 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-cream text-ink-primary-light">
-      <EditorialPageHeader
-        eyebrow="ANALYTICS & REPORTING"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Analytics & Reporting"
         title="Analytics & Reporting"
-        description="Permit cycle times, costs, and performance metrics for your workspace."
-        icon={BarChart3}
-        iconClassName="text-teal"
-        actions={<AnalyticsExport
-          summary={summary}
-          jurisdictionMetrics={jurisdictionMetrics}
-          projectTypeMetrics={projectTypeMetrics}
-          rejectionTrends={rejectionTrends}
-          dateRange={dateRange}
-        />}
+        body="Permit cycle times, costs, and performance metrics for your workspace."
+        action={
+          <AnalyticsExport
+            summary={summary}
+            jurisdictionMetrics={jurisdictionMetrics}
+            projectTypeMetrics={projectTypeMetrics}
+            rejectionTrends={rejectionTrends}
+            dateRange={dateRange}
+          />
+        }
       />
 
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 md:py-8">
-        <div className="mb-8 rounded-2xl border border-cream-sunken bg-cream-raised/80 px-4 py-4 shadow-inner sm:px-5">
-          <DateRangeFilter
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-            presetRange={presetRange}
-            onPresetChange={setPresetRange}
-          />
+      <Panel eyebrow="Date range" title="Report window">
+        <DateRangeFilter
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          presetRange={presetRange}
+          onPresetChange={setPresetRange}
+        />
+      </Panel>
+
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      ) : error ? (
+        <Panel>
+          <EmptyState
+            icon={AlertCircle}
+            title="Could not load analytics"
+            body={error}
+          />
+        </Panel>
+      ) : (
+        <div className="space-y-6">
+          <AnalyticsSummaryCards summary={summary} />
 
-        {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-teal" />
-          </div>
-        ) : error ? (
-          <div className="py-8 text-center">
-            <p className="text-destructive">{error}</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <AnalyticsSummaryCards summary={summary} />
-
+          <Panel>
             <Tabs defaultValue="trends" className="space-y-6">
-              <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl border border-cream-sunken bg-cream-sunken/40 p-1 text-ink-secondary-light sm:grid-cols-3 lg:inline-flex lg:w-auto">
-                <TabsTrigger
-                  value="trends"
-                  className="data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  Permit Trends
-                </TabsTrigger>
-                <TabsTrigger
-                  value="performance"
-                  className="data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  Performance
-                </TabsTrigger>
-                <TabsTrigger
-                  value="costs"
-                  className="data-[state=active]:bg-cream data-[state=active]:text-ink-primary-light data-[state=active]:shadow-sm"
-                >
-                  Costs & Rejections
-                </TabsTrigger>
+              <TabsList className="grid h-auto w-full grid-cols-1 gap-1 sm:grid-cols-3 lg:inline-flex lg:w-auto">
+                <TabsTrigger value="trends">Permit Trends</TabsTrigger>
+                <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="costs">Costs &amp; Rejections</TabsTrigger>
               </TabsList>
 
               <TabsContent value="trends" className="space-y-6">
@@ -128,9 +118,9 @@ export default function Analytics() {
                 </div>
               </TabsContent>
             </Tabs>
-          </div>
-        )}
-      </div>
+          </Panel>
+        </div>
+      )}
     </div>
   );
 }

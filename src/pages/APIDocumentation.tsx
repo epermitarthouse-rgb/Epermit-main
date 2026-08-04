@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { apiEndpoints, categoryLabels, APIEndpoint } from '@/lib/apiDocumentationData';
 import { exportAPIDocumentationPDF } from '@/lib/apiDocumentationPDF';
 import { toast } from 'sonner';
+import { MetricCard, PageHeader } from '@/components/design/ProductPrimitives';
 
 const APIDocumentation = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,16 +131,12 @@ const APIDocumentation = () => {
 
   return (
     <>
-      <div className="container mx-auto py-8 px-4 max-w-6xl">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Server className="h-6 w-6 text-primary" />
-              </div>
-              <h1 className="text-3xl font-bold text-foreground">API Documentation</h1>
-            </div>
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Documentation"
+          title="API Documentation"
+          body="Complete reference for all edge functions. Each endpoint includes authentication requirements, request/response schemas, and code examples."
+          action={
             <Button onClick={handleExportPDF} disabled={isExporting}>
               {isExporting ? (
                 <>
@@ -153,45 +150,15 @@ const APIDocumentation = () => {
                 </>
               )}
             </Button>
-          </div>
-          <p className="text-muted-foreground max-w-2xl">
-            Complete reference for all edge functions. Each endpoint includes authentication requirements,
-            request/response schemas, and code examples.
-          </p>
-        </div>
+          }
+        />
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-4 text-center">
-              <div className="text-2xl font-bold text-foreground">{apiEndpoints.length}</div>
-              <div className="text-sm text-muted-foreground">Total Endpoints</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 text-center">
-              <div className="text-2xl font-bold text-foreground">
-                {apiEndpoints.filter(e => e.authRequired).length}
-              </div>
-              <div className="text-sm text-muted-foreground">Protected</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 text-center">
-              <div className="text-2xl font-bold text-foreground">
-                {apiEndpoints.filter(e => !e.authRequired).length}
-              </div>
-              <div className="text-sm text-muted-foreground">Public</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 text-center">
-              <div className="text-2xl font-bold text-foreground">
-                {Object.keys(categoryLabels).length}
-              </div>
-              <div className="text-sm text-muted-foreground">Categories</div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard label="Total endpoints" value={apiEndpoints.length} icon={Server} />
+          <MetricCard label="Protected" value={apiEndpoints.filter(e => e.authRequired).length} icon={Lock} />
+          <MetricCard label="Public" value={apiEndpoints.filter(e => !e.authRequired).length} icon={Unlock} />
+          <MetricCard label="Categories" value={Object.keys(categoryLabels).length} />
         </div>
 
         {/* Search & Filter */}

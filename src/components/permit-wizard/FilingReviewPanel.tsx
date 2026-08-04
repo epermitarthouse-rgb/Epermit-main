@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   CheckCircle2,
   XCircle,
@@ -23,11 +24,19 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { formatPermitFilingError } from '@/lib/permitFilingErrors';
 import { toast } from 'sonner';
+import { AlertBanner } from '@/components/design/ProductPrimitives';
 import { PropertyIntelligenceCard } from './PropertyIntelligenceCard';
 import { LicenseValidationCard } from './LicenseValidationCard';
 import { DocumentChecklistCard } from './DocumentChecklistCard';
 import { PermitClassificationCard } from './PermitClassificationCard';
+import {
+  PERMIT_FILING_WIP,
+  PERMIT_FILING_WIP_ACTION_TOOLTIP,
+  PERMIT_FILING_WIP_LABEL,
+  PERMIT_FILING_WIP_NOTE,
+} from './permitFilingWip';
 
 interface ApprovalPackage {
   assembled_at?: string;
@@ -130,6 +139,10 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
   const muniMeta = filing?.municipality ? MUNICIPALITY_META[filing.municipality] ?? null : null;
 
   const handleDecision = useCallback(async (decision: 'approved' | 'rejected') => {
+    if (PERMIT_FILING_WIP) {
+      toast.info(PERMIT_FILING_WIP_ACTION_TOOLTIP);
+      return;
+    }
     if (!filing || !user) return;
     if (!notes.trim()) {
       toast.error('Notes are required for the approval decision.');
@@ -201,7 +214,7 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
       onDecisionMade?.();
     } catch (e) {
       console.error('Decision update failed:', e);
-      toast.error('Failed to save decision. Please try again.');
+      toast.error(formatPermitFilingError(e, 'Failed to save decision. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -239,10 +252,28 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
             <Shield className="h-5 w-5" />
             Pre-Submission Review
           </h2>
-          <Badge className={statusConfig.badgeClass} data-testid="badge-filing-status">
-            {statusConfig.label}
-          </Badge>
+          <div className="flex items-center gap-2 flex-wrap">
+            {PERMIT_FILING_WIP && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                data-testid="badge-filing-review-wip"
+              >
+                {PERMIT_FILING_WIP_LABEL}
+              </Badge>
+            )}
+            <Badge className={statusConfig.badgeClass} data-testid="badge-filing-status">
+              {statusConfig.label}
+            </Badge>
+          </div>
         </div>
+        {PERMIT_FILING_WIP && (
+          <AlertBanner
+            tone="warn"
+            title={PERMIT_FILING_WIP_LABEL}
+            detail={PERMIT_FILING_WIP_NOTE}
+          />
+        )}
         {muniMeta && (
           <p className="text-sm font-medium" data-testid="text-municipality-name">
             {muniMeta.displayName}
@@ -359,7 +390,9 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Review Decision</CardTitle>
             <CardDescription>
-              Review the package above and approve or reject the filing. Notes are required.
+              {PERMIT_FILING_WIP
+                ? 'Review package is visible for UI evaluation. Final approval and execution are gated while this workflow is work in progress.'
+                : 'Review the package above and approve or reject the filing. Notes are required.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -370,27 +403,46 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
               className="resize-none"
               rows={3}
               data-testid="input-review-notes"
+              disabled={PERMIT_FILING_WIP}
             />
             <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                onClick={() => handleDecision('approved')}
-                disabled={submitting || !notes.trim()}
-                data-testid="button-approve-filing"
-              >
-                {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                Approve Filing
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => handleDecision('rejected')}
-                disabled={submitting || !notes.trim()}
-                data-testid="button-reject-filing"
-              >
-                {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <XCircle className="h-4 w-4 mr-2" />}
-                Reject Filing
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex" tabIndex={0}>
+                    <Button
+                      onClick={() => handleDecision('approved')}
+                      disabled={PERMIT_FILING_WIP || submitting || !notes.trim()}
+                      data-testid="button-approve-filing"
+                    >
+                      {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                      Approve Filing
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {PERMIT_FILING_WIP && (
+                  <TooltipContent className="max-w-xs">{PERMIT_FILING_WIP_ACTION_TOOLTIP}</TooltipContent>
+                )}
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex" tabIndex={0}>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDecision('rejected')}
+                      disabled={PERMIT_FILING_WIP || submitting || !notes.trim()}
+                      data-testid="button-reject-filing"
+                    >
+                      {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <XCircle className="h-4 w-4 mr-2" />}
+                      Reject Filing
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {PERMIT_FILING_WIP && (
+                  <TooltipContent className="max-w-xs">{PERMIT_FILING_WIP_ACTION_TOOLTIP}</TooltipContent>
+                )}
+              </Tooltip>
             </div>
-            {hasHardStop && (
+            {hasHardStop && !PERMIT_FILING_WIP && (
               <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 Warning: A hard stop was detected. Approving will override this.
@@ -409,9 +461,22 @@ export function FilingReviewPanel({ filing, isLoading, onDecisionMade, asDialog,
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) onDialogClose?.(); }}>
         <DialogContent className="max-w-3xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Filing Review</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              Filing Review
+              {PERMIT_FILING_WIP && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                  data-testid="badge-filing-review-dialog-wip"
+                >
+                  {PERMIT_FILING_WIP_LABEL}
+                </Badge>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Review the pre-submission package and make an approval decision.
+              {PERMIT_FILING_WIP
+                ? 'Review the pre-submission package for evaluation. Approval, execution, submission, and monitoring remain disabled while work is in progress.'
+                : 'Review the pre-submission package and make an approval decision.'}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[70vh]">

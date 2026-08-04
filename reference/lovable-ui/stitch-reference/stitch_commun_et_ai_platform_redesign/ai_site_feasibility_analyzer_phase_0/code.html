@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot - Site Feasibility Analyzer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&amp;family=Inter+Tight:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#9bccf6",
+                        "surface-container-low": "#fff1e9",
+                        "surface-container": "#fcebe0",
+                        "inverse-primary": "#ffb77e",
+                        "status-success": "#137333",
+                        "outline-variant": "#dbc2b1",
+                        "on-error-container": "#93000a",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#0f1c2d",
+                        "on-tertiary-container": "#003a59",
+                        "surface": "#fff8f5",
+                        "inverse-on-surface": "#ffede3",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "surface-bright": "#fff8f5",
+                        "tertiary": "#2f6388",
+                        "surface-border": "#E2E8F0",
+                        "tertiary-fixed": "#cbe6ff",
+                        "secondary-container": "#d6e3fb",
+                        "primary-fixed-dim": "#ffb77e",
+                        "on-tertiary-fixed": "#001e30",
+                        "secondary-fixed-dim": "#bac7de",
+                        "on-tertiary-fixed-variant": "#0e4b6e",
+                        "background-alt": "#F5F8FB",
+                        "on-primary-container": "#572b00",
+                        "surface-tint": "#914c00",
+                        "secondary": "#535f73",
+                        "on-surface-variant": "#554337",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#e8d7cc",
+                        "surface-container-highest": "#f1dfd5",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#596579",
+                        "secondary-fixed": "#d6e3fb",
+                        "inverse-surface": "#382e27",
+                        "primary-fixed": "#ffdcc3",
+                        "primary-container": "#e8882f",
+                        "primary": "#914c00",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "surface-variant": "#f1dfd5",
+                        "status-error": "#C5221F",
+                        "surface-container-high": "#f6e5da",
+                        "background": "#fff8f5",
+                        "on-error": "#ffffff",
+                        "on-background": "#221a13",
+                        "outline": "#887365",
+                        "on-primary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "status-warning": "#B06000",
+                        "on-surface": "#221a13",
+                        "tertiary-container": "#74a5cd",
+                        "on-primary-fixed": "#2f1500",
+                        "text-muted": "#64748B"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "sm": "8px",
+                        "xxl": "64px",
+                        "xl": "40px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "gutter": "24px",
+                        "unit": "4px",
+                        "margin": "32px"
+                    },
+                    "fontFamily": {
+                        "h1": ["Inter Tight"],
+                        "body-lg": ["Inter"],
+                        "h2": ["Inter Tight"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "data-mono": ["JetBrains Mono"],
+                        "h3": ["Inter Tight"],
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter Tight"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "h1": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "h2": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "1.1", "fontWeight": "600"}],
+                        "data-mono": ["14px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                        "h3": ["20px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-alt text-on-surface font-body-md min-h-screen flex flex-col md:flex-row antialiased selection:bg-primary-container selection:text-white">
+<!-- Sidebar Navigation -->
+<nav class="bg-surface-container-low dark:bg-surface-container-low border-r border-surface-border hidden md:flex flex-col h-screen w-[256px] py-lg px-md fixed left-0 top-0 z-40">
+<div class="mb-xl px-sm">
+<h1 class="font-display-lg text-display-lg text-primary leading-none">PermitPilot</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-sm">by Commun-ET</p>
+</div>
+<div class="flex flex-col gap-sm flex-grow">
+<!-- Active State -->
+<a class="flex items-center gap-md px-md py-sm bg-primary-fixed-dim/20 rounded-lg text-primary font-bold transition-all group" href="#">
+<span class="material-symbols-outlined filled text-primary">dashboard</span>
+<span class="font-label-caps text-label-caps uppercase">Feasibility Analyzer</span>
+</a>
+<!-- Inactive States -->
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">description</span>
+<span class="font-label-caps text-label-caps uppercase">Documents</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">map</span>
+<span class="font-label-caps text-label-caps uppercase">Map View</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">smart_toy</span>
+<span class="font-label-caps text-label-caps uppercase">AI Agent</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">event_upcoming</span>
+<span class="font-label-caps text-label-caps uppercase">Timeline</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">folder_shared</span>
+<span class="font-label-caps text-label-caps uppercase">Resources</span>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-sm pt-md border-t border-surface-border">
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-caps text-label-caps uppercase">Help Center</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high hover:text-primary transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined">download</span>
+<span class="font-label-caps text-label-caps uppercase">Export Data</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-[256px] flex flex-col min-h-screen">
+<!-- Top App Bar (Mobile Nav Alternative) -->
+<header class="bg-surface/80 dark:bg-surface/80 backdrop-blur-md flex justify-between items-center px-margin py-md w-full border-b border-surface-border shadow-sm sticky top-0 z-30">
+<div class="md:hidden flex items-center gap-md">
+<span class="material-symbols-outlined text-primary cursor-pointer text-[28px]">menu</span>
+<span class="font-display-lg text-h2 text-primary leading-none">PermitPilot</span>
+</div>
+<div class="hidden md:flex items-center gap-lg flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-[40px] pr-md py-sm bg-surface-container-lowest border border-surface-border rounded-lg text-body-md focus:outline-none focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all" placeholder="Enter Site Address for Analysis..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:text-primary-container transition-colors hidden md:block">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary-container transition-colors hidden md:block">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-surface-border overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A professional headshot of a corporate civil engineer or project manager in modern lighting. The subject is wearing business casual attire, conveying reliability and expertise. The background is a subtle, out-of-focus modern office environment, maintaining a clean, high-end corporate aesthetic consistent with light-mode UI design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKY4tuFJbOpcoP7nyqcFK1BLSPV9kvYaiStCavp3UccqMZlLTq5HjahbsuXc7vrIiU2AYNO6IfJT5qMJ64OOkTJejNHd2MC_X5fjuw5CrvV_oB16xaA8vg5Dp_p0NWU3SoW53h5Rn7Y0OoVbO-mF1OCqlKob1UQSq4i6S1B1QtbeToqowYngQZPfz7vGIQPruS24nhx2vfTN8gWrIQHfNkYj2IlHXMTbeMjZoFQG-q_ttnQVvWYDIMh1SsPy8IZ4NtRr4U6Egkezc"/>
+</div>
+<button class="bg-primary-container text-white px-md py-[8px] rounded-lg font-label-caps text-label-caps uppercase hover:bg-surface-tint transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] ml-sm hidden sm:block">
+                     Analyze Site
+                 </button>
+</div>
+</header>
+<!-- Page Content -->
+<div class="p-margin flex-1 flex flex-col gap-gutter">
+<!-- Page Header & Global Context -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md pb-md">
+<div>
+<div class="flex items-center gap-sm mb-xs">
+<span class="bg-primary-container/10 text-primary px-sm py-[2px] rounded-full font-label-caps text-label-caps uppercase tracking-wider">Phase 0</span>
+<span class="text-text-muted font-body-sm text-body-sm">Strategic Review</span>
+</div>
+<h2 class="font-display-lg text-display-lg text-on-surface leading-tight">Site Feasibility Analyzer</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mt-sm">Evaluate early-stage project viability through automated zoning, utility, and entitlement risk assessment.</p>
+</div>
+</div>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
+<!-- Primary Insight: Risk Score (Bento Style) -->
+<div class="xl:col-span-4 bg-surface-container-lowest border border-surface-border rounded-xl p-lg shadow-[0_4px_20px_rgba(14,27,44,0.02)] relative overflow-hidden flex flex-col justify-between">
+<!-- Decorative Flare -->
+<div class="absolute -top-12 -right-12 w-32 h-32 bg-primary-container/5 rounded-full blur-2xl pointer-events-none"></div>
+<div>
+<h3 class="font-h3 text-h3 text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary-container text-[20px]">speed</span>
+                            Preliminary Risk Score
+                        </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Composite score based on historical data and AI analysis.</p>
+</div>
+<div class="flex flex-col items-center justify-center py-lg mt-md relative">
+<!-- Abstracted circular progress -->
+<div class="w-[180px] h-[180px] rounded-full border-[12px] border-surface-container-high flex items-center justify-center relative">
+<svg class="absolute inset-0 w-full h-full -rotate-90" viewbox="0 0 100 100">
+<circle class="text-primary-container drop-shadow-md" cx="50" cy="50" fill="none" r="44" stroke="currentColor" stroke-dasharray="276" stroke-dashoffset="65" stroke-linecap="round" stroke-width="12"></circle>
+</svg>
+<div class="text-center">
+<span class="font-display-lg text-[56px] font-bold text-on-surface leading-none block">78</span>
+<span class="font-label-caps text-label-caps text-status-success uppercase tracking-wider block mt-xs">Moderate Viability</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-sm mt-md flex justify-between items-center border border-surface-border">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Confidence Level</span>
+<span class="font-data-mono text-data-mono text-on-surface">82.4%</span>
+</div>
+</div>
+<!-- Secondary Insights: Quick Glance Cards -->
+<div class="xl:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Zoning Fit -->
+<div class="bg-surface-container-lowest border border-surface-border rounded-xl p-md shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-transparent to-surface-container-low/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="flex justify-between items-start mb-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center border border-surface-border text-tertiary">
+<span class="material-symbols-outlined">account_balance</span>
+</div>
+<span class="bg-status-success/10 text-status-success px-sm py-[2px] rounded-full font-label-caps text-label-caps uppercase">Favorable</span>
+</div>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Zoning Fit</h4>
+<div class="mt-auto pt-md">
+<p class="font-data-mono text-data-mono text-on-surface-variant border-b border-surface-border pb-sm mb-sm flex justify-between">
+<span>Designation</span>
+<span class="text-on-surface font-semibold">C-3 Commercial</span>
+</p>
+<p class="font-data-mono text-data-mono text-on-surface-variant flex justify-between">
+<span>Variance Needed</span>
+<span class="text-on-surface">None</span>
+</p>
+</div>
+</div>
+<!-- Utility Proximity -->
+<div class="bg-surface-container-lowest border border-surface-border rounded-xl p-md shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-transparent to-surface-container-low/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="flex justify-between items-start mb-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center border border-surface-border text-primary-container">
+<span class="material-symbols-outlined">electrical_services</span>
+</div>
+<span class="bg-status-warning/10 text-status-warning px-sm py-[2px] rounded-full font-label-caps text-label-caps uppercase">Review Req.</span>
+</div>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Utility Proximity</h4>
+<div class="mt-auto pt-md">
+<p class="font-data-mono text-data-mono text-on-surface-variant border-b border-surface-border pb-sm mb-sm flex justify-between">
+<span>Main Distance</span>
+<span class="text-on-surface font-semibold">~450 ft</span>
+</p>
+<p class="font-data-mono text-data-mono text-on-surface-variant flex justify-between">
+<span>Capacity Flag</span>
+<span class="text-status-warning">Substation Load</span>
+</p>
+</div>
+</div>
+<!-- Entitlement Path -->
+<div class="bg-surface-container-lowest border border-surface-border rounded-xl p-md shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-transparent to-surface-container-low/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="flex justify-between items-start mb-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center border border-surface-border text-tertiary-fixed-dim">
+<span class="material-symbols-outlined">gavel</span>
+</div>
+<span class="bg-tertiary-fixed-dim/20 text-tertiary px-sm py-[2px] rounded-full font-label-caps text-label-caps uppercase">Standard</span>
+</div>
+<h4 class="font-h3 text-h3 text-on-surface mb-xs">Entitlement Path</h4>
+<div class="mt-auto pt-md">
+<p class="font-data-mono text-data-mono text-on-surface-variant border-b border-surface-border pb-sm mb-sm flex justify-between">
+<span>Est. Timeline</span>
+<span class="text-on-surface font-semibold">12-18 Months</span>
+</p>
+<p class="font-data-mono text-data-mono text-on-surface-variant flex justify-between">
+<span>Public Hearing</span>
+<span class="text-on-surface">Likely</span>
+</p>
+</div>
+</div>
+<!-- AI Narrative spanning across bottom -->
+<div class="md:col-span-3 bg-surface-container-lowest border border-surface-border rounded-xl p-lg shadow-[0_4px_20px_rgba(14,27,44,0.02)] flex flex-col relative">
+<div class="flex items-center gap-sm mb-md">
+<span class="material-symbols-outlined text-primary text-[24px]">smart_toy</span>
+<h3 class="font-display-lg text-[28px] text-on-surface leading-none">AI Feasibility Narrative</h3>
+</div>
+<div class="bg-background-alt border border-surface-border rounded-lg p-md text-body-md text-on-surface leading-relaxed">
+<p class="mb-sm">Based on the preliminary analysis of <strong>1200 North Main Street</strong>, the site presents a generally favorable path for commercial development under current C-3 zoning. The primary constraint identified is utility capacity, specifically regarding the proximity to the nearest high-voltage substation main (~450ft) and potential load limitations noted in municipal records.</p>
+<p>We recommend prioritizing an early electrical load study and initiating preliminary discussions with the local utility provider to mitigate timeline risks. Standard entitlement procedures apply, though neighborhood density suggests preparing for public comment phases.</p>
+</div>
+</div>
+</div>
+<!-- Bottom Full Width: Past Performance -->
+<div class="xl:col-span-12 bg-surface-container-lowest border border-surface-border rounded-xl shadow-[0_4px_20px_rgba(14,27,44,0.02)] overflow-hidden">
+<div class="p-lg border-b border-surface-border flex justify-between items-center bg-surface-bright">
+<div>
+<h3 class="font-h2 text-h2 text-on-surface">Similar Past Performance</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Comparable Commun-ET managed projects within a 10-mile radius.</p>
+</div>
+<button class="text-primary font-label-caps text-label-caps uppercase hover:text-primary-container transition-colors flex items-center gap-xs">
+                            View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-[#F8FAFC] border-b border-surface-border">
+<th class="py-sm px-md font-label-caps text-label-caps text-text-muted uppercase tracking-wider">Project Reference</th>
+<th class="py-sm px-md font-label-caps text-label-caps text-text-muted uppercase tracking-wider">Zoning</th>
+<th class="py-sm px-md font-label-caps text-label-caps text-text-muted uppercase tracking-wider">Permit Duration</th>
+<th class="py-sm px-md font-label-caps text-label-caps text-text-muted uppercase tracking-wider">Major Hurdles</th>
+<th class="py-sm px-md font-label-caps text-label-caps text-text-muted uppercase tracking-wider text-right">Similarity</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm">
+<tr class="border-b border-surface-border hover:bg-[#F8FAFC] transition-colors">
+<td class="py-md px-md text-on-surface font-medium">Southside Retail Hub</td>
+<td class="py-md px-md text-on-surface-variant">C-3 Commercial</td>
+<td class="py-md px-md text-on-surface-variant font-data-mono">14 Months</td>
+<td class="py-md px-md text-on-surface-variant">Traffic Study Revision</td>
+<td class="py-md px-md text-right">
+<span class="bg-status-success/10 text-status-success px-sm py-[2px] rounded-full font-data-mono text-[12px]">92% Match</span>
+</td>
+</tr>
+<tr class="border-b border-surface-border hover:bg-[#F8FAFC] transition-colors">
+<td class="py-md px-md text-on-surface font-medium">West End Mixed Use</td>
+<td class="py-md px-md text-on-surface-variant">C-2 (Variance Granted)</td>
+<td class="py-md px-md text-on-surface-variant font-data-mono">19 Months</td>
+<td class="py-md px-md text-on-surface-variant">Utility Coordination Delay</td>
+<td class="py-md px-md text-right">
+<span class="bg-status-success/10 text-status-success px-sm py-[2px] rounded-full font-data-mono text-[12px]">85% Match</span>
+</td>
+</tr>
+<tr class="hover:bg-[#F8FAFC] transition-colors">
+<td class="py-md px-md text-on-surface font-medium">Oak Street Logistics Annex</td>
+<td class="py-md px-md text-on-surface-variant">M-1 Industrial</td>
+<td class="py-md px-md text-on-surface-variant font-data-mono">11 Months</td>
+<td class="py-md px-md text-on-surface-variant">Environmental Review</td>
+<td class="py-md px-md text-right">
+<span class="bg-status-warning/10 text-status-warning px-sm py-[2px] rounded-full font-data-mono text-[12px]">71% Match</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

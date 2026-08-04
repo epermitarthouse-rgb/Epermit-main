@@ -53,6 +53,8 @@ export function ReportDeliveryHistory({ reportId }: ReportDeliveryHistoryProps) 
         return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
       case 'failed':
         return <XCircle className="h-4 w-4 text-red-600" />;
+      case 'no_match':
+        return <AlertTriangle className="h-4 w-4 text-muted-foreground" />;
       default:
         return null;
     }
@@ -66,6 +68,8 @@ export function ReportDeliveryHistory({ reportId }: ReportDeliveryHistoryProps) 
         return <Badge variant="default" className="bg-yellow-600">Partial</Badge>;
       case 'failed':
         return <Badge variant="destructive">Failed</Badge>;
+      case 'no_match':
+        return <Badge variant="secondary">No matching checklists</Badge>;
       default:
         return null;
     }
@@ -91,7 +95,7 @@ export function ReportDeliveryHistory({ reportId }: ReportDeliveryHistoryProps) 
         <History className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
         <p className="text-muted-foreground">No delivery history yet.</p>
         <p className="text-sm text-muted-foreground mt-1">
-          Reports will appear here after they are sent.
+          Production scheduled sends appear here. Preview and Send Test do not.
         </p>
       </div>
     );
