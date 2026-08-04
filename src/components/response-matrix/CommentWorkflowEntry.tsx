@@ -11,14 +11,49 @@ function withProjectId(path: string, projectId: string | null): string {
 type CommentWorkflowEntryProps = {
   projectId: string | null;
   onNavigate: (path: string) => void;
+  /** `toolbar` = compact CTAs for Response Matrix command bar; `panel` = legacy full block. */
+  variant?: "panel" | "toolbar";
 };
 
 /**
- * Compact hub CTAs into Comment Review (upload/parse/approve).
+ * Hub CTAs into Comment Review (upload/parse/approve).
  * Classified comments stay on Response Matrix — no separate classified CTA.
  */
-export function CommentWorkflowEntry({ projectId, onNavigate }: CommentWorkflowEntryProps) {
+export function CommentWorkflowEntry({
+  projectId,
+  onNavigate,
+  variant = "panel",
+}: CommentWorkflowEntryProps) {
   const commentReviewPath = withProjectId("/comment-review", projectId);
+
+  const buttons = (
+    <>
+      <Button
+        size="sm"
+        variant={variant === "toolbar" ? "outline" : "default"}
+        className="gap-1.5"
+        onClick={() => onNavigate(commentReviewPath)}
+        data-testid="matrix-upload-parse-comments"
+      >
+        <FileSearch className="h-4 w-4" />
+        Upload &amp; Parse Comments
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        onClick={() => onNavigate(commentReviewPath)}
+        data-testid="matrix-review-parsed-comments"
+      >
+        <ListChecks className="h-4 w-4" />
+        Review Parsed Comments
+      </Button>
+    </>
+  );
+
+  if (variant === "toolbar") {
+    return <div className="flex flex-wrap items-center gap-2">{buttons}</div>;
+  }
 
   return (
     <Panel
@@ -31,27 +66,7 @@ export function CommentWorkflowEntry({ projectId, onNavigate }: CommentWorkflowE
           Upload letters, load portal comments, parse, and approve extracted rows in Comment Review.
           Classified comments and drafting live in this matrix.
         </p>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => onNavigate(commentReviewPath)}
-            data-testid="matrix-upload-parse-comments"
-          >
-            <FileSearch className="h-4 w-4" />
-            Upload &amp; Parse Comments
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => onNavigate(commentReviewPath)}
-            data-testid="matrix-review-parsed-comments"
-          >
-            <ListChecks className="h-4 w-4" />
-            Review Parsed Comments
-          </Button>
-        </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">{buttons}</div>
       </div>
     </Panel>
   );

@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useGroundedDraftQueue } from "@/hooks/useGroundedDraftQueue";
-import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, MessageSquare, AlertTriangle, Filter, RefreshCw, FileSearch } from "lucide-react";
+import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, Filter, RefreshCw, FileSearch, ListChecks } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,13 +54,18 @@ import {
 import { ExportPackageDialog } from "@/components/response-matrix/ExportPackageDialog";
 import { ResponseMatrixExportMenu } from "@/components/response-matrix/ResponseMatrixExportMenu";
 import { SuggestedResponsePanel } from "@/components/response-matrix/SuggestedResponsePanel";
-import { CommentWorkflowEntry } from "@/components/response-matrix/CommentWorkflowEntry";
 import { useProjectTeam } from "@/hooks/useProjectTeam";
 import { effectiveResponseStatus, responseStatusBadgeClass } from "@/lib/responseApproval";
+import {
+  classifyResponseLifecycle,
+  countLifecycleMetrics,
+  parseResponseMatrixMetric,
+  type ResponseMatrixMetric,
+} from "@/lib/responseMatrixMetrics";
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
-import { PageHeader, MetricCard, ServicePill, AlertBanner, Panel } from "@/components/design/ProductPrimitives";
+import { PageHeader, Panel } from "@/components/design/ProductPrimitives";
 import { PlanMarkupWorkspace } from "@/components/plans/PlanMarkupWorkspace";
 import { useApprovalGate } from "@/components/plans/ArchitectApprovalDialog";
 import type { PanelComment } from "@/components/plans/CommentPlanPanel";
@@ -647,6 +652,7 @@ export default function ResponseMatrix() {
   // `?view=scoring` swaps Response → AI Confidence. No reconciliation engine/backend.
   const scoringView = searchParams.get("view") === "scoring";
   const disciplineFilter = searchParams.get("discipline")?.trim() || "all";
+  const metricFilter = parseResponseMatrixMetric(searchParams.get("metric"));
   const setMatrixView = useCallback(
     (v: "reconciliation" | "scoring") => {
       const next = new URLSearchParams(searchParams);
@@ -667,6 +673,15 @@ export default function ResponseMatrix() {
       const next = new URLSearchParams(searchParams);
       if (!value || value === "all") next.delete("discipline");
       else next.set("discipline", value);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const setMetricFilter = useCallback(
+    (value: ResponseMatrixMetric | null) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value) next.delete("metric");
+      else next.set("metric", value);
       setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams],
@@ -768,6 +783,9 @@ export default function ResponseMatrix() {
           String(r.response_text).trim() === "",
       );
     }
+    if (metricFilter) {
+      next = next.filter((r) => classifyResponseLifecycle(r) === metricFilter);
+    }
     if (disciplineFilter !== "all") {
       next = next.filter((r) => {
         const d = r.discipline?.trim() || "Unclassified";
@@ -775,7 +793,7 @@ export default function ResponseMatrix() {
       });
     }
     return next;
-  }, [withoutMetadata, filterPending, disciplineFilter]);
+  }, [withoutMetadata, filterPending, metricFilter, disciplineFilter]);
 
   const lastSubmittedDraft = useMemo(() => {
     return [...allDrafts]
@@ -1302,39 +1320,25 @@ export default function ResponseMatrix() {
 
   const matrixSourceLabel = commentMatrixSourceLabel(withoutMetadata);
   const pipelineBusy = enriching || routing || pipelineResuming;
-
-  const openCount = withoutMetadata.filter((r) => {
-    const s = (r.status ?? "").toLowerCase();
-    const rs = effectiveResponseStatus(r);
-    return (
-      !r.response_text?.trim() ||
-      s === "pending" ||
-      s === "pending review" ||
-      rs === "Changes Requested" ||
-      rs == null
-    );
-  }).length;
-  const draftedCount = withoutMetadata.filter((r) => {
-    const rs = effectiveResponseStatus(r);
-    const s = (r.status ?? "").toLowerCase();
-    return (
-      rs === "AI Generated" ||
-      rs === "Draft" ||
-      rs === "Awaiting Approval" ||
-      s === "draft" ||
-      s === "ready for review"
-    );
-  }).length;
-  const acceptedCount = withoutMetadata.filter((r) => {
-    const s = (r.status ?? "").toLowerCase();
-    const rs = effectiveResponseStatus(r);
-    return s === "approved" || rs === "Approved";
-  }).length;
+  const lifecycleCounts = useMemo(
+    () => countLifecycleMetrics(withoutMetadata),
+    [withoutMetadata],
+  );
 
   const runActionsMenuItem = useCallback((action: () => void) => {
     setActionsMenuOpen(false);
     action();
   }, []);
+
+  const commentReviewPath = projectId
+    ? `/comment-review?project_id=${encodeURIComponent(projectId)}`
+    : "/comment-review";
+
+  const metricChipLabel: Record<ResponseMatrixMetric, string> = {
+    "needs-response": "Needs Response",
+    "in-draft": "In Draft",
+    accepted: "Accepted",
+  };
 
   if (authLoading) {
     return (
@@ -1345,17 +1349,18 @@ export default function ResponseMatrix() {
   }
 
   return (
-    <div className="min-h-[80vh] w-full min-w-0 space-y-6 overflow-x-hidden bg-background text-foreground">
+    <div className="min-h-[80vh] w-full min-w-0 space-y-3 overflow-x-hidden bg-background text-foreground">
       <style>{RESPONSE_MATRIX_STYLES}</style>
       <PageHeader
+        compact
         className="mb-0"
         eyebrow="Response Matrix"
-        title="Comment reconciliation across permitting and utility coordination."
+        title="Comment response queue"
         body={
           <>
-            Manage and draft official responses to permit comments in one workspace.
+            Draft and approve responses to permit comments.
             {withoutMetadata.length > 0 ? (
-              <span className="mt-1 block text-muted-foreground/80">{matrixSourceLabel}</span>
+              <span className="text-muted-foreground/80"> · {matrixSourceLabel}</span>
             ) : null}
           </>
         }
@@ -1393,19 +1398,88 @@ export default function ResponseMatrix() {
         }
       />
 
+      {/* Metric chips — lifecycle filters; Cross-service is Upcoming placeholder only */}
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-1.5"
+        role="group"
+        aria-label="Response lifecycle metrics"
+      >
+        <button
+          type="button"
+          data-testid="metric-chip-all"
+          aria-pressed={metricFilter == null}
+          onClick={() => setMetricFilter(null)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors",
+            metricFilter == null
+              ? "border-primary bg-primary/10 font-medium text-foreground"
+              : "border-border bg-card text-muted-foreground hover:text-foreground",
+          )}
+        >
+          All
+          <span className="font-data font-semibold tabular-nums text-foreground">
+            {withoutMetadata.length}
+          </span>
+        </button>
+        {(
+          [
+            ["needs-response", lifecycleCounts.needsResponse] as const,
+            ["in-draft", lifecycleCounts.inDraft] as const,
+            ["accepted", lifecycleCounts.accepted] as const,
+          ] as const
+        ).map(([key, count]) => (
+          <button
+            key={key}
+            type="button"
+            data-testid={`metric-chip-${key}`}
+            aria-pressed={metricFilter === key}
+            title={`Show ${metricChipLabel[key].toLowerCase()} comments`}
+            onClick={() => setMetricFilter(metricFilter === key ? null : key)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors",
+              metricFilter === key
+                ? "border-primary bg-primary/10 font-medium text-foreground"
+                : "border-border bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span>{metricChipLabel[key]}</span>
+            <span className="font-data font-semibold tabular-nums text-foreground">{count}</span>
+          </button>
+        ))}
+        <span
+          className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground"
+          data-testid="metric-chip-cross-service"
+        >
+          <span>Cross-service</span>
+          <span className="font-data font-semibold tabular-nums">—</span>
+          <span
+            className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 font-data text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            data-testid="badge-cross-service-upcoming"
+          >
+            Upcoming
+          </span>
+          <span className="basis-full text-[10px] leading-snug text-muted-foreground sm:basis-auto sm:max-w-[14rem]">
+            Utility/provider comments will appear after backend integration
+          </span>
+        </span>
+      </div>
+
+      {/* Compact command toolbar */}
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button
           variant={filterPending ? "default" : "outline"}
           size="sm"
-          className="gap-1.5"
+          className="h-8 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3.5"
           onClick={togglePendingFilter}
+          data-testid="matrix-pending-filter"
         >
-          <Filter className="h-4 w-4" /> {filterPending ? "Pending only" : "Filter"}
+          <Filter />
+          {filterPending ? "Pending only" : "Filter"}
         </Button>
         {disciplineOptions.length > 0 ? (
           <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
             <SelectTrigger
-              className="h-9 w-[160px] text-xs"
+              className="h-8 w-[140px] shrink-0 text-xs"
               data-testid="matrix-discipline-filter"
             >
               <SelectValue placeholder="Discipline" />
@@ -1420,28 +1494,6 @@ export default function ResponseMatrix() {
             </SelectContent>
           </Select>
         ) : null}
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
-          onClick={() =>
-            runBatchGrounded(
-              rows
-                .filter(
-                  (r) =>
-                    !r.response_text?.trim() ||
-                    (r.status ?? "").toLowerCase() === "pending" ||
-                    (r.status ?? "").toLowerCase() === "pending review",
-                )
-                .map((r) => r.id),
-            )
-          }
-        >
-          <Sparkles className="h-4 w-4" /> Auto-Draft
-        </Button>
-        <ServicePill kind="permit">Permit expediting</ServicePill>
-        <ServicePill kind="utility">Utility coordination</ServicePill>
         {projectId && (
           <span className="inline-flex h-6 min-w-[24px] shrink-0 items-center justify-center rounded-full border border-border bg-muted px-2 text-xs font-medium">
             {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
@@ -1449,180 +1501,168 @@ export default function ResponseMatrix() {
         )}
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={() => navigate("/dashboard")}
-          className="shrink-0"
+          className="ml-auto h-8 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
           aria-label="Back to dashboard"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Dashboard</span>
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <MetricCard
-          label="Open"
-          value={`${openCount}`}
-          detail="Needs operator attention"
-          icon={AlertTriangle}
-        />
-        <MetricCard
-          label="Drafted"
-          value={`${draftedCount}`}
-          detail="Ready for review"
-          icon={MessageSquare}
-        />
-        <MetricCard
-          label="Accepted"
-          value={`${acceptedCount}`}
-          detail="Ready to export"
-          icon={CheckCircle2}
-        />
-        <MetricCard
-          label="Cross-service"
-          value="—"
-          detail={
-            <span className="inline-flex flex-col items-start gap-1.5">
-              <span
-                className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 font-data text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
-                data-testid="badge-cross-service-upcoming"
-              >
-                Upcoming
-              </span>
-              Utility/provider comments will appear once real backend integration is available.
-            </span>
-          }
-          icon={AlertCircle}
-        />
-      </div>
+      <div className="w-full min-w-0">
+        <Panel className="overflow-hidden p-0" title={undefined}>
+          <div className="border-b border-border px-4 py-2.5 sm:px-5">
+            <p className="pilot-kicker mb-0.5">Reconciliation view</p>
+            <h2 className="font-tight text-lg font-bold text-foreground">Comment response queue</h2>
+          </div>
 
-      <AlertBanner
-        tone="info"
-        title="Utility comments reconcile in this workspace"
-        detail="Provider markups and permit review comments share scoring, approval, and export workflows so filings and service requests stay aligned. All rows are live parsed comments — never mocked."
-      />
+          {/* Sticky queue toolbar: Timer / Export / Actions / Save */}
+          <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-5">
+            <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
+            <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
+            <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!projectId}
+                  data-testid="button-actions-dropdown"
+                  className="shrink-0"
+                >
+                  Actions
+                  <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runValidateCompleteness)}
+                  disabled={!projectId || validating}
+                  data-testid="menu-validate-completeness"
+                >
+                  {validating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                  Validate Completeness
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runQualityCheck)}
+                  disabled={!projectId || qualityChecking || qualityCheckBlocked}
+                  data-testid="menu-quality-check"
+                >
+                  {qualityChecking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                  Quality Check
+                  {qualityCheckBlocked && (
+                    <AlertCircle className="h-3.5 w-3.5 ml-1 text-amber-500" />
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => setPlanMarkupOpen(true))}
+                  disabled={!projectId}
+                  data-testid="menu-plan-markup"
+                >
+                  <PenTool className="h-4 w-4 mr-2" />
+                  Plan Markup
+                  {hasPendingMarkups && (
+                    <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">
+                      {pendingCount}
+                    </Badge>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runEnrichment)}
+                  disabled={!projectId || pipelineBusy}
+                  data-testid="menu-run-enrichment"
+                >
+                  {enriching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                  Run Enrichment
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runRouteComments)}
+                  disabled={!projectId || pipelineBusy}
+                  data-testid="menu-route-comments"
+                >
+                  {routing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
+                  Run Auto Routing
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(refreshClassifications)}
+                  disabled={!projectId || reclassifying || pipelineBusy}
+                  data-testid="menu-refresh-classifications"
+                >
+                  {reclassifying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Refresh Classifications
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runResumePipeline)}
+                  disabled={!projectId || pipelineBusy}
+                  data-testid="menu-resume-pipeline"
+                >
+                  {pipelineResuming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                  Resume Pipeline
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() =>
+                    runActionsMenuItem(() =>
+                      runBatchGrounded(
+                        rows
+                          .filter(
+                            (r) =>
+                              !r.response_text?.trim() ||
+                              (r.status ?? "").toLowerCase() === "pending" ||
+                              (r.status ?? "").toLowerCase() === "pending review",
+                          )
+                          .map((r) => r.id),
+                      ),
+                    )
+                  }
+                  disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
+                  data-testid="menu-auto-draft"
+                >
+                  {groundedBatchProgress ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  Auto-Draft
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => navigate(commentReviewPath))}
+                  data-testid="menu-upload-parse-comments"
+                >
+                  <FileSearch className="h-4 w-4 mr-2" />
+                  Upload &amp; Parse Comments
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => navigate(commentReviewPath))}
+                  data-testid="menu-review-parsed-comments"
+                >
+                  <ListChecks className="h-4 w-4 mr-2" />
+                  Review Parsed Comments
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => setExportDialogOpen(true))}
+                  disabled={!projectId}
+                  data-testid="menu-export-response-package"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export Response Package
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="gold"
+              size="sm"
+              onClick={saveChanges}
+              disabled={saving || rows.length === 0}
+              className="shrink-0 sm:ml-auto"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Changes
+            </Button>
+          </div>
 
-      <CommentWorkflowEntry projectId={projectId} onNavigate={navigate} />
-
-      <div className="w-full min-w-0 space-y-4">
-        <Panel
-          title="Comment response queue"
-          eyebrow="Reconciliation view"
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
-              <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
-              <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!projectId}
-                    data-testid="button-actions-dropdown"
-                    className="shrink-0"
-                  >
-                    Actions
-                    <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runValidateCompleteness)}
-                    disabled={!projectId || validating}
-                    data-testid="menu-validate-completeness"
-                  >
-                    {validating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                    Validate Completeness
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runQualityCheck)}
-                    disabled={!projectId || qualityChecking || qualityCheckBlocked}
-                    data-testid="menu-quality-check"
-                  >
-                    {qualityChecking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                    Quality Check
-                    {qualityCheckBlocked && (
-                      <AlertCircle className="h-3.5 w-3.5 ml-1 text-amber-500" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(() => setPlanMarkupOpen(true))}
-                    disabled={!projectId}
-                    data-testid="menu-plan-markup"
-                  >
-                    <PenTool className="h-4 w-4 mr-2" />
-                    Plan Markup
-                    {hasPendingMarkups && (
-                      <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">
-                        {pendingCount}
-                      </Badge>
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runEnrichment)}
-                    disabled={!projectId || pipelineBusy}
-                    data-testid="menu-run-enrichment"
-                  >
-                    {enriching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                    Run Enrichment
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runRouteComments)}
-                    disabled={!projectId || pipelineBusy}
-                    data-testid="menu-route-comments"
-                  >
-                    {routing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
-                    Run Auto Routing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(refreshClassifications)}
-                    disabled={!projectId || reclassifying || pipelineBusy}
-                    data-testid="menu-refresh-classifications"
-                  >
-                    {reclassifying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                    Refresh Classifications
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runResumePipeline)}
-                    disabled={!projectId || pipelineBusy}
-                    data-testid="menu-resume-pipeline"
-                  >
-                    {pipelineResuming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
-                    Resume Pipeline
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() =>
-                      runActionsMenuItem(() =>
-                        navigate(
-                          projectId
-                            ? `/comment-review?project_id=${encodeURIComponent(projectId)}`
-                            : "/comment-review",
-                        ),
-                      )
-                    }
-                    data-testid="menu-upload-parse-comments"
-                  >
-                    <FileSearch className="h-4 w-4 mr-2" />
-                    Upload &amp; Parse Comments
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(() => setExportDialogOpen(true))}
-                    disabled={!projectId}
-                    data-testid="menu-export-response-package"
-                  >
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Export Response Package
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button variant="gold" onClick={saveChanges} disabled={saving || rows.length === 0} className="shrink-0">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Changes
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-4">
+          <div className="space-y-3 p-4 sm:p-5">
 
         <Dialog open={validateOpen} onOpenChange={setValidateOpen}>
           <DialogContent>
@@ -1792,26 +1832,16 @@ export default function ResponseMatrix() {
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-sm">
               {filterPending
                 ? "No pending comments for this project."
-                : disciplineFilter !== "all"
-                  ? `No comments in discipline “${disciplineFilter}”.`
-                  : "Upload or load portal comments in Comment Review, then return here to draft and approve responses."}
+                : metricFilter
+                  ? `No comments in “${metricChipLabel[metricFilter]}”.`
+                  : disciplineFilter !== "all"
+                    ? `No comments in discipline “${disciplineFilter}”.`
+                    : "Upload or load portal comments in Comment Review, then return here to draft and approve responses."}
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              {!filterPending && disciplineFilter === "all" ? (
-                <Button
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() =>
-                    navigate(
-                      projectId
-                        ? `/comment-review?project_id=${encodeURIComponent(projectId)}`
-                        : "/comment-review",
-                    )
-                  }
-                  data-testid="matrix-empty-upload-parse"
-                >
-                  <FileSearch className="h-4 w-4" />
-                  Upload &amp; Parse Comments
+              {metricFilter ? (
+                <Button variant="outline" size="sm" onClick={() => setMetricFilter(null)}>
+                  Clear metric filter
                 </Button>
               ) : null}
               <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
@@ -1821,10 +1851,13 @@ export default function ResponseMatrix() {
           </div>
         ) : (
           <>
-          {(filterPending || disciplineFilter !== "all") && (
+          {(filterPending || metricFilter || disciplineFilter !== "all") && (
             <p className="text-sm text-muted-foreground mb-2 flex flex-wrap gap-2">
               {filterPending ? (
                 <Badge variant="secondary">Showing pending comments only</Badge>
+              ) : null}
+              {metricFilter ? (
+                <Badge variant="secondary">{metricChipLabel[metricFilter]}</Badge>
               ) : null}
               {disciplineFilter !== "all" ? (
                 <Badge variant="secondary">Discipline: {disciplineFilter}</Badge>
