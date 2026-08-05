@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { SelectedProjectProvider, useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
@@ -12,7 +12,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjects } from "@/hooks/useProjects";
-import { Search, LogOut, Building2, MapPin, Loader2, Eye } from "lucide-react";
+import { Search, LogIn, LogOut, Building2, MapPin, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -76,7 +76,7 @@ function ScrapeHeaderIndicator() {
 function DashboardContent({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const scrape = useScrapeOptional();
 
@@ -113,19 +113,34 @@ function DashboardContent({ children }: { children: ReactNode }) {
             </Button>
             <NotificationBell />
             <ThemeToggle />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSignOut}
-              className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </Button>
+            {user ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            ) : (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
+              >
+                <Link to="/auth" aria-label="Sign in">
+                  <LogIn className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sign In</span>
+                </Link>
+              </Button>
+            )}
           </div>
         </header>
         
-        <main className="flex-1 overflow-auto overflow-x-hidden bg-background pb-16 text-foreground md:pb-0">
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background pb-16 text-foreground md:pb-0">
           {children}
         </main>
         

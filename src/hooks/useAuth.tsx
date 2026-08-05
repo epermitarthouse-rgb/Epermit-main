@@ -169,7 +169,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error(`[AuthProvider] signOut failed ${safeAuthErrorMessage(error)}`);
+    }
+    // Clear local auth state even if the network call fails or the
+    // onAuthStateChange event is delayed — keeps header/sidebar in sync.
+    setSession(null);
+    setUser(null);
     setSubscription(defaultSubscription);
   };
 
