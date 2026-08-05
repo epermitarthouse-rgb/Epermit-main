@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,11 @@ import {
 } from "@/lib/complianceBatchProcessor";
 import {
   COMPLIANCE_RESULTS_FILTER_ALL,
+  COMPLIANCE_SCORE_FILTER_ALL,
+  COMPLIANCE_SCORE_FILTER_NOT_100,
+  filterComplianceGroupsByScore,
   filterComplianceResultGroups,
+  type ComplianceScoreFilter,
 } from "@/lib/complianceResultFilter";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
@@ -210,20 +214,30 @@ export function AIComplianceAnalyzer() {
   const [resultsDocumentFilter, setResultsDocumentFilter] = useState<string>(
     COMPLIANCE_RESULTS_FILTER_ALL,
   );
+  /** Score filter: `all` (default) or only groups that are not 100% compliant / failed. */
+  const [complianceScoreFilter, setComplianceScoreFilter] = useState<ComplianceScoreFilter>(
+    COMPLIANCE_SCORE_FILTER_ALL,
+  );
   const [loadingExisting, setLoadingExisting] = useState(false);
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<ComplianceBatchProgress | null>(null);
-  const [loadedExistingResults, setLoadedExistingResults] = useState<{
+  type LoadedExistingAnalysis = {
     documentId: string;
     fileName: string;
     ibcResult: AnalysisResult | null;
     localResult: AnalysisResult | null;
-  } | null>(null);
+  };
+  /** Hydrated prior analyses from DB (All loads every project doc; single-file may load one). */
+  const [loadedExistingResults, setLoadedExistingResults] = useState<LoadedExistingAnalysis[]>([]);
   const [activeResultFileId, setActiveResultFileId] = useState<string | null>(null);
   const completedBatchFiles = useMemo(
     () => files.filter((f) => f.status === "completed"),
+    [files],
+  );
+  const failedBatchFiles = useMemo(
+    () => files.filter((f) => f.status === "failed"),
     [files],
   );
 
@@ -234,8 +248,22 @@ export function AIComplianceAnalyzer() {
     return completedBatchFiles[0] ?? null;
   }, [activeResultFileId, completedBatchFiles]);
 
-  const ibcResult = activeResultFile?.ibcResult ?? loadedExistingResults?.ibcResult ?? null;
-  const localResult = activeResultFile?.localResult ?? loadedExistingResults?.localResult ?? null;
+  const activeLoadedExisting = useMemo(() => {
+    if (activeResultFileId) {
+      return loadedExistingResults.find((l) => l.documentId === activeResultFileId) ?? null;
+    }
+    if (resultsDocumentFilter !== COMPLIANCE_RESULTS_FILTER_ALL) {
+      return (
+        loadedExistingResults.find((l) => l.documentId === resultsDocumentFilter) ??
+        loadedExistingResults[0] ??
+        null
+      );
+    }
+    return loadedExistingResults[0] ?? null;
+  }, [activeResultFileId, loadedExistingResults, resultsDocumentFilter]);
+
+  const ibcResult = activeResultFile?.ibcResult ?? activeLoadedExisting?.ibcResult ?? null;
+  const localResult = activeResultFile?.localResult ?? activeLoadedExisting?.localResult ?? null;
   const [responses, setResponses] = useState<Record<string, IssueResponse>>({});
   const [selectedIssue, setSelectedIssue] = useState<ComplianceIssue | null>(null);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
@@ -306,129 +334,175 @@ export function AIComplianceAnalyzer() {
     fetchDocsWithAnalysis();
   }, [selectedProjectId, user, analysisSavedAt]);
 
-  // Load existing annotations for a persisted document (used by the results filter dropdown).
-  const loadExistingAnalysis = useCallback(
-    async (documentId: string) => {
-      if (!documentId || !selectedProjectId || !user) return false;
+  const buildResultsFromAnnotations = useCallback(
+    (complianceAnnotations: Array<{ id: string; data: unknown }>) => {
+      const metadataByCodeType = new Map<string, ComplianceAnnotationData>();
+      const issuesByCodeType = new Map<string, ComplianceIssue[]>();
+
+      for (const ann of complianceAnnotations) {
+        const d = ann.data as ComplianceAnnotationData;
+        if (d.compliance_metadata) {
+          metadataByCodeType.set(d.codeType || "ibc", d);
+        } else if (d.compliance_issue && d.codeType) {
+          const issue: ComplianceIssue = {
+            id: d.id || ann.id,
+            category: d.category || "",
+            title: d.title || "",
+            description: d.description || "",
+            severity: (d.severity as ComplianceIssue["severity"]) || "advisory",
+            codeReference: d.codeReference || "",
+            codeYear: d.codeYear || "",
+            location: d.location || "",
+            suggestedFix: d.suggestedFix || "",
+            codeType: d.codeType,
+          };
+          const list = issuesByCodeType.get(d.codeType) || [];
+          list.push(issue);
+          issuesByCodeType.set(d.codeType, list);
+        }
+      }
+
+      const ibcMeta = metadataByCodeType.get("ibc");
+      const localMeta = metadataByCodeType.get("local");
+      const ibcIssues = issuesByCodeType.get("ibc") || [];
+      const localIssues = issuesByCodeType.get("local") || [];
+
+      const buildSummary = (issues: ComplianceIssue[], meta?: ComplianceAnnotationData) => {
+        const critical = issues.filter((i) => i.severity === "critical").length;
+        const warnings = issues.filter((i) => i.severity === "warning").length;
+        const advisory = issues.filter((i) => i.severity === "advisory").length;
+        // Never surface a stored/AI-echoed score (e.g. 85) when there are zero issues.
+        if (issues.length === 0) {
+          return { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 };
+        }
+        const recomputed = computeComplianceOverallScore({
+          critical,
+          warnings,
+          advisory,
+          totalIssues: issues.length,
+        });
+        if (meta?.summary) {
+          return {
+            ...meta.summary,
+            totalIssues: issues.length,
+            critical,
+            warnings,
+            advisory,
+            overallScore:
+              typeof meta.summary.overallScore === "number"
+                ? meta.summary.overallScore
+                : recomputed,
+          };
+        }
+        return {
+          totalIssues: issues.length,
+          critical,
+          warnings,
+          advisory,
+          overallScore: recomputed,
+        };
+      };
+
+      let loadedIbc: AnalysisResult | null = null;
+      let loadedLocal: AnalysisResult | null = null;
+
+      if (ibcIssues.length > 0 || ibcMeta) {
+        loadedIbc = {
+          issues: ibcIssues,
+          summary: buildSummary(ibcIssues, ibcMeta),
+          jurisdictionNotes: ibcMeta?.jurisdictionNotes || "",
+          codeType: "ibc",
+        };
+      }
+      if (localIssues.length > 0 || localMeta) {
+        loadedLocal = {
+          issues: localIssues,
+          summary: buildSummary(localIssues, localMeta),
+          jurisdictionNotes: localMeta?.jurisdictionNotes || "",
+          codeType: "local",
+        };
+      }
+
+      return { loadedIbc, loadedLocal, ibcIssues, localIssues };
+    },
+    [],
+  );
+
+  /**
+   * Hydrate prior analyses from DB into resultGroups.
+   * - Omit `documentIds` (or pass every analyzed id) to load All for the project.
+   * - Pass a single id to ensure that document is available for the per-file filter.
+   */
+  const hydrateExistingAnalyses = useCallback(
+    async (documentIds?: string[], opts?: { toastOnEmpty?: boolean }) => {
+      if (!selectedProjectId || !user) return false;
+      const ids =
+        documentIds && documentIds.length > 0
+          ? documentIds
+          : documentsWithAnalysis.map((d) => d.id);
+      if (ids.length === 0) {
+        if (!documentIds) setLoadedExistingResults([]);
+        return false;
+      }
+
       setLoadingExisting(true);
       try {
         const { data: annotations, error } = await supabase
           .from("document_annotations")
           .select("*")
-          .eq("document_id", documentId)
           .eq("project_id", selectedProjectId)
+          .in("document_id", ids)
           .order("layer_order", { ascending: true });
 
         if (error) throw error;
 
-        const complianceAnnotations = (annotations || []).filter(
-          (a) =>
-            (a.data as ComplianceAnnotationData)?.compliance_issue ||
-            (a.data as ComplianceAnnotationData)?.compliance_metadata,
-        );
+        const byDoc = new Map<string, Array<{ id: string; data: unknown }>>();
+        for (const ann of annotations || []) {
+          if (!ann.document_id) continue;
+          const d = ann.data as ComplianceAnnotationData;
+          if (!d?.compliance_issue && !d?.compliance_metadata) continue;
+          const list = byDoc.get(ann.document_id) || [];
+          list.push(ann);
+          byDoc.set(ann.document_id, list);
+        }
 
-        if (complianceAnnotations.length === 0) {
-          toast.info("No previous analysis found for this document");
+        const loaded: LoadedExistingAnalysis[] = [];
+        for (const documentId of ids) {
+          const complianceAnnotations = byDoc.get(documentId) || [];
+          if (complianceAnnotations.length === 0) continue;
+          const { loadedIbc, loadedLocal } = buildResultsFromAnnotations(complianceAnnotations);
+          if (!loadedIbc && !loadedLocal) continue;
+          const doc = documentsWithAnalysis.find((d) => d.id === documentId);
+          loaded.push({
+            documentId,
+            fileName: doc?.file_name ?? "Loaded document",
+            ibcResult: loadedIbc,
+            localResult: loadedLocal,
+          });
+        }
+
+        if (loaded.length === 0) {
+          if (opts?.toastOnEmpty) {
+            toast.info("No previous analysis found for this document");
+          }
+          if (!documentIds) setLoadedExistingResults([]);
           return false;
         }
 
-        const metadataByCodeType = new Map<string, ComplianceAnnotationData>();
-        const issuesByCodeType = new Map<string, ComplianceIssue[]>();
-
-        for (const ann of complianceAnnotations) {
-          const d = ann.data as ComplianceAnnotationData;
-          if (d.compliance_metadata) {
-            metadataByCodeType.set(d.codeType || "ibc", d);
-          } else if (d.compliance_issue && d.codeType) {
-            const issue: ComplianceIssue = {
-              id: d.id || ann.id,
-              category: d.category || "",
-              title: d.title || "",
-              description: d.description || "",
-              severity: (d.severity as ComplianceIssue["severity"]) || "advisory",
-              codeReference: d.codeReference || "",
-              codeYear: d.codeYear || "",
-              location: d.location || "",
-              suggestedFix: d.suggestedFix || "",
-              codeType: d.codeType,
-            };
-            const list = issuesByCodeType.get(d.codeType) || [];
-            list.push(issue);
-            issuesByCodeType.set(d.codeType, list);
-          }
-        }
-
-        const ibcMeta = metadataByCodeType.get("ibc");
-        const localMeta = metadataByCodeType.get("local");
-        const ibcIssues = issuesByCodeType.get("ibc") || [];
-        const localIssues = issuesByCodeType.get("local") || [];
-
-        const buildSummary = (issues: ComplianceIssue[], meta?: ComplianceAnnotationData) => {
-          const critical = issues.filter((i) => i.severity === "critical").length;
-          const warnings = issues.filter((i) => i.severity === "warning").length;
-          const advisory = issues.filter((i) => i.severity === "advisory").length;
-          // Never surface a stored/AI-echoed score (e.g. 85) when there are zero issues.
-          if (issues.length === 0) {
-            return { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 };
-          }
-          const recomputed = computeComplianceOverallScore({
-            critical,
-            warnings,
-            advisory,
-            totalIssues: issues.length,
+        if (!documentIds) {
+          // Full All hydrate — replace the hydrated set.
+          setLoadedExistingResults(loaded);
+        } else {
+          // Merge specific docs into the existing hydrate set.
+          setLoadedExistingResults((prev) => {
+            const next = prev.filter((p) => !ids.includes(p.documentId));
+            return [...next, ...loaded];
           });
-          if (meta?.summary) {
-            return {
-              ...meta.summary,
-              totalIssues: issues.length,
-              critical,
-              warnings,
-              advisory,
-              overallScore:
-                typeof meta.summary.overallScore === "number"
-                  ? meta.summary.overallScore
-                  : recomputed,
-            };
-          }
-          return {
-            totalIssues: issues.length,
-            critical,
-            warnings,
-            advisory,
-            overallScore: recomputed,
-          };
-        };
-
-        let loadedIbc: AnalysisResult | null = null;
-        let loadedLocal: AnalysisResult | null = null;
-
-        if (ibcIssues.length > 0 || ibcMeta) {
-          loadedIbc = {
-            issues: ibcIssues,
-            summary: buildSummary(ibcIssues, ibcMeta),
-            jurisdictionNotes: ibcMeta?.jurisdictionNotes || "",
-            codeType: "ibc",
-          };
-        }
-        if (localIssues.length > 0 || localMeta) {
-          loadedLocal = {
-            issues: localIssues,
-            summary: buildSummary(localIssues, localMeta),
-            jurisdictionNotes: localMeta?.jurisdictionNotes || "",
-            codeType: "local",
-          };
         }
 
-        const doc = documentsWithAnalysis.find((d) => d.id === documentId);
-        setLoadedExistingResults({
-          documentId,
-          fileName: doc?.file_name ?? "Loaded document",
-          ibcResult: loadedIbc,
-          localResult: loadedLocal,
-        });
+        const primary = loaded[0];
         setActiveResultFileId(null);
-        setActiveResultTab(ibcIssues.length > 0 ? "ibc" : "local");
-        toast.success("Loaded previous analysis");
+        setActiveResultTab(primary.ibcResult ? "ibc" : "local");
         return true;
       } catch (err) {
         console.error("Error loading existing analysis:", err);
@@ -438,8 +512,38 @@ export function AIComplianceAnalyzer() {
         setLoadingExisting(false);
       }
     },
-    [selectedProjectId, user, documentsWithAnalysis],
+    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations],
   );
+
+  // When landing on / switching to All, hydrate every saved analysis for the project.
+  // Keyed by document-id set so mid-batch re-renders do not wipe/refetch unnecessarily.
+  const lastAllHydrateKeyRef = useRef<string>("");
+  useEffect(() => {
+    if (!selectedProjectId || !user) {
+      setLoadedExistingResults([]);
+      lastAllHydrateKeyRef.current = "";
+      return;
+    }
+    if (resultsDocumentFilter !== COMPLIANCE_RESULTS_FILTER_ALL) return;
+    const hydrateKey = documentsWithAnalysis
+      .map((d) => d.id)
+      .sort()
+      .join(",");
+    if (!hydrateKey) {
+      setLoadedExistingResults([]);
+      lastAllHydrateKeyRef.current = "";
+      return;
+    }
+    if (lastAllHydrateKeyRef.current === hydrateKey) return;
+    lastAllHydrateKeyRef.current = hydrateKey;
+    void hydrateExistingAnalyses();
+  }, [
+    selectedProjectId,
+    user,
+    documentsWithAnalysis,
+    resultsDocumentFilter,
+    hydrateExistingAnalyses,
+  ]);
 
   const handleResultsDocumentFilterChange = useCallback(
     async (value: string) => {
@@ -447,6 +551,16 @@ export function AIComplianceAnalyzer() {
       setResultsDocumentFilter(next);
 
       if (next === COMPLIANCE_RESULTS_FILTER_ALL) {
+        // Explicit hydrate so selecting All always shows every saved analysis.
+        lastAllHydrateKeyRef.current = documentsWithAnalysis
+          .map((d) => d.id)
+          .sort()
+          .join(",");
+        if (documentsWithAnalysis.length > 0) {
+          await hydrateExistingAnalyses();
+        } else {
+          setLoadedExistingResults([]);
+        }
         return;
       }
 
@@ -458,29 +572,41 @@ export function AIComplianceAnalyzer() {
         return;
       }
 
-      if (loadedExistingResults?.documentId === next) {
+      if (loadedExistingResults.some((l) => l.documentId === next)) {
         setActiveResultFileId(null);
         return;
       }
 
       // Not in the current session — load from DB so the filter has something to show.
-      await loadExistingAnalysis(next);
+      await hydrateExistingAnalyses([next], { toastOnEmpty: true });
     },
-    [completedBatchFiles, loadedExistingResults, loadExistingAnalysis],
+    [
+      completedBatchFiles,
+      loadedExistingResults,
+      hydrateExistingAnalyses,
+      documentsWithAnalysis,
+    ],
   );
 
   /** Clear the upload queue for a new batch round; prior DB analyses stay in the dropdown. */
   const clearBatchForNewRound = useCallback(() => {
     setFiles([]);
     setBatchProgress(null);
-    setLoadedExistingResults(null);
     setActiveResultFileId(null);
     setResponses({});
     setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
+    setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+    // Re-show every saved analysis under All after clearing the session queue.
+    lastAllHydrateKeyRef.current = "";
+    if (documentsWithAnalysis.length > 0) {
+      void hydrateExistingAnalyses();
+    } else {
+      setLoadedExistingResults([]);
+    }
     toast.info(
       "Selection cleared — prior analyses remain available under Load previously analyzed document",
     );
-  }, []);
+  }, [documentsWithAnalysis, hydrateExistingAnalyses]);
 
   // Recently used tracking
   const { recentItems: recentJurisdictions, addRecentItem: addRecentJurisdiction } = useRecentlyUsed(
@@ -498,7 +624,10 @@ export function AIComplianceAnalyzer() {
       if (newProject) {
         setSelectedProjectId(newProject.id);
         setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
-        setLoadedExistingResults(null);
+        setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+        setLoadedExistingResults([]);
+        setDocumentsWithAnalysis([]);
+        lastAllHydrateKeyRef.current = "";
         setActiveResultFileId(null);
         setShowNewProjectInput(false);
         setNewProjectName("");
@@ -996,10 +1125,12 @@ export function AIComplianceAnalyzer() {
       setAnalyzing(true);
       setBatchProgress({ total: pendingOrFailed.length, completed: 0, currentIndex: 1 });
       if (!onlyFailed) {
-        setLoadedExistingResults(null);
+        // Keep hydrated prior analyses so All continues to show the full project history
+        // while the new batch completes; session files merge into resultGroups separately.
         setResponses({});
         setActiveResultFileId(null);
         setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
+        setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
       }
 
       try {
@@ -1118,10 +1249,21 @@ export function AIComplianceAnalyzer() {
       }));
       setModifyDialogOpen(false);
       toast.success("Response modified");
-    } else if (selectedIssue && loadedExistingResults) {
+    } else if (selectedIssue && activeLoadedExisting) {
       setResponses((prev) => ({
         ...prev,
-        [issueResponseKey(loadedExistingResults.documentId, selectedIssue.id)]: {
+        [issueResponseKey(activeLoadedExisting.documentId, selectedIssue.id)]: {
+          status: "modified",
+          originalFix: selectedIssue.suggestedFix,
+          modifiedResponse: modifiedText,
+        },
+      }));
+      setModifyDialogOpen(false);
+      toast.success("Response modified");
+    } else if (selectedIssue && activeResultFileId) {
+      setResponses((prev) => ({
+        ...prev,
+        [issueResponseKey(activeResultFileId, selectedIssue.id)]: {
           status: "modified",
           originalFix: selectedIssue.suggestedFix,
           modifiedResponse: modifiedText,
@@ -1133,29 +1275,48 @@ export function AIComplianceAnalyzer() {
   };
 
   const resultGroups = useMemo(() => {
-    const groups = completedBatchFiles.map((f) => ({
-      id: f.id,
-      documentId: f.documentId ?? null,
-      fileName: f.file.name,
-      ibcResult: f.ibcResult ?? null,
-      localResult: f.localResult ?? null,
-    }));
-    if (loadedExistingResults) {
-      const alreadyPresent = groups.some(
-        (g) => g.documentId === loadedExistingResults.documentId,
-      );
+    const groups: Array<{
+      id: string;
+      documentId: string | null;
+      fileName: string;
+      ibcResult: AnalysisResult | null;
+      localResult: AnalysisResult | null;
+      failed: boolean;
+      error?: string;
+    }> = [
+      ...completedBatchFiles.map((f) => ({
+        id: f.id,
+        documentId: f.documentId ?? null,
+        fileName: f.file.name,
+        ibcResult: f.ibcResult ?? null,
+        localResult: f.localResult ?? null,
+        failed: false as boolean,
+      })),
+      ...failedBatchFiles.map((f) => ({
+        id: f.id,
+        documentId: f.documentId ?? null,
+        fileName: f.file.name,
+        ibcResult: f.ibcResult ?? null,
+        localResult: f.localResult ?? null,
+        failed: true as boolean,
+        error: f.error,
+      })),
+    ];
+    for (const loaded of loadedExistingResults) {
+      const alreadyPresent = groups.some((g) => g.documentId === loaded.documentId);
       if (!alreadyPresent) {
-        groups.unshift({
-          id: loadedExistingResults.documentId,
-          documentId: loadedExistingResults.documentId,
-          fileName: loadedExistingResults.fileName,
-          ibcResult: loadedExistingResults.ibcResult,
-          localResult: loadedExistingResults.localResult,
+        groups.push({
+          id: loaded.documentId,
+          documentId: loaded.documentId,
+          fileName: loaded.fileName,
+          ibcResult: loaded.ibcResult,
+          localResult: loaded.localResult,
+          failed: false,
         });
       }
     }
     return groups;
-  }, [completedBatchFiles, loadedExistingResults]);
+  }, [completedBatchFiles, failedBatchFiles, loadedExistingResults]);
 
   const filterMatchFileName = useMemo(() => {
     if (resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL) return null;
@@ -1164,11 +1325,14 @@ export function AIComplianceAnalyzer() {
     );
   }, [resultsDocumentFilter, documentsWithAnalysis]);
 
-  const displayedResultGroups = useMemo(
-    () =>
-      filterComplianceResultGroups(resultGroups, resultsDocumentFilter, filterMatchFileName),
-    [resultGroups, resultsDocumentFilter, filterMatchFileName],
-  );
+  const displayedResultGroups = useMemo(() => {
+    const byDocument = filterComplianceResultGroups(
+      resultGroups,
+      resultsDocumentFilter,
+      filterMatchFileName,
+    );
+    return filterComplianceGroupsByScore(byDocument, complianceScoreFilter);
+  }, [resultGroups, resultsDocumentFilter, filterMatchFileName, complianceScoreFilter]);
 
   /** Aggregate KPI strip across displayed analyzed files' real results — never seeded. */
   const aggregateFindingStats = useMemo(() => {
@@ -1213,7 +1377,23 @@ export function AIComplianceAnalyzer() {
     fileName: string;
     ibcResult: AnalysisResult | null;
     localResult: AnalysisResult | null;
+    failed?: boolean;
+    error?: string;
   }) => {
+    if (group.failed) {
+      return (
+        <div key={group.id} className="space-y-2">
+          <p className="text-sm font-medium text-foreground">{group.fileName}</p>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Analysis failed{group.error ? `: ${group.error}` : ". Retry from the batch controls above."}
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+    }
+
     const tab = fileResultTabs[group.id] ?? (group.ibcResult ? "ibc" : "local");
     const groupResult =
       (tab === "local" ? group.localResult : group.ibcResult) ?? group.localResult ?? group.ibcResult;
@@ -1362,7 +1542,7 @@ export function AIComplianceAnalyzer() {
         jurisdictionNotes: result.jurisdictionNotes ?? "",
         projectName:
           activeResultFile?.file.name?.replace(/\.[^/.]+$/, "") ||
-          loadedExistingResults?.fileName?.replace(/\.[^/.]+$/, "") ||
+          activeLoadedExisting?.fileName?.replace(/\.[^/.]+$/, "") ||
           "Compliance Analysis",
       });
       toast.success("PDF report exported");
@@ -1382,7 +1562,9 @@ export function AIComplianceAnalyzer() {
   const batchProgressValue = batchProgress ? batchProgressPercent(batchProgress) : 0;
   const batchProgressLabel = batchProgress ? formatBatchProgressLabel(batchProgress) : "";
   const hasAnyResults =
-    completedBatchFiles.length > 0 || loadedExistingResults !== null;
+    completedBatchFiles.length > 0 ||
+    failedBatchFiles.length > 0 ||
+    loadedExistingResults.length > 0;
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -1648,7 +1830,10 @@ export function AIComplianceAnalyzer() {
                 setShowNewProjectInput(false);
                 setSelectedProjectId(v === "__none__" ? null : v);
                 setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
-                setLoadedExistingResults(null);
+                setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+                setLoadedExistingResults([]);
+                setDocumentsWithAnalysis([]);
+                lastAllHydrateKeyRef.current = "";
                 setActiveResultFileId(null);
               }}
             >
@@ -1722,36 +1907,55 @@ export function AIComplianceAnalyzer() {
           </div>
 
           {/* View / filter previously analyzed documents */}
-          {documentFilterOptions.length > 0 && (
+          {(documentFilterOptions.length > 0 || hasAnyResults) && (
             <Card className={cn("pilot-card border-border bg-card", "bg-background/80")}>
               <CardContent className="pt-4">
                 <div className="space-y-3">
                   <p className="font-medium text-sm text-foreground">Load previously analyzed document</p>
                   <div className="flex flex-wrap gap-2 items-center">
+                    {documentFilterOptions.length > 0 && (
+                      <Select
+                        value={resultsDocumentFilter}
+                        onValueChange={(v) => void handleResultsDocumentFilterChange(v)}
+                        disabled={loadingExisting}
+                      >
+                        <SelectTrigger className="w-[280px]" data-testid="select-analyzed-document">
+                          <SelectValue placeholder="All documents" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={COMPLIANCE_RESULTS_FILTER_ALL}>All</SelectItem>
+                          {documentFilterOptions.map((d) => (
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Select
-                      value={resultsDocumentFilter}
-                      onValueChange={(v) => void handleResultsDocumentFilterChange(v)}
-                      disabled={loadingExisting}
+                      value={complianceScoreFilter}
+                      onValueChange={(v) =>
+                        setComplianceScoreFilter(
+                          v === COMPLIANCE_SCORE_FILTER_NOT_100
+                            ? COMPLIANCE_SCORE_FILTER_NOT_100
+                            : COMPLIANCE_SCORE_FILTER_ALL,
+                        )
+                      }
                     >
-                      <SelectTrigger className="w-[280px]" data-testid="select-analyzed-document">
-                        <SelectValue placeholder="All documents" />
+                      <SelectTrigger className="w-[220px]" data-testid="select-compliance-score-filter">
+                        <SelectValue placeholder="All results" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={COMPLIANCE_RESULTS_FILTER_ALL}>All</SelectItem>
-                        {documentFilterOptions.map((d) => (
-                          <SelectItem key={d.id} value={d.id}>
-                            {d.label}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value={COMPLIANCE_SCORE_FILTER_ALL}>All results</SelectItem>
+                        <SelectItem value={COMPLIANCE_SCORE_FILTER_NOT_100}>
+                          Not 100% compliant
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     {loadingExisting && (
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    All shows every analysis in this view. Pick a file to show only that file&apos;s results.
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -2053,7 +2257,17 @@ export function AIComplianceAnalyzer() {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
-                {displayedResultGroups.map((group) => renderFileResultGroup(group))}
+                {displayedResultGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {loadingExisting
+                      ? "Loading previous analyses…"
+                      : complianceScoreFilter === COMPLIANCE_SCORE_FILTER_NOT_100
+                        ? "No analyses match “Not 100% compliant”."
+                        : "No analysis results to show for this filter."}
+                  </p>
+                ) : (
+                  displayedResultGroups.map((group) => renderFileResultGroup(group))
+                )}
               </div>
 
               <aside className="space-y-4 lg:self-start">
