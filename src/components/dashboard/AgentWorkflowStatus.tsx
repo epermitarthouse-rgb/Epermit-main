@@ -280,6 +280,29 @@ export function AgentWorkflowStatus() {
     refetchInterval: chainPhase !== "idle" && chainPhase !== "complete" ? 3000 : false,
   });
 
+  // Must be declared before any hook deps that read projectBySelectedId
+  // (TDZ ReferenceError otherwise white-screens /dashboard).
+  const { data: projectBySelectedId = null } = useQuery({
+    queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, selectedProjectId, user?.id],
+    enabled: !!selectedProjectId && !!user?.id,
+    queryFn: async () => {
+      const { data: sel, error } = await supabase
+        .from("projects")
+        .select("id, permit_number, jurisdiction, credential_id, portal_data")
+        .eq("id", selectedProjectId!)
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error || !sel) return null;
+      return {
+        id: sel.id as string,
+        permit_number: (sel.permit_number as string) ?? null,
+        jurisdiction: (sel.jurisdiction as string) ?? null,
+        credential_id: (sel.credential_id as string) ?? null,
+        portal_data: sel.portal_data ?? null,
+      };
+    },
+  });
+
   useEffect(() => {
     const projectId = projectBySelectedId?.id ?? latestProjectId;
     if (!projectId) return;
@@ -718,27 +741,6 @@ export function AgentWorkflowStatus() {
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
-
-  const { data: projectBySelectedId = null } = useQuery({
-    queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, selectedProjectId, user?.id],
-    enabled: !!selectedProjectId && !!user?.id,
-    queryFn: async () => {
-      const { data: sel, error } = await supabase
-        .from("projects")
-        .select("id, permit_number, jurisdiction, credential_id, portal_data")
-        .eq("id", selectedProjectId!)
-        .eq("user_id", user!.id)
-        .maybeSingle();
-      if (error || !sel) return null;
-      return {
-        id: sel.id as string,
-        permit_number: (sel.permit_number as string) ?? null,
-        jurisdiction: (sel.jurisdiction as string) ?? null,
-        credential_id: (sel.credential_id as string) ?? null,
-        portal_data: sel.portal_data ?? null,
-      };
-    },
-  });
 
   const linkedCredentialId = projectBySelectedId?.credential_id ?? null;
 
