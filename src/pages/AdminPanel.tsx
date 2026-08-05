@@ -518,6 +518,14 @@ export default function AdminPanel() {
 
   const adminQuickLinks = (
     <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/members')}>
+        <Users className="mr-2 h-4 w-4" />
+        Members
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/audit')}>
+        <History className="mr-2 h-4 w-4" />
+        Audit
+      </Button>
       <Button variant="outline" size="sm" onClick={() => navigate('/admin/shadow-mode')}>
         <Shield className="mr-2 h-4 w-4" />
         Shadow Mode

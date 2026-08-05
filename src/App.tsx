@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LeadCaptureProvider } from "@/contexts/LeadCaptureContext";
 import { LeadCaptureModal } from "@/components/lead-capture/LeadCaptureModal";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -10,10 +10,11 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { ProtectedLayoutRoute } from "@/components/auth/ProtectedRoute";
-import { HomeRoute } from "@/components/auth/HomeRoute";
+import { PublicOnlyRoute } from "@/components/auth/PublicOnlyRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { MarketingLayout } from "@/components/layout/MarketingLayout";
 
+import LandingPage from "./pages/LandingPage";
 import Demos from "./pages/Demos";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
@@ -29,9 +30,12 @@ import Projects from "./pages/Projects";
 import InviteAcceptPage from "./pages/InviteAccept";
 import Analytics from "./pages/Analytics";
 import AdminPanel from "./pages/AdminPanel";
+import AdminMembers from "./pages/AdminMembers";
+import AdminAudit from "./pages/AdminAudit";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
+import AdminAuthorizationsPlaceholder from "./pages/placeholders/AdminPreviewPlaceholders";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
@@ -72,10 +76,15 @@ const App = () => (
             <LeadCaptureModal />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<HomeRoute />} />
+                <Route
+                  path="/"
+                  element={
+                    <PublicOnlyRoute>
+                      <LandingPage />
+                    </PublicOnlyRoute>
+                  }
+                />
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/login" element={<Navigate to="/auth" replace />} />
-                <Route path="/signup" element={<Navigate to="/auth" state={{ authView: "signup" }} replace />} />
                 <Route
                   path="/demos"
                   element={
@@ -131,6 +140,9 @@ const App = () => (
                     <Route path="jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
+                    <Route path="members" element={<AdminMembers />} />
+                    <Route path="audit" element={<AdminAudit />} />
+                    <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
                   </Route>
                   <Route path="/mvp-documentation" element={<MVPDocumentation />} />
                   <Route path="/api-docs" element={<APIDocumentation />} />
