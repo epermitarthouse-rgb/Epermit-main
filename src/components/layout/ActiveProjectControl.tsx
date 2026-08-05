@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Briefcase, ChevronDown, KeyRound } from "lucide-react";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
 import { isProjectDoxUrl } from "@/lib/portalView";
+import {
+  DASHBOARD_SELECTED_PROJECT_QUERY_KEY,
+  SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
+} from "@/lib/portalMonitorScrapeOptions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,6 +35,7 @@ const FIELD_CLASS =
  */
 export function ActiveProjectControl() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const selectedProject = useSelectedProjectOptional();
   const { projects, loading, updateProject, fetchProjects, createProject } =
     useProjects();
@@ -122,12 +128,56 @@ export function ActiveProjectControl() {
         return;
       }
 
+      const projectId = selectedProject.selectedProjectId;
+
+      // Optimistically sync dashboard scrape identity so Portal Monitor does not
+      // keep a stale null credential_id after header bind.
+      queryClient.setQueryData(
+        [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, projectId, user.id],
+        (prev: {
+          id: string;
+          permit_number: string | null;
+          jurisdiction: string | null;
+          credential_id: string | null;
+          portal_data: unknown;
+        } | null | undefined) => {
+          if (prev && prev.id === projectId) {
+            return { ...prev, credential_id: credId };
+          }
+          return {
+            id: projectId,
+            permit_number: updated.permit_number ?? null,
+            jurisdiction: updated.jurisdiction ?? null,
+            credential_id: credId,
+            portal_data: null,
+          };
+        },
+      );
+
       const { data: proj } = await supabase
         .from("projects")
-        .select("portal_data, portal_status, last_checked_at")
-        .eq("id", selectedProject.selectedProjectId)
+        .select("portal_data, portal_status, last_checked_at, credential_id")
+        .eq("id", projectId)
         .eq("user_id", user.id)
         .maybeSingle();
+
+      // Verify the bind actually landed in DB (source of truth for scrape).
+      const persistedCredentialId =
+        (proj?.credential_id as string | null | undefined) ?? null;
+      if (persistedCredentialId !== credId) {
+        console.error(
+          "[ActiveProjectControl] credential_id mismatch after update",
+          { projectId, expected: credId, actual: persistedCredentialId },
+        );
+        setSelectedCredentialId(previousValue);
+        toast.error(
+          "Credential did not save on this project. Try selecting it again.",
+        );
+        void queryClient.invalidateQueries({
+          queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY],
+        });
+        return;
+      }
 
       const existingType =
         (proj?.portal_data as { portalType?: string } | null)?.portalType || "unknown";
@@ -148,8 +198,30 @@ export function ActiveProjectControl() {
             portal_status: null,
             last_checked_at: null,
           })
-          .eq("id", selectedProject.selectedProjectId);
+          .eq("id", projectId);
+        queryClient.setQueryData(
+          [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, projectId, user.id],
+          (prev: {
+            id: string;
+            permit_number: string | null;
+            jurisdiction: string | null;
+            credential_id: string | null;
+            portal_data: unknown;
+          } | null | undefined) =>
+            prev && prev.id === projectId
+              ? { ...prev, portal_data: null, credential_id: credId }
+              : prev,
+        );
       }
+
+      // Ensure Portal Monitor scrape options resolve from the newly selected
+      // credential immediately (do not wait for a scrape / remount).
+      void queryClient.invalidateQueries({
+        queryKey: [SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY],
+      });
 
       fetchProjects();
     },
@@ -160,6 +232,7 @@ export function ActiveProjectControl() {
       fetchProjects,
       selectedCredentialId,
       sidebarCredentials,
+      queryClient,
     ],
   );
 

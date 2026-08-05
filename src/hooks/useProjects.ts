@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Project, ProjectStatus, ProjectType, PROJECT_STATUS_CONFIG } from '@/types/project';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { logProjectActivity } from '@/lib/activityLogger';
+import {
+  DASHBOARD_SELECTED_PROJECT_QUERY_KEY,
+  SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
+} from '@/lib/portalMonitorScrapeOptions';
 
 /** Columns added in Phase 4 QB/billing migrations — omit from fallback select if DB not migrated yet. */
 const PHASE_4_PLUS_OPTIONAL_PROJECT_COLUMNS = new Set([
@@ -185,6 +190,7 @@ export interface UpdateProjectData extends Partial<CreateProjectData> {
 
 export function useProjects() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -302,6 +308,17 @@ export function useProjects() {
           p.id === id ? normalizeProjectRow(updatedProject as Record<string, unknown>) : p,
         ),
       );
+
+      // Portal Monitor scrape-mode menu reads these queries — refresh as soon as
+      // the project's portal credential binding changes (header or Edit Project).
+      if (Object.prototype.hasOwnProperty.call(data, 'credential_id')) {
+        void queryClient.invalidateQueries({
+          queryKey: [SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY],
+        });
+      }
       
       // Log activity
       if (data.status && currentProject && data.status !== currentProject.status) {

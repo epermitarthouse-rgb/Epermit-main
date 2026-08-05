@@ -48,20 +48,16 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  isArlingtonPortalContext,
-  isBaltimorePortal,
-  isFairfaxPortal,
-  isMontgomeryProjectDoxPortalCredential,
-  isHowardProjectDoxPortalCredential,
-  isPgcEplanPortalCredential,
-  isWashingtonStyleProjectDoxCredential,
-} from "@/lib/portalView";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import {
   buildQuickScrapeRequestIdentity,
   resolveQuickScrapeSubmitFields,
 } from "@/lib/quickScrapeFormState";
+import {
+  DASHBOARD_SELECTED_PROJECT_QUERY_KEY,
+  SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
+  resolvePortalMonitorScrapeMenu,
+} from "@/lib/portalMonitorScrapeOptions";
 
 const SCRAPER_URL = getScraperBaseUrl();
 
@@ -249,13 +245,6 @@ export function AgentWorkflowStatus() {
   const [latestPermitNumber, setLatestPermitNumber] = useState<string | null>(
     null,
   );
-  const [projectBySelectedId, setProjectBySelectedId] = useState<{
-    id: string;
-    permit_number: string | null;
-    jurisdiction: string | null;
-    credential_id: string | null;
-    portal_data: unknown;
-  } | null>(null);
 
   const [chainPhase, setChainPhase] = useState<ChainPhase>("idle");
   const [chainError, setChainError] = useState<string | null>(null);
@@ -308,8 +297,22 @@ export function AgentWorkflowStatus() {
           filter: `id=eq.${projectId}`,
         },
         (payload) => {
-          const oldHash = (payload.old as Record<string, unknown>)?.portal_data_hash;
-          const newHash = (payload.new as Record<string, unknown>)?.portal_data_hash;
+          const oldRow = payload.old as Record<string, unknown> | undefined;
+          const newRow = payload.new as Record<string, unknown> | undefined;
+          const oldHash = oldRow?.portal_data_hash;
+          const newHash = newRow?.portal_data_hash;
+          const oldCredentialId = oldRow?.credential_id ?? null;
+          const newCredentialId = newRow?.credential_id ?? null;
+
+          // Credential bind/unbind — refresh scrape-mode menu immediately.
+          if (oldCredentialId !== newCredentialId) {
+            void queryClient.invalidateQueries({
+              queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, projectId],
+            });
+            void queryClient.invalidateQueries({
+              queryKey: [SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY, projectId],
+            });
+          }
 
           if (newHash && oldHash !== newHash && !realtimeTriggeredRef.current) {
             if (pipelineTriggerInFlightRef.current) {
@@ -341,7 +344,7 @@ export function AgentWorkflowStatus() {
       realtimeTriggeredRef.current = false;
       supabase.removeChannel(channel);
     };
-  }, [projectBySelectedId?.id, latestProjectId]);
+  }, [projectBySelectedId?.id, latestProjectId, queryClient]);
 
   useEffect(() => {
     const jobStatus = scrape.scrapeJobStatus;
@@ -703,47 +706,59 @@ export function AgentWorkflowStatus() {
     }
 
     if (selectedProjectId) {
-      const { data: sel } = await supabase
-        .from("projects")
-        .select("id, permit_number, jurisdiction, credential_id, portal_data")
-        .eq("id", selectedProjectId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      setProjectBySelectedId(
-        sel
-          ? {
-              id: sel.id as string,
-              permit_number: (sel.permit_number as string) ?? null,
-              jurisdiction: (sel.jurisdiction as string) ?? null,
-              credential_id: (sel.credential_id as string) ?? null,
-              portal_data: sel.portal_data ?? null,
-            }
-          : null,
-      );
-    } else {
-      setProjectBySelectedId(null);
+      await queryClient.invalidateQueries({
+        queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, selectedProjectId, user.id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: [SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY, selectedProjectId, user.id],
+      });
     }
-  }, [user, selectedProjectId]);
+  }, [user, selectedProjectId, queryClient]);
 
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  const { data: linkedPortalCredential } = useQuery({
-    queryKey: ["sidebar_portal_credential", selectedProjectId, user?.id],
+  const { data: projectBySelectedId = null } = useQuery({
+    queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, selectedProjectId, user?.id],
     enabled: !!selectedProjectId && !!user?.id,
     queryFn: async () => {
-      const { data: proj, error: projErr } = await supabase
+      const { data: sel, error } = await supabase
         .from("projects")
-        .select("credential_id")
+        .select("id, permit_number, jurisdiction, credential_id, portal_data")
         .eq("id", selectedProjectId!)
         .eq("user_id", user!.id)
         .maybeSingle();
-      if (projErr || !proj?.credential_id) return null;
+      if (error || !sel) return null;
+      return {
+        id: sel.id as string,
+        permit_number: (sel.permit_number as string) ?? null,
+        jurisdiction: (sel.jurisdiction as string) ?? null,
+        credential_id: (sel.credential_id as string) ?? null,
+        portal_data: sel.portal_data ?? null,
+      };
+    },
+  });
+
+  const linkedCredentialId = projectBySelectedId?.credential_id ?? null;
+
+  const {
+    data: linkedPortalCredential,
+    isLoading: linkedCredentialLoading,
+    isFetching: linkedCredentialFetching,
+  } = useQuery({
+    queryKey: [
+      SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
+      selectedProjectId,
+      user?.id,
+      linkedCredentialId,
+    ],
+    enabled: !!selectedProjectId && !!user?.id && !!linkedCredentialId,
+    queryFn: async () => {
       const { data: cred, error: credErr } = await supabase
         .from("portal_credentials")
         .select("id, login_url, jurisdiction")
-        .eq("id", proj.credential_id as string)
+        .eq("id", linkedCredentialId!)
         .eq("user_id", user!.id)
         .maybeSingle();
       if (credErr) return null;
@@ -751,41 +766,36 @@ export function AgentWorkflowStatus() {
     },
   });
 
-  const isPgcEplanCred = isPgcEplanPortalCredential(
-    linkedPortalCredential ?? null,
-  );
-  const isMontgomeryCred = isMontgomeryProjectDoxPortalCredential(
-    linkedPortalCredential ?? null,
-  );
-  const isHowardCred = isHowardProjectDoxPortalCredential(
-    linkedPortalCredential ?? null,
-  );
-  const isWashingtonProjectDoxCred = isWashingtonStyleProjectDoxCredential(
-    linkedPortalCredential ?? null,
-  );
-  const isBaltimoreCred = isBaltimorePortal(linkedPortalCredential ?? null);
-  const isFairfaxCred = isFairfaxPortal(linkedPortalCredential ?? null);
-  const arlingtonPortalContext = useMemo(
+  const scrapeMenu = useMemo(
     () =>
-      isArlingtonPortalContext({
-        selectedCredential: linkedPortalCredential ?? null,
+      resolvePortalMonitorScrapeMenu({
+        credential: linkedPortalCredential ?? null,
         portalUrl: linkedPortalCredential?.login_url ?? null,
-        portalType: "accela",
         portalData: projectBySelectedId?.portal_data ?? null,
         project: projectBySelectedId,
       }),
     [linkedPortalCredential, projectBySelectedId],
   );
-  const isArlingtonCred = arlingtonPortalContext.isArlington;
+
+  const isPgcEplanCred = scrapeMenu === "pgc";
+  const isMontgomeryCred = scrapeMenu === "montgomery";
+  const isHowardCred = scrapeMenu === "howard";
+  const isWashingtonProjectDoxCred = scrapeMenu === "washington_projectdox";
+  const isBaltimoreCred = scrapeMenu === "baltimore";
+  const isFairfaxCred = scrapeMenu === "fairfax";
+  const isArlingtonCred = scrapeMenu === "arlington";
   const isMinimalTabsCred = isBaltimoreCred || isFairfaxCred;
+  const scrapeOptionsLoading =
+    !!linkedCredentialId &&
+    (linkedCredentialLoading ||
+      (linkedCredentialFetching && linkedPortalCredential == null));
 
   useEffect(() => {
     if (!isArlingtonCred) return;
     console.log(
       `[ArlingtonUI] scrape options source=Arlington options=${JSON.stringify([...ARLINGTON_SCRAPE_MENU_OPTIONS])}`,
     );
-  }, [isArlingtonCred, arlingtonPortalContext.source]);
-
+  }, [isArlingtonCred, scrapeMenu]);
   const [washingtonScrapeTabs, setWashingtonScrapeTabs] = useState<
     Record<WashingtonTabKey, boolean>
   >({
@@ -1122,9 +1132,55 @@ export function AgentWorkflowStatus() {
   ) => {
     // Selected project UUID is source of truth — never fall back to another
     // project's permit (e.g. latest Washington B2606607) after a project switch.
+    // Always re-read credential_id from DB: Active Project may have just bound a
+    // credential while this component's React Query cache is still stale.
+    if (!selectedProjectId || !user?.id) {
+      toast.error(
+        "No project found. Select a project in the header Active Project control or create one first.",
+      );
+      return;
+    }
+
+    const { data: freshProject, error: freshProjectErr } = await supabase
+      .from("projects")
+      .select("id, permit_number, jurisdiction, credential_id, portal_data")
+      .eq("id", selectedProjectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (freshProjectErr || !freshProject) {
+      toast.error(
+        "No project found. Select a project in the header Active Project control or create one first.",
+      );
+      return;
+    }
+
+    const freshSelectedProject = {
+      id: freshProject.id as string,
+      permit_number: (freshProject.permit_number as string) ?? null,
+      jurisdiction: (freshProject.jurisdiction as string) ?? null,
+      credential_id: (freshProject.credential_id as string) ?? null,
+      portal_data: freshProject.portal_data ?? null,
+    };
+
+    queryClient.setQueryData(
+      [DASHBOARD_SELECTED_PROJECT_QUERY_KEY, selectedProjectId, user.id],
+      freshSelectedProject,
+    );
+    if (freshSelectedProject.credential_id) {
+      void queryClient.invalidateQueries({
+        queryKey: [
+          SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
+          selectedProjectId,
+          user.id,
+          freshSelectedProject.credential_id,
+        ],
+      });
+    }
+
     const submitFields = resolveQuickScrapeSubmitFields({
       selectedProjectId,
-      selectedProject: projectBySelectedId,
+      selectedProject: freshSelectedProject,
     });
 
     if (!submitFields.ok) {
@@ -1526,15 +1582,17 @@ export function AgentWorkflowStatus() {
                 <DropdownMenuContent
                   align="end"
                   data-testid={
-                    isBaltimoreCred
-                      ? "baltimore-scrape-tab-picker"
-                      : isFairfaxCred
-                        ? "fairfax-scrape-tab-picker"
-                        : isArlingtonCred
-                          ? "arlington-scrape-tab-picker"
-                          : isWashingtonProjectDoxCred
-                            ? "washington-scrape-tab-picker"
-                            : undefined
+                    scrapeOptionsLoading
+                      ? "scrape-options-loading"
+                      : isBaltimoreCred
+                        ? "baltimore-scrape-tab-picker"
+                        : isFairfaxCred
+                          ? "fairfax-scrape-tab-picker"
+                          : isArlingtonCred
+                            ? "arlington-scrape-tab-picker"
+                            : isWashingtonProjectDoxCred
+                              ? "washington-scrape-tab-picker"
+                              : undefined
                   }
                   className={
                     isWashingtonProjectDoxCred ||
@@ -1544,7 +1602,12 @@ export function AgentWorkflowStatus() {
                       : undefined
                   }
                 >
-                  {isPgcEplanCred ? (
+                  {scrapeOptionsLoading ? (
+                    <DropdownMenuItem disabled data-testid="menu-scrape-options-loading">
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading portal scrape options…
+                    </DropdownMenuItem>
+                  ) : isPgcEplanCred ? (
                     <>
                       <DropdownMenuItem
                         onClick={() => runManualCheck("scrape_without_files")}

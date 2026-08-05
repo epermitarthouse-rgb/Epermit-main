@@ -135,4 +135,18 @@ describe("quickScrapeFormState — wiring contracts", () => {
       /projectBySelectedId\?\.permit_number \?\? latestPermitNumber/,
     );
   });
+
+  it("AgentWorkflowStatus re-reads projects.credential_id from DB before scrape submit", () => {
+    const src = readFileSync(
+      join(__dirname, "../components/dashboard/AgentWorkflowStatus.tsx"),
+      "utf8",
+    );
+    // Stale React state after header credential bind must not block scrape.
+    assert.match(src, /Always re-read credential_id from DB/);
+    assert.match(
+      src,
+      /\.select\("id, permit_number, jurisdiction, credential_id, portal_data"\)/,
+    );
+    assert.match(src, /freshSelectedProject/);
+  });
 });
