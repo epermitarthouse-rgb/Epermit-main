@@ -1512,7 +1512,7 @@ export function AIComplianceAnalyzer() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <Shield className="h-5 w-5 text-teal" />
-            AI Code Compliance Analyzer
+            AI Code Analyzer
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Upload architectural drawings to automatically detect building code violations using AI vision analysis

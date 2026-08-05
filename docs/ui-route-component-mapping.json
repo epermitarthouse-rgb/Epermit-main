@@ -1,0 +1,3154 @@
+{
+  "meta": {
+    "title": "Lovable \u2194 Current PermitPilot route/component mapping",
+    "date": "2026-07-21",
+    "summary": {
+      "lovableRoutesMapped": 88,
+      "lovableMetaRoutesDeclared": 87,
+      "lovableInventoryRouteEntries": 88,
+      "directUrlPagesReviewed": 55,
+      "exactMatches": 7,
+      "redesignedMatches": 23,
+      "mockOnlyPages": 71,
+      "duplicatePages": 5,
+      "excludedPages": 42,
+      "productDecisionRequired": 29,
+      "backendExtensionRequired": 10,
+      "adapterSufficientInScope": 31,
+      "inScopeV1": 31,
+      "notes": "Inventory JSON contains 88 route entries while meta.routesDeclared=87; mapping uses all 88. mockOnlyPages counts any route tagged lovable_mock_only.",
+      "mockOnlyPagesPrimary": 51
+    },
+    "classificationLabels": [
+      "style_only",
+      "shared_shell_replacement",
+      "component_replacement",
+      "page_layout_restructure",
+      "route_alias",
+      "route_restructure",
+      "frontend_adapter_required",
+      "existing_backend_can_support",
+      "backend_extension_required",
+      "lovable_mock_only",
+      "duplicate_lovable_page",
+      "existing_permitpilot_feature_missing_from_lovable",
+      "product_decision_required",
+      "exclude_from_replication"
+    ],
+    "pageKindValues": [
+      "detail_flow",
+      "duplicate",
+      "prototype",
+      "future",
+      "production",
+      "exclude"
+    ],
+    "directUrlDefinition": "55 pages: /login, /signup, /dashboard/uci, plus expanded notInSidebarNav from lovable-ui-inventory.json"
+  },
+  "shell": {
+    "lovableLayout": "PermitPilotShell",
+    "lovableSource": "src/components/permitpilot/PermitPilotShell.tsx",
+    "currentLayout": "DashboardLayout",
+    "currentSource": "src/components/layout/DashboardLayout.tsx",
+    "classifications": [
+      "shared_shell_replacement",
+      "frontend_adapter_required"
+    ],
+    "preserveProviders": [
+      "AuthProvider",
+      "SelectedProjectProvider",
+      "ScrapeProvider",
+      "SidebarProvider"
+    ],
+    "risk": "high",
+    "recommendedApproach": "Phase 2 shell swap; keep providers and scrape indicator"
+  },
+  "workflows": [
+    {
+      "id": "auth",
+      "name": "Authentication & authorization",
+      "lovableRoutes": [
+        "/login",
+        "/signup"
+      ],
+      "currentRoutes": [
+        "/auth"
+      ],
+      "classifications": [
+        "frontend_adapter_required",
+        "product_decision_required"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Supabase session",
+        "JWT scraper",
+        "UCI refresh-on-401",
+        "RLS"
+      ]
+    },
+    {
+      "id": "projects",
+      "name": "Projects",
+      "lovableRoutes": [
+        "/projects",
+        "/projects/new"
+      ],
+      "currentRoutes": [
+        "/projects"
+      ],
+      "classifications": [
+        "page_layout_restructure",
+        "frontend_adapter_required"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "useProjects",
+        "SelectedProjectContext"
+      ]
+    },
+    {
+      "id": "scraper",
+      "name": "Scraper / Portal Harvest",
+      "lovableRoutes": [
+        "/portals/harvest"
+      ],
+      "currentRoutes": [
+        "/portal-data"
+      ],
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "ScrapeContext",
+        "durable jobs",
+        "real progress"
+      ]
+    },
+    {
+      "id": "documents_comments",
+      "name": "Documents & comments",
+      "lovableRoutes": [
+        "/documents",
+        "/matrix/response"
+      ],
+      "currentRoutes": [
+        "/comment-review",
+        "/response-matrix",
+        "/classified-comments"
+      ],
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "ingestion",
+        "approval trigger",
+        "Edge parsers"
+      ]
+    },
+    {
+      "id": "ai_compliance",
+      "name": "AI compliance",
+      "lovableRoutes": [
+        "/compliance",
+        "/compliance/analyzer"
+      ],
+      "currentRoutes": [
+        "/code-compliance"
+      ],
+      "classifications": [
+        "frontend_adapter_required",
+        "product_decision_required"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "/api/analyze-drawing"
+      ]
+    },
+    {
+      "id": "uci",
+      "name": "UCI lifecycle",
+      "lovableRoutes": [
+        "/uci",
+        "/uci/submissions",
+        "/uci/communications",
+        "/uci/class-of-service",
+        "/uci/ciac",
+        "/uci/energization",
+        "/uci/application-builder",
+        "/utility/load-profile",
+        "/utility/provider-map",
+        "/utility/meter-set"
+      ],
+      "currentRoutes": [
+        "/uci"
+      ],
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "uciApi",
+        "stage enums",
+        "PEPCO gate"
+      ]
+    },
+    {
+      "id": "admin",
+      "name": "Admin",
+      "lovableRoutes": [
+        "/admin",
+        "/admin/*"
+      ],
+      "currentRoutes": [
+        "/admin",
+        "/admin/jurisdictions",
+        "/admin/feature-flags",
+        "/admin/shadow-mode"
+      ],
+      "classifications": [
+        "page_layout_restructure",
+        "backend_extension_required",
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": true,
+      "risk": "high",
+      "preserveLogic": [
+        "useRequireAdmin"
+      ]
+    },
+    {
+      "id": "settings",
+      "name": "Settings",
+      "lovableRoutes": [
+        "/settings"
+      ],
+      "currentRoutes": [
+        "/settings"
+      ],
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support"
+      ],
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "credential crypto"
+      ]
+    }
+  ],
+  "productDecisions": [
+    {
+      "id": "PD-1",
+      "topic": "Auth paths"
+    },
+    {
+      "id": "PD-2",
+      "topic": "Role model"
+    },
+    {
+      "id": "PD-3",
+      "topic": "Marketing / shell"
+    },
+    {
+      "id": "PD-4",
+      "topic": "LOA"
+    },
+    {
+      "id": "PD-5",
+      "topic": "Admin members/audit"
+    },
+    {
+      "id": "PD-6",
+      "topic": "UCI IA"
+    },
+    {
+      "id": "PD-7",
+      "topic": "DesignCheck matrix"
+    },
+    {
+      "id": "PD-8",
+      "topic": "Permit queue"
+    },
+    {
+      "id": "PD-9",
+      "topic": "Messages"
+    },
+    {
+      "id": "PD-10",
+      "topic": "Timeline/Gantt"
+    },
+    {
+      "id": "PD-11",
+      "topic": "Nav IA"
+    },
+    {
+      "id": "PD-12",
+      "topic": "Route renames"
+    },
+    {
+      "id": "PD-13",
+      "topic": "Baltimore nav"
+    },
+    {
+      "id": "PD-14",
+      "topic": "Direct-URL in-scope set"
+    }
+  ],
+  "routes": [
+    {
+      "lovableRoute": "/login",
+      "lovableSource": "src/pages/Login.tsx",
+      "currentRoute": "/auth",
+      "currentSource": "src/pages/Auth.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "product_decision_required",
+        "existing_backend_can_support"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Supabase session"
+      ],
+      "recommendedApproach": "Restyle Auth; optional alias",
+      "notes": "connected-supabase",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "redesignedMatch": true
+    },
+    {
+      "lovableRoute": "/signup",
+      "lovableSource": "src/pages/Signup.tsx",
+      "currentRoute": "/auth",
+      "currentSource": "src/pages/Auth.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "product_decision_required",
+        "backend_extension_required"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": true,
+      "risk": "medium",
+      "preserveLogic": [
+        "useAuth.signUp",
+        "/invite/:token"
+      ],
+      "recommendedApproach": "Pending-approval model needs PD/BE",
+      "notes": "connected-supabase",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "redesignedMatch": true
+    },
+    {
+      "lovableRoute": "/",
+      "lovableSource": "src/pages/Home.tsx",
+      "currentRoute": "/",
+      "currentSource": "src/pages/LandingPage.tsx",
+      "classifications": [
+        "page_layout_restructure",
+        "product_decision_required",
+        "existing_backend_can_support"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "backend",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "PublicOnlyRoute",
+        "MarketingLayout"
+      ],
+      "recommendedApproach": "Keep public marketing; avoid anon app shell",
+      "notes": "static + contact form \u2192 send-contact-email edge fn",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": true
+    },
+    {
+      "lovableRoute": "/dashboard",
+      "lovableSource": "src/pages/Dashboard.tsx",
+      "currentRoute": "/dashboard",
+      "currentSource": "src/pages/Dashboard.tsx",
+      "classifications": [
+        "page_layout_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "page_layout_restructure",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "onboarding",
+        "selected project"
+      ],
+      "recommendedApproach": "Chrome + real widgets",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/dashboard/uci",
+      "lovableSource": "src/pages/UciDashboard.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx",
+      "classifications": [
+        "duplicate_lovable_page",
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "duplicate_lovable_page",
+      "dataMode": "static",
+      "navVisibility": "hidden",
+      "pageKind": "duplicate",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "never unguarded UCI"
+      ],
+      "recommendedApproach": "Exclude",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "duplicate": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/projects",
+      "lovableSource": "src/pages/Projects.tsx",
+      "currentRoute": "/projects",
+      "currentSource": "src/pages/Projects.tsx",
+      "classifications": [
+        "page_layout_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "page_layout_restructure",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "useProjects",
+        "status enum"
+      ],
+      "recommendedApproach": "Cards + useProjects",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/projects/new",
+      "lovableSource": "src/pages/ProjectSetupCredentials.tsx",
+      "currentRoute": "/projects",
+      "currentSource": "Projects + PortalCredentialsManager",
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "static",
+      "navVisibility": "direct",
+      "pageKind": "detail_flow",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "portal-credentials crypto"
+      ],
+      "recommendedApproach": "No visual vault as storage",
+      "notes": "visual-only",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/projects/alpha",
+      "lovableSource": "src/pages/ProjectWorkspace.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude hard-coded slug",
+      "notes": "mock \u2014 hard-coded slug",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/projects/:id/timeline",
+      "lovableSource": "src/pages/ProjectTimeline.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only",
+        "exclude_from_replication"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/projects/:id/gantt",
+      "lovableSource": "src/pages/ProjectGantt.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only",
+        "exclude_from_replication"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/mission-control",
+      "lovableSource": "src/pages/MissionControl.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/command-center",
+      "lovableSource": "src/pages/CommandCenter.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/feasibility",
+      "lovableSource": "src/pages/Feasibility.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/feasibility/site",
+      "lovableSource": "src/pages/SiteFeasibility.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/critical-path",
+      "lovableSource": "src/pages/CriticalPath.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/permit-queue",
+      "lovableSource": "src/pages/PermitQueue.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only",
+        "backend_extension_required"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "medium",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-8 exclude until aggregate design",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/agents",
+      "lovableSource": "src/pages/AgentCenter.tsx",
+      "currentRoute": null,
+      "currentSource": "AgentWorkflowStatus",
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "real scrape/agent statuses"
+      ],
+      "recommendedApproach": "Don't ship fake agents",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/messages",
+      "lovableSource": "src/pages/Messages.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only",
+        "backend_extension_required"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-9 exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/documents",
+      "lovableSource": "src/pages/DocumentVault.tsx",
+      "currentRoute": null,
+      "currentSource": "project_documents hooks",
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only",
+        "page_layout_restructure"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "detail_flow",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "ingestion statuses",
+        "storage"
+      ],
+      "recommendedApproach": "Vault + real docs",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/utility-map",
+      "lovableSource": "src/pages/UtilityMap.tsx",
+      "currentRoute": "/jurisdictions/map",
+      "currentSource": "src/pages/JurisdictionMapPage.tsx",
+      "classifications": [
+        "product_decision_required",
+        "frontend_adapter_required",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "prototype",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Mapbox"
+      ],
+      "recommendedApproach": "Prefer Mapbox over fake lines",
+      "notes": "visual-only",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/compliance",
+      "lovableSource": "src/pages/Compliance.tsx",
+      "currentRoute": "/code-compliance",
+      "currentSource": "src/pages/CodeCompliance.tsx",
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only",
+        "backend_extension_required"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "medium",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-7; analyzer first",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/compliance/intelligence",
+      "lovableSource": "src/pages/ComplianceIntelligence.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only",
+        "duplicate_lovable_page"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "duplicate": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/compliance/analyzer",
+      "lovableSource": "src/pages/ComplianceAnalyzer.tsx",
+      "currentRoute": "/code-compliance",
+      "currentSource": "src/pages/CodeCompliance.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "component_replacement"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "backend",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "/api/analyze-drawing"
+      ],
+      "recommendedApproach": "Chrome + PP API",
+      "notes": "functional (client) + analyze-compliance-drawings edge fn",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true
+    },
+    {
+      "lovableRoute": "/compliance/prescreen",
+      "lovableSource": "src/pages/InternalPrescreen.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/architecture",
+      "lovableSource": "src/pages/PlatformArchitecture.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "static",
+      "navVisibility": "direct",
+      "pageKind": "exclude",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "static",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true
+    },
+    {
+      "lovableRoute": "/content-studio",
+      "lovableSource": "src/pages/ContentStudio.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/admin",
+      "lovableSource": "src/pages/AdminConsole.tsx",
+      "currentRoute": "/admin",
+      "currentSource": "src/pages/AdminPanel.tsx",
+      "classifications": [
+        "page_layout_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "page_layout_restructure",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "useRequireAdmin"
+      ],
+      "recommendedApproach": "Restyle hub keep PP admin",
+      "notes": "mock hub",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/admin/authorizations",
+      "lovableSource": "src/pages/AdminAuthorizations.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "backend_extension_required",
+        "product_decision_required"
+      ],
+      "primaryClassification": "backend_extension_required",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "high",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-4/5: BE or exclude \u2014 not in current schema",
+      "notes": "connected \u2014 client_authorizations",
+      "inScopeV1": false,
+      "directUrlReview": true
+    },
+    {
+      "lovableRoute": "/admin/members",
+      "lovableSource": "src/pages/AdminMembers.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "backend_extension_required",
+        "product_decision_required"
+      ],
+      "primaryClassification": "backend_extension_required",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "high",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-4/5: BE or exclude \u2014 not in current schema",
+      "notes": "connected \u2014 profiles/user_roles/workspace_invitations, RPC approve/reject",
+      "inScopeV1": false,
+      "directUrlReview": true
+    },
+    {
+      "lovableRoute": "/admin/audit",
+      "lovableSource": "src/pages/AdminAuditLog.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "backend_extension_required",
+        "product_decision_required"
+      ],
+      "primaryClassification": "backend_extension_required",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "high",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-4/5: BE or exclude \u2014 not in current schema",
+      "notes": "connected \u2014 access_audit_log",
+      "inScopeV1": false,
+      "directUrlReview": true
+    },
+    {
+      "lovableRoute": "/admin/invoicing",
+      "lovableSource": "src/pages/AdminInvoicing.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude; keep Stripe/api-docs as applicable",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/admin/past-performance",
+      "lovableSource": "src/pages/AdminPastPerformance.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude; keep Stripe/api-docs as applicable",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/admin/crm",
+      "lovableSource": "src/pages/AdminCrm.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude; keep Stripe/api-docs as applicable",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/admin/milestone-billing",
+      "lovableSource": "src/pages/MilestoneBilling.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude; keep Stripe/api-docs as applicable",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/admin/endpoints",
+      "lovableSource": "src/pages/AdminEndpoints.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude; keep Stripe/api-docs as applicable",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/portfolio/executive",
+      "lovableSource": "src/pages/PortfolioExecutive.tsx",
+      "currentRoute": "/analytics",
+      "currentSource": "src/pages/Analytics.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "useAnalytics"
+      ],
+      "recommendedApproach": "Executive chrome + analytics",
+      "notes": "mock + recharts",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/utility/conflict-hunter",
+      "lovableSource": "src/pages/CrossUtilityConflictHunter.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/utility/easements",
+      "lovableSource": "src/pages/EasementRowManager.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/utility/load-profile",
+      "lovableSource": "src/pages/LoadProfileAnalyzer.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "uciApi load-profile",
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only",
+        "route_restructure"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "detail_flow",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "load-profile APIs",
+        "project access"
+      ],
+      "recommendedApproach": "Wire uciApi",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/utility/provider-map",
+      "lovableSource": "src/pages/UtilityProviderMap.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "uciApi providers",
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "detail_flow",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "provider resolution"
+      ],
+      "recommendedApproach": "Live providers over static file",
+      "notes": "static (utilityProviders.ts)",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true
+    },
+    {
+      "lovableRoute": "/utility/meter-set",
+      "lovableSource": "src/pages/MeterSetChoreographer.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "meter-set prepare API",
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only",
+        "product_decision_required"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "detail_flow",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "meter-set/prepare"
+      ],
+      "recommendedApproach": "Thin FE",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/scheduling/long-lead",
+      "lovableSource": "src/pages/LongLeadEquipment.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/scheduling/predictive-impact",
+      "lovableSource": "src/pages/PredictiveScheduleImpact.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/inspections/release-tracker",
+      "lovableSource": "src/pages/InspectorReleaseTracker.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/uci",
+      "lovableSource": "src/pages/UciDashboard.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "page_layout_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": true,
+      "redesignedMatch": false,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/submissions",
+      "lovableSource": "src/pages/UciSubmissions.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": true,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/communications",
+      "lovableSource": "src/pages/UciCommunications.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": true,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/class-of-service",
+      "lovableSource": "src/pages/UciClassOfService.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": true,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/ciac",
+      "lovableSource": "src/pages/UciCiac.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": true,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/energization",
+      "lovableSource": "src/pages/UciEnergization.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": true,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/miss-utility",
+      "lovableSource": "src/pages/UciMissUtility.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "product_decision_required",
+        "backend_extension_required",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "medium",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "Product decide",
+      "notes": "static",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": false,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/application-builder",
+      "lovableSource": "src/pages/UciApplicationBuilder.tsx",
+      "currentRoute": "/uci",
+      "currentSource": "src/pages/UciDashboard.tsx + uciApi.ts",
+      "classifications": [
+        "lovable_mock_only",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "uciApi JWT",
+        "stage/state enums",
+        "PEPCO submit gate",
+        "uci-access"
+      ],
+      "recommendedApproach": "PD-6; replace static with uciApi",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": true,
+      "mockOnly": true,
+      "excluded": false
+    },
+    {
+      "lovableRoute": "/uci/knowledge-graph",
+      "lovableSource": "src/pages/UciKnowledgeGraph.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "exclude",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude",
+      "notes": "static",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "exactMatch": false,
+      "redesignedMatch": false,
+      "mockOnly": true,
+      "excluded": true
+    },
+    {
+      "lovableRoute": "/settings",
+      "lovableSource": "src/pages/Settings.tsx",
+      "currentRoute": "/settings",
+      "currentSource": "src/pages/Settings.tsx",
+      "classifications": [
+        "page_layout_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "PortalCredentialsManager",
+        "MS mailbox"
+      ],
+      "recommendedApproach": "Keep credential secrecy",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "exactMatch": true
+    },
+    {
+      "lovableRoute": "/matrix",
+      "lovableSource": "src/pages/MasterMatrix.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "duplicate_lovable_page",
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "duplicate_lovable_page",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "duplicate",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "duplicate": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/matrix/unified",
+      "lovableSource": "src/pages/UnifiedMatrix.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "duplicate_lovable_page",
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "duplicate_lovable_page",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "duplicate",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "duplicate": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/matrix/guided",
+      "lovableSource": "src/pages/GuidedFlow.tsx",
+      "currentRoute": "/permit-wizard-filing",
+      "currentSource": "src/pages/PermitWizardFiling.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "permitwizard-*"
+      ],
+      "recommendedApproach": "Visual over wizard",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/matrix/ai-workflow",
+      "lovableSource": "src/pages/AiWorkflow.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only",
+        "exclude_from_replication"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude as production workflow",
+      "notes": "functional dialog + localStorage persistence",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/matrix/response",
+      "lovableSource": "src/pages/ResponseMatrix.tsx",
+      "currentRoute": "/response-matrix",
+      "currentSource": "src/pages/ResponseMatrix.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Edge generate-*",
+        "approval trigger"
+      ],
+      "recommendedApproach": "Restyle keep BE",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/portals/harvest",
+      "lovableSource": "src/pages/PortalHarvest.tsx",
+      "currentRoute": "/portal-data",
+      "currentSource": "src/pages/PortalDataViewer.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "ScrapeContext",
+        "scrape APIs",
+        "durable jobs"
+      ],
+      "recommendedApproach": "Bind real statuses",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/raze",
+      "lovableSource": "src/pages/RazePermit.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/mobile/survey",
+      "lovableSource": "src/pages/MobileSurvey.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/mobile/camera",
+      "lovableSource": "src/pages/MobileCamera.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/mobile/map",
+      "lovableSource": "src/pages/MobileMap.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/field/studio",
+      "lovableSource": "src/pages/FieldStudio.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/sir",
+      "lovableSource": "src/pages/Sir.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/sir/workspace",
+      "lovableSource": "src/pages/SirWorkspace.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/sir/annex",
+      "lovableSource": "src/pages/SirAnnex.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/sir/executive",
+      "lovableSource": "src/pages/SirExecutive.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/sir/sync",
+      "lovableSource": "src/pages/SirSync.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/inspections/special",
+      "lovableSource": "src/pages/SpecialInspections.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/inspections/final-co",
+      "lovableSource": "src/pages/FinalInspections.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/closeout",
+      "lovableSource": "src/pages/Closeout.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/closeout/archive",
+      "lovableSource": "src/pages/CloseoutArchive.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/closeout/tracker",
+      "lovableSource": "src/pages/CloseoutTracker.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/closeout/post-mortem",
+      "lovableSource": "src/pages/PostMortem.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/closeout/post-mortem/analytics",
+      "lovableSource": "src/pages/PostMortemAnalytics.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock + recharts",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/closeout/post-mortem/financial",
+      "lovableSource": "src/pages/PostMortemFinancial.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Exclude v1",
+      "notes": "mock + recharts",
+      "inScopeV1": false,
+      "directUrlReview": true,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/reference",
+      "lovableSource": "src/pages/ReferenceLibrary.tsx",
+      "currentRoute": "/code-reference",
+      "currentSource": "src/pages/CodeReferenceLibrary.tsx",
+      "classifications": [
+        "product_decision_required",
+        "page_layout_restructure"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Merge into existing docs pages",
+      "notes": "static",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true
+    },
+    {
+      "lovableRoute": "/reference/utility-coverage",
+      "lovableSource": "src/pages/UtilityCoverage.tsx",
+      "currentRoute": "/jurisdictions/map",
+      "currentSource": "jurisdictions/territory",
+      "classifications": [
+        "frontend_adapter_required",
+        "existing_backend_can_support"
+      ],
+      "primaryClassification": "frontend_adapter_required",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "territory sources"
+      ],
+      "recommendedApproach": "Live coverage data",
+      "notes": "static \u2014 utilityProviders.ts",
+      "inScopeV1": true,
+      "directUrlReview": false
+    },
+    {
+      "lovableRoute": "/reference/glossary",
+      "lovableSource": "src/pages/Glossary.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "product_decision_required",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "future",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Optional static",
+      "notes": "static",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/checklists",
+      "lovableSource": "src/pages/Checklists.tsx",
+      "currentRoute": "/checklist-history",
+      "currentSource": "src/pages/ChecklistHistory.tsx",
+      "classifications": [
+        "route_restructure",
+        "frontend_adapter_required",
+        "existing_backend_can_support",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [
+        "useSavedChecklists"
+      ],
+      "recommendedApproach": "Alias + restyle",
+      "notes": "mock",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "/contact",
+      "lovableSource": "src/pages/Contact.tsx",
+      "currentRoute": "/contact",
+      "currentSource": "src/pages/Contact.tsx",
+      "classifications": [
+        "style_only",
+        "existing_backend_can_support"
+      ],
+      "primaryClassification": "style_only",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [
+        "send-contact-email"
+      ],
+      "recommendedApproach": "Restyle",
+      "notes": "functional \u2192 send-contact-email",
+      "inScopeV1": true,
+      "directUrlReview": true,
+      "exactMatch": true
+    },
+    {
+      "lovableRoute": "/onboarding/authorization",
+      "lovableSource": "src/pages/OnboardingAuthorization.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "backend_extension_required",
+        "product_decision_required"
+      ],
+      "primaryClassification": "backend_extension_required",
+      "dataMode": "backend",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "high",
+      "preserveLogic": [],
+      "recommendedApproach": "PD-4 exclude v1 or add schema",
+      "notes": "connected \u2014 client_authorizations + storage + jspdf",
+      "inScopeV1": false,
+      "directUrlReview": false
+    },
+    {
+      "lovableRoute": "/delivery/authorization",
+      "lovableSource": "src/pages/OnboardingAuthorization.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "duplicate_lovable_page",
+        "route_alias",
+        "backend_extension_required"
+      ],
+      "primaryClassification": "duplicate_lovable_page",
+      "dataMode": "backend",
+      "navVisibility": "sidebar",
+      "pageKind": "duplicate",
+      "adapterSufficient": false,
+      "backendExtensionRequired": true,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Alias if LOA ships",
+      "notes": "connected",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "duplicate": true
+    },
+    {
+      "lovableRoute": "/demo/mcdonalds",
+      "lovableSource": "src/pages/DemoMcDonalds.tsx",
+      "currentRoute": "/demos",
+      "currentSource": "src/pages/Demos.tsx",
+      "classifications": [
+        "route_restructure",
+        "component_replacement",
+        "product_decision_required"
+      ],
+      "primaryClassification": "route_restructure",
+      "dataMode": "static",
+      "navVisibility": "sidebar",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [
+        "lead capture"
+      ],
+      "recommendedApproach": "Map to /demos",
+      "notes": "static + GuidedTour",
+      "inScopeV1": true,
+      "directUrlReview": false,
+      "redesignedMatch": true
+    },
+    {
+      "lovableRoute": "/operations",
+      "lovableSource": "src/pages/OperationsBoard.tsx",
+      "currentRoute": null,
+      "currentSource": null,
+      "classifications": [
+        "exclude_from_replication",
+        "lovable_mock_only"
+      ],
+      "primaryClassification": "exclude_from_replication",
+      "dataMode": "mock",
+      "navVisibility": "sidebar",
+      "pageKind": "prototype",
+      "adapterSufficient": false,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Defer / decide",
+      "notes": "mock",
+      "inScopeV1": false,
+      "directUrlReview": false,
+      "excluded": true,
+      "mockOnly": true
+    },
+    {
+      "lovableRoute": "*",
+      "lovableSource": "Navigate \u2192 /dashboard",
+      "currentRoute": "*",
+      "currentSource": "src/pages/NotFound.tsx",
+      "classifications": [
+        "product_decision_required"
+      ],
+      "primaryClassification": "product_decision_required",
+      "dataMode": "static",
+      "navVisibility": "hidden",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "low",
+      "preserveLogic": [],
+      "recommendedApproach": "Prefer NotFound over redirect-to-dashboard",
+      "notes": "redirect",
+      "inScopeV1": true,
+      "directUrlReview": false
+    }
+  ],
+  "permitPilotOnlyRoutes": [
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/auth",
+      "currentSource": "src/pages/Auth.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Combined auth"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Combined auth",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/portal/:token",
+      "currentSource": "src/pages/ClientPortal.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Token portal"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Token portal",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/embed/:token",
+      "currentSource": "src/pages/EmbedWidget.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Embed"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Embed",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/invite/:token",
+      "currentSource": "src/pages/InviteAccept.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Invite accept"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Invite accept",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/comment-review",
+      "currentSource": "src/pages/CommentReview.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Comment review"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Comment review",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/classified-comments",
+      "currentSource": "src/pages/ClassifiedComments.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Classified comments"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Classified comments",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/permit-intelligence",
+      "currentSource": "src/pages/PermitIntelligence.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Shovels"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Shovels",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/roi-calculator",
+      "currentSource": "src/pages/ROICalculator.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "ROI"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "ROI",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/consolidation-calculator",
+      "currentSource": "src/pages/ConsolidationCalculator.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Consolidation"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Consolidation",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/pricing",
+      "currentSource": "src/pages/Pricing.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Pricing/Stripe"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Pricing/Stripe",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/faq",
+      "currentSource": "src/pages/FAQ.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "FAQ"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "FAQ",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/install",
+      "currentSource": "src/pages/Install.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "PWA install"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "PWA install",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/demos",
+      "currentSource": "src/pages/Demos.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Demos"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Demos",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/jurisdictions/compare",
+      "currentSource": "src/pages/JurisdictionComparison.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Compare"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Compare",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/jurisdictions/:stateCode",
+      "currentSource": "src/pages/StateLandingPage.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "State landing"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "State landing",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/admin/jurisdictions",
+      "currentSource": "src/pages/JurisdictionAdmin.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Jurisdiction admin"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Jurisdiction admin",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/admin/feature-flags",
+      "currentSource": "src/pages/FeatureFlagsAdmin.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Feature flags"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Feature flags",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/admin/shadow-mode",
+      "currentSource": "src/pages/ShadowModeDashboard.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Shadow mode"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Shadow mode",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/baltimore",
+      "currentSource": "src/pages/baltimore/BaltimorePortalHome.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "mock",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Baltimore mock"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Baltimore mock",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/api-docs",
+      "currentSource": "src/pages/APIDocumentation.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "API docs"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "API docs",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/design-system-preview",
+      "currentSource": "src/pages/EpermitDesignSystemPreview.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "Design preview"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Design preview",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/permit-wizard-filing",
+      "currentSource": "src/pages/PermitWizardFiling.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Permit wizard (current path)"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Permit wizard (current path)",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/portal-data",
+      "currentSource": "src/pages/PortalDataViewer.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Portal harvest (current path)"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Portal harvest (current path)",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/response-matrix",
+      "currentSource": "src/pages/ResponseMatrix.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "high",
+      "preserveLogic": [
+        "Response matrix (current path)"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "Response matrix (current path)",
+      "inScopeV1": true,
+      "ppOnly": true
+    },
+    {
+      "lovableRoute": null,
+      "lovableSource": null,
+      "currentRoute": "/code-compliance",
+      "currentSource": "src/pages/CodeCompliance.tsx",
+      "classifications": [
+        "existing_permitpilot_feature_missing_from_lovable"
+      ],
+      "primaryClassification": "existing_permitpilot_feature_missing_from_lovable",
+      "dataMode": "backend",
+      "navVisibility": "direct",
+      "pageKind": "production",
+      "adapterSufficient": true,
+      "backendExtensionRequired": false,
+      "risk": "medium",
+      "preserveLogic": [
+        "AI compliance (current path)"
+      ],
+      "recommendedApproach": "Preserve; do not drop in shell swap",
+      "notes": "AI compliance (current path)",
+      "inScopeV1": true,
+      "ppOnly": true
+    }
+  ]
+}

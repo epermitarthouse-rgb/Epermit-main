@@ -1,0 +1,71 @@
+---
+description: Isolated Lovable UI redesign workflow (feature branch, Vercel Preview, Railway development)
+alwaysApply: true
+---
+
+# Lovable UI development workflow
+
+Use this rule for all Lovable visual-alignment / UI replication work. Implementation plan: `docs/lovable-ui-frontend-implementation-plan.md`. Environment details: `docs/lovable-ui-development-environment.md`.
+
+## Branch rule
+
+- Implement **only** on `feat/lovable-ui-replication`.
+- **Never** commit Lovable UI work to `main`.
+- Commit and push to the feature branch only.
+- **Never** merge into `main` without explicit human approval.
+
+## Vercel rule
+
+- `main` → production frontend.
+- `feat/lovable-ui-replication` → Preview frontend.
+- Preview must use Railway **development** backend URL via branch-specific `VITE_API_BASE_URL`.
+- **Never** change Vercel **Production** env vars for this work.
+- After push, report the Vercel Preview URL when available.
+
+## Railway rule
+
+- Railway is **CLI-deployed only**. Do **not** connect Railway to GitHub for this workflow.
+- Deploy Lovable-related backend/scraper changes **only** to environment `development`.
+- Always use explicit flags:
+
+```bash
+git branch --show-current
+git status
+railway environment list
+railway status
+railway up --environment development --service Epermit-main -d -y
+```
+
+- **Never** deploy to Railway `production` unless the user explicitly instructs it.
+- Verify linked project/environment/service before deploy (`railway status`).
+- After deploy, report Railway status and the development URL.
+
+## Functional-preservation rule
+
+- Lovable is a **visual/UX reference only**. PermitPilot remains the functional source of truth.
+- Preserve existing hooks, contexts, APIs, permissions, statuses, and options.
+- Do **not** replace functioning components with static mocks.
+- Do **not** remove controls or flows just because Lovable omits them.
+- No mock data on production paths.
+- No backend, auth, schema, RLS, scraper behavior, or UCI contract changes unless explicitly approved.
+- No migrations.
+
+## Phase completion rule
+
+Before marking a phase done / continuing to a higher-risk phase:
+
+1. Run tests / build / typecheck as applicable.
+2. Smoke-test affected routes.
+3. Confirm no lost options or controls vs current PP behavior.
+4. Commit on `feat/lovable-ui-replication`.
+5. Push the feature branch.
+6. Confirm Vercel Preview (when auth available).
+7. Deploy Railway **development** only if backend/scraper changes require it.
+8. Report results.
+9. Do **not** continue a high-risk phase with critical regressions.
+
+## Shared-data warning
+
+- Railway `development` currently shares production Supabase (`SUPABASE_URL` / service role values duplicated from production).
+- Use **demo accounts only**.
+- Do **not** run destructive actions or live utility submissions without explicit approval.

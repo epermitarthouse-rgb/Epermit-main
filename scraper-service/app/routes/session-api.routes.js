@@ -3,7 +3,9 @@
 const { Router } = require("express");
 const { sessions, cleanupSession } = require("../session/in-memory-store.js");
 const { getSupabaseAdmin } = require("../../lib/supabase-admin.js");
-const scrapeEvents = require("../../lib/scrape-events.js");
+const {
+  requestCancel,
+} = require("../../lib/scrape-job-cancellation.js");
 
 const router = Router();
 
@@ -42,43 +44,45 @@ router.get("/api/data/:sessionId", (req, res) => {
 });
 
 router.post("/api/scrape/cancel/:sessionId", async (req, res) => {
-  const s = sessions[req.params.sessionId];
+  const sessionId = `${req.params.sessionId || ""}`.trim();
+  const s = sessions[sessionId];
   if (!s) return res.status(404).json({ error: "Session not found" });
-  s._cancelRequested = true;
-  s.status = "cancelled";
-  s.message = "Scrape cancelled by user";
-  console.log(`   🛑 Cancel requested for session ${req.params.sessionId}`);
 
-  if (s._scrapeJobId && s._scrapeProjectId) {
-    try {
-      const supabase = getSupabaseAdmin();
-      const jurisdiction = `${s.jurisdiction || s.portalUrl || ""}`.toLowerCase();
-      if (jurisdiction.includes("arlington")) {
-        await supabase.rpc("cancel_arlington_scrape_job", {
-          p_job_id: s._scrapeJobId,
-          p_project_id: s._scrapeProjectId,
-          p_user_id: s.userId || null,
-        });
-      } else {
-        await scrapeEvents.markScrapeCancelled(
-          supabase,
-          s._scrapeJobId,
-          s._scrapeProjectId,
-          { user_message: "Scrape cancelled." },
-        );
-      }
-      scrapeEvents.stopHeartbeat(s._scrapeJobId);
-    } catch (err) {
-      console.warn("[scrape-events] cancel persist failed:", err.message);
-    }
+  try {
+    const supabase = getSupabaseAdmin();
+    const result = await requestCancel({
+      supabase,
+      sessionId,
+      jobId: s._scrapeJobId || null,
+      projectId: s._scrapeProjectId || null,
+      sessions,
+      cleanupSession,
+      userId: s.userId || null,
+      closeBrowser: true,
+      user_message: "Scrape cancelled by user",
+    });
+    console.log(`   🛑 Cancel requested for session ${sessionId}`);
+    res.json({
+      message: "Scrape cancelled",
+      sessionId,
+      jobId: result.jobId || s._scrapeJobId || null,
+      status: result.status,
+      success: true,
+    });
+  } catch (err) {
+    console.warn("[scrape/cancel] failed:", err?.message || err);
+    // Best-effort legacy signal even if durable cancel fails.
+    s._cancelRequested = true;
+    s.status = "cancelled";
+    s.message = "Scrape cancelled by user";
+    cleanupSession(sessionId, "http_cancel");
+    res.json({
+      message: "Scrape cancelled",
+      sessionId,
+      jobId: s._scrapeJobId || null,
+      success: true,
+    });
   }
-
-  cleanupSession(req.params.sessionId, "http_cancel");
-  res.json({
-    message: "Scrape cancelled",
-    sessionId: req.params.sessionId,
-    jobId: s._scrapeJobId || null,
-  });
 });
 
 router.post("/api/scrape-jobs/:jobId/cancel", async (req, res) => {
@@ -93,59 +97,35 @@ router.post("/api/scrape-jobs/:jobId/cancel", async (req, res) => {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data: jobRow, error: jobError } = await supabase
-      .from("scrape_jobs")
-      .select("id, jurisdiction, user_id, project_id")
-      .eq("id", jobId)
-      .maybeSingle();
-    if (jobError) throw jobError;
-    if (!jobRow) {
-      return res.status(404).json({ success: false, error: "Scrape job not found" });
-    }
-    if (`${jobRow.project_id}` !== projectId) {
-      return res.status(403).json({ success: false, error: "Job does not belong to project" });
-    }
-
-    const jurisdiction = `${jobRow.jurisdiction || ""}`.toLowerCase();
-    if (!jurisdiction.includes("arlington")) {
-      await scrapeEvents.markScrapeCancelled(supabase, jobId, projectId, {
-        user_message: "Scrape cancelled.",
-      });
-      scrapeEvents.stopHeartbeat(jobId);
-      return res.json({
-        success: true,
-        jobId,
-        status: "cancelled",
-        alreadyTerminal: false,
-        cancellationReason: "user_cancelled",
-      });
-    }
-
-    const { data, error } = await supabase.rpc("cancel_arlington_scrape_job", {
-      p_job_id: jobId,
-      p_project_id: projectId,
-      p_user_id: jobRow.user_id || null,
+    const result = await requestCancel({
+      supabase,
+      jobId,
+      projectId,
+      sessions,
+      cleanupSession,
+      userId: req.body?.userId || null,
+      closeBrowser: true,
+      user_message: "Scrape cancelled.",
     });
-    if (error) throw error;
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row?.already_terminal) {
-      await scrapeEvents.emitScrapeEvent(supabase, jobId, projectId, {
-        event_type: "scrape_cancelled",
-        stage: "cancelled",
-        status: "cancelled",
-        user_message: "Arlington scrape cancelled by user.",
-      });
-    }
-    scrapeEvents.stopHeartbeat(jobId);
 
     return res.json({
       success: true,
-      jobId: row?.job_id || jobId,
-      status: row?.status || "cancelled",
-      alreadyTerminal: Boolean(row?.already_terminal),
-      cancellationReason: row?.cancellation_reason || "user_cancelled",
+      jobId: result.jobId || jobId,
+      status: result.status || "cancelling",
+      alreadyTerminal: Boolean(result.alreadyTerminal),
+      cancellationReason: result.cancellationReason || "user_cancelled",
+      localSessionSignaled: Boolean(result.localSessionSignaled),
     });
   } catch (err) {
+    const code = err?.code || "";
+    if (code === "JOB_NOT_FOUND") {
+      return res.status(404).json({ success: false, error: "Scrape job not found" });
+    }
+    if (code === "PROJECT_MISMATCH") {
+      return res
+        .status(403)
+        .json({ success: false, error: "Job does not belong to project" });
+    }
     console.warn("[scrape-jobs/cancel] failed:", err?.message || err);
     return res.status(500).json({
       success: false,

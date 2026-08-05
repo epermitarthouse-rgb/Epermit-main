@@ -31,6 +31,23 @@ export default {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         elevated: "hsl(var(--elevated))",
+        surface: {
+          DEFAULT: "hsl(var(--surface))",
+          muted: "hsl(var(--surface-muted))",
+        },
+        pilot: {
+          cyan: "hsl(var(--pilot-cyan))",
+          teal: "hsl(var(--pilot-teal))",
+          amber: "hsl(var(--pilot-amber))",
+          rose: "hsl(var(--pilot-rose))",
+          line: "hsl(var(--pilot-line))",
+          ink: "hsl(var(--pilot-ink))",
+        },
+        brand: {
+          orange: "hsl(var(--brand-orange))",
+          "orange-deep": "hsl(var(--brand-orange-deep))",
+          blue: "hsl(var(--brand-blue))",
+        },
         cream: {
           DEFAULT: "hsl(var(--surface-cream))",
           raised: "hsl(var(--surface-cream-raised))",
@@ -71,14 +88,6 @@ export default {
           deep: "hsl(var(--navy-deep))",
           elev: "hsl(var(--navy-elev))",
           line: "hsl(var(--navy-line))",
-        },
-        pilot: {
-          cyan: "hsl(var(--pilot-cyan))",
-          teal: "hsl(var(--pilot-teal))",
-          amber: "hsl(var(--pilot-amber))",
-          rose: "hsl(var(--pilot-rose))",
-          line: "hsl(var(--pilot-line))",
-          ink: "hsl(var(--pilot-ink))",
         },
         primary: {
           DEFAULT: "hsl(var(--primary))",
@@ -134,6 +143,7 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
       },
       boxShadow: {
         glow: "var(--shadow-glow)",

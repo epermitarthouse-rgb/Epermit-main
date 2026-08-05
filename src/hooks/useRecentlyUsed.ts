@@ -18,7 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/settings": "Settings",
   "/designcheck": "DesignCheck",
   "/uci/application-builder": "UCI Builder",
-  "/code-compliance": "Code Compliance Analyzer",
+  "/code-compliance": "Code Analyzer",
   "/code-reference": "Reference Library",
   "/reference": "Reference Library",
   "/reference/glossary": "Glossary",

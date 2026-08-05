@@ -59,7 +59,7 @@ const toolItems = [
     keywords: ["designcheck", "design check", "readiness", "compliance", "presubmittal", "pre-submittal"],
     requiresAuth: true,
   },
-  { name: "Code Compliance Analyzer", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code", "analyzer"] },
+  { name: "Code Analyzer", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code", "analyzer"] },
   {
     name: "Response Matrix",
     href: "/response-matrix",

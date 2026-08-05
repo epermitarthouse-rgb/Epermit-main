@@ -2842,6 +2842,18 @@ async function runMontgomeryProductionPipeline(
   const storagePrefix = (opts.storagePrefix || "montgomery").replace(/^\/+|\/+$/g, "");
   const harvestFiles = opts.harvestFiles || null;
   const webUiBase = bases[0] || DEFAULT_MONTGOMERY_WEBUI;
+  const isCancelRequested =
+    typeof opts.isCancelRequested === "function" ? opts.isCancelRequested : null;
+
+  async function cancelled() {
+    if (!isCancelRequested) return false;
+    try {
+      const v = isCancelRequested();
+      return !!(v && typeof v.then === "function" ? await v : v);
+    } catch (_) {
+      return false;
+    }
+  }
 
   const skipDetail = !!(omit.info && omit.status && omit.tasks);
   const skipFiles = !!omit.files;
@@ -2851,10 +2863,17 @@ async function runMontgomeryProductionPipeline(
     `[Montgomery][mode] omit(files=${!!omit.files},reports=${!!omit.reports},info=${!!omit.info},status=${!!omit.status},tasks=${!!omit.tasks}) → run(files=${!skipFiles},reports=${!skipReports},detail=${!skipDetail})`,
   );
 
+  if (await cancelled()) {
+    return { cancelled: true, detailResult: { ok: true, out: null, skipped: true }, filesOut: { skipped: true }, reportsPayload: { skipped: true, reports: [] } };
+  }
+
   /** @type {any} */
   let detailResult = { ok: true, out: null, skipped: true };
   if (!skipDetail) {
     detailResult = await scrapeMontgomeryProjectDetails(page, proj, webUiBase, omit);
+  }
+  if (await cancelled()) {
+    return { cancelled: true, detailResult, filesOut: { skipped: true }, reportsPayload: { skipped: true, reports: [] } };
   }
 
   let wfid = extractWfidFromMontgomeryStatusTab(detailResult.out?.statusTab);
@@ -2921,6 +2940,17 @@ async function runMontgomeryProductionPipeline(
     },
   };
   if (!skipFiles) {
+    if (await cancelled()) {
+      return {
+        cancelled: true,
+        detailResult,
+        workflowPack,
+        reviewOut,
+        filesOut: { ...filesOut, skipped: true },
+        reportsPayload: { skipped: true, reports: [] },
+        _montgomeryOmitTabs: omit,
+      };
+    }
     filesOut = harvestFiles
       ? await harvestFiles(page, proj, webUiBase)
       : await harvestMontgomeryFilesByCategory(page, proj, webUiBase);
@@ -2928,6 +2958,17 @@ async function runMontgomeryProductionPipeline(
 
   let reportsPayload = { skipped: true, reports: [] };
   if (!skipReports) {
+    if (await cancelled()) {
+      return {
+        cancelled: true,
+        detailResult,
+        workflowPack,
+        reviewOut,
+        filesOut,
+        reportsPayload,
+        _montgomeryOmitTabs: omit,
+      };
+    }
     reportsPayload = await processMontgomerySsrReportsForProject(page, proj, wfid, {
       webUiBase,
       dashboardUrl,
@@ -2935,6 +2976,17 @@ async function runMontgomeryProductionPipeline(
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {
+        if (await cancelled()) {
+          return {
+            cancelled: true,
+            detailResult,
+            workflowPack,
+            reviewOut,
+            filesOut,
+            reportsPayload,
+            _montgomeryOmitTabs: omit,
+          };
+        }
         const slug = r.fileSlug || "report";
         try {
           if (r.excelPath && fs.existsSync(r.excelPath)) {
@@ -2962,6 +3014,18 @@ async function runMontgomeryProductionPipeline(
         }
       }
     }
+  }
+
+  if (await cancelled()) {
+    return {
+      cancelled: true,
+      detailResult,
+      workflowPack,
+      reviewOut,
+      filesOut,
+      reportsPayload,
+      _montgomeryOmitTabs: omit,
+    };
   }
 
   return {

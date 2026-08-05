@@ -11846,6 +11846,292 @@ function pgcFindBravaPublishPdfUrl(viewerPage, responseRecords) {
 }
 
 /**
+ * Map fallback channel labels onto the existing pdf_url_detected source enum.
+ * @param {string} source
+ * @returns {"tab"|"frame"|"network"}
+ */
+function pgcFallbackSourceToLogSource(source) {
+  const s = String(source || "");
+  if (/frame/i.test(s)) return "frame";
+  if (/request|response|network/i.test(s)) return "network";
+  return "tab";
+}
+
+/**
+ * Pure fallback picker over pre-collected channel data (unit-testable).
+ * Primary path does not use this — only after Export complete with no primary URL.
+ * @param {{
+ *   events?: Array<{ url?: string, source?: string, capturedAt?: number, status?: number }>,
+ *   pageUrls?: string[],
+ *   frameUrls?: string[],
+ * }} channels
+ * @param {{
+ *   prePublishSnapshot?: Set<string>,
+ *   usedPublishedPdfUrls?: Set<string>,
+ *   exportStartedAt?: number,
+ * }} [opts]
+ * @returns {{
+ *   found: { url: string, source: string, norm: string, status?: number } | null,
+ *   channelsChecked: Record<string, number>,
+ * }}
+ */
+function pgcPickBravaPublishPdfFromFallbackChannels(channels, opts = {}) {
+  const prePublishSnapshot = opts.prePublishSnapshot || new Set();
+  const usedPublishedPdfUrls = opts.usedPublishedPdfUrls || new Set();
+  const exportStartedAt = opts.exportStartedAt || 0;
+  const channelsChecked = {
+    capture_events: 0,
+    page_urls: 0,
+    frame_urls: 0,
+  };
+
+  /** @type {{ url: string, source: string, norm: string, status?: number } | null} */
+  let best = null;
+
+  const consider = (rawUrl, source, recordTs, status) => {
+    if (!rawUrl || !isPgcBravaPublishToPdfUrl(rawUrl)) return;
+    const norm = pgcNormalizePublishUrl(rawUrl);
+    if (prePublishSnapshot.has(norm)) return;
+    if (usedPublishedPdfUrls.has(norm)) return;
+    if (exportStartedAt > 0 && recordTs && recordTs < exportStartedAt - 50) return;
+    if (!best) {
+      best = {
+        url: String(rawUrl),
+        source: String(source || "fallback"),
+        norm,
+        status,
+      };
+    }
+  };
+
+  for (const ev of channels?.events || []) {
+    channelsChecked.capture_events += 1;
+    const ts =
+      typeof ev.capturedAt === "number" ? Number(ev.capturedAt) : Date.now();
+    consider(ev.url, `fallback_${ev.source || "event"}`, ts, ev.status);
+  }
+  for (const u of channels?.pageUrls || []) {
+    channelsChecked.page_urls += 1;
+    consider(u, "fallback_tab", Date.now());
+  }
+  for (const u of channels?.frameUrls || []) {
+    channelsChecked.frame_urls += 1;
+    consider(u, "fallback_frame", Date.now());
+  }
+
+  return { found: best, channelsChecked };
+}
+
+/**
+ * Live inspect: capture-session events + all context pages/frames.
+ * @param {import('playwright').Page} viewerPage
+ * @param {{ events?: Array<Record<string, unknown>> } | null} captureSession
+ * @param {{
+ *   prePublishSnapshot?: Set<string>,
+ *   usedPublishedPdfUrls?: Set<string>,
+ *   exportStartedAt?: number,
+ * }} [opts]
+ */
+function pgcResolveBravaPublishPdfFallback(viewerPage, captureSession, opts = {}) {
+  /** @type {string[]} */
+  const pageUrls = [];
+  /** @type {string[]} */
+  const frameUrls = [];
+  try {
+    for (const p of viewerPage.context().pages()) {
+      try {
+        pageUrls.push(p.url());
+      } catch (_) {}
+      try {
+        for (const f of p.frames()) {
+          frameUrls.push(f.url() || "");
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return pgcPickBravaPublishPdfFromFallbackChannels(
+    {
+      events: captureSession?.events || [],
+      pageUrls,
+      frameUrls,
+    },
+    opts,
+  );
+}
+
+/**
+ * Attach popup / new-page / navigation / request / response listeners BEFORE
+ * Publish to PDF. Primary detection still uses viewerPage responseRecords only;
+ * this bag is consulted only by the Export-complete fallback.
+ * @param {import('playwright').Page} viewerPage
+ */
+function pgcAttachBravaPublishCaptureSession(viewerPage) {
+  const ctx = viewerPage.context();
+  /** @type {Array<{ url: string, source: string, capturedAt: number, status?: number }>} */
+  const events = [];
+  /** @type {WeakSet<object>} */
+  const watched = new WeakSet();
+  /** @type {Array<() => void>} */
+  const cleanups = [];
+
+  const pushUrl = (url, source, status) => {
+    if (!url || !isPgcBravaPublishToPdfUrl(url)) return;
+    events.push({
+      url: String(url),
+      source: String(source || "unknown"),
+      capturedAt: Date.now(),
+      status: typeof status === "number" ? status : undefined,
+    });
+  };
+
+  const watchPage = (p, initialSource) => {
+    if (!p || watched.has(p)) return;
+    watched.add(p);
+    try {
+      pushUrl(p.url(), initialSource || "page_url_initial");
+    } catch (_) {}
+
+    const onResponse = (res) => {
+      try {
+        pushUrl(res.url(), "response", res.status());
+      } catch (_) {}
+    };
+    const onRequest = (req) => {
+      try {
+        pushUrl(req.url(), "request");
+      } catch (_) {}
+    };
+    const onFrameNav = (frame) => {
+      try {
+        const u = frame.url() || "";
+        if (frame === p.mainFrame()) pushUrl(u, "navigation");
+        else pushUrl(u, "frame_navigated");
+      } catch (_) {}
+    };
+
+    p.on("response", onResponse);
+    p.on("request", onRequest);
+    p.on("framenavigated", onFrameNav);
+    cleanups.push(() => {
+      try {
+        p.off("response", onResponse);
+      } catch (_) {}
+      try {
+        p.off("request", onRequest);
+      } catch (_) {}
+      try {
+        p.off("framenavigated", onFrameNav);
+      } catch (_) {}
+    });
+  };
+
+  for (const p of ctx.pages()) {
+    watchPage(p, p === viewerPage ? "viewer_page_initial" : "existing_tab_initial");
+  }
+
+  const onNewPage = (p) => {
+    pushUrl(
+      (() => {
+        try {
+          return p.url();
+        } catch (_) {
+          return "";
+        }
+      })(),
+      "popup_or_new_page",
+    );
+    watchPage(p, "popup_or_new_page");
+    Promise.resolve()
+      .then(() => p.waitForLoadState("domcontentloaded").catch(() => {}))
+      .then(() => {
+        try {
+          pushUrl(p.url(), "popup_or_new_page_loaded");
+        } catch (_) {}
+      })
+      .catch(() => {});
+  };
+  ctx.on("page", onNewPage);
+  cleanups.push(() => {
+    try {
+      ctx.off("page", onNewPage);
+    } catch (_) {}
+  });
+
+  return {
+    events,
+    dispose() {
+      while (cleanups.length) {
+        const fn = cleanups.pop();
+        try {
+          fn && fn();
+        } catch (_) {}
+      }
+    },
+  };
+}
+
+/**
+ * Short fallback poll after Export complete when primary missed the PDF URL.
+ * @param {import('playwright').Page} viewerPage
+ * @param {{ events?: Array<Record<string, unknown>>, dispose?: () => void } | null} captureSession
+ * @param {{
+ *   prePublishSnapshot?: Set<string>,
+ *   usedPublishedPdfUrls?: Set<string>,
+ *   exportStartedAt?: number,
+ * }} findOpts
+ * @param {{ name?: string|null, fileId?: string|null }} fileMeta
+ * @param {{ timeoutMs?: number }} [opts]
+ */
+async function pgcFallbackCaptureBravaPublishPdfUrl(
+  viewerPage,
+  captureSession,
+  findOpts,
+  fileMeta,
+  opts = {},
+) {
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const start = Date.now();
+  /** @type {Record<string, number> | null} */
+  let lastChannels = null;
+
+  while (Date.now() - start < timeoutMs) {
+    const resolved = pgcResolveBravaPublishPdfFallback(
+      viewerPage,
+      captureSession,
+      findOpts,
+    );
+    lastChannels = resolved.channelsChecked;
+    if (resolved.found) {
+      pgcProgress.pgcLogDetail("brava_pdf_fallback_hit", {
+        file: fileMeta.name || fileMeta.fileId,
+        source: resolved.found.source,
+        channelsChecked: resolved.channelsChecked,
+        urlSnippet: resolved.found.url.slice(0, 200),
+      });
+      return {
+        url: resolved.found.url,
+        source: resolved.found.source,
+        status: resolved.found.status,
+        channelsChecked: resolved.channelsChecked,
+      };
+    }
+    await viewerPage.waitForTimeout(250);
+  }
+
+  pgcProgress.pgcLogDetail("brava_pdf_fallback_miss", {
+    file: fileMeta.name || fileMeta.fileId,
+    channelsChecked: lastChannels,
+  });
+  return {
+    url: null,
+    source: null,
+    status: undefined,
+    channelsChecked: lastChannels,
+  };
+}
+
+/**
  * Log PDF URL once when first detected (tab / frame / network).
  * @param {string} url
  * @param {"tab"|"frame"|"network"} source
@@ -12017,6 +12303,7 @@ async function waitForPgcPostPublishSuccess(
 ) {
   const timeoutMs = opts.timeoutMs ?? 90000;
   const exportCtx = opts.exportCtx || null;
+  const captureSession = opts.captureSession || null;
   const findOpts = exportCtx
     ? {
         prePublishSnapshot: exportCtx.prePublishSnapshot,
@@ -12086,6 +12373,42 @@ async function waitForPgcPostPublishSuccess(
     return null;
   };
 
+  /**
+   * Narrow: only after Export complete, consult popup/context capture bag.
+   * Does not replace primary scanBravaPdfUrl / responseRecords.
+   */
+  const scanFallbackAfterExport = () => {
+    if (!captureSession) return null;
+    if (!uiState.sawExportPopup && !uiState.exportOkLogged) return null;
+    const resolved = pgcResolveBravaPublishPdfFallback(
+      viewerPage,
+      captureSession,
+      findOpts,
+    );
+    if (!resolved.found) return null;
+    return {
+      url: resolved.found.url,
+      source: pgcFallbackSourceToLogSource(resolved.found.source),
+      fallbackSource: resolved.found.source,
+      channelsChecked: resolved.channelsChecked,
+      status: resolved.found.status,
+    };
+  };
+
+  const success = (u, extra = {}) => ({
+    ok: true,
+    url: u,
+    sawExportPopup: uiState.sawExportPopup,
+    exportOkLogged: uiState.exportOkLogged,
+    ...extra,
+  });
+  const failure = (error) => ({
+    ok: false,
+    error,
+    sawExportPopup: uiState.sawExportPopup,
+    exportOkLogged: uiState.exportOkLogged,
+  });
+
   while (Date.now() - start < timeoutMs) {
     let found = scanBravaPdfUrl();
     if (found) {
@@ -12095,7 +12418,7 @@ async function waitForPgcPostPublishSuccess(
           exportCtx.detectedPublishUrl = u;
           exportCtx.detectedAt = Date.now();
         }
-        return { ok: true, url: u };
+        return success(u, { detectionSource: "primary" });
       }
     }
 
@@ -12113,7 +12436,7 @@ async function waitForPgcPostPublishSuccess(
           exportCtx.detectedPublishUrl = u;
           exportCtx.detectedAt = Date.now();
         }
-        return { ok: true, url: u };
+        return success(u, { detectionSource: "primary" });
       }
     }
 
@@ -12126,7 +12449,28 @@ async function waitForPgcPostPublishSuccess(
           exportCtx.detectedPublishUrl = u;
           exportCtx.detectedAt = Date.now();
         }
-        return { ok: true, url: u };
+        return success(u, { detectionSource: "primary" });
+      }
+    }
+
+    const fbFound = scanFallbackAfterExport();
+    if (fbFound) {
+      const u = resolveAndLogUrl(fbFound.url, fbFound.source);
+      if (u) {
+        if (exportCtx) {
+          exportCtx.detectedPublishUrl = u;
+          exportCtx.detectedAt = Date.now();
+        }
+        pgcProgress.pgcLogDetail("brava_pdf_fallback_hit", {
+          file: fileMeta.name || fileMeta.fileId,
+          source: fbFound.fallbackSource,
+          channelsChecked: fbFound.channelsChecked,
+          urlSnippet: u.slice(0, 200),
+          duringPrimaryWait: true,
+        });
+        return success(u, {
+          detectionSource: fbFound.fallbackSource || "fallback",
+        });
       }
     }
 
@@ -12141,22 +12485,47 @@ async function waitForPgcPostPublishSuccess(
         exportCtx.detectedPublishUrl = u;
         exportCtx.detectedAt = Date.now();
       }
-      return { ok: true, url: u };
+      return success(u, { detectionSource: "primary" });
+    }
+  }
+
+  const lastFallback = scanFallbackAfterExport();
+  if (lastFallback) {
+    const u = resolveAndLogUrl(lastFallback.url, lastFallback.source);
+    if (u) {
+      if (exportCtx) {
+        exportCtx.detectedPublishUrl = u;
+        exportCtx.detectedAt = Date.now();
+      }
+      pgcProgress.pgcLogDetail("brava_pdf_fallback_hit", {
+        file: fileMeta.name || fileMeta.fileId,
+        source: lastFallback.fallbackSource,
+        channelsChecked: lastFallback.channelsChecked,
+        urlSnippet: u.slice(0, 200),
+        duringPrimaryWait: true,
+        atTimeout: true,
+      });
+      return success(u, {
+        detectionSource: lastFallback.fallbackSource || "fallback",
+      });
     }
   }
 
   if (uiState.pdfOptionsPublishMissing) {
-    return { ok: false, error: "pdf_publish_button_not_clicked" };
+    return failure("pdf_publish_button_not_clicked");
   }
   if (uiState.exportOkMissing) {
-    return { ok: false, error: "export_complete_ok_not_clicked" };
+    return failure("export_complete_ok_not_clicked");
   }
-  pgcProgress.emitPgcProgress("publishtoformat_pdf_not_seen", {
-    stage: "publishtoformat_pdf_not_seen",
-    status: "fail",
-    terminalLine: `[PGC] Brava | publishtoformat_pdf_not_seen | ${fileMeta.name || fileMeta.fileId}`,
-  });
-  return { ok: false, error: "publishtoformat_pdf_not_seen" };
+  // Caller may run Export-complete fallback before treating this as terminal.
+  if (opts.emitNotSeen !== false) {
+    pgcProgress.emitPgcProgress("publishtoformat_pdf_not_seen", {
+      stage: "publishtoformat_pdf_not_seen",
+      status: "fail",
+      terminalLine: `[PGC] Brava | publishtoformat_pdf_not_seen | ${fileMeta.name || fileMeta.fileId}`,
+    });
+  }
+  return failure("publishtoformat_pdf_not_seen");
 }
 
 /**
@@ -12272,20 +12641,125 @@ async function runPgcBravaPublishUiSequence(
 
   const open = await openPgcBravaPublishMenu(bravaFrame, viewerPage, fileMeta);
   if (!open.ok) return open;
-  const sub = await clickPgcBravaPublishToPdf(bravaFrame, viewerPage, fileMeta);
-  if (!sub.ok) return sub;
-  const wait = await waitForPgcPostPublishSuccess(
-    bravaFrame,
-    viewerPage,
-    fileMeta,
-    responseRecords,
-    {
-      timeoutMs: opts.postPublishTimeoutMs ?? 90000,
-      exportCtx,
-    },
-  );
-  if (!wait.ok) return { ok: false, error: wait.error };
-  return { ok: true, pdfUrl: wait.url };
+
+  // Attach before Publish to PDF so popup/new-tab publishtoformat traffic is recorded
+  // for the narrow Export-complete fallback (primary still uses responseRecords).
+  const captureSession = pgcAttachBravaPublishCaptureSession(viewerPage);
+  try {
+    const sub = await clickPgcBravaPublishToPdf(bravaFrame, viewerPage, fileMeta);
+    if (!sub.ok) return sub;
+    const wait = await waitForPgcPostPublishSuccess(
+      bravaFrame,
+      viewerPage,
+      fileMeta,
+      responseRecords,
+      {
+        timeoutMs: opts.postPublishTimeoutMs ?? 90000,
+        exportCtx,
+        captureSession,
+        // Defer terminal emit until Export-complete fallback has also missed.
+        emitNotSeen: false,
+      },
+    );
+
+    const waitSource = wait.detectionSource || (wait.ok ? "primary" : null);
+    const primaryOk = !!wait.ok && waitSource === "primary";
+    pgcProgress.pgcLogDetail("brava_pdf_primary_detection", {
+      file: fileMeta.name || fileMeta.fileId,
+      ok: primaryOk,
+      error: wait.error || null,
+      sawExportPopup: !!wait.sawExportPopup,
+      exportOkLogged: !!wait.exportOkLogged,
+      urlSnippet: wait.url ? String(wait.url).slice(0, 200) : null,
+      captureEventCount: captureSession.events.length,
+      waitDetectionSource: waitSource,
+    });
+
+    if (wait.ok) {
+      pgcProgress.pgcLogDetail("brava_pdf_detection_final", {
+        file: fileMeta.name || fileMeta.fileId,
+        finalSource: waitSource || "primary",
+        urlSnippet: String(wait.url || "").slice(0, 200),
+      });
+      return {
+        ok: true,
+        pdfUrl: wait.url,
+        detectionSource: waitSource || "primary",
+      };
+    }
+
+    const canFallback =
+      wait.error === "publishtoformat_pdf_not_seen" &&
+      (!!wait.sawExportPopup || !!wait.exportOkLogged);
+
+    if (!canFallback) {
+      if (wait.error === "publishtoformat_pdf_not_seen") {
+        pgcProgress.emitPgcProgress("publishtoformat_pdf_not_seen", {
+          stage: "publishtoformat_pdf_not_seen",
+          status: "fail",
+          terminalLine: `[PGC] Brava | publishtoformat_pdf_not_seen | ${fileMeta.name || fileMeta.fileId}`,
+        });
+      }
+      return { ok: false, error: wait.error };
+    }
+
+    const findOpts = exportCtx
+      ? {
+          prePublishSnapshot: exportCtx.prePublishSnapshot,
+          usedPublishedPdfUrls: exportCtx.usedPublishedPdfUrls,
+          exportStartedAt: exportCtx.exportStartedAt,
+        }
+      : {};
+
+    const fb = await pgcFallbackCaptureBravaPublishPdfUrl(
+      viewerPage,
+      captureSession,
+      findOpts,
+      fileMeta,
+    );
+
+    pgcProgress.pgcLogDetail("brava_pdf_fallback_channels", {
+      file: fileMeta.name || fileMeta.fileId,
+      channelsChecked: fb.channelsChecked,
+      found: !!fb.url,
+      source: fb.source,
+    });
+
+    if (fb.url) {
+      const logSource = pgcFallbackSourceToLogSource(fb.source || "");
+      pgcLogBravaPublishPdfUrlFound(fb.url, logSource, fileMeta, fb.status);
+      if (exportCtx) {
+        exportCtx.detectedPublishUrl = fb.url;
+        exportCtx.detectedAt = Date.now();
+      }
+      pgcProgress.pgcLogDetail("brava_pdf_detection_final", {
+        file: fileMeta.name || fileMeta.fileId,
+        finalSource: fb.source || "fallback",
+        urlSnippet: String(fb.url).slice(0, 200),
+      });
+      return {
+        ok: true,
+        pdfUrl: fb.url,
+        detectionSource: fb.source || "fallback",
+      };
+    }
+
+    pgcProgress.pgcLogDetail("brava_pdf_detection_final", {
+      file: fileMeta.name || fileMeta.fileId,
+      finalSource: null,
+      primaryError: wait.error,
+      fallbackUsed: true,
+      fallbackFound: false,
+    });
+    pgcProgress.emitPgcProgress("publishtoformat_pdf_not_seen", {
+      stage: "publishtoformat_pdf_not_seen",
+      status: "fail",
+      terminalLine: `[PGC] Brava | publishtoformat_pdf_not_seen | ${fileMeta.name || fileMeta.fileId}`,
+    });
+    return { ok: false, error: wait.error };
+  } finally {
+    captureSession.dispose();
+  }
 }
 
 /**
@@ -14005,11 +14479,15 @@ async function getFolderFiles(page, folder) {
   };
 }
 
-function pgcHarvestIsCancelled(harvestOpts) {
-  return (
-    typeof harvestOpts?.isCancelRequested === "function" &&
-    harvestOpts.isCancelRequested()
-  );
+async function pgcHarvestIsCancelled(harvestOpts) {
+  if (typeof harvestOpts?.isCancelRequested !== "function") return false;
+  try {
+    const value = harvestOpts.isCancelRequested();
+    if (value && typeof value.then === "function") return !!(await value);
+    return !!value;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function pgcHarvestNotifyFileAttemptStart(harvestOpts, row, file) {
@@ -14293,9 +14771,34 @@ async function harvestProjectFilesAndSampleDownloads(
     if (devControls?.maxFolders > 0) {
       folderIdsToProcess = folderIdsToProcess.slice(0, devControls.maxFolders);
     }
+    // Targeted retry: only activate/traverse folders that contain selected fileIds.
+    const explicitRetryIds = Array.isArray(devControls?.explicitFileIds)
+      ? devControls.explicitFileIds.map(String)
+      : [];
+    if (devControls?.retrySelectedOnly && explicitRetryIds.length > 0) {
+      const beforeFolderCount = folderIdsToProcess.length;
+      try {
+        const pgcRetryLib = require("./lib/pgc-retry-artifacts.js");
+        folderIdsToProcess = pgcRetryLib.filterFolderIdsForTargetedRetry(
+          folderIdsToProcess,
+          byFolder,
+          explicitRetryIds,
+        );
+      } catch (_) {
+        folderIdsToProcess = folderIdsToProcess.filter((folderID) => {
+          const rows = byFolder.get(folderID) || [];
+          return rows.some((r) =>
+            explicitRetryIds.includes(String(r.file?.fileId || "")),
+          );
+        });
+      }
+      console.log(
+        `[PGC] Targeted retry folder filter | selectedFiles=${explicitRetryIds.length} folders=${folderIdsToProcess.length}/${beforeFolderCount}`,
+      );
+    }
     if (devControls) {
       console.log(
-        `[PGC] Dev harvest controls | folders=${folderIdsToProcess.length} maxFilesPerFolder=${devControls.maxFilesPerFolder ?? "all"} explicitFileIds=${devControls.explicitFileIds?.length ?? 0}`,
+        `[PGC] Dev harvest controls | folders=${folderIdsToProcess.length} maxFilesPerFolder=${devControls.maxFilesPerFolder ?? "all"} explicitFileIds=${devControls.explicitFileIds?.length ?? 0} retrySelectedOnly=${!!devControls.retrySelectedOnly}`,
       );
     }
 
@@ -14325,11 +14828,9 @@ async function harvestProjectFilesAndSampleDownloads(
       const rowsInFolder = byFolder.get(folderID);
       if (!rowsInFolder || !rowsInFolder.length) continue;
 
-      if (typeof harvestOpts.isCancelRequested === "function") {
-        if (harvestOpts.isCancelRequested()) {
-          console.log("[PGC] Task 6 | harvest cancelled — preserving checkpoints");
-          break;
-        }
+      if (await pgcHarvestIsCancelled(harvestOpts)) {
+        console.log("[PGC] Task 6 | harvest cancelled — preserving checkpoints");
+        break;
       }
       if (typeof harvestOpts.refreshScrapeLease === "function") {
         harvestOpts.refreshScrapeLease();
@@ -14597,10 +15098,13 @@ async function harvestProjectFilesAndSampleDownloads(
       let consecutiveViewerOpenFailures = 0;
 
       let filesToProcess = rowsInFolder;
-      if (devControls?.explicitFileIds?.length) {
-        const idSet = new Set(devControls.explicitFileIds.map(String));
+      const explicitIdSet = devControls?.explicitFileIds?.length
+        ? new Set(devControls.explicitFileIds.map(String))
+        : null;
+      const retrySelectedOnly = !!devControls?.retrySelectedOnly && !!explicitIdSet;
+      if (explicitIdSet && !retrySelectedOnly) {
         filesToProcess = rowsInFolder.filter((r) =>
-          idSet.has(String(r.file?.fileId)),
+          explicitIdSet.has(String(r.file?.fileId)),
         );
       }
       if (devControls?.startFileIndex > 0) {
@@ -14608,6 +15112,26 @@ async function harvestProjectFilesAndSampleDownloads(
       }
       if (devControls?.maxFilesPerFolder > 0) {
         filesToProcess = filesToProcess.slice(0, devControls.maxFilesPerFolder);
+      }
+
+      // Targeted retry: restore checkpoints for untargeted files; download only selected.
+      if (retrySelectedOnly) {
+        for (const row of rowsInFolder) {
+          const f = row.file;
+          const id = String(f?.fileId || "");
+          if (!id || explicitIdSet.has(id)) continue;
+          const cpKey = `${id}|${f.version != null ? String(f.version).trim() : ""}`;
+          const priorCp = harvestOpts.uploadedCheckpointMap?.get(cpKey);
+          if (priorCp?.publicUrl) {
+            f.downloadStatus = "ok";
+            f.publicUrl = priorCp.publicUrl;
+            f.sha256 = priorCp.sha256 || null;
+            f.checkpointRestored = true;
+          }
+        }
+        filesToProcess = rowsInFolder.filter((r) =>
+          explicitIdSet.has(String(r.file?.fileId)),
+        );
       }
 
       files_loop: for (const row of filesToProcess) {
@@ -14624,7 +15148,8 @@ async function harvestProjectFilesAndSampleDownloads(
 
         const cpKey = `${String(f.fileId)}|${f.version != null ? String(f.version).trim() : ""}`;
         const priorCp = harvestOpts.uploadedCheckpointMap?.get(cpKey);
-        if (priorCp?.publicUrl) {
+        // Targeted retry of a failed file must re-download even if a stale checkpoint exists.
+        if (priorCp?.publicUrl && !(retrySelectedOnly && explicitIdSet?.has(String(f.fileId)))) {
           f.downloadStatus = "ok";
           f.publicUrl = priorCp.publicUrl;
           f.sha256 = priorCp.sha256 || null;
@@ -14640,11 +15165,9 @@ async function harvestProjectFilesAndSampleDownloads(
           continue;
         }
 
-        if (typeof harvestOpts.isCancelRequested === "function") {
-          if (harvestOpts.isCancelRequested()) {
-            console.log("[PGC] Task 6 | cancel during folder — leaving file unprocessed");
-            break files_loop;
-          }
+        if (await pgcHarvestIsCancelled(harvestOpts)) {
+          console.log("[PGC] Task 6 | cancel during folder — leaving file unprocessed");
+          break files_loop;
         }
         if (typeof harvestOpts.refreshScrapeLease === "function") {
           harvestOpts.refreshScrapeLease();
@@ -14960,7 +15483,7 @@ async function harvestProjectFilesAndSampleDownloads(
               }
               downloadCompletedThisFile = true;
             } else {
-              if (pgcHarvestIsCancelled(harvestOpts)) {
+              if (await pgcHarvestIsCancelled(harvestOpts)) {
                 console.log("[PGC] Cancel after download failure — leaving remaining files unprocessed");
                 break files_loop;
               }
@@ -15044,7 +15567,7 @@ async function harvestProjectFilesAndSampleDownloads(
             );
             break file_attempt;
           } catch (loopErr) {
-            if (pgcHarvestIsCancelled(harvestOpts)) {
+            if (await pgcHarvestIsCancelled(harvestOpts)) {
               console.log("[PGC] Cancel during recoverable error — leaving file unprocessed");
               break files_loop;
             }
@@ -15096,7 +15619,7 @@ async function harvestProjectFilesAndSampleDownloads(
             }
 
             if (recoveryUsedForFile) {
-              if (pgcHarvestIsCancelled(harvestOpts)) {
+              if (await pgcHarvestIsCancelled(harvestOpts)) {
                 console.log("[PGC] Cancel after recovery exhaustion — leaving file unprocessed");
                 break files_loop;
               }
@@ -15167,7 +15690,7 @@ async function harvestProjectFilesAndSampleDownloads(
             });
 
             if (!rec.ok) {
-              if (pgcHarvestIsCancelled(harvestOpts)) {
+              if (await pgcHarvestIsCancelled(harvestOpts)) {
                 console.log("[PGC] Cancel during failed recovery — leaving file unprocessed");
                 break files_loop;
               }
@@ -17609,7 +18132,7 @@ async function processPgcSsrReportsForProject(
 
     const builtSpecs = wfid ? buildPgcReportUrls(projectID, wfid) : [];
     /** @type {{ fileSlug: string, reportName: string, fallbackUrl: string | null }[]} */
-    const specList = PGC_TARGET_REPORT_NAMES.map((nm, i) => {
+    let specList = PGC_TARGET_REPORT_NAMES.map((nm, i) => {
       const b = builtSpecs.find(
         (s) =>
           normalizeReportName(s.reportName) === normalizeReportName(nm),
@@ -17620,6 +18143,24 @@ async function processPgcSsrReportsForProject(
         fallbackUrl: b?.url || null,
       };
     });
+
+    const retryReportTargets = Array.isArray(opts.retryReportTargets)
+      ? opts.retryReportTargets
+      : Array.isArray(opts.devHarvestControls?.explicitReportTargets)
+        ? opts.devHarvestControls.explicitReportTargets
+        : null;
+    const priorReportEntries = Array.isArray(opts.priorReportEntries)
+      ? opts.priorReportEntries
+      : [];
+    if (retryReportTargets && retryReportTargets.length > 0) {
+      const pgcRetryLib = require("./lib/pgc-retry-artifacts.js");
+      specList = specList.filter((spec) =>
+        pgcRetryLib.matchRetryReportTarget(spec, retryReportTargets),
+      );
+      console.log(
+        `[PGC] Reports | retry filter | ${specList.length} report(s) targeted`,
+      );
+    }
 
     const outDir = path.join(__dirname, "pgc-reports", safePid);
     await fs.promises.mkdir(outDir, { recursive: true });
@@ -17799,81 +18340,146 @@ async function processPgcSsrReportsForProject(
         const excelPath = path.join(outDir, `${spec.fileSlug}.xlsx`);
         const pdfPath = path.join(outDir, `${spec.fileSlug}.pdf`);
 
-        // Always attempt both formats. One logical report = PDF + Excel artifacts.
-        entry.excelAttempted = true;
+        const pgcRetryLib = retryReportTargets
+          ? require("./lib/pgc-retry-artifacts.js")
+          : null;
+        const retryTarget = pgcRetryLib
+          ? pgcRetryLib.matchRetryReportTarget(spec, retryReportTargets)
+          : null;
+        const priorEntry =
+          priorReportEntries.find(
+            (p) =>
+              normalizeReportName(p.reportName) ===
+                normalizeReportName(spec.reportName) ||
+              String(p.fileSlug || "") === String(spec.fileSlug || ""),
+          ) || null;
+        const seedFormatFromPrior = (format) => {
+          if (!priorEntry) return false;
+          if (format === "excel") {
+            const url = priorEntry.excelUrl || priorEntry.excelPublicUrl;
+            if (url && /supabase\.co\/storage\//i.test(String(url))) {
+              entry.excelDownloaded = true;
+              entry.excelPublicUrl = url;
+              entry.excelUrl = url;
+              entry.excelStatus = priorEntry.excelStatus || "success";
+              entry.excelError = null;
+              entry.excelExportedAt = priorEntry.excelExportedAt || null;
+              entry.excelAttempted = true;
+              return true;
+            }
+          }
+          if (format === "pdf") {
+            const url = priorEntry.pdfUrl || priorEntry.pdfPublicUrl;
+            if (url && /supabase\.co\/storage\//i.test(String(url))) {
+              entry.pdfDownloaded = true;
+              entry.pdfPublicUrl = url;
+              entry.pdfUrl = url;
+              entry.pdfStatus = priorEntry.pdfStatus || "success";
+              entry.pdfError = null;
+              entry.pdfExportedAt = priorEntry.pdfExportedAt || null;
+              entry.pdfAttempted = true;
+              return true;
+            }
+          }
+          return false;
+        };
+        const shouldExportExcel =
+          !retryTarget ||
+          pgcRetryLib.shouldRetryReportFormat("excel", retryTarget);
+        const shouldExportPdf =
+          !retryTarget ||
+          pgcRetryLib.shouldRetryReportFormat("pdf", retryTarget);
+
         let viewerUrlForHttp = activePage.url() || navigateUrl;
-        const xRes = await exportReportFormat(
-          activePage,
-          "EXCELOPENXML",
-          excelPath,
-          viewerHandle,
-          viewerUrlForHttp,
-        );
-        entry.excelDownloaded = xRes.ok;
-        entry.excelPath = xRes.ok ? excelPath : null;
-        entry.excelRetries = xRes.retries;
-        entry.excelError = xRes.ok ? null : xRes.error || "excel_export_failed";
-        if (xRes.ok) {
-          entry.excelExportedAt = new Date().toISOString();
-          console.log(`[PGC] Reports | excel ok | ${spec.reportName}`);
-        } else {
-          console.log(
-            `[PGC] Reports | excel fail | ${spec.reportName} | ${entry.excelError}`,
+        if (shouldExportExcel) {
+          entry.excelAttempted = true;
+          const xRes = await exportReportFormat(
+            activePage,
+            "EXCELOPENXML",
+            excelPath,
+            viewerHandle,
+            viewerUrlForHttp,
           );
-          pgcProgress.pgcLogDetail("task8_excel_fail", {
-            reportName: spec.reportName,
-            error: entry.excelError,
-          });
+          entry.excelDownloaded = xRes.ok;
+          entry.excelPath = xRes.ok ? excelPath : null;
+          entry.excelRetries =
+            (Number(priorEntry?.excelRetries) || 0) + (xRes.retries || 0) + 1;
+          entry.excelError = xRes.ok ? null : xRes.error || "excel_export_failed";
+          if (xRes.ok) {
+            entry.excelExportedAt = new Date().toISOString();
+            console.log(`[PGC] Reports | excel ok | ${spec.reportName}`);
+          } else {
+            console.log(
+              `[PGC] Reports | excel fail | ${spec.reportName} | ${entry.excelError}`,
+            );
+            pgcProgress.pgcLogDetail("task8_excel_fail", {
+              reportName: spec.reportName,
+              error: entry.excelError,
+            });
+          }
+        } else {
+          seedFormatFromPrior("excel");
+          console.log(
+            `[PGC] Reports | excel skip (not selected for retry) | ${spec.reportName}`,
+          );
         }
 
         // Re-settle viewer before PDF (SSRS often drops $find after first export).
-        await activePage.waitForTimeout(1000);
-        let viewerHandlePdf = await waitForPgcReportViewerHandle(
-          activePage,
-          15000,
-        );
-        if (!viewerHandlePdf) {
-          try {
-            await activePage.goto(navigateUrl, {
-              waitUntil: "domcontentloaded",
-              timeout: 30000,
-            });
-            await activePage.waitForTimeout(TASK8_REPORT_POST_NAV_MS);
-            viewerHandlePdf = await waitForPgcReportViewerHandle(
-              activePage,
-              30000,
+        if (shouldExportPdf) {
+          await activePage.waitForTimeout(1000);
+          let viewerHandlePdf = await waitForPgcReportViewerHandle(
+            activePage,
+            15000,
+          );
+          if (!viewerHandlePdf) {
+            try {
+              await activePage.goto(navigateUrl, {
+                waitUntil: "domcontentloaded",
+                timeout: 30000,
+              });
+              await activePage.waitForTimeout(TASK8_REPORT_POST_NAV_MS);
+              viewerHandlePdf = await waitForPgcReportViewerHandle(
+                activePage,
+                30000,
+              );
+            } catch (reNavErr) {
+              pgcProgress.pgcLogDetail("task8_pdf_renav_error", {
+                reportName: spec.reportName,
+                error: (reNavErr && reNavErr.message) || String(reNavErr),
+              });
+            }
+          }
+          viewerUrlForHttp = activePage.url() || navigateUrl;
+          entry.pdfAttempted = true;
+          const pRes = await exportReportFormat(
+            activePage,
+            "PDF",
+            pdfPath,
+            viewerHandlePdf,
+            viewerUrlForHttp,
+          );
+          entry.pdfDownloaded = pRes.ok;
+          entry.pdfPath = pRes.ok ? pdfPath : null;
+          entry.pdfRetries =
+            (Number(priorEntry?.pdfRetries) || 0) + (pRes.retries || 0) + 1;
+          entry.pdfError = pRes.ok ? null : pRes.error || "pdf_export_failed";
+          if (pRes.ok) {
+            entry.pdfExportedAt = new Date().toISOString();
+            console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
+          } else {
+            console.log(
+              `[PGC] Reports | pdf fail | ${spec.reportName} | ${entry.pdfError}`,
             );
-          } catch (reNavErr) {
-            pgcProgress.pgcLogDetail("task8_pdf_renav_error", {
+            pgcProgress.pgcLogDetail("task8_pdf_fail", {
               reportName: spec.reportName,
-              error: (reNavErr && reNavErr.message) || String(reNavErr),
+              error: entry.pdfError,
             });
           }
-        }
-        viewerUrlForHttp = activePage.url() || navigateUrl;
-        entry.pdfAttempted = true;
-        const pRes = await exportReportFormat(
-          activePage,
-          "PDF",
-          pdfPath,
-          viewerHandlePdf,
-          viewerUrlForHttp,
-        );
-        entry.pdfDownloaded = pRes.ok;
-        entry.pdfPath = pRes.ok ? pdfPath : null;
-        entry.pdfRetries = pRes.retries;
-        entry.pdfError = pRes.ok ? null : pRes.error || "pdf_export_failed";
-        if (pRes.ok) {
-          entry.pdfExportedAt = new Date().toISOString();
-          console.log(`[PGC] Reports | pdf ok | ${spec.reportName}`);
         } else {
+          seedFormatFromPrior("pdf");
           console.log(
-            `[PGC] Reports | pdf fail | ${spec.reportName} | ${entry.pdfError}`,
+            `[PGC] Reports | pdf skip (not selected for retry) | ${spec.reportName}`,
           );
-          pgcProgress.pgcLogDetail("task8_pdf_fail", {
-            reportName: spec.reportName,
-            error: entry.pdfError,
-          });
         }
 
         if (!entry.excelDownloaded && !entry.pdfDownloaded) {
@@ -18640,6 +19246,12 @@ async function runPgcProductionPipeline(
       dashboardUrl: dashboardUrlForReports,
       onScrapeProgress: opts.onScrapeProgress,
       scrapeJobId: opts.scrapeJobId || null,
+      retryReportTargets:
+        opts.pgcRetryArtifacts?.reports ||
+        opts.devHarvestControls?.explicitReportTargets ||
+        null,
+      priorReportEntries: opts.priorReportEntries || null,
+      devHarvestControls: opts.devHarvestControls || null,
     });
     if (uploadLocal && reportsPayload.reports?.length) {
       for (const r of reportsPayload.reports) {
@@ -19270,4 +19882,8 @@ module.exports = {
   pgcReportRowMatchesAnyTarget,
   pgcReportNamesLooselyMatch,
   PGC_TARGET_REPORT_NAMES,
+  isPgcBravaPublishToPdfUrl,
+  pgcNormalizePublishUrl,
+  pgcPickBravaPublishPdfFromFallbackChannels,
+  pgcFallbackSourceToLogSource,
 };

@@ -752,7 +752,7 @@ export const mvpDocumentationData: MVPDocumentation = {
     {
       category: "AI Tools",
       features: [
-        { name: "Code Compliance Analyzer", description: "AI-powered analysis of documents for code compliance" },
+        { name: "Code Analyzer", description: "AI-powered analysis of documents for code compliance" },
         { name: "Drawing Analysis", description: "Automated analysis of architectural drawings" },
         { name: "Pre-Submittal Detection", description: "Identify potential issues before submission" },
         { name: "Auto-Fill Forms", description: "AI-powered form auto-completion" },

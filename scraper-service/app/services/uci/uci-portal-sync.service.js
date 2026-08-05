@@ -96,15 +96,46 @@ async function runPortalSync(supabase, opts) {
   /** @type {import("./adapters/utility-adapter.types.js").NormalizedStatusEvent[]} */
   const normalizedEvents = [];
 
+  const isCancelRequested =
+    typeof opts.isCancelRequested === "function" ? opts.isCancelRequested : null;
+  async function cancelled() {
+    if (!isCancelRequested) return false;
+    try {
+      const v = isCancelRequested();
+      return !!(v && typeof v.then === "function" ? await v : v);
+    } catch (_) {
+      return false;
+    }
+  }
+
   for (const raw of rawApplications) {
+    if (await cancelled()) {
+      const err = new Error("Portal sync cancelled");
+      err.code = "CANCELLED";
+      err.statusCode = 499;
+      throw err;
+    }
     const app = adapter.normalizeApplication(raw, adapterContext);
     if (app) normalizedApplications.push(app);
     normalizedCommunications.push(...adapter.normalizeMessages(raw, adapterContext));
     normalizedEvents.push(...adapter.normalizeStatusEvents(raw, adapterContext));
   }
+  if (await cancelled()) {
+    const err = new Error("Portal sync cancelled");
+    err.code = "CANCELLED";
+    err.statusCode = 499;
+    throw err;
+  }
 
   if (adapter.providerSlug === "generic" && normalizedApplications.length === 0) {
     warnings.push("Generic adapter cannot normalize portal applications for this provider.");
+  }
+
+  if (await cancelled()) {
+    const err = new Error("Portal sync cancelled");
+    err.code = "CANCELLED";
+    err.statusCode = 499;
+    throw err;
   }
 
   const applicationResult = await upsertPortalApplications(supabase, {
@@ -115,6 +146,13 @@ async function runPortalSync(supabase, opts) {
     applications: normalizedApplications,
   });
 
+  if (await cancelled()) {
+    const err = new Error("Portal sync cancelled");
+    err.code = "CANCELLED";
+    err.statusCode = 499;
+    throw err;
+  }
+
   const communicationResult = await upsertPortalCommunications(supabase, {
     coordinationRecordId: tenantContext.coordinationRecordId,
     projectId: tenantContext.projectId,
@@ -122,6 +160,13 @@ async function runPortalSync(supabase, opts) {
     providerSlug: adapterContext.providerSlug,
     communications: normalizedCommunications,
   });
+
+  if (await cancelled()) {
+    const err = new Error("Portal sync cancelled");
+    err.code = "CANCELLED";
+    err.statusCode = 499;
+    throw err;
+  }
 
   const milestoneResult = await upsertPortalStatusEvents(supabase, {
     coordinationRecordId: tenantContext.coordinationRecordId,

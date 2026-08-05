@@ -9,7 +9,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 const navigation = [
   { name: "Home", href: "/" },
-  { name: "Code Compliance Analyzer", href: "/code-compliance" },
+  { name: "Code Analyzer", href: "/code-compliance" },
   { name: "Reference Library", href: "/code-reference" },
   { name: "Demos", href: "/demos" },
   { name: "Pricing", href: "/pricing" },

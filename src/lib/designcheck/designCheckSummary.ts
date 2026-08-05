@@ -52,7 +52,7 @@ export type DesignCheckProjectSummary = {
   hasLocal: boolean;
 };
 
-/** Annotation data shape stored by the Code Compliance Analyzer. */
+/** Annotation data shape stored by the Code Analyzer. */
 export type DesignCheckAnnotationData = {
   compliance_issue?: boolean;
   compliance_metadata?: boolean;

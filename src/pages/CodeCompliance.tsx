@@ -26,8 +26,8 @@ export default function CodeCompliance() {
 
       <div className="space-y-6">
         <PageHeader
-          eyebrow="Code Compliance Analyzer"
-          title="AI Code Compliance Analyzer"
+          eyebrow="Code Analyzer"
+          title="AI Code Analyzer"
           body="Upload architectural drawings and analyze them for building code violations. Get feedback with code citations and suggested fixes — powered by live PermitPilot analysis, not mock findings."
           action={
             <div className="flex flex-wrap gap-2">
