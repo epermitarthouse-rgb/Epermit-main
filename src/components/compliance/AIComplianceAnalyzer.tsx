@@ -78,6 +78,7 @@ import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
 import { useProjects } from "@/hooks/useProjects";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
+import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import { useAuth } from "@/hooks/useAuth";
 import { DocumentDiscipline, DISCIPLINE_OPTIONS, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from "@/types/document";
 import type { ProjectDocument } from "@/types/document";
@@ -205,7 +206,7 @@ interface ComplianceAnnotationData {
 export function AIComplianceAnalyzer() {
   const { user } = useAuth();
   const { projects, loading: projectsLoading, createProject } = useProjects();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { projectId: selectedProjectId, setSelectedProjectId } = useResolvedProjectId();
   const [showNewProjectInput, setShowNewProjectInput] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
@@ -518,6 +519,25 @@ export function AIComplianceAnalyzer() {
   // When landing on / switching to All, hydrate every saved analysis for the project.
   // Keyed by document-id set so mid-batch re-renders do not wipe/refetch unnecessarily.
   const lastAllHydrateKeyRef = useRef<string>("");
+
+  // Reset analyzer results when Active Project / ?projectId= changes (header or DesignCheck link).
+  const previousProjectIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (previousProjectIdRef.current === undefined) {
+      previousProjectIdRef.current = selectedProjectId;
+      return;
+    }
+    if (previousProjectIdRef.current === selectedProjectId) return;
+    previousProjectIdRef.current = selectedProjectId;
+    setShowNewProjectInput(false);
+    setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
+    setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+    setLoadedExistingResults([]);
+    setDocumentsWithAnalysis([]);
+    lastAllHydrateKeyRef.current = "";
+    setActiveResultFileId(null);
+  }, [selectedProjectId]);
+
   useEffect(() => {
     if (!selectedProjectId || !user) {
       setLoadedExistingResults([]);
@@ -623,12 +643,6 @@ export function AIComplianceAnalyzer() {
       const newProject = await createProject({ name: newProjectName.trim() });
       if (newProject) {
         setSelectedProjectId(newProject.id);
-        setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
-        setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
-        setLoadedExistingResults([]);
-        setDocumentsWithAnalysis([]);
-        lastAllHydrateKeyRef.current = "";
-        setActiveResultFileId(null);
         setShowNewProjectInput(false);
         setNewProjectName("");
       }
@@ -1829,12 +1843,6 @@ export function AIComplianceAnalyzer() {
                 }
                 setShowNewProjectInput(false);
                 setSelectedProjectId(v === "__none__" ? null : v);
-                setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
-                setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
-                setLoadedExistingResults([]);
-                setDocumentsWithAnalysis([]);
-                lastAllHydrateKeyRef.current = "";
-                setActiveResultFileId(null);
               }}
             >
               <SelectTrigger data-testid="select-project">
@@ -1904,6 +1912,17 @@ export function AIComplianceAnalyzer() {
                 Select a project to save the file and AI results to the database
               </p>
             )}
+            {selectedProjectId &&
+              !loadingDocsWithAnalysis &&
+              documentsWithAnalysis.length === 0 &&
+              documents.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="text-docs-not-yet-analyzed">
+                  This project has {documents.length} uploaded document
+                  {documents.length === 1 ? "" : "s"}, but none have Code Analyzer results yet.
+                  Upload drawings below to analyze — Project Documents lists every file, while this
+                  dropdown only shows previously analyzed ones.
+                </p>
+              )}
           </div>
 
           {/* View / filter previously analyzed documents */}
