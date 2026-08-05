@@ -414,13 +414,20 @@ export function ActiveProjectControl() {
         address: newProjectAddress.trim() || undefined,
       });
       if (newProject) {
+        // createProject already patched the shared projects cache; select
+        // immediately so AppSidebar's stale-id guard sees the new row.
         selectedProject.setSelectedProjectId(newProject.id);
+        setSelectedCredentialId("");
+        setPermitNumber(trimmed);
+        persistPermitNumber(trimmed);
         setCreateNewProject(false);
         setNewProjectName("");
         setNewProjectJurisdiction("");
         setNewProjectAddress("");
-        fetchProjects();
+        setProjectPickerOpen(false);
+        setProjectQuery("");
         toast.success("Project created and linked");
+        void fetchProjects();
         setOpen(false);
       }
     } finally {
@@ -435,6 +442,7 @@ export function ActiveProjectControl() {
     user,
     createProject,
     fetchProjects,
+    persistPermitNumber,
   ]);
 
   useEffect(() => {

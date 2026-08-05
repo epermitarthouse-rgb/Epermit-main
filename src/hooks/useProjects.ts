@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Project, ProjectStatus, ProjectType, PROJECT_STATUS_CONFIG } from '@/types/project';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,6 +9,13 @@ import {
   DASHBOARD_SELECTED_PROJECT_QUERY_KEY,
   SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
 } from '@/lib/portalMonitorScrapeOptions';
+
+/** Shared cache key — every useProjects() caller must see the same list. */
+export const PROJECTS_QUERY_KEY = 'projects' as const;
+
+export function projectsQueryKey(userId: string) {
+  return [PROJECTS_QUERY_KEY, userId] as const;
+}
 
 /** Columns added in Phase 4 QB/billing migrations — omit from fallback select if DB not migrated yet. */
 const PHASE_4_PLUS_OPTIONAL_PROJECT_COLUMNS = new Set([
@@ -188,53 +195,70 @@ export interface UpdateProjectData extends Partial<CreateProjectData> {
   rejection_reasons?: string[];
 }
 
+async function loadProjectsFromDb(): Promise<Project[]> {
+  let { data, error: fetchError } = await supabase
+    .from('projects')
+    .select(PROJECT_SELECT_COLUMNS)
+    .order('updated_at', { ascending: false });
+
+  if (fetchError && isProjectsSchemaMismatchError(fetchError)) {
+    const retry = await supabase
+      .from('projects')
+      .select(PROJECT_CORE_SELECT_COLUMNS)
+      .order('updated_at', { ascending: false });
+    data = retry.data;
+    fetchError = retry.error;
+  }
+
+  if (fetchError) throw fetchError;
+
+  return ((data || []) as Record<string, unknown>[]).map(normalizeProjectRow);
+}
+
+/**
+ * Shared projects list for the signed-in user.
+ *
+ * IMPORTANT: This must use React Query (not per-hook useState). Header
+ * ActiveProjectControl and AppSidebar both call useProjects(); with separate
+ * local state, creating a project in the header left the sidebar's list stale,
+ * and AppSidebar cleared the new selectedProjectId as "missing".
+ */
 export function useProjects() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryKey = user ? projectsQueryKey(user.id) : ([PROJECTS_QUERY_KEY, 'anonymous'] as const);
+
+  const {
+    data: projects = [],
+    isLoading,
+    error: queryError,
+  } = useQuery({
+    queryKey,
+    queryFn: loadProjectsFromDb,
+    enabled: !!user,
+  });
+
+  const loading = !!user && isLoading;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : 'Failed to fetch projects'
+    : null;
 
   const fetchProjects = useCallback(async () => {
-    if (!user) {
-      setProjects([]);
-      setLoading(false);
-      return;
-    }
+    if (!user) return;
+    await queryClient.invalidateQueries({ queryKey: projectsQueryKey(user.id) });
+  }, [user, queryClient]);
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      let { data, error: fetchError } = await supabase
-        .from('projects')
-        .select(PROJECT_SELECT_COLUMNS)
-        .order('updated_at', { ascending: false });
-
-      if (fetchError && isProjectsSchemaMismatchError(fetchError)) {
-        const retry = await supabase
-          .from('projects')
-          .select(PROJECT_CORE_SELECT_COLUMNS)
-          .order('updated_at', { ascending: false });
-        data = retry.data;
-        fetchError = retry.error;
-      }
-
-      if (fetchError) throw fetchError;
-
-      setProjects(((data || []) as Record<string, unknown>[]).map(normalizeProjectRow));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch projects';
-      setError(message);
-      console.error('Error fetching projects:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+  const patchProjectsCache = useCallback(
+    (updater: (prev: Project[]) => Project[]) => {
+      if (!user) return;
+      queryClient.setQueryData<Project[]>(projectsQueryKey(user.id), (prev) =>
+        updater(prev ?? []),
+      );
+    },
+    [user, queryClient],
+  );
 
   const createProject = async (data: CreateProjectData): Promise<Project | null> => {
     if (!user) {
@@ -243,7 +267,7 @@ export function useProjects() {
     }
 
     try {
-      const { data: newProject, error } = await supabase
+      const { data: newProject, error: insertError } = await supabase
         .from('projects')
         .insert({
           ...data,
@@ -253,11 +277,17 @@ export function useProjects() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
-      setProjects(prev => [normalizeProjectRow(newProject as Record<string, unknown>), ...prev]);
-      
-      // Log activity
+      const normalized = normalizeProjectRow(newProject as Record<string, unknown>);
+      // Sync cache before callers auto-select — prevents AppSidebar stale-list clear.
+      patchProjectsCache((prev) => {
+        if (prev.some((p) => p.id === normalized.id)) {
+          return prev.map((p) => (p.id === normalized.id ? normalized : p));
+        }
+        return [normalized, ...prev];
+      });
+
       await logProjectActivity(
         newProject.id,
         user.id,
@@ -266,9 +296,9 @@ export function useProjects() {
         data.description || undefined,
         { project_type: data.project_type }
       );
-      
+
       toast.success('Project created successfully');
-      return normalizeProjectRow(newProject as Record<string, unknown>);
+      return normalized;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create project';
       toast.error(message);
@@ -279,14 +309,12 @@ export function useProjects() {
 
   const updateProject = async (id: string, data: UpdateProjectData): Promise<Project | null> => {
     if (!user) return null;
-    
+
     try {
-      // Get current project for comparison
       const currentProject = projects.find(p => p.id === id);
-      
-      // Handle status transitions
+
       const updateData: UpdateProjectData & { submitted_at?: string; approved_at?: string } = { ...data };
-      
+
       if (data.status === 'submitted' && !updateData.submitted_at) {
         updateData.submitted_at = new Date().toISOString();
       }
@@ -294,19 +322,18 @@ export function useProjects() {
         updateData.approved_at = new Date().toISOString();
       }
 
-      const { data: updatedProject, error } = await supabase
+      const { data: updatedProject, error: updateError } = await supabase
         .from('projects')
         .update(updateData)
         .eq('id', id)
         .select()
         .single();
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      setProjects(prev =>
-        prev.map(p =>
-          p.id === id ? normalizeProjectRow(updatedProject as Record<string, unknown>) : p,
-        ),
+      const normalized = normalizeProjectRow(updatedProject as Record<string, unknown>);
+      patchProjectsCache((prev) =>
+        prev.map((p) => (p.id === id ? normalized : p)),
       );
 
       // Portal Monitor scrape-mode menu reads these queries — refresh as soon as
@@ -319,8 +346,7 @@ export function useProjects() {
           queryKey: [DASHBOARD_SELECTED_PROJECT_QUERY_KEY],
         });
       }
-      
-      // Log activity
+
       if (data.status && currentProject && data.status !== currentProject.status) {
         const oldStatus = PROJECT_STATUS_CONFIG[currentProject.status].label;
         const newStatus = PROJECT_STATUS_CONFIG[data.status].label;
@@ -344,8 +370,8 @@ export function useProjects() {
         );
         toast.success('Project updated successfully');
       }
-      
-      return normalizeProjectRow(updatedProject as Record<string, unknown>);
+
+      return normalized;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update project';
       toast.error(message);
@@ -356,14 +382,14 @@ export function useProjects() {
 
   const deleteProject = async (id: string): Promise<boolean> => {
     try {
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from('projects')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
 
-      setProjects(prev => prev.filter(p => p.id !== id));
+      patchProjectsCache((prev) => prev.filter((p) => p.id !== id));
       toast.success('Project deleted successfully');
       return true;
     } catch (err) {
@@ -402,14 +428,16 @@ export function useProjects() {
         if (!data) return null;
 
         const normalized = normalizeProjectRow(data as Record<string, unknown>);
-        setProjects(prev => prev.map(p => (p.id === id ? normalized : p)));
+        patchProjectsCache((prev) =>
+          prev.map((p) => (p.id === id ? normalized : p)),
+        );
         return normalized;
       } catch (err) {
         console.error('Error refreshing project:', err);
         return null;
       }
     },
-    [user],
+    [user, patchProjectsCache],
   );
 
   return {

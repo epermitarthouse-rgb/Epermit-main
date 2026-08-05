@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Clock,
@@ -51,29 +51,43 @@ export function AppSidebar() {
   const { recentPages, favorites, toggleFavorite, isFavorite } =
     useNavigationHistory();
   const selectedProject = useSelectedProjectOptional();
-  const { projects, loading } = useProjects();
+  const { projects, loading, fetchProjects } = useProjects();
   const isCollapsed = state === "collapsed";
 
   const [projectsLoadedOnce, setProjectsLoadedOnce] = useState(false);
+  // After a miss, refetch once before clearing — never wipe a just-created id
+  // that another mount has not finished merging into the shared list.
+  const missingSelectionRefetchRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!loading && projects.length > 0) setProjectsLoadedOnce(true);
   }, [loading, projects.length]);
 
   useEffect(() => {
-    if (!selectedProject?.selectedProjectId || loading || !projectsLoadedOnce)
-      return;
+    const selectedId = selectedProject?.selectedProjectId ?? null;
+    if (!selectedId || !selectedProject || loading || !projectsLoadedOnce) return;
     if (projects.length === 0) return;
-    const exists = projects.some(
-      (p) => p.id === selectedProject.selectedProjectId,
-    );
-    if (!exists) {
-      selectedProject.setSelectedProjectId(null);
+
+    const exists = projects.some((p) => p.id === selectedId);
+    if (exists) {
+      missingSelectionRefetchRef.current = null;
+      return;
     }
+
+    if (missingSelectionRefetchRef.current !== selectedId) {
+      missingSelectionRefetchRef.current = selectedId;
+      void fetchProjects();
+      return;
+    }
+
+    selectedProject.setSelectedProjectId(null);
   }, [
     selectedProject?.selectedProjectId,
+    selectedProject,
     projects,
     loading,
     projectsLoadedOnce,
+    fetchProjects,
   ]);
 
   const isActive = (href: string) => {
