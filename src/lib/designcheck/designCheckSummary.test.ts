@@ -106,6 +106,32 @@ describe("designCheckSummary helpers", () => {
     assert.equal(buildDesignCheckSummary([{ id: "x", document_id: "d", data: {} }], []), null);
   });
 
+  it("uses overallScore 100 when only metadata exists with echoed 85 and zero issue rows", () => {
+    const summary = buildDesignCheckSummary(
+      [
+        {
+          id: "meta-1",
+          document_id: "doc-1",
+          data: {
+            compliance_metadata: true,
+            codeType: "ibc",
+            summary: {
+              totalIssues: 0,
+              critical: 0,
+              warnings: 0,
+              advisory: 0,
+              overallScore: 85,
+            },
+          },
+        },
+      ],
+      [{ id: "doc-1", file_name: "clean.pdf" }],
+    );
+    assert.ok(summary);
+    assert.equal(summary!.findings.length, 0);
+    assert.equal(summary!.summary.overallScore, 100);
+  });
+
   it("aggregates impact from findings", () => {
     const findings: DesignCheckFinding[] = [
       {

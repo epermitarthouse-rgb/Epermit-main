@@ -166,7 +166,7 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
     jsonFormat = `{
   "issues": [${issueSchema}],
   "jurisdictionNotes": "Notes about base code requirements reviewed",
-  "overallScore": 85
+  "overallScore": 100
 }`;
   } else if (resolvedCodeType === "local") {
     analysisFocus = jurisdictionContext
@@ -175,7 +175,7 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
     jsonFormat = `{
   "issues": [${issueSchema}],
   "jurisdictionNotes": "Notes about local amendment requirements reviewed",
-  "overallScore": 85
+  "overallScore": 100
 }`;
   } else {
     analysisFocus = `Perform TWO analyses in one response:
@@ -187,8 +187,8 @@ ${jurisdictionContext ? `\nLOCAL AMENDMENTS:\n${jurisdictionContext}` : ""}`;
   "localIssues": [${issueSchema}],
   "ibcJurisdictionNotes": "Notes about base IBC requirements",
   "localJurisdictionNotes": "Notes about local amendment requirements",
-  "ibcOverallScore": 85,
-  "localOverallScore": 85
+  "ibcOverallScore": 100,
+  "localOverallScore": 100
 }`;
   }
 
@@ -207,6 +207,7 @@ For each issue found, provide category, title, description, severity, code refer
 Consider jurisdiction: ${jurisdiction || "General IBC"} and project type: ${projectType}.
 Use code year: ${codeYear}.
 Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
+Scoring: overallScore is 0-100. If issues is an empty array, overallScore MUST be 100. Do not invent a partial score when there are no findings.
 
 You MUST respond with a valid JSON object in exactly this format:
 ${jsonFormat}`;
@@ -354,14 +355,22 @@ function buildSummary(issues, overallScore) {
   const critical = issues.filter((i) => i.severity === "critical").length;
   const warnings = issues.filter((i) => i.severity === "warning").length;
   const advisory = issues.filter((i) => i.severity === "advisory").length;
+  const computed =
+    issues.length === 0
+      ? 100
+      : Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
   return {
     totalIssues: issues.length,
     critical,
     warnings,
     advisory,
+    // Never trust an AI-echoed exemplar score (e.g. 85) when there are zero issues.
     overallScore:
-      overallScore ??
-      Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3),
+      issues.length === 0
+        ? 100
+        : typeof overallScore === "number"
+          ? overallScore
+          : computed,
   };
 }
 

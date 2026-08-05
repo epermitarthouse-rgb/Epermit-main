@@ -105,6 +105,17 @@ export function createComplianceBatchFileId(): string {
   return `batch-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Score from issue severities. Empty issues always score 100 (ignore AI-echoed exemplars). */
+export function computeComplianceOverallScore(counts: {
+  critical: number;
+  warnings: number;
+  advisory: number;
+  totalIssues: number;
+}): number {
+  if (counts.totalIssues === 0) return 100;
+  return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
+}
+
 export function normalizeComplianceAnalysisResult(
   raw: unknown,
   codeType: "ibc" | "local",
@@ -117,13 +128,25 @@ export function normalizeComplianceAnalysisResult(
   const critical = issues.filter((i) => i.severity === "critical").length;
   const warnings = issues.filter((i) => i.severity === "warning").length;
   const advisory = issues.filter((i) => i.severity === "advisory").length;
-  const summary = sum ?? {
+  const recomputedScore = computeComplianceOverallScore({
+    critical,
+    warnings,
+    advisory,
+    totalIssues: issues.length,
+  });
+  // Always reconcile counts from the issues array. Never trust an AI/summary score
+  // when there are zero issues (prompt exemplars often echo overallScore: 85).
+  const summary: ComplianceBatchAnalysisResult["summary"] = {
     totalIssues: issues.length,
     critical,
     warnings,
     advisory,
     overallScore:
-      issues.length === 0 ? 100 : Math.max(0, 100 - critical * 15 - warnings * 5 - advisory * 2),
+      issues.length === 0
+        ? 100
+        : typeof sum?.overallScore === "number"
+          ? sum.overallScore
+          : recomputedScore,
   };
   return {
     issues,

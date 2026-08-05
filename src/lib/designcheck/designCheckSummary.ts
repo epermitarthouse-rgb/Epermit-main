@@ -174,7 +174,6 @@ export function buildDesignCheckSummary(
   let codeYear: string | null = null;
   let hasIbc = false;
   let hasLocal = false;
-  let storedScore: number | null = null;
 
   for (const ann of annotations) {
     const d = (ann.data ?? {}) as DesignCheckAnnotationData;
@@ -191,10 +190,6 @@ export function buildDesignCheckSummary(
       if (d.jurisdiction) jurisdiction = d.jurisdiction;
       if (d.projectType) projectType = d.projectType;
       if (d.codeYear_meta || d.codeYear) codeYear = d.codeYear_meta || d.codeYear || null;
-      if (typeof d.summary?.overallScore === "number") {
-        // Prefer latest metadata score when aggregating; final score may still recompute from issues.
-        storedScore = d.summary.overallScore;
-      }
       continue;
     }
 
@@ -231,12 +226,12 @@ export function buildDesignCheckSummary(
   }
 
   const computed = summarizeFindings(findings);
-  // Prefer recomputed from issue rows (matches analyzer when loading issues);
-  // fall back to stored metadata score only when there are metadata rows but no issue rows.
+  // Prefer recomputed from issue rows. When there are zero issue rows, always use 100
+  // (never trust a stored/AI-echoed score like 85 with an empty findings list).
   const overallScore =
-    findings.length > 0
-      ? computed.overallScore
-      : storedScore ?? computed.overallScore;
+    findings.length === 0
+      ? 100
+      : computed.overallScore;
 
   return {
     documents: Array.from(docIds).map((id) => ({

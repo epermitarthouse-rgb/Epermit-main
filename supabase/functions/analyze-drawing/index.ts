@@ -354,8 +354,10 @@ You MUST respond with a valid JSON object in exactly this format:
     }
   ],
   "jurisdictionNotes": "Notes about jurisdiction-specific requirements",
-  "overallScore": 85
-}`;
+  "overallScore": 100
+}
+
+Scoring: overallScore is 0-100. If issues is an empty array, overallScore MUST be 100. Do not invent a partial score when there are no findings.`;
 
     const userPrompt = `Analyze this architectural drawing for building code compliance issues. 
 Look for violations related to:
@@ -432,7 +434,12 @@ Provide a comprehensive analysis with specific code citations. Return ONLY valid
         critical,
         warnings,
         advisory,
-        overallScore: analysisData.overallScore || Math.max(0, 100 - (critical * 20) - (warnings * 10) - (advisory * 3))
+        overallScore:
+          issues.length === 0
+            ? 100
+            : (typeof analysisData.overallScore === "number"
+                ? analysisData.overallScore
+                : Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3)),
       },
       jurisdictionNotes: analysisData.jurisdictionNotes || ''
     };

@@ -7,9 +7,11 @@ import {
 import {
   batchProgressPercent,
   canRemoveBatchFile,
+  computeComplianceOverallScore,
   countCompletedBatchFiles,
   countFailedBatchFiles,
   formatBatchProgressLabel,
+  normalizeComplianceAnalysisResult,
   processComplianceBatch,
   type ComplianceBatchFile,
 } from "./complianceBatchProcessor.ts";
@@ -313,5 +315,59 @@ describe("complianceBatchProcessor", () => {
     assert.equal(canRemoveBatchFile("analyzing"), false);
     assert.equal(canRemoveBatchFile("completed"), false);
     assert.equal(canRemoveBatchFile("failed"), false);
+  });
+
+  it("forces overallScore 100 when issues are empty (ignores AI-echoed 85)", () => {
+    assert.equal(
+      computeComplianceOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0 }),
+      100,
+    );
+    const normalized = normalizeComplianceAnalysisResult(
+      {
+        issues: [],
+        summary: {
+          totalIssues: 0,
+          critical: 0,
+          warnings: 0,
+          advisory: 0,
+          overallScore: 85,
+        },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+    );
+    assert.equal(normalized.summary.totalIssues, 0);
+    assert.equal(normalized.summary.overallScore, 100);
+  });
+
+  it("keeps a numeric AI score when issues are present", () => {
+    const normalized = normalizeComplianceAnalysisResult(
+      {
+        issues: [
+          {
+            id: "1",
+            category: "Egress",
+            title: "t",
+            description: "d",
+            severity: "warning",
+            codeReference: "IBC",
+            codeYear: "2021",
+            location: "l",
+            suggestedFix: "f",
+          },
+        ],
+        summary: {
+          totalIssues: 1,
+          critical: 0,
+          warnings: 1,
+          advisory: 0,
+          overallScore: 92,
+        },
+      },
+      "ibc",
+    );
+    assert.equal(normalized.summary.totalIssues, 1);
+    assert.equal(normalized.summary.warnings, 1);
+    assert.equal(normalized.summary.overallScore, 92);
   });
 });

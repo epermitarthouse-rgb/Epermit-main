@@ -83,8 +83,29 @@ describe("analyze-drawing.service", () => {
     );
     assert.equal(result.ibc.summary.totalIssues, 1);
     assert.equal(result.local.summary.totalIssues, 0);
+    assert.equal(result.local.summary.overallScore, 100); // empty issues ignore echoed 95
     assert.equal(result.ibc.jurisdictionNotes, "ibc note");
     assert.equal(result.local.jurisdictionNotes, "local note");
+  });
+
+  it("formatSingleResult forces overallScore 100 when issues are empty", () => {
+    const result = formatSingleResult(
+      {
+        issues: [],
+        overallScore: 85,
+        jurisdictionNotes: "clean",
+      },
+      "2021",
+    );
+    assert.equal(result.summary.totalIssues, 0);
+    assert.equal(result.summary.overallScore, 100);
+  });
+
+  it("buildPrompts exemplar score is 100 not 85", () => {
+    const ibc = buildPrompts({ codeType: "ibc", codeYear: "2021" });
+    assert.match(ibc.systemPrompt, /"overallScore": 100/);
+    assert.doesNotMatch(ibc.systemPrompt, /"overallScore": 85/);
+    assert.match(ibc.systemPrompt, /overallScore MUST be 100/i);
   });
 
   it("returns success for normal content response", async () => {
