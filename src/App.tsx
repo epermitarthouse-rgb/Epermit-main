@@ -68,9 +68,7 @@ import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder"
 import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
 import UtilityCoveragePlaceholder from "./pages/placeholders/UtilityCoveragePlaceholder";
 import MessagesPlaceholder from "./pages/placeholders/MessagesPlaceholder";
-import AdminAuthorizationsPlaceholder, {
-  AdminPreviewPlaceholder,
-} from "./pages/placeholders/AdminPreviewPlaceholders";
+import AdminAuthorizationsPlaceholder from "./pages/placeholders/AdminPreviewPlaceholders";
 
 const queryClient = new QueryClient();
 

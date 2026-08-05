@@ -1,9 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveReportsFromEmail } from "../_shared/scheduledReportNextSend.ts";
+import { ensureTestSubject } from "../_shared/scheduledReportDelivery.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const REPORTS_FROM_EMAIL = Deno.env.get("REPORTS_FROM_EMAIL");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,10 +128,13 @@ const handler = async (req: Request): Promise<Response> => {
       pending: allItems.filter((i: any) => i.status === "pending").length || 5,
     };
 
-    // Build email
+    // Build email — Preview/Send Test stay out of production analytics (no delivery log insert).
     const projectName = body.project_filter !== "all" ? body.project_filter : "All Projects";
-    const emailSubject = body.email_subject || `[TEST] ${body.frequency === "weekly" ? "Weekly" : "Monthly"} Inspection Report - ${projectName}`;
-    const emailIntro = body.email_intro || `Here is your ${body.frequency} inspection checklists report.`;
+    const baseSubject = body.email_subject ||
+      `${body.frequency === "weekly" ? "Weekly" : "Monthly"} Inspection Report - ${projectName}`;
+    const emailSubject = ensureTestSubject(baseSubject);
+    const emailIntro = body.email_intro ||
+      `[TEST EMAIL] Here is your ${body.frequency} inspection checklists report.`;
 
     // Get first email from comma-separated list
     const testEmail = body.recipient_email.split(',')[0].trim();
@@ -145,7 +151,18 @@ const handler = async (req: Request): Promise<Response> => {
       branding
     );
 
-    // Send test email
+    const fromAddress = resolveReportsFromEmail(REPORTS_FROM_EMAIL, "Insight|DesignCheck");
+    if (fromAddress.includes("localhost.invalid")) {
+      return new Response(
+        JSON.stringify({
+          error: "REPORTS_FROM_EMAIL not configured",
+          hint: "Set REPORTS_FROM_EMAIL to a verified Resend sender before sending tests",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
+    // Send test email (explicitly labeled; does not write scheduled_report_delivery_logs)
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -153,10 +170,11 @@ const handler = async (req: Request): Promise<Response> => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Insight|DesignCheck <onboarding@resend.dev>",
+        from: fromAddress,
         to: [testEmail],
         subject: emailSubject,
         html: emailHtml,
+        tags: [{ name: "type", value: "scheduled_report_test" }],
       }),
     });
 

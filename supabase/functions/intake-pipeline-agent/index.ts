@@ -8,7 +8,15 @@ const corsHeaders = {
 
 const PARSER_TIMEOUT_MS = 60_000;
 const CLASSIFIER_TIMEOUT_MS = 60_000;
-const ENRICHMENT_TIMEOUT_MS = 120_000;
+/** Per-batch enrichment timeout (one OpenAI round of ≤20 comments). */
+const ENRICHMENT_TIMEOUT_MS = 90_000;
+/** Max context-reference-engine invocations per pipeline call (each processes one batch). */
+const ENRICHMENT_MAX_PIPELINE_ROUNDS = 50;
+/**
+ * Soft wall-clock budget for enrichment inside one intake-pipeline invoke.
+ * Leaves headroom under typical edge limits; UI/pipeline can continue.
+ */
+const ENRICHMENT_INVOKE_BUDGET_MS = 100_000;
 const ROUTER_TIMEOUT_MS = 60_000;
 
 type StageStatus = "pending" | "running" | "completed" | "completed_with_warnings" | "failed" | "skipped";
@@ -255,6 +263,18 @@ serve(async (req) => {
           stages = defaultStages();
         } else if (existingByKey.stages && typeof existingByKey.stages === "object") {
           stages = { ...defaultStages(), ...(existingByKey.stages as PipelineStages) };
+          // Targeted retries must re-run the requested stage even if a prior run
+          // marked it completed after a partial batch (historical 20-row ceiling).
+          if (enrichmentOnly) {
+            stages.enrichment = { status: "pending" };
+          }
+          if (routingOnly) {
+            stages.auto_routing = { status: "pending" };
+          }
+        } else if (enrichmentOnly) {
+          stages.enrichment = { status: "pending" };
+        } else if (routingOnly) {
+          stages.auto_routing = { status: "pending" };
         }
       }
     }
@@ -588,55 +608,235 @@ serve(async (req) => {
       );
     }
 
-    let enrichmentResult: { enriched_count?: number; error?: string; status?: StageStatus; halted_reason?: string } =
+    let enrichmentResult: {
+      enriched_count?: number;
+      error?: string;
+      status?: StageStatus;
+      halted_reason?: string;
+      eligible_count?: number;
+      fetched_count?: number;
+      remaining?: number;
+      rounds?: number;
+    } =
       stages.enrichment?.status === "completed"
         ? { enriched_count: stages.enrichment.enriched_count, status: "completed" }
         : {};
 
-    const runEnrichment = (enrichmentOnly ||
-      (!routingOnly && shouldRunStage("enrichment", stages, effectiveResumeFrom))) &&
-      stages.enrichment?.status !== "completed";
+    const runEnrichment = (
+      enrichmentOnly ||
+      (!routingOnly && shouldRunStage("enrichment", stages, effectiveResumeFrom))
+    ) && (
+      (forceRetry && (enrichmentOnly || resumeFromStage === "enrichment")) ||
+      stages.enrichment?.status !== "completed"
+    );
 
     if (runEnrichment) {
       stages.enrichment = { status: "running" };
       await persistRun({ current_stage: "enrichment", stages });
 
-      console.log("[intake-pipeline] context-reference-engine start");
+      console.log("[intake-pipeline] context-reference-engine start (batched)");
+      let totalEnriched = 0;
+      let totalFetched = 0;
+      let pipelineRounds = 0;
+      let eligibleCount: number | undefined;
+      let remaining: number | undefined;
+      let halted: string | undefined;
+      let needsContinue = false;
+      const enrichStartedAt = Date.now();
+
       try {
-        const { ok, json } = await invokeJson(
-          `${baseUrl}/context-reference-engine`,
-          headers,
-          { project_id: projectId, projectId },
-          enrichmentTimeout,
-        );
-        if (!ok) {
-          const errMsg = (json.message ?? json.error ?? "Enrichment failed") as string;
-          enrichmentResult = { error: errMsg, status: "failed" };
-          stages.enrichment = { status: "failed", error: errMsg };
-          await persistRun({
-            status: "failed",
-            current_stage: "enrichment",
-            stages,
-            error_message: errMsg,
-          });
-        } else {
-          const enriched = (json.enriched_count as number) ?? 0;
-          const halted = json.halted_reason as string | undefined;
+        // One engine invoke = one BATCH_SIZE (20) OpenAI round. Continue until drained
+        // so large projects (e.g. 62 comments) are fully enriched without a single
+        // long request that hits the edge/parent timeout after ~20 rows.
+        while (pipelineRounds < ENRICHMENT_MAX_PIPELINE_ROUNDS) {
+          if (
+            pipelineRounds > 0 &&
+            Date.now() - enrichStartedAt > ENRICHMENT_INVOKE_BUDGET_MS
+          ) {
+            needsContinue = true;
+            halted =
+              `Enrichment pause after ${pipelineRounds} batch(es) to avoid timeout; ` +
+              `${remaining ?? "more"} comments still need enrichment`;
+            break;
+          }
+
+          pipelineRounds++;
+          const { ok, json } = await invokeJson(
+            `${baseUrl}/context-reference-engine`,
+            headers,
+            { project_id: projectId, projectId, max_rounds: 1 },
+            enrichmentTimeout,
+          );
+
+          if (!ok) {
+            const errMsg = (json.message ?? json.error ?? "Enrichment failed") as string;
+            enrichmentResult = {
+              error: errMsg,
+              status: "failed",
+              enriched_count: totalEnriched,
+              eligible_count: eligibleCount,
+              fetched_count: totalFetched,
+              remaining,
+              rounds: pipelineRounds,
+            };
+            stages.enrichment = { status: "failed", error: errMsg, enriched_count: totalEnriched };
+            await persistRun({
+              status: "failed",
+              current_stage: "enrichment",
+              stages,
+              error_message: errMsg,
+            });
+            halted = errMsg;
+            break;
+          }
+
+          const batchEnriched = (json.enriched_count as number) ?? 0;
+          const batchFetched = (json.fetched_count as number) ?? 0;
+          totalEnriched += batchEnriched;
+          totalFetched += batchFetched;
+          if (typeof json.eligible_count === "number" && eligibleCount == null) {
+            eligibleCount = json.eligible_count;
+          }
+          if (typeof json.remaining === "number") {
+            remaining = json.remaining;
+          }
+          const batchHalted = (json.halted_reason ?? json.warning ?? json.error) as string | undefined;
+
+          console.log(
+            JSON.stringify({
+              event: "intake-pipeline.enrichment.batch",
+              project_id: projectId,
+              pipeline_round: pipelineRounds,
+              batch_enriched: batchEnriched,
+              batch_fetched: batchFetched,
+              total_enriched: totalEnriched,
+              remaining,
+              has_more: json.has_more === true,
+              halted_reason: batchHalted ?? null,
+            }),
+          );
+
+          if (batchHalted && json.has_more !== true && batchEnriched === 0 && totalEnriched === 0) {
+            enrichmentResult = {
+              error: batchHalted,
+              status: "failed",
+              enriched_count: 0,
+              eligible_count: eligibleCount,
+              fetched_count: totalFetched,
+              remaining,
+              rounds: pipelineRounds,
+              halted_reason: batchHalted,
+            };
+            stages.enrichment = { status: "failed", error: batchHalted };
+            await persistRun({
+              status: "failed",
+              current_stage: "enrichment",
+              stages,
+              error_message: batchHalted,
+            });
+            halted = batchHalted;
+            break;
+          }
+
+          if (json.has_more !== true) {
+            halted = batchHalted;
+            enrichmentResult = {
+              enriched_count: totalEnriched,
+              status: halted ? "completed_with_warnings" : "completed",
+              halted_reason: halted,
+              eligible_count: eligibleCount,
+              fetched_count: totalFetched,
+              remaining: remaining ?? 0,
+              rounds: pipelineRounds,
+            };
+            stages.enrichment = {
+              status: halted ? "completed_with_warnings" : "completed",
+              enriched_count: totalEnriched,
+            };
+            break;
+          }
+
+          if (batchEnriched === 0) {
+            halted = batchHalted ?? "Enrichment made no progress; stopping batch continuation";
+            enrichmentResult = {
+              enriched_count: totalEnriched,
+              status: totalEnriched > 0 ? "completed_with_warnings" : "failed",
+              error: totalEnriched > 0 ? undefined : halted,
+              halted_reason: halted,
+              eligible_count: eligibleCount,
+              fetched_count: totalFetched,
+              remaining,
+              rounds: pipelineRounds,
+            };
+            stages.enrichment = {
+              status: enrichmentResult.status as StageStatus,
+              enriched_count: totalEnriched,
+              error: enrichmentResult.error,
+            };
+            if (totalEnriched === 0) {
+              await persistRun({
+                status: "failed",
+                current_stage: "enrichment",
+                stages,
+                error_message: halted,
+              });
+            }
+            break;
+          }
+        }
+
+        if (needsContinue && !enrichmentResult.status && !enrichmentResult.error) {
           enrichmentResult = {
-            enriched_count: enriched,
-            status: halted ? "completed_with_warnings" : "completed",
+            enriched_count: totalEnriched,
+            status: "completed_with_warnings",
             halted_reason: halted,
+            eligible_count: eligibleCount,
+            fetched_count: totalFetched,
+            remaining,
+            rounds: pipelineRounds,
+          };
+          // Keep enrichment pending so a follow-up force_retry continues remaining rows.
+          stages.enrichment = {
+            status: "pending",
+            enriched_count: totalEnriched,
+          };
+        } else if (!enrichmentResult.status && !enrichmentResult.error) {
+          // Hit max pipeline rounds with work still remaining.
+          halted =
+            `Reached max enrichment rounds (${ENRICHMENT_MAX_PIPELINE_ROUNDS}); ` +
+            `${remaining ?? "some"} comments may still need enrichment — run enrichment again`;
+          enrichmentResult = {
+            enriched_count: totalEnriched,
+            status: "completed_with_warnings",
+            halted_reason: halted,
+            eligible_count: eligibleCount,
+            fetched_count: totalFetched,
+            remaining,
+            rounds: pipelineRounds,
           };
           stages.enrichment = {
-            status: halted ? "completed_with_warnings" : "completed",
-            enriched_count: enriched,
+            status: "pending",
+            enriched_count: totalEnriched,
           };
+          needsContinue = true;
+        }
+
+        if (needsContinue) {
+          (enrichmentResult as { needs_continue?: boolean }).needs_continue = true;
         }
       } catch (err) {
         const isTimeout = err instanceof Error && err.name === "AbortError";
         const errMsg = isTimeout ? "timeout" : (err instanceof Error ? err.message : "Unknown error");
-        enrichmentResult = { error: errMsg, status: "failed" };
-        stages.enrichment = { status: "failed", error: errMsg };
+        enrichmentResult = {
+          error: errMsg,
+          status: "failed",
+          enriched_count: totalEnriched,
+          eligible_count: eligibleCount,
+          fetched_count: totalFetched,
+          remaining,
+          rounds: pipelineRounds,
+        };
+        stages.enrichment = { status: "failed", error: errMsg, enriched_count: totalEnriched };
         await persistRun({
           status: "failed",
           current_stage: "enrichment",
@@ -657,6 +857,27 @@ serve(async (req) => {
           auto_routing: { status: "pending" },
           stages,
           next_action: "retry_enrichment",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Partial enrichment drain (timeout budget) — do not advance to routing yet.
+    if (
+      (enrichmentResult as { needs_continue?: boolean }).needs_continue === true &&
+      body.run_enrichment_only !== true
+    ) {
+      await persistRun({ status: "running", current_stage: "enrichment", stages });
+      return new Response(
+        JSON.stringify({
+          project_id: projectId,
+          pipeline_run_id: runId,
+          comment_parser: commentParserResult,
+          discipline_classifier: disciplineClassifierResult,
+          enrichment: enrichmentResult,
+          auto_routing: stages.auto_routing ?? { status: "pending" },
+          stages,
+          next_action: "continue_enrichment",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -686,11 +907,13 @@ serve(async (req) => {
     }
 
     if (body.run_enrichment_only === true) {
+      const needsContinue =
+        (enrichmentResult as { needs_continue?: boolean }).needs_continue === true;
       await persistRun({
-        status: "completed",
-        current_stage: null,
+        status: needsContinue ? "running" : "completed",
+        current_stage: needsContinue ? "enrichment" : null,
         stages,
-        completed_at: new Date().toISOString(),
+        completed_at: needsContinue ? null : new Date().toISOString(),
       });
       return new Response(
         JSON.stringify({
@@ -698,7 +921,7 @@ serve(async (req) => {
           pipeline_run_id: runId,
           enrichment: enrichmentResult,
           stages,
-          next_action: "complete",
+          next_action: needsContinue ? "continue_enrichment" : "complete",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
