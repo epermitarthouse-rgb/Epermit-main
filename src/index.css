@@ -70,6 +70,17 @@
 
     --elevated: 42 42% 99%;
 
+    /* Lovable homepage / shell tokens (aliases onto current theme) */
+    --surface: 42 38% 99%;
+    --surface-muted: 38 16% 93%;
+    --pilot-cyan: 188 70% 42%;
+    --pilot-teal: 172 58% 36%;
+    --pilot-amber: 36 90% 48%;
+    --pilot-rose: 0 68% 46%;
+    --pilot-line: 38 18% 86%;
+    --pilot-ink: 219 76% 11%;
+    --deep-navy: 219 55% 6%;
+
     --navy-deep: 219 55% 6%;
     --navy-elev: 219 42% 12%;
     --navy-line: 219 28% 28%;
@@ -198,6 +209,16 @@
     --ring: 172 60% 50%;
 
     --elevated: 219 40% 12%;
+
+    --surface: 219 42% 10%;
+    --surface-muted: 219 32% 14%;
+    --pilot-cyan: 188 62% 52%;
+    --pilot-teal: 172 55% 48%;
+    --pilot-amber: 36 90% 52%;
+    --pilot-rose: 0 68% 56%;
+    --pilot-line: 219 28% 22%;
+    --pilot-ink: 40 35% 97%;
+    --deep-navy: 219 55% 6%;
 
     --navy-deep: 219 58% 5%;
     --navy-elev: 219 44% 10%;
@@ -434,6 +455,50 @@
   .container-page {
     @apply w-full max-w-full overflow-x-hidden;
     @apply px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10;
+  }
+
+  /* Lovable homepage utilities (Home.tsx inside app shell) */
+  .pilot-kicker {
+    font-family: var(--font-mono-data), ui-monospace, monospace;
+    @apply text-xs uppercase tracking-wider text-muted-foreground;
+  }
+
+  .pilot-card {
+    @apply rounded-lg border border-border bg-card text-card-foreground;
+    background-color: hsl(var(--surface));
+  }
+
+  .pilot-card-raised {
+    @apply rounded-lg border border-border text-card-foreground shadow-md;
+    background-color: hsl(var(--surface));
+    box-shadow: 0 8px 24px -8px hsl(215 40% 8% / 0.18);
+  }
+
+  .dark .pilot-card-raised {
+    box-shadow: 0 10px 28px -10px hsl(0 0% 0% / 0.45);
+  }
+
+  .pilot-button-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-tight text-xs font-bold uppercase tracking-wider;
+    @apply bg-primary text-primary-foreground transition-colors hover:opacity-90;
+  }
+
+  .pilot-button-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2 font-tight text-xs font-bold uppercase tracking-wider;
+    @apply bg-transparent text-foreground transition-colors hover:bg-muted;
+    background-color: hsl(var(--surface));
+  }
+
+  .pilot-input {
+    @apply h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground;
+    @apply placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .signal-grid {
+    background-image:
+      linear-gradient(hsl(var(--pilot-line) / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--pilot-line) / 0.35) 1px, transparent 1px);
+    background-size: 32px 32px;
   }
 
   /* ~4% white grid on navy-deep (Lovable marketing texture) */

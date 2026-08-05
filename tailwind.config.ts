@@ -72,6 +72,14 @@ export default {
           elev: "hsl(var(--navy-elev))",
           line: "hsl(var(--navy-line))",
         },
+        pilot: {
+          cyan: "hsl(var(--pilot-cyan))",
+          teal: "hsl(var(--pilot-teal))",
+          amber: "hsl(var(--pilot-amber))",
+          rose: "hsl(var(--pilot-rose))",
+          line: "hsl(var(--pilot-line))",
+          ink: "hsl(var(--pilot-ink))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -196,6 +204,7 @@ export default {
         tight: ["Inter Tight", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
         "mono-data": ['"JetBrains Mono"', "ui-monospace", "monospace"],
+        data: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
     },
   },

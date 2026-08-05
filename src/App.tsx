@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LeadCaptureProvider } from "@/contexts/LeadCaptureContext";
 import { LeadCaptureModal } from "@/components/lead-capture/LeadCaptureModal";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -10,11 +10,10 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { ProtectedLayoutRoute } from "@/components/auth/ProtectedRoute";
-import { PublicOnlyRoute } from "@/components/auth/PublicOnlyRoute";
+import { HomeRoute } from "@/components/auth/HomeRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { MarketingLayout } from "@/components/layout/MarketingLayout";
 
-import LandingPage from "./pages/LandingPage";
 import Demos from "./pages/Demos";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
@@ -73,15 +72,10 @@ const App = () => (
             <LeadCaptureModal />
             <BrowserRouter>
               <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <PublicOnlyRoute>
-                      <LandingPage />
-                    </PublicOnlyRoute>
-                  }
-                />
+                <Route path="/" element={<HomeRoute />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Navigate to="/auth" replace />} />
+                <Route path="/signup" element={<Navigate to="/auth" state={{ authView: "signup" }} replace />} />
                 <Route
                   path="/demos"
                   element={
