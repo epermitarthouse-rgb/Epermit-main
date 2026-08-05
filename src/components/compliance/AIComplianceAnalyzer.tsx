@@ -80,6 +80,11 @@ import {
   mergeLoadedExistingAnalyses,
   resolveComplianceResultsEmptyKind,
 } from "@/lib/complianceAnalysisHydrate";
+import {
+  buildAggregatedComplianceExport,
+  buildComplianceExportJsonReport,
+  complianceIssueResponseKey,
+} from "@/lib/complianceAnalysisExport";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -270,8 +275,6 @@ export function AIComplianceAnalyzer() {
     return loadedExistingResults[0] ?? null;
   }, [activeResultFileId, loadedExistingResults, resultsDocumentFilter]);
 
-  const ibcResult = activeResultFile?.ibcResult ?? activeLoadedExisting?.ibcResult ?? null;
-  const localResult = activeResultFile?.localResult ?? activeLoadedExisting?.localResult ?? null;
   const [responses, setResponses] = useState<Record<string, IssueResponse>>({});
   const [selectedIssue, setSelectedIssue] = useState<ComplianceIssue | null>(null);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
@@ -1579,58 +1582,100 @@ export function AIComplianceAnalyzer() {
     );
   };
 
-  const currentResult = (activeResultTab === "local" ? localResult : ibcResult) ?? localResult ?? ibcResult;
+  /** Export uses the same filtered set as the results UI / KPI strip. */
+  const exportAggregated = useMemo(
+    () => buildAggregatedComplianceExport(displayedResultGroups),
+    [displayedResultGroups],
+  );
+  const canExportReport = exportAggregated.filesAnalyzed > 0 || exportAggregated.files.some((f) => f.failed);
+
+  const selectedProjectName = useMemo(() => {
+    if (!selectedProjectId) return null;
+    return projects.find((p) => p.id === selectedProjectId)?.name ?? null;
+  }, [projects, selectedProjectId]);
 
   const exportReportJSON = () => {
-    const result = currentResult;
-    if (!result) return;
+    if (!canExportReport) return;
 
-    const report = {
-      generatedAt: new Date().toISOString(),
+    const report = buildComplianceExportJsonReport({
+      aggregated: exportAggregated,
       jurisdiction,
       projectType,
       codeYear,
-      codeType: result.codeType,
-      summary: result.summary,
-      issues: result.issues.map((issue) => ({
-        ...issue,
-        response: responses[issue.id] || null,
-      })),
-      jurisdictionNotes: result.jurisdictionNotes,
-    };
+      responses,
+    });
 
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `compliance-report-${result.codeType}-${new Date().toISOString().split("T")[0]}.json`;
+    const scope =
+      resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
+        ? `all-${exportAggregated.filesAnalyzed}files`
+        : (exportAggregated.files[0]?.codeType ?? "combined");
+    a.download = `compliance-report-${scope}-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("JSON report exported");
+    toast.success(
+      resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
+        ? `JSON report exported (${exportAggregated.filesAnalyzed} files)`
+        : "JSON report exported",
+    );
   };
 
   const exportReportPDF = () => {
-    const result = currentResult;
-    if (!result) {
+    if (!canExportReport) {
       toast.error("No analysis results to export. Please run an analysis first.");
       return;
     }
 
     try {
+      const singleFileName =
+        exportAggregated.files.length === 1
+          ? exportAggregated.files[0].fileName.replace(/\.[^/.]+$/, "")
+          : null;
+      // PDF response lookup uses bare issue ids; remap file-scoped UI keys.
+      const pdfResponses: Record<string, IssueResponse> = { ...responses };
+      for (const file of exportAggregated.files) {
+        for (const issue of file.issues) {
+          const scoped = responses[complianceIssueResponseKey(file.fileId, issue.id)];
+          if (scoped && !pdfResponses[issue.id]) {
+            pdfResponses[issue.id] = scoped;
+          }
+        }
+      }
+
       exportComplianceReportPDF({
         jurisdiction,
         projectType,
         codeYear,
-        summary: result.summary,
-        issues: result.issues,
-        responses,
-        jurisdictionNotes: result.jurisdictionNotes ?? "",
+        summary: exportAggregated.summary,
+        issues: exportAggregated.issues,
+        responses: pdfResponses,
+        jurisdictionNotes: exportAggregated.jurisdictionNotes,
         projectName:
+          selectedProjectName ||
+          singleFileName ||
           activeResultFile?.file.name?.replace(/\.[^/.]+$/, "") ||
           activeLoadedExisting?.fileName?.replace(/\.[^/.]+$/, "") ||
           "Compliance Analysis",
+        filesAnalyzed: exportAggregated.filesAnalyzed,
+        fileSections: exportAggregated.files.map((file) => ({
+          fileId: file.fileId,
+          fileName: file.fileName,
+          summary: file.summary,
+          issues: file.issues,
+          failed: file.failed,
+          error: file.error,
+        })),
+        responseKeyForIssue: (issue, fileId) =>
+          fileId ? complianceIssueResponseKey(fileId, issue.id) : issue.id,
       });
-      toast.success("PDF report exported");
+      toast.success(
+        resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
+          ? `PDF report exported (${exportAggregated.filesAnalyzed} files)`
+          : "PDF report exported",
+      );
     } catch (err) {
       console.error("PDF export error:", err);
       toast.error("Failed to export PDF. Please try again.");
@@ -2406,7 +2451,7 @@ export function AIComplianceAnalyzer() {
                       variant="outlineGold"
                       className="w-full justify-start"
                       onClick={exportReportPDF}
-                      disabled={!currentResult}
+                      disabled={!canExportReport}
                     >
                       <FileDown className="h-4 w-4 mr-2" />
                       Export PDF
@@ -2415,7 +2460,7 @@ export function AIComplianceAnalyzer() {
                       variant="ghost"
                       className="w-full justify-start"
                       onClick={exportReportJSON}
-                      disabled={!currentResult}
+                      disabled={!canExportReport}
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Export JSON

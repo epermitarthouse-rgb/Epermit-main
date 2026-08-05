@@ -27,6 +27,15 @@ interface IssueResponse {
   modifiedResponse?: string;
 }
 
+interface ExportFileSection {
+  fileId: string;
+  fileName: string;
+  summary?: AnalysisSummary;
+  issues?: ComplianceIssue[];
+  failed?: boolean;
+  error?: string;
+}
+
 interface ExportOptions {
   jurisdiction: string;
   projectType: string;
@@ -36,6 +45,15 @@ interface ExportOptions {
   responses: Record<string, IssueResponse>;
   jurisdictionNotes: string;
   projectName?: string;
+  /** When set, executive summary shows multi-file KPI alignment. */
+  filesAnalyzed?: number;
+  /** Optional per-file sections for Detailed Findings (All export). */
+  fileSections?: ExportFileSection[];
+  /**
+   * Resolve issue responses. Prefer (fileId, issueId) → `fileId:issueId`
+   * for multi-file exports; falls back to bare issue.id.
+   */
+  responseKeyForIssue?: (issue: ComplianceIssue, fileId?: string) => string;
 }
 
 const JURISDICTION_LABELS: Record<string, string> = {
@@ -81,12 +99,27 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     responses,
     jurisdictionNotes,
     projectName,
+    filesAnalyzed,
+    fileSections,
+    responseKeyForIssue,
   } = options;
 
   // Validate required data
   if (!summary || !issues) {
     throw new Error('Invalid export data: summary and issues are required');
   }
+
+  const resolveResponse = (issue: ComplianceIssue, fileId?: string): IssueResponse | undefined => {
+    if (responseKeyForIssue) {
+      const keyed = responses[responseKeyForIssue(issue, fileId)];
+      if (keyed) return keyed;
+    }
+    if (fileId) {
+      const scoped = responses[`${fileId}:${issue.id}`];
+      if (scoped) return scoped;
+    }
+    return responses[issue.id];
+  };
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -192,8 +225,12 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   
-  // Total
-  doc.text(`Total Issues Found: ${safeText(summary.totalIssues)}`, statsX, y + 18);
+  // Total + multi-file count when exporting All displayed analyses
+  const filesLabel =
+    typeof filesAnalyzed === 'number' && filesAnalyzed > 0
+      ? ` · ${filesAnalyzed} file${filesAnalyzed === 1 ? '' : 's'} analyzed`
+      : '';
+  doc.text(`Total Issues Found: ${safeText(summary.totalIssues)}${filesLabel}`, statsX, y + 18);
   
   // Critical
   doc.setFillColor(220, 38, 38);
@@ -286,94 +323,159 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   y += 10;
   drawLine(y);
   y += 15;
-  
-  // Group issues by category
-  const issuesByCategory = issues.reduce((acc, issue) => {
-    const cat = safeText(issue.category) || 'Uncategorized';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(issue);
-    return acc;
-  }, {} as Record<string, ComplianceIssue[]>);
-  
-  Object.entries(issuesByCategory).forEach(([category, categoryIssues]) => {
-    checkPageBreak(40);
-    
-    // Category header
-    doc.setFillColor(241, 245, 249); // slate-100
-    doc.roundedRect(margin, y, contentWidth, 12, 2, 2, 'F');
-    doc.setTextColor(71, 85, 105); // slate-600
-    doc.setFontSize(11);
+
+  const renderIssueCard = (issue: ComplianceIssue, fileId?: string) => {
+    checkPageBreak(60);
+
+    const response = resolveResponse(issue, fileId);
+    const severity = safeText(issue.severity) || 'advisory';
+    const severityColor = SEVERITY_COLORS[severity as keyof typeof SEVERITY_COLORS] ?? SEVERITY_COLORS.advisory;
+
+    // Issue card
+    doc.setDrawColor(severityColor[0], severityColor[1], severityColor[2]);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, y, contentWidth, 50, 3, 3, 'S');
+
+    // Severity badge
+    doc.setFillColor(severityColor[0], severityColor[1], severityColor[2]);
+    doc.roundedRect(margin + 5, y + 5, 50, 10, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${safeText(category)} (${categoryIssues.length} issue${categoryIssues.length !== 1 ? 's' : ''})`, margin + 5, y + 8);
-    y += 18;
-    
-    categoryIssues.forEach((issue) => {
-      checkPageBreak(60);
-      
-      const response = responses[issue.id];
-      const severity = safeText(issue.severity) || 'advisory';
-      const severityColor = SEVERITY_COLORS[severity as keyof typeof SEVERITY_COLORS] ?? SEVERITY_COLORS.advisory;
-      
-      // Issue card
-      doc.setDrawColor(severityColor[0], severityColor[1], severityColor[2]);
-      doc.setLineWidth(0.5);
-      doc.roundedRect(margin, y, contentWidth, 50, 3, 3, 'S');
-      
-      // Severity badge
-      doc.setFillColor(severityColor[0], severityColor[1], severityColor[2]);
-      doc.roundedRect(margin + 5, y + 5, 50, 10, 2, 2, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.text(safeText(issue.severity).toUpperCase(), margin + 30, y + 11, { align: 'center' });
-      
-      // Issue title
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(10);
-      doc.text(safeText(issue.title), margin + 60, y + 11);
-      
-      // Code reference
-      doc.setFillColor(219, 234, 254); // blue-100
-      doc.roundedRect(pageWidth - margin - 55, y + 3, 50, 12, 2, 2, 'F');
-      doc.setTextColor(30, 64, 175); // blue-800
+    doc.text(safeText(issue.severity).toUpperCase(), margin + 30, y + 11, { align: 'center' });
+
+    // Issue title
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(10);
+    doc.text(safeText(issue.title), margin + 60, y + 11);
+
+    // Code reference
+    doc.setFillColor(219, 234, 254); // blue-100
+    doc.roundedRect(pageWidth - margin - 55, y + 3, 50, 12, 2, 2, 'F');
+    doc.setTextColor(30, 64, 175); // blue-800
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(safeText(issue.codeReference), pageWidth - margin - 30, y + 10, { align: 'center' });
+
+    // Description
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    const descLines = doc.splitTextToSize(safeText(issue.description), contentWidth - 15);
+    doc.text(descLines.slice(0, 2).map(safeText), margin + 5, y + 24);
+
+    // Location
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(8);
+    doc.text(`Location: ${safeText(issue.location)}`, margin + 5, y + 38);
+
+    // Resolution status
+    if (response) {
+      const statusColor = response.status === 'accepted'
+        ? [16, 185, 129]
+        : response.status === 'modified'
+          ? [37, 99, 235]
+          : [156, 163, 175];
+      doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+      doc.circle(pageWidth - margin - 10, y + 44, 4, 'F');
+      doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
       doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
-      doc.text(safeText(issue.codeReference), pageWidth - margin - 30, y + 10, { align: 'center' });
-      
-      // Description
-      doc.setTextColor(71, 85, 105);
-      doc.setFontSize(9);
-      const descLines = doc.splitTextToSize(safeText(issue.description), contentWidth - 15);
-      doc.text(descLines.slice(0, 2).map(safeText), margin + 5, y + 24);
-      
-      // Location
-      doc.setTextColor(100, 116, 139);
-      doc.setFontSize(8);
-      doc.text(`Location: ${safeText(issue.location)}`, margin + 5, y + 38);
-      
-      // Resolution status
-      if (response) {
-        const statusColor = response.status === 'accepted' 
-          ? [16, 185, 129] 
-          : response.status === 'modified'
-            ? [37, 99, 235]
-            : [156, 163, 175];
-        doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-        doc.circle(pageWidth - margin - 10, y + 44, 4, 'F');
-        doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
-        doc.setFontSize(7);
-        doc.text(
-          safeText(response.status === 'accepted' ? 'RESOLVED' : response.status === 'modified' ? 'MODIFIED' : 'N/A'),
-          pageWidth - margin - 18,
-          y + 46
-        );
-      }
-      
-      y += 55;
+      doc.text(
+        safeText(response.status === 'accepted' ? 'RESOLVED' : response.status === 'modified' ? 'MODIFIED' : 'N/A'),
+        pageWidth - margin - 18,
+        y + 46
+      );
+    }
+
+    y += 55;
+  };
+
+  const renderIssuesByCategory = (sectionIssues: ComplianceIssue[], fileId?: string) => {
+    const issuesByCategory = sectionIssues.reduce((acc, issue) => {
+      const cat = safeText(issue.category) || 'Uncategorized';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(issue);
+      return acc;
+    }, {} as Record<string, ComplianceIssue[]>);
+
+    Object.entries(issuesByCategory).forEach(([category, categoryIssues]) => {
+      checkPageBreak(40);
+
+      // Category header
+      doc.setFillColor(241, 245, 249); // slate-100
+      doc.roundedRect(margin, y, contentWidth, 12, 2, 2, 'F');
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${safeText(category)} (${categoryIssues.length} issue${categoryIssues.length !== 1 ? 's' : ''})`, margin + 5, y + 8);
+      y += 18;
+
+      categoryIssues.forEach((issue) => renderIssueCard(issue, fileId));
+      y += 5;
     });
-    
-    y += 5;
-  });
+  };
+
+  const sections = fileSections ?? [];
+
+  if (sections.length > 1) {
+    sections.forEach((section, index) => {
+      checkPageBreak(36);
+      if (index > 0) {
+        y += 4;
+      }
+
+      doc.setFillColor(15, 23, 42);
+      doc.roundedRect(margin, y, contentWidth, 16, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      const scoreLabel =
+        section.failed
+          ? 'FAILED'
+          : `${safeText(section.summary?.overallScore ?? 0)}% · ${safeText(section.summary?.totalIssues ?? section.issues?.length ?? 0)} issues`;
+      doc.text(
+        `${safeText(section.fileName)}  (${scoreLabel})`,
+        margin + 5,
+        y + 11,
+      );
+      y += 22;
+
+      if (section.failed) {
+        doc.setTextColor(220, 38, 38);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+          `Analysis failed${section.error ? `: ${safeText(section.error)}` : '.'}`,
+          margin + 2,
+          y,
+        );
+        y += 14;
+        return;
+      }
+
+      if (!section.issues || section.issues.length === 0) {
+        doc.setTextColor(100, 116, 139);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('No issues found for this file.', margin + 2, y);
+        y += 14;
+        return;
+      }
+
+      renderIssuesByCategory(section.issues, section.fileId);
+    });
+  } else {
+    // Single-file (or legacy) path: flat category grouping
+    const singleFileId = sections[0]?.fileId;
+    const singleIssues = sections[0]?.issues ?? issues;
+    if (singleIssues.length === 0) {
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(10);
+      doc.text('No issues found.', margin, y);
+      y += 14;
+    } else {
+      renderIssuesByCategory(singleIssues, singleFileId);
+    }
+  }
   
   // ==================== CODE CITATIONS ====================
   
