@@ -73,6 +73,13 @@ import {
   filterComplianceResultGroups,
   type ComplianceScoreFilter,
 } from "@/lib/complianceResultFilter";
+import {
+  complianceDocsHydrateKey,
+  complianceResultsEmptyMessage,
+  createGenerationGuard,
+  mergeLoadedExistingAnalyses,
+  resolveComplianceResultsEmptyKind,
+} from "@/lib/complianceAnalysisHydrate";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -286,23 +293,35 @@ export function AIComplianceAnalyzer() {
   const [documentsWithAnalysis, setDocumentsWithAnalysis] = useState<ProjectDocument[]>([]);
   const [loadingDocsWithAnalysis, setLoadingDocsWithAnalysis] = useState(false);
   const [analysisSavedAt, setAnalysisSavedAt] = useState<number>(0);
+  /** True when All/per-doc hydrate failed after analyzed docs were found. */
+  const [hydrateLoadFailed, setHydrateLoadFailed] = useState(false);
+  const docsFetchGuardRef = useRef(createGenerationGuard());
+  const hydrateGuardRef = useRef(createGenerationGuard());
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  selectedProjectIdRef.current = selectedProjectId;
 
   // Fetch documents that have compliance annotations when project changes or after save
   useEffect(() => {
     if (!selectedProjectId || !user) {
+      docsFetchGuardRef.current.invalidate();
       setDocumentsWithAnalysis([]);
+      setLoadingDocsWithAnalysis(false);
       return;
     }
+    const projectId = selectedProjectId;
+    const fetchGen = docsFetchGuardRef.current.next();
     const fetchDocsWithAnalysis = async () => {
       setLoadingDocsWithAnalysis(true);
       try {
         const { data: annotations, error } = await supabase
           .from("document_annotations")
           .select("document_id, data")
-          .eq("project_id", selectedProjectId)
+          .eq("project_id", projectId)
           .not("document_id", "is", null);
 
         if (error) throw error;
+        if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
+        if (selectedProjectIdRef.current !== projectId) return;
 
         const complianceDocIds = new Set<string>();
         for (const a of annotations ?? []) {
@@ -320,19 +339,26 @@ export function AIComplianceAnalyzer() {
         const { data: docs, error: docsError } = await supabase
           .from("project_documents")
           .select("*")
+          .eq("project_id", projectId)
           .in("id", docIds)
           .order("created_at", { ascending: false });
 
         if (docsError) throw docsError;
+        if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
+        if (selectedProjectIdRef.current !== projectId) return;
         setDocumentsWithAnalysis((docs as ProjectDocument[]) || []);
       } catch (err) {
         console.error("Error fetching documents with analysis:", err);
+        if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
+        if (selectedProjectIdRef.current !== projectId) return;
         setDocumentsWithAnalysis([]);
       } finally {
-        setLoadingDocsWithAnalysis(false);
+        if (docsFetchGuardRef.current.isCurrent(fetchGen)) {
+          setLoadingDocsWithAnalysis(false);
+        }
       }
     };
-    fetchDocsWithAnalysis();
+    void fetchDocsWithAnalysis();
   }, [selectedProjectId, user, analysisSavedAt]);
 
   const buildResultsFromAnnotations = useCallback(
@@ -433,29 +459,39 @@ export function AIComplianceAnalyzer() {
    * Hydrate prior analyses from DB into resultGroups.
    * - Omit `documentIds` (or pass every analyzed id) to load All for the project.
    * - Pass a single id to ensure that document is available for the per-file filter.
+   * Stale completions (after project switch / superseded request) are ignored.
    */
   const hydrateExistingAnalyses = useCallback(
     async (documentIds?: string[], opts?: { toastOnEmpty?: boolean }) => {
       if (!selectedProjectId || !user) return false;
+      const projectId = selectedProjectId;
       const ids =
         documentIds && documentIds.length > 0
           ? documentIds
           : documentsWithAnalysis.map((d) => d.id);
       if (ids.length === 0) {
-        if (!documentIds) setLoadedExistingResults([]);
+        if (!documentIds) {
+          setLoadedExistingResults([]);
+          setHydrateLoadFailed(false);
+        }
         return false;
       }
 
+      const hydrateGen = hydrateGuardRef.current.next();
+      const isFullAllHydrate = !documentIds;
       setLoadingExisting(true);
+      setHydrateLoadFailed(false);
       try {
         const { data: annotations, error } = await supabase
           .from("document_annotations")
           .select("*")
-          .eq("project_id", selectedProjectId)
+          .eq("project_id", projectId)
           .in("document_id", ids)
           .order("layer_order", { ascending: true });
 
         if (error) throw error;
+        if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
+        if (selectedProjectIdRef.current !== projectId) return false;
 
         const byDoc = new Map<string, Array<{ id: string; data: unknown }>>();
         for (const ann of annotations || []) {
@@ -482,24 +518,32 @@ export function AIComplianceAnalyzer() {
           });
         }
 
+        if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
+        if (selectedProjectIdRef.current !== projectId) return false;
+
         if (loaded.length === 0) {
           if (opts?.toastOnEmpty) {
             toast.info("No previous analysis found for this document");
           }
-          if (!documentIds) setLoadedExistingResults([]);
+          if (isFullAllHydrate) {
+            setLoadedExistingResults([]);
+            setHydrateLoadFailed(true);
+          }
           return false;
         }
 
-        if (!documentIds) {
+        if (isFullAllHydrate) {
           // Full All hydrate — replace the hydrated set.
-          setLoadedExistingResults(loaded);
+          setLoadedExistingResults(
+            mergeLoadedExistingAnalyses([], loaded, "replace"),
+          );
         } else {
           // Merge specific docs into the existing hydrate set.
-          setLoadedExistingResults((prev) => {
-            const next = prev.filter((p) => !ids.includes(p.documentId));
-            return [...next, ...loaded];
-          });
+          setLoadedExistingResults((prev) =>
+            mergeLoadedExistingAnalyses(prev, loaded, "merge", ids),
+          );
         }
+        setHydrateLoadFailed(false);
 
         const primary = loaded[0];
         setActiveResultFileId(null);
@@ -507,10 +551,17 @@ export function AIComplianceAnalyzer() {
         return true;
       } catch (err) {
         console.error("Error loading existing analysis:", err);
+        if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
+        if (selectedProjectIdRef.current !== projectId) return false;
         toast.error("Failed to load previous analysis");
+        if (isFullAllHydrate) {
+          setHydrateLoadFailed(true);
+        }
         return false;
       } finally {
-        setLoadingExisting(false);
+        if (hydrateGuardRef.current.isCurrent(hydrateGen)) {
+          setLoadingExisting(false);
+        }
       }
     },
     [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations],
@@ -518,6 +569,7 @@ export function AIComplianceAnalyzer() {
 
   // When landing on / switching to All, hydrate every saved analysis for the project.
   // Keyed by document-id set so mid-batch re-renders do not wipe/refetch unnecessarily.
+  // Only mark the key after a successful hydrate so failures can retry.
   const lastAllHydrateKeyRef = useRef<string>("");
 
   // Reset analyzer results when Active Project / ?projectId= changes (header or DesignCheck link).
@@ -529,39 +581,48 @@ export function AIComplianceAnalyzer() {
     }
     if (previousProjectIdRef.current === selectedProjectId) return;
     previousProjectIdRef.current = selectedProjectId;
+    docsFetchGuardRef.current.invalidate();
+    hydrateGuardRef.current.invalidate();
     setShowNewProjectInput(false);
     setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
     setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
     setLoadedExistingResults([]);
     setDocumentsWithAnalysis([]);
+    setHydrateLoadFailed(false);
     lastAllHydrateKeyRef.current = "";
     setActiveResultFileId(null);
   }, [selectedProjectId]);
 
   useEffect(() => {
     if (!selectedProjectId || !user) {
+      hydrateGuardRef.current.invalidate();
       setLoadedExistingResults([]);
+      setHydrateLoadFailed(false);
       lastAllHydrateKeyRef.current = "";
       return;
     }
     if (resultsDocumentFilter !== COMPLIANCE_RESULTS_FILTER_ALL) return;
-    const hydrateKey = documentsWithAnalysis
-      .map((d) => d.id)
-      .sort()
-      .join(",");
+    // Wait for the analyzed-doc list before deciding All is empty (avoids mount race).
+    if (loadingDocsWithAnalysis) return;
+    const hydrateKey = complianceDocsHydrateKey(documentsWithAnalysis.map((d) => d.id));
     if (!hydrateKey) {
       setLoadedExistingResults([]);
+      setHydrateLoadFailed(false);
       lastAllHydrateKeyRef.current = "";
       return;
     }
     if (lastAllHydrateKeyRef.current === hydrateKey) return;
-    lastAllHydrateKeyRef.current = hydrateKey;
-    void hydrateExistingAnalyses();
+    void hydrateExistingAnalyses().then((ok) => {
+      if (ok && selectedProjectIdRef.current === selectedProjectId) {
+        lastAllHydrateKeyRef.current = hydrateKey;
+      }
+    });
   }, [
     selectedProjectId,
     user,
     documentsWithAnalysis,
     resultsDocumentFilter,
+    loadingDocsWithAnalysis,
     hydrateExistingAnalyses,
   ]);
 
@@ -572,14 +633,17 @@ export function AIComplianceAnalyzer() {
 
       if (next === COMPLIANCE_RESULTS_FILTER_ALL) {
         // Explicit hydrate so selecting All always shows every saved analysis.
-        lastAllHydrateKeyRef.current = documentsWithAnalysis
-          .map((d) => d.id)
-          .sort()
-          .join(",");
+        const hydrateKey = complianceDocsHydrateKey(
+          documentsWithAnalysis.map((d) => d.id),
+        );
         if (documentsWithAnalysis.length > 0) {
-          await hydrateExistingAnalyses();
+          const ok = await hydrateExistingAnalyses();
+          if (ok) lastAllHydrateKeyRef.current = hydrateKey;
+          else lastAllHydrateKeyRef.current = "";
         } else {
           setLoadedExistingResults([]);
+          setHydrateLoadFailed(false);
+          lastAllHydrateKeyRef.current = "";
         }
         return;
       }
@@ -619,9 +683,16 @@ export function AIComplianceAnalyzer() {
     // Re-show every saved analysis under All after clearing the session queue.
     lastAllHydrateKeyRef.current = "";
     if (documentsWithAnalysis.length > 0) {
-      void hydrateExistingAnalyses();
+      void hydrateExistingAnalyses().then((ok) => {
+        if (ok) {
+          lastAllHydrateKeyRef.current = complianceDocsHydrateKey(
+            documentsWithAnalysis.map((d) => d.id),
+          );
+        }
+      });
     } else {
       setLoadedExistingResults([]);
+      setHydrateLoadFailed(false);
     }
     toast.info(
       "Selection cleared — prior analyses remain available under Load previously analyzed document",
@@ -1579,6 +1650,33 @@ export function AIComplianceAnalyzer() {
     completedBatchFiles.length > 0 ||
     failedBatchFiles.length > 0 ||
     loadedExistingResults.length > 0;
+  /** Keep the results panel visible while All hydrates or when analyzed docs exist. */
+  const showResultsPanel =
+    hasAnyResults ||
+    loadingExisting ||
+    loadingDocsWithAnalysis ||
+    (Boolean(selectedProjectId) && documentsWithAnalysis.length > 0);
+  // Avoid a one-frame "load failed" flash between docs-list resolve and hydrate start.
+  const awaitingAllHydrate =
+    Boolean(selectedProjectId) &&
+    resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL &&
+    documentsWithAnalysis.length > 0 &&
+    loadedExistingResults.length === 0 &&
+    !hydrateLoadFailed &&
+    !loadingDocsWithAnalysis;
+  const resultsEmptyKind = resolveComplianceResultsEmptyKind({
+    loading: loadingExisting || loadingDocsWithAnalysis || awaitingAllHydrate,
+    loadFailed: hydrateLoadFailed,
+    analyzedDocCount: documentsWithAnalysis.length,
+    resultGroupCount: resultGroups.length,
+    displayedGroupCount: displayedResultGroups.length,
+    documentFilterIsAll: resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL,
+    scoreFilterIsNot100: complianceScoreFilter === COMPLIANCE_SCORE_FILTER_NOT_100,
+  });
+  const resultsEmptyMessage = complianceResultsEmptyMessage(
+    resultsEmptyKind,
+    documentsWithAnalysis.length,
+  );
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -2237,14 +2335,15 @@ export function AIComplianceAnalyzer() {
         </CardContent>
       </Card>
 
-      {/* Results */}
+      {/* Results — visible on All land/hydrate so prior analyses are never a silent blank */}
       <AnimatePresence>
-        {hasAnyResults && (
+        {showResultsPanel && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
+            data-testid="compliance-results-panel"
           >
             {/* Findings KPI strip — aggregated across every analyzed file's real results */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -2277,13 +2376,24 @@ export function AIComplianceAnalyzer() {
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
                 {displayedResultGroups.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {loadingExisting
-                      ? "Loading previous analyses…"
-                      : complianceScoreFilter === COMPLIANCE_SCORE_FILTER_NOT_100
-                        ? "No analyses match “Not 100% compliant”."
-                        : "No analysis results to show for this filter."}
-                  </p>
+                  <div className="space-y-3" data-testid="compliance-results-empty">
+                    <p className="text-sm text-muted-foreground">
+                      {resultsEmptyMessage}
+                    </p>
+                    {resultsEmptyKind === "load_failed" && documentsWithAnalysis.length > 0 && (
+                      <Button
+                        variant="outlineGold"
+                        size="sm"
+                        data-testid="button-retry-all-hydrate"
+                        onClick={() => {
+                          lastAllHydrateKeyRef.current = "";
+                          void handleResultsDocumentFilterChange(COMPLIANCE_RESULTS_FILTER_ALL);
+                        }}
+                      >
+                        Retry loading All analyses
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   displayedResultGroups.map((group) => renderFileResultGroup(group))
                 )}
