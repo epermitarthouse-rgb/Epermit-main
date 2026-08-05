@@ -43,11 +43,12 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useGroundedDraftQueue } from "@/hooks/useGroundedDraftQueue";
-import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw } from "lucide-react";
+import { Loader2, Save, Wand2, ArrowLeft, CheckCircle2, ShieldCheck, FileDown, UserCheck, Copy, FileQuestion, PenTool, PenLine, AlertCircle, ChevronDown, ChevronRight, Sparkles, RotateCcw, Filter, RefreshCw, FileSearch, ListChecks } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ExportPackageDialog } from "@/components/response-matrix/ExportPackageDialog";
@@ -55,11 +56,16 @@ import { ResponseMatrixExportMenu } from "@/components/response-matrix/ResponseM
 import { SuggestedResponsePanel } from "@/components/response-matrix/SuggestedResponsePanel";
 import { useProjectTeam } from "@/hooks/useProjectTeam";
 import { effectiveResponseStatus, responseStatusBadgeClass } from "@/lib/responseApproval";
+import {
+  classifyResponseLifecycle,
+  countLifecycleMetrics,
+  parseResponseMatrixMetric,
+  type ResponseMatrixMetric,
+} from "@/lib/responseMatrixMetrics";
 import { getModifiedCommentIds } from "@/components/response-matrix/RoundChangeSummary";
 import { useResponsePackageDrafts } from "@/hooks/useResponsePackageDrafts";
 import { cn } from "@/lib/utils";
-import { Section } from "@/components/ui/Section";
-import { Eyebrow } from "@/components/ui/Typography";
+import { PageHeader, Panel } from "@/components/design/ProductPrimitives";
 import { PlanMarkupWorkspace } from "@/components/plans/PlanMarkupWorkspace";
 import { useApprovalGate } from "@/components/plans/ArchitectApprovalDialog";
 import type { PanelComment } from "@/components/plans/CommentPlanPanel";
@@ -142,7 +148,7 @@ function statusBadgeClass(status: string): string {
   if (s.includes("ready")) {
     return "border-sky-700/35 bg-sky-500/[0.13] text-sky-950";
   }
-  return "bg-cream-sunken/80 text-ink-secondary-light border-cream-sunken";
+  return "bg-muted/80 text-muted-foreground border-border";
 }
 
 /** Closed trigger pill: navy surface + cream ink (dropdown menu items keep light chips via statusBadgeClass). */
@@ -166,12 +172,12 @@ function statusSelectTriggerAccentClass(status: string): string {
 const DISCIPLINE_COLORS: Record<string, string> = {
   zoning: "bg-violet-500/15 text-violet-700 border-violet-500/30",
   structural: "bg-blue-500/15 text-blue-700 border-blue-500/30",
-  architectural: "bg-teal/15 text-ink-primary-light border-teal/30",
-  mechanical: "bg-gold/12 text-gold-deep border-gold/32",
-  mep: "bg-gold/12 text-gold-deep border-gold/32",
+  architectural: "bg-teal/15 text-foreground border-teal/30",
+  mechanical: "bg-gold/12 text-primary-deep border-gold/32",
+  mep: "bg-gold/12 text-primary-deep border-gold/32",
   electrical: "bg-yellow-500/15 text-yellow-700 border-yellow-500/30",
   fire: "bg-red-500/15 text-red-700 border-red-500/30",
-  general: "bg-cream-sunken/90 text-ink-secondary-light border-cream-sunken",
+  general: "bg-muted/90 text-muted-foreground border-border",
 };
 
 function disciplineBadgeClass(discipline: string | null): string {
@@ -187,19 +193,19 @@ function CodeRefChip({ value }: { value: string | null | undefined }) {
     navigator.clipboard.writeText(text);
     toast.success("Code reference copied");
   };
-  if (!text) return <span className="text-ink-tertiary-light">—</span>;
+  if (!text) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="group/code flex items-center gap-1 max-w-full">
-      <span className="text-xs font-mono-data bg-gold-soft/90 text-ink-primary-light px-2 py-1 rounded border border-gold/35 truncate">
+      <span className="text-xs font-mono-data bg-primary/10 text-foreground px-2 py-1 rounded border border-primary/35 truncate">
         {text}
       </span>
       <button
         type="button"
         onClick={copy}
-        className="opacity-0 group-hover/code:opacity-100 p-1 rounded shrink-0 transition-opacity hover:bg-cream-sunken/70"
+        className="opacity-0 group-hover/code:opacity-100 p-1 rounded shrink-0 transition-opacity hover:bg-muted/70"
         aria-label="Copy code reference"
       >
-        <Copy className="h-3.5 w-3.5 text-ink-tertiary-light" />
+        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
     </div>
   );
@@ -223,7 +229,7 @@ function MarkupStatusBadge({ commentId, projectId }: { commentId: string; projec
     return () => { cancelled = true; };
   }, [commentId, projectId]);
 
-  if (status === "none") return <span className="text-ink-tertiary-light text-xs">—</span>;
+  if (status === "none") return <span className="text-muted-foreground text-xs">—</span>;
 
   const variant = status === "approved" ? "default" : status === "rejected" ? "destructive" : "secondary";
   return (
@@ -272,39 +278,39 @@ function RelevanceBadge({ value }: { value?: string }) {
 
 function EvidenceCitationCard({ item, index }: { item: GroundedEvidenceItem; index: number }) {
   return (
-    <div className="rounded-lg border border-cream-sunken bg-cream-raised p-3 space-y-1.5 shadow-sm dark:border-border/60 dark:bg-obsidian-raised/40">
+    <div className="rounded-lg border border-border bg-card p-3 space-y-1.5 shadow-sm dark:border-border/60 dark:bg-muted/40">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-ink-primary-light dark:text-ink-primary-dark">
+        <p className="text-sm font-semibold text-foreground dark:text-foreground">
           Citation {index + 1}
         </p>
         <RelevanceBadge value={item.relevance} />
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">File</dt>
-        <dd className="text-ink-primary-light dark:text-ink-primary-dark break-all">{item.file_name ?? "Document"}</dd>
+        <dt className="text-muted-foreground dark:text-muted-foreground font-medium">File</dt>
+        <dd className="text-foreground dark:text-foreground break-all">{item.file_name ?? "Document"}</dd>
         {item.page_number != null && (
           <>
-            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Page</dt>
-            <dd className="text-ink-primary-light dark:text-ink-primary-dark">{item.page_number}</dd>
+            <dt className="text-muted-foreground dark:text-muted-foreground font-medium">Page</dt>
+            <dd className="text-foreground dark:text-foreground">{item.page_number}</dd>
           </>
         )}
         {item.sheet_label && (
           <>
-            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Sheet</dt>
-            <dd className="text-ink-primary-light dark:text-ink-primary-dark font-mono-data">{item.sheet_label}</dd>
+            <dt className="text-muted-foreground dark:text-muted-foreground font-medium">Sheet</dt>
+            <dd className="text-foreground dark:text-foreground font-mono-data">{item.sheet_label}</dd>
           </>
         )}
         {item.sheet_title && (
           <>
-            <dt className="text-ink-secondary-light dark:text-ink-secondary-dark font-medium">Title</dt>
-            <dd className="text-ink-primary-light dark:text-ink-primary-dark">{item.sheet_title}</dd>
+            <dt className="text-muted-foreground dark:text-muted-foreground font-medium">Title</dt>
+            <dd className="text-foreground dark:text-foreground">{item.sheet_title}</dd>
           </>
         )}
       </dl>
       {item.snippet && (
-        <div className="pt-1 border-t border-cream-sunken/80 dark:border-border/50">
-          <p className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-1">Evidence</p>
-          <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark whitespace-pre-wrap break-words leading-relaxed">
+        <div className="pt-1 border-t border-border/80 dark:border-border/50">
+          <p className="text-xs font-medium text-muted-foreground dark:text-muted-foreground mb-1">Evidence</p>
+          <p className="text-sm text-foreground dark:text-foreground whitespace-pre-wrap break-words leading-relaxed">
             {item.snippet}
           </p>
         </div>
@@ -327,13 +333,13 @@ function DetailSection({
       ? "border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10"
       : variant === "action"
         ? "border-teal/35 bg-teal/5 dark:bg-teal/10"
-        : "border-cream-sunken bg-cream-raised/80 dark:border-border/60 dark:bg-obsidian-raised/30";
+        : "border-border bg-card/80 dark:border-border/60 dark:bg-muted/30";
   return (
     <section className={cn("rounded-lg border p-4 space-y-2", borderCls)}>
-      <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-ink-secondary-light dark:text-ink-secondary-dark">
+      <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-muted-foreground dark:text-muted-foreground">
         {title}
       </h4>
-      <div className="text-sm text-ink-primary-light dark:text-ink-primary-dark leading-relaxed whitespace-pre-wrap break-words">
+      <div className="text-sm text-foreground dark:text-foreground leading-relaxed whitespace-pre-wrap break-words">
         {children}
       </div>
     </section>
@@ -363,12 +369,12 @@ function CommentDetailPanel({
   const evidence = Array.isArray(row.grounded_evidence) ? row.grounded_evidence : [];
 
   return (
-    <div className="px-4 py-5 sm:px-6 bg-cream-sunken/40 dark:bg-obsidian/50 border-t border-cream-sunken dark:border-border/50 space-y-4">
+    <div className="px-4 py-5 sm:px-6 bg-muted/40 dark:bg-muted/50 border-t border-border dark:border-border/50 space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <DetailSection title="City / reviewer comment">
             {(ctx.reviewer_name || ctx.comment_number) && (
-              <p className="text-xs font-mono uppercase tracking-wide text-ink-secondary-light mb-2">
+              <p className="text-xs font-mono uppercase tracking-wide text-muted-foreground mb-2">
                 {[ctx.reviewer_name, ctx.comment_number ? `#${ctx.comment_number}` : null]
                   .filter(Boolean)
                   .join(" · ")}
@@ -377,7 +383,7 @@ function CommentDetailPanel({
             {ctx.display_primary_text ? (
               <p>{ctx.display_primary_text}</p>
             ) : (
-              <p className="text-ink-tertiary-light italic">No comment text</p>
+              <p className="text-muted-foreground italic">No comment text</p>
             )}
             {row.ingest_source === "manual_letter" && (
               <Badge variant="outline" className="mt-2 text-[10px] border-teal/40 text-teal">
@@ -394,7 +400,7 @@ function CommentDetailPanel({
 
           {existing ? (
             <DetailSection title="Existing letter response">
-              <p className="text-ink-secondary-light dark:text-ink-secondary-dark">{existing}</p>
+              <p className="text-muted-foreground dark:text-muted-foreground">{existing}</p>
             </DetailSection>
           ) : null}
         </div>
@@ -403,7 +409,7 @@ function CommentDetailPanel({
           <div className="flex flex-wrap items-center gap-2">
             <ConfidenceBadge value={row.grounded_confidence} />
             {row.grounded_generated_at && (
-              <span className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">
+              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Grounded {new Date(row.grounded_generated_at).toLocaleString()}
               </span>
             )}
@@ -429,7 +435,7 @@ function CommentDetailPanel({
 
           {evidence.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-ink-secondary-light dark:text-ink-secondary-dark">
+              <h4 className="text-xs font-mono uppercase tracking-[0.14em] text-muted-foreground dark:text-muted-foreground">
                 Evidence found ({evidence.length})
               </h4>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -446,27 +452,27 @@ function CommentDetailPanel({
 
           <div className="grid gap-3 sm:grid-cols-2 pt-1">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark">Assigned to</label>
+              <label className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Assigned to</label>
               <Input
                 value={row.assigned_to ?? ""}
                 onChange={(e) => onUpdateAssigned(e.target.value)}
                 placeholder="Name or email"
-                className="border-cream-sunken bg-cream-raised dark:bg-obsidian-raised"
+                className="border-border bg-card dark:bg-card-raised"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-secondary-light dark:text-ink-secondary-dark">Sheet reference</label>
+              <label className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Sheet reference</label>
               <Input
                 value={row.sheet_reference ?? ""}
                 onChange={(e) => onUpdateSheetRef(e.target.value)}
                 placeholder="e.g. A1.02"
-                className="border-cream-sunken bg-cream-raised dark:bg-obsidian-raised"
+                className="border-border bg-card dark:bg-card-raised"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-secondary-light dark:text-ink-secondary-dark">Plan markup</span>
+            <span className="text-xs text-muted-foreground dark:text-muted-foreground">Plan markup</span>
             <MarkupStatusBadge commentId={row.id} projectId={row.project_id} />
           </div>
         </div>
@@ -527,7 +533,7 @@ function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand
   return (
     <div className="max-w-[240px] space-y-1">
       {(ctx.reviewer_name || ctx.comment_number) && (
-        <p className="text-[10px] font-mono uppercase tracking-wide text-ink-secondary-light dark:text-ink-secondary-dark truncate">
+        <p className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground dark:text-muted-foreground truncate">
           {[ctx.reviewer_name, ctx.comment_number ? `#${ctx.comment_number}` : null]
             .filter(Boolean)
             .join(" · ")}
@@ -537,8 +543,8 @@ function CommentPreviewCell({ row, onExpand }: { row: ParsedCommentRow; onExpand
         className={cn(
           "text-sm line-clamp-2 leading-snug",
           preview
-            ? "text-ink-primary-light dark:text-ink-primary-dark"
-            : "text-ink-tertiary-light italic",
+            ? "text-foreground dark:text-foreground"
+            : "text-muted-foreground italic",
         )}
         title={preview || undefined}
       >
@@ -568,11 +574,11 @@ function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
   return (
     <div className="max-w-[200px] space-y-1.5">
       {text ? (
-        <p className="text-sm text-ink-primary-light dark:text-ink-primary-dark line-clamp-2" title={text}>
+        <p className="text-sm text-foreground dark:text-foreground line-clamp-2" title={text}>
           {text}
         </p>
       ) : (
-        <p className="text-sm text-ink-tertiary-light italic">No response yet</p>
+        <p className="text-sm text-muted-foreground italic">No response yet</p>
       )}
       <div className="flex flex-wrap gap-1">
         {approvalStatus && (
@@ -599,6 +605,34 @@ function ResponsePreviewCell({ row }: { row: ParsedCommentRow }) {
   );
 }
 
+function ResponseConfidenceCell({ row }: { row: ParsedCommentRow }) {
+  const text = row.response_text?.trim() ?? "";
+  const hasGrounded = Boolean(row.grounded_generated_at || row.grounded_confidence);
+  const approvalStatus = effectiveResponseStatus(row);
+  return (
+    <div className="max-w-[200px] space-y-1.5">
+      {hasGrounded ? (
+        <ConfidenceBadge value={row.grounded_confidence} />
+      ) : (
+        <span className="text-xs text-muted-foreground italic">No grounded draft yet</span>
+      )}
+      {approvalStatus && (
+        <Badge
+          variant="outline"
+          className={cn("block w-fit text-[10px] font-medium", responseStatusBadgeClass(approvalStatus))}
+        >
+          {approvalStatus}
+        </Badge>
+      )}
+      {text ? (
+        <p className="text-xs text-muted-foreground line-clamp-2" title={text}>
+          {text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function commentMatrixSourceLabel(rows: ParsedCommentRow[]): string {
   const hasPortal = rows.some((r) => r.ingest_source === "raw_ref");
   const hasManual = rows.some((r) => r.ingest_source === "manual_letter");
@@ -612,9 +646,48 @@ export default function ResponseMatrix() {
   const { user, loading: authLoading } = useAuth();
   const { projectId } = useResolvedProjectId();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const filterPending = searchParams.get("filter") === "pending";
+  // View label only (Lovable parity): default = Reconciliation (Response column).
+  // `?view=scoring` swaps Response → AI Confidence. No reconciliation engine/backend.
+  const scoringView = searchParams.get("view") === "scoring";
+  const disciplineFilter = searchParams.get("discipline")?.trim() || "all";
+  const metricFilter = parseResponseMatrixMetric(searchParams.get("metric"));
+  const setMatrixView = useCallback(
+    (v: "reconciliation" | "scoring") => {
+      const next = new URLSearchParams(searchParams);
+      if (v === "scoring") next.set("view", "scoring");
+      else next.delete("view"); // Reconciliation = default comment/response queue
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const togglePendingFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    if (filterPending) next.delete("filter");
+    else next.set("filter", "pending");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, filterPending]);
+  const setDisciplineFilter = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value || value === "all") next.delete("discipline");
+      else next.set("discipline", value);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const setMetricFilter = useCallback(
+    (value: ResponseMatrixMetric | null) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value) next.delete("metric");
+      else next.set("metric", value);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const [saving, setSaving] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
   const timerRef = useRef<ReviewTimerHandle>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
@@ -686,15 +759,41 @@ export default function ResponseMatrix() {
       })),
     });
   }
-  const rows =
-    filterPending && withoutMetadata.length > 0
-      ? withoutMetadata.filter(
-          (r) =>
-            (r.status ?? "").toLowerCase() === "pending" ||
-            r.response_text == null ||
-            String(r.response_text).trim() === ""
-        )
-      : withoutMetadata;
+  const disciplineOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of withoutMetadata) {
+      const d = r.discipline?.trim();
+      if (d) keys.add(d);
+      else keys.add("Unclassified");
+    }
+    return Array.from(keys).sort((a, b) => {
+      if (a === "Unclassified") return 1;
+      if (b === "Unclassified") return -1;
+      return a.localeCompare(b);
+    });
+  }, [withoutMetadata]);
+
+  const rows = useMemo(() => {
+    let next = withoutMetadata;
+    if (filterPending && withoutMetadata.length > 0) {
+      next = next.filter(
+        (r) =>
+          (r.status ?? "").toLowerCase() === "pending" ||
+          r.response_text == null ||
+          String(r.response_text).trim() === "",
+      );
+    }
+    if (metricFilter) {
+      next = next.filter((r) => classifyResponseLifecycle(r) === metricFilter);
+    }
+    if (disciplineFilter !== "all") {
+      next = next.filter((r) => {
+        const d = r.discipline?.trim() || "Unclassified";
+        return d === disciplineFilter;
+      });
+    }
+    return next;
+  }, [withoutMetadata, filterPending, metricFilter, disciplineFilter]);
 
   const lastSubmittedDraft = useMemo(() => {
     return [...allDrafts]
@@ -1036,24 +1135,110 @@ export default function ResponseMatrix() {
     }
     setEnriching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
-        body: { project_id: projectId, run_enrichment_only: true, force_retry: true },
-      });
-      if (error) throw error;
-      const payload = data as { enrichment?: { enriched_count?: number; error?: string }; next_action?: string };
-      if (payload?.enrichment?.error) {
-        toast.error(payload.enrichment.error);
-        return;
+      type EnrichmentPayload = {
+        enrichment?: {
+          enriched_count?: number;
+          error?: string;
+          remaining?: number;
+          eligible_count?: number;
+          rounds?: number;
+          needs_continue?: boolean;
+        };
+        next_action?: string;
+      };
+
+      // Continue across batches/timeout budgets until all eligible rows are drained.
+      const maxContinues = 50;
+      let totalEnriched = 0;
+      let eligibleTotal: number | undefined;
+      let lastPayload: EnrichmentPayload | null = null;
+      for (let i = 0; i < maxContinues; i++) {
+        const { data, error } = await supabase.functions.invoke("intake-pipeline-agent", {
+          body: { project_id: projectId, run_enrichment_only: true, force_retry: true },
+        });
+        if (error) throw error;
+        const payload = data as EnrichmentPayload;
+        lastPayload = payload;
+        if (payload?.enrichment?.error) {
+          toast.error(payload.enrichment.error);
+          return;
+        }
+        if (eligibleTotal == null && typeof payload?.enrichment?.eligible_count === "number") {
+          eligibleTotal = payload.enrichment.eligible_count;
+        }
+        totalEnriched += payload?.enrichment?.enriched_count ?? 0;
+        if (payload?.next_action !== "continue_enrichment") break;
       }
-      const enrichedCount = payload?.enrichment?.enriched_count ?? 0;
-      toast.success(`Enriched ${enrichedCount} comments`);
-      queryClient.invalidateQueries({ queryKey: ["parsed_comments", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check", projectId] });
+
+      const remaining = lastPayload?.enrichment?.remaining ?? 0;
+      toast.success(
+        remaining > 0
+          ? `Enriched ${totalEnriched} comments (${remaining} still need codes)`
+          : eligibleTotal != null
+            ? `Enriched ${totalEnriched} of ${eligibleTotal} eligible comments`
+            : `Enriched ${totalEnriched} comments`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments_code_ref_check"] });
+      await queryClient.invalidateQueries({ queryKey: ["project_pipeline_run", projectId] });
     } catch (e) {
       console.warn("Run enrichment failed:", e);
       toast.error("Run enrichment failed");
     } finally {
       setEnriching(false);
+    }
+  }, [projectId, queryClient]);
+
+  /** Re-runs the discipline model on every parsed row (from former Classified Comments page). */
+  const refreshClassifications = useCallback(async () => {
+    if (!projectId) {
+      toast.error("Select a project first");
+      return;
+    }
+    setReclassifying(true);
+    try {
+      const { count: totalInDb, error: countErr } = await supabase
+        .from("parsed_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId);
+      if (countErr) throw countErr;
+      const loaded = totalInDb ?? 0;
+      if (loaded === 0) {
+        toast.info("No parsed comments in the database for this project yet.");
+        return;
+      }
+      toast.info(`Sending ${loaded} parsed comment(s) to the discipline classifier…`);
+
+      const { data, error } = await supabase.functions.invoke("discipline-classifier-agent", {
+        body: { project_id: projectId, reclassify_all: true },
+      });
+      if (error) throw error;
+
+      const payload = data as {
+        code?: number;
+        message?: string;
+        classified_count?: number;
+        rows_sent?: number;
+        parsed_comments_total?: number;
+      };
+      if (payload?.code != null && payload.code >= 400) {
+        throw new Error(payload.message ?? `Classifier returned ${payload.code}`);
+      }
+
+      const rowsSent = payload?.rows_sent ?? 0;
+      const updated = payload?.classified_count ?? 0;
+      const total = payload?.parsed_comments_total ?? loaded;
+
+      await queryClient.invalidateQueries({ queryKey: ["parsed_comments"] });
+      toast.success(
+        `Discipline classifier: updated ${updated} row(s) (processed ${rowsSent} of ${total} parsed comment(s)).`,
+      );
+    } catch (e) {
+      console.error("[ResponseMatrix] discipline-classifier-agent", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Classifier failed: ${msg}`);
+    } finally {
+      setReclassifying(false);
     }
   }, [projectId, queryClient]);
 
@@ -1168,11 +1353,25 @@ export default function ResponseMatrix() {
 
   const matrixSourceLabel = commentMatrixSourceLabel(withoutMetadata);
   const pipelineBusy = enriching || routing || pipelineResuming;
+  const lifecycleCounts = useMemo(
+    () => countLifecycleMetrics(withoutMetadata),
+    [withoutMetadata],
+  );
 
   const runActionsMenuItem = useCallback((action: () => void) => {
     setActionsMenuOpen(false);
     action();
   }, []);
+
+  const commentReviewPath = projectId
+    ? `/comment-review?project_id=${encodeURIComponent(projectId)}`
+    : "/comment-review";
+
+  const metricChipLabel: Record<ResponseMatrixMetric, string> = {
+    "needs-response": "Needs Response",
+    "in-draft": "In Draft",
+    accepted: "Accepted",
+  };
 
   if (authLoading) {
     return (
@@ -1183,134 +1382,320 @@ export default function ResponseMatrix() {
   }
 
   return (
-    <div className="min-h-[80vh] w-full min-w-0 overflow-x-hidden bg-cream">
+    <div className="min-h-[80vh] w-full min-w-0 space-y-3 overflow-x-hidden bg-background text-foreground">
       <style>{RESPONSE_MATRIX_STYLES}</style>
-      <Section variant="cream" className="pt-10 pb-8 border-b border-cream-sunken">
-        <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0">
-        <header className="flex flex-col gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/dashboard")}
-              className="shrink-0 text-ink-secondary-light hover:text-ink-primary-light hover:bg-cream-sunken"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-0 pl-2 border-l-2 border-gold/40">
-              <Eyebrow>RESPONSE MATRIX</Eyebrow>
-              <h1 className="mt-2 font-display text-4xl sm:text-5xl text-ink-primary-light leading-tight">
-                Response <em className="text-gold italic">Matrix</em>
-              </h1>
-              <p className="text-ink-secondary-light text-sm mt-2 max-w-2xl leading-relaxed">
-                Manage and draft official responses to permit comments.
-                {withoutMetadata.length > 0 ? (
-                  <span className="block mt-1 text-ink-tertiary-light">{matrixSourceLabel}</span>
-                ) : null}
-              </p>
-              <div className="h-0.5 w-16 mt-2 bg-gradient-to-r from-gold/70 to-transparent rounded-full" />
-            </div>
+      <PageHeader
+        compact
+        className="mb-0"
+        eyebrow="Response Matrix"
+        title="Comment response queue"
+        body={
+          <>
+            Draft and approve responses to permit comments.
+            {withoutMetadata.length > 0 ? (
+              <span className="text-muted-foreground/80"> · {matrixSourceLabel}</span>
+            ) : null}
+          </>
+        }
+        action={
+          <div
+            className="flex rounded-md border border-border bg-card p-0.5 text-xs"
+            role="group"
+            aria-label="Matrix view"
+          >
+            {(["reconciliation", "scoring"] as const).map((v) => {
+              const active = (v === "scoring") === scoringView;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setMatrixView(v)}
+                  aria-pressed={active}
+                  title={
+                    v === "scoring"
+                      ? "Show AI confidence column"
+                      : "Show response column (default queue view)"
+                  }
+                  className={cn(
+                    "rounded px-3 py-1.5 transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {v === "scoring" ? "AI Scoring" : "Reconciliation"}
+                </button>
+              );
+            })}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {projectId && (
-              <span className="inline-flex items-center justify-center rounded-full border border-gold/35 bg-gold/12 text-gold-deep text-xs font-medium h-6 min-w-[24px] px-2 shrink-0">
-                {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
-              </span>
-            )}
-            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 justify-end">
-              <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
-              <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
-              <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outlineGold"
-                    size="sm"
-                    disabled={!projectId}
-                    data-testid="button-actions-dropdown"
-                    className="shrink-0"
-                  >
-                    Actions
-                    <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runValidateCompleteness)}
-                    disabled={!projectId || validating}
-                    data-testid="menu-validate-completeness"
-                  >
-                    {validating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                    Validate Completeness
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runQualityCheck)}
-                    disabled={!projectId || qualityChecking || qualityCheckBlocked}
-                    data-testid="menu-quality-check"
-                  >
-                    {qualityChecking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                    Quality Check
-                    {qualityCheckBlocked && (
-                      <AlertCircle className="h-3.5 w-3.5 ml-1 text-amber-500" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(() => setPlanMarkupOpen(true))}
-                    disabled={!projectId}
-                    data-testid="menu-plan-markup"
-                  >
-                    <PenTool className="h-4 w-4 mr-2" />
-                    Plan Markup
-                    {hasPendingMarkups && (
-                      <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">
-                        {pendingCount}
-                      </Badge>
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runEnrichment)}
-                    disabled={!projectId || pipelineBusy}
-                    data-testid="menu-run-enrichment"
-                  >
-                    {enriching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                    Run Enrichment
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runRouteComments)}
-                    disabled={!projectId || pipelineBusy}
-                    data-testid="menu-route-comments"
-                  >
-                    {routing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
-                    Run Auto Routing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(runResumePipeline)}
-                    disabled={!projectId || pipelineBusy}
-                    data-testid="menu-resume-pipeline"
-                  >
-                    {pipelineResuming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
-                    Resume Pipeline
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => runActionsMenuItem(() => setExportDialogOpen(true))}
-                    disabled={!projectId}
-                    data-testid="menu-export-response-package"
-                  >
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Export Response Package
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button variant="gold" onClick={saveChanges} disabled={saving || rows.length === 0} className="shrink-0">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </header>
-        </div>
-      </Section>
+        }
+      />
 
-      <div className="max-w-[1600px] mx-auto px-4 md:px-6 w-full min-w-0 space-y-4 py-6">
+      {/* Metric chips — lifecycle filters; Cross-service is Upcoming placeholder only */}
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-1.5"
+        role="group"
+        aria-label="Response lifecycle metrics"
+      >
+        <button
+          type="button"
+          data-testid="metric-chip-all"
+          aria-pressed={metricFilter == null}
+          onClick={() => setMetricFilter(null)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors",
+            metricFilter == null
+              ? "border-primary bg-primary/10 font-medium text-foreground"
+              : "border-border bg-card text-muted-foreground hover:text-foreground",
+          )}
+        >
+          All
+          <span className="font-data font-semibold tabular-nums text-foreground">
+            {withoutMetadata.length}
+          </span>
+        </button>
+        {(
+          [
+            ["needs-response", lifecycleCounts.needsResponse] as const,
+            ["in-draft", lifecycleCounts.inDraft] as const,
+            ["accepted", lifecycleCounts.accepted] as const,
+          ] as const
+        ).map(([key, count]) => (
+          <button
+            key={key}
+            type="button"
+            data-testid={`metric-chip-${key}`}
+            aria-pressed={metricFilter === key}
+            title={`Show ${metricChipLabel[key].toLowerCase()} comments`}
+            onClick={() => setMetricFilter(metricFilter === key ? null : key)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors",
+              metricFilter === key
+                ? "border-primary bg-primary/10 font-medium text-foreground"
+                : "border-border bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span>{metricChipLabel[key]}</span>
+            <span className="font-data font-semibold tabular-nums text-foreground">{count}</span>
+          </button>
+        ))}
+        <span
+          className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground"
+          data-testid="metric-chip-cross-service"
+        >
+          <span>Cross-service</span>
+          <span className="font-data font-semibold tabular-nums">—</span>
+          <span
+            className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 font-data text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            data-testid="badge-cross-service-upcoming"
+          >
+            Upcoming
+          </span>
+          <span className="basis-full text-[10px] leading-snug text-muted-foreground sm:basis-auto sm:max-w-[14rem]">
+            Utility/provider comments will appear after backend integration
+          </span>
+        </span>
+      </div>
+
+      {/* Compact command toolbar */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Button
+          variant={filterPending ? "default" : "outline"}
+          size="sm"
+          className="h-8 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3.5"
+          onClick={togglePendingFilter}
+          data-testid="matrix-pending-filter"
+        >
+          <Filter />
+          {filterPending ? "Pending only" : "Filter"}
+        </Button>
+        {disciplineOptions.length > 0 ? (
+          <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
+            <SelectTrigger
+              className="h-8 w-[140px] shrink-0 text-xs"
+              data-testid="matrix-discipline-filter"
+            >
+              <SelectValue placeholder="Discipline" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All disciplines</SelectItem>
+              {disciplineOptions.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+        {projectId && (
+          <span className="inline-flex h-6 min-w-[24px] shrink-0 items-center justify-center rounded-full border border-border bg-muted px-2 text-xs font-medium">
+            {withoutMetadata.length} comment{withoutMetadata.length !== 1 ? "s" : ""}
+          </span>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/dashboard")}
+          className="ml-auto h-8 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+          aria-label="Back to dashboard"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Dashboard</span>
+        </Button>
+      </div>
+
+      <div className="w-full min-w-0">
+        <Panel className="overflow-hidden p-0" title={undefined}>
+          <div className="border-b border-border px-4 py-2.5 sm:px-5">
+            <p className="pilot-kicker mb-0.5">Reconciliation view</p>
+            <h2 className="font-tight text-lg font-bold text-foreground">Comment response queue</h2>
+          </div>
+
+          {/* Sticky queue toolbar: Timer / Export / Actions / Save */}
+          <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-5">
+            <ReviewTimer ref={timerRef} projectId={projectId} commentCount={rows.length} />
+            <ResponseMatrixExportMenu projectId={projectId} rows={rows} />
+            <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!projectId}
+                  data-testid="button-actions-dropdown"
+                  className="shrink-0"
+                >
+                  Actions
+                  <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runValidateCompleteness)}
+                  disabled={!projectId || validating}
+                  data-testid="menu-validate-completeness"
+                >
+                  {validating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                  Validate Completeness
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runQualityCheck)}
+                  disabled={!projectId || qualityChecking || qualityCheckBlocked}
+                  data-testid="menu-quality-check"
+                >
+                  {qualityChecking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                  Quality Check
+                  {qualityCheckBlocked && (
+                    <AlertCircle className="h-3.5 w-3.5 ml-1 text-amber-500" />
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => setPlanMarkupOpen(true))}
+                  disabled={!projectId}
+                  data-testid="menu-plan-markup"
+                >
+                  <PenTool className="h-4 w-4 mr-2" />
+                  Plan Markup
+                  {hasPendingMarkups && (
+                    <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">
+                      {pendingCount}
+                    </Badge>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runEnrichment)}
+                  disabled={!projectId || pipelineBusy}
+                  data-testid="menu-run-enrichment"
+                >
+                  {enriching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                  Run Enrichment
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runRouteComments)}
+                  disabled={!projectId || pipelineBusy}
+                  data-testid="menu-route-comments"
+                >
+                  {routing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
+                  Run Auto Routing
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(refreshClassifications)}
+                  disabled={!projectId || reclassifying || pipelineBusy}
+                  data-testid="menu-refresh-classifications"
+                >
+                  {reclassifying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Refresh Classifications
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(runResumePipeline)}
+                  disabled={!projectId || pipelineBusy}
+                  data-testid="menu-resume-pipeline"
+                >
+                  {pipelineResuming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                  Resume Pipeline
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() =>
+                    runActionsMenuItem(() =>
+                      runBatchGrounded(
+                        rows
+                          .filter(
+                            (r) =>
+                              !r.response_text?.trim() ||
+                              (r.status ?? "").toLowerCase() === "pending" ||
+                              (r.status ?? "").toLowerCase() === "pending review",
+                          )
+                          .map((r) => r.id),
+                      ),
+                    )
+                  }
+                  disabled={rows.length === 0 || Boolean(groundedBatchProgress)}
+                  data-testid="menu-auto-draft"
+                >
+                  {groundedBatchProgress ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  Auto-Draft
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => navigate(commentReviewPath))}
+                  data-testid="menu-upload-parse-comments"
+                >
+                  <FileSearch className="h-4 w-4 mr-2" />
+                  Upload &amp; Parse Comments
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => navigate(commentReviewPath))}
+                  data-testid="menu-review-parsed-comments"
+                >
+                  <ListChecks className="h-4 w-4 mr-2" />
+                  Review Parsed Comments
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => runActionsMenuItem(() => setExportDialogOpen(true))}
+                  disabled={!projectId}
+                  data-testid="menu-export-response-package"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export Response Package
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="gold"
+              size="sm"
+              onClick={saveChanges}
+              disabled={saving || rows.length === 0}
+              className="shrink-0 sm:ml-auto"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Changes
+            </Button>
+          </div>
+
+          <div className="space-y-3 p-4 sm:p-5">
 
         <Dialog open={validateOpen} onOpenChange={setValidateOpen}>
           <DialogContent>
@@ -1480,20 +1865,39 @@ export default function ResponseMatrix() {
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-sm">
               {filterPending
                 ? "No pending comments for this project."
-                : "Run the Comment Parser agent to extract comments from your portal reports."}
+                : metricFilter
+                  ? `No comments in “${metricChipLabel[metricFilter]}”.`
+                  : disciplineFilter !== "all"
+                    ? `No comments in discipline “${disciplineFilter}”.`
+                    : "Upload or load portal comments in Comment Review, then return here to draft and approve responses."}
             </p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate("/dashboard")}>
-              Go to Dashboard
-            </Button>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {metricFilter ? (
+                <Button variant="outline" size="sm" onClick={() => setMetricFilter(null)}>
+                  Clear metric filter
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
+                Go to Dashboard
+              </Button>
+            </div>
           </div>
         ) : (
           <>
-          {filterPending && (
-            <p className="text-sm text-muted-foreground mb-2">
-              <Badge variant="secondary">Showing pending comments only</Badge>
+          {(filterPending || metricFilter || disciplineFilter !== "all") && (
+            <p className="text-sm text-muted-foreground mb-2 flex flex-wrap gap-2">
+              {filterPending ? (
+                <Badge variant="secondary">Showing pending comments only</Badge>
+              ) : null}
+              {metricFilter ? (
+                <Badge variant="secondary">{metricChipLabel[metricFilter]}</Badge>
+              ) : null}
+              {disciplineFilter !== "all" ? (
+                <Badge variant="secondary">Discipline: {disciplineFilter}</Badge>
+              ) : null}
             </p>
           )}
-          <p className="text-sm text-ink-secondary-light mb-2">{matrixSourceLabel}</p>
+          <p className="text-sm text-muted-foreground mb-2">{matrixSourceLabel}</p>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <Button
               variant="outline"
@@ -1526,21 +1930,21 @@ export default function ResponseMatrix() {
               Generate Grounded for Pending
             </Button>
             {groundedBatchProgress && (
-              <span className="text-sm text-ink-secondary-light dark:text-ink-secondary-dark flex items-center gap-2">
+              <span className="text-sm text-muted-foreground dark:text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-teal" />
                 Generating {groundedBatchProgress.completed + groundedBatchProgress.active} of{" "}
                 {groundedBatchProgress.total}…
               </span>
             )}
           </div>
-          <div className="rounded-xl border border-cream-sunken bg-cream-raised shadow-cream overflow-hidden">
-            <div className="overflow-x-auto bg-gradient-to-b from-cream via-cream-raised/95 to-cream-raised">
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
             <Table
               wrapperClassName="rounded-none border-0 shadow-none bg-transparent dark:border-0"
               className="w-full min-w-[960px]"
             >
               <TableHeader className="dark:[&_tr]:!bg-transparent">
-                <TableRow className="border-b border-border !bg-muted/60 hover:!bg-muted/80 dark:!border-obsidian-raised/55 dark:!bg-obsidian-raised dark:hover:!bg-obsidian">
+                <TableRow className="border-b border-border !bg-muted/60 hover:!bg-muted/80">
                   <TableHead className="w-10 table-head-sticky px-2 py-3">
                     <Checkbox
                       checked={rows.length > 0 && selectedRowIds.size === rows.length}
@@ -1549,22 +1953,22 @@ export default function ResponseMatrix() {
                     />
                   </TableHead>
                   <TableHead className="w-10 table-head-sticky px-2 py-3" />
-                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Status
                   </TableHead>
-                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[100px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Discipline
                   </TableHead>
-                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="min-w-[200px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Comment
                   </TableHead>
-                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[130px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Code Ref.
                   </TableHead>
-                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
-                    Response
+                  <TableHead className="min-w-[180px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
+                    {scoringView ? "AI Confidence" : "Response"}
                   </TableHead>
-                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground dark:text-ink-secondary-dark">
+                  <TableHead className="w-[120px] table-head-sticky px-3 py-3 text-left text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
                     Draft
                   </TableHead>
                 </TableRow>
@@ -1581,11 +1985,11 @@ export default function ResponseMatrix() {
                     <Fragment key={row.id}>
                       <TableRow
                         className={cn(
-                          "!border-transparent border-t border-cream-sunken bg-cream hover:!bg-cream-sunken/50 dark:bg-cream dark:hover:!bg-cream-sunken/50",
-                          idx % 2 === 1 && "!bg-cream-raised hover:!bg-cream-sunken/50 dark:!bg-cream-raised",
-                          "text-ink-primary-light transition-colors duration-150",
+                          "border-t border-border bg-card hover:!bg-muted/40",
+                          idx % 2 === 1 && "!bg-muted/20 hover:!bg-muted/50",
+                          "text-foreground transition-colors duration-150",
                           statusBorderClass(row.status),
-                          isExpanded && "!bg-cream-sunken/60 dark:!bg-obsidian-raised/40",
+                          isExpanded && "!bg-muted/50",
                         )}
                       >
                         <TableCell className="align-middle w-10 px-2">
@@ -1617,8 +2021,8 @@ export default function ResponseMatrix() {
                             <SelectTrigger
                               className={cn(
                                 "inline-flex min-h-8 min-w-0 w-full max-w-full items-center gap-2 rounded-full border px-3 py-1.5 font-semibold shadow-sm",
-                                "bg-muted/60 hover:bg-muted/80 dark:bg-obsidian dark:hover:bg-obsidian-raised",
-                                "text-foreground dark:!text-ink-primary-dark text-[11px] md:text-xs",
+                                "bg-muted/60 hover:bg-muted/80 dark:bg-card dark:hover:bg-obsidian-raised",
+                                "text-foreground dark:!text-foreground text-[11px] md:text-xs",
                                 statusSelectTriggerAccentClass(row.status),
                               )}
                             >
@@ -1648,13 +2052,13 @@ export default function ResponseMatrix() {
                             const refs = parseStoredCodeReferences(row.code_references);
                             const primary = row.code_reference?.trim() || refs[0] || "";
                             if (!primary && refs.length === 0) {
-                              return <span className="text-ink-tertiary-light">—</span>;
+                              return <span className="text-muted-foreground">—</span>;
                             }
                             return (
                               <div className="space-y-1">
                                 {primary ? <CodeRefChip value={primary} /> : null}
                                 {refs.length > 1 ? (
-                                  <p className="text-[10px] text-ink-secondary-light dark:text-ink-secondary-dark">
+                                  <p className="text-[10px] text-muted-foreground dark:text-muted-foreground">
                                     +{refs.length - 1} more
                                   </p>
                                 ) : null}
@@ -1670,7 +2074,11 @@ export default function ResponseMatrix() {
                                 Modified
                               </Badge>
                             )}
-                            <ResponsePreviewCell row={row} />
+                            {scoringView ? (
+                              <ResponseConfidenceCell row={row} />
+                            ) : (
+                              <ResponsePreviewCell row={row} />
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="align-top py-3">
@@ -1738,6 +2146,8 @@ export default function ResponseMatrix() {
           </div>
           </>
         )}
+          </div>
+        </Panel>
       </div>
     </div>
   );

@@ -15,6 +15,8 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { MarketingLayout } from "@/components/layout/MarketingLayout";
 
 import Demos from "./pages/Demos";
+import DemoMcDonalds from "./pages/DemoMcDonalds";
+import OnboardingAuthorization from "./pages/OnboardingAuthorization";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import FAQ from "./pages/FAQ";
@@ -33,12 +35,14 @@ import AdminMembers from "./pages/AdminMembers";
 import AdminAudit from "./pages/AdminAudit";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
+import ArchitectureReplicationChecklist from "./pages/ArchitectureReplicationChecklist";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
-import AdminAuthorizationsPlaceholder from "./pages/placeholders/AdminPreviewPlaceholders";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
 import CodeCompliance from "./pages/CodeCompliance";
+import DesignCheck from "./pages/DesignCheck";
+import UciApplicationBuilder from "./pages/UciApplicationBuilder";
 import CodeReferenceLibrary from "./pages/CodeReferenceLibrary";
 import ROICalculator from "./pages/ROICalculator";
 import ConsolidationCalculator from "./pages/ConsolidationCalculator";
@@ -52,6 +56,7 @@ import ResponseMatrix from "./pages/ResponseMatrix";
 import PortalDataViewer from "./pages/PortalDataViewer";
 import ClassifiedComments from "./pages/ClassifiedComments";
 import PermitWizardFiling from "./pages/PermitWizardFiling";
+import OperationsBoard from "./pages/OperationsBoard";
 import BaltimorePortalHome from "./pages/baltimore/BaltimorePortalHome";
 import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
 import BaltimoreRecordsListPage from "./pages/baltimore/BaltimoreRecordsListPage";
@@ -59,6 +64,13 @@ import BaltimoreRecordDetailPage from "./pages/baltimore/BaltimoreRecordDetailPa
 import UciDashboard from "./pages/UciDashboard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
+import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder";
+import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
+import UtilityCoveragePlaceholder from "./pages/placeholders/UtilityCoveragePlaceholder";
+import MessagesPlaceholder from "./pages/placeholders/MessagesPlaceholder";
+import AdminAuthorizationsPlaceholder, {
+  AdminPreviewPlaceholder,
+} from "./pages/placeholders/AdminPreviewPlaceholders";
 
 const queryClient = new QueryClient();
 
@@ -119,12 +131,30 @@ const App = () => (
                 <Route element={<ProtectedLayoutRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/projects" element={<Projects />} />
+                  <Route path="/projects/new" element={<Projects />} />
+                  {/* Executive demo is the primary Demo landing; Interactive Demos stay at /demos */}
+                  <Route path="/demo" element={<Navigate to="/demo/mcdonalds" replace />} />
+                  <Route path="/demo/mcdonalds" element={<DemoMcDonalds />} />
+                  <Route path="/demo/mcd" element={<Navigate to="/demo/mcdonalds" replace />} />
+                  <Route
+                    path="/onboarding/authorization"
+                    element={
+                      <ErrorBoundary fallbackTitle="Letter of Authorization failed to load">
+                        <OnboardingAuthorization />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/delivery/authorization"
+                    element={<Navigate to="/onboarding/authorization" replace />}
+                  />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/jurisdictions/compare" element={<JurisdictionComparison />} />
                   <Route path="/jurisdiction-comparison" element={<JurisdictionComparison />} />
                   <Route path="/jurisdictions/map" element={<JurisdictionMapPage />} />
                   <Route path="/jurisdictions/:stateCode" element={<StateLandingPage />} />
                   <Route path="/permit-intelligence" element={<PermitIntelligence />} />
+                  <Route path="/designcheck" element={<DesignCheck />} />
                   <Route path="/code-compliance" element={<CodeCompliance />} />
                   <Route path="/code-reference" element={<CodeReferenceLibrary />} />
                   <Route path="/roi-calculator" element={<ROICalculator />} />
@@ -134,20 +164,44 @@ const App = () => (
                     <Route path="jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
+                    <Route
+                      path="architecture-replication"
+                      element={<ArchitectureReplicationChecklist />}
+                    />
+                    <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
                     <Route path="members" element={<AdminMembers />} />
                     <Route path="audit" element={<AdminAudit />} />
-                    <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
                   </Route>
                   <Route path="/mvp-documentation" element={<MVPDocumentation />} />
                   <Route path="/api-docs" element={<APIDocumentation />} />
                   <Route path="/checklist-history" element={<ChecklistHistory />} />
+                  <Route path="/checklists" element={<ChecklistHistory />} />
+                  <Route path="/permit-queue" element={<PermitQueuePlaceholder />} />
+                  <Route path="/reference/glossary" element={<GlossaryPlaceholder />} />
+                  <Route
+                    path="/reference/utility-coverage"
+                    element={<UtilityCoveragePlaceholder />}
+                  />
+                  {/* Alias after specific /reference/* routes so children win ranking */}
+                  <Route path="/reference" element={<Navigate to="/code-reference" replace />} />
+                  <Route path="/messages" element={<MessagesPlaceholder />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route
                     path="/uci"
                     element={
-                      <div className="min-h-screen bg-background px-4 py-6 sm:px-6">
+                      <div className="min-h-screen bg-background">
                         <ErrorBoundary fallbackTitle="Utility Coordination dashboard failed to load">
                           <UciDashboard />
+                        </ErrorBoundary>
+                      </div>
+                    }
+                  />
+                  <Route
+                    path="/uci/application-builder"
+                    element={
+                      <div className="min-h-screen bg-background">
+                        <ErrorBoundary fallbackTitle="UCI Builder failed to load">
+                          <UciApplicationBuilder />
                         </ErrorBoundary>
                       </div>
                     }
@@ -157,6 +211,7 @@ const App = () => (
                   <Route path="/response-matrix" element={<ResponseMatrix />} />
                   <Route path="/classified-comments" element={<ClassifiedComments />} />
                   <Route path="/portal-data" element={<PortalDataViewer />} />
+                  <Route path="/operations" element={<OperationsBoard />} />
                   <Route path="/permit-wizard-filing" element={<PermitWizardFiling />} />
                   {/* Baltimore Accela portal clone (UI only, mock data) */}
                   <Route path="/baltimore" element={<BaltimorePortalHome />} />

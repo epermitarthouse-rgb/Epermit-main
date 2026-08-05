@@ -77,6 +77,8 @@ import { downloadChecklistPDF } from '@/lib/checklistPDF';
 import { downloadCombinedChecklistPDF, generateCombinedChecklistPDFBase64 } from '@/lib/combinedChecklistPDF';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { MetricCard, PageHeader, Panel } from '@/components/design/ProductPrimitives';
+import { EmptyState } from '@/components/design/EmptyState';
 import { ScheduledReportsManager } from '@/components/checklists/ScheduledReportsManager';
 import { EmailBrandingDialog } from '@/components/checklists/EmailBrandingDialog';
 import { EmailPreviewDialog } from '@/components/checklists/EmailPreviewDialog';
@@ -403,115 +405,85 @@ export default function ChecklistHistory() {
 
   if (authLoading) {
     return (
-      <div className="container mx-auto py-8 px-4">
-          <Skeleton className="h-10 w-64 mb-8" />
-          <div className="grid gap-4 md:grid-cols-4 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-24" />
-            ))}
-          </div>
-          <Skeleton className="h-12 w-full mb-4" />
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
-          </div>
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid gap-4 md:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
         </div>
+        <Skeleton className="h-12 w-full" />
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="container mx-auto py-16 px-4 text-center">
-          <AlertCircle className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Sign In Required</h1>
-          <p className="text-muted-foreground mb-6">
-            Please sign in to view your checklist history.
-          </p>
-          <Button onClick={() => navigate('/auth')}>Sign In</Button>
-        </div>
+      <div className="space-y-6">
+        <EmptyState
+          icon={AlertCircle}
+          title="Sign In Required"
+          body="Please sign in to view your checklist history."
+          action={<Button onClick={() => navigate('/auth')}>Sign In</Button>}
+        />
+      </div>
     );
   }
 
   return (
     <>
-      <div className="w-full max-w-7xl ml-0 mr-auto pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 py-4 sm:py-6 md:py-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ClipboardList className="h-8 w-8 text-primary" />
-            Checklist History
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Browse and manage all your saved inspection checklists across projects.
-          </p>
-        </motion.div>
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Checklists"
+          title="Checklist History"
+          body="Browse and manage all your saved inspection checklists across projects."
+        />
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              History
-            </TabsTrigger>
-            <TabsTrigger value="scheduled" className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" />
-              Scheduled Reports
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="scheduled" className="mt-6">
-            <ScheduledReportsManager />
-          </TabsContent>
-
-          <TabsContent value="history" className="mt-6">
-
-        {/* Stats Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid gap-4 md:grid-cols-5 mb-8"
-        >
-          <Card
-            className={`cursor-pointer transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary' : 'hover:shadow-md'}`}
+        <div className="grid gap-4 md:grid-cols-5">
+          <MetricCard
+            label="Total"
+            value={stats.total}
+            icon={ClipboardList}
+            detail="Saved checklists"
+            className={`cursor-pointer transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary' : ''}`}
             onClick={() => setStatusFilter('all')}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                </div>
-                <ClipboardList className="h-8 w-8 text-muted-foreground" />
-              </div>
-            </CardContent>
-          </Card>
-          {Object.entries(statusConfig).map(([status, config]) => {
-            const StatusIcon = config.icon;
-            return (
-              <Card
-                key={status}
-                className={`cursor-pointer transition-all ${statusFilter === status ? 'ring-2 ring-primary' : 'hover:shadow-md'}`}
-                onClick={() => setStatusFilter(status)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{config.label}</p>
-                      <p className="text-2xl font-bold">{stats[status as keyof typeof stats]}</p>
-                    </div>
-                    <StatusIcon className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </motion.div>
+          />
+          {Object.entries(statusConfig).map(([status, config]) => (
+            <MetricCard
+              key={status}
+              label={config.label}
+              value={stats[status as keyof typeof stats]}
+              icon={config.icon}
+              className={`cursor-pointer transition-all ${statusFilter === status ? 'ring-2 ring-primary' : ''}`}
+              onClick={() => setStatusFilter(status)}
+            />
+          ))}
+        </div>
+
+        <Panel>
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="history" className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                History
+              </TabsTrigger>
+              <TabsTrigger value="scheduled" className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" />
+                Scheduled Reports
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="scheduled" className="mt-6">
+              <ScheduledReportsManager />
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-6">
 
         {/* Filters */}
         <motion.div
@@ -707,15 +679,16 @@ export default function ChecklistHistory() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-16"
             >
-              <ClipboardList className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">No Checklists Found</h2>
-              <p className="text-muted-foreground">
-                {searchQuery || statusFilter !== 'all' || typeFilter !== 'All Types'
-                  ? 'Try adjusting your filters or search query.'
-                  : 'Create your first inspection checklist to get started.'}
-              </p>
+              <EmptyState
+                icon={ClipboardList}
+                title="No Checklists Found"
+                body={
+                  searchQuery || statusFilter !== 'all' || typeFilter !== 'All Types' || projectFilter !== 'all'
+                    ? 'Try adjusting your filters or search query.'
+                    : 'Create your first inspection checklist to get started.'
+                }
+              />
             </motion.div>
           ) : (
             <div className="space-y-4">
@@ -840,8 +813,9 @@ export default function ChecklistHistory() {
             </div>
           )}
         </AnimatePresence>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        </Panel>
       </div>
 
       {/* View Dialog */}

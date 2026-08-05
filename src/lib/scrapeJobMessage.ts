@@ -38,8 +38,9 @@ export function resolveScrapeCurrentMessage({
       (loading ? "Loading scrape progress…" : "Waiting for updates…");
   }
 
-  if (isStale && !isTerminal) {
-    return "Still working…";
-  }
+  // Stale activity is shown as a secondary badge in the panel — never replace
+  // the canonical backend / event message.
+  void isStale;
+  void isTerminal;
   return baseMessage;
 }

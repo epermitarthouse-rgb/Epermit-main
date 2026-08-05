@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot - Site Investigation Report</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style data-purpose="typography">
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    h1, h2, h3, .editorial-heading {
+      font-family: 'Cormorant Garamond', serif;
+    }
+    .tech-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+<style data-purpose="layout">
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr 300px;
+      min-height: 100vh;
+    }
+    .main-content {
+      height: calc(100vh - 64px);
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .status-yes { background-color: #dcfce7; color: #166534; }
+    .status-no { background-color: #fee2e2; color: #991b1b; }
+    .status-na { background-color: #f1f5f9; color: #475569; }
+  </style>
+</head>
+<body class="bg-slate-50">
+<!-- BEGIN: Top Navigation -->
+<header class="h-16 bg-slate-900 text-white flex items-center justify-between px-6 sticky top-0 z-50">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-lg tech-mono">P</div>
+<span class="font-semibold tracking-wide">PermitPilot</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-slate-800 rounded-full transition-colors"><i class="w-5 h-5 text-slate-300" data-lucide="bell"></i></button>
+<div class="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-medium">JD</div>
+</div>
+</header>
+<!-- END: Top Navigation -->
+<div class="layout-grid">
+<!-- BEGIN: Left Sidebar Navigation -->
+<aside class="bg-white border-r border-slate-200 flex flex-col pt-6 sticky top-16 h-[calc(100vh-64px)] overflow-y-auto">
+<div class="px-6 mb-6">
+<h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Contents</h3>
+<nav class="space-y-1">
+<a class="block px-3 py-2 text-sm font-medium rounded-md bg-blue-50 text-blue-700" href="#summary">Summary</a>
+<a class="block px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900" href="#civil-site">Civil / Site Review</a>
+<a class="block px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900" href="#landscaping">Landscaping &amp; Lighting</a>
+<a class="block px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900" href="#transportation">Transportation / DOT</a>
+<a class="block px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900" href="#drainage">Drainage &amp; Stormwater</a>
+<a class="block px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900" href="#utilities">Utilities Summary</a>
+<a class="block px-3 py-2 text-sm font-medium rounded-md text-slate-600 hover:bg-slate-50 hover:text-slate-900" href="#site-photos">Field Evidence</a>
+</nav>
+</div>
+</aside>
+<!-- END: Left Sidebar Navigation -->
+<!-- BEGIN: Main Content Area -->
+<main class="main-content p-8">
+<!-- Report Header -->
+<div class="mb-8 flex justify-between items-start">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<span class="tech-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">SIR-2022-0452</span>
+<span class="status-badge bg-emerald-100 text-emerald-800">Finalized</span>
+</div>
+<h1 class="text-4xl editorial-heading text-slate-900">Valvoline - Leesburg, VA</h1>
+<p class="text-slate-500 mt-2 text-sm">Site Investigation Report • Generated May 2022</p>
+</div>
+<div class="flex gap-3">
+<button class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+<i class="w-4 h-4" data-lucide="share"></i> Share
+          </button>
+<button class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-md text-sm font-medium text-white hover:bg-slate-800 shadow-sm transition-all">
+<i class="w-4 h-4" data-lucide="download"></i> Export PDF
+          </button>
+</div>
+</div>
+<!-- Conceptual Site Plan Preview -->
+<section class="mb-10 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" id="summary">
+<div class="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+<h2 class="text-2xl editorial-heading">Conceptual Site Plan</h2>
+<button class="text-blue-600 text-sm font-medium hover:underline">View Full Screen</button>
+</div>
+<div class="relative h-96 bg-slate-100 flex items-center justify-center overflow-hidden">
+<img alt="Conceptual Site Plan - Draft V1" class="object-cover w-full h-full opacity-90 mix-blend-multiply" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuJPVGrulAB5OIs7xgcCOYEsPA2r3WBbzYFJna9JmIsf7qadbsbl2EKLCrOBLAkjT0LKrN1hEL0dAH2tJLCFV_Px19T4u_o8t6kGjcCpWtto1TiV3zXJLbzkW6T9dcaA1GQ-ZbU11jKXDGQF4kMqyoH0YwMlBVmyCDDHcm02gwyB082y-9HLmwM_11XY7rSOnZBdwt1Ibo523tFFr7Nl7tGf-7UEjV0t_mA-1obv3gp1jp3jfcvRLbcwp4VNROKgBrNvo_nepCI-E"/>
+</div>
+</section>
+<!-- Civil / Site Review Section -->
+<section class="mb-10" id="civil-site">
+<h2 class="text-3xl editorial-heading mb-6 border-b border-slate-200 pb-2">Civil / Site Review <span class="text-lg text-slate-400 font-sans font-normal ml-2">- Phase 2</span></h2>
+<div class="bg-white shadow-sm rounded-xl border border-slate-200 overflow-hidden">
+<table class="w-full text-left border-collapse">
+<tbody class="divide-y divide-slate-100">
+<tr class="hover:bg-slate-50">
+<th class="py-3 px-4 font-medium text-sm text-slate-700 w-1/3 bg-slate-50/50">Will CSP Need to be Adjusted after SIR Review?</th>
+<td class="py-3 px-4"><span class="status-badge status-no">No</span></td>
+</tr>
+<tr class="hover:bg-slate-50">
+<th class="py-3 px-4 font-medium text-sm text-slate-700 bg-slate-50/50">Is LL Required to Apply?</th>
+<td class="py-3 px-4">
+<div class="flex items-start gap-4">
+<span class="status-badge status-yes mt-0.5">Yes</span>
+<span class="text-sm text-slate-600">The property owner/landlord is required to sign each and every submitted application.</span>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-slate-50">
+<th class="py-3 px-4 font-medium text-sm text-slate-700 bg-slate-50/50"># of Parking Spaces Req'd</th>
+<td class="py-3 px-4 text-sm text-slate-600">
+                  Vehicle Service Facility requires 1 space per 200sf of sales area; 2 spaces per service bay; and 1 space per employee. Based on no sales area, 3 service bays and 4 employees, 10 parking spaces are required. The concept plan shows 11 parking spaces are being proposed.
+                </td>
+</tr>
+<tr class="hover:bg-slate-50">
+<th class="py-3 px-4 font-medium text-sm text-slate-700 bg-slate-50/50">Trash Enclosure Requirements</th>
+<td class="py-3 px-4 text-sm text-slate-600">
+                  As detailed within the approved master site plans. Enclosure must be large enough to fully screen from view along with the dumpster. Constructed of CMU, bottom four courses painted black with aluminum gates and yellow bollards.
+                </td>
+</tr>
+</tbody>
+</table>
+<div class="p-4 bg-slate-50 border-t border-slate-200 text-sm">
+<strong class="text-slate-700 font-medium block mb-1">Additional Notes:</strong>
+<p class="text-slate-600 leading-relaxed">Once the CP Amendment and Special Exception applications have been approved... Completion of the Site Plan-Civil Engineering Application, Site Plan Submittal Checklist and Civil Engineering Checklist are required. Fees are estimated at <span class="tech-mono font-medium">$10,400.00</span>.</p>
+</div>
+</div>
+</section>
+<!-- Landscaping & Lighting -->
+<section class="mb-10" id="landscaping">
+<h2 class="text-3xl editorial-heading mb-6 border-b border-slate-200 pb-2">Landscaping &amp; Site Lighting</h2>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div class="bg-white shadow-sm rounded-xl border border-slate-200 p-5">
+<h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2"><i class="w-5 h-5 text-emerald-600" data-lucide="trees"></i> Landscaping</h3>
+<ul class="space-y-3 text-sm">
+<li class="flex justify-between items-center py-2 border-b border-slate-100">
+<span class="text-slate-600">Green Area Req'd</span>
+<span class="font-medium">20%</span>
+</li>
+<li class="flex justify-between items-center py-2 border-b border-slate-100">
+<span class="text-slate-600">Tree Removal Ordinance</span>
+<span class="status-badge status-no">No</span>
+</li>
+<li class="py-2">
+<span class="text-slate-600 block mb-1">Interior Requirements</span>
+<p class="text-slate-700 bg-slate-50 p-2 rounded text-xs leading-relaxed">1. A minimum of 5% of the VUA must be comprised of landscape area;<br/>2. Landscape areas must be a minimum of 145sf and a minimum width of 9';<br/>3. One medium canopy tree is required for every 16 parking spaces.</p>
+</li>
+</ul>
+</div>
+<div class="bg-white shadow-sm rounded-xl border border-slate-200 p-5">
+<h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2"><i class="w-5 h-5 text-amber-500" data-lucide="lightbulb"></i> Site Lighting</h3>
+<ul class="space-y-3 text-sm">
+<li class="flex justify-between items-center py-2 border-b border-slate-100">
+<span class="text-slate-600">Photometric Plan Required?</span>
+<span class="status-badge status-yes">Yes</span>
+</li>
+<li class="flex justify-between items-center py-2 border-b border-slate-100">
+<span class="text-slate-600">Light Pole Max Height?</span>
+<span class="font-medium">15'</span>
+</li>
+<li class="py-2">
+<span class="text-slate-600 block mb-1">Pole Type Requirement</span>
+<span class="font-medium">Shopping Center Standard</span>
+</li>
+</ul>
+</div>
+</div>
+</section>
+<!-- Field Evidence Gallery -->
+<section class="mb-10" id="site-photos">
+<h2 class="text-3xl editorial-heading mb-6 border-b border-slate-200 pb-2 flex justify-between items-end">
+          Field Survey Evidence
+          <span class="text-sm font-sans font-normal text-slate-500">Documented May 2022</span>
+</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="aspect-square rounded-lg overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer">
+<img alt="Site survey view 1" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMhGdvMUDVD6Lp-zqjC3TZAyPvN5S1ULrZ-_OvTQiUZk-sA3QREVzTdinwgauB3aEyWaz7iOcDat17fD-xO-iqRaZGJ1xN9wqAaqazJiwKJYiyq9Kax7BEykMjjriKkw9XAY23WzuT2B_ERPjlpmuOr7Hno7ez_pvsIM5cVIRURWZyjVYHvMWDdBOTp19mP8_wQbrTy8Ug0QzpPzcIMMqzD6gGNYYOcXR_ZkKs1ONhi0HFPjfZ2eTEvftp_HsL7eGlnhoGiEvq7pc"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<i class="text-white w-6 h-6" data-lucide="zoom-in"></i>
+</div>
+</div>
+<div class="aspect-square rounded-lg overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group cursor-pointer">
+<img alt="Site survey detail markers" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMOUCGzaw_LtOtrfrCl8Uh_zcn2vYvtdGLPNKianvobuHeBFEnY4TnhTWTlS9YkevynPdFqrSKhlQRp6wn1UWV2jMX91Nzn6YnUSkX6247_IRiVotpCFjP2f4xvKO8t1vhHud5NmILgfFWtmQOmDOLpl8G87MyeS2DUhYHExa6mQlW4h4PS0wT3-__ZeWUT5U2O98Jr_WVawWErZko6akzy3UJWzu01DREVJOQL8v-PW-1hpfOJVfLiGET-arS92WhiW8U7iKOsMg"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<i class="text-white w-6 h-6" data-lucide="zoom-in"></i>
+</div>
+</div>
+<div class="aspect-square rounded-lg overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-50 relative group cursor-pointer">
+<div class="text-center p-4">
+<i class="w-8 h-8 text-slate-400 mx-auto mb-2" data-lucide="image"></i>
+<span class="text-sm text-slate-600 font-medium">View All 12 Photos</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- END: Main Content Area -->
+<!-- BEGIN: Right Sidebar - Intelligence -->
+<aside class="bg-slate-50 border-l border-slate-200 p-6 flex flex-col h-[calc(100vh-64px)] sticky top-16 overflow-y-auto">
+<div class="mb-6 flex items-center gap-2 text-indigo-700">
+<i class="w-5 h-5" data-lucide="sparkles"></i>
+<h3 class="font-semibold uppercase tracking-wider text-sm">PermitPilot Intel</h3>
+</div>
+<div class="space-y-4">
+<div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
+<h4 class="text-sm font-semibold text-slate-800 mb-1">Institutional Memory</h4>
+<p class="text-xs text-slate-600 leading-relaxed">Typical processing time for Special Exception Applications with the Town of Leesburg Planning Commission is currently averaging 45-60 days based on recent data.</p>
+</div>
+<div class="bg-amber-50 p-4 rounded-lg border border-amber-200 shadow-sm">
+<h4 class="text-sm font-semibold text-amber-800 mb-1 flex items-center gap-1"><i class="w-4 h-4" data-lucide="alert-triangle"></i> Cost Alert</h4>
+<p class="text-xs text-amber-700 leading-relaxed">Sewer and Water Availability Fee is noted at <span class="tech-mono font-medium">$11,975.00</span>. Ensure this is factored into Q3 CapEx.</p>
+</div>
+<div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+<h4 class="text-sm font-semibold text-slate-800 mb-2">Key Contacts</h4>
+<div class="text-xs space-y-2">
+<div>
+<span class="block text-slate-500">Town of Leesburg Planning</span>
+<span class="font-medium text-slate-700">Michael Watkins</span>
+<a class="text-blue-600 block hover:underline tech-mono" href="mailto:mwatkins@leesburgva.gov">mwatkins@leesburgva.gov</a>
+</div>
+<div class="pt-2 border-t border-slate-100">
+<span class="block text-slate-500">Town of Leesburg Utilities</span>
+<span class="font-medium text-slate-700">Betsy Payne</span>
+<span class="block tech-mono text-slate-600">703.771.2762</span>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- END: Right Sidebar - Intelligence -->
+</div>
+<script data-purpose="icons-setup">
+    lucide.createIcons();
+  </script>
+</body></html>

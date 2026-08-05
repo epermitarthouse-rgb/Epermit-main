@@ -1849,10 +1849,6 @@ export type Database = {
       }
     }
     Functions: {
-      admin_list_member_directory: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
       has_project_access: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean

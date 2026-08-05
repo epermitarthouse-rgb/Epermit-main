@@ -1,55 +1,37 @@
 import { ReactNode, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { SelectedProjectProvider, useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
+import { SelectedProjectProvider } from "@/contexts/SelectedProjectContext";
 import { ScrapeProvider, useScrapeOptional } from "@/contexts/ScrapeContext";
-
 import { CommandPalette } from "@/components/navigation/CommandPalette";
 import { FloatingHelpWidget } from "@/components/help/FloatingHelpWidget";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ActiveProjectControl } from "@/components/layout/ActiveProjectControl";
+import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
 import { useAuth } from "@/hooks/useAuth";
-import { useProjects } from "@/hooks/useProjects";
-import { Search, LogIn, LogOut, Building2, MapPin, Loader2, Eye } from "lucide-react";
+import { resolvePageTitle } from "@/components/layout/hybridNav";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Eye,
+  Home,
+  Loader2,
+  LogIn,
+  LogOut,
+  Plus,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
   children: ReactNode;
-}
-
-function ActiveProjectBadge() {
-  const ctx = useSelectedProjectOptional();
-  const { projects } = useProjects();
-  if (!ctx?.selectedProjectId) return null;
-  const project = projects.find((p) => p.id === ctx.selectedProjectId);
-  if (!project) return null;
-  const permit = project.permit_number;
-  const jurisdiction = project.jurisdiction;
-  return (
-    <div className="flex items-center gap-2 truncate min-w-0 text-sm text-foreground/90" data-testid="header-active-project">
-      <Building2 className="h-3.5 w-3.5 shrink-0 text-gold" />
-      <span className="font-medium text-foreground truncate" data-testid="header-project-name">
-        {project.name}
-      </span>
-      {permit && (
-        <span
-          className="hidden sm:inline shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[11px] tabular-nums leading-none text-foreground shadow-sm"
-          data-testid="header-permit-number"
-        >
-          {permit}
-        </span>
-      )}
-      {jurisdiction && (
-        <span className="hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="header-jurisdiction">
-          <MapPin className="h-3 w-3 shrink-0 opacity-90" />
-          {jurisdiction}
-        </span>
-      )}
-    </div>
-  );
 }
 
 function ScrapeHeaderIndicator() {
@@ -61,27 +43,151 @@ function ScrapeHeaderIndicator() {
 
   return (
     <button
-      className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-warning/35 bg-warning/10 text-xs font-medium text-warning dark:border-primary/35 dark:bg-primary/12 dark:text-primary hover:bg-warning/18 dark:hover:bg-primary/18 transition-colors cursor-pointer max-w-[220px]"
+      type="button"
+      className="flex max-w-[140px] shrink cursor-pointer items-center gap-2 rounded-md border border-warning/35 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning transition-colors hover:bg-warning/18 sm:max-w-[180px] dark:border-primary/35 dark:bg-primary/12 dark:text-primary dark:hover:bg-primary/18"
       onClick={() => setScrapeMinimized(false)}
       data-testid="header-scrape-indicator"
     >
-      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-      <span className="hidden sm:inline text-xs font-medium truncate">{label}</span>
-      <span className="sm:hidden truncate">Scraping</span>
+      <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+      <span className="hidden truncate text-xs font-medium sm:inline">{label}</span>
+      <span className="truncate sm:hidden">Scraping</span>
       <Eye className="h-3 w-3 shrink-0 opacity-60" />
     </button>
   );
 }
 
+function AppHeader({
+  onOpenCommand,
+  onSignOut,
+}: {
+  onOpenCommand: () => void;
+  onSignOut: () => void;
+}) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const title = resolvePageTitle(pathname);
+  const isHome = pathname === "/dashboard";
+  const initials =
+    user?.email?.slice(0, 2).toUpperCase() ??
+    "PP";
+
+  return (
+    <header className="sticky top-0 z-30 min-w-0 overflow-hidden border-b border-border bg-background/90 backdrop-blur-xl">
+      <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 lg:px-8">
+        <SidebarTrigger className="h-9 w-9 shrink-0 border border-border bg-card text-foreground" />
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+            title="Back"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <AuthGatedLink
+            to="/dashboard"
+            aria-label="Go to dashboard"
+            title="Home"
+            aria-current={isHome ? "page" : undefined}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card transition-colors hover:text-foreground",
+              isHome ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            <Home className="h-4 w-4" />
+          </AuthGatedLink>
+        </div>
+
+        <div className="hidden min-w-0 max-w-[9rem] items-center gap-2 text-sm text-muted-foreground lg:flex xl:max-w-[14rem]">
+          <span className="shrink-0">PermitPilot</span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate font-medium text-foreground">{title}</span>
+        </div>
+
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1.5 overflow-hidden sm:gap-2">
+          <ScrapeHeaderIndicator />
+          <ActiveProjectControl />
+
+          <button
+            type="button"
+            onClick={onOpenCommand}
+            className="hidden min-w-0 max-w-[11rem] shrink items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left xl:flex"
+            aria-label="Open command palette"
+          >
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+              Search navigation…
+            </span>
+            <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium text-muted-foreground 2xl:flex">
+              ⌘K
+            </kbd>
+          </button>
+
+          <AuthGatedLink
+            to="/permit-wizard-filing"
+            className="pilot-button-primary hidden shrink-0 lg:inline-flex"
+            aria-label="New workflow"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden xl:inline">New workflow</span>
+          </AuthGatedLink>
+
+          <Link
+            to="/demo/mcdonalds"
+            className="pilot-button-primary inline-flex shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
+            aria-label="Request Demo"
+          >
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="hidden xl:inline">Request Demo</span>
+          </Link>
+
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <ThemeToggle />
+            <NotificationBell />
+
+            <Avatar className="hidden h-9 w-9 border border-border xl:flex">
+              <AvatarFallback className="bg-primary font-tight text-xs font-bold text-primary-foreground">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+
+            {user ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSignOut}
+                className="shrink-0 gap-2 border-border"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span className="hidden xl:inline">Sign Out</span>
+              </Button>
+            ) : (
+              <Button asChild variant="default" size="sm" className="shrink-0 gap-2">
+                <Link to="/auth" aria-label="Sign in">
+                  <LogIn className="h-4 w-4 shrink-0" />
+                  <span className="hidden xl:inline">Sign In</span>
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 function DashboardContent({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
   const scrape = useScrapeOptional();
 
   const handleSignOut = async () => {
-    scrape?.clearAccelaBrowserSession();
+    scrape?.resetScrapeUi();
     await signOut();
     toast.success("Signed out successfully");
     navigate("/");
@@ -89,67 +195,21 @@ function DashboardContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-50 flex h-16 items-center gap-2 sm:gap-4 border-b border-border/70 bg-background/85 px-3 text-foreground backdrop-blur-md sm:gap-4 sm:px-4 lg:px-6 dark:border-border/50">
-          <SidebarTrigger className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-muted/80 hover:text-foreground" />
-          
-          <div className="flex-1 min-w-0">
-            <ActiveProjectBadge />
-          </div>
-          
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <ScrapeHeaderIndicator />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="hidden sm:flex gap-2 border border-border/80 bg-muted/60 px-3 font-tight text-foreground/90 hover:bg-muted hover:text-foreground dark:border-border/50 dark:bg-muted/40"
-              onClick={() => setCommandOpen(true)}
-            >
-              <Search className="h-4 w-4 shrink-0 text-gold" />
-              <span className="text-muted-foreground">Search...</span>
-              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium tabular-nums text-muted-foreground sm:flex">
-                ⌘K
-              </kbd>
-            </Button>
-            <NotificationBell />
-            <ThemeToggle />
-            {user ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSignOut}
-                className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
-                aria-label="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </Button>
-            ) : (
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="gap-2 border border-gold text-gold hover:bg-gold hover:text-sidebar-primary-foreground dark:border-gold dark:text-gold dark:hover:bg-gold dark:hover:text-sidebar-primary-foreground"
-              >
-                <Link to="/auth" aria-label="Sign in">
-                  <LogIn className="h-4 w-4" />
-                  <span className="hidden sm:inline">Sign In</span>
-                </Link>
-              </Button>
-            )}
-          </div>
-        </header>
-        
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background pb-16 text-foreground md:pb-0">
-          {children}
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        <AppHeader
+          onOpenCommand={() => setCommandOpen(true)}
+          onSignOut={handleSignOut}
+        />
+
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-20 text-foreground md:px-6 md:pb-5 lg:px-8">
+          <div className="min-h-full min-w-0 max-w-full">{children}</div>
         </main>
-        
       </div>
-      
+
       <CommandPalette
         open={commandOpen}
         onOpenChange={setCommandOpen}
-        onOpenHelp={() => setHelpOpen(true)}
+        onOpenHelp={() => undefined}
       />
       <FloatingHelpWidget />
       <MobileBottomNav />
@@ -162,9 +222,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <SelectedProjectProvider>
       <ScrapeProvider>
         <SidebarProvider>
-          <div className="flex min-h-screen w-full bg-background text-foreground">
-            <AppSidebar />
-            <DashboardContent>{children}</DashboardContent>
+          <div className="signal-grid flex min-h-screen w-full overflow-x-hidden bg-background text-foreground">
+            <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden">
+              <AppSidebar />
+              <DashboardContent>{children}</DashboardContent>
+            </div>
           </div>
         </SidebarProvider>
       </ScrapeProvider>

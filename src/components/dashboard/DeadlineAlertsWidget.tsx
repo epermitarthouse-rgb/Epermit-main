@@ -31,6 +31,7 @@ interface DeadlineItem {
 export function DeadlineAlertsWidget() {
   const { user } = useAuth();
   const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
+  const [hasAnyDeadlines, setHasAnyDeadlines] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,11 +40,10 @@ export function DeadlineAlertsWidget() {
     const fetchDeadlines = async () => {
       setLoading(true);
       
-      // Fetch projects with deadlines that are not yet approved
+      // Eligible (non-approved) projects — distinguish "none set" vs "none in window"
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, deadline, status, jurisdiction')
-        .not('deadline', 'is', null)
         .neq('status', 'approved')
         .order('deadline', { ascending: true });
 
@@ -54,7 +54,13 @@ export function DeadlineAlertsWidget() {
       }
 
       const now = new Date();
-      const items: DeadlineItem[] = (data || []).map(project => {
+      const withDeadline = (data || []).filter(
+        (project): project is typeof project & { deadline: string } =>
+          project.deadline != null && String(project.deadline).trim() !== '',
+      );
+      setHasAnyDeadlines(withDeadline.length > 0);
+
+      const items: DeadlineItem[] = withDeadline.map(project => {
         const deadlineDate = parseISO(project.deadline);
         const daysUntil = differenceInDays(deadlineDate, now);
         
@@ -93,6 +99,7 @@ export function DeadlineAlertsWidget() {
   const overdueItems = deadlines.filter(d => d.isOverdue);
   const urgentItems = deadlines.filter(d => !d.isOverdue && d.daysUntil <= 7 && d.daysUntil >= 0);
   const upcomingItems = deadlines.filter(d => !d.isOverdue && d.daysUntil > 7 && d.daysUntil <= 30);
+  const inAlertWindowCount = overdueItems.length + urgentItems.length + upcomingItems.length;
 
   const getUrgencyBadge = (item: DeadlineItem) => {
     if (item.isOverdue) {
@@ -190,15 +197,25 @@ export function DeadlineAlertsWidget() {
           </Button>
         </div>
         <CardDescription className="text-ink-secondary-light">
-          Upcoming permit deadlines and overdue items
+          Portfolio · Upcoming permit deadlines and overdue items
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 min-h-0">
-        {deadlines.length === 0 ? (
+        {!hasAnyDeadlines ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <CalendarClock className="h-12 w-12 text-ink-tertiary-light mb-3" />
+            <p className="font-medium text-ink-primary-light">No deadlines set</p>
+            <p className="text-sm text-ink-secondary-light">
+              Add deadlines on active projects to see alerts here
+            </p>
+          </div>
+        ) : inAlertWindowCount === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <CheckCircle2 className="h-12 w-12 text-emerald-500 mb-3" />
-            <p className="font-medium text-ink-primary-light">All caught up!</p>
-            <p className="text-sm text-ink-secondary-light">No upcoming deadlines to worry about</p>
+            <p className="font-medium text-ink-primary-light">No overdue or upcoming deadlines</p>
+            <p className="text-sm text-ink-secondary-light">
+              Deadlines exist, but none fall in the current alert window
+            </p>
           </div>
         ) : (
           <Tabs defaultValue="overdue" className="w-full">

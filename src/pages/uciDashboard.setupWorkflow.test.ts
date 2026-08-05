@@ -18,9 +18,27 @@ describe("UciDashboard guided setup workflow regression", () => {
     assert.doesNotMatch(dashboardSource, /Select all/);
   });
 
-  it("hides portfolio and records until a project is selected", () => {
-    assert.match(dashboardSource, /\{projectId \? \(\s*\n\s*<\>/);
+  it("renders the coordination hub as primary content even before a project is selected", () => {
+    // The Lovable-style hub (KPI row, hub tiles, stage rail, records table,
+    // attention queue) must render unconditionally — never gated behind
+    // `{projectId ? (...) : null}` — so it is never hidden behind the setup
+    // form. Only a lightweight prompt banner should differ by project state.
+    assert.doesNotMatch(dashboardSource, /\{projectId \? \(\s*\n\s*<\>/);
+    assert.match(dashboardSource, /No project selected yet/);
+    assert.match(dashboardSource, /data-testid="uci-records-no-project"/);
     assert.match(workflowSource, /data-testid="uci-no-project-empty"/);
+  });
+
+  it("keeps the old setup form secondary — reachable from a hub tile, rendered after the hub", () => {
+    const hubIndex = dashboardSource.indexOf("Coordination modules");
+    const setupWorkflowSectionIndex = dashboardSource.indexOf('id="uci-setup-workflow"');
+    assert.ok(hubIndex >= 0, "hub panel title not found");
+    assert.ok(setupWorkflowSectionIndex >= 0, "secondary setup workflow section id not found");
+    assert.ok(
+      hubIndex < setupWorkflowSectionIndex,
+      "hub must render before the secondary setup workflow section",
+    );
+    assert.match(dashboardSource, /data-testid="uci-hub-tile-setup"/);
   });
 
   it("keeps provider directory in a collapsed reference section", () => {

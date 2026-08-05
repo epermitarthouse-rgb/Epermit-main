@@ -12,8 +12,6 @@ import { BaltimoreDetailSection } from "@/components/baltimore/BaltimoreDetailSe
 import { BaltimoreInfoGrid } from "@/components/baltimore/BaltimoreInfoGrid";
 import { BaltimorePanelTable } from "@/components/baltimore/BaltimorePanelTable";
 import { getBaltimoreRecordDetail } from "@/data/baltimorePortalMock";
-import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
-import { cn } from "@/lib/utils";
 
 export default function BaltimoreRecordDetailPage() {
   const { recordId } = useParams<{ recordId: string }>();
@@ -35,8 +33,8 @@ export default function BaltimoreRecordDetailPage() {
   if (!recordId) {
     return (
       <BaltimoreLayout activeModule="permits" permitsSubActive="search">
-        <Card className={EDITORIAL_FORM_CARD}>
-          <CardContent className="py-12 text-center text-sm text-ink-secondary-light">
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
             Missing record ID.
           </CardContent>
         </Card>
@@ -47,8 +45,8 @@ export default function BaltimoreRecordDetailPage() {
   if (!record) {
     return (
       <BaltimoreLayout activeModule="permits" permitsSubActive="search">
-        <Card className={EDITORIAL_FORM_CARD}>
-          <CardContent className="py-12 text-center text-sm text-ink-secondary-light">
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
             Record not found.
           </CardContent>
         </Card>
@@ -61,7 +59,7 @@ export default function BaltimoreRecordDetailPage() {
       <div className="space-y-6">
         <BaltimoreRecordHeader record={record} />
 
-        <Card className={cn(EDITORIAL_FORM_CARD, "overflow-hidden")}>
+        <Card className="overflow-hidden">
           <BaltimoreRecordTabBar
             activePanel={activePanel}
             onPanelChange={setActivePanel}
@@ -196,7 +194,7 @@ export default function BaltimoreRecordDetailPage() {
                       render: (r) => (
                         <Link
                           to={`/baltimore/records/${encodeURIComponent(r.recordId as string)}`}
-                          className="text-gold-deep hover:underline underline-offset-2 font-medium"
+                          className="text-primary hover:underline underline-offset-2 font-medium"
                         >
                           {r.recordNumber as string}
                         </Link>
@@ -238,7 +236,7 @@ export default function BaltimoreRecordDetailPage() {
                       key: "action",
                       header: "Action",
                       render: (r) => (
-                        <span className="cursor-pointer text-gold-deep hover:underline underline-offset-2 font-medium">
+                        <span className="cursor-pointer text-primary hover:underline underline-offset-2 font-medium">
                           {(r.actionLabel as string) || "View"}
                         </span>
                       ),

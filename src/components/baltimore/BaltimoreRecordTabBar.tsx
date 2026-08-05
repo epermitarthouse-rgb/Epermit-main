@@ -51,14 +51,14 @@ export function BaltimoreRecordTabBar({
 }: BaltimoreRecordTabBarProps) {
   if (minimalSections) {
     return (
-      <div className="flex flex-wrap items-center gap-1 border-b border-cream-sunken bg-cream-raised p-1">
+      <div className="flex flex-wrap items-center gap-1 border-b bg-card p-1">
         {MINIMAL_RECORD_PANELS.map((key) => (
           <Button
             key={key}
             variant="ghost"
             size="sm"
             className={cn(
-              activePanel === key && "bg-gold/14 text-gold-deep font-medium border border-gold/30 shadow-sm",
+              activePanel === key && "bg-primary/10 text-primary font-medium border border-primary/30 shadow-sm",
             )}
             onClick={() => onPanelChange(key)}
           >
@@ -80,13 +80,13 @@ export function BaltimoreRecordTabBar({
   const isPlanReview = activePanel === "plan_review";
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-cream-sunken bg-cream-raised p-1">
+    <div className="flex flex-wrap items-center gap-1 border-b bg-card p-1">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className={cn("gap-1", isRecordInfo && "bg-gold/14 text-gold-deep border border-gold/30")}
+            className={cn("gap-1", isRecordInfo && "bg-primary/10 text-primary border border-primary/30")}
           >
             Record Info
             <ChevronDown className="h-3.5 w-3.5" />
@@ -98,7 +98,7 @@ export function BaltimoreRecordTabBar({
               <DropdownMenuItem
                 key={key}
                 onClick={() => onPanelChange(key)}
-                className={cn(activePanel === key && "bg-gold/12 text-gold-deep font-medium")}
+                className={cn(activePanel === key && "bg-primary/10 text-primary font-medium")}
               >
                 {RECORD_INFO_LABELS[key]}
               </DropdownMenuItem>
@@ -112,7 +112,7 @@ export function BaltimoreRecordTabBar({
           <Button
             variant="ghost"
             size="sm"
-            className={cn("gap-1", isPayments && "bg-gold/14 text-gold-deep border border-gold/30")}
+            className={cn("gap-1", isPayments && "bg-primary/10 text-primary border border-primary/30")}
           >
             Payments
             <ChevronDown className="h-3.5 w-3.5" />
@@ -121,7 +121,7 @@ export function BaltimoreRecordTabBar({
         <DropdownMenuContent align="start" className="min-w-[140px]">
           <DropdownMenuItem
             onClick={() => onPanelChange("fees")}
-            className={cn(activePanel === "fees" && "bg-gold/12 text-gold-deep font-medium")}
+            className={cn(activePanel === "fees" && "bg-primary/10 text-primary font-medium")}
           >
             Fees
           </DropdownMenuItem>
@@ -131,7 +131,7 @@ export function BaltimoreRecordTabBar({
       <Button
         variant="ghost"
         size="sm"
-        className={cn(isPlanReview && "bg-gold/14 text-gold-deep border border-gold/30")}
+        className={cn(isPlanReview && "bg-primary/10 text-primary border border-primary/30")}
         onClick={() => onPanelChange("plan_review")}
       >
         Plan Review

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PermitPilot - Site Investigation Report</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&amp;family=Inter+Tight:ital,wght@0,100..900;1,100..900&amp;family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "#572b00",
+                        "on-error": "#ffffff",
+                        "background": "#fff8f5",
+                        "text-muted": "#64748B",
+                        "tertiary-fixed-dim": "#9bccf6",
+                        "inverse-on-surface": "#ffede3",
+                        "outline-variant": "#dbc2b1",
+                        "on-surface": "#221a13",
+                        "on-primary": "#ffffff",
+                        "surface": "#fff8f5",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#0f1c2d",
+                        "surface-tint": "#914c00",
+                        "background-alt": "#F5F8FB",
+                        "secondary-fixed": "#d6e3fb",
+                        "surface-dim": "#e8d7cc",
+                        "status-success": "#137333",
+                        "primary-fixed-dim": "#ffb77e",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "on-tertiary-container": "#003a59",
+                        "on-primary-fixed": "#2f1500",
+                        "inverse-primary": "#ffb77e",
+                        "on-secondary-fixed-variant": "#3b475a",
+                        "on-error-container": "#93000a",
+                        "secondary": "#535f73",
+                        "on-secondary-container": "#596579",
+                        "error-container": "#ffdad6",
+                        "primary": "#914c00",
+                        "surface-bright": "#fff8f5",
+                        "secondary-container": "#d6e3fb",
+                        "on-background": "#221a13",
+                        "primary-fixed": "#ffdcc3",
+                        "surface-container-low": "#fff1e9",
+                        "on-tertiary-fixed": "#001e30",
+                        "on-surface-variant": "#554337",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#bac7de",
+                        "surface-container-high": "#f6e5da",
+                        "status-warning": "#B06000",
+                        "primary-container": "#e8882f",
+                        "on-tertiary-fixed-variant": "#0e4b6e",
+                        "surface-variant": "#f1dfd5",
+                        "surface-border": "#E2E8F0",
+                        "tertiary-fixed": "#cbe6ff",
+                        "surface-container": "#fcebe0",
+                        "tertiary": "#2f6388",
+                        "status-error": "#C5221F",
+                        "outline": "#887365",
+                        "tertiary-container": "#74a5cd",
+                        "surface-container-highest": "#f1dfd5",
+                        "inverse-surface": "#382e27"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "xl": "40px",
+                        "lg": "24px",
+                        "gutter": "24px",
+                        "xxl": "64px",
+                        "sm": "8px",
+                        "margin": "32px",
+                        "unit": "4px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "h3": ["Inter Tight"],
+                        "h2": ["Inter Tight"],
+                        "body-sm": ["Inter"],
+                        "display-lg": ["Cormorant Garamond"],
+                        "label-caps": ["Inter Tight"],
+                        "h1": ["Inter Tight"],
+                        "body-md": ["Inter"],
+                        "data-mono": ["JetBrains Mono"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "h3": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "h2": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "h1": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "data-mono": ["14px", { "lineHeight": "1.4", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Custom scrollbar for high-density tables */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #F5F8FB; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="bg-background-alt text-on-background font-body-md antialiased overflow-x-hidden">
+<!-- SideNavBar (JSON Derived) -->
+<nav class="h-screen w-64 fixed left-0 top-0 bg-[#0E1B2C] dark:bg-slate-950 border-r border-white/10 flex flex-col py-8 z-40 shadow-sm">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-serif text-white tracking-tight">PermitPilot</h1>
+<p class="text-slate-400 font-label-caps text-label-caps mt-1">Intelligence Platform</p>
+</div>
+<div class="flex flex-col flex-1 gap-1">
+<a class="text-slate-400 flex items-center gap-3 px-6 py-3 hover:bg-white/5 hover:text-white transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+                Dashboard
+            </a>
+<a class="text-slate-400 flex items-center gap-3 px-6 py-3 hover:bg-white/5 hover:text-white transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">description</span>
+                Permits
+            </a>
+<!-- Active State Applied Here to Analytics -->
+<a class="bg-white/10 text-orange-400 border-l-4 border-orange-500 flex items-center gap-3 px-6 py-3 scale-95 duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">monitoring</span>
+                Analytics
+            </a>
+<a class="text-slate-400 flex items-center gap-3 px-6 py-3 hover:bg-white/5 hover:text-white transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">local_shipping</span>
+                Logistics
+            </a>
+<a class="text-slate-400 flex items-center gap-3 px-6 py-3 hover:bg-white/5 hover:text-white transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+                Settings
+            </a>
+</div>
+<div class="px-6 mt-auto mb-6">
+<button class="w-full bg-[#E8882F] text-white py-2 px-4 rounded-lg font-body-md text-body-md flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Permit
+            </button>
+</div>
+<div class="flex flex-col gap-1 border-t border-white/10 pt-4">
+<a class="text-slate-400 flex items-center gap-3 px-6 py-2 hover:bg-white/5 hover:text-white transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">help</span>
+                Help Center
+            </a>
+<a class="text-slate-400 flex items-center gap-3 px-6 py-2 hover:bg-white/5 hover:text-white transition-all font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">logout</span>
+                Sign Out
+            </a>
+</div>
+</nav>
+<!-- Main Canvas -->
+<main class="ml-64 p-margin min-h-screen">
+<!-- Header -->
+<header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-lg gap-4">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-status-success/10 text-status-success tracking-wider uppercase">Active Investigation</span>
+<span class="font-data-mono text-data-mono text-text-muted">ID: SIR-8820-X</span>
+</div>
+<h1 class="font-h1 text-h1 text-on-surface">Site Investigation Report</h1>
+<p class="font-body-md text-body-md text-text-muted mt-1">Project Alpha-09 • 1440 Industrial Parkway</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="bg-surface text-on-surface border border-surface-border py-2 px-4 rounded-lg font-body-md text-body-md hover:bg-surface-dim transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                    Export PDF
+                </button>
+<button class="bg-primary-container text-white py-2 px-4 rounded-lg font-body-md text-body-md hover:opacity-90 transition-opacity shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">done_all</span>
+                    Finalize Report
+                </button>
+</div>
+</header>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Section 1: Utility Infrastructure Status (Spans 8 columns) -->
+<section class="lg:col-span-8 bg-surface rounded-xl border border-surface-border shadow-[0_4px_20px_rgba(14,27,44,0.02)] overflow-hidden relative group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-container/5 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+<div class="p-lg border-b border-surface-border flex justify-between items-center bg-[#F8FAFC]">
+<h2 class="font-h3 text-h3 text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">schema</span>
+                        Utility Infrastructure Status
+                    </h2>
+<span class="font-data-mono text-data-mono text-text-muted">Last surveyed: 24h ago</span>
+</div>
+<div class="flex flex-col md:flex-row">
+<!-- Mini Map representation -->
+<div class="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-surface-border bg-surface-dim relative h-48 md:h-auto">
+<img alt="Map view" class="absolute inset-0 w-full h-full object-cover mix-blend-luminosity opacity-80" data-alt="A clean, modern satellite map view of an industrial utility district. The image is styled in a light mode, highly legible technical aesthetic with subtle blue and grey routing lines superimposed. It evokes a sense of precise civil engineering and spatial intelligence planning, avoiding clutter to maintain a corporate professional mood." data-location="Industrial District Map" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqosUTy1Kx270X_SFAEq5SdwkEG9dgYJBp5ppenw6DeQEi9mOkwyPmlOIFNIWve4sgUKdOdX0RkIWLEclukaRig-bA0oEKcupHw4DJL5zBkqLk1PBSvCBqJzTlXpGI1sIphFb7t5y6Kord_e1M0zvHSrIDxqjSzN2XM8sTKlF8q4PPhjHjZ9McoeNvHqrQS_5nYvvSnVeG0hliJuuX7GIdv1kfYjy-ahgzMlN7ALpep51FU8DG_U8MHraJg9UG1NtUIws-qlrRopk"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface/80 to-transparent flex items-end p-md">
+<span class="font-label-caps text-label-caps bg-surface text-on-surface px-2 py-1 rounded shadow-sm border border-surface-border">Grid Zone: Sector 4</span>
+</div>
+</div>
+<!-- Data Table -->
+<div class="w-full md:w-2/3 p-0 custom-scrollbar overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-[#F8FAFC]">
+<th class="font-label-caps text-label-caps text-text-muted py-3 px-md border-b border-surface-border uppercase">Utility Type</th>
+<th class="font-label-caps text-label-caps text-text-muted py-3 px-md border-b border-surface-border uppercase">Nearest Node</th>
+<th class="font-label-caps text-label-caps text-text-muted py-3 px-md border-b border-surface-border uppercase">Distance</th>
+<th class="font-label-caps text-label-caps text-text-muted py-3 px-md border-b border-surface-border uppercase">Capacity Status</th>
+</tr>
+</thead>
+<tbody>
+<tr class="hover:bg-[#F8FAFC] transition-colors group">
+<td class="py-4 px-md border-b border-surface-border font-body-sm text-body-sm text-on-surface flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-orange-500"></span> Electric
+                                    </td>
+<td class="py-4 px-md border-b border-surface-border font-data-mono text-data-mono text-on-surface">Substation 12-B</td>
+<td class="py-4 px-md border-b border-surface-border font-data-mono text-data-mono text-text-muted group-hover:text-primary-container transition-colors">1.2 km</td>
+<td class="py-4 px-md border-b border-surface-border">
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-status-success/10 text-status-success">Available</span>
+</td>
+</tr>
+<tr class="hover:bg-[#F8FAFC] transition-colors group">
+<td class="py-4 px-md border-b border-surface-border font-body-sm text-body-sm text-on-surface flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-blue-500"></span> Water Lateral
+                                    </td>
+<td class="py-4 px-md border-b border-surface-border font-data-mono text-data-mono text-on-surface">Main Line 88</td>
+<td class="py-4 px-md border-b border-surface-border font-data-mono text-data-mono text-text-muted group-hover:text-primary-container transition-colors">450 m</td>
+<td class="py-4 px-md border-b border-surface-border">
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-status-warning/10 text-status-warning">Review Req</span>
+</td>
+</tr>
+<tr class="hover:bg-[#F8FAFC] transition-colors group">
+<td class="py-4 px-md font-body-sm text-body-sm text-on-surface flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-yellow-500"></span> Gas Main
+                                    </td>
+<td class="py-4 px-md font-data-mono text-data-mono text-on-surface">Valve Stn Alpha</td>
+<td class="py-4 px-md font-data-mono text-data-mono text-text-muted group-hover:text-primary-container transition-colors">2.1 km</td>
+<td class="py-4 px-md">
+<span class="font-label-caps text-label-caps px-2 py-1 rounded bg-status-success/10 text-status-success">High Vol</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- Section 3: CAPEX Impact (Spans 4 columns) -->
+<section class="lg:col-span-4 bg-surface rounded-xl border border-surface-border shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg flex flex-col relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary-container/10 rounded-bl-full pointer-events-none"></div>
+<h2 class="font-h3 text-h3 text-on-surface mb-md flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">account_balance</span>
+                    CAPEX Impact
+                </h2>
+<div class="flex-1 flex flex-col justify-center gap-6">
+<div>
+<p class="font-label-caps text-label-caps text-text-muted uppercase mb-1">Estimated CIAC</p>
+<div class="flex items-baseline gap-2">
+<span class="font-h1 text-h1 text-on-surface">$142,500</span>
+<span class="font-data-mono text-data-mono text-status-success flex items-center text-xs">
+<span class="material-symbols-outlined text-[14px]">arrow_downward</span> 4.2%
+                            </span>
+</div>
+<p class="font-body-sm text-body-sm text-text-muted mt-1 leading-snug">Contribution in Aid of Construction based on linear distance models.</p>
+</div>
+<div class="border-t border-surface-border pt-6">
+<p class="font-label-caps text-label-caps text-text-muted uppercase mb-1">Service &amp; Tap Fees</p>
+<div class="flex items-baseline gap-2">
+<span class="font-h2 text-h2 text-on-surface">$18,200</span>
+</div>
+<div class="w-full bg-surface-border h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-primary-container h-full rounded-full" style="width: 65%;"></div>
+</div>
+<p class="font-data-mono text-data-mono text-xs text-text-muted mt-2 text-right">65% Confidence Interval</p>
+</div>
+</div>
+</section>
+<!-- Section 2: The 10-Stage Prediction (Spans 4 columns) -->
+<section class="lg:col-span-4 bg-surface rounded-xl border border-surface-border shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg h-full">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-h3 text-h3 text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">timeline</span>
+                        10-Stage Prediction
+                    </h2>
+<span class="font-label-caps text-label-caps bg-primary-container/10 text-primary-container px-2 py-1 rounded">AI FORECAST</span>
+</div>
+<div class="relative pl-3 border-l-2 border-surface-border space-y-6 mt-4">
+<!-- Stage 1 -->
+<div class="relative">
+<div class="absolute -left-[21px] top-1 w-3 h-3 bg-status-success rounded-full ring-4 ring-surface"></div>
+<p class="font-label-caps text-label-caps text-text-muted">STAGE 01 - COMPLETE</p>
+<div class="flex justify-between items-end mt-1">
+<h3 class="font-body-md text-body-md text-on-surface font-semibold">Initial Site Survey</h3>
+<span class="font-data-mono text-data-mono text-text-muted">Oct 12</span>
+</div>
+</div>
+<!-- Stage 2 -->
+<div class="relative">
+<div class="absolute -left-[21px] top-1 w-3 h-3 bg-primary-container rounded-full ring-4 ring-surface animate-pulse"></div>
+<p class="font-label-caps text-label-caps text-primary-container">STAGE 02 - IN PROGRESS (85% PROB)</p>
+<div class="flex justify-between items-end mt-1">
+<h3 class="font-body-md text-body-md text-on-surface font-semibold">Utility Conflict Review</h3>
+<span class="font-data-mono text-data-mono text-on-surface">Oct 28</span>
+</div>
+</div>
+<!-- Stage 3 -->
+<div class="relative">
+<div class="absolute -left-[21px] top-1 w-3 h-3 bg-surface-border rounded-full ring-4 ring-surface"></div>
+<p class="font-label-caps text-label-caps text-text-muted">STAGE 03 - PENDING (60% PROB)</p>
+<div class="flex justify-between items-end mt-1">
+<h3 class="font-body-md text-body-md text-text-muted">Design Submittal</h3>
+<span class="font-data-mono text-data-mono text-text-muted">Nov 15</span>
+</div>
+</div>
+<!-- Stage 10 (Target) -->
+<div class="relative pt-4 border-t border-surface-border/50 border-dashed">
+<div class="absolute -left-[21px] top-5 w-3 h-3 bg-[#0f1c2d] rounded-full ring-4 ring-surface"></div>
+<p class="font-label-caps text-label-caps text-text-muted">STAGE 10 - TARGET</p>
+<div class="flex justify-between items-end mt-1">
+<h3 class="font-body-md text-body-md text-on-surface font-bold">Energization Date</h3>
+<span class="font-data-mono text-data-mono text-on-surface font-bold">Mar 2025</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 4: Field Survey Photos (Spans 8 columns) -->
+<section class="lg:col-span-8 bg-surface rounded-xl border border-surface-border shadow-[0_4px_20px_rgba(14,27,44,0.02)] p-lg">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-h3 text-h3 text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">photo_library</span>
+                        Field Survey Documentation
+                    </h2>
+<button class="bg-surface text-on-surface border border-surface-border py-1.5 px-3 rounded text-sm font-body-sm hover:bg-surface-dim transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">upload</span> Upload
+                    </button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+<!-- Photo Card 1 -->
+<div class="group relative rounded-lg overflow-hidden border border-surface-border h-40 bg-surface-dim cursor-pointer">
+<img alt="Transformer pad" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="A highly detailed close-up shot of an industrial electrical transformer pad sitting on concrete, taken during daytime. The lighting is crisp, bright, and highly legible, fitting a modern corporate light-mode UI report. The scene conveys institutional reliability and structured engineering, with subtle navy and grey tones dominating the technical equipment against a clean, uncluttered background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDegfIeYEmgjjcaShTmLSr1cUqvWA0SrU1s9h03SQOk73SNj-m36tPjiTU3vEWOswvyMSUr-NILc0NSYa-YmrrMjzjsUTusA8T5HR4-Dw1XOGfSL3VL2UlO4T9hnlytORQ0lj1t8ST4KleGjNIn1HhZ8eHGGpdRcH-GVAY1JvS0t3tTJTiszOKH81cMzq-BCtJLasCgE5t33SmIOwTVo1WvB6qW5sYdntztfctX6Xg9jGhSkwc8RiN4TbcsXYSQUDv36vYGSayCuBc"/>
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#0E1B2C]/90 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+<p class="font-data-mono text-data-mono text-white text-xs">TR-PAD-01</p>
+<p class="font-body-sm text-body-sm text-slate-300 text-xs">Northwest corner</p>
+</div>
+</div>
+<!-- Photo Card 2 -->
+<div class="group relative rounded-lg overflow-hidden border border-surface-border h-40 bg-surface-dim cursor-pointer">
+<img alt="Utility conduit" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 grayscale opacity-80" data-alt="A clear, sharply focused photograph of underground utility conduit pipes exposed in a clean, excavated trench. The visual style is strictly professional and documentary, utilizing high-key natural lighting to illuminate the textures of the industrial materials. The color palette leans heavily into cool greys and earthy tones, maintaining consistency with a high-end technical engineering dashboard aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuxkC5R8Su56yrMBjhpKKPhAXk2eJ4fSYKPJ9SGPqe4q7Np1hd0k0U5W8SVm-4shZU7GL3n0MJwLTeFaZ_tUo1USSaS5ZTuGTcDQ-PLXoiCOyxiIgE1luUUO5ZsWHpGmluhJrcdtwqwXVmW_9_Buc5Fs5pxJdHtiK7h1NldStU297vebWXg17xpUha5V9wAPpZWKF0L7Eo0NoWY_okNjx8WVSEM6f1zkZhdulT6dJWlDFvcWZzUNrQOsMp-QgGyKj-Xfi5EfdQ1Lo"/>
+<div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#0E1B2C]/90 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+<p class="font-data-mono text-data-mono text-white text-xs">CND-TRENCH</p>
+<p class="font-body-sm text-body-sm text-slate-300 text-xs">Main lateral run</p>
+</div>
+</div>
+<!-- Add New Placeholder -->
+<div class="rounded-lg border-2 border-dashed border-surface-border h-40 bg-background flex flex-col items-center justify-center text-text-muted hover:bg-surface hover:text-primary-container transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-[32px] mb-2 group-hover:-translate-y-1 transition-transform">add_a_photo</span>
+<span class="font-label-caps text-label-caps">Add Evidence</span>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

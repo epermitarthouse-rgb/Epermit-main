@@ -31,8 +31,11 @@ import {
   User,
   Table2,
   Database,
+  Inbox,
+  Network,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { isPublicShellHref } from "@/lib/authGatedNav";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -49,9 +52,47 @@ const navigationItems = [
 ];
 
 const toolItems = [
-  { name: "AI Compliance", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code"] },
-  { name: "Response Matrix", href: "/response-matrix", icon: Table2, keywords: ["response", "matrix", "comments", "responses"] },
-  { name: "Code Library", href: "/code-reference", icon: BookOpen, keywords: ["library", "reference", "codes"] },
+  {
+    name: "DesignCheck",
+    href: "/designcheck",
+    icon: Shield,
+    keywords: ["designcheck", "design check", "readiness", "compliance", "presubmittal", "pre-submittal"],
+    requiresAuth: true,
+  },
+  { name: "Code Compliance Analyzer", href: "/code-compliance", icon: Shield, keywords: ["compliance", "check", "ai", "code", "analyzer"] },
+  {
+    name: "Response Matrix",
+    href: "/response-matrix",
+    icon: Table2,
+    keywords: [
+      "response",
+      "matrix",
+      "comments",
+      "responses",
+      "classified",
+      "discipline",
+      "draft",
+      "approve",
+      "export",
+    ],
+  },
+  {
+    name: "Comment Review",
+    href: "/comment-review",
+    icon: FileText,
+    keywords: ["comment", "review", "upload", "parse", "letter", "approve rows"],
+    requiresAuth: true,
+  },
+  { name: "Utility Coordination", href: "/uci", icon: Database, keywords: ["uci", "utility", "coordination", "pepco"] },
+  { name: "UCI · Load Profile", href: "/uci?section=load-profile", icon: Database, keywords: ["uci", "load", "profile"] },
+  { name: "UCI · Application Prep", href: "/uci?section=application-builder", icon: Database, keywords: ["uci", "application", "builder", "prep"] },
+  { name: "UCI Builder", href: "/uci/application-builder", icon: Database, keywords: ["uci", "application", "builder", "commercial service"] },
+  {
+    name: "Reference Library",
+    href: "/code-reference",
+    icon: BookOpen,
+    keywords: ["library", "reference", "codes", "code library"],
+  },
   { name: "ROI Calculator", href: "/roi-calculator", icon: Calculator, keywords: ["roi", "calculator", "savings"] },
 ];
 
@@ -62,10 +103,40 @@ const jurisdictionItems = [
 ];
 
 const resourceItems = [
+  {
+    name: "Demo",
+    href: "/demo/mcdonalds",
+    icon: PlayCircle,
+    keywords: ["demo", "mcdonalds", "executive", "tour"],
+    requiresAuth: true,
+  },
   { name: "Demos", href: "/demos", icon: PlayCircle, keywords: ["demos", "examples", "videos"] },
+  {
+    name: "Client Authorization (LOA)",
+    href: "/onboarding/authorization",
+    icon: FileText,
+    keywords: ["loa", "authorization", "onboarding", "letter", "signature"],
+    requiresAuth: true,
+  },
+  { name: "Checklists", href: "/checklist-history", icon: FileText, keywords: ["checklists", "checklist history"], requiresAuth: true },
+  {
+    name: "Utility Coverage",
+    href: "/reference/utility-coverage",
+    icon: Network,
+    keywords: ["utility", "coverage", "providers", "coming soon"],
+  },
+  { name: "Glossary", href: "/reference/glossary", icon: BookOpen, keywords: ["glossary", "terms", "coming soon"], requiresAuth: true },
+  {
+    name: "Messages",
+    href: "/messages",
+    icon: Inbox,
+    keywords: ["messages", "inbox", "coming soon"],
+    requiresAuth: true,
+  },
   { name: "Pricing", href: "/pricing", icon: DollarSign, keywords: ["pricing", "plans", "cost"] },
   { name: "FAQ", href: "/faq", icon: HelpCircle, keywords: ["faq", "questions", "help"] },
-  { name: "Documentation", href: "/api-documentation", icon: FileQuestion, keywords: ["docs", "api", "documentation"] },
+  { name: "Documentation", href: "/api-docs", icon: FileQuestion, keywords: ["docs", "api", "documentation"] },
+  { name: "Permit Queue", href: "/permit-queue", icon: FileText, keywords: ["queue", "filings", "coming soon"], requiresAuth: true },
   { name: "Contact", href: "/contact", icon: Mail, keywords: ["contact", "support", "email"] },
 ];
 
@@ -82,24 +153,33 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
     command();
   }, [onOpenChange]);
 
-  const filterItems = (items: typeof navigationItems) => {
-    return items.filter(item => !item.requiresAuth || user);
-  };
+  // Anonymous visitors still see every command (Lovable pattern); selecting one that
+  // requires a session redirects to /auth instead of navigating straight to the route.
+  const goTo = useCallback(
+    (href: string) => {
+      if (!user && !isPublicShellHref(href)) {
+        navigate("/auth", { state: { from: { pathname: href } } });
+        return;
+      }
+      navigate(href);
+    },
+    [user, navigate],
+  );
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search..." />
+      <CommandInput placeholder="Search navigation pages…" />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        <CommandEmpty>No navigation matches. Live project/permit search is not connected yet.</CommandEmpty>
 
-        <CommandGroup heading="Navigation">
-          {filterItems(navigationItems).map((item) => {
+        <CommandGroup heading="Pages">
+          {navigationItems.map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -117,7 +197,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -135,7 +215,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -153,7 +233,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>
@@ -173,13 +253,13 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
             <span>Open Help</span>
             <CommandShortcut>?</CommandShortcut>
           </CommandItem>
-          {filterItems(settingsItems).map((item) => {
+          {settingsItems.map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
                 key={item.href}
                 value={item.name + " " + item.keywords.join(" ")}
-                onSelect={() => runCommand(() => navigate(item.href))}
+                onSelect={() => runCommand(() => goTo(item.href))}
               >
                 <Icon className="mr-2 h-4 w-4" />
                 <span>{item.name}</span>

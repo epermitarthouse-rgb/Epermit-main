@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import { JurisdictionMap } from '@/components/jurisdictions/JurisdictionMap';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Map, Loader2, AlertCircle } from 'lucide-react';
-import { EditorialPageHeader } from '@/components/layout/EditorialPageHeader';
-import { EDITORIAL_FORM_CARD } from '@/components/layout/editorialPageChrome';
-import { cn } from '@/lib/utils';
+import { PageHeader, Panel } from '@/components/design/ProductPrimitives';
 import { useAuth } from '@/hooks/useAuth';
 import { useGettingStarted } from '@/hooks/useGettingStarted';
 import { FeatureTooltip } from '@/components/onboarding/FeatureTooltip';
@@ -74,8 +71,8 @@ export default function JurisdictionMapPage() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-cream">
-        <Loader2 className="h-8 w-8 animate-spin text-teal" />
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -85,73 +82,68 @@ export default function JurisdictionMapPage() {
   }
 
   return (
-    <div className="min-h-full w-full bg-cream text-ink-primary-light">
-      <EditorialPageHeader
-        eyebrow="GEO DATA"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Geo Data"
         title="Jurisdiction Map"
-        description={
+        body={
           <FeatureTooltip
             id="jurisdiction_map_intro"
             title="Explore Permit Hotspots"
             description="Click on markers to view jurisdiction details, compare fees, and see processing times. Use the search and filters to find specific jurisdictions."
             position="bottom"
           >
-            <span className="cursor-help text-ink-secondary-light">
+            <span className="cursor-help text-muted-foreground">
               Visualize permit volume hotspots across jurisdictions
             </span>
           </FeatureTooltip>
         }
-        icon={Map}
-        iconClassName="text-teal"
       />
 
-      <div className="w-full max-w-7xl ml-0 mr-auto pl-2 pr-4 sm:pl-3 sm:pr-6 md:pl-4 md:pr-6 py-4 sm:py-6 md:py-8">
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-teal" />
-          </div>
-        ) : mapboxToken ? (
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : mapboxToken ? (
+        <Panel className="overflow-hidden p-0">
           <JurisdictionMap mapboxToken={mapboxToken} />
-        ) : (
-          <Card className={cn(EDITORIAL_FORM_CARD, "max-w-lg mx-auto")}>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-gold-deep shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-medium text-ink-primary-light">Mapbox Token Required</h3>
-                  <p className="text-sm text-ink-secondary-light mt-1">
-                    {error || 'Enter your Mapbox public token to view the map.'}
-                  </p>
-                </div>
-              </div>
+        </Panel>
+      ) : (
+        <Panel className="mx-auto max-w-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-tight font-semibold text-foreground">Mapbox Token Required</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {error || 'Enter your Mapbox public token to view the map.'}
+              </p>
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <Input
-                  placeholder="pk.eyJ1Ijoi..."
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  className="border-cream-sunken bg-cream shadow-cream"
-                />
-                <p className="text-xs text-ink-secondary-light">
-                  Get your public token at{' '}
-                  <a
-                    href="https://account.mapbox.com/access-tokens/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gold-deep hover:underline underline-offset-2"
-                  >
-                    mapbox.com/access-tokens
-                  </a>
-                </p>
-              </div>
+          <div className="mt-4 space-y-2">
+            <Input
+              placeholder="pk.eyJ1Ijoi..."
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Get your public token at{' '}
+              <a
+                href="https://account.mapbox.com/access-tokens/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline underline-offset-2"
+              >
+                mapbox.com/access-tokens
+              </a>
+            </p>
+          </div>
 
-              <Button variant="gold" onClick={handleTokenSubmit} className="w-full">
-                Load Map
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+          <Button onClick={handleTokenSubmit} className="mt-4 w-full">
+            Load Map
+          </Button>
+        </Panel>
+      )}
     </div>
   );
 }

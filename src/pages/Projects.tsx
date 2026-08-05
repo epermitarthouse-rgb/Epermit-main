@@ -1,58 +1,110 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/hooks/useAuth';
-import { useProjects, CreateProjectData, UpdateProjectData } from '@/hooks/useProjects';
-import { useSelectedProject } from '@/contexts/SelectedProjectContext';
-import { Project, ProjectStatus, STATUS_ORDER, PROJECT_STATUS_CONFIG } from '@/types/project';
-import { KanbanColumn } from '@/components/projects/KanbanColumn';
-import { ProjectFormDialog } from '@/components/projects/ProjectFormDialog';
-import { ProjectDetailDialog } from '@/components/projects/ProjectDetailDialog';
-import { DeleteProjectDialog } from '@/components/projects/DeleteProjectDialog';
-import { 
-  Plus, 
-  Search, 
-  LayoutGrid, 
-  List,
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Filter,
   FolderKanban,
-  RefreshCw
-} from 'lucide-react';
-import { staggerContainer, staggerItem } from '@/components/animations/variants';
-import { FeatureTooltip } from '@/components/onboarding/FeatureTooltip';
-import { useGettingStarted } from '@/hooks/useGettingStarted';
-import { EditorialPageHeader } from '@/components/layout/EditorialPageHeader';
+  LayoutGrid,
+  List,
+  Plus,
+  RadioTower,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Wrench,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertBanner,
+  MetricCard,
+  PageHeader,
+  Panel,
+  ProgressLine,
+  ServicePill,
+  StatusPill,
+} from "@/components/design/ProductPrimitives";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  useProjects,
+  type CreateProjectData,
+  type UpdateProjectData,
+} from "@/hooks/useProjects";
+import { useSelectedProject } from "@/contexts/SelectedProjectContext";
+import {
+  PROJECT_STATUS_CONFIG,
+  STATUS_ORDER,
+  type Project,
+  type ProjectStatus,
+} from "@/types/project";
+import { KanbanColumn } from "@/components/projects/KanbanColumn";
+import { ProjectFormDialog } from "@/components/projects/ProjectFormDialog";
+import { ProjectDetailDialog } from "@/components/projects/ProjectDetailDialog";
+import { DeleteProjectDialog } from "@/components/projects/DeleteProjectDialog";
+import { FeatureTooltip } from "@/components/onboarding/FeatureTooltip";
+import { useGettingStarted } from "@/hooks/useGettingStarted";
+import { staggerContainer, staggerItem } from "@/components/animations/variants";
+import { EmptyState } from "@/components/design/EmptyState";
+import { cn } from "@/lib/utils";
+import {
+  getProjectScrapeReadiness,
+  scrapeReadinessTone,
+} from "@/lib/projectScrapeReadiness";
+import { toast } from "sonner";
 
-/** Toolbar segmented control: inactive = navy-deep on cream track; active = navy-deep pill + white text. */
-const PROJECTS_VIEW_TAB_CLASSES =
-  'gap-2 px-4 font-tight font-medium transition-colors rounded-md text-navy-deep/80 hover:bg-cream-raised/90 hover:text-navy-deep data-[state=active]:bg-navy-deep data-[state=active]:font-semibold data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:hover:bg-navy-deep data-[state=active]:hover:text-white [&_svg]:shrink-0 [&_svg]:text-current';
+type FilterKey =
+  | "all"
+  | "action"
+  | "in_review"
+  | "corrections"
+  | "approved"
+  | "draft";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "All projects" },
+  { key: "action", label: "Action needed" },
+  { key: "in_review", label: "In review" },
+  { key: "corrections", label: "Corrections" },
+  { key: "draft", label: "Draft" },
+  { key: "approved", label: "Approved" },
+];
+
+function statusTone(status: ProjectStatus): "default" | "good" | "warn" | "bad" {
+  if (status === "approved") return "good";
+  if (status === "corrections") return "bad";
+  if (status === "in_review" || status === "submitted") return "warn";
+  return "default";
+}
+
+function progressForStatus(status: ProjectStatus): number {
+  const idx = STATUS_ORDER.indexOf(status);
+  if (idx < 0) return 10;
+  return Math.round(((idx + 1) / STATUS_ORDER.length) * 100);
+}
 
 export default function Projects() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { completeItem } = useGettingStarted();
   const {
-    projects, 
-    loading, 
+    projects,
+    loading,
     fetchProjects,
     refreshProjectById,
-    createProject, 
-    updateProject, 
+    createProject,
+    updateProject,
     deleteProject,
-    getProjectsByStatus 
   } = useProjects();
   const { setSelectedProjectId } = useSelectedProject();
 
-  // View state
-  const [view, setView] = useState<'kanban' | 'list'>('kanban');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [view, setView] = useState<"cards" | "kanban" | "list">("cards");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = useState<FilterKey>("all");
 
-  // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -60,17 +112,25 @@ export default function Projects() {
   const [formLoading, setFormLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Drag and drop state
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<ProjectStatus | null>(null);
 
+  const isCreateRoute = location.pathname === "/projects/new";
+
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate("/auth");
     }
   }, [user, authLoading, navigate]);
 
-  /** Keep dialogs aligned with canonical rows after refetches (e.g. billing reset in Supabase). */
+  // Lovable entry `/projects/new` reuses the existing ProjectFormDialog workflow.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (!isCreateRoute) return;
+    setSelectedProject(null);
+    setFormDialogOpen(true);
+  }, [authLoading, user, isCreateRoute]);
+
   useEffect(() => {
     const selectedId = selectedProject?.id;
     if (!selectedId) return;
@@ -90,22 +150,58 @@ export default function Projects() {
     });
   }, [projects, selectedProject?.id]);
 
-  // Filter projects by search
-  const filteredProjects = projects.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.jurisdiction?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.permit_number?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return projects.filter((p) => {
+      const matchesSearch =
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.jurisdiction?.toLowerCase().includes(q) ||
+        p.city?.toLowerCase().includes(q) ||
+        p.permit_number?.toLowerCase().includes(q) ||
+        p.client_name?.toLowerCase().includes(q);
 
-  const getFilteredProjectsByStatus = (status: ProjectStatus) => {
-    return filteredProjects.filter(p => p.status === status);
-  };
+      if (!matchesSearch) return false;
 
-  // Handlers
-  const handleCreateProject = () => {
+      if (filter === "all") return true;
+      if (filter === "action") {
+        return p.status === "corrections" || p.status === "submitted";
+      }
+      return p.status === filter;
+    });
+  }, [projects, searchQuery, filter]);
+
+  const metrics = useMemo(() => {
+    const corrections = projects.filter((p) => p.status === "corrections").length;
+    const inFlight = projects.filter(
+      (p) => p.status === "in_review" || p.status === "submitted",
+    ).length;
+    const withPortal = projects.filter((p) => !!p.portal_data || !!p.portal_status).length;
+    return {
+      total: projects.length,
+      inFlight,
+      withPortal,
+      corrections,
+    };
+  }, [projects]);
+
+  const openCreateWorkflow = () => {
     setSelectedProject(null);
     setFormDialogOpen(true);
+    if (!isCreateRoute) {
+      navigate("/projects/new");
+    }
+  };
+
+  const handleFormOpenChange = (open: boolean) => {
+    setFormDialogOpen(open);
+    if (!open && isCreateRoute) {
+      navigate("/projects", { replace: true });
+    }
+  };
+
+  const handleCreateProject = () => {
+    openCreateWorkflow();
   };
 
   const handleEditProject = (project: Project) => {
@@ -129,15 +225,31 @@ export default function Projects() {
     setFormLoading(true);
     try {
       if (selectedProject) {
-        await updateProject(selectedProject.id, data);
+        const updated = await updateProject(selectedProject.id, data);
+        if (!updated) return;
+        const readiness = getProjectScrapeReadiness(updated);
+        if (readiness !== "Ready to Scrape") {
+          toast.message(`Project updated — ${readiness}`, {
+            description:
+              "Link a portal credential and Permit / Application Number before Quick Scrape.",
+          });
+        }
       } else {
         const created = await createProject(data as CreateProjectData);
-        if (created) {
-          setSelectedProjectId(created.id);
-          setSelectedProject(created);
+        if (!created) return;
+        setSelectedProjectId(created.id);
+        setSelectedProject(created);
+        const readiness = getProjectScrapeReadiness(created);
+        if (readiness === "Ready to Scrape") {
+          toast.success("Project created and ready to scrape.");
+        } else {
+          toast.message(`Project created — ${readiness}`, {
+            description:
+              "Open Edit Project or the header Active Project control to set Permit / Application Number and portal credential before Quick Scrape.",
+          });
         }
       }
-      setFormDialogOpen(false);
+      handleFormOpenChange(false);
     } finally {
       setFormLoading(false);
     }
@@ -158,16 +270,11 @@ export default function Projects() {
     await updateProject(project.id, { status: newStatus });
   };
 
-  // Drag and drop handlers
-  const handleDragStart = (project: Project) => {
-    setDraggedProject(project);
-  };
-
+  const handleDragStart = (project: Project) => setDraggedProject(project);
   const handleDragEnd = () => {
     setDraggedProject(null);
     setDragOverStatus(null);
   };
-
   const handleDrop = async (status: ProjectStatus) => {
     if (draggedProject && draggedProject.status !== status) {
       await handleStatusChange(draggedProject, status);
@@ -178,217 +285,387 @@ export default function Projects() {
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal" />
+      <div className="flex min-h-[80vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cream text-ink-primary-light">
-      <EditorialPageHeader
-        eyebrow="PORTFOLIO"
-        title={
-          <span className="inline-flex flex-wrap items-center gap-2 sm:gap-3">
-            <FolderKanban className="h-7 w-7 shrink-0 text-gold-deep sm:h-9 sm:w-9" />
-            <span>Projects</span>
-          </span>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Client workspace"
+        title="Projects across permit expediting and utility coordination."
+        body="Each project shows status, jurisdiction, portal linkage, and ownership so you can see what is moving and what is stalled."
+        action={
+          <FeatureTooltip
+            id="projects_new_button"
+            title="Create Your First Project"
+            description="Click here to start tracking a new permit project. You can add project details, upload documents, and monitor status."
+            position="left"
+          >
+            <button
+              type="button"
+              className="pilot-button-primary"
+              onClick={() => {
+                completeItem("create_project");
+                openCreateWorkflow();
+              }}
+            >
+              <Plus className="h-4 w-4" /> New Project
+            </button>
+          </FeatureTooltip>
         }
-        description="Manage your permit projects and track their status."
       />
 
-      <section className="py-4 pb-10 sm:py-5 md:pb-12">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-8">
-          {/* Toolbar — single cohesive row */}
-          <motion.div
-            className="mb-5 flex flex-col gap-4 rounded-2xl border border-cream-sunken bg-card p-4 shadow-sm ring-1 ring-navy-deep/10 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:p-4 md:p-5"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-          >
-            <div className="relative min-w-0 flex-1 sm:max-w-md md:max-w-lg">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy/55" />
-              <Input
-                placeholder="Search projects..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-cream-sunken bg-cream-raised pl-9 font-sans text-navy-deep shadow-inner placeholder:text-navy/55 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/15"
-              />
-            </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Active projects"
+          value={`${metrics.total}`}
+          hint="Shared client workspace"
+        />
+        <MetricCard
+          label="In flight"
+          value={`${metrics.inFlight}`}
+          hint="Submitted or in review"
+          icon={ShieldAlert}
+        />
+        <MetricCard
+          label="Portal-linked"
+          value={`${metrics.withPortal}`}
+          hint="Harvest / portal data present"
+          icon={Wrench}
+        />
+        <MetricCard
+          label="Corrections"
+          value={`${metrics.corrections}`}
+          hint="Needs operator action"
+          icon={RadioTower}
+        />
+      </div>
 
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-              <Badge
-                variant="outline"
-                className="border-white/20 bg-white/10 px-3 py-1 font-mono text-[11px] font-semibold tabular-nums tracking-tight text-white shadow-none"
-              >
-                {filteredProjects.length} {filteredProjects.length === 1 ? 'project' : 'projects'}
-              </Badge>
+      <AlertBanner
+        tone="info"
+        title="Projects carry permit and utility workflows"
+        detail="Use Portal Harvest, Response Matrix, Permit Filing, and Utility Coordination from the shell — selecting a project here sets the active workspace."
+      />
 
-              <Tabs value={view} onValueChange={(v) => setView(v as 'kanban' | 'list')} className="w-full sm:w-auto">
-                <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-lg border border-cream-sunken bg-cream-sunken p-1 sm:inline-grid sm:w-auto">
-                  <TabsTrigger value="kanban" className={PROJECTS_VIEW_TAB_CLASSES}>
-                    <LayoutGrid className="h-4 w-4" />
-                    Kanban
-                  </TabsTrigger>
-                  <TabsTrigger value="list" className={PROJECTS_VIEW_TAB_CLASSES}>
-                    <List className="h-4 w-4" />
-                    List
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              <Button
-                variant="outlineGold"
-                size="icon"
-                className="shrink-0 border-cream-sunken bg-cream-raised text-gold-deep hover:bg-cream-raised hover:text-gold focus-visible:ring-2 focus-visible:ring-primary/20 disabled:border-cream-sunken disabled:text-navy/50 disabled:opacity-[0.88]"
-                onClick={fetchProjects}
-                disabled={loading}
-                aria-label="Refresh projects"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-
-              <FeatureTooltip
-                id="projects_new_button"
-                title="Create Your First Project"
-                description="Click here to start tracking a new permit project. You can add project details, upload documents, and monitor status."
-                position="left"
-              >
-                <Button
-                  variant="gold"
-                  className="min-w-[10rem] shrink-0 shadow-cream sm:min-w-0"
-                  onClick={() => {
-                    handleCreateProject();
-                    completeItem('create_project');
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Project
-                </Button>
-              </FeatureTooltip>
-            </div>
-          </motion.div>
-
-          {/* Content */}
-          {loading ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-5">
-              {STATUS_ORDER.map((status) => (
-                <div key={status} className="space-y-4">
-                  <Skeleton className="h-10 w-full rounded-lg" />
-                  <Skeleton className="h-32 w-full rounded-lg" />
-                  <Skeleton className="h-32 w-full rounded-lg" />
-                </div>
-              ))}
-            </div>
-          ) : view === 'kanban' ? (
-            <motion.div
-              className="-mx-1 flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain pb-3 pt-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 lg:grid-cols-5 sm:overflow-visible sm:rounded-2xl sm:border sm:border-cream-sunken sm:bg-gradient-to-b sm:from-card sm:to-cream-raised sm:p-4 sm:shadow-sm sm:ring-1 sm:ring-navy-deep/10"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              {STATUS_ORDER.map((status) => (
-                <motion.div
-                  key={status}
-                  variants={staggerItem}
-                  className="w-[min(280px,calc(100vw-3rem))] shrink-0 sm:w-auto sm:min-w-0 sm:self-start"
-                >
-                  <KanbanColumn
-                    status={status}
-                    projects={getFilteredProjectsByStatus(status)}
-                    onEdit={handleEditProject}
-                    onDelete={handleDeleteClick}
-                    onStatusChange={handleStatusChange}
-                    onView={handleViewProject}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                    onDrop={handleDrop}
-                    isDragOver={dragOverStatus === status}
-                  />
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <motion.div
-              className="space-y-2"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              {/* List Header */}
-              <div className="hidden md:grid grid-cols-12 gap-4 rounded-t-xl border-b border-cream-sunken bg-cream-raised px-4 py-3 font-tight text-[11px] font-semibold uppercase tracking-[0.12em] text-navy/72">
-                <div className="col-span-4">Project</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Jurisdiction</div>
-                <div className="col-span-2">Location</div>
-                <div className="col-span-2">Updated</div>
-              </div>
-
-              {filteredProjects.length === 0 ? (
-                <Card className="rounded-xl border-dashed border-navy-deep/20 bg-card shadow-sm md:rounded-b-xl md:rounded-t-none">
-                  <CardContent className="space-y-2 py-14 text-center">
-                    {searchQuery.trim() ? (
-                      <>
-                        <p className="font-medium text-navy-deep">No projects match your search</p>
-                        <p className="text-sm leading-relaxed text-navy/70">
-                          Try another term or clear the search.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-medium text-navy-deep">No projects yet</p>
-                        <p className="text-sm leading-relaxed text-navy/70">
-                          Create your first project to get started.
-                        </p>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                filteredProjects.map((project) => {
-                  const statusConfig = PROJECT_STATUS_CONFIG[project.status];
-                  return (
-                    <motion.div
-                      key={project.id}
-                      variants={staggerItem}
-                      className="grid cursor-pointer grid-cols-12 gap-4 rounded-xl border border-border bg-card px-4 py-3.5 text-foreground shadow-sm transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-muted/50 hover:shadow-md dark:border-navy-line/35 dark:bg-navy-deep dark:text-white dark:ring-1 dark:ring-white/10 dark:hover:bg-navy"
-                      onClick={() => handleViewProject(project)}
-                    >
-                      <div className="col-span-12 md:col-span-4">
-                        <p className="truncate font-semibold text-foreground dark:text-white">{project.name}</p>
-                        {project.permit_number ? (
-                          <p className="mt-0.5 font-mono text-xs tabular-nums tracking-tight text-muted-foreground dark:text-white/70">
-                            {project.permit_number}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="col-span-6 md:col-span-2">
-                        <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0 font-tight`}>
-                          {statusConfig.label}
-                        </Badge>
-                      </div>
-                      <div className="col-span-6 md:col-span-2 truncate text-sm text-muted-foreground dark:text-white/70">
-                        {project.jurisdiction || '—'}
-                      </div>
-                      <div className="col-span-6 md:col-span-2 truncate text-sm text-muted-foreground dark:text-white/70">
-                        {[project.city, project.state].filter(Boolean).join(', ') || '—'}
-                      </div>
-                      <div className="col-span-6 md:col-span-2 font-mono text-sm tabular-nums text-muted-foreground dark:text-white/70">
-                        {new Date(project.updated_at).toLocaleDateString()}
-                      </div>
-                    </motion.div>
-                  );
-                })
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={cn(
+                "pilot-button-ghost py-2",
+                filter === item.key && "border-primary bg-primary/10 text-primary",
               )}
-            </motion.div>
-          )}
+              onClick={() => setFilter(item.key)}
+            >
+              <Filter className="h-4 w-4" />
+              {item.label}
+            </button>
+          ))}
         </div>
-      </section>
 
-      {/* Dialogs */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search projects..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Badge variant="outline" className="font-mono text-[11px] tabular-nums">
+            {filteredProjects.length}{" "}
+            {filteredProjects.length === 1 ? "project" : "projects"}
+          </Badge>
+          <Tabs
+            value={view}
+            onValueChange={(v) => setView(v as "cards" | "kanban" | "list")}
+          >
+            <TabsList className="h-10">
+              <TabsTrigger value="cards" className="gap-1.5">
+                <FolderKanban className="h-4 w-4" />
+                Cards
+              </TabsTrigger>
+              <TabsTrigger value="kanban" className="gap-1.5">
+                <LayoutGrid className="h-4 w-4" />
+                Kanban
+              </TabsTrigger>
+              <TabsTrigger value="list" className="gap-1.5">
+                <List className="h-4 w-4" />
+                List
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchProjects}
+            disabled={loading}
+            aria-label="Refresh projects"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : view === "cards" ? (
+        filteredProjects.length === 0 ? (
+          <Panel>
+            <EmptyState
+              icon={FolderKanban}
+              title={
+                searchQuery.trim() || filter !== "all"
+                  ? "No projects match your filters"
+                  : "No projects yet"
+              }
+              body={
+                searchQuery.trim() || filter !== "all"
+                  ? "Try another filter or clear search."
+                  : "Create your first project to get started."
+              }
+              action={
+                !searchQuery.trim() && filter === "all" ? (
+                  <Button onClick={handleCreateProject}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Project
+                  </Button>
+                ) : undefined
+              }
+            />
+          </Panel>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {filteredProjects.map((project) => {
+              const progress = progressForStatus(project.status);
+              const scrapeReadiness = getProjectScrapeReadiness(project);
+              return (
+                <Panel
+                  key={project.id}
+                  className="cursor-pointer transition-colors hover:border-primary"
+                  onClick={() => handleViewProject(project)}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="pilot-kicker">
+                        {project.permit_number || project.id.slice(0, 8)}
+                      </div>
+                      <h2 className="mt-2 font-display text-2xl font-semibold text-foreground md:text-3xl">
+                        {project.name}
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {[project.address, project.city, project.state]
+                          .filter(Boolean)
+                          .join(", ") || "Address not set"}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusPill tone={statusTone(project.status)}>
+                        {PROJECT_STATUS_CONFIG[project.status].label}
+                      </StatusPill>
+                      <StatusPill tone={scrapeReadinessTone(scrapeReadiness)}>
+                        {scrapeReadiness}
+                      </StatusPill>
+                      {project.portal_status ? (
+                        <span className="rounded-full border border-border bg-muted px-2.5 py-1 font-data text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {project.portal_status}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ServicePill kind="permit">Permit expediting</ServicePill>
+                    {project.service_type ? (
+                      <ServicePill kind="utility">{project.service_type}</ServicePill>
+                    ) : (
+                      <ServicePill kind="utility">Utility coordination</ServicePill>
+                    )}
+                  </div>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-3">
+                    <Meta label="Client" value={project.client_name || "—"} />
+                    <Meta label="Jurisdiction" value={project.jurisdiction || "—"} />
+                    <Meta
+                      label="Updated"
+                      value={new Date(project.updated_at).toLocaleDateString()}
+                    />
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{PROJECT_STATUS_CONFIG[project.status].label}</span>
+                      <span>{progress}% pipeline</span>
+                    </div>
+                    <ProgressLine value={progress} />
+                  </div>
+
+                  <div className="mt-5 flex items-center justify-between gap-4">
+                    <div className="text-sm text-muted-foreground">
+                      {project.deadline ? (
+                        <>
+                          Deadline:{" "}
+                          <span className="text-foreground">
+                            {new Date(project.deadline).toLocaleDateString()}
+                          </span>
+                        </>
+                      ) : (
+                        <span>No deadline set</span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="pilot-button-ghost py-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditProject(project);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="pilot-button-ghost py-2 text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(project);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </Panel>
+              );
+            })}
+          </div>
+        )
+      ) : view === "kanban" ? (
+        <motion.div
+          className="-mx-1 flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain pb-3 pt-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 sm:overflow-visible lg:grid-cols-5"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          {STATUS_ORDER.map((status) => (
+            <motion.div
+              key={status}
+              variants={staggerItem}
+              className="w-[min(280px,calc(100vw-3rem))] shrink-0 sm:w-auto sm:min-w-0 sm:self-start"
+            >
+              <KanbanColumn
+                status={status}
+                projects={filteredProjects.filter((p) => p.status === status)}
+                onEdit={handleEditProject}
+                onDelete={handleDeleteClick}
+                onStatusChange={handleStatusChange}
+                onView={handleViewProject}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop}
+                isDragOver={dragOverStatus === status}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
+      ) : (
+        <motion.div
+          className="space-y-2"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          <div className="hidden grid-cols-12 gap-4 border-b border-border px-4 py-3 font-tight text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+            <div className="col-span-3">Project</div>
+            <div className="col-span-2">Status</div>
+            <div className="col-span-2">Scrape readiness</div>
+            <div className="col-span-2">Jurisdiction</div>
+            <div className="col-span-2">Location</div>
+            <div className="col-span-1">Updated</div>
+          </div>
+
+          {filteredProjects.length === 0 ? (
+            <Panel>
+              <EmptyState
+                icon={FolderKanban}
+                title={
+                  searchQuery.trim() || filter !== "all"
+                    ? "No projects match your filters"
+                    : "No projects yet"
+                }
+                body={
+                  searchQuery.trim() || filter !== "all"
+                    ? "Try another filter or clear search."
+                    : "Create your first project to get started."
+                }
+                action={
+                  !searchQuery.trim() && filter === "all" ? (
+                    <Button onClick={handleCreateProject}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Project
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </Panel>
+          ) : (
+            filteredProjects.map((project) => {
+              const scrapeReadiness = getProjectScrapeReadiness(project);
+              return (
+              <motion.div
+                key={project.id}
+                variants={staggerItem}
+                className="grid cursor-pointer grid-cols-12 gap-4 rounded-lg border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary/40 hover:bg-muted/40"
+                onClick={() => handleViewProject(project)}
+              >
+                <div className="col-span-12 md:col-span-3">
+                  <p className="truncate font-semibold">{project.name}</p>
+                  {project.permit_number ? (
+                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                      {project.permit_number}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <StatusPill tone={statusTone(project.status)}>
+                    {PROJECT_STATUS_CONFIG[project.status].label}
+                  </StatusPill>
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <StatusPill tone={scrapeReadinessTone(scrapeReadiness)}>
+                    {scrapeReadiness}
+                  </StatusPill>
+                </div>
+                <div className="col-span-6 truncate text-sm text-muted-foreground md:col-span-2">
+                  {project.jurisdiction || "—"}
+                </div>
+                <div className="col-span-6 truncate text-sm text-muted-foreground md:col-span-2">
+                  {[project.city, project.state].filter(Boolean).join(", ") || "—"}
+                </div>
+                <div className="col-span-6 font-mono text-sm tabular-nums text-muted-foreground md:col-span-1">
+                  {new Date(project.updated_at).toLocaleDateString()}
+                </div>
+              </motion.div>
+              );
+            })
+          )}
+        </motion.div>
+      )}
+
       <ProjectFormDialog
         open={formDialogOpen}
-        onOpenChange={setFormDialogOpen}
+        onOpenChange={handleFormOpenChange}
         project={selectedProject}
         onSubmit={handleFormSubmit}
         loading={formLoading}
@@ -415,3 +692,10 @@ export default function Projects() {
     </div>
   );
 }
+
+const Meta = ({ label, value }: { label: string; value: string }) => (
+  <div>
+    <div className="pilot-kicker">{label}</div>
+    <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+  </div>
+);

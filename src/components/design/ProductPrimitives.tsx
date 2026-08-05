@@ -19,21 +19,56 @@ export function PageHeader({
   body,
   action,
   className,
+  compact = false,
 }: {
   eyebrow?: string;
   title: React.ReactNode;
   body?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
+  /** Denser header for work surfaces (e.g. Response Matrix) where the table should stay near the fold. */
+  compact?: boolean;
 }) {
   return (
-    <div className={cn("mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between", className)}>
-      <div className="min-w-0 space-y-1.5">
+    <div
+      className={cn(
+        compact
+          ? "mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+          : "mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between",
+        className,
+      )}
+    >
+      <div className={cn("min-w-0 flex-1", compact ? "max-w-4xl space-y-0.5" : "max-w-3xl space-y-1.5")}>
         {eyebrow ? <p className="pilot-kicker">{eyebrow}</p> : null}
-        <h1 className="font-tight text-3xl font-black tracking-tight text-foreground md:text-4xl">{title}</h1>
-        {body ? <div className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">{body}</div> : null}
+        <h1
+          className={cn(
+            "font-tight font-black tracking-tight text-foreground",
+            compact ? "text-xl md:text-2xl" : "text-3xl md:text-4xl",
+          )}
+        >
+          {title}
+        </h1>
+        {body ? (
+          <div
+            className={cn(
+              "text-muted-foreground",
+              compact ? "max-w-3xl text-xs leading-5 md:text-sm" : "max-w-2xl text-sm leading-6 md:text-base",
+            )}
+          >
+            {body}
+          </div>
+        ) : null}
       </div>
-      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+      {action ? (
+        <div
+          className={cn(
+            "flex min-w-0 flex-wrap items-center gap-2",
+            compact ? "sm:justify-end" : "lg:justify-end",
+          )}
+        >
+          {action}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -11,13 +11,13 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ProgressLine, StatusPill } from "@/components/design/ProductPrimitives";
+import { scrapeStatusTone } from "@/adapters/scrapeStatusAdapter";
+import { resolvePanelDisplayStatus } from "@/lib/scrapeTerminalLifecycle";
 import {
-  scrapeJobStatusBadgeClass,
   scrapeJobStatusLabel,
   type ScrapeEvent,
-  type ScrapeJob,
 } from "@/lib/scrapeJobTypes";
 import type { UseScrapeJobResult } from "@/hooks/useScrapeJob";
 
@@ -114,7 +114,6 @@ export function ScrapeProgressPanel({
 }: ScrapeProgressPanelProps) {
   const {
     job,
-    events,
     meaningfulEvents,
     currentMessage,
     progress,
@@ -124,12 +123,17 @@ export function ScrapeProgressPanel({
     isTerminal,
     isCancellable,
     reconnecting,
+    loading,
+    error,
   } = jobState;
 
   const [feedExpanded, setFeedExpanded] = useState(true);
   const [showTechnical, setShowTechnical] = useState(false);
 
-  const status = job?.status ?? "running";
+  const status = resolvePanelDisplayStatus(job?.status, {
+    loading,
+    error,
+  });
   const jurisdiction = job?.jurisdiction ?? "Portal";
   const progressPct =
     progress && progress.total > 0
@@ -137,6 +141,10 @@ export function ScrapeProgressPanel({
       : null;
 
   const technicalEvents = meaningfulEvents.filter((e) => e.technical_message?.trim());
+  const statusLabel =
+    status === "loading" || status === "unavailable"
+      ? scrapeJobStatusLabel(status)
+      : scrapeJobStatusLabel(status);
 
   if (minimized) {
     return (
@@ -179,12 +187,9 @@ export function ScrapeProgressPanel({
             <h3 className="text-sm font-semibold text-foreground truncate dark:text-ink-primary-dark">
               Portal scrape
             </h3>
-            <Badge
-              variant="outline"
-              className={cn("text-[10px]", scrapeJobStatusBadgeClass(status))}
-            >
-              {scrapeJobStatusLabel(status)}
-            </Badge>
+            <StatusPill tone={scrapeStatusTone(status)}>
+              {statusLabel}
+            </StatusPill>
           </div>
           <p className="text-xs text-muted-foreground dark:text-ink-tertiary-dark">
             Permit{" "}
@@ -222,6 +227,13 @@ export function ScrapeProgressPanel({
         </div>
       )}
 
+      {status === "unavailable" && (
+        <div className="flex items-center gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-md px-2 py-1.5">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          Progress unavailable. Waiting for job data…
+        </div>
+      )}
+
       <div className="rounded-md bg-muted/50 border border-teal/15 px-3 py-2 dark:bg-obsidian-raised/60">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 dark:text-ink-tertiary-dark">
           Current activity
@@ -242,12 +254,7 @@ export function ScrapeProgressPanel({
               {progress!.current} / {progress!.total} ({progressPct}%)
             </span>
           </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden dark:bg-obsidian-raised">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
+          <ProgressLine value={progressPct} className="h-1.5" />
         </div>
       )}
 

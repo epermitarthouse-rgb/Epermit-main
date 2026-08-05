@@ -32,7 +32,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Project, PROJECT_STATUS_CONFIG, PROJECT_TYPE_LABELS } from '@/types/project';
+import { Project, PROJECT_STATUS_CONFIG, getProjectTypeLabel } from '@/types/project';
 import { ProjectDocumentsSection } from '@/components/documents/ProjectDocumentsSection';
 import { ProjectTeamSection } from '@/components/team/ProjectTeamSection';
 import { ProjectInspectionsSection } from '@/components/inspections/ProjectInspectionsSection';
@@ -201,7 +201,7 @@ export function ProjectDetailDialog({
             <div className="flex flex-wrap gap-2">
               {project.project_type && (
                 <Badge variant="secondary">
-                  {PROJECT_TYPE_LABELS[project.project_type]}
+                  {getProjectTypeLabel(project.project_type)}
                 </Badge>
               )}
             </div>

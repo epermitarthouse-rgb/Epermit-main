@@ -70,7 +70,10 @@ describe("UciDashboard auth dependency regression", () => {
       /const \[detailOpen, setDetailOpen\] = useState\(false\)/,
       "detailOpen state must exist — Row 3 edits removed it and caused ReferenceError on /uci",
     );
-    assert.match(dashboardSource, /<Sheet open=\{detailOpen\} onOpenChange=\{setDetailOpen\}/);
+    assert.match(
+      dashboardSource,
+      /<Sheet open=\{detailOpen\} onOpenChange=\{handleDetailOpenChange\}/,
+    );
     assert.match(dashboardSource, /\[detailOpen, detailId, isPepcoCoordination\]/);
   });
 

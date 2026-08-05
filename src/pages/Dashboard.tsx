@@ -1,76 +1,93 @@
-import { useEffect, useState } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import architectureBg from "@/assets/permitpilot-architecture-background.png";
-import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
-import { toast } from "sonner";
+import { useEffect, useMemo, useState } from "react";
+import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
+import { format, isValid } from "date-fns";
 import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  Bot,
+  Brain,
   Calculator,
   Clock,
-  Plus,
-  Trash2,
-  Building2,
-  Briefcase,
-  LayoutDashboard,
   CreditCard,
   Crown,
-  Loader2,
-  RefreshCw,
+  FileUp,
   FolderKanban,
-  Database,
+  HeartPulse,
+  ListChecks,
+  Loader2,
+  PlusCircle,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
-import { format, isValid } from "date-fns";
-import { staggerContainer, staggerItem } from "@/components/animations/variants";
-import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
-import { InspectionsPunchListWidget } from "@/components/dashboard/InspectionsPunchListWidget";
-import { DeadlineAlertsWidget } from "@/components/dashboard/DeadlineAlertsWidget";
-import { RecentChecklistsWidget } from "@/components/dashboard/RecentChecklistsWidget";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertBanner,
+  PageHeader,
+  Panel,
+  ServicePill,
+  StatusPill,
+} from "@/components/design/ProductPrimitives";
 import { AgentWorkflowStatus } from "@/components/dashboard/AgentWorkflowStatus";
+import { DeadlineAlertsWidget } from "@/components/dashboard/DeadlineAlertsWidget";
+import { InspectionsPunchListWidget } from "@/components/dashboard/InspectionsPunchListWidget";
 import { ProjectHealthCard } from "@/components/dashboard/ProjectHealthCard";
-import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { RecentChecklistsWidget } from "@/components/dashboard/RecentChecklistsWidget";
 import { GettingStartedChecklist } from "@/components/onboarding/GettingStartedChecklist";
-import { useOnboarding } from "@/hooks/useOnboarding";
+import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { useAuth } from "@/hooks/useAuth";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { usePortalHarvestEvidence } from "@/hooks/usePortalHarvestEvidence";
+import { useProjects } from "@/hooks/useProjects";
+import { useScrapeOptional } from "@/contexts/ScrapeContext";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
-import { Eyebrow } from "@/components/ui/Typography";
+import { supabase } from "@/lib/supabase";
+import { SUBSCRIPTION_TIERS } from "@/lib/stripe";
+import type { HarvestQueueStatus } from "@/lib/portalHarvestMetrics";
+import { PROJECT_STATUS_CONFIG, type Project } from "@/types/project";
 import { cn } from "@/lib/utils";
 
-/** Light raised card — welcome, projects, deadlines, checklists, calculations.
- * Force cream surface in dark mode so `text-ink-*-light` stays readable (Card defaults otherwise use `dark:bg-card`).
- */
-const surfCreamRaised =
-  "rounded-2xl border border-cream-sunken bg-cream-raised text-ink-primary-light shadow-cream transition-[box-shadow,border-color] hover:border-gold/25 hover:shadow-[0_12px_36px_-10px_hsl(30_55%_48%/0.16)] dark:border-cream-sunken dark:bg-cream-raised dark:text-ink-primary-light";
+type WorkflowTab = "intake" | "health" | "inspections" | "calculations";
 
-const surfGoldSoft =
-  "rounded-2xl border border-gold/30 bg-gradient-to-br from-gold-soft/70 via-cream-raised to-cream-raised text-ink-primary-light shadow-cream transition-colors hover:border-gold/45 dark:border-gold/30 dark:bg-gradient-to-br dark:from-gold-soft/65 dark:via-cream-raised dark:to-cream-raised dark:text-ink-primary-light";
+const WORKFLOW_TABS = new Set<WorkflowTab>(["intake", "health", "inspections", "calculations"]);
 
-/** Blue-gray intelligence surface (Permit Intelligence quick card) — theme-aware */
-const surfIntelBlueGray =
-  "rounded-2xl border border-border bg-muted/60 text-foreground shadow-sm transition-colors hover:border-teal/40 hover:shadow-md dark:border-[hsl(var(--border-obsidian-strong)/0.42)] dark:bg-gradient-to-br dark:from-obsidian-raised/95 dark:via-obsidian dark:to-obsidian-sunken dark:text-ink-primary-dark dark:shadow-lg dark:shadow-black/20 dark:hover:border-teal/30";
-
-/** Teal-soft light card (Interactive Demos) */
-const surfTealSoftLight =
-  "rounded-2xl border border-teal/22 bg-teal-soft/55 text-ink-primary-light shadow-cream transition-colors hover:border-teal/40 hover:shadow-md dark:border-teal/25 dark:bg-teal-soft/50 dark:text-ink-primary-light";
-
-/** Pipeline feature shell — uses pipeline-canvas CSS class (theme-aware, defined in index.css) */
-const intakePipelineShell = "pipeline-canvas p-6 sm:p-8";
-
-/** Gold outline icon tile — light backgrounds */
-const tileGoldAccent =
-  "flex shrink-0 items-center justify-center rounded-lg border border-gold/28 bg-gold-soft/90 text-gold-deep shadow-sm transition-colors group-hover:border-gold/42 group-hover:bg-gold-soft";
-
-/** Teal accent tile — dark intel card */
-const tileTealOnDark =
-  "flex shrink-0 items-center justify-center rounded-lg border border-teal/35 bg-teal/15 text-teal shadow-inner transition-colors group-hover:bg-teal/22";
-
-/** Teal accent tile — teal-soft light card */
-const tileTealOnLight =
-  "flex shrink-0 items-center justify-center rounded-lg border border-teal/25 bg-teal/12 text-teal transition-colors group-hover:bg-teal/18";
+/** Honest dashboard Portal column — never invent Synced from portal_data alone. */
+function formatDashboardPortalLabel(
+  harvestStatus: HarvestQueueStatus | undefined,
+  hasPortalData: boolean,
+): string {
+  if (!harvestStatus) {
+    return hasPortalData ? "Has portal data" : "—";
+  }
+  switch (harvestStatus) {
+    case "Synced":
+      return "Synced";
+    case "Stale":
+      return "Stale";
+    case "Partial":
+      return "Partial";
+    case "Failed":
+      return "Failed";
+    case "Awaiting First Harvest":
+      return "Not harvested";
+    case "Queued":
+      return "Queued";
+    case "Running":
+      return "Running";
+    case "Human Action Required":
+      return "Needs attention";
+    case "Credentials Required":
+      return hasPortalData ? "Has portal data" : "—";
+    default:
+      return hasPortalData ? "Has portal data" : "—";
+  }
+}
 
 interface SavedCalculation {
   id: string;
@@ -87,18 +104,53 @@ interface Profile {
   job_title: string | null;
 }
 
+function statusTone(status: Project["status"]): "default" | "good" | "warn" | "bad" {
+  if (status === "approved") return "good";
+  if (status === "corrections") return "bad";
+  if (status === "in_review" || status === "submitted") return "warn";
+  return "default";
+}
+
 export default function Dashboard() {
-  const { user, loading: authLoading, subscription, subscriptionLoading, checkSubscription } = useAuth();
+  const { user, loading: authLoading, subscription, subscriptionLoading, checkSubscription } =
+    useAuth();
   const { showOnboarding, completeOnboarding } = useOnboarding();
   const { isComplete: gettingStartedComplete } = useGettingStarted();
-  const { selectedProjectId } = useSelectedProject();
+  const { selectedProjectId, setSelectedProjectId } = useSelectedProject();
+  const { projects, loading: projectsLoading } = useProjects();
+  const harvestEvidence = usePortalHarvestEvidence(projects);
+  const scrape = useScrapeOptional();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [calculations, setCalculations] = useState<SavedCalculation[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [workflowTab, setWorkflowTab] = useState<WorkflowTab>(() => {
+    const raw = searchParams.get("workflow") ?? searchParams.get("tab");
+    return raw && WORKFLOW_TABS.has(raw as WorkflowTab) ? (raw as WorkflowTab) : "intake";
+  });
 
-  // Handle checkout success
+  useEffect(() => {
+    const raw = searchParams.get("workflow") ?? searchParams.get("tab");
+    if (raw && WORKFLOW_TABS.has(raw as WorkflowTab)) {
+      setWorkflowTab(raw as WorkflowTab);
+    }
+  }, [searchParams]);
+
+  const harvestByProjectId = useMemo(() => {
+    const map = new Map<string, (typeof harvestEvidence.rows)[number]>();
+    for (const row of harvestEvidence.rows) {
+      map.set(row.projectId, row);
+    }
+    return map;
+  }, [harvestEvidence.rows]);
+
+  const hasLiveHarvestProcess =
+    Boolean(scrape?.isScraping) ||
+    harvestEvidence.rows.some(
+      (row) => row.harvestStatus === "Running" || row.harvestStatus === "Queued",
+    );
+
   useEffect(() => {
     if (searchParams.get("checkout") === "success") {
       toast.success("Welcome! Your subscription is now active.");
@@ -114,25 +166,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      fetchData();
+      void fetchData();
     }
   }, [user]);
 
   const fetchData = async () => {
     setLoading(true);
-    
-    // Fetch profile
+
     const { data: profileData } = await supabase
       .from("profiles")
       .select("full_name, company_name, job_title")
       .eq("user_id", user!.id)
       .single();
-    
-    if (profileData) {
-      setProfile(profileData);
-    }
 
-    // Fetch saved calculations
+    if (profileData) setProfile(profileData);
+
     const { data: calcData, error } = await supabase
       .from("saved_calculations")
       .select("*")
@@ -148,16 +196,12 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from("saved_calculations")
-      .delete()
-      .eq("id", id);
-
+    const { error } = await supabase.from("saved_calculations").delete().eq("id", id);
     if (error) {
       toast.error("Failed to delete calculation");
     } else {
       toast.success("Calculation deleted");
-      setCalculations(calculations.filter((c) => c.id !== id));
+      setCalculations((prev) => prev.filter((c) => c.id !== id));
     }
   };
 
@@ -166,434 +210,537 @@ export default function Dashboard() {
     return SUBSCRIPTION_TIERS[subscription.tier]?.name || subscription.tier;
   };
 
-  const profileFullNameSafe = String(profile?.full_name ?? "");
-  const welcomeFirstName = profileFullNameSafe.trim().split(/\s+/).filter(Boolean)[0];
+  const welcomeFirstName = String(profile?.full_name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)[0];
+
+  const kpis = useMemo(() => {
+    const active = projects.filter((p) => p.status !== "approved");
+    const corrections = projects.filter((p) => p.status === "corrections");
+    const inReview = projects.filter((p) => p.status === "in_review" || p.status === "submitted");
+    const withPortal = projects.filter(
+      (p) => !!p.credential_id || harvestEvidence.harvestedProjectIds.has(p.id),
+    );
+    return [
+      {
+        value: String(active.length),
+        label: "Active Projects",
+        helper: "Excludes approved",
+        accent: "bg-primary/10",
+      },
+      {
+        value: String(inReview.length),
+        label: "In Review / Submitted",
+        helper: "Portfolio",
+        accent: "bg-[hsl(var(--pilot-cyan)/0.12)]",
+      },
+      {
+        value: String(withPortal.length),
+        label: "Portal-linked",
+        helper: "Credential or harvest data",
+        accent: "bg-[hsl(var(--pilot-teal)/0.12)]",
+      },
+      {
+        value: String(corrections.length),
+        label: "Corrections Needed",
+        helper: "Portfolio",
+        accent: "bg-destructive/10",
+        tone: "bad" as const,
+      },
+    ];
+  }, [projects, harvestEvidence.harvestedProjectIds]);
+
+  const openIntakePipelineTab = () => {
+    setWorkflowTab("intake");
+    const next = new URLSearchParams(searchParams);
+    next.set("workflow", "intake");
+    setSearchParams(next, { replace: true });
+  };
+
+  const portfolio = useMemo(
+    () =>
+      [...projects]
+        .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at))
+        .slice(0, 8),
+    [projects],
+  );
 
   if (authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="flex min-h-[80vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <>
-      {/* Onboarding Wizard */}
       <OnboardingWizard open={showOnboarding} onComplete={completeOnboarding} />
 
-      <div className="dashboard-editorial-canvas min-w-0">
-        <div className="dashboard-editorial-canvas__inner mx-auto w-full max-w-6xl min-w-0 px-4 pb-14 pt-7 sm:px-6 sm:pt-9 sm:pb-16">
-          <Card
-            className={cn(
-              surfCreamRaised,
-              "relative mb-8 overflow-hidden border-cream-sunken/95 before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_70%_58%_at_100%_-8%,hsl(var(--accent-gold-soft)/0.5),transparent_58%)] before:opacity-[0.85]",
-            )}
-          >
-            <CardContent className="relative z-[1] p-6 sm:p-7">
-              <motion.div
-                className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="PermitPilot Command"
+          title={welcomeFirstName ? `Dashboard · ${welcomeFirstName}` : "Dashboard"}
+          body="Overview of active permit expediting and utility coordination work across your portfolio."
+          action={
+            <>
+              <button
+                type="button"
+                className="pilot-button-ghost"
+                onClick={() => navigate("/projects/new")}
               >
-                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-gold/45 bg-cream text-lg font-display font-normal text-ink-primary-light shadow-inner sm:h-14 sm:w-14 sm:text-xl">
-                    {(profileFullNameSafe.trim()
-                      ? profileFullNameSafe.trim().charAt(0)
-                      : "") ||
-                      user?.email?.charAt(0)?.toUpperCase() ||
-                      "U"}
-                  </div>
-                  <div className="min-w-0">
-                    <Eyebrow className="mb-1 text-ink-secondary-light">Home</Eyebrow>
-                    <h1 className="font-display text-2xl font-normal tracking-tight text-ink-primary-light sm:text-3xl">
-                      {welcomeFirstName ? (
-                        <>
-                          Welcome, <span className="italic text-gold">{welcomeFirstName}</span>!
-                        </>
-                      ) : (
-                        "Welcome!"
-                      )}
-                    </h1>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-secondary-light sm:gap-x-3 sm:text-sm">
-                      {profile?.job_title && (
-                        <span className="flex items-center gap-1">
-                          <Briefcase className="h-3 w-3 shrink-0" />
-                          {profile.job_title}
-                        </span>
-                      )}
-                      {profile?.company_name && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="h-3 w-3 shrink-0" />
-                          {profile.company_name}
-                        </span>
-                      )}
-                    </div>
-                    {selectedProjectId ? (
-                      <p className="mt-2 font-mono text-[11px] tabular-nums tracking-tight text-ink-secondary-light sm:text-xs">
-                        Active project{" "}
-                        <span className="text-ink-primary-light/95">
-                          {selectedProjectId.slice(0, 8)}…{selectedProjectId.slice(-4)}
-                        </span>
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2 sm:pt-1">
-                  {subscription.subscribed && (
-                    <Button
-                      variant="outline"
-                      asChild
-                      className="w-fit shrink-0 rounded-lg border-gold/45 bg-cream-raised px-3.5 text-gold-deep shadow-sm transition-colors hover:border-gold hover:bg-gold hover:text-cream"
-                    >
-                      <Link to="/pricing">
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Manage Billing
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </motion.div>
-            </CardContent>
-          </Card>
+                <PlusCircle className="h-4 w-4 text-primary" /> New Project
+              </button>
+              <button
+                type="button"
+                className="pilot-button-ghost"
+                onClick={() => navigate("/portal-data")}
+              >
+                <FileUp className="h-4 w-4 text-primary" /> Portal Harvest
+              </button>
+              <button
+                type="button"
+                className="pilot-button-primary"
+                onClick={() => navigate("/analytics")}
+              >
+                <BarChart3 className="h-4 w-4" /> Open Analytics
+              </button>
+            </>
+          }
+        />
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="mb-10"
-          >
-            <div className={intakePipelineShell}>
-              {/* Architecture background image */}
-              <div
-                className="pointer-events-none absolute inset-0 bg-cover bg-right-center bg-no-repeat"
-                style={{ backgroundImage: `url(${architectureBg})`, backgroundPosition: "right center" }}
-                aria-hidden
-              />
-              {/* Light-mode overlay: strong cream wash so image is subtle and text stays readable */}
-              <div
-                className="pointer-events-none absolute inset-0 dark:hidden"
-                style={{ background: "linear-gradient(to right, hsl(42 38% 99% / 0.96) 38%, hsl(42 38% 99% / 0.80) 68%, hsl(42 38% 99% / 0.55) 100%)" }}
-                aria-hidden
-              />
-              {/* Dark-mode overlay: deep navy wash, preserves orange image highlights */}
-              <div
-                className="pointer-events-none absolute inset-0 hidden dark:block"
-                style={{ background: "linear-gradient(to right, hsl(219 52% 6% / 0.97) 32%, hsl(219 52% 6% / 0.82) 62%, hsl(219 52% 6% / 0.58) 100%)" }}
-                aria-hidden
-              />
-              {/* Grid overlay — theme-aware */}
-              <div
-                className="pointer-events-none absolute inset-0 bg-grid-light opacity-[0.6] dark:bg-grid-navy-lines dark:opacity-[0.22]"
-                aria-hidden
-              />
-              {/* Subtle top-right radial glow (dark only) */}
-              <div
-                className="pointer-events-none absolute inset-0 hidden dark:block bg-[radial-gradient(ellipse_78%_60%_at_68%_-12%,hsl(219_48%_20%/0.45),transparent_58%)]"
-                aria-hidden
-              />
-              <div className="relative">
-                <AgentWorkflowStatus />
+        <div className="flex flex-wrap items-center gap-2">
+          <ServicePill kind="permit">Permit expediting</ServicePill>
+          <ServicePill kind="utility">Utility coordination</ServicePill>
+          {profile?.company_name ? (
+            <span className="text-xs text-muted-foreground">{profile.company_name}</span>
+          ) : null}
+          {profile?.job_title ? (
+            <span className="text-xs text-muted-foreground">· {profile.job_title}</span>
+          ) : null}
+        </div>
+
+        <nav className="flex items-center gap-1 border-b border-border">
+          {[
+            { to: "/dashboard", label: "Operations", end: true },
+            { to: "/uci", label: "Utility Coordination", end: false },
+          ].map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              end={tab.end}
+              className={({ isActive }) =>
+                cn(
+                  "relative px-4 py-3 font-tight text-sm font-semibold transition-colors",
+                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  isActive &&
+                    "after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:bg-primary",
+                )
+              }
+            >
+              {tab.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* KPI cards — Lovable composition, PP counts */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Portfolio
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {projectsLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="pilot-card p-6">
+                    <Skeleton className="h-12 w-16" />
+                    <Skeleton className="mt-3 h-3 w-28" />
+                  </div>
+                ))
+              : kpis.map((s) => (
+                  <article key={s.label} className="pilot-card relative overflow-hidden p-6">
+                    <div
+                      className={cn(
+                        "pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full",
+                        s.accent,
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        "relative font-display text-5xl font-semibold leading-none tracking-tight",
+                        s.tone === "bad" ? "text-destructive" : "text-foreground",
+                      )}
+                    >
+                      {s.value}
+                    </div>
+                    <div className="pilot-kicker relative mt-3">{s.label}</div>
+                    {s.helper ? (
+                      <p className="relative mt-1 text-[11px] text-muted-foreground">{s.helper}</p>
+                    ) : null}
+                  </article>
+                ))}
+          </div>
+        </div>
+
+        {!subscription.subscribed && (
+          <AlertBanner
+            tone="warn"
+            title="No active subscription"
+            detail={
+              <div className="flex flex-wrap items-center gap-3">
+                <span>Upgrade to unlock full PermitPilot workflows.</span>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/pricing">View Plans</Link>
+                </Button>
+              </div>
+            }
+          />
+        )}
+
+        {subscription.subscribed && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Crown className="h-5 w-5 text-primary" />
+              <div>
+                <p className="font-tight text-sm font-semibold">
+                  {getTierDisplayName()} Plan
+                  {subscriptionLoading ? (
+                    <RefreshCw className="ml-2 inline h-3.5 w-3.5 animate-spin" />
+                  ) : null}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {subscription.subscriptionEnd && isValid(new Date(subscription.subscriptionEnd))
+                    ? `Renews on ${format(new Date(subscription.subscriptionEnd), "MMMM d, yyyy")}`
+                    : "Subscription active"}
+                </p>
               </div>
             </div>
-          </motion.div>
-          {/* Project Health (Step 6) - near/below Portal Monitor */}
-          {selectedProjectId && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.06 }}
-              className="mb-8"
-            >
-              <ProjectHealthCard projectId={selectedProjectId} />
-            </motion.div>
-          )}
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/pricing">
+                <CreditCard className="mr-2 h-4 w-4" />
+                Manage Billing
+              </Link>
+            </Button>
+          </div>
+        )}
 
-          {/* Subscription Status Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mb-8"
-          >
-            <Card
-              className={cn(
-                surfGoldSoft,
-                subscription.subscribed
-                  ? ""
-                  : "border-dashed border-cream-sunken bg-gradient-to-br from-cream-sunken/55 to-cream-raised hover:border-gold/30",
-              )}
-            >
-              <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 sm:p-6">
-                <div className="flex items-center gap-4">
-                  <div
+        {/* Portfolio + Intelligence — Lovable 2fr/1fr grid */}
+        <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+          <section className="pilot-card overflow-hidden">
+            <header className="flex items-center justify-between gap-3 border-b border-border p-5">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-tight text-lg font-bold">Projects</h2>
+                  <span
                     className={cn(
-                      "w-12 h-12 rounded-lg flex items-center justify-center border",
-                      subscription.subscribed
-                        ? "bg-gold-soft/80 border-gold/30 text-gold-deep"
-                        : "bg-cream-sunken/80 border-cream-sunken text-ink-tertiary-light",
+                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      hasLiveHarvestProcess
+                        ? "border-success/30 bg-success/10 text-success"
+                        : "border-border bg-muted/60 text-muted-foreground",
                     )}
                   >
-                    <Crown className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-display text-lg font-normal text-ink-primary-light tracking-tight">
-                        {subscription.subscribed ? `${getTierDisplayName()} Plan` : "No Active Subscription"}
-                      </h3>
-                      {subscription.subscribed && (
-                        <Badge className="border border-gold/35 bg-gold/12 text-gold-deep">Active</Badge>
-                      )}
-                      {subscriptionLoading && (
-                        <RefreshCw className="h-4 w-4 animate-spin text-ink-tertiary-light" />
-                      )}
-                    </div>
-                    <p className="text-sm text-ink-secondary-light">
-                      {subscription.subscribed && subscription.subscriptionEnd
-                        ? (() => {
-                            const end = new Date(subscription.subscriptionEnd);
-                            return isValid(end)
-                              ? `Renews on ${format(end, "MMMM d, yyyy")}`
-                              : "Subscription active — renewal date unavailable";
-                          })()
-                        : "Upgrade to access all features"}
-                    </p>
+                    {hasLiveHarvestProcess ? (
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+                    ) : null}
+                    {projects.length} total projects
+                  </span>
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Portfolio
+                </p>
+              </div>
+              <Link
+                to="/projects"
+                className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+              >
+                View All <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </header>
+            <div className="overflow-x-auto">
+              {projectsLoading ? (
+                <div className="space-y-3 p-5">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : portfolio.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 p-10 text-center">
+                  <FolderKanban className="h-10 w-10 text-muted-foreground" />
+                  <p className="font-tight font-semibold">No projects yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Create a project to start tracking permits and portal harvest.
+                  </p>
+                  <Button onClick={() => navigate("/projects/new")}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    New Project
+                  </Button>
+                </div>
+              ) : (
+                <table className="w-full text-left">
+                  <thead className="bg-muted/60">
+                    <tr className="pilot-kicker">
+                      <th className="px-5 py-3 font-medium">Project</th>
+                      <th className="px-5 py-3 font-medium">Jurisdiction</th>
+                      <th className="px-5 py-3 font-medium">Permit #</th>
+                      <th className="px-5 py-3 font-medium">Status</th>
+                      <th className="px-5 py-3 font-medium">Portal</th>
+                      <th className="px-5 py-3 font-medium">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border text-sm">
+                    {portfolio.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="cursor-pointer transition-colors hover:bg-muted/40"
+                        onClick={() => {
+                          setSelectedProjectId(row.id);
+                          navigate("/projects");
+                        }}
+                      >
+                        <td className="px-5 py-4 font-tight font-semibold text-foreground">
+                          {row.name}
+                        </td>
+                        <td className="px-5 py-4 text-muted-foreground">
+                          {row.jurisdiction || "—"}
+                        </td>
+                        <td className="px-5 py-4 font-mono text-xs tabular-nums text-muted-foreground">
+                          {row.permit_number || "—"}
+                        </td>
+                        <td className="px-5 py-4">
+                          <StatusPill tone={statusTone(row.status)}>
+                            {PROJECT_STATUS_CONFIG[row.status].label}
+                          </StatusPill>
+                        </td>
+                        <td className="px-5 py-4 text-muted-foreground">
+                          {formatDashboardPortalLabel(
+                            harvestByProjectId.get(row.id)?.harvestStatus,
+                            harvestEvidence.harvestedProjectIds.has(row.id),
+                          )}
+                        </td>
+                        <td className="px-5 py-4 font-data text-xs text-muted-foreground">
+                          {isValid(new Date(row.updated_at))
+                            ? format(new Date(row.updated_at), "MMM d")
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+
+          <section className="pilot-card flex flex-col">
+            <header className="flex items-center justify-between border-b border-border p-5">
+              <div>
+                <h2 className="font-tight text-lg font-bold">Intelligence &amp; Alerts</h2>
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Portfolio
+                </p>
+              </div>
+              <Brain className="h-5 w-5 text-muted-foreground" />
+            </header>
+            <div className="relative flex-1 space-y-5 p-5">
+              <div className="flex gap-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-primary">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Quick actions
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to="/portal-data"
+                      className="text-[11px] font-bold text-accent hover:underline"
+                    >
+                      Open Portal Harvest
+                    </Link>
+                    <span className="text-border">•</span>
+                    <Link
+                      to="/response-matrix"
+                      className="text-[11px] font-bold text-accent hover:underline"
+                    >
+                      Response Matrix
+                    </Link>
+                    <span className="text-border">•</span>
+                    <Link
+                      to="/uci"
+                      className="text-[11px] font-bold text-accent hover:underline"
+                    >
+                      Utility Coordination
+                    </Link>
+                    <span className="text-border">•</span>
+                    <Link
+                      to="/permit-wizard-filing"
+                      className="text-[11px] font-bold text-accent hover:underline"
+                    >
+                      Permit Filing
+                    </Link>
                   </div>
                 </div>
-                {!subscription.subscribed && (
-                  <Button variant="gold" asChild>
-                    <Link to="/pricing">View Plans</Link>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
+              </div>
+              <div className="border-t border-border pt-4">
+                <DeadlineAlertsWidget />
+              </div>
+            </div>
+          </section>
+        </div>
 
-          {/* Quick Actions */}
-          <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8"
-            variants={staggerContainer}
-            initial="hidden"
-            animate="visible"
+        {!gettingStartedComplete && <GettingStartedChecklist />}
+
+        {/*
+          Secondary operations workspace — NOT co-primary with the Lovable
+          KPI/Active-Projects/Intelligence composition above. Intake Pipeline,
+          project health, inspections/checklists, and saved calculations are
+          all real PP capabilities, demoted into a single tabbed panel below
+          the Lovable-primary fold rather than stacked as full-width sections.
+        */}
+        <Panel
+          eyebrow="Secondary · operations workspace"
+          title="Workflow Tools"
+          className="p-0"
+        >
+          <Tabs
+            value={workflowTab}
+            onValueChange={(value) => {
+              const nextTab = WORKFLOW_TABS.has(value as WorkflowTab)
+                ? (value as WorkflowTab)
+                : "intake";
+              setWorkflowTab(nextTab);
+              const next = new URLSearchParams(searchParams);
+              next.set("workflow", nextTab);
+              setSearchParams(next, { replace: true });
+            }}
+            className="w-full"
           >
-            <motion.div variants={staggerItem} className="h-full min-h-[120px]">
-              <Card
-                className={cn(
-                  "group h-full min-h-[120px] cursor-pointer rounded-2xl border-cream-sunken bg-cream/95 text-ink-primary-light shadow-cream transition-colors hover:border-gold/35 hover:shadow-lg dark:border-cream-sunken dark:bg-cream dark:text-ink-primary-light",
-                )}
-                onClick={() => navigate("/projects")}
-              >
-                <CardContent className="flex h-full items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                  <div className={cn("h-12 w-12", tileGoldAccent)}>
-                    <FolderKanban className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-xl font-normal tracking-tight text-ink-primary-light">
-                      Projects
-                    </h3>
-                    <p className="text-sm text-ink-secondary-light">Manage permits</p>
-                  </div>
-                  <Plus className="ml-auto h-5 w-5 text-ink-tertiary-light transition-colors group-hover:text-gold-deep" />
-                </CardContent>
-              </Card>
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full min-h-[120px]">
-              <Card
-                className={cn(
-                  "group h-full min-h-[120px] cursor-pointer",
-                  surfIntelBlueGray,
-                )}
-                onClick={() => navigate("/permit-intelligence")}
-              >
-                <CardContent className="flex h-full items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                  <div className={cn("h-12 w-12", tileTealOnDark)}>
-                    <Database className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-xl font-normal tracking-tight text-foreground dark:text-ink-primary-dark">
-                      Permit Intelligence
-                    </h3>
-                    <p className="text-sm text-muted-foreground dark:text-ink-secondary-dark">Shovels data</p>
-                  </div>
-                  <Plus className="ml-auto h-5 w-5 text-muted-foreground dark:text-ink-tertiary-dark transition-colors group-hover:text-teal" />
-                </CardContent>
-              </Card>
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full min-h-[120px]">
-              <Card
-                className={cn("group h-full min-h-[120px] cursor-pointer", surfTealSoftLight)}
-                onClick={() => navigate("/demos")}
-              >
-                <CardContent className="flex h-full items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                  <div className={cn("h-12 w-12", tileTealOnLight)}>
-                    <LayoutDashboard className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-xl font-normal tracking-tight text-ink-primary-light">
-                      Interactive Demos
-                    </h3>
-                    <p className="text-sm text-ink-secondary-light">Try our AI tools</p>
-                  </div>
-                  <Plus className="ml-auto h-5 w-5 text-ink-tertiary-light transition-colors group-hover:text-teal" />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
-
-          {/* Getting Started Checklist - Show for new users */}
-          {!gettingStartedComplete && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="mb-8"
-            >
-              <GettingStartedChecklist />
-            </motion.div>
-          )}
-
-          {/* Deadline Alerts & Inspections Row */}
-          <div className="grid gap-6 lg:grid-cols-2 mb-8 items-stretch">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="min-h-0"
-            >
-              <DeadlineAlertsWidget />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="min-h-0"
-            >
-              <InspectionsPunchListWidget />
-            </motion.div>
-          </div>
-
-          {/* Recent Checklists Widget */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.28 }}
-            className="mb-8"
-          >
-            <RecentChecklistsWidget />
-          </motion.div>
-
-          {/* Saved Calculations */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="rounded-2xl border border-cream-sunken/80 bg-gradient-to-br from-cream-sunken/40 via-cream-raised/95 to-cream-raised px-5 py-7 text-ink-primary-light shadow-inner dark:border-cream-sunken/80 dark:from-cream-sunken/45 dark:via-cream-raised dark:to-cream-raised dark:text-ink-primary-light sm:px-7 sm:py-9"
-          >
-            <div className="flex items-center justify-between mb-6 gap-3">
-              <h2 className="font-display text-2xl font-normal text-ink-primary-light tracking-tight">
-                Saved Calculations
-              </h2>
-              <Badge
-                variant="secondary"
-                className="border border-cream-sunken bg-cream-sunken/60 text-ink-secondary-light"
-              >
-                {calculations.length} saved
-              </Badge>
+            <div className="border-b border-border px-5 pt-5">
+              <TabsList className="h-auto flex-wrap justify-start bg-transparent p-0">
+                <TabsTrigger value="intake" className="gap-1.5">
+                  <Bot className="h-3.5 w-3.5" /> Intake Pipeline
+                </TabsTrigger>
+                <TabsTrigger value="health" className="gap-1.5">
+                  <HeartPulse className="h-3.5 w-3.5" /> Project Health
+                </TabsTrigger>
+                <TabsTrigger value="inspections" className="gap-1.5">
+                  <ListChecks className="h-3.5 w-3.5" /> Inspections &amp; Checklists
+                </TabsTrigger>
+                <TabsTrigger value="calculations" className="gap-1.5">
+                  <Calculator className="h-3.5 w-3.5" /> Saved Calculations
+                  {calculations.length > 0 ? (
+                    <Badge variant="secondary" className="ml-1">
+                      {calculations.length}
+                    </Badge>
+                  ) : null}
+                </TabsTrigger>
+              </TabsList>
             </div>
 
-            {loading ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3].map((i) => (
-                  <Card key={i} className={cn(surfCreamRaised)}>
-                    <CardHeader>
-                      <Skeleton className="h-5 w-3/4" />
-                      <Skeleton className="h-4 w-1/2" />
-                    </CardHeader>
-                    <CardContent>
-                      <Skeleton className="h-20 w-full" />
-                    </CardContent>
-                  </Card>
-                ))}
+            <TabsContent value="intake" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Selected Project
+              </p>
+              <AgentWorkflowStatus />
+            </TabsContent>
+
+            <TabsContent value="health" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Selected Project
+              </p>
+              {selectedProjectId ? (
+                <ProjectHealthCard
+                  projectId={selectedProjectId}
+                  onRunManualCheck={openIntakePipelineTab}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-10 text-center">
+                  <HeartPulse className="h-8 w-8 text-muted-foreground" />
+                  <p className="font-tight font-semibold">No project selected</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    Select an active project from the header to view its health snapshot.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="inspections" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Portfolio
+              </p>
+              <div className="grid items-stretch gap-6 lg:grid-cols-2">
+                <InspectionsPunchListWidget />
+                <RecentChecklistsWidget />
               </div>
-            ) : calculations.length === 0 ? (
-              <Card className="border-dashed border-cream-sunken bg-cream/90 text-ink-primary-light shadow-inner dark:border-cream-sunken dark:bg-cream dark:text-ink-primary-light">
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <Calculator className="mb-4 h-12 w-12 text-gold/70" />
-                  <h3 className="font-display text-lg font-normal text-ink-primary-light mb-2">
-                    No saved calculations yet
-                  </h3>
-                  <p className="text-ink-secondary-light text-sm mb-4">
-                    Run an ROI or Consolidation calculation to save your results here
+            </TabsContent>
+
+            <TabsContent value="calculations" className="m-0 p-5">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Portfolio
+              </p>
+              {loading ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-32 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : calculations.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-12 text-center">
+                  <Calculator className="h-10 w-10 text-muted-foreground" />
+                  <p className="font-tight font-semibold">No saved calculations yet</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    Run an ROI or Consolidation calculation to save results here.
                   </p>
                   <div className="flex gap-2">
-                    <Button variant="gold" asChild size="sm">
+                    <Button asChild size="sm">
                       <Link to="/roi-calculator">ROI Calculator</Link>
                     </Button>
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                      className="rounded-lg border-gold/45 bg-cream text-gold-deep transition-colors hover:border-gold hover:bg-gold hover:text-cream"
-                    >
-                      <Link to="/consolidation-calculator">Consolidation Calculator</Link>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/consolidation-calculator">Consolidation</Link>
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {calculations.map((calc) => (
-                  <motion.div
-                    key={calc.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    whileHover={{ y: -4 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Card className={cn("h-full transition-colors", surfCreamRaised)}>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {calculations.map((calc) => (
+                    <Card key={calc.id} className="border-border bg-card">
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
-                          <Badge
-                            className={cn(
-                              "border shadow-sm",
-                              calc.calculation_type === "roi"
-                                ? "border-gold/35 bg-gold text-cream"
-                                : "border-teal/28 bg-teal-soft/85 text-teal",
-                            )}
-                          >
+                          <Badge variant="outline">
                             {calc.calculation_type === "roi" ? "ROI" : "Consolidation"}
                           </Badge>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-ink-tertiary-light hover:text-destructive"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
                             onClick={() => handleDelete(calc.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                        <CardTitle className="mt-2 text-lg text-ink-primary-light">{calc.name}</CardTitle>
-                        <CardDescription className="flex items-center gap-1 text-ink-secondary-light">
+                        <CardTitle className="mt-2 text-base">{calc.name}</CardTitle>
+                        <CardDescription className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {(() => {
-                            const d = new Date(calc.created_at);
-                            return isValid(d) ? format(d, "MMM d, yyyy") : "—";
-                          })()}
+                          {isValid(new Date(calc.created_at))
+                            ? format(new Date(calc.created_at), "MMM d, yyyy")
+                            : "—"}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         {calc.calculation_type === "roi" && calc.results_data && (
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-ink-secondary-light">Annual Savings</span>
+                              <span className="text-muted-foreground">Annual Savings</span>
                               <span className="font-semibold text-success">
-                                ${((calc.results_data as { annualSavings?: number }).annualSavings || 0).toLocaleString()}
+                                $
+                                {(
+                                  (calc.results_data as { annualSavings?: number }).annualSavings || 0
+                                ).toLocaleString()}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-ink-secondary-light">Time Saved</span>
-                              <span className="font-semibold text-ink-primary-light">
-                                {((calc.results_data as { hoursSaved?: number }).hoursSaved || 0)} hrs/yr
+                              <span className="text-muted-foreground">Time Saved</span>
+                              <span className="font-semibold">
+                                {(calc.results_data as { hoursSaved?: number }).hoursSaved || 0} hrs/yr
                               </span>
                             </div>
                           </div>
@@ -601,27 +748,35 @@ export default function Dashboard() {
                         {calc.calculation_type === "consolidation" && calc.results_data && (
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-ink-secondary-light">Current Cost</span>
-                              <span className="font-semibold text-ink-primary-light">
-                                ${((calc.results_data as { currentCost?: number }).currentCost || 0).toLocaleString()}/yr
+                              <span className="text-muted-foreground">Current Cost</span>
+                              <span className="font-semibold">
+                                $
+                                {(
+                                  (calc.results_data as { currentCost?: number }).currentCost || 0
+                                ).toLocaleString()}
+                                /yr
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-ink-secondary-light">With PermitPilot</span>
+                              <span className="text-muted-foreground">With PermitPilot</span>
                               <span className="font-semibold text-success">
-                                ${((calc.results_data as { insightCost?: number }).insightCost || 0).toLocaleString()}/yr
+                                $
+                                {(
+                                  (calc.results_data as { insightCost?: number }).insightCost || 0
+                                ).toLocaleString()}
+                                /yr
                               </span>
                             </div>
                           </div>
                         )}
                       </CardContent>
                     </Card>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </Panel>
       </div>
     </>
   );

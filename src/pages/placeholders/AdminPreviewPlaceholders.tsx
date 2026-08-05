@@ -8,7 +8,7 @@ type AdminPreviewPlaceholderProps = {
   integrationNote: string;
 };
 
-/** Shared chrome for admin preview routes (Preview label; actions disabled). */
+/** Shared chrome for admin_preview_placeholder routes (Preview label; actions disabled). */
 export function AdminPreviewPlaceholder({
   title,
   eyebrow = "Preview",

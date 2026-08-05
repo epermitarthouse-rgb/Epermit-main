@@ -67,7 +67,7 @@ const clientValue = [
 
 export default function Home() {
   return (
-    <div className="space-y-16 px-4 py-5 pb-16 md:px-6 md:pb-16 lg:px-8">
+    <div className="space-y-16 pb-16">
       {/* HERO */}
       <section className="signal-grid relative overflow-hidden rounded-2xl border border-border">
         <div className="absolute inset-0 bg-gradient-to-br from-background via-background/95 to-primary/5" />

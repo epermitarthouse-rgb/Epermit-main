@@ -18,7 +18,7 @@ export function BaltimoreLayout({
   showSearchApplicationsLink = true,
 }: BaltimoreLayoutProps) {
   return (
-    <div className="min-h-full space-y-6 bg-cream pb-12 text-ink-primary-light">
+    <div className="min-h-full space-y-6 bg-background pb-12 text-foreground">
       <BaltimoreNav
         activeModule={activeModule}
         permitsSubActive={permitsSubActive}
