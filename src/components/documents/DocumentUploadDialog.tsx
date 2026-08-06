@@ -152,7 +152,7 @@ export function DocumentUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg w-[calc(100%-2rem)] overflow-hidden">
+      <DialogContent className="sm:max-w-lg w-[calc(100%-2rem)] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isNewVersion ? 'Upload New Version' : 'Upload Documents'}
@@ -174,7 +174,7 @@ export function DocumentUploadDialog({
 
           {/* Drop zone */}
           <div
-            className={`min-w-0 w-full overflow-hidden border-2 border-dashed rounded-lg p-4 sm:p-6 transition-colors ${
+            className={`min-w-0 w-full border-2 border-dashed rounded-lg p-4 sm:p-6 transition-colors ${
               files.length > 0 ? 'text-left' : 'text-center'
             } ${
               dragActive
@@ -188,34 +188,39 @@ export function DocumentUploadDialog({
           >
             {files.length > 0 ? (
               <div className="space-y-2 min-w-0 w-full">
-                {files.map((file, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start gap-2 min-w-0 w-full rounded bg-muted/50 p-2"
-                  >
-                    <File className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <p
-                        className="font-medium text-sm truncate"
-                        title={file.name}
-                      >
-                        {file.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {formatFileSize(file.size)}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeFile(index)}
-                      className="shrink-0 h-8 w-8"
-                      aria-label={`Remove ${file.name}`}
+                <div
+                  className="max-h-[min(40vh,280px)] space-y-2 overflow-y-auto overscroll-contain pr-1"
+                  data-testid="document-upload-file-list"
+                >
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start gap-2 min-w-0 w-full rounded bg-muted/50 p-2"
                     >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <File className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <p
+                          className="font-medium text-sm truncate"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeFile(index)}
+                        className="shrink-0 h-8 w-8"
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
                 <div className="flex items-center justify-between gap-2 pt-2 border-t min-w-0">
                   <p className="text-sm text-muted-foreground truncate min-w-0">
                     {files.length} file{files.length !== 1 ? 's' : ''} • {formatFileSize(totalSize)} total
