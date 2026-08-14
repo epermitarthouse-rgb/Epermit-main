@@ -5,6 +5,7 @@ import {
   countSelectedProviders,
   deriveAddressPresentation,
   filterProvidersForPicker,
+  getSupportedUtilityTypes,
   getInitDisabledReasons,
   sortProvidersForPicker,
 } from "./uciSetupWorkflow.ts";
@@ -89,6 +90,31 @@ describe("uciSetupWorkflow helpers", () => {
     });
     assert.equal(filtered.length, 1);
     assert.equal(filtered[0].slug, "washington-gas");
+  });
+
+  it("exposes and filters every supported UCI utility type without fallback", () => {
+    assert.deepEqual(getSupportedUtilityTypes(["electric", "gas"]), [
+      "electric",
+      "gas",
+      "water",
+      "sewer",
+      "telecom",
+    ]);
+    const catalog = [
+      provider({ slug: "electric-co", utility_type: "electric" }),
+      provider({ slug: "gas-co", utility_type: "gas" }),
+      provider({ slug: "water-co", utility_type: "water" }),
+      provider({ slug: "sewer-co", utility_type: "sewer" }),
+      provider({ slug: "telecom-co", utility_type: "telecom" }),
+    ];
+    for (const utilityType of getSupportedUtilityTypes()) {
+      const filtered = filterProvidersForPicker(catalog, {
+        utilityTypeFilter: utilityType,
+        searchQuery: "",
+      });
+      assert.equal(filtered.length, 1);
+      assert.equal(filtered[0].utility_type, utilityType);
+    }
   });
 
   it("builds initialized slug set and excludes initialized providers from selection counts", () => {

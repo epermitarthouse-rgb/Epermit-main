@@ -3,13 +3,16 @@ import { useProjects } from "@/hooks/useProjects";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import {
   buildCoordinationApplicationPackage,
+  approveSyntheticApplicationChecklist,
   confirmApplicationPackageDocumentMapping,
+  exportSyntheticApplicationChecklist,
   formatUciUserError,
   getCoordinationDetail,
   listApplicationPackageDocumentCandidates,
   listProjectCoordination,
   removeApplicationPackageDocumentMapping,
   reviewCoordinationApplication,
+  setSyntheticApplicationSignatureStatus,
   submitCoordinationApplication,
 } from "@/lib/uciApi";
 import {
@@ -58,6 +61,7 @@ export function useUciApplicationBuilder() {
   const [submitBusy, setSubmitBusy] = useState(false);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [signatureReviewNote, setSignatureReviewNote] = useState("");
   const [lastSubmitResult, setLastSubmitResult] = useState<UciApplicationSubmitResponse | null>(
     null,
   );
@@ -80,6 +84,17 @@ export function useUciApplicationBuilder() {
   const packageApp = getApplicationPackageDraftApplication(applications);
   const packageMeta = parseApplicationPackageMetadata(packageApp);
   const packageDocs = parsePackageDocuments(packageApp?.package_documents);
+  const embeddedProvider = record?.utility_providers
+    ? Array.isArray(record.utility_providers)
+      ? record.utility_providers[0]
+      : record.utility_providers
+    : null;
+  const providerSlug = String(
+    packageApp?.provider_slug || embeddedProvider?.slug || "",
+  ).toLowerCase();
+  const isPepco = providerSlug === "pepco";
+  const isDominionSynthetic =
+    providerSlug === "dominion" && packageMeta?.checklist_mode === "synthetic_test";
 
   const portalApplications = useMemo(
     () =>
@@ -151,7 +166,7 @@ export function useUciApplicationBuilder() {
       setCandidates(null);
       return;
     }
-    if (!externalApplicationId) {
+    if (isPepco && !externalApplicationId) {
       setCandidates(null);
       setCandidatesError(
         "Select a portal application before mapping package documents (PEPCO scope required).",
@@ -171,7 +186,7 @@ export function useUciApplicationBuilder() {
     } finally {
       setCandidatesLoading(false);
     }
-  }, [coordinationId, packageApp?.id, externalApplicationId]);
+  }, [coordinationId, packageApp?.id, externalApplicationId, isPepco]);
 
   useEffect(() => {
     void loadCandidates();
@@ -211,6 +226,7 @@ export function useUciApplicationBuilder() {
     try {
       await buildCoordinationApplicationPackage(coordinationId, {
         external_application_id: externalApplicationId || undefined,
+        checklist_mode: providerSlug === "dominion" ? "synthetic_test" : undefined,
       });
       await refreshDetail(coordinationId);
       setActionMessage({
@@ -224,6 +240,82 @@ export function useUciApplicationBuilder() {
       });
     } finally {
       setBuildBusy(false);
+    }
+  };
+
+  const approveSyntheticChecklist = async () => {
+    if (!packageApp || !coordinationId || !isDominionSynthetic) return;
+    setReviewBusy(true);
+    setActionMessage(null);
+    try {
+      await approveSyntheticApplicationChecklist(packageApp.id, {
+        note: reviewNotes.trim() || "Approved for Highland Springs synthetic Stage 3 testing only",
+      });
+      await refreshDetail(coordinationId);
+      setActionMessage({ tone: "ok", text: "Synthetic test checklist approved" });
+    } catch (e: unknown) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(e, "Synthetic checklist approval failed"),
+      });
+    } finally {
+      setReviewBusy(false);
+    }
+  };
+
+  const setSignatureStatus = async (
+    documentKey: string,
+    status: "unknown" | "unsigned" | "signed_manual_verified",
+  ) => {
+    if (!packageApp || !coordinationId || !isDominionSynthetic) return;
+    setMappingBusySlot(documentKey);
+    setActionMessage(null);
+    try {
+      await setSyntheticApplicationSignatureStatus(packageApp.id, {
+        document_key: documentKey,
+        signature_status: status,
+        review_note:
+          status === "signed_manual_verified"
+            ? signatureReviewNote.trim()
+            : signatureReviewNote.trim() || undefined,
+      });
+      await refreshDetail(coordinationId);
+      setActionMessage({
+        tone: "ok",
+        text:
+          status === "signed_manual_verified"
+            ? "Synthetic signature manually verified"
+            : `Synthetic signature status set to ${status}`,
+      });
+    } catch (e: unknown) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(e, "Synthetic signature update failed"),
+      });
+    } finally {
+      setMappingBusySlot(null);
+    }
+  };
+
+  const exportSyntheticChecklist = async () => {
+    if (!packageApp || !isDominionSynthetic) return;
+    try {
+      const payload = await exportSyntheticApplicationChecklist(packageApp.id);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `uci-synthetic-checklist-${packageApp.id}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setActionMessage({ tone: "ok", text: "Read-only synthetic checklist exported" });
+    } catch (e: unknown) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(e, "Synthetic checklist export failed"),
+      });
     }
   };
 
@@ -399,10 +491,15 @@ export function useUciApplicationBuilder() {
     mappingBusySlot,
     reviewNotes,
     setReviewNotes,
+    signatureReviewNote,
+    setSignatureReviewNote,
     lastSubmitResult,
     actionMessage,
     buildEligibility,
     saveDraft,
+    approveSyntheticChecklist,
+    setSignatureStatus,
+    exportSyntheticChecklist,
     markReviewed,
     submitPackage,
     confirmMapping,
@@ -413,5 +510,8 @@ export function useUciApplicationBuilder() {
     serviceFields,
     loadMetrics,
     projectAddress,
+    providerSlug,
+    isPepco,
+    isDominionSynthetic,
   };
 }

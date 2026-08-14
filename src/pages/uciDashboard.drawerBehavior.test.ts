@@ -78,7 +78,7 @@ describe("UciDashboard coordination drawer open/close behavior", () => {
     );
   });
 
-  it("hydrates the drawer only from an explicit ?coordination= param", () => {
+  it("hydrates detail from an explicit query or record route", () => {
     const block = extractBlock(
       dashboardSource,
       "useEffect(() => {\n    if (!coordinationParam)",
@@ -86,12 +86,13 @@ describe("UciDashboard coordination drawer open/close behavior", () => {
     );
     assert.match(block, /suppressCoordinationHydrationRef/);
     assert.match(block, /openDetail\(coordinationParam\)/);
+    assert.match(dashboardSource, /routeCoordinationId \?\? searchParams\.get\("coordination"\)/);
   });
 
-  it("maps Submissions to application-prep without implying auto-open", () => {
+  it("maps the Builder alias to application-prep without implying auto-open", () => {
     assert.match(
       navSource,
-      /id:\s*"submissions"[\s\S]*?target:\s*\{\s*kind:\s*"drawer-tab",\s*tab:\s*"application-prep"\s*\}/,
+      /id:\s*"application-builder"[\s\S]*?target:\s*\{\s*kind:\s*"drawer-tab",\s*tab:\s*"application-prep"\s*\}/,
     );
     assert.match(
       navSource,

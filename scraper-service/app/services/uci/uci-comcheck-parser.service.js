@@ -115,7 +115,6 @@ function extractComcheckFindingsFromText(text, pageNumber, source) {
         confidence: 0.85,
       });
     }
-    out.push(...extractLightingFixtureRows(pageText, pageNumber, push, "interior"));
   }
 
   if (section === "lighting_exterior") {
@@ -156,7 +155,6 @@ function extractComcheckFindingsFromText(text, pageNumber, source) {
         confidence: 0.85,
       });
     }
-    out.push(...extractLightingFixtureRows(pageText, pageNumber, push, "exterior"));
   }
 
   if (section === "hvac_mechanical") {
@@ -294,19 +292,28 @@ function extractComcheckProjectMetadata(pageText, pageNumber, push) {
     });
   }
 
-  const floorArea = pageText.match(/Floor\s+Area[^0-9]*(\d+(?:\.\d+)?)/i);
+  const areaSection = pageText.search(/\bBuilding\s+Area(?:\s+Type)?\b/i);
+  const areaText = areaSection >= 0 ? pageText.slice(areaSection, areaSection + 700) : pageText;
+  const floorArea =
+    areaText.match(
+      /\b(?:Nonresidential|All\s+Other|Retail|Office|Restaurant|Warehouse)\b[^\n0-9]{0,80}([\d,]{3,}(?:\.\d+)?)\s*(?:SQ\.?\s*FT|SF|FT²)?/i,
+    ) ||
+    areaText.match(
+      /\bDescription\s+Floor\s+Area\b\s*\n[^\n]*?([\d,]{3,}(?:\.\d+)?)\s*$/im,
+    );
   if (floorArea) {
+    const normalizedArea = Number(floorArea[1].replace(/,/g, ""));
     push({
       field_key: "comcheck_building_area",
       field_label: "Building area",
       raw_value: floorArea[1],
-      normalized_value: Number(floorArea[1]),
+      normalized_value: normalizedArea,
       unit: "ft2",
       entity_type: "project_metadata",
       entity_name: "Building area",
       fact_type: "compliance_evidence",
       category: "compliance_evidence",
-      evidence_text: floorArea[0],
+      evidence_text: floorArea[0].replace(/\s+/g, " ").trim(),
       confidence: 0.78,
     });
   }

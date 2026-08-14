@@ -47,6 +47,154 @@ function extractPanelScheduleFindingsFromText(text, pageNumber, source) {
     );
   };
 
+  const pushPanelFacts = ({ label, amps, voltage, phase, wires, evidence }) => {
+    const isMdp = /^MDP$/i.test(label);
+    const entityType = isMdp ? "main_distribution_panel" : "panel";
+    push({
+      field_key: isMdp ? "main_distribution_panel_rating" : "panel_rating",
+      field_label: isMdp ? "MDP rating" : `Panel ${label} rating`,
+      raw_value: String(amps),
+      normalized_value: Number(amps),
+      unit: "A",
+      entity_type: entityType,
+      entity_name: label,
+      fact_type: "panel_fact",
+      category: isMdp ? "main_distribution_equipment" : "panel_rating",
+      evidence_text: evidence,
+      confidence: 0.9,
+    });
+    if (voltage) {
+      push({
+        field_key: "service_voltage",
+        field_label: "Panel voltage",
+        raw_value: voltage,
+        normalized_value: voltage,
+        unit: "V",
+        entity_type: entityType,
+        entity_name: label,
+        fact_type: "panel_fact",
+        category: "service_voltage",
+        evidence_text: evidence,
+        confidence: 0.88,
+      });
+    }
+    if (phase) {
+      push({
+        field_key: "phase",
+        field_label: "Panel phase",
+        raw_value: `${phase}PH`,
+        normalized_value: String(phase),
+        unit: "phase",
+        entity_type: entityType,
+        entity_name: label,
+        fact_type: "panel_fact",
+        category: "phase",
+        evidence_text: evidence,
+        confidence: 0.86,
+      });
+    }
+    if (wires) {
+      push({
+        field_key: "wire_configuration",
+        field_label: "Panel wire configuration",
+        raw_value: `${wires}W`,
+        normalized_value: String(wires),
+        unit: "wire",
+        entity_type: entityType,
+        entity_name: label,
+        fact_type: "panel_fact",
+        category: "wire_configuration",
+        evidence_text: evidence,
+        confidence: 0.86,
+      });
+    }
+  };
+
+  const pushPanelLoad = ({ label, kind, value, evidence }) => {
+    const normalized = Number(value);
+    if (!Number.isFinite(normalized)) return;
+    push({
+      field_key: kind === "connected" ? "panel_connected_load_kva" : "panel_demand_load_kva",
+      field_label: `Panel ${label} ${kind} load`,
+      raw_value: String(value),
+      normalized_value: normalized,
+      unit: "kVA",
+      entity_type: "electrical_panel",
+      entity_name: label,
+      fact_type: "electric_load",
+      category: "panel_load",
+      aggregation_role: "summary_total",
+      utility_type: "electric",
+      energy_domain: "electric",
+      capacity_type: kind === "connected" ? "connected_load" : "demand_load",
+      evidence_text: evidence,
+      confidence: 0.9,
+      review_blocked_reason: "Panel-level total — not a whole-project service total",
+    });
+  };
+
+  /*
+   * Revit text extraction commonly flattens two side-by-side schedules as:
+   *   208/120 Wye, 3PH, 4W 208/120 Wye, 3PH, 4W
+   *   PANELBOARD PANELBOARD
+   *   A B
+   *   200A MLO 200A MLO
+   * Keep each pair as a bounded block so totals cannot drift to MDP or another panel.
+   */
+  const pairedHeaderRegex =
+    /(\d{2,3}\/\d{2,3})\s*(?:Wye,?\s*)?(\d+)\s*PH,?\s*(\d+)\s*W\s+\1\s*(?:Wye,?\s*)?\2\s*PH,?\s*\3\s*W\s*\n\s*PANELBOARD\s+PANELBOARD\s*\n\s*(MDP|[A-Z])\s+(MDP|[A-Z])\s*\n\s*(\d{2,4})\s*A\s+MLO\s+(\d{2,4})\s*A\s+MLO/gi;
+  const pairedBlocks = [];
+  let pairMatch;
+  while ((pairMatch = pairedHeaderRegex.exec(pageText)) !== null) {
+    pairedBlocks.push({
+      index: pairMatch.index,
+      end: pairedHeaderRegex.lastIndex,
+      voltage: pairMatch[1],
+      phase: pairMatch[2],
+      wires: pairMatch[3],
+      labels: [pairMatch[4], pairMatch[5]],
+      amps: [Number(pairMatch[6]), Number(pairMatch[7])],
+      header: pairMatch[0].replace(/\s+/g, " ").trim(),
+    });
+  }
+
+  for (let i = 0; i < pairedBlocks.length; i += 1) {
+    const block = pairedBlocks[i];
+    const end = pairedBlocks[i + 1]?.index ?? pageText.length;
+    const segment = pageText.slice(block.index, end);
+    for (let col = 0; col < block.labels.length; col += 1) {
+      pushPanelFacts({
+        label: block.labels[col],
+        amps: block.amps[col],
+        voltage: block.voltage,
+        phase: block.phase,
+        wires: block.wires,
+        evidence: block.header,
+      });
+    }
+
+    const connectedLine = segment.match(/TOTAL\s+CONN(?:ECTED)?\.?\s+LOAD:\s*([0-9.]+)\s*kVA[\s\S]{0,120}?TOTAL\s+CONN(?:ECTED)?\.?\s+LOAD:\s*([0-9.]+)\s*kVA/i);
+    const demandLine = segment.match(/TOTAL\s+DEMAND\s+LOAD:\s*([0-9.]+)\s*kVA[\s\S]{0,120}?TOTAL\s+DEMAND\s+LOAD:\s*([0-9.]+)\s*kVA/i);
+    for (let col = 0; col < block.labels.length; col += 1) {
+      if (connectedLine?.[col + 1]) {
+        pushPanelLoad({
+          label: block.labels[col],
+          kind: "connected",
+          value: connectedLine[col + 1],
+          evidence: `Panel ${block.labels[col]} TOTAL CONN. LOAD: ${connectedLine[col + 1]} kVA`,
+        });
+      }
+      if (demandLine?.[col + 1]) {
+        pushPanelLoad({
+          label: block.labels[col],
+          kind: "demand",
+          value: demandLine[col + 1],
+          evidence: `Panel ${block.labels[col]} TOTAL DEMAND LOAD: ${demandLine[col + 1]} kVA`,
+        });
+      }
+    }
+  }
+
   const mloRegex = /(\d{2,4})\s*A\s+MLO\s+(MDP|[A-Z])\s+PANELBOARD/gi;
   let match;
   while ((match = mloRegex.exec(pageText)) !== null) {
@@ -54,19 +202,7 @@ function extractPanelScheduleFindingsFromText(text, pageNumber, source) {
     const label = String(match[2]).trim();
     const isMdp = /^MDP$/i.test(label);
     const evidence = buildConciseEvidence(pageText, match.index, match[0].length);
-    push({
-      field_key: isMdp ? "main_distribution_panel_rating" : "panel_rating",
-      field_label: isMdp ? "MDP rating" : `Panel ${label} rating`,
-      raw_value: String(amps),
-      normalized_value: amps,
-      unit: "A",
-      entity_type: isMdp ? "main_distribution_panel" : "panel",
-      entity_name: label,
-      fact_type: "panel_fact",
-      category: isMdp ? "main_distribution_equipment" : "panel_rating",
-      evidence_text: evidence,
-      confidence: 0.82,
-    });
+    pushPanelFacts({ label, amps, evidence });
   }
 
   const voltageRegex = /(\d{2,3}\/\d{2,3})\s*V[,\s]*(?:Wye,?\s*)?(\d+)\s*PH/gi;

@@ -28,6 +28,10 @@ const {
 } = require("./territory/territory-dataset-loader.service.js");
 const { extractTerritoryStateCode } = require("./territory/territory-geo.utils.js");
 const { resolveElectricTerritory } = require("./territory/electric-territory-resolver.service.js");
+const {
+  UCI_SUPPORTED_UTILITY_TYPES,
+  requireSupportedUtilityType,
+} = require("./uci-utility-types.js");
 
 /** Electric-only EIA territory tiers; gas/water/sewer/telecom stay manual until dedicated datasets exist. */
 const ELECTRIC_TERRITORY_SERVICE_TYPES = new Set(["electric"]);
@@ -95,7 +99,7 @@ async function isTerritoryDataAvailableForServiceType(serviceType, stateCode = n
  * @param {string | null | undefined} [params.addressSourceAcknowledged]
  */
 function buildTerritoryUnavailableResolution(params, reasonCode = "MANIFEST_MISSING") {
-  const serviceType = normalizeServiceType(params.serviceType);
+  const serviceType = requireSupportedUtilityType(params.serviceType, "service_type");
   const now = new Date().toISOString();
 
   return {
@@ -152,7 +156,7 @@ function providerToCandidate(provider, matchReason) {
  * @param {string | null | undefined} [params.addressSourceAcknowledged]
  */
 async function resolveProviderResolutionForProject(supabase, params) {
-  const serviceType = normalizeServiceType(params.serviceType);
+  const serviceType = requireSupportedUtilityType(params.serviceType, "service_type");
   if (!serviceType) {
     const err = new Error("service_type is required");
     err.statusCode = 400;
@@ -272,7 +276,7 @@ async function resolveProviderResolutionForProject(supabase, params) {
  * @param {string | null | undefined} [params.notes]
  */
 async function confirmProviderResolutionForProject(supabase, params) {
-  const serviceType = normalizeServiceType(params.serviceType);
+  const serviceType = requireSupportedUtilityType(params.serviceType, "service_type");
   const providerId = String(params.providerId ?? "").trim();
   if (!serviceType || !providerId) {
     const err = new Error("service_type and provider_id are required");
@@ -391,7 +395,7 @@ async function overrideProviderResolutionForProject(supabase, params) {
     throw err;
   }
 
-  const serviceType = normalizeServiceType(params.serviceType);
+  const serviceType = requireSupportedUtilityType(params.serviceType, "service_type");
   const providerId = String(params.providerId ?? "").trim();
   if (!serviceType || !providerId) {
     const err = new Error("service_type and provider_id are required");
@@ -522,7 +526,9 @@ async function getProviderResolutionForProject(supabase, params) {
 
   const store = readProviderResolutionStore(project);
   const addressContext = buildProviderSetupAddressContext(project);
-  const filterType = params.serviceType ? normalizeServiceType(params.serviceType) : null;
+  const filterType = params.serviceType
+    ? requireSupportedUtilityType(params.serviceType, "service_type")
+    : null;
   const projectStateCode = extractTerritoryStateCode(addressContext);
   const electricAvailability = await checkElectricTerritoryAvailability("electric", projectStateCode);
 
@@ -547,10 +553,12 @@ async function getProviderResolutionForProject(supabase, params) {
   return {
     project_id: params.projectId,
     resolver_version: store?.resolver_version ?? PROVIDER_RESOLUTION_VERSION,
-    territory_data_available: {
-      electric: electricAvailability.available,
-      gas: false,
-    },
+    territory_data_available: Object.fromEntries(
+      UCI_SUPPORTED_UTILITY_TYPES.map((utilityType) => [
+        utilityType,
+        utilityType === "electric" ? electricAvailability.available : false,
+      ]),
+    ),
     territory_availability: {
       electric: {
         available: electricAvailability.available,

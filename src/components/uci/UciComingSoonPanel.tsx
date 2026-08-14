@@ -3,7 +3,7 @@ import { AlertBanner, Panel } from "@/components/design/ProductPrimitives";
 import type { UciNavSection } from "@/lib/uciNavSections";
 
 /**
- * Lightweight non-functional preview for Lovable UCI nav items with no PP backend.
+ * Honest foundation preview for UCI areas without a complete backend.
  * Never simulates records, saves, or successful operations.
  */
 export function UciComingSoonPanel({ section }: { section: UciNavSection }) {
@@ -11,7 +11,7 @@ export function UciComingSoonPanel({ section }: { section: UciNavSection }) {
   return (
     <Panel
       id={`uci-coming-soon-${section.id}`}
-      eyebrow="Coming soon"
+      eyebrow="Foundation"
       title={section.label}
       className="border-dashed"
     >
@@ -20,15 +20,15 @@ export function UciComingSoonPanel({ section }: { section: UciNavSection }) {
           <Icon className="h-6 w-6 text-muted-foreground" aria-hidden />
         </div>
         <div className="min-w-0 flex-1 space-y-3">
-          <AlertBanner tone="warn" title="Not yet connected">
+          <AlertBanner tone="warn" title="Foundation · not yet connected">
             {section.note ??
-              "This Lovable navigation item has no PermitPilot backend yet. It is shown for roadmap visibility only."}
+              "This area has a structural home but no complete PermitPilot backend yet."}
           </AlertBanner>
           <p className="flex items-start gap-2 text-sm text-muted-foreground">
             <Construction className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span>
               No mock records, fake actions, or simulated submissions are available from this
-              panel. Use the Utility Coordination hub and coordination drawer for live UCI work.
+              panel. Use the project command center and coordination-record workspace for live UCI work.
             </span>
           </p>
         </div>

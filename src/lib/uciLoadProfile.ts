@@ -32,6 +32,7 @@ export interface UciLoadProfileSummary {
   calculated_values: Record<string, unknown>;
   candidate_values?: UciLoadCandidate[];
   verified_values?: Record<string, UciVerifiedLoadValue>;
+  verified_values_history?: Array<UciVerifiedLoadValue & { superseded_at?: string }>;
   load_extraction?: UciLoadExtractionMeta | null;
   source_documents: UciLoadProfileSourceDocument[];
   generated_at: string;
@@ -60,7 +61,7 @@ export interface UciLoadCandidate {
   normalized_value: unknown;
   unit: string | null;
   status: UciLoadCandidateStatus;
-  source_type: "provider_application" | "pepco_portal_document" | "project_document" | "uci_document_finding";
+  source_type: "provider_application" | "pepco_portal_document" | "project_document" | "manual_upload" | "uci_document_finding";
   source_document_name: string;
   source_document_id: string | null;
   source_storage_path: string;
@@ -114,6 +115,19 @@ export interface UciVerifiedLoadValue {
   review_note: string | null;
   original_candidate_id: string;
   source_content_hash: string;
+  provenance?: "manual" | "source";
+  entered_by?: string;
+  entered_at?: string;
+  timestamp?: string;
+  source_reference?: string | null;
+  evidence_sources?: Array<{
+    candidate_id: string;
+    source_document_name: string;
+    source_document_id: string | null;
+    page_number: number | null;
+    evidence_text: string;
+    extraction_method: UciLoadExtractionMethod;
+  }>;
 }
 
 export interface UciLoadExtractionMeta {
@@ -177,6 +191,12 @@ export interface EntityCandidateGroup {
   candidates: UciLoadCandidate[];
 }
 
+export interface ConsolidatedCandidateGroup {
+  logicalFactKey: string;
+  primary: UciLoadCandidate;
+  candidates: UciLoadCandidate[];
+}
+
 export interface LoadReviewTabCounts {
   pending: number;
   approved: number;
@@ -206,6 +226,19 @@ const PACKAGE_SATISFACTION_FIELD_KEYS = new Set([
   "demand_load_kva",
   "connected_equipment_or_load_data",
 ]);
+
+const ELECTRIC_STAGE_2_REQUIREMENTS: Record<string, string[]> = {
+  connected_equipment_or_load_data: [
+    "connected_load_kw",
+    "connected_load_kva",
+    "demand_load_kw",
+    "demand_load_kva",
+    "connected_equipment_or_load_data",
+  ],
+  requested_voltage: ["requested_voltage", "service_voltage"],
+  phase: ["phase"],
+  service_configuration: ["service_configuration", "wire_configuration"],
+};
 
 const LOAD_FIELD_KEYS_REQUIRING_UNIT = new Set([
   "connected_load_kw",
@@ -303,7 +336,7 @@ export function getLoadProfileDraftApplication<
 export function parseLoadProfileSummary(loadSummary: unknown): UciLoadProfileSummary | null {
   if (!isUciLoadProfileSummary(loadSummary)) return null;
   const raw = loadSummary as UciLoadProfileSummary;
-  return {
+  const parsed: UciLoadProfileSummary = {
     ...raw,
     inputs_used: Array.isArray(raw.inputs_used) ? raw.inputs_used : [],
     missing_inputs: Array.isArray(raw.missing_inputs) ? raw.missing_inputs : [],
@@ -327,11 +360,42 @@ export function parseLoadProfileSummary(loadSummary: unknown): UciLoadProfileSum
       !Array.isArray(raw.verified_values)
         ? raw.verified_values
         : {},
+    verified_values_history: Array.isArray(raw.verified_values_history)
+      ? raw.verified_values_history
+      : [],
     load_extraction:
       raw.load_extraction && typeof raw.load_extraction === "object"
         ? raw.load_extraction
         : null,
   };
+  const missingInputs = getStage2MissingInputs(parsed);
+  return {
+    ...parsed,
+    analysis_status:
+      parsed.analysis_status === "blocked"
+        ? "blocked"
+        : missingInputs.length > 0
+          ? "missing_inputs"
+          : "preliminary",
+    missing_inputs: missingInputs,
+  };
+}
+
+function verifiedEntryHasValue(entry: UciVerifiedLoadValue | undefined): boolean {
+  return Boolean(entry && entry.value != null && entry.value !== "");
+}
+
+export function getStage2MissingInputs(
+  summary: UciLoadProfileSummary | null,
+): string[] {
+  if (!summary) return [];
+  if (summary.utility_type.toLowerCase() !== "electric") {
+    return summary.missing_inputs;
+  }
+  const verified = summary.verified_values ?? {};
+  return Object.entries(ELECTRIC_STAGE_2_REQUIREMENTS)
+    .filter(([, keys]) => !keys.some((key) => verifiedEntryHasValue(verified[key])))
+    .map(([requirement]) => requirement);
 }
 
 export function formatLoadProfileAnalysisStatus(status: string | undefined): string {
@@ -383,7 +447,7 @@ export function getPendingLoadCandidates(
   if (!summary?.candidate_values?.length) return [];
   const ext = externalApplicationId ? String(externalApplicationId).trim() : "";
   return summary.candidate_values.filter((c) => {
-    if (c.status === "approved" || c.status === "rejected") return false;
+    if (c.status !== "candidate") return false;
     if (ext && c.external_application_id && c.external_application_id !== ext) return false;
     return true;
   });
@@ -479,6 +543,41 @@ export function deduplicateCandidatesForDisplay(candidates: UciLoadCandidate[]):
     out.push(candidate);
   }
   return out;
+}
+
+export function candidateLogicalFactKey(candidate: UciLoadCandidate): string {
+  return [
+    candidate.field_key,
+    candidate.entity_type ?? "project_service",
+    candidate.entity_name ?? "",
+    candidate.is_project_total === false ? "0" : "1",
+    JSON.stringify(candidate.normalized_value ?? candidate.raw_value),
+    candidate.unit ?? "",
+  ].join("|");
+}
+
+/**
+ * Consolidates agreeing evidence into one review item. Conflicting values have
+ * different logical keys and therefore always remain separate.
+ */
+export function consolidateCandidatesForReview(
+  candidates: UciLoadCandidate[],
+): ConsolidatedCandidateGroup[] {
+  const groups = new Map<string, ConsolidatedCandidateGroup>();
+  for (const candidate of deduplicateCandidatesForDisplay(candidates)) {
+    const logicalFactKey = candidateLogicalFactKey(candidate);
+    const group = groups.get(logicalFactKey);
+    if (group) {
+      group.candidates.push(candidate);
+    } else {
+      groups.set(logicalFactKey, {
+        logicalFactKey,
+        primary: candidate,
+        candidates: [candidate],
+      });
+    }
+  }
+  return [...groups.values()];
 }
 
 export function groupCandidatesByEntity(candidates: UciLoadCandidate[]): EntityCandidateGroup[] {
@@ -588,6 +687,10 @@ export function isRejectedLoadReviewCandidate(candidate: UciLoadCandidate): bool
   return candidate.status === "rejected";
 }
 
+export function isApprovedLoadReviewCandidate(candidate: UciLoadCandidate): boolean {
+  return candidate.status === "approved";
+}
+
 export function getUnresolvedBlockingReason(candidate: UciLoadCandidate): string {
   if (candidate.approval_blocked_reason) return candidate.approval_blocked_reason;
   if (candidate.conflict_group) return "Conflicting values require human resolution";
@@ -676,7 +779,7 @@ export function getLoadReviewTabCandidates(
     case "rejected":
       return scoped.filter(isRejectedLoadReviewCandidate);
     case "approved":
-      return [];
+      return scoped.filter(isApprovedLoadReviewCandidate);
     default:
       return [];
   }
@@ -688,9 +791,11 @@ export function getLoadReviewTabCounts(
 ): LoadReviewTabCounts {
   const scoped = scopedCandidates(summary, externalApplicationId);
   return {
-    pending: scoped.filter(isPendingLoadReviewCandidate).length,
-    approved: getApprovedVerifiedValues(summary).length,
-    unresolved: scoped.filter(isUnresolvedLoadCandidate).length,
+    pending: consolidateCandidatesForReview(scoped.filter(isPendingLoadReviewCandidate)).length,
+    approved: consolidateCandidatesForReview(
+      scoped.filter(isApprovedLoadReviewCandidate),
+    ).length,
+    unresolved: consolidateCandidatesForReview(scoped.filter(isUnresolvedLoadCandidate)).length,
     stale: scoped.filter(isStaleLoadReviewCandidate).length,
     rejected: scoped.filter(isRejectedLoadReviewCandidate).length,
   };

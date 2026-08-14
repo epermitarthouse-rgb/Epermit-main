@@ -75,12 +75,12 @@ async function persistPepcoDashboardDiscovery(supabase, coordinationId, projectI
             const id = /** @type {{ applicationId?: unknown }} */ (c).applicationId;
             return typeof id === "string" && id.trim().length > 0;
           }).length,
-    cards: sanitized,
+    cards_storage: "provider_harvest_inventory",
   };
 
   const { data: row, error: fetchErr } = await supabase
     .from("coordination_records")
-    .select("metadata")
+    .select("metadata, user_id, tenant_id")
     .eq("id", coordinationId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -106,6 +106,51 @@ async function persistPepcoDashboardDiscovery(supabase, coordinationId, projectI
   }
   if (typeof envelope.source === "string" && envelope.source.trim()) {
     metadata.pepco_dashboard_discovery_source = String(envelope.source).trim();
+  }
+
+  const ownerUserId = String(row?.user_id || "").trim();
+  if (ownerUserId) {
+    for (const card of sanitized) {
+      if (!card || typeof card !== "object") continue;
+      const applicationId = String(card.applicationId || "").trim();
+      if (!applicationId) continue;
+      const { data: existing } = await supabase
+        .from("uci_portal_harvest_items")
+        .select("snapshot, portal_status")
+        .eq("owner_user_id", ownerUserId)
+        .eq("provider_slug", "pepco")
+        .eq("external_application_id", applicationId)
+        .maybeSingle();
+      const existingSnapshot =
+        existing?.snapshot && typeof existing.snapshot === "object" ? existing.snapshot : null;
+      const hasDetailSnapshot =
+        existingSnapshot &&
+        (existingSnapshot.overview || existingSnapshot.messages || existingSnapshot.statusChanges);
+      const snapshot = hasDetailSnapshot ? existingSnapshot : card;
+      const { error: inventoryError } = await supabase
+        .from("uci_portal_harvest_items")
+        .upsert(
+          {
+            provider_slug: "pepco",
+            external_application_id: applicationId,
+            owner_user_id: ownerUserId,
+            tenant_id: row?.tenant_id || null,
+            portal_status: hasDetailSnapshot
+              ? existing.portal_status
+              : typeof card.status === "string"
+                ? card.status
+                : typeof card.currentStatus === "string"
+                  ? card.currentStatus
+                  : null,
+            snapshot,
+            last_synced_at: now,
+          },
+          { onConflict: "owner_user_id,provider_slug,external_application_id" },
+        );
+      if (inventoryError) {
+        console.error("[uci-pepco-dashboard] harvest inventory update failed:", inventoryError.message);
+      }
+    }
   }
 
   /** @type {Record<string, unknown>} */

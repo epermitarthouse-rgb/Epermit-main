@@ -13,7 +13,7 @@
  * @property {string} slug Stable provider key (preserves legacy slugs where referenced).
  * @property {string} display_name UX / dropdown label.
  * @property {string} canonical_name Authoritative legal or registry name.
- * @property {"electric"|"gas"|"water"|"telecom"} utility_type
+ * @property {"electric"|"gas"|"water"|"sewer"|"telecom"} utility_type
  * @property {ProviderOwnership} [ownership_type]
  * @property {boolean} cet_relationship Commun-ET relationship flag (explicit, not inferred).
  * @property {string} [portal_key] Adapter / credentials key when distinct from slug.

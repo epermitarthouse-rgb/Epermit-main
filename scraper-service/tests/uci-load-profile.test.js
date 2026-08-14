@@ -8,6 +8,8 @@ const {
   buildInputInventory,
   buildLoadSummary,
   resolveAnalysisStatus,
+  getStage2MissingInputs,
+  reconcileLoadProfileReadiness,
   assertNoInferredEngineeringValues,
   runLoadProfileAnalysis,
   LOAD_PROFILE_IDEMPOTENCY_KEY,
@@ -248,6 +250,51 @@ describe("UCI D2.1 load profile service", () => {
     );
   });
 
+  it("recomputes stale analysis status from current verified Stage 2 inputs", () => {
+    const summary = reconcileLoadProfileReadiness({
+      utility_type: "electric",
+      analysis_status: "missing_inputs",
+      missing_inputs: [
+        "connected_equipment_or_load_data",
+        "requested_voltage",
+        "phase",
+        "meter_count",
+        "service_configuration",
+        "construction_schedule",
+      ],
+      needs_verification: ["territory_not_auto_verified"],
+      verified_values: {
+        connected_load_kva: { value: 410, unit: "kVA" },
+        demand_load_kva: { value: 315, unit: "kVA" },
+        requested_voltage: { value: "120/208", unit: "V" },
+        phase: { value: "3", unit: "phase" },
+        wire_configuration: { value: "4", unit: "wire" },
+      },
+    });
+
+    assert.equal(summary.analysis_status, "preliminary");
+    assert.deepEqual(summary.missing_inputs, []);
+  });
+
+  it("does not make Stage 3/supporting inventory a Stage 2 blocker", () => {
+    const missing = getStage2MissingInputs({
+      utility_type: "electric",
+      missing_inputs: [
+        "meter_count",
+        "construction_schedule",
+        "uploaded_specifications_or_plans",
+        "equipment_schedule",
+      ],
+      verified_values: {
+        demand_load_kva: { value: 315, unit: "kVA" },
+        service_voltage: { value: "120/208", unit: "V" },
+        phase: { value: "3", unit: "phase" },
+        service_configuration: { value: "secondary", unit: null },
+      },
+    });
+    assert.deepEqual(missing, []);
+  });
+
   it("assertNoInferredEngineeringValues rejects forbidden keys", () => {
     assert.throws(() => assertNoInferredEngineeringValues({ kw: 100 }), /invariant/i);
   });
@@ -405,13 +452,14 @@ describe("UCI D2.1 runLoadProfileAnalysis integration", () => {
     }
   });
 
-  it("keeps coordination stage unchanged when missing inputs remain", async () => {
+  it("starts Stage 2 when Agent 2 analysis begins even if inputs remain missing", async () => {
     const tables = {
       coordination_records: [{ ...HUMAN_ASSISTED_RECORD }],
       projects: [{ ...BASE_PROJECT, id: "proj-1" }],
       project_documents: [],
       coordination_equipment: [],
       coordination_applications: [],
+      coordination_stage_transitions: [],
     };
 
     const mock = createLoadProfileMockSupabase(tables);
@@ -426,10 +474,14 @@ describe("UCI D2.1 runLoadProfileAnalysis integration", () => {
         coordinationRecordId: "coord-1",
         userId: "user-1",
       });
-      assert.equal(result.stage_unchanged, true);
-      assert.equal(result.current_stage, 1);
-      assert.equal(result.current_stage_state, "NOT_STARTED");
-      assert.equal(tables.coordination_records[0].current_stage, 1);
+      assert.equal(result.stage_unchanged, false);
+      assert.equal(result.current_stage, 2);
+      assert.equal(result.current_stage_state, "IN_PROGRESS");
+      assert.equal(tables.coordination_records[0].current_stage, 2);
+      assert.equal(tables.coordination_records[0].current_stage_state, "IN_PROGRESS");
+      assert.equal(tables.coordination_stage_transitions.length, 1);
+      assert.equal(tables.coordination_stage_transitions[0].from_stage, 1);
+      assert.equal(tables.coordination_stage_transitions[0].to_stage, 2);
       assert.ok(result.load_summary.missing_inputs.length > 0);
     } finally {
       require("../app/services/uci/uci-records.service.js").getCoordinationRecordById =

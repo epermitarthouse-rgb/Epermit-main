@@ -77,6 +77,17 @@ describe("uciLoadProfile Row 6 helpers", () => {
     expect(getPendingLoadCandidates(summary, "app-a")).toHaveLength(1);
   });
 
+  it("excludes stale candidates from active pending counts", () => {
+    const summary = parseLoadProfileSummary({
+      ...baseSummary(),
+      candidate_values: [
+        candidate(),
+        candidate({ candidate_id: "stale", status: "stale" }),
+      ],
+    });
+    expect(getPendingLoadCandidates(summary, "app-a")).toHaveLength(1);
+  });
+
   it("reads verified values instead of calculated_values", () => {
     const summary = parseLoadProfileSummary({
       ...baseSummary(),
@@ -220,6 +231,7 @@ describe("Connected load review tabs", () => {
         }),
         candidate({ candidate_id: "stale-1", status: "stale" }),
         candidate({ candidate_id: "rejected-1", status: "rejected" }),
+        candidate({ candidate_id: "approved-1", status: "approved" }),
         candidate({ candidate_id: "other-app", external_application_id: "app-b" }),
       ],
       verified_values: {
@@ -264,7 +276,7 @@ describe("Connected load review tabs", () => {
     expect(getLoadReviewTabCandidates(summary, "stale", "app-a")).toHaveLength(1);
   });
 
-  it("shows approved values only in Approved tab source", () => {
+  it("shows persisted approved candidates in Approved tab", () => {
     const summary = parseLoadProfileSummary({
       ...baseSummary(),
       candidate_values: [
@@ -291,7 +303,7 @@ describe("Connected load review tabs", () => {
         },
       },
     });
-    expect(getLoadReviewTabCandidates(summary, "approved", "app-a")).toHaveLength(0);
+    expect(getLoadReviewTabCandidates(summary, "approved", "app-a")).toHaveLength(1);
     expect(getLoadReviewTabCounts(summary, "app-a").approved).toBe(1);
   });
 
@@ -320,7 +332,13 @@ describe("Connected load review tabs", () => {
 
   it("moves candidates between tabs after simulated actions", () => {
     const pending = candidate({ candidate_id: "to-approve" });
-    const toReject = candidate({ candidate_id: "to-reject" });
+    const toReject = candidate({
+      candidate_id: "to-reject",
+      field_key: "service_amperage",
+      normalized_value: 400,
+      raw_value: "400",
+      unit: "A",
+    });
     let summary = parseLoadProfileSummary({
       ...baseSummary(),
       candidate_values: [pending, toReject],

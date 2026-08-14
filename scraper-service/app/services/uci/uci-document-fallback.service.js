@@ -10,6 +10,7 @@ const {
   computeCoverageSummary,
   evaluateRunCompletion,
   safeProcessingErrorMessage,
+  classifyDocumentFallbackStatus,
 } = require("./uci-document-processing.service.js");
 const { validatePepcoStoragePathForRecord } = require("./uci-package-document-bridge.service.js");
 const { downloadFromSupabaseStorage } = require("../../../shared/supabase-storage-upload.js");
@@ -23,6 +24,7 @@ const {
 const {
   createVisionPageProcessor,
   createOcrPageProcessor,
+  OPENAI_CHAT_COMPLETIONS_ENDPOINT,
 } = require("./uci-document-fallback-processors.service.js");
 const {
   extractCandidatesFromPdfText,
@@ -92,6 +94,61 @@ function collectFallbackPages(documents, filter = {}) {
   return pages;
 }
 
+function recomputeFallbackDocumentCoverage(document) {
+  const pageRecords = Array.isArray(document?.page_records) ? document.page_records : [];
+  const statuses = pageRecords.map((page) => String(page?.status ?? ""));
+  const previous =
+    document?.page_coverage && typeof document.page_coverage === "object"
+      ? document.page_coverage
+      : {};
+  const processedStatuses = new Set([
+    "text_extracted",
+    "table_extracted",
+    "vision_processed",
+    "ocr_processed",
+    "human_required",
+  ]);
+  return {
+    ...previous,
+    total_pages: Number(previous.total_pages ?? pageRecords.length),
+    pages_discovered: Number(previous.pages_discovered ?? pageRecords.length),
+    pages_processed: statuses.filter((status) => processedStatuses.has(status)).length,
+    pages_vision_processed: statuses.filter((status) => status === "vision_processed").length,
+    pages_ocr_processed: statuses.filter((status) => status === "ocr_processed").length,
+    failed_pages: statuses.filter((status) =>
+      ["failed", "vision_failed", "ocr_failed"].includes(status),
+    ).length,
+    fallback_pending: statuses.filter((status) =>
+      ["vision_required", "ocr_required", "vision_processing", "ocr_processing"].includes(status),
+    ).length,
+  };
+}
+
+function safeFallbackErrorDiagnostics(error, context = {}) {
+  return {
+    document_id: context.document_id ?? null,
+    document_name: context.document_name ?? null,
+    page_number: context.page_number ?? null,
+    method: context.method ?? null,
+    stage: String(error?.stage ?? context.stage ?? "fallback_processing"),
+    code: String(error?.code ?? "FALLBACK_PAGE_FAILED"),
+    message: safeProcessingErrorMessage(error),
+    http_status: error?.http_status ?? error?.status ?? null,
+    provider_code: error?.provider_code ?? null,
+    provider_type: error?.provider_type ?? null,
+    provider_message: error?.provider_message ?? null,
+    request_id: error?.request_id ?? null,
+    endpoint: error?.endpoint ?? context.endpoint ?? null,
+    model: error?.model ?? context.model ?? null,
+    attempts: error?.attempts ?? null,
+    image_mime_type: context.image_mime_type ?? null,
+    image_bytes: context.image_bytes ?? null,
+    image_width: context.image_width ?? null,
+    image_height: context.image_height ?? null,
+    occurred_at: new Date().toISOString(),
+  };
+}
+
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
@@ -108,12 +165,6 @@ async function runDocumentFallbackProcessing(supabase, params) {
   } = params;
 
   const extAppId = String(externalApplicationId || "").trim();
-  if (!extAppId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -144,6 +195,16 @@ async function runDocumentFallbackProcessing(supabase, params) {
     err.code = "CROSS_PROJECT_REJECTED";
     throw err;
   }
+  if (
+    record.tenant_id != null &&
+    state.tenant_id != null &&
+    String(state.tenant_id) !== String(record.tenant_id)
+  ) {
+    const err = new Error("Cross-tenant document processing state rejected");
+    err.statusCode = 400;
+    err.code = "CROSS_TENANT_REJECTED";
+    throw err;
+  }
 
   const config = deps.config || getDocumentFallbackConfig(deps.env);
   const providerStatus = fallbackProviderStatus(config);
@@ -151,6 +212,23 @@ async function runDocumentFallbackProcessing(supabase, params) {
   const ocrProcessor = createOcrPageProcessor(config, deps);
   const renderFn = deps.renderPdfPageToPng || renderPdfPageToPng;
   const downloadFn = deps.downloadFromSupabaseStorage || downloadFromSupabaseStorage;
+  console.info(
+    "[uci-document-fallback] run started",
+    JSON.stringify({
+      coordination_record_id: String(coordinationRecordId),
+      external_application_id: extAppId,
+      document_id: documentId != null ? String(documentId) : null,
+      mode,
+      vision_enabled: config.vision_enabled,
+      ocr_enabled: config.ocr_enabled,
+      openai_configured: config.openai_configured,
+      vision_model: config.vision_model,
+      ocr_model: config.ocr_model,
+      endpoint: OPENAI_CHAT_COMPLETIONS_ENDPOINT,
+      timeout_ms: config.ai_timeout_ms,
+      max_retries: config.ai_max_retries,
+    }),
+  );
 
   const documents = Array.isArray(state.documents) ? [...state.documents] : [];
   let findings = Array.isArray(state.findings) ? [...state.findings] : [];
@@ -169,6 +247,7 @@ async function runDocumentFallbackProcessing(supabase, params) {
   const ocrLimit = mode === "vision" ? 0 : config.ocr_max_pages_per_run;
 
   let pagesRequested = candidates.length;
+  const candidateDocumentIds = new Set(candidates.map(({ doc }) => String(doc.document_id ?? "")));
   let pagesProcessed = 0;
   let pagesFailed = 0;
   let findingsCreated = 0;
@@ -238,16 +317,46 @@ async function runDocumentFallbackProcessing(supabase, params) {
     }
 
     page.status = method === "vision" ? "vision_processing" : "ocr_processing";
+    const renderDiagnostics = {
+      image_mime_type: null,
+      image_bytes: null,
+      image_width: null,
+      image_height: null,
+    };
+    let currentStage = "storage_download";
 
     try {
       let rendered = null;
       const buffer = await getPdfBuffer(doc);
+      currentStage = "pdf_page_render";
       rendered = await renderFn(buffer, pageNum, deps);
       if (!rendered || !rendered.pngBuffer) {
-        throw new Error("Page image rendering unavailable");
+        const error = new Error("Page image rendering unavailable");
+        error.code = "PDF_PAGE_RENDER_UNAVAILABLE";
+        error.stage = "pdf_page_render";
+        throw error;
+      }
+      const imageBytes = rendered.pngBuffer.length;
+      const imageMimeType = String(rendered.mimeType ?? "");
+      renderDiagnostics.image_mime_type = imageMimeType;
+      renderDiagnostics.image_bytes = imageBytes;
+      renderDiagnostics.image_width = Math.round(Number(rendered.width ?? 0));
+      renderDiagnostics.image_height = Math.round(Number(rendered.height ?? 0));
+      const hasPngSignature =
+        imageMimeType === "image/png" &&
+        rendered.pngBuffer.length >= 8 &&
+        rendered.pngBuffer.subarray(0, 8).equals(
+          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        );
+      if (!hasPngSignature) {
+        const error = new Error("Rendered fallback page is not a valid PNG image");
+        error.code = "PDF_PAGE_RENDER_INVALID_IMAGE";
+        error.stage = "image_validation";
+        throw error;
       }
 
       const imageBase64 = rendered.pngBuffer.toString("base64");
+      currentStage = "openai_request";
       const source = {
         source_type: String(doc.source_type ?? "unknown"),
         source_document_name: String(doc.original_filename ?? "unknown"),
@@ -280,11 +389,18 @@ async function runDocumentFallbackProcessing(supabase, params) {
           model: result.model,
           duration_ms: result.duration_ms,
           usage: result.usage ?? null,
+          endpoint: result.endpoint ?? OPENAI_CHAT_COMPLETIONS_ENDPOINT,
+          image_bytes: imageBytes,
+          image_mime_type: imageMimeType,
+          image_width: Math.round(Number(rendered.width ?? 0)),
+          image_height: Math.round(Number(rendered.height ?? 0)),
         });
         for (const vf of result.findings ?? []) {
+          currentStage = "finding_normalization";
           pageFindings.push(visionFindingToRecord(vf, source, documentIdStr, roles));
         }
         page.status = "vision_processed";
+        page.failure_reason = null;
         page.vision_result = {
           processed_at: new Date().toISOString(),
           provider: result.provider,
@@ -292,6 +408,19 @@ async function runDocumentFallbackProcessing(supabase, params) {
           findings_count: pageFindings.length,
           sheet_title: result.sheet_title ?? null,
           sheet_number: result.sheet_number ?? null,
+        };
+        page.fallback_diagnostics = {
+          stage: "complete",
+          method,
+          endpoint: result.endpoint ?? OPENAI_CHAT_COMPLETIONS_ENDPOINT,
+          model: result.model,
+          image_bytes: imageBytes,
+          image_base64_chars: imageBase64.length,
+          image_mime_type: imageMimeType,
+          image_width: Math.round(Number(rendered.width ?? 0)),
+          image_height: Math.round(Number(rendered.height ?? 0)),
+          duration_ms: result.duration_ms,
+          completed_at: new Date().toISOString(),
         };
       } else {
         const result = await ocrProcessor.processPage({
@@ -311,6 +440,11 @@ async function runDocumentFallbackProcessing(supabase, params) {
           duration_ms: result.duration_ms,
           usage: result.usage ?? null,
           average_confidence: result.average_confidence,
+          endpoint: result.endpoint ?? OPENAI_CHAT_COMPLETIONS_ENDPOINT,
+          image_bytes: imageBytes,
+          image_mime_type: imageMimeType,
+          image_width: Math.round(Number(rendered.width ?? 0)),
+          image_height: Math.round(Number(rendered.height ?? 0)),
         });
 
         page.ocr_result = {
@@ -327,6 +461,7 @@ async function runDocumentFallbackProcessing(supabase, params) {
         };
 
         const ocrText = String(result.page_text ?? "");
+        currentStage = "finding_normalization";
         const pdfCandidates = extractCandidatesFromPdfText(ocrText, pageNum, {
           ...source,
           extraction_method: "ocr",
@@ -344,10 +479,27 @@ async function runDocumentFallbackProcessing(supabase, params) {
           }
           pageFindings.push(finding);
         }
-        page.status = "ocr_processed";
+        page.status = page.ocr_result.approval_blocked ? "human_required" : "ocr_processed";
+        page.failure_reason = page.ocr_result.approval_blocked
+          ? "OCR confidence below configured threshold"
+          : null;
+        page.fallback_diagnostics = {
+          stage: "complete",
+          method,
+          endpoint: result.endpoint ?? OPENAI_CHAT_COMPLETIONS_ENDPOINT,
+          model: result.model,
+          image_bytes: imageBytes,
+          image_base64_chars: imageBase64.length,
+          image_mime_type: imageMimeType,
+          image_width: Math.round(Number(rendered.width ?? 0)),
+          image_height: Math.round(Number(rendered.height ?? 0)),
+          duration_ms: result.duration_ms,
+          completed_at: new Date().toISOString(),
+        };
       }
 
       const before = findings.length;
+      currentStage = "finding_normalization";
       findings = mergeDocumentFindingsHybrid(findings, pageFindings);
       findingsCreated += findings.length - before;
       pagesProcessed += 1;
@@ -356,6 +508,7 @@ async function runDocumentFallbackProcessing(supabase, params) {
       if (!Array.isArray(doc.extraction_methods_used)) doc.extraction_methods_used = [];
       if (!doc.extraction_methods_used.includes(method)) doc.extraction_methods_used.push(method);
 
+      currentStage = "manifest_update";
       await persistDocumentProcessingState(supabase, {
         coordinationRecordId: String(coordinationRecordId),
         projectId,
@@ -386,14 +539,30 @@ async function runDocumentFallbackProcessing(supabase, params) {
     } catch (err) {
       pagesFailed += 1;
       const message = safeProcessingErrorMessage(err);
+      const diagnostics = safeFallbackErrorDiagnostics(err, {
+        document_id: String(doc.document_id ?? ""),
+        document_name: String(doc.original_filename ?? doc.document_id ?? "unknown"),
+        page_number: pageNum,
+        method,
+        endpoint: OPENAI_CHAT_COMPLETIONS_ENDPOINT,
+        model: method === "vision" ? config.vision_model : config.ocr_model,
+        stage: currentStage,
+        ...renderDiagnostics,
+      });
       page.status = method === "vision" ? "vision_failed" : "ocr_failed";
       page.failure_reason = message;
+      page.fallback_diagnostics = diagnostics;
+      console.warn("[uci-document-fallback] page failed", JSON.stringify(diagnostics));
       failedPages.push({
         document_name: String(doc.original_filename ?? doc.document_id ?? "unknown"),
         page_number: pageNum,
         method,
         stage: "fallback_processing",
         message,
+        code: diagnostics.code,
+        stage: diagnostics.stage,
+        http_status: diagnostics.http_status,
+        request_id: diagnostics.request_id,
       });
       await persistDocumentProcessingState(supabase, {
         coordinationRecordId: String(coordinationRecordId),
@@ -422,6 +591,7 @@ async function runDocumentFallbackProcessing(supabase, params) {
   // Recompute document statuses
   for (const doc of documents) {
     const pageRecords = Array.isArray(doc.page_records) ? doc.page_records : [];
+    doc.page_coverage = recomputeFallbackDocumentCoverage(doc);
     const pendingFallback = pageRecords.filter((p) =>
       ["vision_required", "ocr_required", "vision_processing", "ocr_processing"].includes(
         String(p.status),
@@ -430,16 +600,26 @@ async function runDocumentFallbackProcessing(supabase, params) {
     const anyFailed = pageRecords.some((p) =>
       ["vision_failed", "ocr_failed", "failed"].includes(String(p.status)),
     );
+    const anyManualReview = pageRecords.some(
+      (p) => String(p.status) === "human_required",
+    );
     if (pendingFallback > 0) {
       doc.processing_status = "partial";
       doc.failure_reason = "Vision/OCR fallback pages remain unprocessed";
     } else if (anyFailed) {
       doc.processing_status = "partial";
-      doc.failure_reason = "One or more fallback pages failed";
+      doc.failure_reason =
+        Number(doc.findings_count ?? 0) > 0
+          ? "Parsed with fallback warning: one or more fallback pages failed"
+          : "One or more fallback pages failed";
+    } else if (anyManualReview) {
+      doc.processing_status = "partial";
+      doc.failure_reason = "OCR completed with confidence too low for automated use";
     } else if (pageRecords.length > 0) {
       doc.processing_status = "complete";
       doc.failure_reason = null;
     }
+    doc.fallback_status = classifyDocumentFallbackStatus(doc, providerStatus);
   }
 
   const coverage = computeCoverageSummary(documents, findings);
@@ -454,7 +634,20 @@ async function runDocumentFallbackProcessing(supabase, params) {
   if (pagesProcessed === 0 && pagesRequested > 0 && !providerStatus.vision_available && !providerStatus.ocr_available) {
     status = "partial";
   }
-  if (pagesProcessed === 0 && pagesFailed > 0 && pagesRequested === pagesFailed) status = "failed";
+  const targetHasDeterministicFindings = findings.some(
+    (finding) =>
+      candidateDocumentIds.has(String(finding.document_id ?? "")) &&
+      !["vision", "ocr"].includes(String(finding.extraction_method ?? "")) &&
+      String(finding.verification_status ?? "raw") !== "stale",
+  );
+  if (
+    pagesProcessed === 0 &&
+    pagesFailed > 0 &&
+    pagesRequested === pagesFailed &&
+    !targetHasDeterministicFindings
+  ) {
+    status = "failed";
+  }
 
   const finalState = {
     ...state,
@@ -484,6 +677,11 @@ async function runDocumentFallbackProcessing(supabase, params) {
         ocr_enabled: config.ocr_enabled,
         vision_max_pages_per_run: config.vision_max_pages_per_run,
         ocr_max_pages_per_run: config.ocr_max_pages_per_run,
+        ai_timeout_ms: config.ai_timeout_ms,
+        ai_max_retries: config.ai_max_retries,
+        vision_model: config.vision_model,
+        ocr_model: config.ocr_model,
+        endpoint: OPENAI_CHAT_COMPLETIONS_ENDPOINT,
       },
     },
   };
@@ -530,4 +728,6 @@ module.exports = {
   collectFallbackPages,
   runDocumentFallbackProcessing,
   estimateFallbackPages,
+  recomputeFallbackDocumentCoverage,
+  safeFallbackErrorDiagnostics,
 };

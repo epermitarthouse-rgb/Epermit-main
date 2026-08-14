@@ -531,6 +531,10 @@ export default function AdminPanel() {
         <Flag className="mr-2 h-4 w-4" />
         Feature Flags
       </Button>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/uci-action-tracker')}>
+        <History className="mr-2 h-4 w-4" />
+        UCI Action Tracker
+      </Button>
       <Button variant="outline" size="sm" onClick={() => navigate('/admin/authorizations')}>
         <History className="mr-2 h-4 w-4" />
         Authorizations

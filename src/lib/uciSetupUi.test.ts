@@ -91,14 +91,16 @@ describe("UCI project context and switching", () => {
     assert.match(dashboardSource, /UciProjectContextBar/);
   });
 
-  it("uses UCI-local projectId state instead of global selected project context", () => {
-    assert.match(dashboardSource, /const \[projectId, setProjectId\]/);
-    assert.doesNotMatch(dashboardSource, /useSelectedProject/);
+  it("hydrates UCI-local project state from the global selected-project context", () => {
+    assert.match(dashboardSource, /const \[projectId, setProjectIdState\]/);
+    assert.match(dashboardSource, /useSelectedProjectOptional/);
+    assert.match(dashboardSource, /globalSelectedProject\?\.selectedProjectId/);
   });
 
   it("invalidates in-flight project requests when projectId changes", () => {
     assert.match(dashboardSource, /projectDataGenerationRef/);
-    assert.match(dashboardSource, /generation !== projectDataGenerationRef\.current/);
+    assert.match(dashboardSource, /shouldApplyProjectScopedResponse/);
+    assert.match(dashboardSource, /projectDataGenerationRef\.current/);
   });
 
   it("confirms project switch only when unsaved setup changes exist", () => {

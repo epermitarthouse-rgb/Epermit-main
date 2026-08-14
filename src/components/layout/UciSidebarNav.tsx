@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { ChevronDown, RadioTower } from "lucide-react";
+import { ChevronDown, LayoutDashboard, RadioTower } from "lucide-react";
 import { AuthGatedLink, AuthGatedNavLink } from "@/components/layout/AuthGatedLink";
 import {
   Collapsible,
@@ -21,9 +21,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  UCI_PRIMARY_NAV_SECTIONS,
+  UCI_FOUNDATION_NAV_SECTIONS,
+  UCI_OPERATION_NAV_SECTIONS,
   uciSectionHref,
   uciSidebarBadgeLabel,
+  type UciNavSection,
 } from "@/lib/uciNavSections";
 
 /**
@@ -67,7 +69,27 @@ export function UciSidebarNav() {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <SidebarMenuSub>
-            {UCI_PRIMARY_NAV_SECTIONS.map((item) => {
+            <SidebarMenuSubItem className="min-w-0">
+              <SidebarMenuSubButton
+                asChild
+                isActive={location.pathname === "/uci" && !activeSection}
+                className="h-auto min-h-7 py-1"
+              >
+                <AuthGatedNavLink to="/uci" className="flex w-full min-w-0 items-center gap-2">
+                  <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate text-left">Project Workspace</span>
+                </AuthGatedNavLink>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+            {[
+              { label: "Operations", items: UCI_OPERATION_NAV_SECTIONS },
+              { label: "Foundations", items: UCI_FOUNDATION_NAV_SECTIONS },
+            ].map((group) => (
+              <div key={group.label} className="contents">
+                <li className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {group.label}
+                </li>
+                {group.items.map((item: UciNavSection) => {
               const href =
                 item.target.kind === "external"
                   ? item.target.href
@@ -90,12 +112,14 @@ export function UciSidebarNav() {
                   >
                     <item.icon className="h-3.5 w-3.5 shrink-0" />
                     <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
-                    <span
-                      className="pointer-events-none shrink-0 rounded border border-border/70 bg-muted/50 px-1 py-0 font-mono text-[9px] font-medium uppercase leading-4 tracking-wider text-muted-foreground"
-                      aria-label="Coming soon"
-                    >
-                      {badge}
-                    </span>
+                    {badge ? (
+                      <span
+                        className="pointer-events-none shrink-0 rounded border border-border/70 bg-muted/50 px-1 py-0 font-mono text-[8px] font-medium uppercase leading-4 tracking-wider text-muted-foreground"
+                        aria-label={badge}
+                      >
+                        {badge}
+                      </span>
+                    ) : null}
                   </AuthGatedNavLink>
                 </SidebarMenuSubButton>
               );
@@ -105,12 +129,14 @@ export function UciSidebarNav() {
                   <Tooltip>
                     <TooltipTrigger asChild>{row}</TooltipTrigger>
                     <TooltipContent side="right" className="max-w-xs">
-                      Coming soon — {item.note ?? item.label}
+                      {item.note ?? item.label}
                     </TooltipContent>
                   </Tooltip>
                 </SidebarMenuSubItem>
               );
-            })}
+                })}
+              </div>
+            ))}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuItem>

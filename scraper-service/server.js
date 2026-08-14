@@ -7,9 +7,25 @@ const {
   runPlaywrightStartupDiagnostics,
 } = require("./app/register-execution-routes.js");
 const { sessions, cleanupSession } = require("./app/session/in-memory-store.js");
+const {
+  getDocumentFallbackConfig,
+  fallbackProviderStatus,
+} = require("./app/services/uci/uci-document-fallback-config.service.js");
 
 const app = createSharedHttpApp({ scraperServiceRoot: __dirname });
 const { PORT, arlingtonWorker, uciWorker } = registerExecutionRoutes(app);
+const documentFallbackConfig = getDocumentFallbackConfig();
+console.log(
+  "[SCRAPER SERVER] UCI document fallback runtime",
+  JSON.stringify({
+    ...fallbackProviderStatus(documentFallbackConfig),
+    openai_configured: documentFallbackConfig.openai_configured,
+    vision_model: documentFallbackConfig.vision_model,
+    ocr_model: documentFallbackConfig.ocr_model,
+    timeout_ms: documentFallbackConfig.ai_timeout_ms,
+    max_retries: documentFallbackConfig.ai_max_retries,
+  }),
+);
 
 // ─── Shutdown ────────────────────────────────────────────────────────────────
 process.on("SIGINT", () => {

@@ -87,6 +87,7 @@ export interface UciPageRecord {
   extraction_methods?: string[];
   vision_result?: Record<string, unknown> | null;
   ocr_result?: Record<string, unknown> | null;
+  fallback_diagnostics?: Record<string, unknown> | null;
 }
 
 export interface UciFallbackProviderStatus {
@@ -124,6 +125,63 @@ export interface UciDocumentManifestEntry {
   page_records?: UciPageRecord[] | null;
   findings_extraction_status?: FindingsExtractionStatus | null;
   findings_quality_warnings?: string[];
+  fallback_status?:
+    | "not_required"
+    | "pending"
+    | "unavailable"
+    | "attempted_failed"
+    | "manual_review_required";
+}
+
+export type UciDocumentReprocessOutcome =
+  | "parsed"
+  | "unchanged"
+  | "still_needs_fallback"
+  | "fallback_unavailable"
+  | "fallback_failed"
+  | "parsed_with_fallback_warning"
+  | "manual_review_required"
+  | "failed";
+
+export interface UciDocumentReprocessSummary {
+  document_id: string;
+  document_name: string;
+  processing_status: string;
+  findings_extraction_status: string | null;
+  findings_count: number;
+  pages_total: number;
+  pages_requiring_fallback: number;
+  pages_fallback_failed: number;
+  pages_manual_review: number;
+  required_fallback_methods: string[];
+  unavailable_fallback_methods: string[];
+  fallback_provider_status: UciFallbackProviderStatus;
+  failure_reason: string | null;
+}
+
+export interface UciDocumentReprocessResponse {
+  status: "complete" | "partial" | "failed";
+  outcome: UciDocumentReprocessOutcome;
+  changed: boolean;
+  document_id: string;
+  document_name: string;
+  before: UciDocumentReprocessSummary;
+  after: UciDocumentReprocessSummary;
+  fallback_attempted: boolean;
+  fallback: null | {
+    status: "complete" | "partial" | "failed";
+    pages_requested: number;
+    pages_processed: number;
+    pages_failed: number;
+    findings_created: number;
+    pages_remaining: number;
+  };
+  candidates: {
+    created: number;
+    reused: number;
+    superseded: number;
+    failed_findings: Array<{ finding_id: string | null; message: string }>;
+  };
 }
 
 export type FindingsExtractionStatus =

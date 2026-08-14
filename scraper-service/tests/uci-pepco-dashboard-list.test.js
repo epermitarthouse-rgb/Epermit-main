@@ -6,6 +6,7 @@ const {
   parsePepcoApplicationsListResponse,
 } = require("../scrapers/pepco/application-detail-discovery.js");
 const {
+  buildPepcoApplicationDetailDiscoveryMetadata,
   mergeApplicationDetailsByUuid,
 } = require("../app/services/uci/uci-pepco-application-detail-discovery.service.js");
 
@@ -78,6 +79,71 @@ describe("PEPCO application detail merge by UUID", () => {
     assert.equal(updated?.overview?.jobId, "NEW");
     const kept = merged.find((a) => a.applicationUuid === "other-uuid");
     assert.equal(kept?.overview?.jobId, "KEEP");
+  });
+
+  it("preserves stored document references when a refresh does not download documents", () => {
+    const storedFile = {
+      documentName: "plan.pdf",
+      fileName: "plan.pdf",
+      status: "saved",
+      storageStatus: "stored",
+      storageBucket: "project-documents",
+      storagePath: "uci/unconfigured/project/coord/pepco/app/plan.pdf",
+    };
+    const existing = [
+      {
+        applicationUuid: "same-uuid",
+        downloadedFiles: [storedFile],
+      },
+    ];
+    const incoming = [
+      {
+        applicationUuid: "same-uuid",
+        scrapeStatus: "completed",
+        downloadedFiles: [],
+      },
+    ];
+
+    const merged = mergeApplicationDetailsByUuid(existing, incoming);
+
+    assert.deepEqual(merged[0].downloadedFiles, [storedFile]);
+  });
+
+  it("keeps compatibility applications when persisting Portal Harvest inventory metadata", () => {
+    const previous = {
+      untouched: true,
+      pepco_application_detail_discovery: {
+        applications: [
+          {
+            applicationUuid: "wonder-uuid",
+            downloadedFiles: [
+              {
+                status: "saved",
+                storageStatus: "stored",
+                storageBucket: "project-documents",
+                storagePath: "uci/unconfigured/project/coord/pepco/wonder/document.pdf",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const metadata = buildPepcoApplicationDetailDiscoveryMetadata(
+      previous,
+      [{ applicationUuid: "wonder-uuid", downloadedFiles: [] }],
+      "completed",
+      "2026-08-14T00:00:00.000Z",
+    );
+    const discovery = metadata.pepco_application_detail_discovery;
+
+    assert.equal(metadata.untouched, true);
+    assert.equal(discovery.storage, "provider_harvest_inventory");
+    assert.equal(discovery.applications[0].downloadedFiles[0].storageStatus, "stored");
+    assert.equal(
+      discovery.applications[0].downloadedFiles[0].storagePath,
+      "uci/unconfigured/project/coord/pepco/wonder/document.pdf",
+    );
   });
 });
 

@@ -18,6 +18,8 @@ const {
   discoverLoadSourceDocuments,
   discoverProjectDocumentSources,
   extractCandidatesFromStructuredApplication,
+  extractUtilityApplicationCandidatesFromText,
+  extractCandidatesFromKnownDocumentText,
   classifyLoadTotalCandidate,
   deduplicateLoadCandidates,
   linkSupersededCandidates,
@@ -169,6 +171,12 @@ function createMockSupabase(tables) {
         then(resolve, reject) {
           try {
             if (state.mode === "update") {
+              if (tables.__failCoordinationApplicationUpdate && table === "coordination_applications") {
+                return resolve({
+                  data: null,
+                  error: { message: "simulated mutation failure" },
+                });
+              }
               const row = store.find((r) =>
                 filters.every((f) => String(r[f.column]) === String(f.value)),
               );
@@ -219,6 +227,76 @@ describe("uci-load-candidate.service", () => {
     assert.equal(candidates[0].requires_human_review, true);
   });
 
+  it("extracts Aspen-style application service facts without blank meters", () => {
+    const source = {
+      source_type: "pepco_portal_document",
+      source_document_name: "Aspen Hill MD Application.pdf",
+      source_document_id: "application-doc",
+      source_storage_path: "uci/application.pdf",
+      source_content_hash: "hash-application",
+      external_application_id: EXT_APP_A,
+    };
+    const page1 = extractUtilityApplicationCandidatesFromText(
+      "Customer Notes current service is 600A. we need 800A",
+      1,
+      source,
+    );
+    const page2 = extractUtilityApplicationCandidatesFromText(
+      [
+        "Quantity Of Electric Meters Requested",
+        "Current Service Details",
+        "Service Size A 600AMPS",
+        "Service Voltage 120/208V 4-wire 3-phase",
+      ].join("\n"),
+      2,
+      source,
+    );
+    const candidates = [...page1, ...page2];
+    assert.ok(
+      candidates.some(
+        (c) =>
+          c.field_key === "existing_service_amperage" &&
+          c.normalized_value === 600,
+      ),
+    );
+    assert.ok(
+      candidates.some(
+        (c) =>
+          c.field_key === "requested_service_amperage" &&
+          c.normalized_value === 800,
+      ),
+    );
+    assert.ok(
+      candidates.some(
+        (c) => c.field_key === "service_voltage" && c.normalized_value === "120/208",
+      ),
+    );
+    assert.ok(candidates.some((c) => c.field_key === "phase" && c.normalized_value === "3"));
+    assert.ok(
+      candidates.some(
+        (c) => c.field_key === "wire_configuration" && c.normalized_value === "4",
+      ),
+    );
+    assert.ok(!candidates.some((c) => c.field_key === "meter_count"));
+    assert.ok(!candidates.some((c) => c.field_key === "meter_present"));
+  });
+
+  it("keeps electrical specification boilerplate out of active candidates", () => {
+    const candidates = extractCandidatesFromKnownDocumentText(
+      "2 CIRCUIT VOLTAGE 600 VOLT MOTORS SHALL BE THREE PHASE",
+      1,
+      {
+        source_type: "pepco_portal_document",
+        source_document_name: "E002 - ELECTRICAL SPECIFICATIONS.pdf",
+        source_document_id: "e002",
+        source_storage_path: "uci/e002.pdf",
+        source_content_hash: "hash-e002",
+        external_application_id: EXT_APP_A,
+      },
+    );
+    assert.deepEqual(candidates, []);
+  });
+
   it("extracts PDF text candidates with page evidence and unit", () => {
     const text = "Main service size 400 A at 480 V on page 2";
     const source = {
@@ -236,6 +314,43 @@ describe("uci-load-candidate.service", () => {
     assert.ok(amps.evidence_text.includes("400"));
     assert.equal(amps.unit, "A");
     assert.equal(amps.normalized_value, 400);
+  });
+
+  it("extracts Highland Springs labeled service, load, and schedule facts", () => {
+    const text = [
+      "Groundbreak 02/22/2027",
+      "Requested service amperage 1000 A",
+      "Requested voltage 120/208 V",
+      "Wire configuration 4 wire",
+      "Meter count 1",
+      "Project connected load 410 kVA",
+      "Project demand load 315 kVA",
+      "Requested in-service target 01/15/2027",
+    ].join("\n");
+    const source = {
+      source_type: "manual_upload",
+      source_document_name: "01_Synthetic_Load_Letter.pdf",
+      source_document_id: "synthetic-load-letter",
+      source_storage_path: "project/synthetic-load-letter.pdf",
+      source_content_hash: "hash-synthetic-load-letter",
+      external_application_id: "",
+    };
+    const candidates = extractCandidatesFromPdfText(text, 1, source);
+    const byField = new Map(candidates.map((candidate) => [candidate.field_key, candidate]));
+
+    assert.equal(byField.get("requested_service_amperage")?.normalized_value, 1000);
+    assert.equal(byField.get("requested_voltage")?.normalized_value, "120/208");
+    assert.equal(byField.get("wire_configuration")?.normalized_value, 4);
+    assert.equal(byField.get("meter_count")?.normalized_value, 1);
+    assert.equal(byField.get("connected_load_kva")?.normalized_value, 410);
+    assert.equal(byField.get("connected_load_kva")?.entity_type, "project_service");
+    assert.equal(byField.get("demand_load_kva")?.normalized_value, 315);
+    assert.equal(byField.get("demand_load_kva")?.entity_type, "project_service");
+    assert.equal(byField.get("construction_start_date")?.normalized_value, "2027-02-22");
+    assert.equal(byField.get("requested_in_service_date")?.normalized_value, "2027-01-15");
+    assert.ok(
+      candidates.every((candidate) => candidate.status === "candidate" && candidate.requires_human_review),
+    );
   });
 
   it("keeps values without units unresolved for connected load numerics", () => {
@@ -303,6 +418,32 @@ describe("uci-load-candidate.service", () => {
     assert.equal(grouped[0].conflict_group, grouped[1].conflict_group);
   });
 
+  it("does not let stale history create active conflicts", () => {
+    const active = buildCandidateRecord({
+      field_key: "service_amperage",
+      raw_value: "600",
+      normalized_value: 600,
+      unit: "A",
+      source_type: "uci_document_finding",
+      source_document_name: "application.pdf",
+      source_storage_path: "p",
+      source_content_hash: "new",
+      extraction_method: "utility_application_text",
+      external_application_id: EXT_APP_A,
+    });
+    const stale = {
+      ...active,
+      candidate_id: "old",
+      normalized_value: 400,
+      raw_value: "400",
+      status: "stale",
+      conflict_group: "old-conflict",
+    };
+
+    const grouped = assignConflictGroups([stale, active]);
+    assert.equal(grouped[1].conflict_group, null);
+  });
+
   it("does not write candidates into verified output automatically", () => {
     const summary = {
       candidate_values: [
@@ -366,6 +507,73 @@ describe("uci-load-candidate.service", () => {
     assert.equal(result.verified_values.connected_load_kw.method, "source_extracted_and_human_verified");
     assert.equal(result.verified_values.connected_load_kw.original_candidate_id, candidate.candidate_id);
     assert.equal(result.verified_values.connected_load_kw.page_number, 3);
+    const replay = await resolveLoadCandidate(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      candidateId: candidate.candidate_id,
+      action: "approve",
+    });
+    assert.equal(replay.idempotent_replay, true);
+    assert.equal(
+      tables.coordination_applications[0].load_summary.verified_values_history.length,
+      0,
+      "duplicate approval must not append history or create a second verified input",
+    );
+  });
+
+  it("approves one consolidated fact while preserving all agreeing evidence", async () => {
+    const application = buildCandidateRecord({
+      field_key: "phase",
+      raw_value: "three phase",
+      normalized_value: "three_phase",
+      unit: "phase",
+      source_type: "provider_application",
+      source_document_name: "Application",
+      source_storage_path: "",
+      source_content_hash: "application-phase",
+      extraction_method: "structured_application",
+      external_application_id: EXT_APP_A,
+    });
+    const e601 = buildCandidateRecord({
+      field_key: "phase",
+      raw_value: "three phase",
+      normalized_value: "three_phase",
+      unit: "phase",
+      source_type: "manual_upload",
+      source_document_name: "E601.pdf",
+      source_storage_path: "project/e601.pdf",
+      source_content_hash: "e601-phase",
+      page_number: 1,
+      evidence_text: "Incoming service is three phase",
+      extraction_method: "pdf_text",
+      external_application_id: EXT_APP_A,
+    });
+    const tables = {
+      coordination_records: [baseRecord()],
+      coordination_applications: [
+        {
+          id: "load-draft-1",
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: LOAD_PROFILE_IDEMPOTENCY_KEY,
+          load_summary: { candidate_values: [application, e601], verified_values: {} },
+        },
+      ],
+    };
+    const result = await resolveLoadCandidate(createMockSupabase(tables), {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      candidateId: application.candidate_id,
+      action: "approve",
+    });
+    assert.equal(
+      tables.coordination_applications[0].load_summary.candidate_values.filter(
+        (item) => item.status === "approved",
+      ).length,
+      2,
+    );
+    assert.equal(result.verified_values.phase.evidence_sources.length, 2);
   });
 
   it("edited approval preserves original candidate reference", async () => {
@@ -442,6 +650,10 @@ describe("uci-load-candidate.service", () => {
       candidateId: candidate.candidate_id,
       action: "reject",
     });
+    assert.equal(
+      tables.coordination_applications[0].load_summary.candidate_values[0].status,
+      "rejected",
+    );
     const fieldEval = evaluateRequiredFields(
       { address: "1 Main St", project_type: "commercial", description: "test" },
       { verified_values: {}, candidate_values: [candidate] },
@@ -449,6 +661,84 @@ describe("uci-load-candidate.service", () => {
       baseRecord(),
     );
     assert.ok(fieldEval.missingFields.includes("connected_load_data"));
+  });
+
+  it("keeps one candidate unresolved without creating a verified value", async () => {
+    const candidate = buildCandidateRecord({
+      field_key: "service_amperage",
+      raw_value: "400",
+      normalized_value: 400,
+      unit: "A",
+      source_type: "provider_application",
+      source_document_name: "Application",
+      source_storage_path: "",
+      source_content_hash: "unresolved",
+      extraction_method: "structured_application",
+      external_application_id: EXT_APP_A,
+    });
+    const tables = {
+      coordination_records: [baseRecord()],
+      coordination_applications: [
+        {
+          id: "load-draft-1",
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: LOAD_PROFILE_IDEMPOTENCY_KEY,
+          load_summary: { candidate_values: [candidate], verified_values: {} },
+        },
+      ],
+    };
+    const result = await resolveLoadCandidate(createMockSupabase(tables), {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      candidateId: candidate.candidate_id,
+      action: "keep_unresolved",
+    });
+    assert.equal(result.candidate.status, "candidate");
+    assert.ok(result.candidate.resolved_at);
+    assert.deepEqual(result.verified_values, {});
+  });
+
+  it("does not change candidate state when the approval mutation fails", async () => {
+    const candidate = buildCandidateRecord({
+      field_key: "service_amperage",
+      raw_value: "600",
+      normalized_value: 600,
+      unit: "A",
+      source_type: "provider_application",
+      source_document_name: "Application",
+      source_storage_path: "",
+      source_content_hash: "failure",
+      extraction_method: "structured_application",
+      external_application_id: EXT_APP_A,
+    });
+    const draft = {
+      id: "load-draft-1",
+      coordination_record_id: COORD_ID,
+      project_id: PROJECT_ID,
+      record_source: "agent_draft",
+      idempotency_key: LOAD_PROFILE_IDEMPOTENCY_KEY,
+      load_summary: { candidate_values: [candidate], verified_values: {} },
+    };
+    const tables = {
+      coordination_records: [baseRecord()],
+      coordination_applications: [draft],
+      __failCoordinationApplicationUpdate: true,
+    };
+    await assert.rejects(
+      resolveLoadCandidate(createMockSupabase(tables), {
+        coordinationRecordId: COORD_ID,
+        userId: USER_ID,
+        candidateId: candidate.candidate_id,
+        action: "approve",
+      }),
+      (err) =>
+        err.code === "LOAD_CANDIDATE_RESOLVE_FAILED" &&
+        /simulated mutation failure/.test(err.message),
+    );
+    assert.equal(draft.load_summary.candidate_values[0].status, "candidate");
+    assert.deepEqual(draft.load_summary.verified_values, {});
   });
 
   it("approved required fields remove connected_load_data from missing fields", () => {
@@ -572,6 +862,25 @@ describe("uci-load-candidate.service", () => {
     );
     assert.equal(docs.length, 1);
     assert.equal(docs[0].source_type, "project_document");
+  });
+
+  it("labels Agent 2 project documents as manual uploads without a separate parser", () => {
+    const sources = discoverProjectDocumentSources(
+      [
+        {
+          id: "manual-doc",
+          project_id: PROJECT_ID,
+          file_name: "E601 ONE LINE.pdf",
+          file_path: "user/project/manual.pdf",
+          document_type: "other",
+          description: `Agent 2 manual upload · coordination ${COORD_ID}`,
+        },
+      ],
+      PROJECT_ID,
+    );
+    assert.equal(sources.length, 1);
+    assert.equal(sources[0].source_type, "manual_upload");
+    assert.equal(sources[0].storage_bucket, "project-documents");
   });
 
   it("does not use table extraction when pdf text already matched on page", () => {
@@ -1127,9 +1436,10 @@ describe("uci-load-candidate.service", () => {
     const updated = markStaleCandidates([oldCandidate, approved], { "p/old": "old-hash" });
     assert.equal(updated[0].status, "stale");
     assert.equal(updated[1].status, "approved");
-    assert.equal(LOAD_EXTRACTION_SCHEMA_VERSION, "row6-v3");
+    assert.equal(LOAD_EXTRACTION_SCHEMA_VERSION, "row6-v4");
     assert.ok(STALE_EXTRACTION_SCHEMA_VERSIONS.has("row6-v1"));
     assert.ok(STALE_EXTRACTION_SCHEMA_VERSIONS.has("row6-v2"));
+    assert.ok(STALE_EXTRACTION_SCHEMA_VERSIONS.has("row6-v3"));
   });
 
   it("bare TOTAL DEMAND LOAD in panel schedule is not project/service", () => {
@@ -1295,6 +1605,34 @@ describe("uci-load-candidate.service", () => {
     assert.equal(winner.field_key, "panel_demand_load_kva");
   });
 
+  it("active canonical finding wins over stale direct duplicate", () => {
+    const stale = buildCandidateRecord({
+      field_key: "service_voltage",
+      raw_value: "120/208",
+      normalized_value: "120/208",
+      unit: "V",
+      source_type: "pepco_portal_document",
+      source_document_name: "application.pdf",
+      source_storage_path: "p",
+      source_content_hash: "same",
+      evidence_text: "Service Voltage 120/208 V",
+      extraction_method: "utility_application_text",
+      external_application_id: EXT_APP_A,
+      page_number: 2,
+    });
+    stale.status = "stale";
+    const canonical = {
+      ...stale,
+      candidate_id: "canonical",
+      source_type: "uci_document_finding",
+      status: "candidate",
+    };
+
+    const winner = deduplicateLoadCandidates([stale, canonical])[0];
+    assert.equal(winner.candidate_id, "canonical");
+    assert.equal(winner.status, "candidate");
+  });
+
   it("superseded candidates link to replacements where supported", () => {
     const stale = buildCandidateRecord({
       field_key: "demand_load_kva",
@@ -1418,17 +1756,14 @@ describe("uci-load-candidate.service", () => {
     );
   });
 
-  it("validateManualVerifiedPayload requires review note", () => {
-    assert.throws(
-      () =>
-        validateManualVerifiedPayload({
-          field_key: "service_voltage",
-          value: 480,
-          unit: "V",
-          review_note: "",
-        }),
-      (err) => err.code === "REVIEW_NOTE_REQUIRED",
-    );
+  it("validateManualVerifiedPayload allows an optional review note", () => {
+    const result = validateManualVerifiedPayload({
+      field_key: "service_voltage",
+      value: 480,
+      unit: "V",
+      review_note: "",
+    });
+    assert.equal(result.reviewNote, "Explicitly confirmed manual verified input");
   });
 
   it("manual verified value stores user_entered_and_verified without overwriting candidates", async () => {
@@ -1471,6 +1806,8 @@ describe("uci-load-candidate.service", () => {
     });
     assert.equal(result.connected_load_satisfied, true);
     assert.equal(result.verified_values.connected_load_kw.method, "user_entered_and_verified");
+    assert.equal(result.verified_values.connected_load_kw.provenance, "manual");
+    assert.equal(result.verified_values.connected_load_kw.entered_by, USER_ID);
     assert.equal(result.verified_values.connected_load_kw.value, 220);
     const draft = tables.coordination_applications[0];
     assert.equal(draft.load_summary.candidate_values.length, 1);

@@ -10,6 +10,7 @@ const workflowSource = readFileSync(
   join(__dirname, "..", "components", "uci", "UciSetupWorkflow.tsx"),
   "utf8",
 );
+const uciApiSource = readFileSync(join(__dirname, "..", "lib", "uciApi.ts"), "utf8");
 
 describe("UciDashboard guided setup workflow regression", () => {
   it("uses the guided setup workflow component instead of a full-page provider catalog", () => {
@@ -50,8 +51,9 @@ describe("UciDashboard guided setup workflow regression", () => {
     assert.match(workflowSource, /data-testid="uci-init-disabled-reasons"/);
     assert.match(workflowSource, /data-testid="uci-selected-providers"/);
     assert.match(workflowSource, /data-testid="uci-provider-search"/);
-    assert.match(workflowSource, /Automatic territory matching is not available yet/);
-    assert.match(workflowSource, /Confirm these selections using project/);
+    assert.match(workflowSource, /Electric territory suggestions use available service-territory data/);
+    assert.match(workflowSource, /Other supported utility\s+types remain manual/i);
+    assert.match(workflowSource, /uci-create-provider-submit/);
   });
 
   it("includes the D2.2 provider resolution panel with auditable mapping states", () => {
@@ -60,6 +62,27 @@ describe("UciDashboard guided setup workflow regression", () => {
     assert.match(dashboardSource, /resolveProjectProviderResolution/);
     assert.match(dashboardSource, /confirmProjectProviderResolution/);
     assert.match(dashboardSource, /overrideProjectProviderResolution/);
+  });
+
+  it("carries a confirmed provider into initialization without a second confirmation", () => {
+    assert.match(dashboardSource, /confirmedProviderIds/);
+    assert.match(dashboardSource, /setInitPick/);
+    assert.match(workflowSource, /uci-provider-confirmation-carried-forward/);
+    assert.match(workflowSource, /Provider confirmation carried forward/);
+  });
+
+  it("uses the mounted project provider route and selects a created provider immediately", () => {
+    assert.match(
+      uciApiSource,
+      /\/api\/uci\/projects\/\$\{encodeURIComponent\(projectId\)\}\/providers/,
+    );
+    assert.match(dashboardSource, /await createUciProvider\(projectId/);
+    assert.match(
+      dashboardSource,
+      /setInitPick\(\(previous\) => \(\{ \.\.\.previous, \[result\.provider\.slug\]: true \}\)\)/,
+    );
+    assert.match(dashboardSource, /await loadProviders\(\)/);
+    assert.match(dashboardSource, /await loadProviderSetup\(\)/);
   });
 
   it("shows persistent UCI project context above setup and workflow sections", () => {

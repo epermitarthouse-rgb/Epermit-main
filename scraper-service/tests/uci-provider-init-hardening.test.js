@@ -275,6 +275,96 @@ describe("Row 5 — provider init API hardening", () => {
     assert.equal(body.error, "INVALID_PROVIDER");
   });
 
+  it("creates, searches, and initializes tenant providers for all supported types", async () => {
+    const utilityTypes = ["electric", "gas", "water", "sewer", "telecom"];
+    const createdProviders = [];
+
+    for (const utilityType of utilityTypes) {
+      const createRes = await fetch(`${httpServer.baseUrl}/projects/${PROJECT_A}/providers`, {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          name: `Custom ${utilityType} service`,
+          utility_type: utilityType,
+        }),
+      });
+      assert.equal(createRes.status, 201);
+      const created = await createRes.json();
+      assert.equal(created.provider.utility_type, utilityType);
+      createdProviders.push(created.provider);
+
+      const searchRes = await fetch(
+        `${httpServer.baseUrl}/providers?projectId=${PROJECT_A}&utilityType=${utilityType}`,
+        { headers: auth },
+      );
+      assert.equal(searchRes.status, 200);
+      const search = await searchRes.json();
+      assert.ok(
+        search.providers.some((provider) => provider.id === created.provider.id),
+        `${utilityType} provider must be visible after create`,
+      );
+    }
+
+    const initRes = await fetch(
+      `${httpServer.baseUrl}/projects/${PROJECT_A}/coordination/init`,
+      {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          providers: createdProviders.map((provider) => provider.slug),
+          provider_setup: {
+            confirmed: true,
+            address_source_acknowledged: "structured",
+          },
+        }),
+      },
+    );
+    assert.equal(initRes.status, 200);
+    const initialized = await initRes.json();
+    assert.equal(initialized.created.length, utilityTypes.length);
+    assert.deepEqual(
+      initialized.created.map((record) => record.utility_type).sort(),
+      [...utilityTypes].sort(),
+    );
+  });
+
+  it("returns the existing provider for a duplicate create", async () => {
+    const payload = {
+      name: "Custom water service",
+      utility_type: "water",
+    };
+    const first = await fetch(`${httpServer.baseUrl}/projects/${PROJECT_A}/providers`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify(payload),
+    });
+    assert.equal(first.status, 200);
+    const firstBody = await first.json();
+    assert.equal(firstBody.created, false);
+
+    const duplicate = await fetch(`${httpServer.baseUrl}/projects/${PROJECT_A}/providers`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify(payload),
+    });
+    assert.equal(duplicate.status, 200);
+    const duplicateBody = await duplicate.json();
+    assert.equal(duplicateBody.created, false);
+    assert.equal(duplicateBody.provider.id, firstBody.provider.id);
+    assert.equal(duplicateBody.provider.slug, firstBody.provider.slug);
+  });
+
+  it("rejects unsupported provider types without coercion", async () => {
+    const res = await fetch(`${httpServer.baseUrl}/projects/${PROJECT_A}/providers`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "Steam Utility", utility_type: "steam" }),
+    });
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error, "UNSUPPORTED_UTILITY_TYPE");
+  });
+
   it("accepts valid confirmed init and persists mapping metadata", async () => {
     const res = await fetch(`${httpServer.baseUrl}/projects/${PROJECT_A}/coordination/init`, {
       method: "POST",
@@ -316,8 +406,11 @@ describe("Row 5 — provider init API hardening", () => {
     const body = await res.json();
     assert.equal(body.created.length, 0);
     assert.equal(body.already_existed.length, 1);
+    const pepcoRecord = body.records.find(
+      (record) => record.utility_provider_id === "global-pepco",
+    );
     assert.equal(
-      body.records[0].metadata.uci_provider_mapping.address_source_acknowledged,
+      pepcoRecord.metadata.uci_provider_mapping.address_source_acknowledged,
       "portal_data_location",
     );
   });

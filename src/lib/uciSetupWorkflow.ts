@@ -3,6 +3,7 @@ import type {
   UciProviderSetupResponse,
   UtilityProvider,
 } from "@/types/uci";
+import { UCI_SUPPORTED_UTILITY_TYPES, type UciUtilityType } from "@/lib/uciUtilityTypes";
 
 export type AddressPresentationMode =
   | "missing"
@@ -32,6 +33,12 @@ export function formatUtilityTypeLabel(value: string): string {
   if (!normalized) return "Unknown";
   if (normalized === "water/sewer" || normalized === "water_sewer") return "Water / sewer";
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+export function getSupportedUtilityTypes(
+  _catalogTypes: readonly string[] = [],
+): UciUtilityType[] {
+  return [...UCI_SUPPORTED_UTILITY_TYPES];
 }
 
 /** CET partners first, then display name. */

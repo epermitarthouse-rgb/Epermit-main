@@ -7,6 +7,8 @@ const { extractComcheckFindingsFromText } = require("../app/services/uci/uci-com
 const LIGHTING_PAGE = `
 Report Title: Sample Retail Project Report Date: Apr 10, 2026, 02:09 PM 3 of 9
 2021 IECC Sample Retail Project Springfield, Illinois 4a Alteration
+Building Area Type Floor Area
+All Other 4,382
 Total Proposed Watts: 1623.5
 Interior Lighting PASSES
 F2: F2: LED: Manual Control
@@ -82,14 +84,18 @@ describe("uci-comcheck-parser", () => {
     assert.ok(findings.some((f) => f.field_key === "comcheck_energy_code"));
     assert.ok(findings.some((f) => f.field_key === "comcheck_project_title"));
     assert.ok(findings.some((f) => f.field_key === "comcheck_report_date"));
+    assert.equal(
+      findings.find((f) => f.field_key === "comcheck_building_area")
+        ?.normalized_value,
+      4382,
+    );
   });
 
-  it("tags lighting totals and fixture rows with aggregation roles", () => {
+  it("keeps only lighting totals as electrical load findings", () => {
     const findings = extractComcheckFindingsFromText(LIGHTING_PAGE, 3, source);
     const total = findings.find((f) => f.field_key === "lighting_interior_total_watts");
-    const fixture = findings.find((f) => f.field_key === "lighting_fixture_row");
     assert.equal(total?.aggregation_role, "summary_total");
-    assert.equal(fixture?.aggregation_role, "detail_component");
+    assert.ok(!findings.some((f) => f.field_key === "lighting_fixture_row"));
   });
 
   it("does not create engineering candidates from inspection checklist boilerplate", () => {

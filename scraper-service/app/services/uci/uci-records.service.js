@@ -4,6 +4,7 @@ const { listApplicationsByCoordination } = require("./uci-applications.service.j
 const {
   mergeProviderResolutionIntoCoordinationMetadata,
 } = require("./uci-provider-resolution-persistence.js");
+const { requireSupportedUtilityType } = require("./uci-utility-types.js");
 
 const RECORD_WITH_PROVIDER_SELECT = `
   *,
@@ -230,7 +231,7 @@ async function initCoordinationForProviders(supabase, p) {
 
   const { data: existingRows, error: exErr } = await supabase
     .from("coordination_records")
-    .select("id, utility_provider_id")
+    .select("id, utility_provider_id, utility_type")
     .eq("project_id", projectId)
     .eq("scope_description", "")
     .in("utility_provider_id", providerIds);
@@ -243,8 +244,17 @@ async function initCoordinationForProviders(supabase, p) {
     });
   }
 
-  const existingPid = new Set(
-    (Array.isArray(existingRows) ? existingRows : []).map((r) => r.utility_provider_id),
+  const recordKey = (providerId, utilityType) =>
+    `${String(providerId)}:${String(utilityType).trim().toLowerCase()}`;
+  const existingProviderTypes = new Set(
+    (Array.isArray(existingRows) ? existingRows : []).map((r) =>
+      recordKey(r.utility_provider_id, r.utility_type),
+    ),
+  );
+  const legacyExistingProviderIds = new Set(
+    (Array.isArray(existingRows) ? existingRows : [])
+      .filter((r) => !String(r.utility_type ?? "").trim())
+      .map((r) => String(r.utility_provider_id)),
   );
 
   /** @type {Array<Record<string, unknown>>} */
@@ -252,7 +262,12 @@ async function initCoordinationForProviders(supabase, p) {
 
   for (const provider of resolvedProviders) {
     const pid = provider.id;
-    if (existingPid.has(pid)) {
+    const utilityType = requireSupportedUtilityType(provider.utility_type);
+    const providerTypeKey = recordKey(pid, utilityType);
+    if (
+      existingProviderTypes.has(providerTypeKey) ||
+      legacyExistingProviderIds.has(String(pid))
+    ) {
       continue;
     }
 
@@ -273,7 +288,7 @@ async function initCoordinationForProviders(supabase, p) {
       project_id: projectId,
       user_id: userId,
       utility_provider_id: pid,
-      utility_type: provider.utility_type ?? null,
+      utility_type: utilityType,
       scope_description: "",
       current_stage: 1,
       current_stage_state: "NOT_STARTED",
@@ -294,7 +309,7 @@ async function initCoordinationForProviders(supabase, p) {
       });
     }
 
-    existingPid.add(pid);
+    existingProviderTypes.add(providerTypeKey);
 
     const { error: trErr } = await supabase.from("coordination_stage_transitions").insert({
       coordination_record_id: inserted.id,

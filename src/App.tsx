@@ -36,12 +36,27 @@ import AdminAudit from "./pages/AdminAudit";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
 import ArchitectureReplicationChecklist from "./pages/ArchitectureReplicationChecklist";
+import UciActionTracker from "./pages/UciActionTracker";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
 import CodeCompliance from "./pages/CodeCompliance";
 import DesignCheck from "./pages/DesignCheck";
+import {
+  UciCiacRefundsPage,
+  UciClassOfServicePage,
+  UciConflictsPage,
+  UciEnergizationPage,
+  UciInboxPage,
+  UciKnowledgePage,
+  UciMissUtilityPage,
+  UciNeedsAttentionPage,
+  UciPortfolioPage,
+  UciProviderDirectoryPage,
+  UciSubmissionsPage,
+  UciUtilityTerritoryPage,
+} from "./pages/UciRoutePages";
 import UciApplicationBuilder from "./pages/UciApplicationBuilder";
 import CodeReferenceLibrary from "./pages/CodeReferenceLibrary";
 import ROICalculator from "./pages/ROICalculator";
@@ -62,6 +77,7 @@ import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
 import BaltimoreRecordsListPage from "./pages/baltimore/BaltimoreRecordsListPage";
 import BaltimoreRecordDetailPage from "./pages/baltimore/BaltimoreRecordDetailPage";
 import UciDashboard from "./pages/UciDashboard";
+import UciPortalHarvest from "./pages/UciPortalHarvest";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
 import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder";
@@ -166,6 +182,7 @@ const App = () => (
                       path="architecture-replication"
                       element={<ArchitectureReplicationChecklist />}
                     />
+                    <Route path="uci-action-tracker" element={<UciActionTracker />} />
                     <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
                     <Route path="members" element={<AdminMembers />} />
                     <Route path="audit" element={<AdminAudit />} />
@@ -197,13 +214,43 @@ const App = () => (
                   <Route
                     path="/uci/application-builder"
                     element={
+                      <ErrorBoundary fallbackTitle="UCI Application Builder failed to load">
+                        <UciApplicationBuilder />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/uci/records/:coordinationId"
+                    element={
                       <div className="min-h-screen bg-background">
-                        <ErrorBoundary fallbackTitle="UCI Builder failed to load">
-                          <UciApplicationBuilder />
+                        <ErrorBoundary fallbackTitle="Coordination workspace failed to load">
+                          <UciDashboard />
                         </ErrorBoundary>
                       </div>
                     }
                   />
+                  <Route
+                    path="/uci/portal-harvest"
+                    element={
+                      <div className="min-h-screen bg-background">
+                        <ErrorBoundary fallbackTitle="UCI Portal Harvest failed to load">
+                          <UciPortalHarvest />
+                        </ErrorBoundary>
+                      </div>
+                    }
+                  />
+                  <Route path="/uci/portfolio" element={<UciPortfolioPage />} />
+                  <Route path="/uci/needs-attention" element={<UciNeedsAttentionPage />} />
+                  <Route path="/uci/inbox" element={<UciInboxPage />} />
+                  <Route path="/uci/submissions" element={<UciSubmissionsPage />} />
+                  <Route path="/uci/provider-directory" element={<UciProviderDirectoryPage />} />
+                  <Route path="/uci/class-of-service" element={<UciClassOfServicePage />} />
+                  <Route path="/uci/ciac-refunds" element={<UciCiacRefundsPage />} />
+                  <Route path="/uci/energization" element={<UciEnergizationPage />} />
+                  <Route path="/uci/miss-utility" element={<UciMissUtilityPage />} />
+                  <Route path="/uci/knowledge" element={<UciKnowledgePage />} />
+                  <Route path="/uci/conflicts" element={<UciConflictsPage />} />
+                  <Route path="/uci/utility-territory-map" element={<UciUtilityTerritoryPage />} />
                   <Route path="/design-system-preview" element={<EpermitDesignSystemPreview />} />
                   <Route path="/comment-review" element={<CommentReview />} />
                   <Route path="/response-matrix" element={<ResponseMatrix />} />

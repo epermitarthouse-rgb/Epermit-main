@@ -4,6 +4,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const {
   DOCUMENT_PROCESSING_SCHEMA_VERSION,
+  MANUAL_DOCUMENT_SCOPE_KEY,
   UCI_DOCUMENT_ROLES,
   classifyDocumentRoles,
   mapRolesToUciStages,
@@ -28,6 +29,9 @@ const {
   buildCandidateRecord,
   extractCandidatesFromPdfText,
 } = require("../app/services/uci/uci-load-candidate.service.js");
+const {
+  buildLayoutAwarePageText,
+} = require("../app/services/uci/uci-pdf-page-analysis.service.js");
 const { PROVIDER_SETUP_METHOD } = require("../app/services/uci/uci-provider-setup.service.js");
 
 const TENANT_A = "tenant-a-0000-4000-8000-000000000101";
@@ -153,6 +157,17 @@ function createMockSupabase(tables) {
 }
 
 describe("uci-document-processing.service", () => {
+  it("preserves physical PDF rows for deterministic schedule parsing", () => {
+    const text = buildLayoutAwarePageText([
+      { str: "101", transform: [1, 0, 0, 1, 10, 700] },
+      { str: "OVEN", transform: [1, 0, 0, 1, 60, 700] },
+      { str: "208 V", transform: [1, 0, 0, 1, 200, 700] },
+      { str: "03/10/2026", transform: [1, 0, 0, 1, 400, 650] },
+    ]);
+
+    assert.equal(text, "101 OVEN 208 V\n03/10/2026");
+  });
+
   it("discovers every document for the selected external application", () => {
     const discovery = discoverAllUciDocuments(baseRecord(), {
       externalApplicationId: EXT_APP_A,
@@ -169,6 +184,80 @@ describe("uci-document-processing.service", () => {
     });
     const paths = discovery.documents.map((d) => d.storage_path);
     assert.ok(!paths.some((p) => String(p).includes(EXT_APP_B)));
+  });
+
+  it("processes coordination-scoped manual documents without a utility application", async () => {
+    const record = baseRecord({
+      metadata: {
+        uci_provider_mapping: { method: PROVIDER_SETUP_METHOD, provider_slug: "pepco" },
+      },
+    });
+    const manualDocument = {
+      id: "manual-doc-1",
+      project_id: PROJECT_ID,
+      document_type: "other",
+      file_name: "client-load-schedule.pdf",
+      file_path: `${USER_ID}/${PROJECT_ID}/manual-doc-1/client-load-schedule.pdf`,
+      file_type: "application/pdf",
+      description: `Agent 2 manual upload · coordination ${COORD_ID}`,
+      created_at: "2026-08-14T00:00:00.000Z",
+    };
+    const tables = {
+      coordination_records: [record],
+      project_documents: [manualDocument],
+    };
+    const supabase = createMockSupabase(tables);
+    const deps = {
+      downloadFromSupabaseStorage: async () => ({
+        ok: true,
+        data: {
+          arrayBuffer: async () => Buffer.from("%PDF-1.4\nService voltage 480 V three phase"),
+        },
+      }),
+      extractPdfPages: async () => [
+        { pageNumber: 1, text: "Service voltage 480 V three phase" },
+      ],
+    };
+
+    const manualResult = await runDocumentProcessing(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: null,
+      deps,
+    });
+
+    assert.equal(manualResult.external_application_id, "");
+    assert.equal(manualResult.documents.length, 1);
+    assert.equal(manualResult.documents[0].source_type, "manual_upload");
+    assert.ok(manualResult.findings_count > 0);
+    const manualState = getDocumentProcessingState(record.metadata, null);
+    assert.ok(manualState);
+    assert.equal(manualState.project_id, PROJECT_ID);
+    assert.equal(manualState.coordination_record_id, COORD_ID);
+    assert.equal(manualState.tenant_id, TENANT_A);
+    assert.ok(record.metadata.uci_document_processing.applications[MANUAL_DOCUMENT_SCOPE_KEY]);
+
+    record.metadata.pepco_application_detail_discovery = {
+      applications: [{ applicationUuid: EXT_APP_A, downloadedFiles: [] }],
+    };
+    const linkedResult = await runDocumentProcessing(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+      deps,
+    });
+
+    const linkedManualDocuments = linkedResult.documents.filter(
+      (document) => document.source_type === "manual_upload",
+    );
+    assert.equal(linkedManualDocuments.length, 1);
+    assert.equal(linkedManualDocuments[0].processing_status, "duplicate");
+    assert.equal(linkedManualDocuments[0].document_id, manualResult.documents[0].document_id);
+    const linkedDocumentIds = linkedResult.documents.map((document) => document.document_id);
+    assert.equal(new Set(linkedDocumentIds).size, linkedDocumentIds.length);
+    const linkedState = getDocumentProcessingState(record.metadata, EXT_APP_A);
+    const linkedFindingIds = linkedState.findings.map((finding) => finding.finding_id);
+    assert.equal(new Set(linkedFindingIds).size, linkedFindingIds.length);
   });
 
   it("assigns document roles without irrelevant status", () => {
@@ -441,6 +530,69 @@ describe("uci-document-processing.service", () => {
     const duplicate = result.documents.find((d) => d.processing_status === "duplicate");
     assert.ok(duplicate);
     assert.equal(duplicate.failure_reason, "Exact duplicate content hash");
+  });
+
+  it("reprocesses a selected document from its stored path and replaces its findings", async () => {
+    const record = baseRecord();
+    const tables = { coordination_records: [record], project_documents: [] };
+    const supabase = createMockSupabase(tables);
+    const downloads = [];
+    let voltage = 480;
+    const pageText = () =>
+      `NEW PANELBOARD "MDP" 800A, ${voltage === 480 ? "277/480" : "120/208"}V, 3-PH M CT CABINET AND METER`;
+    const deps = {
+      downloadFromSupabaseStorage: async ({ storagePath }) => {
+        downloads.push(String(storagePath));
+        return {
+          ok: true,
+          data: { arrayBuffer: async () => Buffer.from(`%PDF-1.4\n${pageText()}`) },
+        };
+      },
+      extractPdfPages: async () => [
+        { pageNumber: 1, text: pageText() },
+      ],
+    };
+
+    await runDocumentProcessing(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+      refresh: true,
+      deps,
+    });
+    const before = getDocumentProcessingState(record.metadata, EXT_APP_A);
+    const target = before.documents.find(
+      (document) => document.original_filename === ONE_LINE_FILE.fileName,
+    );
+    const untouched = before.documents.find(
+      (document) => document.original_filename === PANEL_FILE.fileName,
+    );
+    assert.ok(target);
+    assert.ok(untouched);
+
+    downloads.length = 0;
+    voltage = 208;
+    await runDocumentProcessing(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+      refresh: true,
+      documentIds: [target.document_id],
+      deps,
+    });
+
+    const after = getDocumentProcessingState(record.metadata, EXT_APP_A);
+    assert.deepEqual(downloads, [ONE_LINE_FILE.storagePath]);
+    assert.equal(
+      after.documents.find((document) => document.document_id === untouched.document_id).processed_at,
+      untouched.processed_at,
+    );
+    const targetFindings = after.findings.filter(
+      (finding) => finding.document_id === target.document_id,
+    );
+    assert.ok(targetFindings.length > 0);
+    assert.ok(targetFindings.some((finding) => String(finding.raw_value).includes("208")));
+    assert.ok(targetFindings.every((finding) => !String(finding.raw_value).includes("480")));
   });
 
   it("computes coverage summary counts", () => {

@@ -6,6 +6,7 @@ const { getCoordinationRecordById } = require("./uci-records.service.js");
 const {
   findAgentDraftApplication,
   LOAD_PROFILE_IDEMPOTENCY_KEY,
+  reconcileLoadProfileReadiness,
 } = require("./uci-load-profile.service.js");
 const {
   extractPepcoPortalFiles,
@@ -16,14 +17,14 @@ const {
 const { UCI_DOCUMENTS_STORAGE_BUCKET } = require("./uci-document-storage.service.js");
 const { downloadFromSupabaseStorage } = require("../../../shared/supabase-storage-upload.js");
 
-const LOAD_EXTRACTION_SCHEMA_VERSION = "row6-v3";
+const LOAD_EXTRACTION_SCHEMA_VERSION = "row6-v4";
 
 /** Prior schema versions whose unapproved candidates should be marked stale on re-extraction. */
-const STALE_EXTRACTION_SCHEMA_VERSIONS = new Set(["row6-v1", "row6-v2"]);
+const STALE_EXTRACTION_SCHEMA_VERSIONS = new Set(["row6-v1", "row6-v2", "row6-v3"]);
 const PROJECT_DOCUMENTS_BUCKET = "project-documents";
 
 const PROJECT_DOCUMENTS_SELECT =
-  "id, project_id, document_type, file_name, file_path, file_type, created_at";
+  "id, project_id, document_type, file_name, file_path, file_type, description, created_at";
 
 /**
  * @param {object} params
@@ -105,6 +106,22 @@ const EXTRACTABLE_FIELD_KEYS = new Set([
   "meter_count",
   "service_configuration",
   "wire_configuration",
+  "main_distribution_panel_rating",
+  "panel_rating",
+  "disconnect_rating",
+  "meter_present",
+  "ct_cabinet_present",
+  "transformer_present",
+  "equipment_schedule_voltage",
+  "equipment_schedule_phase",
+  "equipment_schedule_amperage",
+  "equipment_schedule_watts",
+  "equipment_schedule_kva",
+  "lighting_interior_total_watts",
+  "lighting_exterior_total_watts",
+  "construction_start_date",
+  "construction_completion_date",
+  "requested_in_service_date",
 ]);
 
 const PHASE_EQUIPMENT_REJECT_PATTERNS = [
@@ -131,6 +148,8 @@ const PHASE_SERVICE_ACCEPT_PATTERNS = [
 ];
 
 const PROJECT_TOTAL_EVIDENCE_PATTERNS = [
+  /\bproject\s+connected\s+load\b/i,
+  /\bproject\s+demand\s+load\b/i,
   /\btotal\s+building\s+load\b/i,
   /\bbuilding\s+demand\b/i,
   /\bbuilding\s+total\b/i,
@@ -205,6 +224,12 @@ const PDF_TEXT_FIELD_PATTERNS = [
     loadKind: "demand",
   },
   {
+    field_key: "requested_service_amperage",
+    regex: /\brequested\s+service\s+amperage[:\s]*(\d+(?:\.\d+)?)\s*(A|AMP(?:ERE)?S?)\b/gi,
+    unitGroup: 2,
+    valueGroup: 1,
+  },
+  {
     field_key: "service_amperage",
     regex: /\b(?:service|main)\s*(?:size|amp(?:erage)?)?[:\s]*(\d+(?:\.\d+)?)\s*(A|AMP(?:ERE)?S?)\b/gi,
     unitGroup: 2,
@@ -212,15 +237,44 @@ const PDF_TEXT_FIELD_PATTERNS = [
   },
   {
     field_key: "requested_voltage",
-    regex: /\b(?:service\s+)?voltage[:\s]*(\d{3,4})\s*(V|VOLTS?)\b/gi,
+    regex: /\b(?:requested\s+|service\s+)voltage[:\s]*(\d{2,4}(?:\s*\/\s*\d{2,4})?)\s*(V|VOLTS?)\b/gi,
+    unitGroup: 2,
+    valueGroup: 1,
+    valueType: "voltage",
+  },
+  {
+    field_key: "meter_count",
+    regex: /\b(?:meter\s+count[:\s]*(\d+)|(\d+)\s*meters?)\b/gi,
+    unitGroup: 0,
+    valueGroup: 1,
+    fallbackValueGroup: 2,
+  },
+  {
+    field_key: "wire_configuration",
+    regex: /\bwire\s+configuration[:\s]*(\d+)\s*(wire)\b/gi,
     unitGroup: 2,
     valueGroup: 1,
   },
   {
-    field_key: "meter_count",
-    regex: /\b(\d+)\s*meters?\b/gi,
+    field_key: "construction_start_date",
+    regex: /\bgroundbreak(?:ing)?(?:\s+date)?[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})\b/gi,
     unitGroup: 0,
     valueGroup: 1,
+    valueType: "date",
+  },
+  {
+    field_key: "construction_completion_date",
+    regex: /\bconstruction\s+completion(?:\s+date|\s+target)?[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})\b/gi,
+    unitGroup: 0,
+    valueGroup: 1,
+    valueType: "date",
+  },
+  {
+    field_key: "requested_in_service_date",
+    regex: /\brequested(?:\s+utility)?\s+in[\s-]*service(?:\s+(?:date|target))?[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})\b/gi,
+    unitGroup: 0,
+    valueGroup: 1,
+    valueType: "date",
   },
 ];
 
@@ -340,6 +394,7 @@ function buildCandidateRecord(input) {
       fieldKey !== "connected_equipment_or_load_data" &&
       fieldKey !== "phase" &&
       fieldKey !== "service_configuration" &&
+      !fieldKey.endsWith("_date") &&
       !fieldKey.endsWith("_count"));
 
   const record = {
@@ -430,6 +485,7 @@ function normalizeUnit(unitRaw) {
   if (u === "KVA") return "kVA";
   if (/^AMP(?:ERE)?S?$/.test(u) || u === "A") return "A";
   if (/^VOLTS?$/.test(u) || u === "V") return "V";
+  if (u === "WIRE") return "wire";
   return u;
 }
 
@@ -621,6 +677,20 @@ function classificationPriority(candidate) {
 }
 
 /**
+ * Prefer preserved approvals, then active canonical findings, over stale
+ * parallel-extractor rows that share the same semantic evidence.
+ *
+ * @param {Record<string, unknown>} candidate
+ */
+function candidateDedupPriority(candidate) {
+  const status = String(candidate.status ?? "candidate");
+  const statusPriority =
+    status === "approved" ? 300 : status === "candidate" ? 200 : status === "rejected" ? 50 : 0;
+  const canonicalPriority = candidate.source_type === "uci_document_finding" ? 10 : 0;
+  return statusPriority + canonicalPriority + classificationPriority(candidate);
+}
+
+/**
  * @param {Record<string, unknown>} candidate
  */
 function semanticDedupKey(candidate) {
@@ -658,7 +728,7 @@ function deduplicateLoadCandidates(candidates) {
   for (const candidate of candidates) {
     const key = semanticDedupKey(candidate);
     const prev = best.get(key);
-    if (!prev || classificationPriority(candidate) > classificationPriority(prev)) {
+    if (!prev || candidateDedupPriority(candidate) > candidateDedupPriority(prev)) {
       best.set(key, candidate);
     }
   }
@@ -902,7 +972,7 @@ function extractCandidatesFromStructuredApplication(app, externalApplicationId) 
   const scalarMappings = [
     { key: "serviceVoltage", field_key: "service_voltage", unit: "V" },
     { key: "requestedVoltage", field_key: "requested_voltage", unit: "V" },
-    { key: "requestedServiceAmperage", field_key: "service_amperage", unit: "A" },
+    { key: "requestedServiceAmperage", field_key: "requested_service_amperage", unit: "A" },
     { key: "phase", field_key: "phase", unit: null },
     { key: "meterCount", field_key: "meter_count", unit: "count" },
     { key: "serviceAmperage", field_key: "service_amperage", unit: "A" },
@@ -912,8 +982,8 @@ function extractCandidatesFromStructuredApplication(app, externalApplicationId) 
 
   for (const mapping of scalarMappings) {
     const raw = applicationDetails[mapping.key];
-    if (raw == null || raw === "") continue;
-    const rawStr = String(raw);
+    if (raw == null || String(raw).trim() === "") continue;
+    const rawStr = String(raw).trim();
     let normalized = null;
     let unit = mapping.unit;
     if (mapping.field_key === "phase") {
@@ -921,10 +991,16 @@ function extractCandidatesFromStructuredApplication(app, externalApplicationId) 
       unit = normalized ? "phase" : null;
     } else if (mapping.field_key === "meter_count") {
       const n = Number(raw);
-      normalized = Number.isFinite(n) ? n : null;
+      if (!Number.isFinite(n) || n <= 0) continue;
+      normalized = n;
     } else if (mapping.unit === "A" || mapping.unit === "V") {
-      const n = Number(String(raw).replace(/[^\d.]/g, ""));
-      normalized = Number.isFinite(n) ? n : null;
+      const slashVoltage = mapping.unit === "V" && rawStr.match(/\b(\d{2,3}\/\d{2,3})\b/);
+      if (slashVoltage) {
+        normalized = slashVoltage[1];
+      } else {
+        const numberMatch = rawStr.match(/\d+(?:\.\d+)?/);
+        normalized = numberMatch ? Number(numberMatch[0]) : null;
+      }
     } else {
       normalized = rawStr;
     }
@@ -953,6 +1029,172 @@ function extractCandidatesFromStructuredApplication(app, externalApplicationId) 
   }
 
   return out;
+}
+
+/**
+ * Extract only explicitly labeled service facts from a rendered utility
+ * application. Blank meter/load rows intentionally produce no candidate.
+ *
+ * @param {string} text
+ * @param {number} pageNumber
+ * @param {Record<string, unknown>} source
+ */
+function extractUtilityApplicationCandidatesFromText(text, pageNumber, source) {
+  const pageText = String(text ?? "");
+  /** @type {Array<Record<string, unknown>>} */
+  const out = [];
+  const push = (
+    fieldKey,
+    rawValue,
+    normalizedValue,
+    unit,
+    evidence,
+    confidence = 0.9,
+  ) => {
+    out.push(
+      buildCandidateRecord({
+        field_key: fieldKey,
+        raw_value: String(rawValue),
+        normalized_value: normalizedValue,
+        unit,
+        entity_type: "project_service",
+        entity_name: null,
+        is_project_total: true,
+        source_type: source.source_type,
+        source_document_name: source.source_document_name,
+        source_document_id: source.source_document_id,
+        source_storage_path: source.source_storage_path,
+        source_content_hash: source.source_content_hash,
+        page_number: pageNumber,
+        evidence_text: String(evidence).replace(/\s+/g, " ").trim(),
+        extraction_method: "utility_application_text",
+        confidence,
+        external_application_id: source.external_application_id,
+      }),
+    );
+  };
+
+  const currentDetails = pageText.match(/\bService\s+Size\s+A\s+(\d{2,4})\s*AMPS?\b/i);
+  if (currentDetails) {
+    push(
+      "existing_service_amperage",
+      currentDetails[1],
+      Number(currentDetails[1]),
+      "A",
+      currentDetails[0],
+      0.95,
+    );
+  }
+
+  const customerRequest = pageText.match(
+    /\bcurrent\s+service\s+is\s+(\d{2,4})\s*A\b[\s\S]{0,80}?\b(?:we\s+need|request(?:ed|ing)?)\s+(\d{2,4})\s*A\b/i,
+  );
+  if (customerRequest) {
+    if (!currentDetails) {
+      push(
+        "existing_service_amperage",
+        customerRequest[1],
+        Number(customerRequest[1]),
+        "A",
+        customerRequest[0],
+      );
+    }
+    push(
+      "requested_service_amperage",
+      customerRequest[2],
+      Number(customerRequest[2]),
+      "A",
+      customerRequest[0],
+    );
+  }
+
+  const voltage = pageText.match(
+    /\bService\s+Voltage\s+(\d{2,3}\/\d{2,3})\s*V\b(?:[^\n]*)/i,
+  );
+  if (voltage) {
+    push("service_voltage", voltage[1], voltage[1], "V", voltage[0]);
+    const wires = voltage[0].match(/\b(\d+)[\s-]*wire\b/i);
+    if (wires) {
+      push("wire_configuration", wires[0], wires[1], "wire", voltage[0]);
+    }
+    const phase = voltage[0].match(/\b(\d+)[\s-]*phase\b/i);
+    if (phase) {
+      push("phase", phase[0], phase[1], "phase", voltage[0]);
+    }
+  }
+
+  for (const rawLine of pageText.split(/\r?\n/)) {
+    const meter = rawLine.match(
+      /^\s*(?:Quantity\s+Of\s+)?(?:Electric\s+)?Meters?\s+(?:Requested\s+)?[:\-]?\s*(\d+)\s*$/i,
+    );
+    if (meter && Number(meter[1]) > 0) {
+      push("meter_count", meter[1], Number(meter[1]), "count", rawLine);
+    }
+  }
+
+  return deduplicateLoadCandidates(out);
+}
+
+/**
+ * Route native text through the deterministic parser for known document
+ * families. Imports are intentionally lazy because those parsers reuse
+ * buildCandidateRecord from this module.
+ *
+ * @param {string} text
+ * @param {number} pageNumber
+ * @param {Record<string, unknown>} source
+ */
+function extractCandidatesFromKnownDocumentText(text, pageNumber, source) {
+  const pageText = String(text ?? "");
+  const name = String(source.source_document_name ?? "").replace(/[_-]+/g, " ");
+
+  if (
+    /\bService\s+Installation\s*&\s*Upgrades\s+Application\b/i.test(pageText) ||
+    /\bApplication\b/i.test(name) ||
+    (/\bCurrent\s+Service\s+Details\b/i.test(pageText) && /\bService\s+Voltage\b/i.test(pageText))
+  ) {
+    return extractUtilityApplicationCandidatesFromText(pageText, pageNumber, source);
+  }
+
+  const panelParser = require("./uci-panel-schedule-parser.service.js");
+  if (/\bPANEL\s+SCHEDULES?\b/i.test(name) || panelParser.detectPanelScheduleText(pageText)) {
+    return panelParser.extractPanelScheduleFindingsFromText(pageText, pageNumber, source);
+  }
+
+  const oneLineParser = require("./uci-one-line-extractor.service.js");
+  if (/\b(?:ONE|SINGLE)\s+LINE\b/i.test(name) || oneLineParser.detectOneLineDiagramText(pageText)) {
+    return oneLineParser.extractOneLineFindingsFromText(pageText, pageNumber, source);
+  }
+
+  const comcheckParser = require("./uci-comcheck-parser.service.js");
+  if (/\bCOM\s*CHECK\b/i.test(name) || comcheckParser.detectComcheckReportText(pageText)) {
+    return comcheckParser.extractComcheckFindingsFromText(pageText, pageNumber, source);
+  }
+
+  const equipmentParser = require("./uci-equipment-schedule-parser.service.js");
+  if (
+    /\bEQUIPMENT\s+(?:UTILITY\s+)?SCHEDULE\b/i.test(name) ||
+    equipmentParser.detectEquipmentScheduleText(pageText)
+  ) {
+    return equipmentParser.extractEquipmentScheduleFindingsFromText(
+      pageText,
+      pageNumber,
+      source,
+    ).findings;
+  }
+
+  if (
+    /\bE00[12]\b/i.test(name) ||
+    /\bELECTRICAL\s+SPECIFICATIONS?\b/i.test(name) ||
+    /\b(?:ELECTRICAL|POWER)\s+PLAN\b/i.test(name)
+  ) {
+    return [];
+  }
+
+  const textCandidates = extractCandidatesFromPdfText(pageText, pageNumber, source);
+  return textCandidates.length
+    ? textCandidates
+    : extractCandidatesFromTables(pageText, pageNumber, source);
 }
 
 /**
@@ -1102,13 +1344,22 @@ function extractCandidatesFromPdfText(text, pageNumber, source) {
     let match;
     while ((match = regex.exec(pageText)) !== null) {
       if (
+        pattern.field_key === "service_amperage" &&
+        /\brequested\s+$/i.test(pageText.slice(Math.max(0, match.index - 20), match.index))
+      ) {
+        continue;
+      }
+      if (
         pattern.loadKind &&
         /\bTOTAL\s+(?:DEMAND|CONNECTED)\s+LOAD\b/i.test(String(match[0] ?? ""))
       ) {
         continue;
       }
 
-      const rawValue = match[pattern.valueGroup] ?? "";
+      const rawValue =
+        match[pattern.valueGroup] ??
+        (pattern.fallbackValueGroup ? match[pattern.fallbackValueGroup] : "") ??
+        "";
       let unit = null;
       let normalized = null;
       let fieldKey = pattern.field_key;
@@ -1118,7 +1369,15 @@ function extractCandidatesFromPdfText(text, pageNumber, source) {
       let panelIdentifierMissing = false;
       let scheduleHeading = null;
 
-      if (pattern.unitGroup > 0) {
+      if (pattern.valueType === "date") {
+        const parts = String(rawValue).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        normalized = parts
+          ? `${parts[3]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`
+          : null;
+      } else if (pattern.valueType === "voltage" && String(rawValue).includes("/")) {
+        unit = normalizeUnit(match[pattern.unitGroup]);
+        normalized = String(rawValue).replace(/\s+/g, "");
+      } else if (pattern.unitGroup > 0) {
         unit = normalizeUnit(match[pattern.unitGroup]);
         const n = Number(String(rawValue).replace(/[^\d.]/g, ""));
         normalized = unit && Number.isFinite(n) ? n : null;
@@ -1421,8 +1680,11 @@ function discoverProjectDocumentSources(projectDocuments, projectId) {
     if (rank.score <= 0) continue;
     if (!/\.pdf$/i.test(fileName)) continue;
 
+    const isManualUpload = /\bagent\s*2\s+manual\s+upload\b/i.test(
+      String(doc.description ?? ""),
+    );
     out.push({
-      source_type: "project_document",
+      source_type: isManualUpload ? "manual_upload" : "project_document",
       source_document_id: String(doc.id),
       source_document_name: fileName,
       file_name: fileName,
@@ -1524,8 +1786,11 @@ function isConnectedLoadDataSatisfied(loadSummary) {
 function assignConflictGroups(candidates) {
   /** @type {Map<string, Array<Record<string, unknown>>>} */
   const byScope = new Map();
+  for (const candidate of candidates) {
+    if (candidate?.status === "candidate") candidate.conflict_group = null;
+  }
   for (const c of candidates) {
-    if (!c || c.status === "rejected") continue;
+    if (!c || c.status !== "candidate") continue;
     const scopeKey = [
       String(c.field_key ?? ""),
       String(c.entity_type ?? "project_service"),
@@ -1551,7 +1816,7 @@ function assignConflictGroups(candidates) {
   }
 
   for (const c of candidates) {
-    if (c && c.status !== "rejected") {
+    if (c && c.status === "candidate") {
       c.can_satisfy_package = canCandidateSatisfyPackage(c);
       c.approval_blocked_reason = approvalBlockedReason(c);
     }
@@ -1860,14 +2125,13 @@ async function runLoadCandidateExtraction(supabase, params) {
 
       for (const page of pages) {
         try {
-          const textCandidates = extractCandidatesFromPdfText(page.text, page.pageNumber, source);
-          if (textCandidates.length) {
-            extracted = extracted.concat(textCandidates);
-          } else {
-            extracted = extracted.concat(
-              extractCandidatesFromTables(page.text, page.pageNumber, source),
-            );
-          }
+          extracted = extracted.concat(
+            extractCandidatesFromKnownDocumentText(
+              page.text,
+              page.pageNumber,
+              source,
+            ),
+          );
         } catch (err) {
           documentFailureCount += 1;
           failedDocuments.push({
@@ -1994,7 +2258,7 @@ async function runLoadCandidateExtraction(supabase, params) {
     })),
   };
 
-  const nextSummary = {
+  const nextSummary = reconcileLoadProfileReadiness({
     ...existingSummary,
     candidate_values: mergedCandidates,
     verified_values: verifiedValues,
@@ -2005,7 +2269,7 @@ async function runLoadCandidateExtraction(supabase, params) {
       !Array.isArray(existingSummary.calculated_values)
         ? existingSummary.calculated_values
         : {},
-  };
+  });
 
   let data;
   try {
@@ -2037,7 +2301,9 @@ async function runLoadCandidateExtraction(supabase, params) {
     documents_downloaded: downloadedCount,
     documents_parsed: parsedCount,
     documents_failed: documentFailureCount + (projectDocsErr ? 1 : 0),
-    candidates_produced: mergedCandidates.filter((c) => c.status !== "rejected").length,
+    candidates_produced: mergedCandidates.filter(
+      (c) => c.status !== "rejected" && c.status !== "stale",
+    ).length,
     extraction: loadExtraction,
     application: data,
   };
@@ -2080,6 +2346,36 @@ async function listLoadCandidates(supabase, params) {
     load_extraction: summary.load_extraction ?? null,
     connected_load_satisfied: isConnectedLoadDataSatisfied(summary),
   };
+}
+
+function candidatesRepresentSameLogicalFact(a, b) {
+  return (
+    a.status === "candidate" &&
+    b.status === "candidate" &&
+    String(a.field_key ?? "") === String(b.field_key ?? "") &&
+    String(a.entity_type ?? "project_service") === String(b.entity_type ?? "project_service") &&
+    String(a.entity_name ?? "") === String(b.entity_name ?? "") &&
+    (a.is_project_total === false) === (b.is_project_total === false) &&
+    JSON.stringify(a.normalized_value ?? a.raw_value) ===
+      JSON.stringify(b.normalized_value ?? b.raw_value) &&
+    String(a.unit ?? "") === String(b.unit ?? "") &&
+    !a.conflict_group &&
+    !b.conflict_group
+  );
+}
+
+function appendVerifiedHistory(summary, fieldKey, previousEntry) {
+  const history = Array.isArray(summary.verified_values_history)
+    ? [...summary.verified_values_history]
+    : [];
+  if (previousEntry && typeof previousEntry === "object") {
+    history.push({
+      ...previousEntry,
+      field_key: fieldKey,
+      superseded_at: new Date().toISOString(),
+    });
+  }
+  return history;
 }
 
 /**
@@ -2127,7 +2423,9 @@ async function resolveLoadCandidate(supabase, params) {
     draft.load_summary && typeof draft.load_summary === "object" && !Array.isArray(draft.load_summary)
       ? /** @type {Record<string, unknown>} */ (draft.load_summary)
       : {};
-  const candidates = Array.isArray(summary.candidate_values) ? [...summary.candidate_values] : [];
+  const candidates = Array.isArray(summary.candidate_values)
+    ? summary.candidate_values.map((item) => ({ ...item }))
+    : [];
   const idx = candidates.findIndex((c) => String(c.candidate_id) === String(candidateId));
   if (idx < 0) {
     const err = new Error("Load candidate not found");
@@ -2143,6 +2441,52 @@ async function resolveLoadCandidate(supabase, params) {
     !Array.isArray(summary.verified_values)
       ? { .../** @type {Record<string, unknown>} */ (summary.verified_values) }
       : {};
+
+  const existingVerifiedEntry = Object.values(verified).find(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      !Array.isArray(entry) &&
+      (String(entry.original_candidate_id ?? "") === String(candidateId) ||
+        (Array.isArray(entry.evidence_sources) &&
+          entry.evidence_sources.some(
+            (source) => String(source?.candidate_id ?? "") === String(candidateId),
+          ))),
+  );
+  const isSameCompletedAction =
+    (candidate.status === "approved" &&
+      (act === "approve" || act === "edit_approve") &&
+      existingVerifiedEntry) ||
+    (candidate.status === "rejected" && act === "reject") ||
+    (candidate.status === "candidate" &&
+      act === "keep_unresolved" &&
+      candidate.resolved_at);
+  if (isSameCompletedAction) {
+    return {
+      coordination_record_id: coordinationRecordId,
+      candidate,
+      verified_values: verified,
+      connected_load_satisfied: isConnectedLoadDataSatisfied(summary),
+      application: draft,
+      idempotent_replay: true,
+    };
+  }
+  if (candidate.status !== "candidate" && !existingVerifiedEntry) {
+    // Recover an approved candidate whose verified projection was lost by a
+    // previous whole-document write race. Other cross-state transitions must
+    // remain explicit and are rejected.
+    if (!(candidate.status === "approved" && (act === "approve" || act === "edit_approve"))) {
+      const err = new Error(`Candidate is already ${candidate.status}`);
+      err.statusCode = 409;
+      err.code = "CANDIDATE_ALREADY_RESOLVED";
+      throw err;
+    }
+  } else if (candidate.status !== "candidate") {
+    const err = new Error(`Candidate is already ${candidate.status}`);
+    err.statusCode = 409;
+    err.code = "CANDIDATE_ALREADY_RESOLVED";
+    throw err;
+  }
 
   const approvedAt = new Date().toISOString();
   const note = review_note != null ? String(review_note).trim() : null;
@@ -2207,13 +2551,37 @@ async function resolveLoadCandidate(supabase, params) {
       throw err;
     }
 
+    const agreeingIndexes = edited
+      ? [idx]
+      : candidates
+          .map((item, itemIndex) =>
+            candidatesRepresentSameLogicalFact(candidate, item) ? itemIndex : -1,
+          )
+          .filter((itemIndex) => itemIndex >= 0);
+    const evidenceSources = agreeingIndexes.map((itemIndex) => {
+      const item = candidates[itemIndex];
+      item.status = "approved";
+      item.requires_human_review = false;
+      item.resolved_at = approvedAt;
+      item.resolved_by = userId;
+      if (note) item.review_note = note;
+      candidates[itemIndex] = item;
+      return {
+        candidate_id: item.candidate_id,
+        source_document_name: item.source_document_name,
+        source_document_id: item.source_document_id ?? null,
+        page_number: item.page_number ?? null,
+        evidence_text: item.evidence_text,
+        extraction_method: item.extraction_method,
+      };
+    });
     candidate.status = "approved";
     candidate.requires_human_review = false;
     candidate.resolved_at = approvedAt;
     candidate.resolved_by = userId;
-    if (note) candidate.review_note = note;
     candidates[idx] = candidate;
 
+    const verifiedValuesHistory = appendVerifiedHistory(summary, fieldKey, verified[fieldKey]);
     verified[fieldKey] = {
       field_key: fieldKey,
       value,
@@ -2231,27 +2599,52 @@ async function resolveLoadCandidate(supabase, params) {
       review_note: note,
       original_candidate_id: candidate.candidate_id,
       source_content_hash: candidate.source_content_hash,
+      provenance: "source",
+      evidence_sources: evidenceSources,
     };
+    summary.verified_values_history = verifiedValuesHistory;
   }
 
-  const nextSummary = {
+  const nextSummary = reconcileLoadProfileReadiness({
     ...summary,
     candidate_values: assignConflictGroups(candidates),
     verified_values: verified,
-  };
+  });
 
-  const { data, error } = await supabase
+  let updateQuery = supabase
     .from("coordination_applications")
     .update({ load_summary: nextSummary })
-    .eq("id", draft.id)
-    .select("*")
-    .single();
+    .eq("id", draft.id);
+  // `load_summary` is a single JSON document. Compare the version read above
+  // so simultaneous row approvals cannot silently overwrite each other.
+  if (draft.updated_at) {
+    updateQuery = updateQuery.eq("updated_at", draft.updated_at);
+  }
+  const updateResult = await updateQuery.select("*");
+  const data = Array.isArray(updateResult.data) ? updateResult.data[0] ?? null : updateResult.data;
+  const error = updateResult.error;
 
   if (error) {
     throw Object.assign(new Error(error.message || "Failed to resolve load candidate"), {
       statusCode: 500,
       code: "LOAD_CANDIDATE_RESOLVE_FAILED",
     });
+  }
+  if (!data) {
+    const attempt = Number(params.concurrencyAttempt ?? 0);
+    if (attempt < 4) {
+      return resolveLoadCandidate(supabase, {
+        ...params,
+        concurrencyAttempt: attempt + 1,
+      });
+    }
+    throw Object.assign(
+      new Error("Candidate changed while this action was being saved. Refresh and try again."),
+      {
+        statusCode: 409,
+        code: "LOAD_CANDIDATE_WRITE_CONFLICT",
+      },
+    );
   }
 
   return {
@@ -2310,27 +2703,10 @@ function validateManualVerifiedPayload(params) {
     throw err;
   }
 
-  const reviewNote = params.review_note != null ? String(params.review_note).trim() : "";
-  if (!reviewNote) {
-    const err = new Error("review_note is required for manual verified entry");
-    err.statusCode = 400;
-    err.code = "REVIEW_NOTE_REQUIRED";
-    throw err;
-  }
-
-  if (
-    CONNECTED_LOAD_SATISFACTION_KEYS.has(fieldKey) &&
-    fieldKey !== "connected_equipment_or_load_data" &&
-    !params.evidence_text &&
-    !params.source_reference
-  ) {
-    const err = new Error(
-      "source_reference or evidence_text required for manual project load entry",
-    );
-    err.statusCode = 400;
-    err.code = "SOURCE_REFERENCE_REQUIRED";
-    throw err;
-  }
+  const reviewNote =
+    params.review_note != null && String(params.review_note).trim()
+      ? String(params.review_note).trim()
+      : "Explicitly confirmed manual verified input";
 
   const value =
     typeof rawValue === "number"
@@ -2414,6 +2790,7 @@ async function addManualVerifiedValue(supabase, params) {
         ? `Manual entry — ${String(source_reference).trim()}`
         : reviewNote;
 
+  const verifiedValuesHistory = appendVerifiedHistory(summary, fieldKey, verified[fieldKey]);
   verified[fieldKey] = {
     field_key: fieldKey,
     value: normalizedValue,
@@ -2432,12 +2809,21 @@ async function addManualVerifiedValue(supabase, params) {
     review_note: reviewNote,
     original_candidate_id: manualId,
     source_content_hash: `manual:${fieldKey}:${approvedAt}`,
+    provenance: "manual",
+    entered_by: userId,
+    entered_at: approvedAt,
+    timestamp: approvedAt,
+    source_reference:
+      source_reference != null && String(source_reference).trim()
+        ? String(source_reference).trim()
+        : null,
   };
 
-  const nextSummary = {
+  const nextSummary = reconcileLoadProfileReadiness({
     ...summary,
     verified_values: verified,
-  };
+    verified_values_history: verifiedValuesHistory,
+  });
 
   const { data, error } = await supabase
     .from("coordination_applications")
@@ -2472,7 +2858,7 @@ function validateLoadSourceStoragePath(storagePath, ctx) {
   if (ctx.source_type === "pepco_portal_document") {
     return validatePepcoStoragePathForRecord(storagePath, ctx);
   }
-  if (ctx.source_type === "project_document") {
+  if (ctx.source_type === "project_document" || ctx.source_type === "manual_upload") {
     return Boolean(storagePath && ctx.projectId);
   }
   return false;
@@ -2495,6 +2881,7 @@ module.exports = {
   deduplicateLoadCandidates,
   linkSupersededCandidates,
   classificationPriority,
+  candidateDedupPriority,
   semanticDedupKey,
   extractPanelContextFromText,
   canCandidateSatisfyPackage,
@@ -2506,6 +2893,8 @@ module.exports = {
   discoverLoadSourceDocuments,
   discoverProjectDocumentSources,
   extractCandidatesFromStructuredApplication,
+  extractUtilityApplicationCandidatesFromText,
+  extractCandidatesFromKnownDocumentText,
   extractPanelLoadCandidatesFromPdfText,
   extractServicePhaseCandidatesFromPdfText,
   extractCandidatesFromPdfText,

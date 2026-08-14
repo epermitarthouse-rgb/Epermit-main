@@ -69,11 +69,11 @@ function validateSubmitEligibility(application) {
       ? /** @type {Record<string, unknown>} */ (metadata.application_package)
       : {};
 
-  if (String(pkg.package_status) === "blocked") {
+  if (String(pkg.package_status) !== "ready_for_review") {
     return {
       ok: false,
-      code: "PACKAGE_BLOCKED",
-      message: "Application package is blocked and cannot be submitted",
+      code: "PACKAGE_NOT_READY",
+      message: "Application package must be ready_for_review before validation or submission",
     };
   }
 
@@ -97,6 +97,79 @@ function validateSubmitEligibility(application) {
   }
 
   return { ok: true };
+}
+
+async function runSyntheticChecklistValidationDryRun(supabase, params) {
+  const { application, userId } = params;
+  const metadata =
+    application.agent_draft_metadata &&
+    typeof application.agent_draft_metadata === "object" &&
+    !Array.isArray(application.agent_draft_metadata)
+      ? application.agent_draft_metadata
+      : {};
+  const pkg =
+    metadata.application_package &&
+    typeof metadata.application_package === "object" &&
+    !Array.isArray(metadata.application_package)
+      ? metadata.application_package
+      : {};
+  const generatedAt = new Date().toISOString();
+  const fieldResults = Array.isArray(pkg.field_results) ? pkg.field_results : [];
+  const documents = Array.isArray(application.package_documents)
+    ? application.package_documents
+    : [];
+  const validationErrors = [
+    ...(Array.isArray(pkg.missing_fields) ? pkg.missing_fields : []),
+    ...(Array.isArray(pkg.missing_documents) ? pkg.missing_documents : []),
+  ];
+  const submissionMetadata = {
+    version: SUBMIT_VERSION,
+    method: "validation_only",
+    provider_slug: String(application.provider_slug ?? ""),
+    generated_by: GENERATED_BY,
+    generated_at: generatedAt,
+    submitted_by_user_id: userId,
+    dry_run: true,
+    validation_only: true,
+    synthetic_test: true,
+    checklist_label: pkg.checklist_label ?? "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED",
+    confirmation_status: "dry_run",
+    external_side_effects: {
+      email_sent: false,
+      portal_touched: false,
+      live_submission_attempted: false,
+      lifecycle_advanced: false,
+    },
+    validation: {
+      ok: validationErrors.length === 0 && String(pkg.package_status) === "ready_for_review",
+      package_status: pkg.package_status ?? null,
+      field_count: fieldResults.length,
+      attached_document_count: documents.filter((doc) => doc.status === "attached").length,
+      signature_requirements: pkg.signature_requirements ?? [],
+      validation_errors: validationErrors,
+    },
+  };
+
+  await persistSubmissionAttempt(supabase, {
+    applicationId: String(application.id),
+    application,
+    metadata,
+    submissionMetadata,
+  });
+
+  return {
+    status: "validation_passed",
+    reason: "synthetic_dominion_validation_only",
+    submission_method: "validation_only",
+    dry_run: true,
+    validation_only: true,
+    lifecycle_advanced: false,
+    external_side_effects: submissionMetadata.external_side_effects,
+    application,
+    submission_metadata: submissionMetadata,
+    message:
+      "Synthetic checklist validation passed. No email was sent, no portal was touched, and lifecycle was not advanced.",
+  };
 }
 
 /**
@@ -582,6 +655,21 @@ async function submitApplicationPackage(supabase, params) {
   }
 
   const providerSlug = String(application.provider_slug ?? "").trim().toLowerCase();
+  const packageMeta =
+    application.agent_draft_metadata?.application_package &&
+    typeof application.agent_draft_metadata.application_package === "object"
+      ? application.agent_draft_metadata.application_package
+      : {};
+  if (
+    providerSlug === "dominion" &&
+    String(packageMeta.checklist_mode ?? "") === "synthetic_test" &&
+    packageMeta.authoritative_requirements === false
+  ) {
+    return runSyntheticChecklistValidationDryRun(supabase, {
+      application,
+      userId,
+    });
+  }
   const submissionMethod = resolveSubmissionMethod(providerSlug);
 
   if (submissionMethod === "portal") {
@@ -613,6 +701,7 @@ module.exports = {
   submitApplicationPackage,
   submitViaPepcoPortal,
   submitViaEmail,
+  runSyntheticChecklistValidationDryRun,
   persistSubmissionAttempt,
   advanceLifecycleAfterConfirmedSubmission,
   isPepcoLiveSubmissionEnabled,

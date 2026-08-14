@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   __uciApiTestHooks,
+  analyzeCoordinationLoadProfile,
+  extractCoordinationLoadCandidates,
   getValidUciAccessToken,
+  importCoordinationDocumentFindings,
   uciAuthenticatedFetch,
   UciSessionExpiredError,
+  UciTransportError,
 } from "./uciApi.ts";
 
 const FAR_FUTURE_EXP = Math.floor(Date.now() / 1000) + 3600;
@@ -209,8 +213,113 @@ describe("uciAuthenticatedFetch auth refresh behavior", () => {
       throw new Error("network down");
     }) as typeof fetch;
 
-    await assert.rejects(() => uciAuthenticatedFetch("/api/uci/providers"), /network down/);
+    await assert.rejects(
+      () => uciAuthenticatedFetch("/api/uci/providers"),
+      (err: unknown) =>
+        err instanceof UciTransportError &&
+        err.kind === "network" &&
+        err.retryAttempted === false &&
+        err.message.includes("Request ID:"),
+    );
     assert.equal(refreshSessionMock.mock.callCount(), 0);
+  });
+
+  it("retries the idempotent Re-analyze action once with fresh auth/base URL state", async () => {
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      fetchCalls.push({ url, init });
+      if (fetchCalls.length === 1) {
+        __uciApiTestHooks.setScraperBaseUrlOverride("https://recovered.example");
+        throw new TypeError("Failed to fetch");
+      }
+      return jsonResponse(200, { analysis_status: "preliminary" });
+    }) as typeof fetch;
+
+    const result = await analyzeCoordinationLoadProfile("coord-1");
+
+    assert.equal(result.analysis_status, "preliminary");
+    assert.equal(fetchCalls.length, 2);
+    assert.equal(getSessionMock.mock.callCount(), 2);
+    assert.equal(fetchCalls[0]?.url, "https://test.example/api/uci/coordination/coord-1/load-profile/analyze");
+    assert.equal(
+      fetchCalls[1]?.url,
+      "https://recovered.example/api/uci/coordination/coord-1/load-profile/analyze",
+    );
+    const firstHeaders = fetchCalls[0]?.init?.headers as Record<string, string>;
+    const retryHeaders = fetchCalls[1]?.init?.headers as Record<string, string>;
+    assert.equal(firstHeaders["x-request-id"], retryHeaders["x-request-id"]);
+    assert.equal(firstHeaders["x-uci-request-attempt"], "1");
+    assert.equal(retryHeaders["x-uci-request-attempt"], "2");
+  });
+
+  it("does not auto-retry candidate extraction or findings import mutations", async () => {
+    const fetchMock = mock.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        extractCoordinationLoadCandidates("coord-1", {
+          external_application_id: "app-1",
+        }),
+      (err: unknown) => err instanceof UciTransportError && err.retryAttempted === false,
+    );
+    await assert.rejects(
+      () =>
+        importCoordinationDocumentFindings("coord-1", {
+          external_application_id: "app-1",
+        }),
+      (err: unknown) => err instanceof UciTransportError && err.retryAttempted === false,
+    );
+    assert.equal(fetchMock.mock.callCount(), 2);
+  });
+
+  it("turns a request timeout into a recoverable transport error", async () => {
+    globalThis.fetch = mock.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    ) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        uciAuthenticatedFetch(
+          "/api/uci/coordination/coord-1/load-profile/analyze",
+          { method: "POST" },
+          { timeoutMs: 5 },
+        ),
+      (err: unknown) =>
+        err instanceof UciTransportError &&
+        err.kind === "timeout" &&
+        err.retryAttempted === false,
+    );
+  });
+
+  it("recovers normally on a subsequent action after a transport failure", async () => {
+    let shouldFail = true;
+    globalThis.fetch = mock.fn(async () => {
+      if (shouldFail) {
+        shouldFail = false;
+        throw new TypeError("Failed to fetch");
+      }
+      return jsonResponse(200, { analysis_status: "preliminary" });
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        importCoordinationDocumentFindings("coord-1", {
+          external_application_id: "app-1",
+        }),
+      UciTransportError,
+    );
+    const result = await analyzeCoordinationLoadProfile("coord-1");
+    assert.equal(result.analysis_status, "preliminary");
   });
 
   it("does not refresh on generic 401 without confirmed INVALID_JWT", async () => {

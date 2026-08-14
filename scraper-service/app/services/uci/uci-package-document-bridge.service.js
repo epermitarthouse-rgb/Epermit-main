@@ -11,6 +11,8 @@ const {
   resolvePackageStatus,
   findLoadProfileDraftApplication,
   getApplicationById,
+  applyDocumentSignatureRequirements,
+  isSyntheticTestTemplate,
 } = require("./uci-application-builder.service.js");
 const {
   UCI_DOCUMENTS_STORAGE_BUCKET,
@@ -506,6 +508,21 @@ function resolvePackageDocumentSlots(params) {
             file_name: matched.file_name != null ? String(matched.file_name) : null,
             confirmed_by: confirmed.confirmed_by != null ? String(confirmed.confirmed_by) : null,
             confirmed_at: confirmed.confirmed_at != null ? String(confirmed.confirmed_at) : null,
+            signature_required: confirmed.signature_required === true,
+            signature_status:
+              confirmed.signature_status != null ? String(confirmed.signature_status) : undefined,
+            signature_verified_by:
+              confirmed.signature_verified_by != null
+                ? String(confirmed.signature_verified_by)
+                : null,
+            signature_verified_at:
+              confirmed.signature_verified_at != null
+                ? String(confirmed.signature_verified_at)
+                : null,
+            signature_review_note:
+              confirmed.signature_review_note != null
+                ? String(confirmed.signature_review_note)
+                : null,
           });
           continue;
         }
@@ -577,7 +594,12 @@ async function listPackageDocumentCandidates(supabase, params) {
   }
 
   const utilityType = normalizeUtilityType(record.utility_type);
-  const template = loadTemplateManifest(providerCheck.providerSlug, utilityType);
+  const packageDraft = await findApplicationPackageDraft(supabase, coordinationRecordId, projectId);
+  const checklistMode =
+    packageDraft?.agent_draft_metadata?.application_package?.checklist_mode != null
+      ? String(packageDraft.agent_draft_metadata.application_package.checklist_mode)
+      : undefined;
+  const template = loadTemplateManifest(providerCheck.providerSlug, utilityType, { checklistMode });
   const requiredDocuments = Array.isArray(template?.required_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (template.required_documents)
     : [];
@@ -720,7 +742,13 @@ async function listPackageDocumentCandidates(supabase, params) {
 
   /** @type {Record<string, Array<Record<string, unknown>>>} */
   const suggestions_by_slot = {};
-  for (const slot of PACKAGE_SLOT_KEYS) {
+  const suggestionSlotKeys = [
+    ...new Set([
+      ...PACKAGE_SLOT_KEYS,
+      ...requiredDocuments.map((req) => String(req.key ?? "")).filter(Boolean),
+    ]),
+  ];
+  for (const slot of suggestionSlotKeys) {
     suggestions_by_slot[slot] = candidates.filter((c) => c.suggested_package_slot === slot);
   }
 
@@ -840,6 +868,12 @@ async function confirmPackageDocumentMapping(supabase, params) {
   const template = loadTemplateManifest(
     providerCheck.providerSlug,
     normalizeUtilityType(record.utility_type),
+    {
+      checklistMode:
+        application.agent_draft_metadata?.application_package?.checklist_mode != null
+          ? String(application.agent_draft_metadata.application_package.checklist_mode)
+          : undefined,
+    },
   );
   const required = Array.isArray(template?.required_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (template.required_documents)
@@ -873,6 +907,14 @@ async function confirmPackageDocumentMapping(supabase, params) {
       coordination_record_id: coordinationRecordId,
       confirmed_by: userId,
       confirmed_at: confirmedAt,
+      signature_required: slotDef.signature_required === true,
+      signature_status:
+        slotDef.signature_required === true &&
+        /(^|[^A-Z0-9])UNSIGNED([^A-Z0-9]|$)/i.test(String(doc.file_name ?? ""))
+          ? "unsigned"
+          : slotDef.signature_required === true
+            ? "unknown"
+            : undefined,
     };
   } else {
     const doc = await loadProjectDocumentForPackage(
@@ -990,7 +1032,11 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
   }
 
   const utilityType = normalizeUtilityType(record.utility_type);
-  const template = loadTemplateManifest(providerCheck.providerSlug, utilityType);
+  const checklistMode =
+    application.agent_draft_metadata?.application_package?.checklist_mode != null
+      ? String(application.agent_draft_metadata.application_package.checklist_mode)
+      : undefined;
+  const template = loadTemplateManifest(providerCheck.providerSlug, utilityType, { checklistMode });
   if (!template) {
     const err = new Error("Application template not found");
     err.statusCode = 404;
@@ -1086,6 +1132,10 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
     pepcoPortalFiles: extractPepcoPortalFiles(record),
     accessContext,
   });
+  const signatureEval = applyDocumentSignatureRequirements(
+    docMatch.packageDocuments,
+    requiredDocuments,
+  );
 
   const fieldEval = evaluateRequiredFields(
     projectResult.data,
@@ -1094,10 +1144,25 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
     record,
     { externalApplicationId },
   );
+  const syntheticChecklist =
+    prevPkg.synthetic_checklist &&
+    typeof prevPkg.synthetic_checklist === "object" &&
+    !Array.isArray(prevPkg.synthetic_checklist)
+      ? /** @type {Record<string, unknown>} */ (prevPkg.synthetic_checklist)
+      : {};
+  const checklistApproved =
+    isSyntheticTestTemplate(template) && String(syntheticChecklist.status ?? "") === "approved";
+  const missingFields = [
+    ...fieldEval.missingFields,
+    ...signatureEval.missingSignatureFields,
+    ...(isSyntheticTestTemplate(template) && !checklistApproved
+      ? ["synthetic_checklist_approval"]
+      : []),
+  ];
 
   const packageStatus = resolvePackageStatus({
     missingDocuments: docMatch.missingDocuments,
-    missingFields: fieldEval.missingFields,
+    missingFields,
     loadSummary,
     hasLoadProfileDraft: Boolean(loadProfileDraft),
     addressReviewRequired: fieldEval.addressResolution.address_review_required,
@@ -1110,8 +1175,9 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
       ...prevPkg,
       package_status: packageStatus,
       missing_documents: docMatch.missingDocuments,
-      missing_fields: fieldEval.missingFields,
+      missing_fields: missingFields,
       field_results: fieldEval.fieldResults,
+      signature_requirements: signatureEval.signatureRequirements,
       project_address: {
         formatted: addressResolution.address.formatted,
         source: addressResolution.address.source,
@@ -1133,7 +1199,7 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
   const { data, error } = await supabase
     .from("coordination_applications")
     .update({
-      package_documents: docMatch.packageDocuments,
+      package_documents: signatureEval.packageDocuments,
       agent_draft_metadata: agentDraftMetadata,
     })
     .eq("id", applicationId)
@@ -1152,8 +1218,8 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
     application: data,
     package_status: packageStatus,
     missing_documents: docMatch.missingDocuments,
-    missing_fields: fieldEval.missingFields,
-    package_documents: docMatch.packageDocuments,
+    missing_fields: missingFields,
+    package_documents: signatureEval.packageDocuments,
   };
 }
 

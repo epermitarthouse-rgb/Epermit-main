@@ -1,0 +1,126 @@
+{
+  "version": "synthetic-test-dominion-electric-v1",
+  "provider_slug": "dominion",
+  "utility_type": "electric",
+  "application_type": "new_service",
+  "checklist_mode": "synthetic_test",
+  "authoritative": false,
+  "label": "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED",
+  "description": "Highland Springs Stage 3 test fixture. This is not a Dominion Energy Virginia application requirement list and must never be used for production submission.",
+  "required_documents": [
+    {
+      "key": "load_letter",
+      "label": "Synthetic load letter",
+      "aliases": ["load_letter"]
+    },
+    {
+      "key": "one_line_diagram",
+      "label": "Synthetic one-line diagram",
+      "aliases": ["one_line", "one_line_diagram", "single_line", "single_line_diagram"]
+    },
+    {
+      "key": "equipment_schedule",
+      "label": "Synthetic equipment schedule",
+      "aliases": ["equipment_schedule"]
+    },
+    {
+      "key": "site_utility_plan",
+      "label": "Synthetic site utility plan",
+      "aliases": ["site_utility_plan", "site_plan"]
+    },
+    {
+      "key": "equipment_cut_sheet",
+      "label": "Synthetic equipment cut sheet",
+      "aliases": ["equipment_cut_sheet", "cut_sheet"]
+    },
+    {
+      "key": "authorization",
+      "label": "Synthetic authorization / LOA",
+      "aliases": ["authorization", "loa", "letter_of_authorization"],
+      "signature_required": true,
+      "signature_requirement_key": "authorization_signature"
+    }
+  ],
+  "required_fields": [
+    {
+      "key": "project_address",
+      "label": "Project address",
+      "source": "project.address",
+      "required": true
+    },
+    {
+      "key": "project_type",
+      "label": "Project type",
+      "source": "project.project_type",
+      "required": true
+    },
+    {
+      "key": "connected_load_kva",
+      "label": "Connected load",
+      "source": "load_summary.verified_values.connected_load_kva",
+      "required": true
+    },
+    {
+      "key": "demand_load_kva",
+      "label": "Demand load",
+      "source": "load_summary.verified_values.demand_load_kva",
+      "required": true
+    },
+    {
+      "key": "requested_voltage",
+      "label": "Requested voltage",
+      "source": "load_summary.verified_values.requested_voltage",
+      "required": true
+    },
+    {
+      "key": "phase",
+      "label": "Phase",
+      "source": "load_summary.verified_values.phase",
+      "required": true
+    },
+    {
+      "key": "wire_configuration",
+      "label": "Wire configuration",
+      "source": "load_summary.verified_values.wire_configuration",
+      "required": true
+    },
+    {
+      "key": "service_entrance_amperage",
+      "label": "Service amperage",
+      "source": "load_summary.verified_values.service_entrance_amperage",
+      "required": true
+    },
+    {
+      "key": "meter_count",
+      "label": "Meter count",
+      "source": "load_summary.verified_values.meter_count",
+      "required": true
+    },
+    {
+      "key": "requested_in_service_date",
+      "label": "Requested in-service date",
+      "source": "load_summary.verified_values.requested_in_service_date",
+      "required": true
+    },
+    {
+      "key": "construction_start_date",
+      "label": "Construction start",
+      "source": "load_summary.verified_values.construction_start_date",
+      "required": true
+    }
+  ],
+  "safety": {
+    "external_submission_allowed": false,
+    "email_allowed": false,
+    "portal_allowed": false,
+    "lifecycle_advance_allowed": false,
+    "export_read_only": true
+  },
+  "notes": [
+    "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED",
+    "Uses only existing Highland Springs test data and synthetic documents",
+    "Does not claim or infer Dominion Energy Virginia requirements",
+    "Unsigned authorization remains incomplete until signed_manual_verified is explicitly recorded",
+    "Validation-only dry run must not send email, touch a portal, or advance lifecycle"
+  ]
+}

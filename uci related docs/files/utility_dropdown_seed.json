@@ -1,0 +1,118 @@
+{
+  "_meta": {
+    "title": "PermitPilot D2.2 dropdown seed data",
+    "prepared_by": "Commun-ET, LLC internal",
+    "date": "2026-07-15",
+    "status": "SEED / UX-ONLY. State-level lists are drawn from the East Coast Utility Coverage Analysis and are reliable for dropdown candidates. County-level entries are orientation seeds with confidence flags and MUST be replaced by the EIA-861 / Energy Atlas pull (permitpilot_territory_ingest.py) before any automatic selection ships. Per D2.2, no entry here authorizes silent auto-selection; every suggestion is coordinator-confirmable.",
+    "sort_rule": "cet_relationship first, then list order"
+  },
+  "states": {
+    "DC": [
+      {"name": "PEPCO", "type": "IOU", "cet_relationship": true},
+      {"name": "Washington Gas", "type": "GAS", "cet_relationship": true}
+    ],
+    "MD": [
+      {"name": "PEPCO", "type": "IOU", "cet_relationship": true},
+      {"name": "BGE", "type": "IOU", "cet_relationship": true},
+      {"name": "Potomac Edison (FirstEnergy)", "type": "IOU", "cet_relationship": false},
+      {"name": "Delmarva Power (Exelon)", "type": "IOU", "cet_relationship": true},
+      {"name": "SMECO", "type": "COOPERATIVE", "cet_relationship": true},
+      {"name": "Choptank Electric Cooperative", "type": "COOPERATIVE", "cet_relationship": false},
+      {"name": "Washington Gas", "type": "GAS", "cet_relationship": true}
+    ],
+    "VA": [
+      {"name": "Dominion Energy Virginia", "type": "IOU", "cet_relationship": true},
+      {"name": "NOVEC", "type": "COOPERATIVE", "cet_relationship": true},
+      {"name": "Appalachian Power (AEP)", "type": "IOU", "cet_relationship": true},
+      {"name": "Rappahannock Electric Cooperative", "type": "COOPERATIVE", "cet_relationship": false},
+      {"name": "Washington Gas", "type": "GAS", "cet_relationship": true}
+    ],
+    "NJ": [
+      {"name": "PSE&G", "type": "IOU", "cet_relationship": true},
+      {"name": "Jersey Central Power & Light (FirstEnergy)", "type": "IOU", "cet_relationship": false},
+      {"name": "Atlantic City Electric (Exelon)", "type": "IOU", "cet_relationship": true}
+    ],
+    "NY": [
+      {"name": "Con Edison", "type": "IOU", "cet_relationship": true},
+      {"name": "National Grid (upstate)", "type": "IOU", "cet_relationship": true},
+      {"name": "NYSEG (Avangrid)", "type": "IOU", "cet_relationship": false},
+      {"name": "Orange & Rockland", "type": "IOU", "cet_relationship": false},
+      {"name": "PSEG Long Island", "type": "IOU", "cet_relationship": false}
+    ],
+    "PA": [
+      {"name": "PECO (Exelon)", "type": "IOU", "cet_relationship": true},
+      {"name": "PPL Electric Utilities", "type": "IOU", "cet_relationship": false},
+      {"name": "FirstEnergy PA companies", "type": "IOU", "cet_relationship": false},
+      {"name": "Duquesne Light", "type": "IOU", "cet_relationship": false}
+    ],
+    "DE": [
+      {"name": "Delmarva Power (Exelon)", "type": "IOU", "cet_relationship": true},
+      {"name": "Delaware Electric Cooperative", "type": "COOPERATIVE", "cet_relationship": false}
+    ],
+    "MA": [
+      {"name": "Eversource", "type": "IOU", "cet_relationship": true},
+      {"name": "National Grid MA", "type": "IOU", "cet_relationship": true}
+    ],
+    "CT": [
+      {"name": "Eversource", "type": "IOU", "cet_relationship": true},
+      {"name": "United Illuminating (Avangrid)", "type": "IOU", "cet_relationship": false}
+    ],
+    "NC": [
+      {"name": "Duke Energy Carolinas", "type": "IOU", "cet_relationship": true},
+      {"name": "Duke Energy Progress", "type": "IOU", "cet_relationship": true},
+      {"name": "Dominion Energy NC", "type": "IOU", "cet_relationship": true},
+      {"name": "NC electric cooperatives", "type": "COOPERATIVE", "cet_relationship": false}
+    ],
+    "SC": [
+      {"name": "Duke Energy Carolinas / Progress", "type": "IOU", "cet_relationship": true},
+      {"name": "Dominion Energy SC", "type": "IOU", "cet_relationship": true},
+      {"name": "Santee Cooper", "type": "STATE", "cet_relationship": false}
+    ],
+    "GA": [
+      {"name": "Georgia Power", "type": "IOU", "cet_relationship": true},
+      {"name": "Georgia EMCs (cooperatives)", "type": "COOPERATIVE", "cet_relationship": false}
+    ],
+    "FL": [
+      {"name": "Florida Power & Light", "type": "IOU", "cet_relationship": true},
+      {"name": "Duke Energy Florida", "type": "IOU", "cet_relationship": true},
+      {"name": "TECO (Tampa Electric)", "type": "IOU", "cet_relationship": false},
+      {"name": "FKEC (Upper/Middle Keys)", "type": "COOPERATIVE", "cet_relationship": true},
+      {"name": "KEYS Energy Services (Lower Keys)", "type": "MUNICIPAL", "cet_relationship": true},
+      {"name": "Florida municipal utilities (OUC, JEA, others)", "type": "MUNICIPAL", "cet_relationship": false}
+    ],
+    "OH": [
+      {"name": "AEP Ohio", "type": "IOU", "cet_relationship": true},
+      {"name": "Duke Energy Ohio", "type": "IOU", "cet_relationship": true},
+      {"name": "FirstEnergy OH companies", "type": "IOU", "cet_relationship": false}
+    ],
+    "WV": [
+      {"name": "Appalachian Power (AEP)", "type": "IOU", "cet_relationship": true},
+      {"name": "Wheeling Power (AEP)", "type": "IOU", "cet_relationship": true},
+      {"name": "Mon Power / Potomac Edison (FirstEnergy)", "type": "IOU", "cet_relationship": false}
+    ],
+    "AL": [
+      {"name": "Alabama Power", "type": "IOU", "cet_relationship": true},
+      {"name": "Alabama electric cooperatives", "type": "COOPERATIVE", "cet_relationship": false}
+    ],
+    "MS": [
+      {"name": "Entergy Mississippi", "type": "IOU", "cet_relationship": true},
+      {"name": "Mississippi Power", "type": "IOU", "cet_relationship": true},
+      {"name": "Mississippi electric cooperatives", "type": "COOPERATIVE", "cet_relationship": false}
+    ]
+  },
+  "dmv_county_seed": {
+    "_note": "Orientation seeds only. confidence=high means safe for default dropdown ordering; confidence=verify means present candidates but require Tier 1 resolution before submission.",
+    "DC:District of Columbia": {"electric": ["PEPCO"], "gas": ["Washington Gas"], "confidence": "high"},
+    "MD:Montgomery": {"electric": ["PEPCO", "Potomac Edison (upcounty)"], "gas": ["Washington Gas"], "confidence": "verify", "multi_utility": true},
+    "MD:Prince George's": {"electric": ["PEPCO", "BGE (Laurel vicinity)", "SMECO (southern edge)"], "gas": ["Washington Gas"], "confidence": "verify", "multi_utility": true},
+    "MD:Howard": {"electric": ["BGE"], "gas": ["BGE"], "confidence": "verify"},
+    "MD:Anne Arundel": {"electric": ["BGE"], "gas": ["BGE"], "confidence": "high"},
+    "MD:Baltimore City": {"electric": ["BGE"], "gas": ["BGE"], "confidence": "high"},
+    "MD:Baltimore County": {"electric": ["BGE"], "gas": ["BGE"], "confidence": "high"},
+    "VA:Arlington": {"electric": ["Dominion Energy Virginia"], "gas": ["Washington Gas"], "confidence": "high"},
+    "VA:Alexandria (city)": {"electric": ["Dominion Energy Virginia"], "gas": ["Washington Gas"], "confidence": "high"},
+    "VA:Fairfax": {"electric": ["Dominion Energy Virginia", "NOVEC (western portions)"], "gas": ["Washington Gas"], "confidence": "verify", "multi_utility": true},
+    "VA:Loudoun": {"electric": ["Dominion Energy Virginia", "NOVEC"], "gas": ["Washington Gas"], "confidence": "verify", "multi_utility": true},
+    "VA:Prince William": {"electric": ["Dominion Energy Virginia", "NOVEC"], "gas": ["Washington Gas"], "confidence": "verify", "multi_utility": true}
+  }
+}

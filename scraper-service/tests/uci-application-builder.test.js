@@ -11,6 +11,7 @@ const {
   resolvePackageStatus,
   runApplicationPackageBuild,
   reviewApplicationPackage,
+  inferSignatureStatus,
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
 } = require("../app/services/uci/uci-application-builder.service.js");
 const { LOAD_PROFILE_IDEMPOTENCY_KEY } = require("../app/services/uci/uci-load-profile.service.js");
@@ -71,6 +72,21 @@ describe("UCI D3 application builder service", () => {
     assert.equal(template.utility_type, "electric");
     assert.ok(Array.isArray(template.required_documents));
     assert.ok(Array.isArray(template.required_fields));
+  });
+
+  it("loads Dominion synthetic checklist only when explicitly requested", () => {
+    assert.equal(loadTemplateManifest("dominion", "electric"), null);
+    const template = loadTemplateManifest("dominion", "electric", {
+      checklistMode: "synthetic_test",
+    });
+    assert.ok(template);
+    assert.equal(template.authoritative, false);
+    assert.equal(template.checklist_mode, "synthetic_test");
+    assert.match(String(template.label), /NOT DOMINION PROVIDED/);
+  });
+
+  it("recognizes underscore-delimited unsigned synthetic filenames", () => {
+    assert.equal(inferSignatureStatus("06_Synthetic_LOA_UNSIGNED.pdf"), "unsigned");
   });
 
   it("rejects missing provider context", () => {
@@ -550,7 +566,7 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
       idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
       draft_status: "draft",
       agent_draft_metadata: {
-        application_package: { package_status: "incomplete" },
+        application_package: { package_status: "ready_for_review" },
       },
     };
 
@@ -564,6 +580,32 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
     });
     assert.equal(result.review_status, "reviewed");
     assert.equal(tables.coordination_applications[0].draft_status, "reviewed");
+  });
+
+  it("rejects review while package is incomplete", async () => {
+    const tables = {
+      coordination_applications: [
+        {
+          id: "app-pkg-incomplete",
+          project_id: "proj-1",
+          record_source: "agent_draft",
+          idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+          draft_status: "draft",
+          agent_draft_metadata: {
+            application_package: { package_status: "incomplete" },
+          },
+        },
+      ],
+    };
+    await assert.rejects(
+      () =>
+        reviewApplicationPackage(createApplicationBuilderMockSupabase(tables), {
+          applicationId: "app-pkg-incomplete",
+          userId: "user-1",
+          review: { status: "reviewed" },
+        }),
+      (err) => err.code === "PACKAGE_NOT_READY",
+    );
   });
 
   it("rejects review on portal_sync application rows", async () => {

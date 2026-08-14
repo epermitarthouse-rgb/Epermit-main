@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   Construction,
+  Download,
   FileQuestion,
   FileText,
   ListChecks,
@@ -42,7 +43,6 @@ import {
   type UciBuilderSectionId,
 } from "@/lib/uciBuilder/uciBuilderReadiness";
 import { cn } from "@/lib/utils";
-import { uciSectionHref } from "@/lib/uciNavSections";
 
 function ComingSoonChip({ detail }: { detail: string }) {
   return (
@@ -113,7 +113,11 @@ export default function UciApplicationBuilder() {
                 detail="Live project, coordination, load profile, and package APIs. Owner/billing, Agent QA, and some site logistics are Coming Soon."
               />
               <Link
-                to={uciSectionHref("load-profile")}
+                to={
+                  builder.coordinationId
+                    ? `/uci/records/${encodeURIComponent(builder.coordinationId)}?tab=load-profile`
+                    : "/uci"
+                }
                 className="text-xs font-semibold text-primary hover:underline"
               >
                 Open Load Profile workspace
@@ -144,7 +148,9 @@ export default function UciApplicationBuilder() {
               disabled={builder.submitBusy || !submitReady}
               title={
                 submitReady
-                  ? "Runs Pepco validation dry-run by default — not a live portal filing"
+                  ? builder.isDominionSynthetic
+                    ? "Runs validation only — no email, portal, or lifecycle transition"
+                    : "Runs Pepco validation dry-run by default — not a live portal filing"
                   : "Mark the package reviewed before submit"
               }
               onClick={() => void builder.submitPackage()}
@@ -154,7 +160,9 @@ export default function UciApplicationBuilder() {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              Submit to {providerLabel.includes("Pepco") ? "Pepco" : "utility"}
+              {builder.isDominionSynthetic
+                ? "Validate synthetic package"
+                : `Submit to ${providerLabel.includes("Pepco") ? "Pepco" : "utility"}`}
             </button>
           </div>
         </header>
@@ -374,9 +382,11 @@ export default function UciApplicationBuilder() {
                     </div>
                     <div className="mt-4">
                       <Link
-                        to={uciSectionHref("load-profile", {
-                          coordination: builder.coordinationId || undefined,
-                        })}
+                        to={
+                          builder.coordinationId
+                            ? `/uci/records/${encodeURIComponent(builder.coordinationId)}?tab=load-profile`
+                            : "/uci"
+                        }
                         className="pilot-button-ghost"
                       >
                         Open Load Profile Analyzer
@@ -470,9 +480,9 @@ export default function UciApplicationBuilder() {
                     {!builder.packageApp ? (
                       <>
                         <p className="mt-3 text-sm text-muted-foreground">
-                          Save a package draft to load the real template slots (Pepco electric: site
-                          plan, single-line, cut sheets, LOA). Lovable marketing exhibit names below
-                          are placeholders until then.
+                          Save a package draft to load provider-specific slots. Dominion is available
+                          only through the explicitly labeled synthetic test checklist; production
+                          Dominion requirements remain unknown.
                         </p>
                         <ul className="mt-5 space-y-2">
                           {LOVABLE_EXHIBIT_PLACEHOLDERS.map((d) => (
@@ -518,7 +528,7 @@ export default function UciApplicationBuilder() {
                           </span>
                         </div>
 
-                        {builder.portalApplications.length > 0 ? (
+                        {builder.isPepco && builder.portalApplications.length > 0 ? (
                           <div className="mt-4 max-w-md">
                             <Label className="text-xs text-muted-foreground">
                               Portal application scope (required for mapping)
@@ -543,12 +553,44 @@ export default function UciApplicationBuilder() {
                               </SelectContent>
                             </Select>
                           </div>
-                        ) : (
+                        ) : builder.isPepco ? (
                           <p className="mt-3 text-xs text-amber-800 dark:text-amber-200">
                             No portal-synced applications yet. Sync Pepco projects from the UCI hub
                             before confirming document mappings.
                           </p>
-                        )}
+                        ) : null}
+
+                        {builder.isDominionSynthetic ? (
+                          <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                            <p className="font-semibold text-amber-900 dark:text-amber-100">
+                              {builder.packageMeta?.checklist_label}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Not authoritative Dominion requirements. External submission is disabled.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="pilot-button-primary"
+                                disabled={
+                                  builder.reviewBusy ||
+                                  builder.packageMeta?.synthetic_checklist?.status === "approved"
+                                }
+                                onClick={() => void builder.approveSyntheticChecklist()}
+                              >
+                                Approve synthetic checklist
+                              </button>
+                              <button
+                                type="button"
+                                className="pilot-button-ghost"
+                                onClick={() => void builder.exportSyntheticChecklist()}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                Export read-only JSON
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
 
                         {builder.candidatesError ? (
                           <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
@@ -603,11 +645,52 @@ export default function UciApplicationBuilder() {
                                   ) : null}
                                 </div>
                                 {attached ? (
-                                  <p className="mt-2 text-xs text-muted-foreground">
-                                    {slot.file_name} ·{" "}
-                                    {formatPackageDocumentSource(slot.source)}
-                                    {slot.user_confirmed ? " · human confirmed" : ""}
-                                  </p>
+                                  <>
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                      {slot.file_name} ·{" "}
+                                      {formatPackageDocumentSource(slot.source)}
+                                      {slot.user_confirmed ? " · human confirmed" : ""}
+                                    </p>
+                                    {slot.signature_required ? (
+                                      <div className="mt-3 space-y-2 rounded-md border border-amber-500/30 p-3">
+                                        <p className="text-xs font-semibold">
+                                          Signature: {slot.signature_status || "unknown"}
+                                        </p>
+                                        <input
+                                          value={builder.signatureReviewNote}
+                                          onChange={(event) =>
+                                            builder.setSignatureReviewNote(event.target.value)
+                                          }
+                                          placeholder="Manual verification note required to mark signed"
+                                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs"
+                                        />
+                                        <div className="flex flex-wrap gap-2">
+                                          <button
+                                            type="button"
+                                            className="pilot-button-ghost"
+                                            onClick={() =>
+                                              void builder.setSignatureStatus(slot.key, "unsigned")
+                                            }
+                                          >
+                                            Mark unsigned
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="pilot-button-primary"
+                                            disabled={!builder.signatureReviewNote.trim()}
+                                            onClick={() =>
+                                              void builder.setSignatureStatus(
+                                                slot.key,
+                                                "signed_manual_verified",
+                                              )
+                                            }
+                                          >
+                                            Manually verify signed
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </>
                                 ) : (
                                   <div className="mt-3 space-y-2">
                                     {suggested.length > 0 ? (
@@ -783,7 +866,9 @@ export default function UciApplicationBuilder() {
                             type="button"
                             className="pilot-button-primary"
                             disabled={
-                              builder.reviewBusy || builder.packageApp.draft_status === "reviewed"
+                              builder.reviewBusy ||
+                              builder.packageApp.draft_status === "reviewed" ||
+                              builder.packageMeta?.package_status !== "ready_for_review"
                             }
                             onClick={() => void builder.markReviewed("reviewed")}
                           >
@@ -811,12 +896,17 @@ export default function UciApplicationBuilder() {
                             ) : (
                               <Send className="h-4 w-4" />
                             )}
-                            Submit to utility <ArrowRight className="h-4 w-4" />
+                            {builder.isDominionSynthetic
+                              ? "Run validation-only dry run"
+                              : "Submit to utility"}{" "}
+                            <ArrowRight className="h-4 w-4" />
                           </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {submitReady
-                            ? "Reviewed — submit runs Pepco validation dry-run by default (no live portal submit unless explicitly enabled)."
+                            ? builder.isDominionSynthetic
+                              ? "Reviewed — validation only. No email, portal action, or lifecycle transition."
+                              : "Reviewed — submit runs Pepco validation dry-run by default (no live portal submit unless explicitly enabled)."
                             : "Portal submission stays disabled until draft status is reviewed."}
                         </p>
                         {builder.lastSubmitResult ? (

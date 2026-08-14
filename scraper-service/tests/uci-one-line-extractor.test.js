@@ -123,4 +123,26 @@ describe("uci-one-line-extractor", () => {
     );
     assert.equal(mdpRatings.length, 1);
   });
+
+  it("does not treat a transformer legend as installed equipment", () => {
+    const candidates = extractOneLineFindingsFromText(
+      "XFMR TRANSFORMER SYMBOL REFER TO ELECTRICAL SPECIFICATIONS",
+      1,
+      source,
+    );
+    assert.ok(!candidates.some((c) => c.field_key === "transformer_present"));
+  });
+
+  it("captures a disconnect whose label is split across extracted lines", () => {
+    const candidates = extractOneLineFindingsFromText(
+      "800A, 3-POLE, NEMA-1\nSERVICE EQUIPMENT\nFUSED DISCONNECT",
+      1,
+      source,
+    );
+    assert.ok(
+      candidates.some(
+        (c) => c.field_key === "disconnect_rating" && c.normalized_value === 800,
+      ),
+    );
+  });
 });

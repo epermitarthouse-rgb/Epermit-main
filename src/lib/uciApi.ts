@@ -20,12 +20,15 @@ import type {
   UciPortalSyncResponse,
   UciPortalSyncRunsResponse,
   UciPortfolioViewResponse,
+  UciPortalHarvestResponse,
   UciProjectCoordinationResponse,
   UciProviderSetupConfirmation,
   UciProviderSetupResponse,
   UciProviderResolutionActionResponse,
   UciProviderResolutionListResponse,
   UciProvidersResponse,
+  UciCreateProviderInput,
+  UciCreateProviderResponse,
   UtilityProvider,
   UciRecentEventsResponse,
   UciRecordDetailResponse,
@@ -53,12 +56,17 @@ export function isUciSessionExpiredError(err: unknown): boolean {
 export class UciApiError extends Error {
   readonly code: string;
   readonly httpStatus: number;
+  readonly requestId: string | null;
 
-  constructor(message: string, params: { code?: string; httpStatus?: number } = {}) {
+  constructor(
+    message: string,
+    params: { code?: string; httpStatus?: number; requestId?: string | null } = {},
+  ) {
     super(message);
     this.name = "UciApiError";
     this.code = String(params.code ?? "ERROR");
     this.httpStatus = typeof params.httpStatus === "number" ? params.httpStatus : 500;
+    this.requestId = params.requestId ?? null;
   }
 }
 
@@ -66,10 +74,45 @@ export function isUciApiError(err: unknown): err is UciApiError {
   return err instanceof UciApiError;
 }
 
+export type UciTransportFailureKind = "network" | "timeout";
+
+/** A browser-to-API transport failure: Express may never have received the request. */
+export class UciTransportError extends Error {
+  readonly kind: UciTransportFailureKind;
+  readonly requestId: string;
+  readonly retryAttempted: boolean;
+
+  constructor(params: {
+    kind: UciTransportFailureKind;
+    requestId: string;
+    retryAttempted: boolean;
+  }) {
+    const reason =
+      params.kind === "timeout"
+        ? "The UCI service did not respond before the request timed out."
+        : "The browser could not reach the UCI service.";
+    const recovery = params.retryAttempted
+      ? " An automatic retry also failed."
+      : " The request was not automatically retried.";
+    super(`${reason}${recovery} Check your connection and try again. Request ID: ${params.requestId}`);
+    this.name = "UciTransportError";
+    this.kind = params.kind;
+    this.requestId = params.requestId;
+    this.retryAttempted = params.retryAttempted;
+  }
+}
+
+export function isUciTransportError(err: unknown): err is UciTransportError {
+  return err instanceof UciTransportError;
+}
+
 /** Map API/auth failures to user-safe UCI messages (never raw INVALID_JWT text). */
 export function formatUciUserError(err: unknown, fallback: string): string {
   if (isUciSessionExpiredError(err)) return UCI_SESSION_EXPIRED_MESSAGE;
-  if (err instanceof UciApiError) return err.message;
+  if (isUciTransportError(err)) return err.message;
+  if (err instanceof UciApiError) {
+    return err.requestId ? `${err.message} Request ID: ${err.requestId}` : err.message;
+  }
   if (err instanceof Error) {
     if (err.message === "Invalid or expired authentication token") {
       return UCI_SESSION_EXPIRED_MESSAGE;
@@ -166,6 +209,7 @@ function mapUciHttpError(
   status: number,
   body: Record<string, unknown>,
   fallback: string,
+  requestId?: string | null,
 ): Error {
   if (
     status === 401 &&
@@ -178,11 +222,13 @@ function mapUciHttpError(
   return new UciApiError(String(body.message || body.error || fallback), {
     code: typeof body.error === "string" ? body.error : undefined,
     httpStatus: status,
+    requestId,
   });
 }
 
 type UciFetchDiagnostics = {
   endpoint: string;
+  requestId: string;
   tokenExpiry: number | null;
   refreshAttempted: boolean;
   retryAttempted: boolean;
@@ -194,6 +240,7 @@ function logUciFetchDiagnostics(diag: UciFetchDiagnostics): void {
   if (!import.meta.env?.DEV) return;
   console.info("[uci-api]", {
     endpoint: diag.endpoint,
+    requestId: diag.requestId,
     tokenExpiry: diag.tokenExpiry,
     refreshAttempted: diag.refreshAttempted,
     retryAttempted: diag.retryAttempted,
@@ -276,7 +323,29 @@ export async function getValidUciAccessToken(): Promise<{
 type UciAuthenticatedFetchOptions = {
   /** Revalidate token immediately before sensitive MFA/resume calls. */
   mfaSensitive?: boolean;
+  /**
+   * Retry one browser transport failure. Only set this for operations whose
+   * server-side result is idempotent; ordinary POST mutations must remain false.
+   */
+  retryOnTransportFailure?: boolean;
+  /** Per-attempt timeout. Omit to preserve the existing fetch timeout behavior. */
+  timeoutMs?: number;
 };
+
+const UCI_REQUEST_ID_HEADER = "x-request-id";
+const UCI_OPERATIONAL_READ_OPTIONS: UciAuthenticatedFetchOptions = {
+  retryOnTransportFailure: false,
+  timeoutMs: 10_000,
+};
+
+function createUciRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ??
+    `uci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function transportFailureKind(err: unknown): UciTransportFailureKind {
+  return err instanceof Error && err.name === "AbortError" ? "timeout" : "network";
+}
 
 /**
  * Perform an authenticated UCI HTTP request using the current session token.
@@ -287,25 +356,99 @@ export async function uciAuthenticatedFetch(
   init: RequestInit & { headers?: Record<string, string> } = {},
   options: UciAuthenticatedFetchOptions = {},
 ): Promise<Response> {
-  const base = getUciRequestBaseUrl();
-  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
-
+  const requestId = createUciRequestId();
   let refreshAttempted = false;
   let retryAttempted = false;
+  let transportRetryAttempted = false;
 
-  const runOnce = async (token: string) => {
+  const runOnce = async (token: string, attempt: number) => {
+    // Resolve the base URL for every attempt so runtime config/proxy recovery is
+    // not hidden by a value captured before a transient failure.
+    const base = getUciRequestBaseUrl();
+    const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
     const headers: Record<string, string> = {
       ...(init.headers as Record<string, string> | undefined),
       Authorization: `Bearer ${token}`,
+      [UCI_REQUEST_ID_HEADER]: requestId,
+      "x-uci-request-attempt": String(attempt),
     };
-    return fetch(url, { ...init, headers });
+    const controller = new AbortController();
+    let timedOut = false;
+    const onCallerAbort = () => controller.abort(init.signal?.reason);
+    if (init.signal) {
+      if (init.signal.aborted) onCallerAbort();
+      else init.signal.addEventListener("abort", onCallerAbort, { once: true });
+    }
+    const timeout =
+      options.timeoutMs && options.timeoutMs > 0
+        ? globalThis.setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, options.timeoutMs)
+        : null;
+    try {
+      return await fetch(url, { ...init, headers, signal: controller.signal });
+    } catch (err) {
+      if (init.signal?.aborted && !timedOut) throw err;
+      if (timedOut && err instanceof Error && err.name !== "AbortError") {
+        const timeoutError = new Error(err.message);
+        timeoutError.name = "AbortError";
+        throw timeoutError;
+      }
+      throw err;
+    } finally {
+      if (timeout != null) globalThis.clearTimeout(timeout);
+      init.signal?.removeEventListener("abort", onCallerAbort);
+    }
   };
 
   let tokenState = await getValidUciAccessToken();
 
-  let res = await runOnce(tokenState.token);
+  const runWithSafeTransportRetry = async (initialToken: string): Promise<Response> => {
+    try {
+      return await runOnce(initialToken, 1);
+    } catch (err) {
+      if (init.signal?.aborted) throw err;
+      if (!options.retryOnTransportFailure || transportRetryAttempted) {
+        throw new UciTransportError({
+          kind: transportFailureKind(err),
+          requestId,
+          retryAttempted: transportRetryAttempted,
+        });
+      }
+      transportRetryAttempted = true;
+      retryAttempted = true;
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 250));
+      // Re-read both auth and API configuration immediately before retrying.
+      tokenState = await getValidUciAccessToken();
+      try {
+        return await runOnce(tokenState.token, 2);
+      } catch (retryErr) {
+        throw new UciTransportError({
+          kind: transportFailureKind(retryErr),
+          requestId,
+          retryAttempted: true,
+        });
+      }
+    }
+  };
 
-  if (res.status === 401 && !retryAttempted) {
+  let res: Response;
+  try {
+    res = await runWithSafeTransportRetry(tokenState.token);
+  } catch (err) {
+    logUciFetchDiagnostics({
+      endpoint: path,
+      requestId,
+      tokenExpiry: tokenState.expiry,
+      refreshAttempted,
+      retryAttempted,
+      finalStatus: 0,
+    });
+    throw err;
+  }
+
+  if (res.status === 401 && !refreshAttempted) {
     const body = await parseJsonSafe(res.clone());
     if (isInvalidJwtResponse(res.status, body)) {
       retryAttempted = true;
@@ -316,10 +459,11 @@ export async function uciAuthenticatedFetch(
           token: refreshedToken,
           expiry: decodeAccessTokenExpiry(refreshedToken),
         };
-        res = await runOnce(refreshedToken);
+        res = await runWithSafeTransportRetry(refreshedToken);
       } catch (err) {
         logUciFetchDiagnostics({
           endpoint: path,
+          requestId,
           tokenExpiry: tokenState.expiry,
           refreshAttempted,
           retryAttempted,
@@ -333,6 +477,7 @@ export async function uciAuthenticatedFetch(
 
   logUciFetchDiagnostics({
     endpoint: path,
+    requestId,
     tokenExpiry: tokenState.expiry,
     refreshAttempted,
     retryAttempted,
@@ -365,7 +510,12 @@ async function uciFetchJson<T>(
   const res = await uciAuthenticatedFetch(path, init, options);
   if (!res.ok) {
     const err = await parseJsonSafe(res);
-    throw mapUciHttpError(res.status, err, errorFallback);
+    throw mapUciHttpError(
+      res.status,
+      err,
+      errorFallback,
+      res.headers.get(UCI_REQUEST_ID_HEADER),
+    );
   }
   return (await res.json()) as T;
 }
@@ -382,6 +532,60 @@ export async function listUciProviders(
     `/api/uci/providers${query}`,
     {},
     "Failed to load providers",
+    UCI_OPERATIONAL_READ_OPTIONS,
+  );
+}
+
+export async function createUciProvider(
+  projectId: string,
+  input: UciCreateProviderInput,
+): Promise<UciCreateProviderResponse> {
+  return uciFetchJson<UciCreateProviderResponse>(
+    `/api/uci/projects/${encodeURIComponent(projectId)}/providers`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    "Failed to create utility provider",
+  );
+}
+
+export async function getUciPortalHarvest(
+  providerSlug = "pepco",
+  options?: { signal?: AbortSignal },
+): Promise<UciPortalHarvestResponse> {
+  return uciFetchJson<UciPortalHarvestResponse>(
+    `/api/uci/portal-harvest/${encodeURIComponent(providerSlug)}`,
+    options?.signal ? { signal: options.signal } : {},
+    "Failed to load provider harvest",
+    UCI_OPERATIONAL_READ_OPTIONS,
+  );
+}
+
+export async function linkUciPortalHarvestApplication(
+  providerSlug: string,
+  externalApplicationId: string,
+  payload: { project_id: string; coordination_record_id: string },
+): Promise<{ link: Record<string, unknown> }> {
+  return uciFetchJson<{ link: Record<string, unknown> }>(
+    `/api/uci/portal-harvest/${encodeURIComponent(providerSlug)}/applications/${encodeURIComponent(externalApplicationId)}/link`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to link harvested application",
+  );
+}
+
+export async function refreshUciPortalHarvest(
+  providerSlug = "pepco",
+): Promise<{ refreshed: number; skipped_unmatched: number }> {
+  return uciFetchJson<{ refreshed: number; skipped_unmatched: number }>(
+    `/api/uci/portal-harvest/${encodeURIComponent(providerSlug)}/refresh`,
+    { method: "POST" },
+    "Failed to refresh linked provider data",
   );
 }
 
@@ -413,6 +617,7 @@ export async function listProjectCoordination(
     `/api/uci/projects/${encodeURIComponent(projectId)}/coordination`,
     {},
     "Failed to load coordination",
+    UCI_OPERATIONAL_READ_OPTIONS,
   );
 }
 
@@ -437,6 +642,7 @@ export async function getProjectProviderResolution(
     `/api/uci/projects/${encodeURIComponent(projectId)}/provider-resolution${query}`,
     {},
     "Failed to load provider resolution",
+    UCI_OPERATIONAL_READ_OPTIONS,
   );
 }
 
@@ -525,12 +731,20 @@ export async function initProjectCoordination(
 
 export function formatLoadCandidateExtractionError(err: unknown, fallback: string): string {
   if (err && typeof err === "object") {
-    const rec = err as { stage?: string; document_name?: string | null; message?: string };
+    const rec = err as {
+      stage?: string;
+      document_name?: string | null;
+      message?: string;
+      requestId?: string | null;
+    };
+    const requestSuffix = rec.requestId ? ` Request ID: ${rec.requestId}` : "";
     if (rec.stage) {
       const doc = rec.document_name ? ` (${rec.document_name})` : "";
-      return `${rec.message || fallback} [${rec.stage}${doc}]`;
+      return `${rec.message || fallback} [${rec.stage}${doc}]${requestSuffix}`;
     }
-    if (typeof rec.message === "string" && rec.message.trim()) return rec.message;
+    if (typeof rec.message === "string" && rec.message.trim()) {
+      return `${rec.message}${requestSuffix}`;
+    }
   }
   return formatUciUserError(err, fallback);
 }
@@ -542,12 +756,15 @@ export async function analyzeCoordinationLoadProfile(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/analyze`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
     "Load profile analysis failed",
+    // Safe retry: analysis replaces the same Agent 2 draft using a stable
+    // idempotency key and does not append candidate/import mutations.
+    { retryOnTransportFailure: true, timeoutMs: 60_000 },
   );
 }
 
 export async function importCoordinationDocumentFindings(
   coordinationId: string,
-  params: { external_application_id: string; refresh?: boolean },
+  params: { external_application_id?: string | null; refresh?: boolean },
 ): Promise<{
   status: "complete" | "partial";
   findings_considered: number;
@@ -568,12 +785,19 @@ export async function importCoordinationDocumentFindings(
       body: JSON.stringify(params),
     },
     "Failed to import document findings",
+    // No automatic retry: despite deterministic candidate IDs/deduplication,
+    // this mutation may already be running when the browser loses the response.
+    { timeoutMs: 120_000 },
   );
 }
 
 export async function runCoordinationDocumentProcessing(
   coordinationId: string,
-  params: { external_application_id: string; refresh?: boolean },
+  params: {
+    external_application_id?: string | null;
+    refresh?: boolean;
+    document_ids?: string[];
+  },
 ): Promise<import("@/lib/uciDocumentProcessing").UciDocumentProcessingRunResponse> {
   return uciFetchJson(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/document-processing/run`,
@@ -586,12 +810,30 @@ export async function runCoordinationDocumentProcessing(
   );
 }
 
+export async function reprocessCoordinationDocument(
+  coordinationId: string,
+  params: { external_application_id?: string | null; document_id: string },
+): Promise<import("@/lib/uciDocumentProcessing").UciDocumentReprocessResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/document-processing/reprocess`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Document reprocessing failed",
+    { timeoutMs: 180_000 },
+  );
+}
+
 export async function getCoordinationDocumentManifest(
   coordinationId: string,
-  params: { external_application_id: string; include_findings?: boolean },
+  params: { external_application_id?: string | null; include_findings?: boolean },
 ): Promise<import("@/lib/uciDocumentProcessing").UciDocumentProcessingManifestResponse> {
   const qs = new URLSearchParams();
-  qs.set("external_application_id", params.external_application_id);
+  if (params.external_application_id) {
+    qs.set("external_application_id", params.external_application_id);
+  }
   if (params.include_findings) qs.set("include_findings", "true");
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return uciFetchJson(
@@ -674,19 +916,32 @@ export async function extractCoordinationLoadCandidates(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     },
+    // No automatic retry: extraction mutates candidate/stale state and a
+    // transport failure cannot prove whether the first request committed.
+    { timeoutMs: 120_000 },
   );
   const body = await parseJsonSafe(res);
   if (!res.ok) {
     if (body.error === "LOAD_CANDIDATE_EXTRACTION_FAILED") {
       const err = new Error(
         String(body.message || "Connected load extraction failed"),
-      ) as Error & { stage?: string; document_name?: string | null };
+      ) as Error & {
+        stage?: string;
+        document_name?: string | null;
+        requestId?: string | null;
+      };
       err.stage = body.stage != null ? String(body.stage) : "unknown";
       err.document_name =
         body.document_name != null ? String(body.document_name) : null;
+      err.requestId = res.headers.get(UCI_REQUEST_ID_HEADER);
       throw err;
     }
-    throw mapUciHttpError(res.status, body, "Connected load extraction failed");
+    throw mapUciHttpError(
+      res.status,
+      body,
+      "Connected load extraction failed",
+      res.headers.get(UCI_REQUEST_ID_HEADER),
+    );
   }
   return body as import("@/lib/uciLoadProfile").UciLoadCandidateExtractionResponse;
 }
@@ -730,9 +985,7 @@ export async function resolveCoordinationLoadCandidate(
 
 export async function addCoordinationManualVerifiedValue(
   coordinationId: string,
-  payload: import("@/lib/uciLoadProfileWorkspace").ManualVerifiedInputPayload & {
-    review_note: string;
-  },
+  payload: import("@/lib/uciLoadProfileWorkspace").ManualVerifiedInputPayload,
 ): Promise<import("@/lib/uciLoadProfile").UciLoadCandidateResolveResponse> {
   return uciFetchJson(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/verified-values`,
@@ -747,11 +1000,14 @@ export async function addCoordinationManualVerifiedValue(
 
 export async function buildCoordinationApplicationPackage(
   coordinationId: string,
-  params?: { external_application_id?: string },
+  params?: { external_application_id?: string; checklist_mode?: "synthetic_test" },
 ): Promise<UciApplicationPackageBuildResponse> {
   const body: Record<string, string> = {};
   if (params?.external_application_id) {
     body.external_application_id = params.external_application_id;
+  }
+  if (params?.checklist_mode) {
+    body.checklist_mode = params.checklist_mode;
   }
   return uciFetchJson<UciApplicationPackageBuildResponse>(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/applications`,
@@ -826,6 +1082,58 @@ export async function removeApplicationPackageDocumentMapping(
   );
 }
 
+export async function approveSyntheticApplicationChecklist(
+  applicationId: string,
+  payload?: { note?: string },
+): Promise<{
+  application: unknown;
+  package_status: string;
+  checklist_status: "approved";
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/synthetic-checklist/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to approve synthetic checklist",
+  );
+}
+
+export async function setSyntheticApplicationSignatureStatus(
+  applicationId: string,
+  payload: {
+    document_key: string;
+    signature_status: "unknown" | "unsigned" | "signed_manual_verified";
+    review_note?: string;
+  },
+): Promise<{
+  application: unknown;
+  package_status: string;
+  signature_status: string;
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/synthetic-checklist/signature`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update synthetic signature status",
+  );
+}
+
+export async function exportSyntheticApplicationChecklist(
+  applicationId: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/synthetic-checklist/export`,
+    {},
+    "Failed to export synthetic checklist",
+  );
+}
+
 export async function reviewCoordinationApplication(
   applicationId: string,
   payload: { status: "reviewed" | "needs_changes"; notes?: string },
@@ -883,6 +1191,7 @@ export async function getCoordinationDetail(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}`,
     {},
     "Failed to load coordination detail",
+    UCI_OPERATIONAL_READ_OPTIONS,
   );
 }
 
@@ -989,6 +1298,23 @@ export async function listCoordinationCommunications(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/communications${suffix}`,
     {},
     "Failed to load communications",
+    UCI_OPERATIONAL_READ_OPTIONS,
+  );
+}
+
+export async function listProjectNeedsAttentionCommunications(
+  projectId: string,
+  params?: { coordinationId?: string; limit?: number; offset?: number },
+): Promise<UciCommunicationsListResponse> {
+  const qs = new URLSearchParams({ project_id: projectId });
+  if (params?.coordinationId) qs.set("coordination_id", params.coordinationId);
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  return uciFetchJson<UciCommunicationsListResponse>(
+    `/api/uci/communications/needs_attention?${qs.toString()}`,
+    {},
+    "Failed to load needs-attention communications",
+    UCI_OPERATIONAL_READ_OPTIONS,
   );
 }
 
@@ -1399,6 +1725,7 @@ export async function getProjectPortfolioView(
     `/api/uci/projects/${encodeURIComponent(projectId)}/portfolio_view`,
     {},
     "Failed to load portfolio view",
+    UCI_OPERATIONAL_READ_OPTIONS,
   );
 }
 

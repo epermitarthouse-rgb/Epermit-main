@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
-import { ConnectedLoadReviewPanel } from "@/components/uci/ConnectedLoadReviewPanel";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, FileUp, Loader2, RotateCcw } from "lucide-react";
+import {
+  ConnectedLoadReviewPanel,
+  type CandidateResolutionState,
+} from "@/components/uci/ConnectedLoadReviewPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +34,11 @@ import {
   parseLoadProfileSummary,
   type UciLoadProfileSummary,
 } from "@/lib/uciLoadProfile";
+import { getCoordinationDocumentManifest } from "@/lib/uciApi";
+import type {
+  UciDocumentProcessingManifestResponse,
+  UciDocumentReprocessResponse,
+} from "@/lib/uciDocumentProcessing";
 import {
   buildLoadScheduleRows,
   buildPackageReadinessChecklist,
@@ -41,6 +49,7 @@ import {
   getDataLevelLabel,
   getLoadProfileOverview,
   getLoadScheduleTotals,
+  getServiceSizingRecommendation,
   getUtilityTypeContracts,
   groupSourceDocumentsByCategory,
   MANUAL_VERIFIABLE_FIELD_OPTIONS,
@@ -62,7 +71,15 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
   package_readiness: "Package readiness",
 };
 
+export interface Agent2ManualUploadProgress {
+  stage: "uploading" | "processing" | "importing";
+  current: number;
+  total: number;
+  fileName?: string;
+}
+
 export function LoadProfileWorkspace({
+  coordinationId,
   applications,
   utilityType,
   selectedPepcoApplicationId,
@@ -72,8 +89,10 @@ export function LoadProfileWorkspace({
   toolbarOutlineButtonClass,
   analyzeBusy,
   candidateBusy,
-  candidateResolveBusy,
+  candidateResolutionState,
   manualVerifyBusy,
+  manualUploadBusy,
+  manualUploadProgress,
   importFindingsBusy,
   packageStatus,
   hasProjectAddress,
@@ -83,7 +102,10 @@ export function LoadProfileWorkspace({
   onImportDocumentFindings,
   onResolveCandidate,
   onManualVerify,
+  onManualUpload,
+  onReprocessDocuments,
 }: {
+  coordinationId: string;
   applications: CoordinationApplication[];
   utilityType: string | null | undefined;
   selectedPepcoApplicationId: string | null;
@@ -93,8 +115,10 @@ export function LoadProfileWorkspace({
   toolbarOutlineButtonClass: string;
   analyzeBusy: boolean;
   candidateBusy: boolean;
-  candidateResolveBusy: string | null;
+  candidateResolutionState: CandidateResolutionState;
   manualVerifyBusy: boolean;
+  manualUploadBusy: boolean;
+  manualUploadProgress: Agent2ManualUploadProgress | null;
   importFindingsBusy: boolean;
   packageStatus?: string | null;
   hasProjectAddress?: boolean;
@@ -107,22 +131,69 @@ export function LoadProfileWorkspace({
     action: "approve" | "edit_approve" | "reject" | "keep_unresolved",
     opts?: { edited_value?: string; edited_unit?: string; review_note?: string },
   ) => void;
-  onManualVerify: (payload: ManualVerifiedInputPayload & { review_note: string }) => void;
+  onManualVerify: (payload: ManualVerifiedInputPayload) => void;
+  onManualUpload: (files: File[], externalApplicationId: string | null) => Promise<boolean>;
+  onReprocessDocuments: (
+    documentIds: string[],
+    externalApplicationId: string | null,
+    onProgress?: (completed: number) => void,
+  ) => Promise<{
+    results: UciDocumentReprocessResponse[];
+    failures: Array<{ document_id: string; message: string }>;
+  }>;
 }) {
   const [section, setSection] = useState<WorkspaceSection>(
     () => readStoredWorkspaceSection() ?? DEFAULT_WORKSPACE_SECTION,
   );
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualField, setManualField] = useState(MANUAL_VERIFIABLE_FIELD_OPTIONS[0].field_key);
+  const [manualField, setManualField] = useState<string>(
+    MANUAL_VERIFIABLE_FIELD_OPTIONS[0].field_key,
+  );
   const [manualValue, setManualValue] = useState("");
   const [manualUnit, setManualUnit] = useState("");
   const [manualSource, setManualSource] = useState("");
   const [manualNote, setManualNote] = useState("");
   const [manualConfirm, setManualConfirm] = useState(false);
+  const [manualUploadFiles, setManualUploadFiles] = useState<File[]>([]);
+  const [processingManifest, setProcessingManifest] =
+    useState<UciDocumentProcessingManifestResponse | null>(null);
+  const [manifestError, setManifestError] = useState<string | null>(null);
+  const [reprocessBusy, setReprocessBusy] = useState<string[] | null>(null);
+  const [reprocessProgress, setReprocessProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
+  const reprocessInFlightRef = useRef(false);
 
   useEffect(() => {
     persistWorkspaceSection(section);
   }, [section]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProcessingManifest(null);
+    setManifestError(null);
+    if (!coordinationId || manualUploadBusy) return;
+
+    void getCoordinationDocumentManifest(coordinationId, {
+      external_application_id: selectedPepcoApplicationId,
+      include_findings: false,
+    })
+      .then((manifest) => {
+        if (!cancelled) setProcessingManifest(manifest);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setManifestError(
+            "Processing metadata could not be loaded; displayed statuses may be incomplete.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coordinationId, selectedPepcoApplicationId, manualUploadBusy]);
 
   const draftApp = getLoadProfileDraftApplication(applications);
   const summary = parseLoadProfileSummary(draftApp?.load_summary) as UciLoadProfileSummary | null;
@@ -138,14 +209,40 @@ export function LoadProfileWorkspace({
   );
 
   const sourceRows = useMemo(
-    () => buildSourceDocumentRows(summary, selectedPepcoApplicationId),
-    [summary, selectedPepcoApplicationId],
+    () =>
+      buildSourceDocumentRows(
+        summary,
+        selectedPepcoApplicationId,
+        processingManifest?.documents ?? [],
+      ),
+    [summary, selectedPepcoApplicationId, processingManifest?.documents],
   );
   const sourceGroups = useMemo(() => groupSourceDocumentsByCategory(sourceRows), [sourceRows]);
+  const pendingReprocessIds = useMemo(
+    () =>
+      sourceRows
+        .filter((row) => {
+          if (row.status === "failed" || row.status === "pending") return true;
+          if (row.status !== "needs_fallback") return false;
+          const document = processingManifest?.documents.find(
+            (item) => item.document_id === row.documentKey,
+          );
+          return !["unavailable", "manual_review_required"].includes(
+            String(document?.fallback_status ?? ""),
+          );
+        })
+        .map((row) => row.documentKey)
+        .filter((id) => processingManifest?.documents.some((doc) => doc.document_id === id)),
+    [processingManifest?.documents, sourceRows],
+  );
   const verifiedGroups = useMemo(() => buildVerifiedInputRows(summary), [summary]);
   const scheduleRows = useMemo(() => buildLoadScheduleRows(summary), [summary]);
   const scheduleTotals = useMemo(() => getLoadScheduleTotals(summary), [summary]);
   const serviceFields = useMemo(() => buildServiceSizingFields(summary), [summary]);
+  const serviceSizingRecommendation = useMemo(
+    () => getServiceSizingRecommendation(summary),
+    [summary],
+  );
   const readiness = useMemo(
     () =>
       buildPackageReadinessChecklist(summary, {
@@ -157,13 +254,19 @@ export function LoadProfileWorkspace({
   );
   const utilityContract = getUtilityTypeContracts(utilityType ?? summary?.utility_type ?? "electric");
   const bridgeMeta = summary?.load_extraction?.document_findings_bridge;
+  const uploadExternalApplicationId =
+    selectedPepcoApplicationId ??
+    summary?.load_extraction?.external_application_id ??
+    applications.find((application) => application.external_application_id)
+      ?.external_application_id ??
+    null;
 
   const manualOption =
     MANUAL_VERIFIABLE_FIELD_OPTIONS.find((o) => o.field_key === manualField) ??
     MANUAL_VERIFIABLE_FIELD_OPTIONS[0];
 
   const submitManual = () => {
-    const payload: ManualVerifiedInputPayload & { review_note: string } = {
+    const payload: ManualVerifiedInputPayload = {
       field_key: manualField,
       value: manualValue,
       unit: manualUnit || manualOption.unit || undefined,
@@ -177,6 +280,35 @@ export function LoadProfileWorkspace({
     setManualValue("");
     setManualNote("");
     setManualConfirm(false);
+  };
+
+  const reprocessDocuments = async (documentIds: string[]) => {
+    if (reprocessInFlightRef.current || documentIds.length === 0) return;
+    reprocessInFlightRef.current = true;
+    setReprocessBusy(documentIds);
+    setReprocessProgress({ completed: 0, total: documentIds.length });
+    try {
+      await onReprocessDocuments(
+        documentIds,
+        selectedPepcoApplicationId,
+        (completed) => setReprocessProgress({ completed, total: documentIds.length }),
+      );
+      try {
+        setProcessingManifest(
+          await getCoordinationDocumentManifest(coordinationId, {
+            external_application_id: selectedPepcoApplicationId,
+            include_findings: false,
+          }),
+        );
+        setManifestError(null);
+      } catch {
+        setManifestError("Reprocessing finished, but the updated document status could not be loaded.");
+      }
+    } finally {
+      reprocessInFlightRef.current = false;
+      setReprocessBusy(null);
+      setReprocessProgress(null);
+    }
   };
 
   return (
@@ -253,8 +385,8 @@ export function LoadProfileWorkspace({
           <p className={cn("text-sm", mutedClass)}>
             Run load profile analysis to inventory inputs and enable document-scoped extraction.
           </p>
-        ) : (
-          <Tabs value={section} onValueChange={(v) => setSection(v as WorkspaceSection)}>
+        ) : null}
+        <Tabs value={section} onValueChange={(v) => setSection(v as WorkspaceSection)}>
             <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:grid-cols-4 xl:grid-cols-7">
               {(Object.keys(SECTION_LABELS) as WorkspaceSection[]).map((key) => (
                 <TabsTrigger key={key} value={key} className="text-xs">
@@ -269,10 +401,87 @@ export function LoadProfileWorkspace({
             </TabsContent>
 
             <TabsContent value="source_documents" className="mt-4 space-y-3">
+              <div className="rounded-md border bg-muted/10 p-3">
+                <p className="text-sm font-medium">Upload supporting document</p>
+                <p className={cn("mt-1 text-xs", mutedClass)}>
+                  Upload to project documents, then classify and extract through the same findings
+                  and candidate pipeline. The source will be labeled Manual upload.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Input
+                    className="max-w-md"
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf"
+                    multiple
+                    disabled={manualUploadBusy}
+                    onChange={(event) => {
+                      setManualUploadFiles(Array.from(event.target.files ?? []));
+                      event.target.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={manualUploadBusy || manualUploadFiles.length === 0}
+                    onClick={() => {
+                      if (manualUploadFiles.length === 0) return;
+                      void onManualUpload(
+                        manualUploadFiles,
+                        uploadExternalApplicationId,
+                      ).then((completed) => {
+                        if (completed) setManualUploadFiles([]);
+                      });
+                    }}
+                  >
+                    {manualUploadBusy ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileUp className="mr-2 h-4 w-4" />
+                    )}
+                    Upload and process
+                  </Button>
+                </div>
+                {manualUploadFiles.length > 0 ? (
+                  <p className={cn("mt-2 text-xs", mutedClass)}>
+                    {manualUploadFiles.length} file{manualUploadFiles.length === 1 ? "" : "s"}{" "}
+                    selected: {manualUploadFiles.map((file) => file.name).join(", ")}
+                  </p>
+                ) : null}
+                {manualUploadBusy && manualUploadProgress ? (
+                  <p className="mt-2 text-xs font-medium" aria-live="polite">
+                    {manualUploadProgress.stage === "uploading"
+                      ? `Uploading ${manualUploadProgress.current} of ${manualUploadProgress.total}: ${manualUploadProgress.fileName ?? "document"}`
+                      : manualUploadProgress.stage === "processing"
+                        ? `Processing ${manualUploadProgress.total} uploaded document${manualUploadProgress.total === 1 ? "" : "s"}`
+                        : `Importing findings from ${manualUploadProgress.total} document${manualUploadProgress.total === 1 ? "" : "s"}`}
+                  </p>
+                ) : null}
+              </div>
               <p className={cn("text-xs", mutedClass)}>
                 Filename and ranking categories suggest document type only — they do not verify
                 engineering content.
               </p>
+              {pendingReprocessIds.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={reprocessBusy != null}
+                  onClick={() => void reprocessDocuments(pendingReprocessIds)}
+                >
+                  {reprocessBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                  )}
+                  {reprocessProgress && reprocessProgress.total > 1
+                    ? `Reprocessing ${reprocessProgress.completed}/${reprocessProgress.total}`
+                    : "Reprocess pending documents"}
+                </Button>
+              ) : null}
+              {manifestError ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300">{manifestError}</p>
+              ) : null}
               {(Object.entries(sourceGroups) as Array<[string, typeof sourceRows]>).map(
                 ([cat, rows]) =>
                   rows.length === 0 ? null : (
@@ -280,7 +489,15 @@ export function LoadProfileWorkspace({
                       <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                         {rows[0]?.categoryLabel} ({rows.length})
                       </p>
-                      <SourceDocumentsTable rows={rows} mutedClass={mutedClass} />
+                      <SourceDocumentsTable
+                        rows={rows}
+                        mutedClass={mutedClass}
+                        knownDocumentIds={new Set(
+                          processingManifest?.documents.map((doc) => doc.document_id) ?? [],
+                        )}
+                        reprocessBusy={reprocessBusy}
+                        onReprocess={(documentId) => void reprocessDocuments([documentId])}
+                      />
                     </section>
                   ),
               )}
@@ -338,7 +555,11 @@ export function LoadProfileWorkspace({
             </TabsContent>
 
             <TabsContent value="service_sizing" className="mt-4 space-y-3">
-              <ServiceSizingPanel fields={serviceFields} mutedClass={mutedClass} />
+              <ServiceSizingPanel
+                fields={serviceFields}
+                recommendation={serviceSizingRecommendation}
+                mutedClass={mutedClass}
+              />
               <TemplateStatusPanel overview={overview} mutedClass={mutedClass} />
             </TabsContent>
 
@@ -350,7 +571,7 @@ export function LoadProfileWorkspace({
                   selectedPepcoApplicationId={selectedPepcoApplicationId}
                   connectedLoadReady={overview.connectedLoadSatisfied}
                   candidateBusy={candidateBusy}
-                  candidateResolveBusy={candidateResolveBusy}
+                  candidateResolutionState={candidateResolutionState}
                   mutedClass={mutedClass}
                   toolbarOutlineButtonClass={toolbarOutlineButtonClass}
                   onExtractCandidates={onExtractCandidates}
@@ -362,8 +583,7 @@ export function LoadProfileWorkspace({
             <TabsContent value="package_readiness" className="mt-4 space-y-3">
               <PackageReadinessPanel items={readiness} mutedClass={mutedClass} />
             </TabsContent>
-          </Tabs>
-        )}
+        </Tabs>
       </CardContent>
     </Card>
   );
@@ -440,9 +660,15 @@ function DataLevelsHelp({ mutedClass }: { mutedClass: string }) {
 function SourceDocumentsTable({
   rows,
   mutedClass,
+  knownDocumentIds,
+  reprocessBusy,
+  onReprocess,
 }: {
   rows: ReturnType<typeof buildSourceDocumentRows>;
   mutedClass: string;
+  knownDocumentIds: Set<string>;
+  reprocessBusy: string[] | null;
+  onReprocess: (documentId: string) => void;
 }) {
   return (
     <Table>
@@ -451,7 +677,9 @@ function SourceDocumentsTable({
           <TableHead>Document</TableHead>
           <TableHead>Source</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead className="text-right">Findings</TableHead>
           <TableHead className="text-right">Candidates</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -459,15 +687,32 @@ function SourceDocumentsTable({
           <TableRow key={row.documentKey}>
             <TableCell>
               <p className="text-sm font-medium">{row.documentName}</p>
-              {row.failureReason ? (
-                <p className={cn("text-xs text-destructive", mutedClass)}>{row.failureReason}</p>
-              ) : null}
             </TableCell>
             <TableCell className={cn("text-xs", mutedClass)}>{row.sourceLabel}</TableCell>
             <TableCell className={cn("text-xs", mutedClass)}>
-              {row.processingStatus} · {row.textExtractionStatus}
+              <p className="font-medium text-foreground">{row.statusLabel}</p>
+              {row.statusReason ? <p>{row.statusReason}</p> : null}
             </TableCell>
+            <TableCell className="text-right tabular-nums">{row.findingsCount}</TableCell>
             <TableCell className="text-right tabular-nums">{row.candidateCount}</TableCell>
+            <TableCell className="text-right">
+              {knownDocumentIds.has(row.documentKey) ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={reprocessBusy != null}
+                  onClick={() => onReprocess(row.documentKey)}
+                >
+                  {reprocessBusy?.includes(row.documentKey) ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  Reprocess
+                </Button>
+              ) : null}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -574,7 +819,7 @@ function LoadScheduleTable({
             <TableCell>{row.quantity ?? "—"}</TableCell>
             <TableCell>{row.connectedLoad ?? "—"}</TableCell>
             <TableCell>{row.demandAdjustedLoad ?? "—"}</TableCell>
-            <TableCell>{row.demandFactor ?? "Unresolved"}</TableCell>
+            <TableCell>{row.demandFactor ?? row.demandFactorDisplay}</TableCell>
             <TableCell>{row.unit ?? "—"}</TableCell>
             <TableCell>{row.verificationStatus}</TableCell>
           </TableRow>
@@ -605,9 +850,11 @@ function ScheduleTotalsPanel({
 
 function ServiceSizingPanel({
   fields,
+  recommendation,
   mutedClass,
 }: {
   fields: ReturnType<typeof buildServiceSizingFields>;
+  recommendation: ReturnType<typeof getServiceSizingRecommendation>;
   mutedClass: string;
 }) {
   if (fields.length === 0) {
@@ -620,21 +867,32 @@ function ServiceSizingPanel({
     );
   }
   return (
-    <ul className="space-y-2">
-      {fields.map((f) => (
-        <li key={f.key} className="rounded border bg-muted/10 p-2 text-sm">
-          <div className="flex flex-wrap gap-2">
-            <span className="font-medium">{f.label}</span>
-            <Badge variant="outline">{f.origin}</Badge>
-          </div>
-          <p>
-            {f.value}
-            {f.unit ? ` ${f.unit}` : ""}
-          </p>
-          <p className={cn("text-xs", mutedClass)}>Source: {f.source}</p>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      <div className="rounded-md border bg-muted/10 p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-medium">Service-size recommendation</p>
+          <Badge variant={recommendation.status === "approved" ? "secondary" : "outline"}>
+            {recommendation.status.replace(/_/g, " ")}
+          </Badge>
+        </div>
+        <p className={cn("mt-1 text-xs", mutedClass)}>{recommendation.message}</p>
+      </div>
+      <ul className="space-y-2">
+        {fields.map((f) => (
+          <li key={f.key} className="rounded border bg-muted/10 p-2 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <span className="font-medium">{f.label}</span>
+              <Badge variant="outline">{f.origin}</Badge>
+            </div>
+            <p>
+              {f.value}
+              {f.unit ? ` ${f.unit}` : ""}
+            </p>
+            <p className={cn("text-xs", mutedClass)}>Source: {f.source}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -649,7 +907,9 @@ function TemplateStatusPanel({
     <div className="rounded-md border bg-muted/10 p-3 text-sm">
       <p className="font-medium">Template status</p>
       <p className={cn("text-xs capitalize", mutedClass)}>
-        {overview.templateStatus === "none"
+        {overview.verifiedProjectDemandSatisfied
+          ? "Not required for demand — verified project demand provided"
+          : overview.templateStatus === "none"
           ? "No approved template — engineering factors cannot be applied automatically"
           : `${overview.templateStatus} template: ${overview.templateName ?? "—"} (${overview.templateVersion ?? "—"})`}
       </p>
@@ -763,7 +1023,7 @@ function ManualVerifiedForm({
         <Input value={manualSource} onChange={(e) => onSourceChange(e.target.value)} />
       </div>
       <div className="md:col-span-2 space-y-2">
-        <Label>Engineering note (required)</Label>
+        <Label>Note (optional)</Label>
         <Textarea value={manualNote} onChange={(e) => onNoteChange(e.target.value)} rows={3} />
       </div>
       <div className="md:col-span-2 flex items-center gap-2">

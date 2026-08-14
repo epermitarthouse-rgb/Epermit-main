@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_LOAD_REVIEW_TAB,
+  consolidateCandidatesForReview,
   findReplacementCandidate,
   formatCandidateEntityLabel,
   formatCandidateFieldLabel,
@@ -56,12 +57,21 @@ const PENDING_GROUP_ORDER: PendingReviewGroup[] = [
   "specification_reference",
 ];
 
+export type CandidateResolutionState = Record<
+  string,
+  {
+    action: "approve" | "edit_approve" | "reject" | "keep_unresolved";
+    status: "pending" | "error";
+    error?: string;
+  }
+>;
+
 export function ConnectedLoadReviewPanel({
   summary,
   selectedPepcoApplicationId,
   connectedLoadReady,
   candidateBusy,
-  candidateResolveBusy,
+  candidateResolutionState,
   mutedClass,
   toolbarOutlineButtonClass,
   onExtractCandidates,
@@ -71,7 +81,7 @@ export function ConnectedLoadReviewPanel({
   selectedPepcoApplicationId: string | null;
   connectedLoadReady: boolean;
   candidateBusy: boolean;
-  candidateResolveBusy: string | null;
+  candidateResolutionState: CandidateResolutionState;
   mutedClass: string;
   toolbarOutlineButtonClass: string;
   onExtractCandidates: (refresh?: boolean) => void;
@@ -119,6 +129,10 @@ export function ConnectedLoadReviewPanel({
   );
   const rejectedCandidates = useMemo(
     () => getLoadReviewTabCandidates(summary, "rejected", selectedPepcoApplicationId),
+    [summary, selectedPepcoApplicationId],
+  );
+  const approvedCandidates = useMemo(
+    () => getLoadReviewTabCandidates(summary, "approved", selectedPepcoApplicationId),
     [summary, selectedPepcoApplicationId],
   );
   const approvedValues = useMemo(() => getApprovedVerifiedValues(summary), [summary]);
@@ -216,7 +230,7 @@ export function ConnectedLoadReviewPanel({
                         <p className="text-sm font-medium text-foreground">{entityGroup.entityLabel}</p>
                         <CandidateList
                           candidates={entityGroup.candidates}
-                          candidateResolveBusy={candidateResolveBusy}
+                          candidateResolutionState={candidateResolutionState}
                           editCandidateId={editCandidateId}
                           editValue={editValue}
                           editUnit={editUnit}
@@ -246,7 +260,7 @@ export function ConnectedLoadReviewPanel({
         </TabsContent>
 
         <TabsContent value="approved" className="mt-3">
-          {approvedValues.length === 0 ? (
+          {approvedCandidates.length === 0 ? (
             <EmptyTabState
               title="No approved values"
               description="Approve candidates from Pending or Unresolved to populate verified load profile values."
@@ -254,14 +268,30 @@ export function ConnectedLoadReviewPanel({
             />
           ) : (
             <ul className="space-y-3">
-              {approvedValues.map(({ key, entry }) => (
-                <ApprovedValueCard
-                  key={key}
-                  fieldKey={key}
-                  entry={entry}
-                  mutedClass={mutedClass}
-                />
-              ))}
+              {consolidateCandidatesForReview(approvedCandidates).map((factGroup) => {
+                const candidateIds = new Set(
+                  factGroup.candidates.map((candidate) => candidate.candidate_id),
+                );
+                const matchesCandidate = (entry: UciVerifiedLoadValue) =>
+                  candidateIds.has(entry.original_candidate_id) ||
+                  entry.evidence_sources?.some((source) =>
+                    candidateIds.has(source.candidate_id),
+                  );
+                const verified =
+                  approvedValues.find(({ entry }) => matchesCandidate(entry)) ??
+                  (summary.verified_values_history ?? [])
+                    .map((entry) => ({ key: entry.field_key, entry }))
+                    .find(({ entry }) => matchesCandidate(entry));
+                return (
+                  <ApprovedCandidateCard
+                    key={factGroup.logicalFactKey}
+                    candidate={factGroup.primary}
+                    evidenceCandidates={factGroup.candidates}
+                    verified={verified}
+                    mutedClass={mutedClass}
+                  />
+                );
+              })}
             </ul>
           )}
         </TabsContent>
@@ -283,7 +313,7 @@ export function ConnectedLoadReviewPanel({
                   <p className="text-sm font-medium text-foreground">{entityGroup.entityLabel}</p>
                   <CandidateList
                     candidates={entityGroup.candidates}
-                    candidateResolveBusy={candidateResolveBusy}
+                    candidateResolutionState={candidateResolutionState}
                     editCandidateId={editCandidateId}
                     editValue={editValue}
                     editUnit={editUnit}
@@ -345,7 +375,7 @@ export function ConnectedLoadReviewPanel({
                   <CollapsibleContent className="pt-2">
                     <CandidateList
                       candidates={group.candidates}
-                      candidateResolveBusy={candidateResolveBusy}
+                      candidateResolutionState={candidateResolutionState}
                       editCandidateId={null}
                       editValue=""
                       editUnit=""
@@ -479,49 +509,58 @@ function EmptyTabState({
   );
 }
 
-function ApprovedValueCard({
-  fieldKey,
-  entry,
+function ApprovedCandidateCard({
+  candidate,
+  evidenceCandidates,
+  verified,
   mutedClass,
 }: {
-  fieldKey: string;
-  entry: UciVerifiedLoadValue;
+  candidate: UciLoadCandidate;
+  evidenceCandidates: UciLoadCandidate[];
+  verified?: { key: string; entry: UciVerifiedLoadValue };
   mutedClass: string;
 }) {
-  const satisfiesPackage = verifiedValueSatisfiesConnectedLoad(fieldKey, entry);
-  const displayValue =
-    entry.value != null && typeof entry.value !== "object" ? String(entry.value) : JSON.stringify(entry.value);
+  const entry = verified?.entry;
+  const satisfiesPackage =
+    entry && verified ? verifiedValueSatisfiesConnectedLoad(verified.key, entry) : false;
+  const displayValue = entry
+    ? entry.value != null && typeof entry.value !== "object"
+      ? String(entry.value)
+      : JSON.stringify(entry.value)
+    : formatCandidateValue(candidate);
 
   return (
-    <li className="rounded border border-border/50 bg-muted/20 p-2 text-sm">
+    <li className="rounded border border-emerald-500/40 bg-emerald-500/5 p-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{formatCandidateFieldLabel(fieldKey)}</span>
+        <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+        <Badge variant="secondary">Approved</Badge>
         {satisfiesPackage ? (
           <Badge variant="secondary">Satisfies connected_load_data</Badge>
         ) : (
           <Badge variant="mutedLight">Review / supporting value</Badge>
         )}
-        {entry.edited ? <Badge variant="outline">Edited</Badge> : null}
+        {entry?.edited ? <Badge variant="outline">Edited</Badge> : null}
       </div>
+      <CandidateMeta
+        candidate={candidate}
+        evidenceCandidates={evidenceCandidates}
+        mutedClass={mutedClass}
+      />
       <p className={cn("mt-1 text-xs", mutedClass)}>
         {displayValue}
-        {entry.unit ? ` ${entry.unit}` : ""}
+        {(entry?.unit ?? candidate.unit) ? ` ${entry?.unit ?? candidate.unit}` : ""}
       </p>
-      <p className={cn("mt-1 text-xs", mutedClass)}>
-        Source: {entry.source_document_name}
-        {entry.page_number != null ? ` · p.${entry.page_number}` : ""} ·{" "}
-        {entry.extraction_method}
-      </p>
-      {entry.evidence_text ? (
-        <p className={cn("mt-1 text-xs italic", mutedClass)}>&ldquo;{entry.evidence_text}&rdquo;</p>
-      ) : null}
-      <p className={cn("mt-1 text-xs", mutedClass)}>
-        {formatVerifiedApprovalMethod(entry.method)} · {entry.approved_by} · {entry.approved_at}
-      </p>
-      <p className={cn("mt-1 text-xs", mutedClass)}>
-        Entity: Project / service
-      </p>
-      {entry.review_note ? (
+      {entry ? (
+        <p className={cn("mt-1 text-xs text-emerald-800 dark:text-emerald-200")}>
+          Verified input created · {formatVerifiedApprovalMethod(entry.method)} · {entry.approved_at}
+        </p>
+      ) : (
+        <p className={cn("mt-1 flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200")}>
+          <AlertCircle className="h-3 w-3" aria-hidden="true" />
+          Approval is persisted; this value has since been superseded or needs projection recovery.
+        </p>
+      )}
+      {entry?.review_note ? (
         <p className={cn("mt-1 text-xs", mutedClass)}>Note: {entry.review_note}</p>
       ) : null}
     </li>
@@ -530,7 +569,7 @@ function ApprovedValueCard({
 
 function CandidateList({
   candidates,
-  candidateResolveBusy,
+  candidateResolutionState,
   editCandidateId,
   editValue,
   editUnit,
@@ -548,7 +587,7 @@ function CandidateList({
   onRejectRequest,
 }: {
   candidates: UciLoadCandidate[];
-  candidateResolveBusy: string | null;
+  candidateResolutionState: CandidateResolutionState;
   editCandidateId: string | null;
   editValue: string;
   editUnit: string;
@@ -571,19 +610,22 @@ function CandidateList({
 }) {
   return (
     <ul className="mt-2 space-y-3">
-      {candidates.map((candidate) => {
-        const resolving = candidateResolveBusy === candidate.candidate_id;
+      {consolidateCandidatesForReview(candidates).map((factGroup) => {
+        const candidate = factGroup.primary;
+        const resolution = candidateResolutionState[candidate.candidate_id];
+        const resolving = resolution?.status === "pending";
         const isEditing = editCandidateId === candidate.candidate_id;
         const approvalBlocked = isCandidateApprovalBlocked(candidate);
         const replacement = replacementResolver?.(candidate) ?? null;
 
         return (
           <li
-            key={candidate.candidate_id}
+            key={factGroup.logicalFactKey}
             className="rounded border border-border/50 bg-muted/20 p-2 text-sm"
           >
             <CandidateMeta
               candidate={candidate}
+              evidenceCandidates={factGroup.candidates}
               mutedClass={mutedClass}
               entityFirst={entityFirst}
             />
@@ -653,6 +695,9 @@ function CandidateList({
                   title={approvalBlocked ? candidate.approval_blocked_reason ?? "Approval blocked" : undefined}
                   onClick={() => onResolve(candidate.candidate_id, "approve")}
                 >
+                  {resolving && resolution.action === "approve" ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : null}
                   Approve
                 </Button>
                 <Button
@@ -684,6 +729,15 @@ function CandidateList({
                 </Button>
               </div>
             ) : null}
+            {resolution?.status === "error" ? (
+              <p
+                className="mt-2 flex items-center gap-1 text-xs text-destructive"
+                role="alert"
+              >
+                <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
+                {resolution.error || "Action failed. Try again."}
+              </p>
+            ) : null}
           </li>
         );
       })}
@@ -693,10 +747,12 @@ function CandidateList({
 
 function CandidateMeta({
   candidate,
+  evidenceCandidates = [candidate],
   mutedClass,
   entityFirst = false,
 }: {
   candidate: UciLoadCandidate;
+  evidenceCandidates?: UciLoadCandidate[];
   mutedClass: string;
   entityFirst?: boolean;
 }) {
@@ -726,15 +782,26 @@ function CandidateMeta({
       {candidate.schedule_heading ? (
         <p className={cn("mt-1 text-xs", mutedClass)}>Heading: {candidate.schedule_heading}</p>
       ) : null}
-      <p className={cn("mt-1 text-xs", mutedClass)}>
-        Source: {candidate.source_document_name}
-        {candidate.page_number != null ? ` · p.${candidate.page_number}` : ""} ·{" "}
-        {candidate.extraction_method}
-        {candidate.confidence != null ? ` · conf ${candidate.confidence}` : ""}
-      </p>
-      {candidate.evidence_text ? (
-        <p className={cn("mt-1 text-xs italic", mutedClass)}>&ldquo;{candidate.evidence_text}&rdquo;</p>
+      {evidenceCandidates.length > 1 ? (
+        <Badge variant="secondary" className="mt-1">
+          {evidenceCandidates.length} agreeing sources
+        </Badge>
       ) : null}
+      <ul className="mt-1 space-y-1">
+        {evidenceCandidates.map((evidence) => (
+          <li key={evidence.candidate_id} className={cn("text-xs", mutedClass)}>
+            <span>
+              Source: {evidence.source_document_name}
+              {evidence.page_number != null ? ` · p.${evidence.page_number}` : ""} ·{" "}
+              {evidence.extraction_method}
+              {evidence.confidence != null ? ` · conf ${evidence.confidence}` : ""}
+            </span>
+            {evidence.evidence_text ? (
+              <span className="block italic">&ldquo;{evidence.evidence_text}&rdquo;</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

@@ -47,28 +47,18 @@ function getLocalLine(text, index) {
  * @param {number} [maxLen]
  */
 function buildConciseEvidence(text, matchIndex, matchLength, maxLen = 140) {
-  const line = getLocalLine(text, matchIndex);
-  if (!line) return "";
-
-  const relStart = matchIndex - (text.lastIndexOf("\n", matchIndex) + 1);
-  const relEnd = relStart + matchLength;
-  const pad = 40;
-  let start = Math.max(0, relStart - pad);
-  let end = Math.min(line.length, relEnd + pad);
-
-  if (start > 0) start = line.indexOf(" ", start) + 1 || start;
-  if (end < line.length) {
-    const nextSpace = line.lastIndexOf(" ", end);
-    if (nextSpace > relEnd) end = nextSpace;
-  }
-
-  let excerpt = line.slice(start, end).trim();
-  if (start > 0) excerpt = `…${excerpt}`;
-  if (end < line.length) excerpt = `${excerpt}…`;
+  const hay = String(text ?? "");
+  if (!hay || matchIndex < 0) return "";
+  const lineStart = hay.lastIndexOf("\n", matchIndex) + 1;
+  const nextBreak = hay.indexOf("\n", matchIndex + matchLength);
+  const lineEnd = nextBreak === -1 ? hay.length : nextBreak;
+  const start = Math.max(lineStart, matchIndex - 50);
+  const end = Math.min(lineEnd, matchIndex + matchLength + 50);
+  let excerpt = hay.slice(start, end).replace(/\s+/g, " ").trim();
+  if (start > lineStart) excerpt = `…${excerpt}`;
+  if (end < lineEnd) excerpt = `${excerpt}…`;
   if (excerpt.length > maxLen) {
-    const center = Math.floor((relStart + relEnd) / 2) - Math.floor(maxLen / 2);
-    const sliceStart = Math.max(0, center);
-    excerpt = `${sliceStart > 0 ? "…" : ""}${line.slice(sliceStart, sliceStart + maxLen).trim()}…`;
+    excerpt = `${excerpt.slice(0, maxLen - 1).trim()}…`;
   }
   return excerpt;
 }
@@ -185,11 +175,12 @@ function detectOneLineDiagramText(text) {
   if (/\bPANEL\s+SCHEDULE\b/i.test(hay) && !/\bONE[\s-]*LINE\b/i.test(hay)) {
     return false;
   }
-  return (
-    /\bONE[\s-]*LINE\b/i.test(hay) ||
-    /\bSINGLE[\s-]*LINE\b/i.test(hay) ||
-    (/\bMDP\b/i.test(hay) && /\b\d{2,4}\s*A\b/i.test(hay) && /\d+\/\d+\s*V/i.test(hay))
-  );
+  const explicitTitle = /\b(?:ONE|SINGLE)[\s-]*LINE(?:\s+DIAGRAMS?)?\b/i.test(hay);
+  const engineeringBody =
+    /\b(?:MDP|PANELBOARD|SERVICE\s+ENTRANCE|CT\s+CABINET)\b/i.test(hay) &&
+    /\b\d{2,4}\s*A\b/i.test(hay) &&
+    /\d+\/\d+\s*V/i.test(hay);
+  return engineeringBody && (explicitTitle || /\bMDP\b/i.test(hay));
 }
 
 /**
@@ -237,7 +228,7 @@ function extractOneLineFindingsFromText(text, pageNumber, source) {
   };
 
   const panelBlockRegex =
-    /(?:NEW\s+)?PANELBOARD\s*["']?([^"'\s,]+)["']?\s*(\d{2,4})\s*A[,\s]+(\d+\/\d+)\s*V[,\s]*(\d+)[\s-]*(?:PH|Ø|PHASE)/gi;
+    /(?:NEW\s+)?PANELBOARD\s*["']?([^"'\s,]+)["']?[\s\S]{0,180}?(\d{2,4})\s*A[,\s]+(\d+\/\d+)\s*V[,\s]*(\d+)[\s-]*(?:PH|Ø|PHASE)/gi;
   let match;
   while ((match = panelBlockRegex.exec(pageText)) !== null) {
     const entityName = String(match[1]).trim();
@@ -294,6 +285,72 @@ function extractOneLineFindingsFromText(text, pageNumber, source) {
         category: "phase",
         evidence_text: evidence,
         confidence: 0.85,
+      });
+    }
+  }
+
+  const flattenedPanels =
+    /PANEL\s+PANEL\s+PANEL[\s\S]{0,180}?["']([^"']+)["']\s+["']([^"']+)["']\s+["']([^"']+)["'][\s\S]{0,420}?(\d{2,4})\s*A\s+(\d{2,4})\s*A\s+(\d{2,4})\s*A[\s\S]{0,300}?(\d+\/\d+)\s*V,\s*(\d+)(?:Ø|PH),\s*(\d+)W\s+\7\s*V,\s*\8(?:Ø|PH),\s*\9W\s+\7\s*V,\s*\8(?:Ø|PH),\s*\9W/gi;
+  while ((match = flattenedPanels.exec(pageText)) !== null) {
+    const labels = [match[1], match[2], match[3]];
+    const amps = [Number(match[4]), Number(match[5]), Number(match[6])];
+    const voltage = match[7];
+    const phase = match[8];
+    const wires = match[9];
+    for (let index = 0; index < labels.length; index += 1) {
+      const entityName = labels[index];
+      const evidence = `Panel \"${entityName}\" ${amps[index]}A MLO ${voltage}V, ${phase}PH, ${wires}W`;
+      push({
+        field_key: "panel_rating",
+        field_label: `Panel ${entityName} rating`,
+        raw_value: String(amps[index]),
+        normalized_value: amps[index],
+        unit: "A",
+        entity_type: "panel",
+        entity_name: entityName,
+        fact_type: "panel_fact",
+        category: "panel_rating",
+        evidence_text: evidence,
+        confidence: 0.88,
+      });
+      push({
+        field_key: "service_voltage",
+        field_label: "Panel voltage",
+        raw_value: voltage,
+        normalized_value: voltage,
+        unit: "V",
+        entity_type: "panel",
+        entity_name: entityName,
+        fact_type: "panel_fact",
+        category: "service_voltage",
+        evidence_text: evidence,
+        confidence: 0.86,
+      });
+      push({
+        field_key: "phase",
+        field_label: "Panel phase",
+        raw_value: `${phase}PH`,
+        normalized_value: phase,
+        unit: "phase",
+        entity_type: "panel",
+        entity_name: entityName,
+        fact_type: "panel_fact",
+        category: "phase",
+        evidence_text: evidence,
+        confidence: 0.86,
+      });
+      push({
+        field_key: "wire_configuration",
+        field_label: "Panel wire configuration",
+        raw_value: `${wires}W`,
+        normalized_value: wires,
+        unit: "wire",
+        entity_type: "panel",
+        entity_name: entityName,
+        fact_type: "panel_fact",
+        category: "wire_configuration",
+        evidence_text: evidence,
+        confidence: 0.86,
       });
     }
   }
@@ -366,6 +423,52 @@ function extractOneLineFindingsFromText(text, pageNumber, source) {
       category: "disconnect_rating",
       evidence_text: evidence,
       confidence: 0.82,
+    });
+  }
+
+  const multilineDisconnectRegex =
+    /(\d{2,4})\s*A[,\s]+(\d+)[\s-]*POLE\b[\s\S]{0,500}?\b(?:FUSED\s+)?DISCONNECT\b/gi;
+  while ((match = multilineDisconnectRegex.exec(pageText)) !== null) {
+    const amps = Number(match[1]);
+    const fullEvidence = pageText.slice(match.index, multilineDisconnectRegex.lastIndex)
+      .replace(/\s+/g, " ")
+      .trim();
+    const evidence =
+      fullEvidence.length <= 180
+        ? fullEvidence
+        : `${fullEvidence.slice(0, 80).trim()} … ${fullEvidence.slice(-90).trim()}`;
+    push({
+      field_key: "disconnect_rating",
+      field_label: "Disconnect rating",
+      raw_value: String(amps),
+      normalized_value: amps,
+      unit: "A",
+      entity_type: "service_equipment",
+      entity_name: "Service disconnect",
+      fact_type: "service_equipment_fact",
+      category: "disconnect_rating",
+      evidence_text: evidence,
+      confidence: 0.86,
+    });
+  }
+
+  const mainServiceEntrance = pageText.match(
+    /\bMAIN\s+SERVICE\s+ENTRANCE\b[\s\S]{0,1600}?(\d{2,4})\s*A,\s*(\d+)[\s-]*POLE\b/i,
+  );
+  if (mainServiceEntrance) {
+    const amps = Number(mainServiceEntrance[1]);
+    push({
+      field_key: "service_entrance_amperage",
+      field_label: "Service entrance amperage",
+      raw_value: mainServiceEntrance[1],
+      normalized_value: amps,
+      unit: "A",
+      entity_type: "project_service",
+      entity_name: "Main service entrance",
+      fact_type: "project_service_fact",
+      category: "service_entrance",
+      evidence_text: `MAIN SERVICE ENTRANCE — ${amps}A, ${mainServiceEntrance[2]}-POLE`,
+      confidence: 0.88,
     });
   }
 
@@ -472,10 +575,21 @@ function extractOneLineFindingsFromText(text, pageNumber, source) {
   while ((match = phaseRegex.exec(pageText)) !== null) {
     const line = getLocalContext(pageText, match.index);
     const evidence = buildConciseEvidence(pageText, match.index, match[0].length) || line;
-    if (!AMP_CONTEXT_PATTERN.test(evidence)) continue;
+    if (!AMP_CONTEXT_PATTERN.test(line)) continue;
     const phase = normalizeOneLinePhase(match[1]);
     if (!phase) continue;
     const entity = classifyPanelEntity(line);
+    if (entity.entityType === "unidentified") continue;
+    if (
+      out.some(
+        (candidate) =>
+          candidate.field_key === "phase" &&
+          candidate.entity_name === entity.entityName &&
+          String(candidate.normalized_value) === phase,
+      )
+    ) {
+      continue;
+    }
     push({
       field_key: "phase",
       field_label: "Phase",
@@ -495,6 +609,8 @@ function extractOneLineFindingsFromText(text, pageNumber, source) {
   while ((match = wireRegex.exec(pageText)) !== null) {
     const line = getLocalContext(pageText, match.index);
     const evidence = buildConciseEvidence(pageText, match.index, match[0].length) || line;
+    const physicalLine = getLocalLine(pageText, match.index);
+    if ((physicalLine.match(/\d+\/\d+\s*V/gi) ?? []).length > 1) continue;
     if (!/\d+\/\d+\s*V/i.test(evidence) && !AMP_CONTEXT_PATTERN.test(evidence)) continue;
     const entity = classifyPanelEntity(line);
     push({
@@ -574,9 +690,11 @@ function extractOneLineFindingsFromText(text, pageNumber, source) {
     });
   }
 
-  if (/\bTRANSFORMER\b/i.test(pageText)) {
-    const idx = pageText.search(/\bTRANSFORMER\b/i);
-    const evidence = buildConciseEvidence(pageText, idx, 30);
+  const padMountedTransformer = pageText.match(
+    /\bPAD[\s-]*MOUNTED\b[\s\S]{0,80}?\bTRANSFORMER\b/i,
+  );
+  if (padMountedTransformer) {
+    const evidence = padMountedTransformer[0].replace(/\s+/g, " ").trim();
     push({
       field_key: "service_configuration",
       field_label: "Transformer",

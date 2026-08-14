@@ -10,17 +10,22 @@ import {
 } from "./uciNavSections.ts";
 
 describe("UCI Lovable-shaped primary nav", () => {
-  it("exposes Lovable UCI children under Utility Coordination (no Hub/Overview)", () => {
+  it("exposes approved cross-project operations and foundations (no stages)", () => {
     const ids = UCI_PRIMARY_NAV_SECTIONS.map((s) => s.id);
     assert.deepEqual(ids, [
       "submissions",
       "communications",
+      "needs-attention",
+      "portfolio",
+      "portal-harvest",
+      "provider-directory",
       "class-of-service",
       "ciac",
       "energization",
       "miss-utility",
       "knowledge-graph",
-      "application-builder",
+      "provider-map",
+      "conflicts",
     ]);
     assert.equal(
       UCI_PRIMARY_NAV_SECTIONS.some((s) => s.id === "overview"),
@@ -28,60 +33,47 @@ describe("UCI Lovable-shaped primary nav", () => {
     );
   });
 
-  it("uses Lovable labels for primary children", () => {
+  it("uses domain-correct labels for primary children", () => {
     const labels = UCI_PRIMARY_NAV_SECTIONS.map((s) => s.label);
-    assert.ok(labels.includes("UCI · Submissions"));
-    assert.ok(labels.includes("UCI · Inbox"));
-    assert.ok(labels.includes("UCI · Class of Service"));
-    assert.ok(labels.includes("UCI · CIAC & Refunds"));
-    assert.ok(labels.includes("UCI · Energization"));
-    assert.ok(labels.includes("UCI · Miss Utility 811"));
-    assert.ok(labels.includes("UCI · Knowledge Graph"));
-    assert.ok(labels.includes("UCI Builder"));
+    assert.ok(labels.includes("Submissions"));
+    assert.ok(labels.includes("Inbox"));
+    assert.ok(labels.includes("Portal Harvest"));
+    assert.ok(labels.includes("Class of Service"));
+    assert.ok(labels.includes("CIAC & Refunds"));
+    assert.ok(labels.includes("Utility Territory Map"));
+    assert.ok(!labels.includes("UCI Builder"));
   });
 
-  it("never surfaces Partial as a sidebar badge", () => {
-    for (const section of UCI_NAV_SECTIONS) {
-      assert.equal(uciSidebarBadgeLabel(section.support), "Soon");
-      assert.notEqual(section.support, "partial");
-    }
+  it("distinguishes active, foundation, and manual destinations", () => {
+    assert.equal(uciSidebarBadgeLabel("active"), "Active");
+    assert.equal(uciSidebarBadgeLabel("foundation"), "Foundation");
+    assert.equal(uciSidebarBadgeLabel("manual"), "Manual");
+    assert.equal(uciSidebarBadgeLabel("contextual"), null);
   });
 
-  it("keeps Submissions / Inbox deep-links as preferred drawer tabs", () => {
+  it("routes Submissions and Inbox to cross-project foundations", () => {
     const submissions = getUciNavSection("submissions");
     const inbox = getUciNavSection("communications");
-    assert.equal(submissions?.target.kind, "drawer-tab");
-    assert.equal(
-      submissions?.target.kind === "drawer-tab" ? submissions.target.tab : null,
-      "application-prep",
-    );
-    assert.equal(inbox?.target.kind, "drawer-tab");
-    assert.equal(
-      inbox?.target.kind === "drawer-tab" ? inbox.target.tab : null,
-      "communications",
-    );
+    assert.equal(submissions?.target.kind === "external" ? submissions.target.href : null, "/uci/submissions");
+    assert.equal(inbox?.target.kind === "external" ? inbox.target.href : null, "/uci/inbox");
     assert.equal(uciSectionHref("submissions"), "/uci?section=submissions");
     assert.equal(uciSectionHref("communications"), "/uci?section=communications");
   });
 
-  it("points UCI Builder at the dedicated route", () => {
+  it("folds UCI Builder into the record application-package workspace", () => {
     const builder = getUciNavSection("application-builder");
-    assert.equal(builder?.target.kind, "external");
+    assert.equal(builder?.target.kind, "drawer-tab");
     assert.equal(
-      builder?.target.kind === "external" ? builder.target.href : null,
-      "/uci/application-builder",
+      builder?.target.kind === "drawer-tab" ? builder.target.tab : null,
+      "application-prep",
     );
   });
 
-  it("demotes Load Profile / Meter Set / Conflict / Easement / Portfolio / Provider Map to hub tiles", () => {
+  it("keeps only contextual record tools as hub tiles", () => {
     const hubIds = UCI_HUB_TILE_SECTIONS.map((s) => s.id).sort();
     assert.deepEqual(hubIds, [
-      "conflict-hunter",
-      "easement",
       "load-profile",
       "meter-set",
-      "portfolio",
-      "provider-map",
     ]);
     for (const id of hubIds) {
       assert.equal(UCI_PRIMARY_NAV_SECTIONS.some((s) => s.id === id), false);

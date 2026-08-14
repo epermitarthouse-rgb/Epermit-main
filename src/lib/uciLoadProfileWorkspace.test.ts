@@ -2,11 +2,14 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import {
   buildLoadScheduleRows,
   buildPackageReadinessChecklist,
+  buildServiceSizingFields,
   buildSourceDocumentRows,
   buildVerifiedInputRows,
+  deriveSourceDocumentStatus,
   getDefaultReviewQueueTab,
   getLoadProfileOverview,
   getLoadScheduleTotals,
+  getServiceSizingRecommendation,
   groupSourceDocumentsByCategory,
   inferDocumentCategory,
   persistWorkspaceSection,
@@ -17,6 +20,7 @@ import {
 } from "@/lib/uciLoadProfileWorkspace";
 import {
   candidateDisplayFingerprint,
+  consolidateCandidatesForReview,
   deduplicateCandidatesForDisplay,
   formatCandidateFieldLabel,
   getLoadReviewTabCandidates,
@@ -25,6 +29,7 @@ import {
   type UciLoadProfileSummary,
   type UciVerifiedLoadValue,
 } from "@/lib/uciLoadProfile";
+import type { UciDocumentManifestEntry } from "@/lib/uciDocumentProcessing";
 
 const baseSummary = (): UciLoadProfileSummary => ({
   version: "d2.1-v1",
@@ -89,6 +94,50 @@ const verified = (
   },
 });
 
+const manifestDocument = (
+  overrides: Partial<UciDocumentManifestEntry> = {},
+): UciDocumentManifestEntry => ({
+  document_id: "uci_doc:test",
+  source_type: "pepco_portal_document",
+  provider_slug: "pepco",
+  external_application_id: "app-a",
+  original_filename: "test.pdf",
+  portal_document_name: null,
+  portal_document_type: null,
+  portal_document_status: null,
+  content_hash: "hash",
+  mime_type: "application/pdf",
+  file_size: 100,
+  page_count: 1,
+  document_roles: ["supporting_document"],
+  role_confidence: ["low"],
+  uci_stages: ["agent_2_load_profile"],
+  processing_status: "complete",
+  pages_processed: 1,
+  extraction_methods_used: ["native_text"],
+  findings_count: 0,
+  failed_pages: [],
+  failure_reason: null,
+  duplicate_of: null,
+  schema_version: "row-doc-v2",
+  processed_at: "2026-08-14T12:58:07.472Z",
+  page_coverage: {
+    total_pages: 1,
+    pages_discovered: 1,
+    pages_processed: 1,
+    pages_with_text: 1,
+    pages_with_tables: 0,
+    pages_sent_to_vision: 0,
+    pages_sent_to_ocr: 0,
+    blank_pages: 0,
+    failed_pages: 0,
+    fallback_pending: 0,
+    skipped_duplicate_pages: 0,
+  },
+  findings_extraction_status: "no_supported_findings",
+  ...overrides,
+});
+
 describe("uciLoadProfileWorkspace", () => {
   describe("overview status logic", () => {
     it("returns not_analyzed when summary is null", () => {
@@ -128,6 +177,45 @@ describe("uciLoadProfileWorkspace", () => {
       expect(overview.connectedLoadSatisfied).toBe(false);
       expect(overview.workspaceState).not.toBe("ready_for_application_package");
     });
+
+    it("recomputes stale missing-input status from verified Stage 2 values", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        analysis_status: "missing_inputs",
+        missing_inputs: [],
+        verified_values: {
+          ...verified("connected_load_kva", { value: 410, unit: "kVA" }),
+          ...verified("demand_load_kva", { value: 315, unit: "kVA" }),
+          ...verified("requested_voltage", { value: "120/208", unit: "V" }),
+          ...verified("phase", { value: "3", unit: "phase" }),
+          ...verified("wire_configuration", { value: "4", unit: "wire" }),
+        },
+      });
+      expect(summary?.analysis_status).toBe("preliminary");
+      expect(summary?.missing_inputs).toEqual([]);
+    });
+
+    it("does not let optional pending evidence block Stage 2 readiness", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        candidate_values: [
+          candidate({
+            field_key: "panel_rating",
+            entity_type: "electrical_panel",
+            is_project_total: false,
+            unit: "A",
+          }),
+        ],
+        verified_values: {
+          ...verified("connected_load_kva", { value: 410, unit: "kVA" }),
+          ...verified("demand_load_kva", { value: 315, unit: "kVA" }),
+          ...verified("requested_voltage", { value: "120/208", unit: "V" }),
+          ...verified("phase", { value: "3", unit: "phase" }),
+          ...verified("wire_configuration", { value: "4", unit: "wire" }),
+        },
+      });
+      expect(getLoadProfileOverview(summary).workspaceState).toBe("ready_for_service_sizing");
+    });
   });
 
   describe("source document grouping", () => {
@@ -151,6 +239,119 @@ describe("uciLoadProfileWorkspace", () => {
       const rows = buildSourceDocumentRows(summary);
       const groups = groupSourceDocumentsByCategory(rows);
       expect(groups.panel_schedules.length + groups.one_line_diagram.length).toBeGreaterThan(0);
+    });
+
+    it("merges ranked documents with active candidates and excludes stale counts", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        load_extraction: {
+          source_document_ranking: [
+            {
+              file_name: "E601 - ONE LINE DIAGRAM.pdf",
+              source_type: "pepco_portal_document",
+              score: 90,
+              reasons: ["one line"],
+            },
+          ],
+        },
+        candidate_values: [
+          candidate({
+            source_type: "uci_document_finding",
+            source_document_name: "E601 - ONE LINE DIAGRAM.pdf",
+          }),
+          candidate({
+            candidate_id: "stale-e601",
+            status: "stale",
+            source_type: "uci_document_finding",
+            source_document_name: "E601 - ONE LINE DIAGRAM.pdf",
+          }),
+        ],
+      });
+
+      const rows = buildSourceDocumentRows(summary);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].candidateCount).toBe(1);
+      expect(rows[0].processingStatus).toBe("processed");
+    });
+
+    it("uses authoritative manifest metadata for zero-findings and fallback states", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        load_extraction: {
+          source_document_ranking: [
+            { file_name: "parsed-empty.pdf", score: 10, reasons: [] },
+            { file_name: "needs-vision.pdf", score: 5, reasons: [] },
+          ],
+        },
+      });
+      const rows = buildSourceDocumentRows(summary, "app-a", [
+        manifestDocument({ document_id: "parsed", original_filename: "parsed-empty.pdf" }),
+        manifestDocument({
+          document_id: "fallback",
+          original_filename: "needs-vision.pdf",
+          processing_status: "partial",
+          pages_processed: 0,
+          failure_reason: "One or more pages require Vision or OCR fallback processing",
+          page_coverage: {
+            ...manifestDocument().page_coverage!,
+            pages_processed: 0,
+            pages_with_text: 0,
+            pages_sent_to_vision: 1,
+            fallback_pending: 1,
+          },
+          page_records: [{ page_number: 1, status: "vision_required" }],
+        }),
+      ]);
+
+      expect(rows.find((row) => row.documentName === "parsed-empty.pdf")?.status).toBe(
+        "parsed_no_candidates",
+      );
+      expect(rows.find((row) => row.documentName === "needs-vision.pdf")?.status).toBe(
+        "needs_fallback",
+      );
+    });
+
+    it("distinguishes all five source document status semantics", () => {
+      expect(
+        deriveSourceDocumentStatus(manifestDocument({ findings_count: 2 })).status,
+      ).toBe("parsed_candidates");
+      expect(deriveSourceDocumentStatus(manifestDocument()).status).toBe(
+        "parsed_no_candidates",
+      );
+      expect(
+        deriveSourceDocumentStatus(
+          manifestDocument({ processing_status: "pending", processed_at: null }),
+        ).status,
+      ).toBe("pending");
+      expect(
+        deriveSourceDocumentStatus(
+          manifestDocument({
+            processing_status: "failed",
+            failure_reason: "Parser failure",
+          }),
+        ).status,
+      ).toBe("failed");
+      expect(
+        deriveSourceDocumentStatus(
+          manifestDocument({
+            processing_status: "partial",
+            page_records: [{ page_number: 1, status: "ocr_required" }],
+          }),
+        ).status,
+      ).toBe("needs_fallback");
+      expect(
+        deriveSourceDocumentStatus(
+          manifestDocument({
+            processing_status: "partial",
+            findings_count: 2,
+            fallback_status: "attempted_failed",
+            failure_reason: "Parsed with fallback warning: one fallback page failed",
+          }),
+        ),
+      ).toMatchObject({
+        status: "parsed_candidates",
+        statusLabel: "Parsed with fallback warning",
+      });
     });
   });
 
@@ -214,6 +415,38 @@ describe("uciLoadProfileWorkspace", () => {
       );
     });
 
+    it("does not require a factor when verified project demand is provided", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        verified_values: {
+          ...verified("connected_load_kva", { value: 410, unit: "kVA" }),
+          ...verified("demand_load_kva", { value: 315, unit: "kVA" }),
+        },
+      });
+
+      const rows = buildLoadScheduleRows(summary);
+      expect(rows).toHaveLength(2);
+      expect(rows.every((row) => row.demandFactorDisplay === "N/A — verified demand provided"))
+        .toBe(true);
+
+      const totals = getLoadScheduleTotals(summary);
+      expect(totals.connectedKva).toBe(410);
+      expect(totals.demandKva).toBe(315);
+      expect(totals.canFinalize).toBe(true);
+      expect(totals.finalizeMessage).toContain("no demand factor or template is required");
+    });
+
+    it("keeps the factor unresolved when project demand must be derived", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        verified_values: verified("connected_load_kva", { value: 410, unit: "kVA" }),
+      });
+
+      const rows = buildLoadScheduleRows(summary);
+      expect(rows[0].demandFactorDisplay).toBe("Unresolved");
+      expect(getLoadScheduleTotals(summary).canFinalize).toBe(false);
+    });
+
     it("excludes unapproved candidates from schedule", () => {
       const summary = parseLoadProfileSummary({
         ...baseSummary(),
@@ -248,14 +481,14 @@ describe("uciLoadProfileWorkspace", () => {
       expect(err).toContain("kVA");
     });
 
-    it("requires reviewer note", () => {
+    it("allows optional note after explicit UI confirmation", () => {
       const err = validateManualVerifiedInput({
         field_key: "service_voltage",
         value: "480",
         unit: "V",
         review_note: "",
       });
-      expect(err).toContain("note");
+      expect(err).toBeNull();
     });
   });
 
@@ -286,6 +519,80 @@ describe("uciLoadProfileWorkspace", () => {
       const items = buildPackageReadinessChecklist(summary);
       const connected = items.find((i) => i.key === "connected_load_data");
       expect(connected?.status).toBe("complete");
+    });
+
+    it("treats verified project demand as sufficient without template approval", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        verified_values: {
+          ...verified("connected_load_kva", { value: 410, unit: "kVA" }),
+          ...verified("demand_load_kva", { value: 315, unit: "kVA" }),
+        },
+      });
+
+      const overview = getLoadProfileOverview(summary);
+      expect(overview.verifiedProjectDemandSatisfied).toBe(true);
+
+      const sizing = buildServiceSizingFields(summary);
+      expect(sizing).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "demand_load_kva", value: "315", approved: true }),
+        ]),
+      );
+
+      const items = buildPackageReadinessChecklist(summary);
+      const schedule = items.find((item) => item.key === "approved_load_schedule");
+      expect(schedule?.status).toBe("complete");
+      expect(schedule?.detail).toContain("no demand factor or template is required");
+    });
+
+    it("requires human service-size input when no approved rule or recommendation exists", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        verified_values: {
+          ...verified("connected_load_kva", { value: 410, unit: "kVA" }),
+          ...verified("demand_load_kva", { value: 315, unit: "kVA" }),
+          ...verified("requested_voltage", { value: "120/208", unit: "V" }),
+          ...verified("phase", { value: "3", unit: "phase" }),
+          ...verified("requested_service_amperage", { value: 1000, unit: "A" }),
+        },
+      });
+
+      expect(getServiceSizingRecommendation(summary)).toMatchObject({
+        status: "requires_human_input",
+        missingInputs: [],
+      });
+      const items = buildPackageReadinessChecklist(summary, {
+        hasProjectAddress: false,
+        packageDocumentsComplete: false,
+      });
+      expect(items.some((item) => item.key === "required_documents")).toBe(false);
+      expect(items.find((item) => item.key === "service_size_recommendation")).toMatchObject({
+        status: "needs_review",
+      });
+    });
+
+    it("marks voltage and phase as needs verification when candidates exist", () => {
+      const summary = parseLoadProfileSummary({
+        ...baseSummary(),
+        candidate_values: [
+          candidate({
+            candidate_id: "voltage",
+            field_key: "requested_voltage",
+            normalized_value: 480,
+            unit: "V",
+          }),
+          candidate({
+            candidate_id: "phase",
+            field_key: "phase",
+            normalized_value: "three_phase",
+            unit: "phase",
+          }),
+        ],
+      });
+      const items = buildPackageReadinessChecklist(summary);
+      expect(items.find((item) => item.key === "voltage")?.status).toBe("needs_review");
+      expect(items.find((item) => item.key === "phase")?.status).toBe("needs_review");
     });
   });
 
@@ -330,6 +637,36 @@ describe("uciLoadProfileWorkspace", () => {
       const b = candidate({ candidate_id: "b" });
       expect(deduplicateCandidatesForDisplay([a, b])).toHaveLength(1);
       expect(candidateDisplayFingerprint(a)).toBe(candidateDisplayFingerprint(b));
+    });
+
+    it("consolidates agreeing facts while preserving conflicting values", () => {
+      const application = candidate({
+        candidate_id: "application",
+        field_key: "phase",
+        normalized_value: "three_phase",
+        unit: "phase",
+        source_document_name: "Application.pdf",
+      });
+      const e601 = candidate({
+        candidate_id: "e601",
+        field_key: "phase",
+        normalized_value: "three_phase",
+        unit: "phase",
+        source_document_name: "E601.pdf",
+        source_content_hash: "e601",
+      });
+      const conflict = candidate({
+        candidate_id: "conflict",
+        field_key: "phase",
+        normalized_value: "single_phase",
+        unit: "phase",
+        source_document_name: "E602.pdf",
+        source_content_hash: "e602",
+      });
+      const groups = consolidateCandidatesForReview([application, e601, conflict]);
+      expect(groups).toHaveLength(2);
+      expect(groups.find((group) => group.primary.normalized_value === "three_phase")?.candidates)
+        .toHaveLength(2);
     });
   });
 

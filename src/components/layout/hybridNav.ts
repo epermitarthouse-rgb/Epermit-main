@@ -278,6 +278,12 @@ export const hybridNavGroups: HybridNavGroup[] = [
         description: "Lovable → PermitPilot checklist",
       },
       {
+        title: "UCI Action Tracker",
+        href: "/admin/uci-action-tracker",
+        icon: ListTodo,
+        description: "Internal UCI implementation matrix",
+      },
+      {
         title: "Authorizations",
         href: "/admin/authorizations",
         icon: FileSignature,
@@ -355,6 +361,7 @@ export const pageTitles: Record<string, string> = {
   "/designcheck": "DesignCheck",
   "/code-compliance": "Code Analyzer",
   "/uci": "Utility Coordination",
+  "/uci/portal-harvest": "UCI Portal Harvest",
   "/uci/application-builder": "UCI Builder",
   "/permit-intelligence": "Permit Intelligence",
   "/jurisdictions/map": "Jurisdiction Map",
@@ -375,6 +382,7 @@ export const pageTitles: Record<string, string> = {
   "/admin/feature-flags": "Admin · Feature Flags",
   "/admin/shadow-mode": "Admin · Shadow Mode",
   "/admin/architecture-replication": "Admin · Architecture Replication",
+  "/admin/uci-action-tracker": "Admin · UCI Action Tracker",
   "/admin/authorizations": "Admin · Authorizations",
   "/admin/members": "Admin · Members",
   "/admin/audit": "Admin · Audit",

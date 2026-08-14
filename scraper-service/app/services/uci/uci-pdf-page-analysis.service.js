@@ -69,6 +69,37 @@ function detectTableLikeAlignment(text, items) {
 }
 
 /**
+ * Preserve physical PDF rows so deterministic table parsers do not join
+ * unrelated title-block, plumbing, and electrical columns into false rows.
+ *
+ * @param {Array<{ str?: string, transform?: number[] }>} items
+ */
+function buildLayoutAwarePageText(items) {
+  const rows = new Map();
+  for (const item of items) {
+    if (!item || typeof item.str !== "string" || !item.str.trim()) continue;
+    const y = Math.round(Number(item.transform?.[5] ?? 0));
+    if (!rows.has(y)) rows.set(y, []);
+    rows.get(y).push({
+      x: Number(item.transform?.[4] ?? 0),
+      str: item.str.trim(),
+    });
+  }
+  return [...rows.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, rowItems]) =>
+      rowItems
+        .sort((a, b) => a.x - b.x)
+        .map((item) => item.str)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
  * @param {object} params
  */
 function classifyPdfPage(params) {
@@ -218,10 +249,7 @@ async function extractPdfPagesWithAnalysis(buffer, deps = {}) {
         page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1 });
         const textContent = await page.getTextContent();
-        const parts = textContent.items
-          .map((item) => (item && typeof item.str === "string" ? item.str : ""))
-          .filter(Boolean);
-        const text = parts.join(" ").replace(/\s+/g, " ").trim();
+        const text = buildLayoutAwarePageText(textContent.items);
         const analysis = classifyPdfPage({
           page_number: pageNum,
           native_text: text,
@@ -374,4 +402,5 @@ module.exports = {
   extractPdfPagesWithAnalysis,
   processDocumentPagesFromAnalysis,
   computeLayoutDependency,
+  buildLayoutAwarePageText,
 };

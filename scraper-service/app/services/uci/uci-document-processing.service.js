@@ -14,6 +14,7 @@ const {
   extractCandidatesFromPdfText,
   extractCandidatesFromTables,
   extractCandidatesFromStructuredApplication,
+  extractUtilityApplicationCandidatesFromText,
   getStructuredApplicationFromRecord,
 } = require("./uci-load-candidate.service.js");
 const {
@@ -42,13 +43,14 @@ const {
 } = require("./uci-equipment-schedule-parser.service.js");
 const { evidenceFingerprint } = require("./uci-one-line-extractor.service.js");
 
-const DOCUMENT_PROCESSING_SCHEMA_VERSION = "row-doc-v1";
-const STALE_DOCUMENT_PROCESSING_SCHEMA_VERSIONS = new Set([]);
+const DOCUMENT_PROCESSING_SCHEMA_VERSION = "row-doc-v2";
+const STALE_DOCUMENT_PROCESSING_SCHEMA_VERSIONS = new Set(["row-doc-v1"]);
 const PROJECT_DOCUMENTS_BUCKET = "project-documents";
 const PROJECT_DOCUMENTS_SELECT =
-  "id, project_id, document_type, file_name, file_path, file_type, created_at";
+  "id, project_id, document_type, file_name, file_path, file_type, description, created_at";
 
 const METADATA_KEY = "uci_document_processing";
+const MANUAL_DOCUMENT_SCOPE_KEY = "__manual__";
 
 /** @type {readonly string[]} */
 const UCI_DOCUMENT_ROLES = [
@@ -153,6 +155,7 @@ const AGENT_2_FIELD_KEYS = new Set([
   "meter_count",
   "meter_present",
   "ct_cabinet_present",
+  "transformer_present",
   "service_configuration",
   "central_ac_count",
   "central_heat_count",
@@ -163,6 +166,10 @@ const AGENT_2_FIELD_KEYS = new Set([
   "equipment_schedule_phase",
   "equipment_schedule_amperage",
   "equipment_schedule_watts",
+  "equipment_schedule_kva",
+  "construction_start_date",
+  "construction_completion_date",
+  "requested_in_service_date",
 ]);
 
 /** Agent 2 engineering categories beyond explicit field keys. */
@@ -191,6 +198,7 @@ const AGENT_2_CATEGORIES = new Set([
   "hvac_thermal_cooling",
   "equipment_evidence",
   "equipment_schedule",
+  "construction_schedule",
   "compliance_evidence",
 ]);
 
@@ -259,6 +267,10 @@ const FIELD_KEY_TO_CATEGORY = {
   equipment_schedule_phase: "equipment_schedule",
   equipment_schedule_amperage: "equipment_schedule",
   equipment_schedule_watts: "equipment_schedule",
+  equipment_schedule_kva: "equipment_schedule",
+  construction_start_date: "construction_schedule",
+  construction_completion_date: "construction_schedule",
+  requested_in_service_date: "construction_schedule",
   comcheck_energy_code: "compliance_evidence",
   comcheck_project_title: "compliance_evidence",
   comcheck_project_location: "compliance_evidence",
@@ -309,6 +321,10 @@ const FIELD_KEY_LABELS = {
   equipment_schedule_phase: "Equipment phase",
   equipment_schedule_amperage: "Equipment amperage",
   equipment_schedule_watts: "Equipment watts",
+  equipment_schedule_kva: "Equipment apparent power",
+  construction_start_date: "Construction start date",
+  construction_completion_date: "Construction completion date",
+  requested_in_service_date: "Requested in-service date",
   comcheck_energy_code: "Energy code",
   comcheck_project_title: "Project title",
   comcheck_project_location: "Project location",
@@ -442,6 +458,26 @@ function summarizeDocumentProcessingCounts(documents) {
   return counts;
 }
 
+function classifyDocumentFallbackStatus(document, providerStatus) {
+  const statuses = (Array.isArray(document?.page_records) ? document.page_records : []).map(
+    (page) => String(page?.status ?? ""),
+  );
+  if (statuses.includes("human_required")) return "manual_review_required";
+  if (statuses.some((status) => status === "vision_failed" || status === "ocr_failed")) {
+    return "attempted_failed";
+  }
+  const needsVision = statuses.includes("vision_required");
+  const needsOcr = statuses.includes("ocr_required");
+  if (
+    (needsVision && !providerStatus?.vision_available) ||
+    (needsOcr && !providerStatus?.ocr_available)
+  ) {
+    return "unavailable";
+  }
+  if (needsVision || needsOcr) return "pending";
+  return "not_required";
+}
+
 /**
  * @param {object} params
  */
@@ -486,9 +522,13 @@ function resolveProviderSlug(record) {
  * @returns {string}
  */
 function buildStableDocumentId(doc) {
+  const applicationScope =
+    String(doc.source_type ?? "") === "manual_upload"
+      ? ""
+      : String(doc.external_application_id ?? "");
   const parts = [
     String(doc.provider_slug ?? "unknown"),
-    String(doc.external_application_id ?? ""),
+    applicationScope,
     String(doc.source_document_id ?? doc.content_hash ?? ""),
     String(doc.file_name ?? doc.source_document_name ?? ""),
   ];
@@ -547,13 +587,6 @@ function fieldKeyToCategory(fieldKey) {
  */
 function discoverAllUciDocuments(record, params) {
   const externalApplicationId = String(params.externalApplicationId || "").trim();
-  if (!externalApplicationId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
-
   const projectId = String(record.project_id ?? "");
   const coordinationRecordId = String(record.id ?? "");
   const tenantId = record.tenant_id != null ? String(record.tenant_id) : null;
@@ -561,9 +594,11 @@ function discoverAllUciDocuments(record, params) {
   const providerSlug = resolveProviderSlug(record);
   const accessContext = { projectId, coordinationRecordId, tenantId };
 
-  const pepcoFiles = extractPepcoPortalFiles(record, { externalApplicationId }).filter((file) =>
-    isPepcoPortalFileAccessible(file, accessContext),
-  );
+  const pepcoFiles = externalApplicationId
+    ? extractPepcoPortalFiles(record, { externalApplicationId }).filter((file) =>
+        isPepcoPortalFileAccessible(file, accessContext),
+      )
+    : [];
 
   /** @type {Array<Record<string, unknown>>} */
   const documents = [];
@@ -605,8 +640,16 @@ function discoverAllUciDocuments(record, params) {
     const filePath = doc.file_path != null ? String(doc.file_path) : "";
     if (!fileName || !filePath) continue;
 
+    const description = String(doc.description ?? "");
+    const isManualUpload = /\bagent\s*2\s+manual\s+upload\b/i.test(description);
+    if (
+      !externalApplicationId &&
+      (!isManualUpload || !description.includes(`coordination ${coordinationRecordId}`))
+    ) {
+      continue;
+    }
     documents.push({
-      source_type: "project_document",
+      source_type: isManualUpload ? "manual_upload" : "project_document",
       provider_slug: providerSlug,
       provider_id: providerId,
       external_application_id: externalApplicationId,
@@ -688,6 +731,7 @@ function buildManifestEntry(doc, opts = {}) {
     page_records: opts.page_records ?? null,
     findings_extraction_status: opts.findings_extraction_status ?? null,
     findings_quality_warnings: opts.findings_quality_warnings ?? [],
+    fallback_status: opts.fallback_status ?? "not_required",
   };
 }
 
@@ -925,16 +969,36 @@ function deduplicateFindings(findings) {
       f.evidence_fingerprint != null
         ? String(f.evidence_fingerprint)
         : evidenceFingerprint(String(f.evidence_text ?? ""));
-    const key = [
-      f.document_id,
-      f.field_key,
-      f.entity_type,
-      f.entity_name,
-      f.page_number,
-      f.normalized_value,
-      f.unit,
-      fingerprint,
-    ].join("|");
+    const utilityApplicationFact =
+      f.extraction_method === "utility_application_text" &&
+      [
+        "existing_service_amperage",
+        "requested_service_amperage",
+        "service_voltage",
+        "phase",
+        "wire_configuration",
+        "meter_count",
+      ].includes(String(f.field_key ?? ""));
+    const key = utilityApplicationFact
+      ? [
+          f.document_id,
+          f.field_key,
+          f.entity_type,
+          f.entity_name,
+          f.normalized_value,
+          f.unit,
+          "utility_application_fact",
+        ].join("|")
+      : [
+          f.document_id,
+          f.field_key,
+          f.entity_type,
+          f.entity_name,
+          f.page_number,
+          f.normalized_value,
+          f.unit,
+          fingerprint,
+        ].join("|");
     const existing = seen.get(key);
     if (existing) {
       const methods = new Set([
@@ -947,6 +1011,9 @@ function deduplicateFindings(findings) {
       if ((f.confidence ?? 0) > (existing.confidence ?? 0)) {
         existing.confidence = f.confidence;
         existing.evidence_text = f.evidence_text;
+        existing.evidence_fingerprint = f.evidence_fingerprint;
+        existing.page_number = f.page_number;
+        existing.raw_value = f.raw_value;
       }
       continue;
     }
@@ -969,6 +1036,7 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
   const isPanelScheduleRole = documentRoles.includes("panel_schedule");
   const isComcheckRole = documentRoles.includes("COMcheck");
   const isEquipmentScheduleRole = documentRoles.includes("equipment_schedule");
+  const isUtilityApplicationRole = documentRoles.includes("utility_application");
   let equipmentScheduleLayoutUnrecoverable = false;
   let equipmentScheduleLayoutReason = null;
 
@@ -980,21 +1048,30 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
     /** @type {Array<Record<string, unknown>>} */
     let candidates = [];
 
-    if (isPanelScheduleRole || detectPanelScheduleText(text)) {
+    const hasPanelSchedule = isPanelScheduleRole || detectPanelScheduleText(text);
+    const hasOneLine =
+      isOneLineRole ||
+      (!isPanelScheduleRole && detectOneLineDiagramText(text));
+    const hasComcheck = isComcheckRole || detectComcheckReportText(text);
+    const hasEquipmentSchedule =
+      isEquipmentScheduleRole || detectEquipmentScheduleText(text);
+    const hasUtilityApplication =
+      isUtilityApplicationRole ||
+      /\bService\s+Installation\s*&\s*Upgrades\s+Application\b/i.test(text) ||
+      (/\bCurrent\s+Service\s+Details\b/i.test(text) && /\bService\s+Voltage\b/i.test(text));
+
+    if (hasPanelSchedule) {
       candidates.push(...extractPanelScheduleFindingsFromText(text, pageNum, source));
     }
 
-    if (
-      isOneLineRole ||
-      (!isPanelScheduleRole && detectOneLineDiagramText(text))
-    ) {
+    if (hasOneLine) {
       candidates.push(...extractOneLineFindingsFromText(text, pageNum, source));
     }
-    if (isComcheckRole || detectComcheckReportText(text)) {
+    if (hasComcheck) {
       candidates.push(...extractComcheckFindingsFromText(text, pageNum, source));
     }
 
-    if (isEquipmentScheduleRole || detectEquipmentScheduleText(text)) {
+    if (hasEquipmentSchedule) {
       const equipmentResult = extractEquipmentScheduleFindingsFromText(text, pageNum, source);
       candidates.push(...equipmentResult.findings);
       if (!equipmentResult.layout.parseable) {
@@ -1003,8 +1080,23 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
       }
     }
 
-    candidates.push(...extractCandidatesFromPdfText(text, pageNum, source));
-    candidates.push(...extractCandidatesFromTables(text, pageNum, source));
+    if (hasUtilityApplication) {
+      candidates.push(...extractUtilityApplicationCandidatesFromText(text, pageNum, source));
+    }
+
+    const specializedPage =
+      hasPanelSchedule ||
+      hasOneLine ||
+      hasComcheck ||
+      hasEquipmentSchedule ||
+      hasUtilityApplication;
+    const reviewOnlyDocument = documentRoles.some((role) =>
+      ["electrical_specification", "electrical_plan"].includes(role),
+    );
+    if (!specializedPage && !reviewOnlyDocument) {
+      candidates.push(...extractCandidatesFromPdfText(text, pageNum, source));
+      candidates.push(...extractCandidatesFromTables(text, pageNum, source));
+    }
 
     for (const candidate of candidates) {
       if (candidate.generic_specification_reference && candidate.normalized_value == null) {
@@ -1255,7 +1347,8 @@ function getDocumentProcessingState(metadata, externalApplicationId) {
   const apps = /** @type {{ applications?: unknown }} */ (root).applications;
   if (!apps || typeof apps !== "object" || Array.isArray(apps)) return null;
 
-  const state = /** @type {Record<string, unknown>} */ (apps)[externalApplicationId];
+  const scopeKey = String(externalApplicationId || "").trim() || MANUAL_DOCUMENT_SCOPE_KEY;
+  const state = /** @type {Record<string, unknown>} */ (apps)[scopeKey];
   if (!state || typeof state !== "object" || Array.isArray(state)) return null;
   return /** @type {Record<string, unknown>} */ (state);
 }
@@ -1295,7 +1388,8 @@ async function persistDocumentProcessingState(supabase, params) {
       ? { .../** @type {Record<string, unknown>} */ (prevRoot.applications) }
       : {};
 
-  prevApps[externalApplicationId] = state;
+  const scopeKey = String(externalApplicationId || "").trim() || MANUAL_DOCUMENT_SCOPE_KEY;
+  prevApps[scopeKey] = state;
 
   const nextMetadata = {
     ...prev,
@@ -1329,15 +1423,13 @@ async function runDocumentProcessing(supabase, params) {
     userId,
     externalApplicationId,
     refresh = false,
+    documentIds = null,
     deps = {},
   } = params;
   const extAppId = String(externalApplicationId || "").trim();
-  if (!extAppId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
+  const requestedDocumentIds = new Set(
+    (Array.isArray(documentIds) ? documentIds : []).map(String).filter(Boolean),
+  );
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -1350,7 +1442,7 @@ async function runDocumentProcessing(supabase, params) {
   const projectId = String(record.project_id);
   const coordinationRecordIdStr = String(coordinationRecordId);
 
-  if (!externalApplicationExistsInRecord(record, extAppId)) {
+  if (extAppId && !externalApplicationExistsInRecord(record, extAppId)) {
     const err = new Error("The selected utility application could not be resolved.");
     err.statusCode = 404;
     err.code = "APPLICATION_NOT_FOUND";
@@ -1377,30 +1469,83 @@ async function runDocumentProcessing(supabase, params) {
   });
 
   if (!Array.isArray(discovery.documents) || discovery.documents.length === 0) {
-    const err = new Error("No downloaded documents were found for the selected utility application.");
+    const err = new Error(
+      extAppId
+        ? "No downloaded documents were found for the selected utility application."
+        : "No manual documents were found for this coordination record.",
+    );
     err.statusCode = 422;
     err.code = "NO_DOWNLOADED_DOCUMENTS";
     throw err;
   }
 
   const previousState = getDocumentProcessingState(record.metadata, extAppId);
-  const previousDocs = Array.isArray(previousState?.documents) ? previousState.documents : [];
-  const previousFindings = Array.isArray(previousState?.findings) ? previousState.findings : [];
+  const manualState = extAppId ? getDocumentProcessingState(record.metadata, "") : null;
+  const previousDocs = [];
+  const previousDocumentKeys = new Set();
+  for (const state of [previousState, manualState]) {
+    for (const doc of Array.isArray(state?.documents) ? state.documents : []) {
+      const key = String(doc.document_id ?? doc.content_hash ?? "");
+      if (!key || previousDocumentKeys.has(key)) continue;
+      previousDocumentKeys.add(key);
+      previousDocs.push(doc);
+    }
+  }
+  const previousFindings = [];
+  const previousFindingIds = new Set();
+  for (const state of [previousState, manualState]) {
+    for (const finding of Array.isArray(state?.findings) ? state.findings : []) {
+      const findingId = String(finding.finding_id ?? "");
+      if (!findingId || previousFindingIds.has(findingId)) continue;
+      previousFindingIds.add(findingId);
+      previousFindings.push(finding);
+    }
+  }
+
+  const targetedRefresh = requestedDocumentIds.size > 0;
+  if (targetedRefresh) {
+    discovery.documents = discovery.documents.filter((doc) =>
+      requestedDocumentIds.has(buildStableDocumentId(doc)),
+    );
+    if (discovery.documents.length !== requestedDocumentIds.size) {
+      const err = new Error("One or more requested documents were not found in this coordination scope.");
+      err.statusCode = 404;
+      err.code = "DOCUMENT_NOT_FOUND";
+      throw err;
+    }
+  }
 
   /** @type {Map<string, string>} */
   const hashToDocId = new Map();
+  const manualDocumentIds = new Set(
+    (Array.isArray(manualState?.documents) ? manualState.documents : [])
+      .map((doc) => String(doc?.document_id ?? ""))
+      .filter(Boolean),
+  );
   for (const doc of previousDocs) {
     const hash = String(doc.content_hash ?? "");
     const id = String(doc.document_id ?? "");
-    if (hash && id && String(doc.processing_status) === "complete") {
+    if (
+      hash &&
+      id &&
+      (String(doc.processing_status) === "complete" || manualDocumentIds.has(id))
+    ) {
       hashToDocId.set(hash, id);
     }
   }
 
   /** @type {Array<Record<string, unknown>>} */
-  const manifestDocuments = [];
+  const manifestDocuments = targetedRefresh
+    ? previousDocs.filter((doc) => !requestedDocumentIds.has(String(doc.document_id ?? "")))
+    : [];
   /** @type {Array<Record<string, unknown>>} */
-  let allFindings = refresh ? [] : [...previousFindings];
+  let allFindings = targetedRefresh
+    ? previousFindings.filter(
+        (finding) => !requestedDocumentIds.has(String(finding.document_id ?? "")),
+      )
+    : refresh
+      ? []
+      : [...previousFindings];
   /** @type {Array<Record<string, unknown>>} */
   const failedDocuments = [];
 
@@ -1438,7 +1583,7 @@ async function runDocumentProcessing(supabase, params) {
     state: runState,
   });
 
-  const structuredApp = getStructuredApplicationFromRecord(record, extAppId);
+  const structuredApp = targetedRefresh ? null : getStructuredApplicationFromRecord(record, extAppId);
   if (structuredApp) {
     try {
       const structuredCandidates = extractCandidatesFromStructuredApplication(structuredApp, extAppId);
@@ -1817,6 +1962,9 @@ async function runDocumentProcessing(supabase, params) {
 
   const fallbackConfig = getDocumentFallbackConfig(deps.env);
   const providerStatus = fallbackProviderStatus(fallbackConfig);
+  for (const document of manifestDocuments) {
+    document.fallback_status = classifyDocumentFallbackStatus(document, providerStatus);
+  }
 
   const finalState = {
     ...runState,
@@ -1870,12 +2018,6 @@ async function runDocumentProcessing(supabase, params) {
 async function getDocumentProcessingManifest(supabase, params) {
   const { coordinationRecordId, externalApplicationId, includeFindings = false } = params;
   const extAppId = String(externalApplicationId || "").trim();
-  if (!extAppId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -1885,7 +2027,9 @@ async function getDocumentProcessingManifest(supabase, params) {
     throw err;
   }
 
-  const state = getDocumentProcessingState(record.metadata, extAppId);
+  const state =
+    getDocumentProcessingState(record.metadata, extAppId) ||
+    (extAppId ? getDocumentProcessingState(record.metadata, "") : null);
   if (!state) {
     return {
       coordination_record_id: String(coordinationRecordId),
@@ -1933,6 +2077,7 @@ module.exports = {
   DOCUMENT_PROCESSING_SCHEMA_VERSION,
   STALE_DOCUMENT_PROCESSING_SCHEMA_VERSIONS,
   METADATA_KEY,
+  MANUAL_DOCUMENT_SCOPE_KEY,
   UCI_DOCUMENT_ROLES,
   ROLE_TO_UCI_STAGES,
   classifyDocumentRoles,
@@ -1963,4 +2108,5 @@ module.exports = {
   externalApplicationExistsInRecord,
   buildDocumentProcessingRunResponse,
   summarizeDocumentProcessingCounts,
+  classifyDocumentFallbackStatus,
 };

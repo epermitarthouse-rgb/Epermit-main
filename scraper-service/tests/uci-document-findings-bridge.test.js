@@ -9,9 +9,14 @@ const {
   findingToCandidate,
   findingUnchangedForBridge,
   findReusableCandidateByEvidence,
+  markSupersededDirectCandidates,
+  reconcileMissingInputs,
   importDocumentFindingsToLoadProfile,
 } = require("../app/services/uci/uci-document-findings-bridge.service.js");
-const { DOCUMENT_PROCESSING_SCHEMA_VERSION } = require("../app/services/uci/uci-document-processing.service.js");
+const {
+  DOCUMENT_PROCESSING_SCHEMA_VERSION,
+  MANUAL_DOCUMENT_SCOPE_KEY,
+} = require("../app/services/uci/uci-document-processing.service.js");
 const { LOAD_PROFILE_IDEMPOTENCY_KEY } = require("../app/services/uci/uci-load-profile.service.js");
 const { PROVIDER_SETUP_METHOD } = require("../app/services/uci/uci-provider-setup.service.js");
 const { canCandidateSatisfyPackage } = require("../app/services/uci/uci-load-candidate.service.js");
@@ -271,6 +276,76 @@ describe("uci-document-findings-bridge.service", () => {
     );
   });
 
+  it("imports manual findings without an application and reuses them after linking", async () => {
+    const finding = agent2Finding({
+      external_application_id: "",
+      document_id: "uci_doc:manual-1",
+      source_document_name: "client-load-schedule.pdf",
+      source_content_hash: "project_doc:manual-1",
+    });
+    const manualState = {
+      schema_version: DOCUMENT_PROCESSING_SCHEMA_VERSION,
+      external_application_id: "",
+      project_id: PROJECT_ID,
+      coordination_record_id: COORD_ID,
+      tenant_id: TENANT_A,
+      findings: [finding],
+      findings_by_stage: { agent_2_load_profile: [finding] },
+      documents: [
+        {
+          document_id: "uci_doc:manual-1",
+          source_type: "manual_upload",
+          source_document_id: "manual-1",
+          original_filename: "client-load-schedule.pdf",
+          content_hash: "project_doc:manual-1",
+        },
+      ],
+    };
+    const record = baseRecord({
+      metadata: {
+        uci_document_processing: {
+          schema_version: DOCUMENT_PROCESSING_SCHEMA_VERSION,
+          applications: { [MANUAL_DOCUMENT_SCOPE_KEY]: manualState },
+        },
+      },
+    });
+    const tables = {
+      coordination_records: [record],
+      coordination_applications: [
+        {
+          id: "load-draft-manual",
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: LOAD_PROFILE_IDEMPOTENCY_KEY,
+          load_summary: { candidate_values: [], verified_values: {} },
+        },
+      ],
+    };
+    const supabase = createMockSupabase(tables);
+
+    const manualImport = await importDocumentFindingsToLoadProfile(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: null,
+    });
+    assert.equal(manualImport.candidates_created, 1);
+    assert.equal(tables.coordination_applications[0].load_summary.candidate_values.length, 1);
+
+    record.metadata.uci_document_processing.applications[EXT_APP_A] = {
+      ...manualState,
+      external_application_id: EXT_APP_A,
+    };
+    const linkedImport = await importDocumentFindingsToLoadProfile(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+    });
+    assert.equal(linkedImport.candidates_created, 0);
+    assert.equal(linkedImport.candidates_reused, 1);
+    assert.equal(tables.coordination_applications[0].load_summary.candidate_values.length, 1);
+  });
+
   it("creates no duplicate candidates on repeated unchanged import", async () => {
     const findings = [agent2Finding()];
     const tables = {
@@ -319,6 +394,33 @@ describe("uci-document-findings-bridge.service", () => {
     assert.equal(reusable.candidate_id, "load_candidate:direct");
   });
 
+  it("does not reuse evidence when parser classification changes scope", () => {
+    const finding = agent2Finding({
+      finding_id: "finding:corrected-project-demand",
+      field_key: "demand_load_kva",
+      normalized_value: 315,
+      unit: "kVA",
+      entity_type: "project_service",
+      is_project_total: true,
+      evidence_text: "Project demand load 315 kVA",
+    });
+    const corrected = findingToCandidate(finding, {
+      externalApplicationId: EXT_APP_A,
+      document: null,
+    });
+    const oldPanelClassification = {
+      ...corrected,
+      candidate_id: "load_candidate:old-panel",
+      field_key: "panel_demand_load_kva",
+      entity_type: "unclassified_load_total",
+      is_project_total: false,
+    };
+    assert.equal(
+      findReusableCandidateByEvidence([oldPanelClassification], corrected),
+      null,
+    );
+  });
+
   it("marks changed findings as superseded and imports replacement", async () => {
     const original = agent2Finding({ normalized_value: 480 });
     const tables = {
@@ -364,6 +466,80 @@ describe("uci-document-findings-bridge.service", () => {
     assert.equal(active.length, 1);
     assert.equal(Number(active[0].normalized_value), 600);
     assert.ok(stale.length >= 1);
+  });
+
+  it("refreshes candidates only for the selected document", async () => {
+    const target = agent2Finding({ document_id: "doc-target" });
+    const unrelated = agent2Finding({
+      finding_id: "finding:unrelated",
+      document_id: "doc-unrelated",
+      field_key: "phase",
+      normalized_value: 3,
+      raw_value: "3",
+      unit: "phase",
+    });
+    const record = recordWithFindings([target, unrelated]);
+    record.metadata.uci_document_processing.applications[EXT_APP_A].documents = [
+      { document_id: "doc-target", original_filename: "target.pdf" },
+      { document_id: "doc-unrelated", original_filename: "unrelated.pdf" },
+    ];
+    const tables = {
+      coordination_records: [record],
+      coordination_applications: [
+        {
+          id: "load-draft-1",
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: LOAD_PROFILE_IDEMPOTENCY_KEY,
+          load_summary: { candidate_values: [], verified_values: {} },
+        },
+      ],
+    };
+    const supabase = createMockSupabase(tables);
+    await importDocumentFindingsToLoadProfile(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+    });
+    const before = tables.coordination_applications[0].load_summary.candidate_values;
+    const unrelatedBefore = before.find((candidate) => candidate.finding_id === "finding:unrelated");
+    assert.equal(unrelatedBefore.status, "candidate");
+
+    const changedTarget = agent2Finding({
+      document_id: "doc-target",
+      normalized_value: 208,
+      raw_value: "208",
+    });
+    record.metadata.uci_document_processing.applications[EXT_APP_A].findings = [
+      changedTarget,
+      unrelated,
+    ];
+    record.metadata.uci_document_processing.applications[
+      EXT_APP_A
+    ].findings_by_stage.agent_2_load_profile = [changedTarget, unrelated];
+
+    await importDocumentFindingsToLoadProfile(supabase, {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+      refresh: true,
+      documentIds: ["doc-target"],
+    });
+
+    const after = tables.coordination_applications[0].load_summary.candidate_values;
+    const unrelatedAfter = after.filter(
+      (candidate) => candidate.finding_id === "finding:unrelated",
+    );
+    assert.equal(unrelatedAfter.length, 1);
+    assert.equal(unrelatedAfter[0].status, "candidate");
+    assert.equal(
+      after.filter(
+        (candidate) =>
+          candidate.finding_id === target.finding_id && candidate.status === "candidate",
+      ).length,
+      1,
+    );
   });
 
   it("does not overwrite approved verified values", async () => {
@@ -448,5 +624,84 @@ describe("uci-document-findings-bridge.service", () => {
     const prior = findingToCandidate(finding, { externalApplicationId: EXT_APP_A, document: null });
     assert.equal(findingUnchangedForBridge(prior, finding), true);
     assert.equal(findingUnchangedForBridge(prior, { ...finding, normalized_value: 600 }), false);
+  });
+
+  it("retires unapproved direct candidates once canonical findings exist", () => {
+    const candidates = [
+      {
+        candidate_id: "direct",
+        status: "candidate",
+        source_type: "pepco_portal_document",
+        source_document_name: "E602.pdf",
+        external_application_id: EXT_APP_A,
+      },
+      {
+        candidate_id: "approved",
+        status: "approved",
+        source_type: "pepco_portal_document",
+        source_document_name: "E602.pdf",
+        external_application_id: EXT_APP_A,
+      },
+    ];
+    const count = markSupersededDirectCandidates(
+      candidates,
+      { documents: [{ original_filename: "E602.pdf" }] },
+      EXT_APP_A,
+    );
+    assert.equal(count, 1);
+    assert.equal(candidates[0].status, "stale");
+    assert.equal(candidates[1].status, "approved");
+  });
+
+  it("clears evidenced inputs without promoting panel totals to project load", () => {
+    const phase = findingToCandidate(
+      agent2Finding({
+        finding_id: "phase",
+        field_key: "phase",
+        normalized_value: "3",
+        raw_value: "3-phase",
+        unit: "phase",
+      }),
+      { externalApplicationId: EXT_APP_A, document: null },
+    );
+    const equipment = findingToCandidate(
+      agent2Finding({
+        finding_id: "equipment",
+        field_key: "equipment_schedule_watts",
+        normalized_value: 1000,
+        raw_value: "1000",
+        unit: "W",
+        entity_type: "equipment",
+        entity_name: "504",
+      }),
+      { externalApplicationId: EXT_APP_A, document: null },
+    );
+    const panel = findingToCandidate(
+      agent2Finding({
+        finding_id: "panel",
+        field_key: "panel_connected_load_kva",
+        normalized_value: 80,
+        raw_value: "80",
+        unit: "kVA",
+        entity_type: "electrical_panel",
+        entity_name: "C",
+      }),
+      { externalApplicationId: EXT_APP_A, document: null },
+    );
+    const missing = reconcileMissingInputs(
+      {
+        missing_inputs: [
+          "phase",
+          "equipment_schedule",
+          "connected_equipment_or_load_data",
+          "uploaded_specifications_or_plans",
+          "meter_count",
+        ],
+      },
+      [phase, equipment, panel],
+      { documents: [{ document_id: "doc-1" }] },
+    );
+    assert.deepEqual(missing, ["meter_count"]);
+    assert.equal(panel.is_project_total, false);
   });
 });

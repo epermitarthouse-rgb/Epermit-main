@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageHeader, AlertBanner, MetricCard, Panel, ServicePill } from "@/components/design/ProductPrimitives";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,13 @@ import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import {
+  executeSequentialDocumentReprocess,
+  summarizeDocumentReprocessBatch,
+} from "@/lib/uciDocumentReprocess";
+import {
   analyzeCoordinationLoadProfile,
   addCoordinationManualVerifiedValue,
+  approveSyntheticApplicationChecklist,
   applyLifecycleProposal,
   analyzeCoordinationCos,
   buildCoordinationApplicationPackage,
@@ -63,8 +68,12 @@ import {
   classifyCoordinationCommunications,
   confirmApplicationPackageDocumentMapping,
   createCoordinationEquipment,
+  createUciProvider,
   extractCoordinationLoadCandidates,
+  exportSyntheticApplicationChecklist,
   importCoordinationDocumentFindings,
+  reprocessCoordinationDocument,
+  runCoordinationDocumentProcessing,
   formatLoadCandidateExtractionError,
   formatUciUserError,
   getCoordinationDetail,
@@ -92,6 +101,7 @@ import {
   resumePepcoApplicationDetailDiscovery,
   resumePepcoDiscovery,
   reviewCoordinationApplication,
+  setSyntheticApplicationSignatureStatus,
   submitCoordinationApplication,
   submitPepcoMfaCode,
   transitionCoordination,
@@ -100,6 +110,8 @@ import {
   UCI_SESSION_EXPIRED_MESSAGE,
   UCI_SYNC_RUN_STORAGE_PREFIX,
 } from "@/lib/uciApi";
+import { UCI_SUPPORTED_UTILITY_TYPES, type UciUtilityType } from "@/lib/uciUtilityTypes";
+import { executeProjectDocumentUpload } from "@/lib/projectDocumentUpload";
 import { getMicrosoftMailboxStatus } from "@/lib/microsoftMailboxApi";
 import { toast } from "sonner";
 import {
@@ -172,15 +184,18 @@ import {
   SyncRunsPanel,
   useSyncRunPolling,
 } from "@/components/uci/UciD13WorkflowPanels";
-import { LoadProfileWorkspace } from "@/components/uci/LoadProfileWorkspace";
+import {
+  LoadProfileWorkspace,
+  type Agent2ManualUploadProgress,
+} from "@/components/uci/LoadProfileWorkspace";
+import type { CandidateResolutionState } from "@/components/uci/ConnectedLoadReviewPanel";
 import { UciDocumentCoveragePanel } from "@/components/uci/UciDocumentCoveragePanel";
 import { UciComingSoonPanel } from "@/components/uci/UciComingSoonPanel";
 import {
   getUciNavSection,
   isUciDrawerTab,
-  uciSectionHref,
   UCI_DRAWER_TABS,
-  UCI_HUB_TILE_SECTIONS,
+  UCI_RECORD_WORKSPACE_GROUPS,
   type UciDrawerTab,
 } from "@/lib/uciNavSections";
 import {
@@ -384,6 +399,8 @@ const uciSheetControlClass = cn(
 const uciManualFormTextClass = "text-foreground dark:text-foreground";
 
 export default function UciDashboard() {
+  const { coordinationId: routeCoordinationId } = useParams<{ coordinationId?: string }>();
+  const isRecordWorkspace = Boolean(routeCoordinationId);
   const { projects, loading: projectsLoading } = useProjects();
   const { user, loading: authLoading } = useAuth();
   /**
@@ -402,6 +419,7 @@ export default function UciDashboard() {
   const [providers, setProviders] = useState<UtilityProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersLoadError, setProvidersLoadError] = useState<string | null>(null);
+  const [providerCreating, setProviderCreating] = useState(false);
   const [tenantScopeId, setTenantScopeId] = useState<string | null>(null);
   const [projectId, setProjectIdState] = useState<string | null>(
     () => globalSelectedProject?.selectedProjectId ?? null,
@@ -413,6 +431,14 @@ export default function UciDashboard() {
     },
     [globalSelectedProject],
   );
+  useEffect(() => {
+    if (!globalSelectedProject) return;
+    setProjectIdState((current) =>
+      current === globalSelectedProject.selectedProjectId
+        ? current
+        : globalSelectedProject.selectedProjectId,
+    );
+  }, [globalSelectedProject?.selectedProjectId]);
   const [records, setRecords] = useState<CoordinationRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [initPick, setInitPick] = useState<Record<string, boolean>>({});
@@ -440,7 +466,7 @@ export default function UciDashboard() {
   /** Blocks ?coordination= hydration briefly after an intentional drawer close (URL update race). */
   const suppressCoordinationHydrationRef = useRef(false);
   const sectionParam = searchParams.get("section");
-  const coordinationParam = searchParams.get("coordination");
+  const coordinationParam = routeCoordinationId ?? searchParams.get("coordination");
   const tabParam = searchParams.get("tab");
   const activeNavSection = getUciNavSection(sectionParam);
 
@@ -456,13 +482,51 @@ export default function UciDashboard() {
   );
 
   const providerCatalogTypes = useMemo(() => {
-    const types = new Set(
-      providers
-        .map((p) => p.utility_type?.trim().toLowerCase())
-        .filter(Boolean) as string[],
+    return [...UCI_SUPPORTED_UTILITY_TYPES];
+  }, []);
+
+  const confirmedProviderIds = useMemo(
+    () =>
+      new Set(
+        Object.values(providerResolution?.resolutions ?? {})
+          .map((resolution) => resolution?.confirmed_provider_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [providerResolution],
+  );
+  const initializedProviderSlugs = useMemo(
+    () => buildInitializedSlugSet(providerSetup),
+    [providerSetup],
+  );
+
+  const providerConfirmationSatisfied = useMemo(() => {
+    const selected = providers.filter(
+      (provider) => initPick[provider.slug] && !initializedProviderSlugs.has(provider.slug),
     );
-    return [...types].sort();
-  }, [providers]);
+    return (
+      selected.length > 0 &&
+      (providerSetupConfirmed || selected.every((provider) => confirmedProviderIds.has(provider.id)))
+    );
+  }, [providers, initPick, initializedProviderSlugs, providerSetupConfirmed, confirmedProviderIds]);
+
+  useEffect(() => {
+    if (confirmedProviderIds.size === 0 || providers.length === 0) return;
+    setInitPick((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      for (const provider of providers) {
+        if (
+          confirmedProviderIds.has(provider.id) &&
+          !initializedProviderSlugs.has(provider.slug) &&
+          next[provider.slug] !== true
+        ) {
+          next[provider.slug] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [confirmedProviderIds, initializedProviderSlugs, providers]);
 
   const providerDisplayLabel = useCallback(
     (provider: UtilityProvider) => workflowProviderDisplayLabel(provider),
@@ -479,8 +543,19 @@ export default function UciDashboard() {
   const [loadProfileBusy, setLoadProfileBusy] = useState(false);
   const [loadCandidateBusy, setLoadCandidateBusy] = useState(false);
   const [importFindingsBusy, setImportFindingsBusy] = useState(false);
-  const [loadCandidateResolveBusy, setLoadCandidateResolveBusy] = useState<string | null>(null);
+  // State disables the buttons after render; refs also close the same-tick
+  // double-click window before React can commit that disabled state.
+  const loadProfileInFlightRef = useRef(false);
+  const loadCandidateInFlightRef = useRef(false);
+  const importFindingsInFlightRef = useRef(false);
+  const [loadCandidateResolutionState, setLoadCandidateResolutionState] =
+    useState<CandidateResolutionState>({});
+  const loadCandidateResolveInFlightRef = useRef(new Set<string>());
   const [manualVerifyBusy, setManualVerifyBusy] = useState(false);
+  const [manualUploadBusy, setManualUploadBusy] = useState(false);
+  const [manualUploadProgress, setManualUploadProgress] =
+    useState<Agent2ManualUploadProgress | null>(null);
+  const manualUploadInFlightRef = useRef(false);
   const [applicationPrepBusy, setApplicationPrepBusy] = useState(false);
   const [applicationReviewBusy, setApplicationReviewBusy] = useState(false);
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
@@ -784,7 +859,7 @@ export default function UciDashboard() {
         initting,
         addressPresentation,
         addressSourceAcknowledged,
-        providerSetupConfirmed,
+        providerSetupConfirmed: providerConfirmationSatisfied,
         selectedProviderCount: countSelectedProviders(initPick),
       }),
     [
@@ -794,7 +869,7 @@ export default function UciDashboard() {
       initting,
       addressPresentation,
       addressSourceAcknowledged,
-      providerSetupConfirmed,
+      providerConfirmationSatisfied,
       initPick,
     ],
   );
@@ -1042,6 +1117,10 @@ export default function UciDashboard() {
               "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
           },
         }));
+        const confirmedProvider = providers.find((provider) => provider.id === params.providerId);
+        if (confirmedProvider) {
+          setInitPick((previous) => ({ ...previous, [confirmedProvider.slug]: true }));
+        }
         toast.success("Utility provider confirmed.");
       } catch (e: unknown) {
         toast.error(formatUciUserError(e, "Failed to confirm provider"));
@@ -1049,7 +1128,7 @@ export default function UciDashboard() {
         setProviderResolutionActionLoading(false);
       }
     },
-    [projectId],
+    [projectId, providers],
   );
 
   const handleOverrideProviderMapping = useCallback(
@@ -1082,6 +1161,10 @@ export default function UciDashboard() {
               "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
           },
         }));
+        const confirmedProvider = providers.find((provider) => provider.id === params.providerId);
+        if (confirmedProvider) {
+          setInitPick((previous) => ({ ...previous, [confirmedProvider.slug]: true }));
+        }
         toast.success("Provider override recorded.");
       } catch (e: unknown) {
         toast.error(formatUciUserError(e, "Failed to override provider"));
@@ -1089,7 +1172,7 @@ export default function UciDashboard() {
         setProviderResolutionActionLoading(false);
       }
     },
-    [projectId],
+    [projectId, providers],
   );
 
   useEffect(() => {
@@ -1154,7 +1237,8 @@ export default function UciDashboard() {
   };
 
   const handleLoadProfileAnalyze = async () => {
-    if (!detailId) return;
+    if (!detailId || loadProfileInFlightRef.current) return;
+    loadProfileInFlightRef.current = true;
     setLoadProfileBusy(true);
     try {
       await analyzeCoordinationLoadProfile(detailId);
@@ -1164,12 +1248,14 @@ export default function UciDashboard() {
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Load profile analysis failed"));
     } finally {
+      loadProfileInFlightRef.current = false;
       setLoadProfileBusy(false);
     }
   };
 
   const handleLoadCandidateExtract = async (externalApplicationId: string, refresh = false) => {
-    if (!detailId || !externalApplicationId) return;
+    if (!detailId || !externalApplicationId || loadCandidateInFlightRef.current) return;
+    loadCandidateInFlightRef.current = true;
     setLoadCandidateBusy(true);
     try {
       const result = await extractCoordinationLoadCandidates(detailId, {
@@ -1189,12 +1275,14 @@ export default function UciDashboard() {
     } catch (e: unknown) {
       toast.error(formatLoadCandidateExtractionError(e, "Connected load extraction failed"));
     } finally {
+      loadCandidateInFlightRef.current = false;
       setLoadCandidateBusy(false);
     }
   };
 
   const handleImportDocumentFindings = async (externalApplicationId: string, refresh = false) => {
-    if (!detailId || !externalApplicationId) return;
+    if (!detailId || !externalApplicationId || importFindingsInFlightRef.current) return;
+    importFindingsInFlightRef.current = true;
     setImportFindingsBusy(true);
     try {
       const result = await importCoordinationDocumentFindings(detailId, {
@@ -1215,6 +1303,7 @@ export default function UciDashboard() {
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Document findings import failed"));
     } finally {
+      importFindingsInFlightRef.current = false;
       setImportFindingsBusy(false);
     }
   };
@@ -1224,16 +1313,33 @@ export default function UciDashboard() {
     action: "approve" | "edit_approve" | "reject" | "keep_unresolved",
     opts?: { edited_value?: string; edited_unit?: string; review_note?: string },
   ) => {
-    if (!detailId) return;
-    setLoadCandidateResolveBusy(candidateId);
+    if (!detailId || loadCandidateResolveInFlightRef.current.has(candidateId)) return;
+    loadCandidateResolveInFlightRef.current.add(candidateId);
+    setLoadCandidateResolutionState((previous) => ({
+      ...previous,
+      [candidateId]: { action, status: "pending" },
+    }));
     try {
-      await resolveCoordinationLoadCandidate(detailId, {
+      const result = await resolveCoordinationLoadCandidate(detailId, {
         candidate_id: candidateId,
         action,
         ...opts,
       });
-      const d = await getCoordinationDetail(detailId);
-      setDetail(d);
+      setDetail((previous) => {
+        if (!previous) return previous;
+        const application = result.application as unknown as CoordinationApplication;
+        return {
+          ...previous,
+          applications: previous.applications.map((item) =>
+            item.id === application.id ? application : item,
+          ),
+        };
+      });
+      setLoadCandidateResolutionState((previous) => {
+        const next = { ...previous };
+        delete next[candidateId];
+        return next;
+      });
       toast.success(
         action === "approve" || action === "edit_approve"
           ? "Value approved into verified load profile"
@@ -1242,16 +1348,19 @@ export default function UciDashboard() {
             : "Candidate left unresolved",
       );
     } catch (e: unknown) {
-      toast.error(formatUciUserError(e, "Failed to resolve candidate"));
+      const message = formatUciUserError(e, "Failed to resolve candidate");
+      setLoadCandidateResolutionState((previous) => ({
+        ...previous,
+        [candidateId]: { action, status: "error", error: message },
+      }));
+      toast.error(message);
     } finally {
-      setLoadCandidateResolveBusy(null);
+      loadCandidateResolveInFlightRef.current.delete(candidateId);
     }
   };
 
   const handleManualVerifiedValue = async (
-    payload: import("@/lib/uciLoadProfileWorkspace").ManualVerifiedInputPayload & {
-      review_note: string;
-    },
+    payload: import("@/lib/uciLoadProfileWorkspace").ManualVerifiedInputPayload,
   ) => {
     if (!detailId) return;
     setManualVerifyBusy(true);
@@ -1267,12 +1376,173 @@ export default function UciDashboard() {
     }
   };
 
+  const handleAgent2ManualUpload = async (
+    files: File[],
+    externalApplicationId: string | null,
+  ): Promise<boolean> => {
+    const uploadProjectId = detail?.record?.project_id ?? projectId;
+    if (manualUploadInFlightRef.current || files.length === 0) return false;
+    if (!detailId || !uploadProjectId || !user) {
+      toast.error("Coordination project context is unavailable");
+      return false;
+    }
+    manualUploadInFlightRef.current = true;
+    setManualUploadBusy(true);
+    setManualUploadProgress({
+      stage: "uploading",
+      current: 1,
+      total: files.length,
+      fileName: files[0]?.name,
+    });
+    try {
+      let uploadedCount = 0;
+      const failedUploads: string[] = [];
+      for (const [index, file] of files.entries()) {
+        setManualUploadProgress({
+          stage: "uploading",
+          current: index + 1,
+          total: files.length,
+          fileName: file.name,
+        });
+        const upload = await executeProjectDocumentUpload({
+          userId: user.id,
+          projectId: uploadProjectId,
+          file,
+          document_type: "other",
+          description:
+            `Agent 2 manual upload · coordination ${detailId}` +
+            (externalApplicationId ? ` · application ${externalApplicationId}` : ""),
+        });
+        if (!upload.document) {
+          failedUploads.push(`${file.name}: ${upload.error || "upload failed"}`);
+          continue;
+        }
+        uploadedCount += 1;
+      }
+      if (uploadedCount === 0) {
+        throw new Error(failedUploads.join("; ") || "Manual document upload failed");
+      }
+
+      setManualUploadProgress({
+        stage: "processing",
+        current: uploadedCount,
+        total: uploadedCount,
+      });
+      const processed = await runCoordinationDocumentProcessing(detailId, {
+        external_application_id: externalApplicationId,
+        refresh: false,
+      });
+      setManualUploadProgress({
+        stage: "importing",
+        current: uploadedCount,
+        total: uploadedCount,
+      });
+      const imported = await importCoordinationDocumentFindings(detailId, {
+        external_application_id: externalApplicationId,
+        refresh: false,
+      });
+      const d = await getCoordinationDetail(detailId);
+      setDetail(d);
+      const resultMessage =
+        `${uploadedCount} document${uploadedCount === 1 ? "" : "s"} processed through the standard pipeline` +
+        ` · ${processed.findings_count} finding(s) · ${imported.candidates_created} candidate(s)`;
+      if (failedUploads.length > 0) {
+        toast.warning(
+          `${resultMessage} · ${failedUploads.length} upload${failedUploads.length === 1 ? "" : "s"} failed`,
+        );
+      } else {
+        toast.success(resultMessage);
+      }
+      return true;
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to upload and process supporting document"));
+      return false;
+    } finally {
+      manualUploadInFlightRef.current = false;
+      setManualUploadBusy(false);
+      setManualUploadProgress(null);
+    }
+  };
+
+  const handleAgent2DocumentReprocess = async (
+    documentIds: string[],
+    externalApplicationId: string | null,
+    onProgress?: (completed: number) => void,
+  ): Promise<{
+    results: import("@/lib/uciDocumentProcessing").UciDocumentReprocessResponse[];
+    failures: Array<{ document_id: string; message: string }>;
+  }> => {
+    if (!detailId || documentIds.length === 0) return { results: [], failures: [] };
+
+    const batch = await executeSequentialDocumentReprocess(
+      documentIds,
+      (documentId) =>
+        reprocessCoordinationDocument(detailId, {
+            external_application_id: externalApplicationId,
+            document_id: documentId,
+          }),
+      (error) => formatUciUserError(error, "Document reprocessing failed"),
+      onProgress,
+    );
+    const { results, failures } = batch;
+
+    try {
+      setDetail(await getCoordinationDetail(detailId));
+    } catch {
+      // The Source Documents manifest refresh is independent; keep completed
+      // reprocess results even if the surrounding coordination refresh fails.
+    }
+
+    if (documentIds.length === 1) {
+      const result = results[0];
+      if (!result) {
+        toast.error(failures[0]?.message ?? "Document reprocessing failed");
+      } else if (result.outcome === "parsed") {
+        toast.success(
+          `${result.document_name} reprocessed — parsed with ${result.after.findings_count} finding(s)`,
+        );
+      } else if (result.outcome === "parsed_with_fallback_warning") {
+        toast.warning(
+          `${result.document_name} parsed with ${result.after.findings_count} finding(s), but OCR/Vision fallback failed`,
+        );
+      } else if (result.outcome === "unchanged") {
+        toast.info(`${result.document_name}: no change after reprocessing`);
+      } else if (result.outcome === "fallback_unavailable") {
+        toast.warning(
+          `${result.document_name} still needs ${result.after.unavailable_fallback_methods.join("/")} — fallback is unavailable`,
+        );
+      } else if (result.outcome === "still_needs_fallback") {
+        toast.warning(
+          `${result.document_name} parsed, but ${result.after.pages_requiring_fallback} page(s) still need OCR/Vision`,
+        );
+      } else if (result.outcome === "manual_review_required") {
+        toast.warning(`${result.document_name} still requires manual review`);
+      } else {
+        toast.error(`${result.document_name}: fallback or document processing failed`);
+      }
+    } else {
+      const summary = summarizeDocumentReprocessBatch(documentIds.length, batch);
+      if (summary.failed > 0 || summary.stillNeedsFallback > 0) {
+        toast.warning(summary.message);
+      } else {
+        toast.success(summary.message);
+      }
+    }
+
+    return { results, failures };
+  };
+
   const handleApplicationPackageBuild = async (externalApplicationId?: string | null) => {
     if (!detailId) return;
     setApplicationPrepBusy(true);
     try {
+      const providerSlug = String(
+        detail?.applications?.find((app) => app.application_type === "load_profile")
+          ?.provider_slug || "",
+      ).toLowerCase();
       await buildCoordinationApplicationPackage(detailId, {
         external_application_id: externalApplicationId || undefined,
+        checklist_mode: providerSlug === "dominion" ? "synthetic_test" : undefined,
       });
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
@@ -1585,7 +1855,7 @@ export default function UciDashboard() {
       toast.error("Select a project first");
       return;
     }
-    if (!providerSetupConfirmed) {
+    if (!providerConfirmationSatisfied) {
       toast.error("Confirm your provider selections before initializing");
       return;
     }
@@ -1618,6 +1888,33 @@ export default function UciDashboard() {
       toast.error(e instanceof Error ? e.message : "Initialize failed");
     } finally {
       setInitting(false);
+    }
+  };
+
+  const handleCreateProvider = async (input: {
+    name: string;
+    utilityType: UciUtilityType;
+  }) => {
+    if (!projectId) {
+      toast.error("Select a project before creating a provider");
+      throw new Error("Project is required");
+    }
+    setProviderCreating(true);
+    try {
+      const result = await createUciProvider(projectId, {
+        name: input.name,
+        utility_type: input.utilityType,
+      });
+      await loadProviders();
+      await loadProviderSetup();
+      setInitPick((previous) => ({ ...previous, [result.provider.slug]: true }));
+      setProviderUtilityFilter(input.utilityType);
+      toast.success(result.created ? "Utility provider created" : "Existing provider selected");
+    } catch (error) {
+      toast.error(formatUciUserError(error, "Failed to create utility provider"));
+      throw error;
+    } finally {
+      setProviderCreating(false);
     }
   };
 
@@ -2452,17 +2749,46 @@ export default function UciDashboard() {
     return names.size;
   }, [records, providerDisplayLabel]);
   const uciStageSummary = useMemo(() => portfolio?.stage_summary ?? {}, [portfolio]);
-  const uciFurthestStage = useMemo(() => {
-    const activeStages = STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0);
-    return activeStages.length > 0 ? Math.max(...activeStages) : null;
-  }, [uciStageSummary]);
+  const uciStageStateMatrix = useMemo(() => {
+    const matrix = new Map<number, Map<string, number>>();
+    for (const record of records) {
+      const states = matrix.get(record.current_stage) ?? new Map<string, number>();
+      states.set(record.current_stage_state, (states.get(record.current_stage_state) ?? 0) + 1);
+      matrix.set(record.current_stage, states);
+    }
+    return matrix;
+  }, [records]);
+  const uciCompletedRecordCount = useMemo(
+    () => records.filter((record) => record.current_stage_state === "COMPLETED").length,
+    [records],
+  );
+  const uciRiskRecordCount = useMemo(
+    () =>
+      records.filter(
+        (record) => record.current_stage_state === "BLOCKED" || record.current_stage_state === "ESCALATED",
+      ).length,
+    [records],
+  );
   const uciAttentionRecords = useMemo(
     () => (portfolio?.records ?? []).filter((r) => r.needs_attention_count > 0),
     [portfolio],
   );
+  const uciPrimaryNextAction = !projectId
+    ? "Select a project to begin utility coordination."
+    : records.length === 0
+      ? "Confirm providers and initialize coordination records."
+      : uciAttentionRecords.length > 0
+        ? `Review ${uciAttentionRecords.length} coordination record(s) with flagged communications.`
+        : uciRiskRecordCount > 0
+          ? `Resolve ${uciRiskRecordCount} blocked or escalated coordination record(s).`
+          : "Open the least recently updated record and confirm its next lifecycle action.";
 
   const handleDetailOpenChange = useCallback(
     (open: boolean) => {
+      if (!open && isRecordWorkspace) {
+        navigate("/uci");
+        return;
+      }
       setDetailOpen(open);
       if (!open) {
         // Clear selected coordination detail so section effects / URL hydration
@@ -2482,7 +2808,7 @@ export default function UciDashboard() {
         );
       }
     },
-    [setSearchParams],
+    [isRecordWorkspace, navigate, setSearchParams],
   );
 
   const updateDrawerTab = useCallback(
@@ -2628,7 +2954,7 @@ export default function UciDashboard() {
             />
           ) : null}
 
-          {activeNavSection?.support === "mock" || activeNavSection?.support === "partial" ? (
+          {activeNavSection?.support === "foundation" ? (
             <UciComingSoonPanel section={activeNavSection} />
           ) : null}
 
@@ -2667,10 +2993,10 @@ export default function UciDashboard() {
               detail="Unique utility providers coordinated"
             />
             <MetricCard
-              label="Furthest stage"
-              value={uciFurthestStage ? `${uciFurthestStage} / ${STAGE_OPTIONS.length}` : "—"}
+              label="Completion & risk"
+              value={!projectId ? "—" : `${uciCompletedRecordCount} complete`}
               icon={Zap}
-              detail="Highest lifecycle stage reached across records"
+              detail={`${uciRiskRecordCount} blocked or escalated record(s)`}
             />
           </div>
 
@@ -2679,7 +3005,8 @@ export default function UciDashboard() {
             (Load Profile, Meter Set, Conflict Hunter, etc.) so capabilities
             stay reachable after the Lovable-shaped UCI nav trim.
           */}
-          <Panel eyebrow="UCI Hub" title="Coordination modules">
+          <Panel eyebrow="Project command center" title="Next actions">
+            <p className="mb-4 text-sm font-medium text-foreground">{uciPrimaryNextAction}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               <button
                 type="button"
@@ -2691,9 +3018,7 @@ export default function UciDashboard() {
                 <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle stages</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {uciFurthestStage ? `Stage ${uciFurthestStage} of ${STAGE_OPTIONS.length}` : "10-stage tracker"}
-                  </div>
+                  <div className="text-[11px] text-muted-foreground">Review required-record stage distribution</div>
                 </div>
               </button>
               <button
@@ -2763,44 +3088,11 @@ export default function UciDashboard() {
                   </div>
                 </div>
               </button>
-              {UCI_HUB_TILE_SECTIONS.map((tile) => {
-                const Icon = tile.icon;
-                const href =
-                  tile.target.kind === "external"
-                    ? tile.target.href
-                    : uciSectionHref(tile.section);
-                return (
-                  <button
-                    key={tile.id}
-                    type="button"
-                    data-testid={`uci-hub-tile-${tile.id}`}
-                    onClick={() => navigate(href)}
-                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
-                  >
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
-                          {tile.label}
-                        </span>
-                        {tile.support === "mock" ? (
-                          <span className="shrink-0 rounded border border-border/70 bg-muted/50 px-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                            Soon
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {tile.hubDescription ?? tile.note ?? "Open module"}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
             </div>
           </Panel>
 
-          {/* Stage progress rail — presentational, driven by real stage_summary counts */}
-          <Panel eyebrow="Lifecycle" title="Stage progress" id="uci-stage-rail">
+          {/* Stage/state matrix — presentational, driven only by current records. */}
+          <Panel eyebrow="Lifecycle" title="Stage + state matrix" id="uci-stage-rail">
             {portfolioLoading ? (
               <div className="flex justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-teal" />
@@ -2809,16 +3101,14 @@ export default function UciDashboard() {
               <div className="flex items-start gap-1 overflow-x-auto pb-1">
                 {STAGE_OPTIONS.map((stage) => {
                   const count = uciStageSummary[String(stage)] ?? 0;
-                  const isFurthest = uciFurthestStage === stage;
+                  const states = Array.from(uciStageStateMatrix.get(stage)?.entries() ?? []);
                   return (
-                    <div key={stage} className="flex min-w-[64px] flex-1 flex-col items-center gap-1.5">
+                    <div key={stage} className="flex min-w-[92px] flex-1 flex-col items-center gap-1.5">
                       <div
                         className={cn(
                           "flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-data font-bold",
                           count > 0
-                            ? isFurthest
-                              ? "border-primary bg-primary/20 text-primary"
-                              : "border-teal bg-teal/15 text-teal"
+                            ? "border-teal bg-teal/15 text-teal"
                             : "border-border bg-muted text-muted-foreground",
                         )}
                       >
@@ -2827,6 +3117,11 @@ export default function UciDashboard() {
                       <span className={cn("text-[10px] font-medium", count > 0 ? "text-foreground" : "text-muted-foreground")}>
                         {count > 0 ? `${count} rec.` : "—"}
                       </span>
+                      {states.map(([state, stateCount]) => (
+                        <span key={state} className="whitespace-nowrap text-[9px] text-muted-foreground">
+                          {formatLifecycleState(state as LifecycleState)} {stateCount}
+                        </span>
+                      ))}
                     </div>
                   );
                 })}
@@ -2878,7 +3173,7 @@ export default function UciDashboard() {
                       <TableHead className={uciTableHeadClass}>Stage</TableHead>
                       <TableHead className={uciTableHeadClass}>State</TableHead>
                       <TableHead className={uciTableHeadClass}>Updated</TableHead>
-                      <TableHead className={cn(uciTableHeadClass, "w-[100px]")} />
+                      <TableHead className={cn(uciTableHeadClass, "w-[190px]")} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2919,15 +3214,24 @@ export default function UciDashboard() {
                             {formatWhen(r.updated_at)}
                           </TableCell>
                           <TableCell className={uciTableCellClass}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className={uciViewRowButtonClass}
-                              onClick={() => void openDetail(r.id)}
-                            >
-                              <Eye className="mr-1 h-4 w-4" />
-                              View
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={uciViewRowButtonClass}
+                                onClick={() => void openDetail(r.id)}
+                              >
+                                <Eye className="mr-1 h-4 w-4" />
+                                Preview
+                              </Button>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => navigate(`/uci/records/${encodeURIComponent(r.id)}`)}
+                              >
+                                Workspace
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -3031,12 +3335,15 @@ export default function UciDashboard() {
               initPick={initPick}
               onInitPickChange={handleProviderPickChange}
               onClearSelectedProviders={handleClearSelectedProviders}
+              onCreateProvider={handleCreateProvider}
+              providerCreating={providerCreating}
               addressSourceAcknowledged={addressSourceAcknowledged}
               onAddressSourceAcknowledged={setAddressSourceAcknowledged}
               unresolvedUtilityTypes={unresolvedUtilityTypes}
               onToggleUnresolvedUtilityType={toggleUnresolvedUtilityType}
               uncoveredUtilityTypes={uncoveredUtilityTypes}
-              providerSetupConfirmed={providerSetupConfirmed}
+              providerSetupConfirmed={providerConfirmationSatisfied}
+              confirmedProviderIds={confirmedProviderIds}
               onProviderSetupConfirmedChange={setProviderSetupConfirmed}
               initDisabledReasons={initDisabledReasons}
               initting={initting}
@@ -3050,7 +3357,7 @@ export default function UciDashboard() {
         </div>
       </section>
 
-      <Sheet open={detailOpen} onOpenChange={handleDetailOpenChange}>
+      <Sheet open={isRecordWorkspace || detailOpen} onOpenChange={handleDetailOpenChange}>
         <SheetContent
           overlayClassName="bg-black/45 dark:bg-black/50"
           className={cn(
@@ -3058,13 +3365,27 @@ export default function UciDashboard() {
             "border-border bg-background text-foreground shadow-2xl",
             "ring-1 ring-border/70 dark:ring-teal/25",
             "dark:border-border dark:bg-card dark:text-foreground",
+            isRecordWorkspace && "!inset-0 !h-screen !w-screen !max-w-none !translate-x-0",
           )}
         >
           <SheetHeader className="text-left sm:text-left">
-            <SheetTitle className="text-foreground">Coordination detail</SheetTitle>
+            <SheetTitle className="text-foreground">
+              {isRecordWorkspace ? "Coordination record workspace" : "Coordination preview"}
+            </SheetTitle>
             <SheetDescription className="text-muted-foreground">
-              {detailProvider?.name ?? "Record"} · child sections are read-only; counts reflect loaded data.
+              {detailProvider?.name ?? "Record"} · lifecycle workspaces use existing UCI services and verified data.
             </SheetDescription>
+            {!isRecordWorkspace && detailId ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 w-fit"
+                onClick={() => navigate(`/uci/records/${encodeURIComponent(detailId)}`)}
+              >
+                Open full workspace
+              </Button>
+            ) : null}
           </SheetHeader>
 
           {uciSelectedProject ? (
@@ -3144,19 +3465,42 @@ export default function UciDashboard() {
               </div>
 
               <Tabs
-                value={drawerTab}
+                value={isRecordWorkspace ? drawerTab : "overview"}
                 onValueChange={(v) => {
-                  if (isUciDrawerTab(v)) updateDrawerTab(v);
+                  if (isRecordWorkspace && isUciDrawerTab(v)) updateDrawerTab(v);
                 }}
                 className="mt-4"
               >
-                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/40 p-1">
-                  {UCI_DRAWER_TABS.filter((t) => !t.pepcoOnly || isPepcoCoordination).map((t) => (
-                    <TabsTrigger key={t.id} value={t.id} className="text-xs sm:text-sm">
-                      {t.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+                {isRecordWorkspace ? (
+                  <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {UCI_RECORD_WORKSPACE_GROUPS.map((group) => {
+                      const tabs = UCI_DRAWER_TABS.filter(
+                        (tab) => group.tabs.includes(tab.id) && (!tab.pepcoOnly || isPepcoCoordination),
+                      );
+                      if (tabs.length === 0) return null;
+                      return (
+                        <div key={group.label} className="space-y-1.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {group.label}
+                          </p>
+                          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-background/60 p-1">
+                            {tabs.map((tab) => (
+                              <TabsTrigger key={tab.id} value={tab.id} className="text-xs" title={`${tab.workspace} workspace`}>
+                                {tab.label}
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <AlertBanner
+                    tone="default"
+                    title="Preview only"
+                    detail="Status and recent activity are shown here. Open the full workspace to author lifecycle work."
+                  />
+                )}
 
                 <TabsContent value="overview" className="mt-4 space-y-4">
                   {providerMappingMetadata ? (
@@ -3536,6 +3880,7 @@ export default function UciDashboard() {
 
                 <TabsContent value="load-profile" className="mt-4 space-y-4">
                   <LoadProfileWorkspace
+                    coordinationId={detailId ?? ""}
                     applications={(detail.applications ?? []) as CoordinationApplication[]}
                     utilityType={detailRecord.utility_type}
                     selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
@@ -3545,8 +3890,10 @@ export default function UciDashboard() {
                     toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
                     analyzeBusy={loadProfileBusy}
                     candidateBusy={loadCandidateBusy}
-                    candidateResolveBusy={loadCandidateResolveBusy}
+                    candidateResolutionState={loadCandidateResolutionState}
                     manualVerifyBusy={manualVerifyBusy}
+                    manualUploadBusy={manualUploadBusy}
+                    manualUploadProgress={manualUploadProgress}
                     importFindingsBusy={importFindingsBusy}
                     packageStatus={loadProfilePackageContext.packageStatus}
                     hasProjectAddress={loadProfilePackageContext.hasProjectAddress}
@@ -3562,6 +3909,8 @@ export default function UciDashboard() {
                       void handleLoadCandidateResolve(candidateId, action, opts)
                     }
                     onManualVerify={(payload) => void handleManualVerifiedValue(payload)}
+                    onManualUpload={handleAgent2ManualUpload}
+                    onReprocessDocuments={handleAgent2DocumentReprocess}
                   />
                 </TabsContent>
 
@@ -3645,6 +3994,13 @@ export default function UciDashboard() {
                     formatWhen={formatWhen}
                   />
 
+                </TabsContent>
+
+                <TabsContent value="energization-closeout" className="mt-4 space-y-4">
+                  <RecordManualMilestoneFoundations
+                    coordinationId={detailRecord.id}
+                    projectId={detailRecord.project_id}
+                  />
                   <MeterSetCloseoutPanel
                     recordMetadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
                     meterBusy={meterSetBusy}
@@ -3757,6 +4113,68 @@ export default function UciDashboard() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function RecordManualMilestoneFoundations({
+  coordinationId,
+  projectId,
+}: {
+  coordinationId: string;
+  projectId: string;
+}) {
+  const storageKey = `uci-record-foundations:v1:${coordinationId}`;
+  const [easementRow, setEasementRow] = useState("");
+  const [inspectionRelease, setInspectionRelease] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "{}") as {
+        easement_row?: string;
+        inspection_release?: string;
+      };
+      setEasementRow(saved.easement_row ?? "");
+      setInspectionRelease(saved.inspection_release ?? "");
+    } catch {
+      setEasementRow("");
+      setInspectionRelease("");
+    }
+  }, [storageKey]);
+
+  const save = () => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        project_id: projectId,
+        coordination_record_id: coordinationId,
+        easement_row: easementRow,
+        inspection_release: inspectionRelease,
+        updated_at: new Date().toISOString(),
+      }),
+    );
+    toast.success("Manual milestone notes saved");
+  };
+
+  return (
+    <Card className={uciDrawerChildCardClass}>
+      <CardHeader className={uciDrawerChildCardHeaderClass}>
+        <CardTitle className={uciDrawerChildCardTitleClass}>Contextual milestones</CardTitle>
+        <CardDescription className="text-[11px]">
+          Manual foundation notes for Easement / ROW and Inspection Release. These notes do not advance lifecycle stages.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 px-4 py-4">
+        <div className="space-y-1.5">
+          <Label htmlFor={`easement-row-${coordinationId}`}>Easement / ROW</Label>
+          <Textarea id={`easement-row-${coordinationId}`} value={easementRow} onChange={(event) => setEasementRow(event.target.value)} placeholder="Manual status, owner, evidence, or next step" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`inspection-release-${coordinationId}`}>Inspection release</Label>
+          <Textarea id={`inspection-release-${coordinationId}`} value={inspectionRelease} onChange={(event) => setInspectionRelease(event.target.value)} placeholder="Manual release status, date, or evidence reference" />
+        </div>
+        <Button type="button" variant="outline" onClick={save}>Save manual milestone notes</Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -4134,6 +4552,12 @@ function ApplicationPrepSection({
   const packageDocs = parsePackageDocuments(packageApp?.package_documents);
   const tone = applicationPackageStatusTone(packageMeta?.package_status);
   const submitReady = canSubmitApplication(packageApp?.draft_status);
+  const providerSlug = String(
+    packageApp?.provider_slug || loadProfileDraft?.provider_slug || "",
+  ).toLowerCase();
+  const isPepco = providerSlug === "pepco";
+  const isDominionSynthetic =
+    providerSlug === "dominion" && packageMeta?.checklist_mode === "synthetic_test";
 
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
@@ -4141,6 +4565,7 @@ function ApplicationPrepSection({
   const [candidatesPayload, setCandidatesPayload] =
     useState<UciPackageDocumentCandidatesResponse | null>(null);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
+  const [signatureReviewNote, setSignatureReviewNote] = useState("");
   const [selectedCandidateBySlot, setSelectedCandidateBySlot] = useState<
     Record<string, string>
   >({});
@@ -4172,7 +4597,7 @@ function ApplicationPrepSection({
       setCandidatesPayload(null);
       return;
     }
-    if (!selectedPepcoApplicationId) {
+    if (isPepco && !selectedPepcoApplicationId) {
       setCandidatesPayload(null);
       setCandidatesError(null);
       setCandidatesScopeError(
@@ -4195,7 +4620,7 @@ function ApplicationPrepSection({
     } finally {
       setCandidatesLoading(false);
     }
-  }, [coordinationId, packageApp?.id, selectedPepcoApplicationId]);
+  }, [coordinationId, packageApp?.id, selectedPepcoApplicationId, isPepco]);
 
   useEffect(() => {
     void loadCandidates();
@@ -4245,6 +4670,62 @@ function ApplicationPrepSection({
     }
   };
 
+  const handleApproveSyntheticChecklist = async () => {
+    if (!packageApp || !isDominionSynthetic) return;
+    try {
+      await approveSyntheticApplicationChecklist(packageApp.id, {
+        note: reviewNotes.trim() || "Approved for Highland Springs synthetic Stage 3 testing only",
+      });
+      await onRefreshDetail();
+      toast.success("Synthetic test checklist approved");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Synthetic checklist approval failed"));
+    }
+  };
+
+  const handleSignatureStatus = async (
+    documentKey: string,
+    signatureStatus: "unsigned" | "signed_manual_verified",
+  ) => {
+    if (!packageApp || !isDominionSynthetic) return;
+    setMappingBusySlot(documentKey);
+    try {
+      await setSyntheticApplicationSignatureStatus(packageApp.id, {
+        document_key: documentKey,
+        signature_status: signatureStatus,
+        review_note:
+          signatureStatus === "signed_manual_verified"
+            ? signatureReviewNote.trim()
+            : signatureReviewNote.trim() || undefined,
+      });
+      await onRefreshDetail();
+      toast.success(`Synthetic signature status: ${signatureStatus}`);
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Synthetic signature update failed"));
+    } finally {
+      setMappingBusySlot(null);
+    }
+  };
+
+  const handleSyntheticExport = async () => {
+    if (!packageApp || !isDominionSynthetic) return;
+    try {
+      const payload = await exportSyntheticApplicationChecklist(packageApp.id);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `uci-synthetic-checklist-${packageApp.id}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Read-only synthetic checklist exported");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Synthetic checklist export failed"));
+    }
+  };
+
   const slotCandidates = useCallback(
     (slotKey: string): UciPackageDocumentCandidate[] => {
       if (!candidatesPayload) return [];
@@ -4279,8 +4760,8 @@ function ApplicationPrepSection({
           <div>
             <CardTitle className={uciDrawerChildCardTitleClass}>Application preparation</CardTitle>
             <CardDescription className={cn("text-[11px]", mutedClass)}>
-              Agent 3 package draft — confirm PEPCO or uploaded documents per required slot. Filename
-              suggestions are not verified attachments.
+              Agent 3 package draft — confirm provider-scoped or uploaded documents per required
+              slot. Filename suggestions are not verified attachments.
             </CardDescription>
           </div>
           <Button
@@ -4288,7 +4769,9 @@ function ApplicationPrepSection({
             variant="outline"
             size="sm"
             className={toolbarOutlineButtonClass}
-            disabled={prepBusy || !loadProfileDraft || !selectedPepcoApplicationId}
+            disabled={
+              prepBusy || !loadProfileDraft || (isPepco && !selectedPepcoApplicationId)
+            }
             onClick={() => onBuild(selectedPepcoApplicationId)}
           >
             {prepBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -4303,8 +4786,8 @@ function ApplicationPrepSection({
           </p>
         ) : !packageApp ? (
           <p className={uciDrawerChildEmptyClass}>
-            No application package yet. Prepare a draft to inventory required documents and fields from
-            the PEPCO template manifest.
+            No application package yet. Prepare a draft to inventory provider-specific test or
+            production requirements. Dominion production requirements remain unknown.
           </p>
         ) : (
           <>
@@ -4317,6 +4800,38 @@ function ApplicationPrepSection({
                 <Badge variant="mutedLight">Human review required</Badge>
               ) : null}
             </div>
+
+            {isDominionSynthetic ? (
+              <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                  {packageMeta?.checklist_label}
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  Test-only checklist. It is not authoritative Dominion guidance and cannot submit
+                  externally.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      packageMeta?.synthetic_checklist?.status === "approved" || reviewBusy
+                    }
+                    onClick={() => void handleApproveSyntheticChecklist()}
+                  >
+                    Approve synthetic checklist
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleSyntheticExport()}
+                  >
+                    Export read-only JSON
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {packageMeta?.package_status === "incomplete" ? (
               <p className={cn("text-sm text-amber-800 dark:text-amber-200", mutedClass)}>
@@ -4389,6 +4904,39 @@ function ApplicationPrepSection({
                         </p>
                         {slot.confirmed_at ? (
                           <p>Confirmed {formatWhen(slot.confirmed_at)}</p>
+                        ) : null}
+                        {slot.signature_required ? (
+                          <div className="space-y-2 rounded-md border border-amber-500/30 p-2">
+                            <p className="font-medium text-foreground">
+                              Signature: {slot.signature_status || "unknown"}
+                            </p>
+                            <Input
+                              value={signatureReviewNote}
+                              onChange={(event) => setSignatureReviewNote(event.target.value)}
+                              placeholder="Manual signature verification note"
+                              className="h-8 text-xs"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleSignatureStatus(slot.key, "unsigned")}
+                              >
+                                Mark unsigned
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={!signatureReviewNote.trim()}
+                                onClick={() =>
+                                  void handleSignatureStatus(slot.key, "signed_manual_verified")
+                                }
+                              >
+                                Manually verify signed
+                              </Button>
+                            </div>
+                          </div>
                         ) : null}
                         <Button
                           type="button"
@@ -4481,7 +5029,7 @@ function ApplicationPrepSection({
                           <p className={cn("text-xs", mutedClass)}>Loading candidates…</p>
                         ) : (
                           <p className={cn("text-xs", mutedClass)}>
-                            No PEPCO or uploaded candidates available for this slot.
+                            No uploaded or provider-scoped candidates available for this slot.
                           </p>
                         )}
                       </div>
@@ -4526,7 +5074,7 @@ function ApplicationPrepSection({
               </div>
             ) : null}
 
-            {!selectedPepcoApplicationId ? (
+            {isPepco && !selectedPepcoApplicationId ? (
               <p className={cn("text-xs text-amber-800 dark:text-amber-200", mutedClass)}>
                 Select a PEPCO portal project above before rebuilding the application package.
               </p>
@@ -4602,7 +5150,11 @@ function ApplicationPrepSection({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  disabled={reviewBusy || packageApp.draft_status === "reviewed"}
+                  disabled={
+                    reviewBusy ||
+                    packageApp.draft_status === "reviewed" ||
+                    packageMeta?.package_status !== "ready_for_review"
+                  }
                   onClick={() => onReview("reviewed")}
                 >
                   {reviewBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -4626,7 +5178,7 @@ function ApplicationPrepSection({
                   onClick={onSubmit}
                 >
                   {submitBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Submit to utility
+                  {isDominionSynthetic ? "Run validation-only dry run" : "Submit to utility"}
                 </Button>
               </div>
               {!submitReady ? (
@@ -4639,8 +5191,9 @@ function ApplicationPrepSection({
                 </p>
               ) : (
                 <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
-                  Reviewed — submit runs PEPCO validation dry-run (no live portal submit by default) or
-                  sends email for other utilities when mailbox is connected.
+                  {isDominionSynthetic
+                    ? "Reviewed — validation only; no email, portal action, or lifecycle transition."
+                    : "Reviewed — submit runs PEPCO validation dry-run (no live portal submit by default) or sends email for other utilities when mailbox is connected."}
                 </p>
               )}
             </div>

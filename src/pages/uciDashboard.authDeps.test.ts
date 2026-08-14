@@ -55,13 +55,9 @@ describe("UciDashboard auth dependency regression", () => {
     assert.match(coordinationBlock, /!projectId/);
   });
 
-  it("imports EditorialPageHeader so initial /uci render does not throw ReferenceError", () => {
-    assert.match(dashboardSource, /<EditorialPageHeader\b/);
-    assert.match(
-      dashboardSource,
-      /import\s*\{[^}]*\bEditorialPageHeader\b[^}]*\}\s*from\s*["']@\/components\/layout\/EditorialPageHeader["']/,
-      "EditorialPageHeader is rendered but must be imported — otherwise /uci blanks on first paint",
-    );
+  it("uses the imported product PageHeader for initial /uci rendering", () => {
+    assert.match(dashboardSource, /<PageHeader\b/);
+    assert.match(dashboardSource, /import \{ PageHeader,/);
   });
 
   it("declares detailOpen state used by coordination sheet and PEPCO mailbox effect", () => {
@@ -72,7 +68,7 @@ describe("UciDashboard auth dependency regression", () => {
     );
     assert.match(
       dashboardSource,
-      /<Sheet open=\{detailOpen\} onOpenChange=\{handleDetailOpenChange\}/,
+      /<Sheet open=\{isRecordWorkspace \|\| detailOpen\} onOpenChange=\{handleDetailOpenChange\}/,
     );
     assert.match(dashboardSource, /\[detailOpen, detailId, isPepcoCoordination\]/);
   });

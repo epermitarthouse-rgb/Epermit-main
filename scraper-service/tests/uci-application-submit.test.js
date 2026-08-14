@@ -37,7 +37,7 @@ const REVIEWED_PACKAGE = {
   ],
   load_summary: { calculated_values: { connected_kw: 80 } },
   agent_draft_metadata: {
-    application_package: { package_status: "incomplete" },
+    application_package: { package_status: "ready_for_review" },
   },
 };
 
@@ -387,7 +387,7 @@ describe("UCI D4 application submit service", () => {
         {
           ...REVIEWED_PACKAGE,
           agent_draft_metadata: {
-            application_package: { package_status: "incomplete" },
+            application_package: { package_status: "ready_for_review" },
             submission: {
               confirmation_status: "failed",
               failure_code: "EMAIL_SEND_FAILED",
@@ -409,6 +409,61 @@ describe("UCI D4 application submit service", () => {
 
     assert.equal(result.status, "confirmed");
     assert.equal(result.lifecycle_advanced, true);
+  });
+
+  it("validates Dominion synthetic checklist without email, portal, or lifecycle advance", async () => {
+    const synthetic = {
+      ...REVIEWED_PACKAGE,
+      id: "app-pkg-dominion-synthetic",
+      provider_slug: "dominion",
+      agent_draft_metadata: {
+        application_package: {
+          package_status: "ready_for_review",
+          checklist_mode: "synthetic_test",
+          checklist_label: "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED",
+          authoritative_requirements: false,
+          missing_fields: [],
+          missing_documents: [],
+          field_results: [{ key: "project_address", status: "present" }],
+          signature_requirements: [
+            {
+              document_key: "authorization",
+              signature_status: "signed_manual_verified",
+              satisfied: true,
+            },
+          ],
+        },
+      },
+    };
+    const tables = createSubmitTables({
+      coordination_applications: [synthetic],
+    });
+    const supabase = createSubmitMockSupabase(tables);
+    let emailCalled = false;
+    const result = await submitApplicationPackage(supabase, {
+      applicationId: synthetic.id,
+      userId: "user-1",
+      deps: {
+        sendMailFn: async () => {
+          emailCalled = true;
+          throw new Error("Synthetic path must not call email");
+        },
+      },
+    });
+
+    assert.equal(result.status, "validation_passed");
+    assert.equal(result.dry_run, true);
+    assert.equal(result.validation_only, true);
+    assert.equal(result.lifecycle_advanced, false);
+    assert.equal(result.external_side_effects.email_sent, false);
+    assert.equal(result.external_side_effects.portal_touched, false);
+    assert.equal(emailCalled, false);
+    assert.equal(tables.coordination_records[0].current_stage, 3);
+    assert.equal(tables.coordination_applications[0].draft_status, "reviewed");
+    assert.equal(
+      tables.coordination_applications[0].agent_draft_metadata.submission.confirmation_status,
+      "dry_run",
+    );
   });
 });
 

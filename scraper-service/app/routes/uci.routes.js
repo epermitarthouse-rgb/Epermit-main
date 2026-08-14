@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const { Router } = require("express");
 const {
   requireAuthenticatedUser,
@@ -14,7 +15,11 @@ const {
 const {
   listActiveProvidersForTenant,
   getActiveProvidersBySlugsForTenant,
+  createTenantUtilityProvider,
 } = require("../services/uci/uci-providers-tenant.service.js");
+const {
+  requireSupportedUtilityType,
+} = require("../services/uci/uci-utility-types.js");
 const { getProjectTenantId, getProjectForUciAccess } = require("../services/uci/uci-access.service.js");
 const {
   listCoordinationRecordsByProject,
@@ -62,6 +67,9 @@ const {
   importDocumentFindingsToLoadProfile,
 } = require("../services/uci/uci-document-findings-bridge.service.js");
 const {
+  reprocessDocument,
+} = require("../services/uci/uci-document-reprocess.service.js");
+const {
   runApplicationPackageBuild,
   reviewApplicationPackage,
   getApplicationById,
@@ -72,6 +80,11 @@ const {
   removePackageDocumentMapping,
 } = require("../services/uci/uci-package-document-bridge.service.js");
 const { submitApplicationPackage } = require("../services/uci/uci-application-submit.service.js");
+const {
+  approveSyntheticChecklist,
+  setSyntheticSignatureStatus,
+  exportSyntheticChecklistPackage,
+} = require("../services/uci/uci-synthetic-checklist.service.js");
 const { listApplicationsByCoordination } = require("../services/uci/uci-applications.service.js");
 const { runPortalSync } = require("../services/uci/uci-portal-sync.service.js");
 const {
@@ -122,6 +135,11 @@ const {
   sanitizeCoordinationDetailBundleForApi,
   streamPepcoDocumentForRequest,
 } = require("../services/uci/uci-pepco-document-download.service.js");
+const {
+  listProviderHarvest,
+  linkHarvestApplication,
+  refreshLinkedHarvestData,
+} = require("../services/uci/uci-portal-harvest.service.js");
 
 /**
  * @param {string} prefix
@@ -194,6 +212,48 @@ function createUciRouter(opts) {
   configureTerritoryDatasetLoader({ supabase });
   const router = Router();
 
+  // Correlate the three user-triggered Load Profile actions with browser errors.
+  // The client reuses the same ID for a safe transport retry, while attempt
+  // distinguishes whether Express saw one or both HTTP requests.
+  router.use((req, res, next) => {
+    if (
+      req.method !== "POST" ||
+      !/^\/coordination\/[^/]+\/(?:load-profile\/(?:analyze|extract-candidates|import-document-findings)|document-processing\/reprocess)$/.test(
+        req.path,
+      )
+    ) {
+      return next();
+    }
+
+    const suppliedRequestId = String(req.get("x-request-id") || "").trim();
+    const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : crypto.randomUUID();
+    const attempt = String(req.get("x-uci-request-attempt") || "1").slice(0, 8);
+    const startedAt = Date.now();
+    let logged = false;
+    res.set("x-request-id", requestId);
+
+    const logCompletion = (outcome) => {
+      if (logged) return;
+      logged = true;
+      console.info("[uci-load-profile-action]", {
+        request_id: requestId,
+        attempt,
+        method: req.method,
+        path: req.path,
+        coordination_id: String(req.path.split("/")[2] || "").trim() || null,
+        status: res.statusCode,
+        outcome,
+        duration_ms: Date.now() - startedAt,
+      });
+    };
+
+    res.once("finish", () => logCompletion("finished"));
+    res.once("close", () => logCompletion(res.writableEnded ? "finished" : "client_closed"));
+    next();
+  });
+
   router.get("/territory-dataset/health", async (req, res) => {
     try {
       await requireAuthenticatedUser(req, supabase);
@@ -229,7 +289,7 @@ function createUciRouter(opts) {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.query.projectId || "").trim();
       const utilityType = String(req.query.utilityType || req.query.utility_type || "").trim();
-      const utilityTypeFilter = utilityType || null;
+      const utilityTypeFilter = utilityType ? requireSupportedUtilityType(utilityType) : null;
       if (projectId) {
         await requireProjectAccess({ supabase, userId: user.id, projectId });
         const project = await getProjectTenantId(supabase, projectId);
@@ -251,6 +311,29 @@ function createUciRouter(opts) {
     }
   });
 
+  router.post("/projects/:projectId/providers", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.params.projectId || "").trim();
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      const project = await getProjectTenantId(supabase, projectId);
+      const tenantId = project?.tenant_id ? String(project.tenant_id) : "";
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await createTenantUtilityProvider(supabase, {
+        tenantId,
+        name: body.name,
+        utilityType: body.utility_type ?? body.utilityType,
+      });
+      res.status(result.created ? 201 : 200).json({
+        ...result,
+        tenant_id: tenantId,
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
   router.get("/providers/resolve", async (req, res) => {
     try {
       await requireAuthenticatedUser(req, supabase);
@@ -263,8 +346,61 @@ function createUciRouter(opts) {
       }
       const utilityType = String(req.query.utilityType || req.query.utility_type || "").trim();
       const result = await resolveProviderAliasForApi(supabase, alias, {
-        utilityType: utilityType || null,
+        utilityType: utilityType ? requireSupportedUtilityType(utilityType) : null,
       });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/portal-harvest/:providerSlug", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const providerSlug = String(req.params.providerSlug || "").trim().toLowerCase();
+      const harvest = await listProviderHarvest(supabase, { userId: user.id, providerSlug });
+      res.json(harvest);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.put("/portal-harvest/:providerSlug/applications/:externalApplicationId/link", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const providerSlug = String(req.params.providerSlug || "").trim().toLowerCase();
+      const externalApplicationId = String(req.params.externalApplicationId || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const projectId = String(body.project_id || "").trim();
+      const coordinationRecordId = String(body.coordination_record_id || "").trim();
+      if (!providerSlug || !externalApplicationId || !projectId || !coordinationRecordId) {
+        const err = new Error("provider, external application, project, and coordination record are required");
+        err.statusCode = 400;
+        err.code = "INVALID_HARVEST_LINK";
+        throw err;
+      }
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      const link = await linkHarvestApplication(supabase, {
+        userId: user.id,
+        providerSlug,
+        externalApplicationId,
+        projectId,
+        coordinationRecordId,
+      });
+      res.json({ link });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/portal-harvest/:providerSlug/refresh", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const providerSlug = String(req.params.providerSlug || "").trim().toLowerCase();
+      const result = await refreshLinkedHarvestData(supabase, { userId: user.id, providerSlug });
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -741,6 +877,9 @@ function createUciRouter(opts) {
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const externalApplicationId = String(body.external_application_id ?? "").trim();
       const refresh = body.refresh === true;
+      const documentIds = Array.isArray(body.document_ids)
+        ? body.document_ids.map(String).filter(Boolean)
+        : null;
 
       const record = await getCoordinationRecordById(supabase, coordinationId);
       if (!record) {
@@ -762,8 +901,45 @@ function createUciRouter(opts) {
         userId: user.id,
         externalApplicationId,
         refresh,
+        documentIds,
       });
 
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/document-processing/reprocess", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const externalApplicationId = String(body.external_application_id ?? "").trim();
+      const documentId = String(body.document_id ?? "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const result = await reprocessDocument(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        externalApplicationId,
+        documentId,
+      });
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -1119,11 +1295,14 @@ function createUciRouter(opts) {
         body.external_application_id != null
           ? String(body.external_application_id).trim()
           : undefined;
+      const checklistMode =
+        body.checklist_mode != null ? String(body.checklist_mode).trim() : undefined;
 
       const result = await runApplicationPackageBuild(supabase, {
         coordinationRecordId: coordinationId,
         userId: user.id,
         externalApplicationId,
+        checklistMode,
       });
 
       res.json(result);
@@ -1237,6 +1416,96 @@ function createUciRouter(opts) {
         slotKey,
       });
 
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/applications/:id/synthetic-checklist/approve", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await approveSyntheticChecklist(supabase, {
+        applicationId,
+        userId: user.id,
+        note: body.note,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/applications/:id/synthetic-checklist/signature", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await setSyntheticSignatureStatus(supabase, {
+        applicationId,
+        userId: user.id,
+        documentKey: body.document_key,
+        signatureStatus: body.signature_status,
+        reviewNote: body.review_note,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/applications/:id/synthetic-checklist/export", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+      });
+      const result = await exportSyntheticChecklistPackage(supabase, { applicationId });
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="uci-synthetic-checklist-${applicationId}.json"`,
+      );
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);

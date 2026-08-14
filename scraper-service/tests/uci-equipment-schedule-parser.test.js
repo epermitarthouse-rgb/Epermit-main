@@ -16,6 +16,20 @@ EQUIPMENT UTILITY SCHEDULE TAG DESCRIPTION MANUFACTURER MODEL VOLTS PHASE AMPS C
 
 const GARBLED_TEXT = `EQUIPMENT UTILITY SCHEDULE some unstructured notes without recoverable rows`;
 
+const ASPEN_STYLE_ROWS = `
+EQUIPMENT UTILITY SCHEDULE TAG DESCRIPTION VOLTS PHASE AMPS CYCLE WATTS
+2026 13677 CONNECTICUT AVE 208 V 3 20 A 60 Hz 1248 W
+202BD BLAST CHILLER 208 V 3 30 A 60 Hz 10.8 kVA
+504 ICE MAKER 120 V 1 10 A 1000 W
+`;
+
+const HIGHLAND_SPRINGS_STYLE_ROWS = `
+Synthetic Equipment Schedule
+Tag Equipment Voltage Phase Amps kVA Watts
+EQ-101 Double batch oven 208 V 3 24 A 8.6 kVA 8600 W
+EQ-102 Water bath 120 V 1 15 A 1.8 kVA 1800 W
+`;
+
 const source = {
   source_type: "pepco_portal_document",
   source_document_name: "A109_EQUIPMENT_UTILITY_SCHEDULE.pdf",
@@ -47,5 +61,47 @@ describe("uci-equipment-schedule-parser", () => {
     assert.equal(layout.parseable, false);
     const { findings } = extractEquipmentScheduleFindingsFromText(GARBLED_TEXT, 1, source);
     assert.equal(findings.length, 0);
+  });
+
+  it("supports multi-letter tags, kVA, and rows without a cycle column", () => {
+    const { findings } = extractEquipmentScheduleFindingsFromText(
+      ASPEN_STYLE_ROWS,
+      1,
+      source,
+    );
+    assert.ok(!findings.some((f) => f.entity_name === "2026"));
+    assert.equal(
+      findings.find(
+        (f) => f.entity_name === "202BD" && f.field_key === "equipment_schedule_kva",
+      )?.normalized_value,
+      10.8,
+    );
+    assert.equal(
+      findings.find(
+        (f) => f.entity_name === "504" && f.field_key === "equipment_schedule_watts",
+      )?.normalized_value,
+      1000,
+    );
+  });
+
+  it("parses prefixed tags and both kVA and Watts columns", () => {
+    const { findings, layout } = extractEquipmentScheduleFindingsFromText(
+      HIGHLAND_SPRINGS_STYLE_ROWS,
+      1,
+      source,
+    );
+    assert.equal(layout.parseable, true);
+    assert.equal(
+      findings.find(
+        (f) => f.entity_name === "EQ-101" && f.field_key === "equipment_schedule_kva",
+      )?.normalized_value,
+      8.6,
+    );
+    assert.equal(
+      findings.find(
+        (f) => f.entity_name === "EQ-101" && f.field_key === "equipment_schedule_watts",
+      )?.normalized_value,
+      8600,
+    );
   });
 });

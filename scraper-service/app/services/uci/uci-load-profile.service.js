@@ -2,10 +2,24 @@
 
 const { getCoordinationRecordById } = require("./uci-records.service.js");
 const { resolveProjectAddressForProviderSetup } = require("./uci-provider-setup.service.js");
+const { recordSystemTransition } = require("./uci-transitions.service.js");
 
 const LOAD_PROFILE_VERSION = "d2.1-v1";
 const LOAD_PROFILE_IDEMPOTENCY_KEY = "agent_2_load_profile:d2.1-v1";
 const GENERATED_BY = "agent_2_load_profile";
+
+const ELECTRIC_STAGE_2_REQUIREMENTS = {
+  connected_equipment_or_load_data: [
+    "connected_load_kw",
+    "connected_load_kva",
+    "demand_load_kw",
+    "demand_load_kva",
+    "connected_equipment_or_load_data",
+  ],
+  requested_voltage: ["requested_voltage", "service_voltage"],
+  phase: ["phase"],
+  service_configuration: ["service_configuration", "wire_configuration"],
+};
 
 /** Engineering numerics that must never be inferred. */
 const FORBIDDEN_INFERRED_KEYS = new Set([
@@ -138,6 +152,68 @@ function requiredInputsForUtilityType(utilityType) {
     return ["service_count", "service_type", "demarcation_location"];
   }
   return ["utility_specific_load_data"];
+}
+
+function verifiedEntryHasValue(entry) {
+  return Boolean(
+    entry &&
+      typeof entry === "object" &&
+      !Array.isArray(entry) &&
+      entry.value != null &&
+      entry.value !== "",
+  );
+}
+
+/**
+ * Stage 2 readiness is intentionally narrower than the historical extraction
+ * inventory. Project metadata, documents, meter count, and construction dates
+ * may support later package work, but they do not block load/service sizing.
+ *
+ * @param {Record<string, unknown>} loadSummary
+ */
+function getStage2MissingInputs(loadSummary) {
+  const utilityType = normalizeUtilityType(loadSummary?.utility_type);
+  const verified =
+    loadSummary?.verified_values &&
+    typeof loadSummary.verified_values === "object" &&
+    !Array.isArray(loadSummary.verified_values)
+      ? /** @type {Record<string, unknown>} */ (loadSummary.verified_values)
+      : {};
+
+  if (utilityType === "electric") {
+    return Object.entries(ELECTRIC_STAGE_2_REQUIREMENTS)
+      .filter(([, keys]) => !keys.some((key) => verifiedEntryHasValue(verified[key])))
+      .map(([requirement]) => requirement);
+  }
+
+  const historicalMissing = Array.isArray(loadSummary?.missing_inputs)
+    ? loadSummary.missing_inputs.map(String)
+    : [];
+  const required = new Set(requiredInputsForUtilityType(utilityType));
+  return historicalMissing.filter((input) => required.has(input));
+}
+
+/**
+ * Recompute status from current verified values instead of preserving a stale
+ * historical analysis result.
+ *
+ * @param {Record<string, unknown>} loadSummary
+ */
+function reconcileLoadProfileReadiness(loadSummary) {
+  const missingInputs = getStage2MissingInputs(loadSummary);
+  return {
+    ...loadSummary,
+    analysis_status:
+      loadSummary?.analysis_status === "blocked"
+        ? "blocked"
+        : resolveAnalysisStatus({
+            missingInputs,
+            needsVerification: Array.isArray(loadSummary?.needs_verification)
+              ? loadSummary.needs_verification
+              : [],
+          }),
+    missing_inputs: missingInputs,
+  };
 }
 
 /**
@@ -308,7 +384,7 @@ function buildLoadSummary(params) {
 
   assertNoInferredEngineeringValues(calculatedValues);
 
-  return {
+  return reconcileLoadProfileReadiness({
     version: LOAD_PROFILE_VERSION,
     utility_type: normalizeUtilityType(utilityType),
     analysis_status: analysisStatus,
@@ -329,7 +405,7 @@ function buildLoadSummary(params) {
     generated_by: GENERATED_BY,
     generated_by_user_id: userId,
     requires_human_review: true,
-  };
+  });
 }
 
 /**
@@ -457,7 +533,7 @@ async function runLoadProfileAnalysis(supabase, params) {
       ? /** @type {Record<string, unknown>} */ (existing.load_summary)
       : {};
 
-  const loadSummary = {
+  const loadSummary = reconcileLoadProfileReadiness({
     ...buildLoadSummary({
       utilityType,
       generatedAt,
@@ -474,13 +550,16 @@ async function runLoadProfileAnalysis(supabase, params) {
       !Array.isArray(prevSummary.verified_values)
         ? prevSummary.verified_values
         : {},
+    verified_values_history: Array.isArray(prevSummary.verified_values_history)
+      ? prevSummary.verified_values_history
+      : [],
     load_extraction:
       prevSummary.load_extraction &&
       typeof prevSummary.load_extraction === "object" &&
       !Array.isArray(prevSummary.load_extraction)
         ? prevSummary.load_extraction
         : null,
-  };
+  });
 
   const embedded = record.utility_providers;
   const providerSlug = Array.isArray(embedded)
@@ -559,15 +638,36 @@ async function runLoadProfileAnalysis(supabase, params) {
     application = data;
   }
 
+  let lifecycleRecord = record;
+  let stageUnchanged = true;
+  const currentStage = Number(record.current_stage) || 1;
+  const currentState = String(record.current_stage_state ?? "NOT_STARTED");
+  if (currentStage < 2 || (currentStage === 2 && currentState === "NOT_STARTED")) {
+    const lifecycle = await recordSystemTransition(supabase, {
+      coordinationRecordId,
+      toStage: 2,
+      toState: "IN_PROGRESS",
+      reason: "Agent 2 load profile analysis started",
+      triggeredByType: "system",
+      triggeredById: userId,
+      metadata: {
+        source: GENERATED_BY,
+        load_profile_version: LOAD_PROFILE_VERSION,
+      },
+    });
+    lifecycleRecord = lifecycle.record;
+    stageUnchanged = false;
+  }
+
   return {
     coordination_record_id: coordinationRecordId,
     project_id: projectId,
     analysis_status: loadSummary.analysis_status,
     load_summary: loadSummary,
     application,
-    stage_unchanged: true,
-    current_stage: record.current_stage,
-    current_stage_state: record.current_stage_state,
+    stage_unchanged: stageUnchanged,
+    current_stage: lifecycleRecord.current_stage,
+    current_stage_state: lifecycleRecord.current_stage_state,
   };
 }
 
@@ -579,6 +679,8 @@ module.exports = {
   normalizeUtilityType,
   validateProviderContext,
   requiredInputsForUtilityType,
+  getStage2MissingInputs,
+  reconcileLoadProfileReadiness,
   buildInputInventory,
   buildLoadSummary,
   resolveAnalysisStatus,

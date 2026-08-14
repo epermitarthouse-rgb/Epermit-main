@@ -9,6 +9,7 @@ import {
   formatCandidateFieldLabel,
   getLoadReviewTabCandidates,
   getLoadReviewTabCounts,
+  getStage2MissingInputs,
   isConnectedLoadSatisfied,
   isPendingLoadReviewCandidate,
   isUnresolvedLoadCandidate,
@@ -18,6 +19,7 @@ import {
   type UciLoadProfileSummary,
   type UciVerifiedLoadValue,
 } from "@/lib/uciLoadProfile";
+import type { UciDocumentManifestEntry } from "@/lib/uciDocumentProcessing";
 
 export type LoadDataLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -56,12 +58,20 @@ export type ChecklistItemStatus = "complete" | "missing" | "needs_review" | "not
 
 export type TemplateStatus = "none" | "draft" | "approved";
 
+export type SourceDocumentStatus =
+  | "parsed_candidates"
+  | "parsed_no_candidates"
+  | "pending"
+  | "failed"
+  | "needs_fallback";
+
 export interface LoadProfileOverview {
   workspaceState: LoadProfileWorkspaceState;
   workspaceStateLabel: string;
   completionPercent: number;
   packageReady: boolean;
   connectedLoadSatisfied: boolean;
+  verifiedProjectDemandSatisfied: boolean;
   hasOnlyPanelEvidence: boolean;
   humanReviewRequired: boolean;
   missingInputs: string[];
@@ -86,7 +96,11 @@ export interface SourceDocumentRow {
   pageCount: number | null;
   contentHash: string | null;
   candidateCount: number;
+  findingsCount: number;
   failureReason: string | null;
+  status: SourceDocumentStatus;
+  statusLabel: string;
+  statusReason: string | null;
   rankScore: number | null;
   rankReasons: string[];
 }
@@ -118,6 +132,7 @@ export interface LoadScheduleRow {
   nonContinuousLoad: number | null;
   demandFactor: number | null;
   demandFactorSource: string | null;
+  demandFactorDisplay: string;
   demandAdjustedLoad: number | null;
   unit: string | null;
   source: string;
@@ -143,6 +158,12 @@ export interface ServiceSizingField {
   source: string;
   evidence: string | null;
   approved: boolean;
+}
+
+export interface ServiceSizingRecommendation {
+  status: "approved" | "requires_human_input" | "missing_inputs";
+  message: string;
+  missingInputs: string[];
 }
 
 export interface PackageReadinessItem {
@@ -172,6 +193,8 @@ const PROJECT_CONNECTED_KEYS = new Set([
   "demand_load_kva",
 ]);
 
+const PROJECT_DEMAND_KEYS = new Set(["demand_load_kw", "demand_load_kva"]);
+
 const PANEL_PREFIX = "panel_";
 
 const SERVICE_FIELD_KEYS = new Set([
@@ -182,6 +205,9 @@ const SERVICE_FIELD_KEYS = new Set([
   "meter_count",
   "service_configuration",
   "wire_configuration",
+  "construction_start_date",
+  "construction_completion_date",
+  "requested_in_service_date",
 ]);
 
 const EQUIPMENT_COUNT_KEYS: Record<string, string> = {
@@ -191,7 +217,10 @@ const EQUIPMENT_COUNT_KEYS: Record<string, string> = {
 
 const NUMERIC_UNIT_REQUIRED = new Set([
   ...PROJECT_CONNECTED_KEYS,
-  ...Array.from(SERVICE_FIELD_KEYS).filter((k) => k !== "phase" && k !== "service_configuration"),
+  "service_amperage",
+  "requested_voltage",
+  "service_voltage",
+  "meter_count",
   ...Object.keys(EQUIPMENT_COUNT_KEYS),
 ]);
 
@@ -222,11 +251,15 @@ export const MANUAL_VERIFIABLE_FIELD_OPTIONS = [
   { field_key: "demand_load_kw", label: "Demand load", unit: "kW", entity_type: "project_service" },
   { field_key: "demand_load_kva", label: "Demand load", unit: "kVA", entity_type: "project_service" },
   { field_key: "service_amperage", label: "Service amperage", unit: "A", entity_type: "project_service" },
+  { field_key: "requested_voltage", label: "Requested voltage", unit: "V", entity_type: "project_service" },
   { field_key: "service_voltage", label: "Service voltage", unit: "V", entity_type: "project_service" },
   { field_key: "phase", label: "Service phase", unit: "phase", entity_type: "project_service" },
   { field_key: "meter_count", label: "Meter count", unit: "count", entity_type: "project_service" },
   { field_key: "service_configuration", label: "Service configuration", unit: "", entity_type: "project_service" },
   { field_key: "wire_configuration", label: "Wire configuration", unit: "", entity_type: "project_service" },
+  { field_key: "construction_start_date", label: "Construction start date", unit: "", entity_type: "project_service" },
+  { field_key: "construction_completion_date", label: "Construction completion date", unit: "", entity_type: "project_service" },
+  { field_key: "requested_in_service_date", label: "Requested in-service date", unit: "", entity_type: "project_service" },
 ] as const;
 
 export function readStoredWorkspaceSection(): WorkspaceSection {
@@ -291,6 +324,8 @@ function sourceTypeLabel(sourceType: string): string {
       return "Utility portal";
     case "project_document":
       return "Project document";
+    case "manual_upload":
+      return "Manual upload";
     case "provider_application":
       return "Application metadata";
     default:
@@ -298,11 +333,117 @@ function sourceTypeLabel(sourceType: string): string {
   }
 }
 
+export function deriveSourceDocumentStatus(
+  doc: UciDocumentManifestEntry,
+): Pick<SourceDocumentRow, "status" | "statusLabel" | "statusReason"> {
+  const pageRecords = doc.page_records ?? [];
+  if (doc.fallback_status === "unavailable") {
+    return {
+      status: "needs_fallback",
+      statusLabel: "OCR/Vision fallback unavailable",
+      statusReason: "Required fallback provider is disabled or not configured",
+    };
+  }
+  if (doc.fallback_status === "attempted_failed") {
+    if (Number(doc.findings_count ?? 0) > 0) {
+      return {
+        status: "parsed_candidates",
+        statusLabel: "Parsed with fallback warning",
+        statusReason:
+          doc.failure_reason ||
+          "Deterministic parsing succeeded, but one or more fallback pages failed",
+      };
+    }
+    return {
+      status: "needs_fallback",
+      statusLabel: "OCR/Vision fallback failed",
+      statusReason: doc.failure_reason || "Fallback was attempted but one or more pages failed",
+    };
+  }
+  if (doc.fallback_status === "manual_review_required") {
+    return {
+      status: "needs_fallback",
+      statusLabel: "Manual review required",
+      statusReason: doc.failure_reason || "Automated extraction cannot resolve one or more pages",
+    };
+  }
+  const fallbackPending =
+    Number(doc.page_coverage?.fallback_pending ?? 0) > 0 ||
+    pageRecords.some((page) =>
+      [
+        "vision_required",
+        "vision_processing",
+        "vision_failed",
+        "ocr_required",
+        "ocr_processing",
+        "ocr_failed",
+        "human_required",
+      ].includes(String(page.status ?? "")),
+    ) ||
+    doc.findings_extraction_status === "vision_required_for_structured_findings";
+
+  if (fallbackPending) {
+    const count = Number(doc.page_coverage?.fallback_pending ?? 0);
+    return {
+      status: "needs_fallback",
+      statusLabel: "Needs OCR/Vision fallback",
+      statusReason:
+        count > 0
+          ? `${count} page${count === 1 ? "" : "s"} awaiting fallback processing`
+          : doc.failure_reason || "Structured extraction requires fallback or manual review",
+    };
+  }
+
+  if (doc.processing_status === "failed" || doc.processing_status === "unsupported") {
+    return {
+      status: "failed",
+      statusLabel: "Failed processing",
+      statusReason: doc.failure_reason || "Document processing failed",
+    };
+  }
+
+  if (doc.processing_status === "pending" || doc.processing_status === "processing") {
+    return {
+      status: "pending",
+      statusLabel: "Pending processing",
+      statusReason:
+        doc.processing_status === "processing"
+          ? "Document processing is in progress"
+          : "Document has not been processed",
+    };
+  }
+
+  if (doc.findings_count > 0 || doc.findings_extraction_status === "findings_created") {
+    return {
+      status: "parsed_candidates",
+      statusLabel: "Parsed — candidates found",
+      statusReason: null,
+    };
+  }
+
+  return {
+    status: "parsed_no_candidates",
+    statusLabel: "Parsed — no relevant candidates",
+    statusReason:
+      doc.findings_extraction_status === "no_supported_findings"
+        ? "Parsing completed but produced no supported findings"
+        : null,
+  };
+}
+
 function hasProjectLevelVerifiedLoad(summary: UciLoadProfileSummary | null): boolean {
   if (!summary?.verified_values) return false;
   return Object.entries(summary.verified_values).some(
     ([key, entry]) =>
       PROJECT_CONNECTED_KEYS.has(key) && verifiedValueSatisfiesConnectedLoad(key, entry),
+  );
+}
+
+export function hasVerifiedProjectDemand(summary: UciLoadProfileSummary | null): boolean {
+  if (!summary?.verified_values) return false;
+  return Object.entries(summary.verified_values).some(
+    ([key, entry]) =>
+      PROJECT_DEMAND_KEYS.has(key) && verifiedValueSatisfiesConnectedLoad(key, entry),
   );
 }
 
@@ -339,6 +480,46 @@ function getLastApprovalAt(summary: UciLoadProfileSummary | null): string | null
   return dates.length ? dates[dates.length - 1] : null;
 }
 
+function verifiedKeysForMissingInput(missingInput: string): string[] {
+  switch (missingInput) {
+    case "connected_equipment_or_load_data":
+      return [...PROJECT_CONNECTED_KEYS, "connected_equipment_or_load_data"];
+    case "requested_voltage":
+      return ["requested_voltage"];
+    case "phase":
+      return ["phase"];
+    case "meter_count":
+      return ["meter_count"];
+    case "service_configuration":
+      return ["service_configuration", "wire_configuration"];
+    case "construction_schedule":
+      return [
+        "construction_start_date",
+        "construction_completion_date",
+        "requested_in_service_date",
+      ];
+    default:
+      return [missingInput];
+  }
+}
+
+function inputHasCandidate(summary: UciLoadProfileSummary, missingInput: string): boolean {
+  const keys = verifiedKeysForMissingInput(missingInput);
+  return (summary.candidate_values ?? []).some(
+    (candidate) => candidate.status === "candidate" && keys.includes(candidate.field_key),
+  );
+}
+
+function isCandidateBlockingStage2(
+  candidate: UciLoadCandidate,
+  missingInputs: string[],
+): boolean {
+  if (candidate.status !== "candidate") return false;
+  return missingInputs.some((input) =>
+    verifiedKeysForMissingInput(input).includes(candidate.field_key),
+  );
+}
+
 export function getTemplateStatus(summary: UciLoadProfileSummary | null): {
   status: TemplateStatus;
   name: string | null;
@@ -359,14 +540,19 @@ export function getLoadProfileOverview(
   } = {},
 ): LoadProfileOverview {
   const connectedLoadSatisfied = isConnectedLoadSatisfied(summary);
+  const verifiedProjectDemandSatisfied = hasVerifiedProjectDemand(summary);
   const hasOnlyPanel = hasOnlyPanelVerifiedOrCandidateEvidence(
     summary,
     options.externalApplicationId,
   );
   const counts = getLoadReviewTabCounts(summary, options.externalApplicationId);
-  const pending = counts.pending;
-  const unresolved = counts.unresolved;
   const template = getTemplateStatus(summary);
+  const effectiveMissingInputs = summary ? getStage2MissingInputs(summary) : [];
+  const blockingReviewCandidates = summary
+    ? (summary.candidate_values ?? []).filter((candidate) =>
+        isCandidateBlockingStage2(candidate, effectiveMissingInputs),
+      ).length
+    : 0;
 
   const blockingIssues: string[] = [];
   if (!summary) {
@@ -376,6 +562,7 @@ export function getLoadProfileOverview(
       completionPercent: 0,
       packageReady: false,
       connectedLoadSatisfied: false,
+      verifiedProjectDemandSatisfied: false,
       hasOnlyPanelEvidence: false,
       humanReviewRequired: true,
       missingInputs: [],
@@ -396,16 +583,22 @@ export function getLoadProfileOverview(
       "Panel-level evidence cannot satisfy project-level connected load requirement",
     );
   }
-  if (summary.missing_inputs.length > 0) {
-    blockingIssues.push(...summary.missing_inputs.map((m) => `Missing input: ${m.replace(/_/g, " ")}`));
+  if (effectiveMissingInputs.length > 0) {
+    blockingIssues.push(
+      ...effectiveMissingInputs.map((input) =>
+        inputHasCandidate(summary, input)
+          ? `Needs verification: ${input.replace(/_/g, " ")}`
+          : `Missing input: ${input.replace(/_/g, " ")}`,
+      ),
+    );
   }
 
   let workspaceState: LoadProfileWorkspaceState = "extraction_available";
   if (summary.analysis_status === "blocked") workspaceState = "blocked";
-  else if (pending > 0 || unresolved > 0) workspaceState = "needs_review";
-  else if (summary.missing_inputs.length > 0 || !connectedLoadSatisfied)
+  else if (blockingReviewCandidates > 0) workspaceState = "needs_review";
+  else if (effectiveMissingInputs.length > 0 || !connectedLoadSatisfied)
     workspaceState = "missing_engineering_inputs";
-  else if (connectedLoadSatisfied && counts.approved > 0) {
+  else if (connectedLoadSatisfied) {
     const serviceVerified = hasVerifiedServiceFacts(summary);
     workspaceState = serviceVerified
       ? options.packageConnectedLoadSatisfied
@@ -414,7 +607,12 @@ export function getLoadProfileOverview(
       : "missing_engineering_inputs";
   }
 
-  const completionPercent = computeCompletionPercent(summary, connectedLoadSatisfied, counts);
+  const completionPercent = computeCompletionPercent(
+    summary,
+    connectedLoadSatisfied,
+    counts,
+    effectiveMissingInputs,
+  );
 
   return {
     workspaceState,
@@ -422,9 +620,10 @@ export function getLoadProfileOverview(
     completionPercent,
     packageReady: options.packageStatus === "ready_for_review",
     connectedLoadSatisfied,
+    verifiedProjectDemandSatisfied,
     hasOnlyPanelEvidence: hasOnlyPanel,
     humanReviewRequired: summary.requires_human_review,
-    missingInputs: summary.missing_inputs,
+    missingInputs: effectiveMissingInputs,
     blockingIssues,
     lastExtractedAt: summary.load_extraction?.last_extracted_at ?? null,
     lastApprovalAt: getLastApprovalAt(summary),
@@ -468,32 +667,41 @@ function computeCompletionPercent(
   summary: UciLoadProfileSummary,
   connectedLoadSatisfied: boolean,
   counts: ReturnType<typeof getLoadReviewTabCounts>,
+  effectiveMissingInputs: string[] = summary.missing_inputs,
 ): number {
   let score = 0;
   if (summary) score += 15;
   if (summary.load_extraction?.last_extracted_at) score += 15;
   if (counts.approved > 0) score += 25;
   if (connectedLoadSatisfied) score += 25;
-  if (counts.pending === 0 && counts.unresolved === 0) score += 10;
-  if (summary.missing_inputs.length === 0) score += 10;
+  if (
+    (summary.candidate_values ?? []).every(
+      (candidate) => !isCandidateBlockingStage2(candidate, effectiveMissingInputs),
+    )
+  ) {
+    score += 10;
+  }
+  if (effectiveMissingInputs.length === 0) score += 10;
   return Math.min(100, score);
 }
 
 export function buildSourceDocumentRows(
   summary: UciLoadProfileSummary | null,
   externalApplicationId?: string | null,
+  manifestDocuments: UciDocumentManifestEntry[] = [],
 ): SourceDocumentRow[] {
-  if (!summary) return [];
-  const ext = externalApplicationId ?? summary.load_extraction?.external_application_id ?? null;
+  if (!summary && manifestDocuments.length === 0) return [];
+  const ext = externalApplicationId ?? summary?.load_extraction?.external_application_id ?? null;
   const map = new Map<string, SourceDocumentRow>();
+  const canonicalDocumentKey = (name: string) => name.trim().toLowerCase();
 
-  const ranking = summary.load_extraction?.source_document_ranking ?? [];
+  const ranking = summary?.load_extraction?.source_document_ranking ?? [];
   for (const item of ranking) {
     const name = String(item.file_name ?? "unknown");
-    const key = `${item.source_type ?? "unknown"}:${name}`;
+    const key = canonicalDocumentKey(name);
     const category = inferDocumentCategory(name, item.reasons ?? []);
     map.set(key, {
-      documentKey: key,
+      documentKey: `${item.source_type ?? "unknown"}:${name}`,
       documentName: name,
       sourceLabel: sourceTypeLabel(String(item.source_type ?? "unknown")),
       sourceType: String(item.source_type ?? "unknown"),
@@ -505,25 +713,35 @@ export function buildSourceDocumentRows(
       pageCount: null,
       contentHash: null,
       candidateCount: 0,
+      findingsCount: 0,
       failureReason: null,
+      status: "pending",
+      statusLabel: "Pending processing",
+      statusReason: "Ranked for processing; no processing result is recorded",
       rankScore: typeof item.score === "number" ? item.score : null,
       rankReasons: Array.isArray(item.reasons) ? item.reasons.map(String) : [],
     });
   }
 
-  const candidates = summary.candidate_values ?? [];
+  const candidates = summary?.candidate_values ?? [];
   for (const c of candidates) {
     if (ext && c.external_application_id && c.external_application_id !== ext) continue;
+    if (c.status === "stale" || c.status === "rejected") continue;
     const name = c.source_document_name || "unknown";
-    const key = `${c.source_type}:${name}`;
+    const key = canonicalDocumentKey(name);
     const existing = map.get(key);
     const category = inferDocumentCategory(name, existing?.rankReasons ?? []);
     if (existing) {
       existing.candidateCount += 1;
       if (c.source_content_hash) existing.contentHash = c.source_content_hash;
+      existing.processingStatus = "processed";
+      existing.textExtractionStatus = "parsed";
+      existing.status = "parsed_candidates";
+      existing.statusLabel = "Parsed — candidates found";
+      existing.statusReason = null;
     } else {
       map.set(key, {
-        documentKey: key,
+        documentKey: `${c.source_type}:${name}`,
         documentName: name,
         sourceLabel: sourceTypeLabel(c.source_type),
         sourceType: c.source_type,
@@ -535,22 +753,29 @@ export function buildSourceDocumentRows(
         pageCount: null,
         contentHash: c.source_content_hash,
         candidateCount: 1,
+        findingsCount: 0,
         failureReason: null,
+        status: "parsed_candidates",
+        statusLabel: "Parsed — candidates found",
+        statusReason: null,
         rankScore: null,
         rankReasons: [],
       });
     }
   }
 
-  for (const failed of summary.load_extraction?.failed_documents ?? []) {
+  for (const failed of summary?.load_extraction?.failed_documents ?? []) {
     const name = String(failed.document_name ?? "unknown");
-    const key = `${failed.source_type ?? "unknown"}:${name}`;
+    const key = canonicalDocumentKey(name);
     const category = inferDocumentCategory(name);
     const row = map.get(key);
     if (row) {
       row.processingStatus = "failed";
       row.textExtractionStatus = "failed";
       row.failureReason = failed.message;
+      row.status = "failed";
+      row.statusLabel = "Failed processing";
+      row.statusReason = failed.message;
     } else {
       map.set(key, {
         documentKey: key,
@@ -565,20 +790,24 @@ export function buildSourceDocumentRows(
         pageCount: null,
         contentHash: null,
         candidateCount: 0,
+        findingsCount: 0,
         failureReason: failed.message,
+        status: "failed",
+        statusLabel: "Failed processing",
+        statusReason: failed.message,
         rankScore: null,
         rankReasons: [],
       });
     }
   }
 
-  for (const doc of summary.source_documents ?? []) {
+  for (const doc of summary?.source_documents ?? []) {
     const name = doc.file_name ?? "unknown";
-    const key = `project_document:${name}`;
+    const key = canonicalDocumentKey(name);
     if (!map.has(key)) {
       const category = inferDocumentCategory(name);
       map.set(key, {
-        documentKey: key,
+        documentKey: `project_document:${name}`,
         documentName: name,
         sourceLabel: "Project document",
         sourceType: "project_document",
@@ -590,11 +819,74 @@ export function buildSourceDocumentRows(
         pageCount: null,
         contentHash: null,
         candidateCount: 0,
+        findingsCount: 0,
         failureReason: null,
+        status: "pending",
+        statusLabel: "Pending processing",
+        statusReason: "Document is available but has not been processed",
         rankScore: null,
         rankReasons: [],
       });
     }
+  }
+
+  for (const doc of manifestDocuments) {
+    if (ext && doc.external_application_id && doc.external_application_id !== ext) continue;
+    const name = doc.original_filename || "unknown";
+    const key = canonicalDocumentKey(name);
+    const derived = deriveSourceDocumentStatus(doc);
+    const existing = map.get(key);
+    const processingStatus =
+      doc.processing_status === "failed" || doc.processing_status === "unsupported"
+        ? "failed"
+        : doc.processing_status === "pending" || doc.processing_status === "processing"
+          ? "available"
+          : "processed";
+    const textExtractionStatus =
+      derived.status === "failed"
+        ? "failed"
+        : derived.status === "pending"
+          ? "not_attempted"
+          : "parsed";
+
+    if (existing) {
+      existing.documentKey = doc.document_id || existing.documentKey;
+      existing.sourceType = doc.source_type || existing.sourceType;
+      existing.sourceLabel = sourceTypeLabel(existing.sourceType);
+      existing.processingStatus = processingStatus;
+      existing.textExtractionStatus = textExtractionStatus;
+      existing.pageCount = doc.page_count;
+      existing.contentHash = doc.content_hash || existing.contentHash;
+      existing.findingsCount = doc.findings_count;
+      existing.failureReason = doc.failure_reason;
+      existing.status = derived.status;
+      existing.statusLabel = derived.statusLabel;
+      existing.statusReason = derived.statusReason;
+      continue;
+    }
+
+    const category = inferDocumentCategory(name, doc.document_roles ?? []);
+    map.set(key, {
+      documentKey: doc.document_id || `${doc.source_type}:${name}`,
+      documentName: name,
+      sourceLabel: sourceTypeLabel(doc.source_type),
+      sourceType: doc.source_type,
+      externalApplicationId: doc.external_application_id || ext,
+      category,
+      categoryLabel: CATEGORY_LABELS[category],
+      processingStatus,
+      textExtractionStatus,
+      pageCount: doc.page_count,
+      contentHash: doc.content_hash || null,
+      candidateCount: 0,
+      findingsCount: doc.findings_count,
+      failureReason: doc.failure_reason,
+      status: derived.status,
+      statusLabel: derived.statusLabel,
+      statusReason: derived.statusReason,
+      rankScore: null,
+      rankReasons: [],
+    });
   }
 
   return [...map.values()].sort((a, b) => (b.rankScore ?? 0) - (a.rankScore ?? 0));
@@ -668,6 +960,7 @@ export function buildVerifiedInputRows(
 export function buildLoadScheduleRows(summary: UciLoadProfileSummary | null): LoadScheduleRow[] {
   if (!summary?.verified_values) return [];
   const rows: LoadScheduleRow[] = [];
+  const verifiedProjectDemandSatisfied = hasVerifiedProjectDemand(summary);
   for (const [key, entry] of Object.entries(summary.verified_values)) {
     if (key.startsWith(PANEL_PREFIX)) continue;
     const numeric =
@@ -691,6 +984,9 @@ export function buildLoadScheduleRows(summary: UciLoadProfileSummary | null): Lo
       nonContinuousLoad: null,
       demandFactor: null,
       demandFactorSource: null,
+      demandFactorDisplay: verifiedProjectDemandSatisfied
+        ? "N/A — verified demand provided"
+        : "Unresolved",
       demandAdjustedLoad: key.includes("demand") ? numeric : null,
       unit,
       source: entry.source_document_name,
@@ -710,9 +1006,12 @@ export function getLoadScheduleTotals(summary: UciLoadProfileSummary | null): Lo
     return values.length ? values.reduce((a, b) => a + b, 0) : null;
   };
 
+  const verifiedProjectDemandSatisfied = hasVerifiedProjectDemand(summary);
   const hasApprovedTemplate = getTemplateStatus(summary).status === "approved";
   const hasDemandFactors = false;
-  const canFinalize = rows.length > 0 && hasApprovedTemplate && hasDemandFactors;
+  const canFinalize =
+    rows.length > 0 &&
+    (verifiedProjectDemandSatisfied || (hasApprovedTemplate && hasDemandFactors));
 
   return {
     connectedKw: sum("kW", "connectedLoad"),
@@ -723,7 +1022,9 @@ export function getLoadScheduleTotals(summary: UciLoadProfileSummary | null): Lo
     finalizeMessage:
       rows.length === 0
         ? "No verified load schedule rows yet."
-        : !hasApprovedTemplate || !hasDemandFactors
+        : verifiedProjectDemandSatisfied
+          ? "Verified project demand provided — no demand factor or template is required; finalize when engineering review is complete."
+          : !hasApprovedTemplate || !hasDemandFactors
           ? "Load schedule cannot be finalized until approved engineering factors or template inputs are provided."
           : "Verified inputs present — finalize when engineering review is complete.",
   };
@@ -740,6 +1041,8 @@ export function buildServiceSizingFields(
     "connected_load_kw",
     "connected_load_kva",
     "service_amperage",
+    "requested_service_amperage",
+    "service_entrance_amperage",
     "service_voltage",
     "requested_voltage",
     "phase",
@@ -771,6 +1074,47 @@ export function buildServiceSizingFields(
   return fields;
 }
 
+export function getServiceSizingRecommendation(
+  summary: UciLoadProfileSummary | null,
+): ServiceSizingRecommendation {
+  if (!summary?.verified_values) {
+    return {
+      status: "missing_inputs",
+      message: "Verified demand, voltage, and phase are required before service sizing review.",
+      missingInputs: ["demand_load", "voltage", "phase"],
+    };
+  }
+
+  const verified = summary.verified_values;
+  const missingInputs: string[] = [];
+  if (!hasVerifiedProjectDemand(summary)) missingInputs.push("demand_load");
+  if (!verified.requested_voltage && !verified.service_voltage) missingInputs.push("voltage");
+  if (!verified.phase) missingInputs.push("phase");
+
+  if (missingInputs.length > 0) {
+    return {
+      status: "missing_inputs",
+      message: `Missing verified service-sizing input${missingInputs.length === 1 ? "" : "s"}: ${missingInputs.join(", ").replace(/_/g, " ")}.`,
+      missingInputs,
+    };
+  }
+
+  if (verified.service_amperage) {
+    return {
+      status: "approved",
+      message: "Verified service-size recommendation is available for final engineering review.",
+      missingInputs: [],
+    };
+  }
+
+  return {
+    status: "requires_human_input",
+    message:
+      "Engineering recommendation requires human input. Verified demand, voltage, and phase are available, but no approved sizing rule or verified proposed service size exists.",
+    missingInputs: [],
+  };
+}
+
 export function buildPackageReadinessChecklist(
   summary: UciLoadProfileSummary | null,
   options: {
@@ -780,9 +1124,24 @@ export function buildPackageReadinessChecklist(
   } = {},
 ): PackageReadinessItem[] {
   const connectedSatisfied = isConnectedLoadSatisfied(summary);
+  const verifiedProjectDemandSatisfied = hasVerifiedProjectDemand(summary);
   const verified = summary?.verified_values ?? {};
-  const hasScheduleRows = buildLoadScheduleRows(summary).length > 0;
+  const schedule = getLoadScheduleTotals(summary);
+  const sizing = getServiceSizingRecommendation(summary);
   const onlyPanel = hasOnlyPanelVerifiedOrCandidateEvidence(summary);
+  const activeCandidates = (summary?.candidate_values ?? []).filter(
+    (candidate) => candidate.status === "candidate",
+  );
+  const hasCandidate = (...fieldKeys: string[]) =>
+    activeCandidates.some((candidate) => fieldKeys.includes(candidate.field_key));
+  const verificationStatus = (
+    isVerified: boolean,
+    candidateExists: boolean,
+  ): ChecklistItemStatus => (isVerified ? "complete" : candidateExists ? "needs_review" : "missing");
+  const hasProjectLoadCandidate = hasCandidate(
+    ...PROJECT_CONNECTED_KEYS,
+    "connected_equipment_or_load_data",
+  );
 
   const item = (
     key: string,
@@ -793,72 +1152,84 @@ export function buildPackageReadinessChecklist(
 
   return [
     item(
-      "project_address",
-      "Project address",
-      options.hasProjectAddress ? "complete" : "missing",
-      options.hasProjectAddress ? "Address available for package" : "Project address required",
-    ),
-    item(
       "connected_load_data",
       "Verified connected-load value",
-      connectedSatisfied ? "complete" : onlyPanel ? "needs_review" : "missing",
+      connectedSatisfied
+        ? "complete"
+        : onlyPanel || hasProjectLoadCandidate
+          ? "needs_review"
+          : "missing",
       connectedSatisfied
         ? "Project-level connected or demand load verified"
+        : hasProjectLoadCandidate
+          ? "Project/service load candidate exists and needs verification"
         : onlyPanel
           ? "Panel totals present but cannot satisfy connected_load_data"
           : "Approve a project/service connected or demand load, or enter one manually",
     ),
     item(
       "voltage",
-      "Voltage",
-      verified.service_voltage || verified.requested_voltage ? "complete" : "missing",
-      verified.service_voltage || verified.requested_voltage
-        ? "Service voltage verified"
-        : "Service voltage not verified",
+      "Verified service voltage",
+      verificationStatus(
+        Boolean(verified.requested_voltage || verified.service_voltage),
+        hasCandidate("requested_voltage", "service_voltage"),
+      ),
+      verified.requested_voltage || verified.service_voltage
+        ? "Voltage verified for service-sizing review"
+        : hasCandidate("requested_voltage", "service_voltage")
+          ? "Voltage candidate exists and needs verification"
+          : "No verified voltage exists",
     ),
     item(
       "phase",
       "Phase",
-      verified.phase ? "complete" : "missing",
-      verified.phase ? "Service phase verified" : "Service phase not verified",
+      verificationStatus(Boolean(verified.phase), hasCandidate("phase")),
+      verified.phase
+        ? "Service phase verified"
+        : hasCandidate("phase")
+          ? "Service phase candidate exists and needs verification"
+          : "No service phase source or value exists",
     ),
     item(
       "service_configuration",
       "Service configuration",
-      verified.service_configuration || verified.wire_configuration ? "complete" : "needs_review",
+      verificationStatus(
+        Boolean(verified.service_configuration || verified.wire_configuration),
+        hasCandidate("service_configuration", "wire_configuration"),
+      ),
       verified.service_configuration || verified.wire_configuration
         ? "Service configuration verified"
-        : "Service configuration may be required",
-    ),
-    item(
-      "meter_count",
-      "Meter count",
-      verified.meter_count ? "complete" : "not_applicable",
-      verified.meter_count ? "Meter count verified" : "Verify if required by utility",
+        : hasCandidate("service_configuration", "wire_configuration")
+          ? "Service configuration candidate exists and needs verification"
+          : "No service configuration source or value exists",
     ),
     item(
       "approved_load_schedule",
-      "Approved load schedule",
-      hasScheduleRows ? "needs_review" : "missing",
-      hasScheduleRows
-        ? "Verified rows exist — demand factors/template approval still required for finalization"
-        : "No verified schedule rows",
+      "Defensible load schedule",
+      schedule.canFinalize ? "complete" : schedule.connectedKw != null || schedule.connectedKva != null ? "needs_review" : "missing",
+      schedule.canFinalize
+        ? verifiedProjectDemandSatisfied
+          ? "Verified project demand provided — no demand factor or template is required"
+          : schedule.finalizeMessage
+        : schedule.finalizeMessage,
     ),
     item(
-      "required_documents",
-      "Required documents",
-      options.packageDocumentsComplete ? "complete" : "missing",
-      options.packageDocumentsComplete
-        ? "Required package documents attached"
-        : "Complete document mapping in application package",
+      "service_size_recommendation",
+      "Service-size recommendation",
+      sizing.status === "approved"
+        ? "complete"
+        : sizing.status === "requires_human_input"
+          ? "needs_review"
+          : "missing",
+      sizing.message,
     ),
     item(
       "human_review",
-      "Human review complete",
+      "Stage 2 engineering review",
       options.humanReviewComplete ? "complete" : "needs_review",
       options.humanReviewComplete
-        ? "Load profile review complete"
-        : "Review and approve required inputs",
+        ? "Load schedule and service sizing reviewed"
+        : "Human approval is required before Stage 2 can be marked complete",
     ),
   ];
 }
@@ -916,16 +1287,6 @@ export function validateManualVerifiedInput(
   }
   if ((fieldKey === "service_voltage" || fieldKey === "requested_voltage") && unit && unit !== "V") {
     return "Voltage requires unit V";
-  }
-
-  const note = payload.review_note != null ? String(payload.review_note).trim() : "";
-  const reference = payload.source_reference != null ? String(payload.source_reference).trim() : "";
-  if (PROJECT_CONNECTED_KEYS.has(fieldKey) && !note && !reference && !payload.evidence_text) {
-    return "Engineering note or source reference required for manual project load entry";
-  }
-
-  if (!payload.review_note?.trim()) {
-    return "Reviewer confirmation note is required";
   }
 
   return null;

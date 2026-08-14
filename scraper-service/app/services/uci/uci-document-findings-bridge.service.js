@@ -2,7 +2,10 @@
 
 const crypto = require("crypto");
 const { getCoordinationRecordById } = require("./uci-records.service.js");
-const { findAgentDraftApplication } = require("./uci-load-profile.service.js");
+const {
+  findAgentDraftApplication,
+  reconcileLoadProfileReadiness,
+} = require("./uci-load-profile.service.js");
 const {
   getDocumentProcessingState,
   filterFindingsForUciStage,
@@ -23,8 +26,8 @@ const {
   fieldKeyMatchesUnit,
 } = require("./uci-load-candidate.service.js");
 
-const BRIDGE_SCHEMA_VERSION = "row-bridge-v1";
-const STALE_BRIDGE_SCHEMA_VERSIONS = new Set([]);
+const BRIDGE_SCHEMA_VERSION = "row-bridge-v2";
+const STALE_BRIDGE_SCHEMA_VERSIONS = new Set(["row-bridge-v1"]);
 
 const AGENT_2_STAGE = "agent_2_load_profile";
 
@@ -34,6 +37,17 @@ const NON_BRIDGE_CATEGORIES = new Set([
   "package_document_evidence",
   "site_plan_information",
   "authorization_information",
+]);
+const EXPECTED_SKIP_REASONS = new Set([
+  "unchanged_finding_reused",
+  "duplicate_evidence_reused",
+  "duplicate_finding_in_batch",
+  "unsupported_field_key",
+  "not_agent_2_stage",
+  "non_agent_2_category",
+  "specification_reference_review_only",
+  "non_electric_thermal_load",
+  "stale_or_rejected_finding",
 ]);
 
 const THERMAL_EVIDENCE_PATTERN = /\b(BTU\s*\/?\s*H?|BTUH|CFM|TONS?\s+OF\s+COOL|THERMAL)\b/i;
@@ -86,7 +100,8 @@ function skipReasonForFinding(finding, externalApplicationId, record) {
   if (findingExt && findingExt !== externalApplicationId) return "cross_application_finding";
 
   const fieldKey = String(finding.field_key ?? "").trim();
-  if (!fieldKey || !EXTRACTABLE_FIELD_KEYS.has(fieldKey)) return "unsupported_field_key";
+  if (!fieldKey) return "malformed_finding";
+  if (!EXTRACTABLE_FIELD_KEYS.has(fieldKey)) return "unsupported_field_key";
 
   const category = String(finding.category ?? "");
   if (NON_BRIDGE_CATEGORIES.has(category)) return "non_agent_2_category";
@@ -225,7 +240,11 @@ function findReusableCandidateByEvidence(existing, candidate) {
       (c) =>
         c.status !== "stale" &&
         c.status !== "rejected" &&
-        semanticDedupKey(c) === key,
+        semanticDedupKey(c) === key &&
+        String(c.field_key ?? "") === String(candidate.field_key ?? "") &&
+        String(c.entity_type ?? "") === String(candidate.entity_type ?? "") &&
+        String(c.entity_name ?? "") === String(candidate.entity_name ?? "") &&
+        (c.is_project_total === false) === (candidate.is_project_total === false),
     ) ?? null
   );
 }
@@ -236,11 +255,26 @@ function findReusableCandidateByEvidence(existing, candidate) {
  * @param {Map<string, Record<string, unknown>>} findingById
  * @param {boolean} refresh
  */
-function markStaleBridgeCandidates(candidates, activeFindingIds, findingById, refresh) {
+function markStaleBridgeCandidates(
+  candidates,
+  activeFindingIds,
+  findingById,
+  refresh,
+  targetDocumentIds = null,
+) {
   let superseded = 0;
   for (const c of candidates) {
     if (c.source_type !== "uci_document_finding") continue;
     if (c.status === "approved" || c.status === "rejected") continue;
+
+    const findingId = String(c.finding_id ?? "");
+    const finding = findingById.get(findingId);
+    if (
+      targetDocumentIds instanceof Set &&
+      !targetDocumentIds.has(String(finding?.document_id ?? c.source_document_id ?? ""))
+    ) {
+      continue;
+    }
 
     const version = String(c.bridge_schema_version ?? "");
     if (version && STALE_BRIDGE_SCHEMA_VERSIONS.has(version)) {
@@ -251,10 +285,7 @@ function markStaleBridgeCandidates(candidates, activeFindingIds, findingById, re
       continue;
     }
 
-    const findingId = String(c.finding_id ?? "");
     if (!findingId) continue;
-
-    const finding = findingById.get(findingId);
     if (!finding || !activeFindingIds.has(findingId)) {
       c.status = "stale";
       c.stale_reason = "finding_removed_or_superseded";
@@ -299,6 +330,105 @@ function preserveStaleBridgeCandidateIds(candidates) {
 }
 
 /**
+ * Once canonical document findings exist, retire unapproved candidates from
+ * the older parallel extractor for those same documents. Approved rows and
+ * candidates outside this application/document set remain untouched.
+ *
+ * @param {Array<Record<string, unknown>>} candidates
+ * @param {Record<string, unknown>} processingState
+ * @param {string} externalApplicationId
+ */
+function markSupersededDirectCandidates(
+  candidates,
+  processingState,
+  externalApplicationId,
+  targetDocumentIds = null,
+) {
+  const processedNames = new Set(
+    (Array.isArray(processingState.documents) ? processingState.documents : [])
+      .filter(
+        (doc) =>
+          !(targetDocumentIds instanceof Set) ||
+          targetDocumentIds.has(String(doc?.document_id ?? "")),
+      )
+      .map((doc) => String(doc?.original_filename ?? ""))
+      .filter(Boolean),
+  );
+  let superseded = 0;
+  for (const candidate of candidates) {
+    if (candidate.status !== "candidate") continue;
+    if (candidate.source_type === "uci_document_finding") continue;
+    if (
+      candidate.external_application_id &&
+      String(candidate.external_application_id) !== externalApplicationId
+    ) {
+      continue;
+    }
+    if (!processedNames.has(String(candidate.source_document_name ?? ""))) continue;
+    candidate.status = "stale";
+    candidate.stale_reason = "superseded_by_document_findings_bridge";
+    candidate.can_satisfy_package = false;
+    superseded += 1;
+  }
+  return superseded;
+}
+
+/**
+ * Remove only evidence requirements that the active extraction explicitly
+ * satisfies. Panel totals never clear the project/service load requirement.
+ *
+ * @param {Record<string, unknown>} summary
+ * @param {Array<Record<string, unknown>>} candidates
+ * @param {Record<string, unknown>} processingState
+ */
+function reconcileMissingInputs(summary, candidates, processingState) {
+  const missing = new Set(
+    Array.isArray(summary.missing_inputs) ? summary.missing_inputs.map(String) : [],
+  );
+  const active = candidates.filter(
+    (candidate) => candidate.status !== "stale" && candidate.status !== "rejected",
+  );
+  const activeFields = new Set(active.map((candidate) => String(candidate.field_key ?? "")));
+
+  if (Array.isArray(processingState.documents) && processingState.documents.length > 0) {
+    missing.delete("uploaded_specifications_or_plans");
+  }
+  if (activeFields.has("phase")) missing.delete("phase");
+  if (activeFields.has("requested_voltage")) {
+    missing.delete("requested_voltage");
+  }
+  if (
+    activeFields.has("wire_configuration") ||
+    activeFields.has("service_configuration")
+  ) {
+    missing.delete("service_configuration");
+  }
+  if (activeFields.has("meter_count")) missing.delete("meter_count");
+
+  const hasEquipmentSchedule = active.some(
+    (candidate) =>
+      String(candidate.entity_type ?? "") === "equipment" ||
+      String(candidate.field_key ?? "").startsWith("equipment_schedule_"),
+  );
+  if (hasEquipmentSchedule) {
+    missing.delete("equipment_schedule");
+    missing.delete("connected_equipment_or_load_data");
+  }
+
+  const hasExplicitProjectLoad = active.some(
+    (candidate) =>
+      PROJECT_LEVEL_LOAD_FIELDS.has(String(candidate.field_key ?? "")) &&
+      candidate.entity_type === "project_service" &&
+      candidate.is_project_total === true,
+  );
+  if (hasExplicitProjectLoad) {
+    missing.delete("connected_equipment_or_load_data");
+  }
+
+  return [...missing];
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
  */
@@ -308,15 +438,10 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
     userId,
     externalApplicationId,
     refresh = false,
+    documentIds = null,
   } = params;
 
   const extAppId = String(externalApplicationId || "").trim();
-  if (!extAppId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -328,6 +453,9 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
 
   const projectId = String(record.project_id ?? "");
   const tenantId = record.tenant_id != null ? String(record.tenant_id) : null;
+  const targetDocumentIds = new Set(
+    (Array.isArray(documentIds) ? documentIds : []).map(String).filter(Boolean),
+  );
 
   const processingState = getDocumentProcessingState(record.metadata, extAppId);
   if (!processingState) {
@@ -432,6 +560,12 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
   };
 
   for (const finding of allFindings) {
+    if (
+      targetDocumentIds.size > 0 &&
+      !targetDocumentIds.has(String(finding?.document_id ?? ""))
+    ) {
+      continue;
+    }
     findingsConsidered += 1;
     try {
       const skip = skipReasonForFinding(finding, extAppId, record);
@@ -454,7 +588,13 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
           c.source_type === "uci_document_finding" && String(c.finding_id ?? "") === findingId,
       );
 
-      if (priorBridge && !refresh && findingUnchangedForBridge(priorBridge, finding)) {
+      if (
+        priorBridge &&
+        priorBridge.status !== "stale" &&
+        priorBridge.status !== "rejected" &&
+        !refresh &&
+        findingUnchangedForBridge(priorBridge, finding)
+      ) {
         candidatesReused += 1;
         bumpSkip("unchanged_finding_reused");
         continue;
@@ -494,11 +634,18 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
   }
 
   let workingCandidates = [...existingCandidates];
-  const candidatesSuperseded = markStaleBridgeCandidates(
+  let candidatesSuperseded = markStaleBridgeCandidates(
     workingCandidates,
     activeFindingIds,
     findingById,
     refresh,
+    targetDocumentIds.size > 0 ? targetDocumentIds : null,
+  );
+  candidatesSuperseded += markSupersededDirectCandidates(
+    workingCandidates,
+    processingState,
+    extAppId,
+    targetDocumentIds.size > 0 ? targetDocumentIds : null,
   );
   preserveStaleBridgeCandidateIds(workingCandidates);
 
@@ -520,19 +667,29 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
     candidates_created: candidatesCreated,
     candidates_reused: candidatesReused,
     candidates_superseded: candidatesSuperseded,
-    status: failedFindings.length > 0 || findingsSkipped > 0 ? "partial" : "complete",
+    skipped_reason_counts: Object.fromEntries(skippedReasonCounts),
+    status:
+      failedFindings.length > 0 ||
+      [...skippedReasonCounts.keys()].some((reason) => !EXPECTED_SKIP_REASONS.has(reason))
+        ? "partial"
+        : "complete",
     failed_findings: failedFindings,
   };
 
-  const nextSummary = {
+  const nextSummary = reconcileLoadProfileReadiness({
     ...existingSummary,
     candidate_values: workingCandidates,
     verified_values: verifiedValues,
+    missing_inputs: reconcileMissingInputs(
+      existingSummary,
+      workingCandidates,
+      processingState,
+    ),
     load_extraction: {
       ...existingExtraction,
       document_findings_bridge: bridgeMeta,
     },
-  };
+  });
 
   const { data, error } = await supabase
     .from("coordination_applications")
@@ -577,5 +734,7 @@ module.exports = {
   findReusableCandidateByEvidence,
   markStaleBridgeCandidates,
   preserveStaleBridgeCandidateIds,
+  markSupersededDirectCandidates,
+  reconcileMissingInputs,
   importDocumentFindingsToLoadProfile,
 };

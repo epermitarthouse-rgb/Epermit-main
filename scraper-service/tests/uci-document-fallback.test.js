@@ -37,6 +37,9 @@ const PROJECT_ID = "proj-generic-1";
 const COORD_ID = "coord-generic-1";
 const EXT_APP_A = "pepco-app-uuid-a";
 const USER_ID = "user-1";
+const VALID_PNG = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+]);
 
 function createMockSupabase(tables) {
   return {
@@ -330,7 +333,7 @@ describe("uci-document-fallback layer", () => {
           OPENAI_API_KEY: "",
         },
         renderPdfPageToPng: async () => ({
-          pngBuffer: Buffer.from("png"),
+          pngBuffer: VALID_PNG,
           mimeType: "image/png",
           width: 100,
           height: 100,
@@ -398,7 +401,7 @@ describe("uci-document-fallback layer", () => {
         },
         visionProcessor: mockVision,
         renderPdfPageToPng: async () => ({
-          pngBuffer: Buffer.from("png"),
+          pngBuffer: VALID_PNG,
           mimeType: "image/png",
           width: 100,
           height: 100,
@@ -415,6 +418,78 @@ describe("uci-document-fallback layer", () => {
     const state =
       tables.coordination_records[0].metadata.uci_document_processing.applications[EXT_APP_A];
     assert.equal(state.documents[0].page_records[0].status, "vision_processed");
+    assert.equal(state.documents[0].page_coverage.fallback_pending, 0);
+    assert.equal(state.documents[0].processing_status, "complete");
+    assert.equal(state.documents[0].fallback_status, "not_required");
+  });
+
+  it("creates and uses the configured OpenAI processor when no processor is injected", async () => {
+    const pageRecords = [
+      {
+        page_number: 1,
+        status: "vision_required",
+        page_analysis: { recommended_method: "vision" },
+      },
+    ];
+    const tables = {
+      coordination_records: [
+        {
+          id: COORD_ID,
+          project_id: PROJECT_ID,
+          tenant_id: TENANT_A,
+          metadata: {
+            uci_provider_mapping: { method: PROVIDER_SETUP_METHOD },
+            uci_document_processing: {
+              applications: {
+                [EXT_APP_A]: baseProcessingState(pageRecords),
+              },
+            },
+          },
+        },
+      ],
+    };
+    const calls = [];
+    const openai = {
+      chat: {
+        completions: {
+          async create(request) {
+            calls.push(request);
+            return {
+              choices: [{ message: { content: JSON.stringify({ findings: [] }) } }],
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+            };
+          },
+        },
+      },
+    };
+    const result = await runDocumentFallbackProcessing(createMockSupabase(tables), {
+      coordinationRecordId: COORD_ID,
+      userId: USER_ID,
+      externalApplicationId: EXT_APP_A,
+      mode: "vision",
+      deps: {
+        env: {
+          UCI_DOCUMENT_VISION_ENABLED: "true",
+          UCI_DOCUMENT_OCR_ENABLED: "false",
+          OPENAI_API_KEY: "test-key",
+        },
+        openai,
+        renderPdfPageToPng: async () => ({
+          pngBuffer: VALID_PNG,
+          mimeType: "image/png",
+          width: 100,
+          height: 100,
+        }),
+        downloadFromSupabaseStorage: async () => ({
+          ok: true,
+          data: { arrayBuffer: async () => Buffer.from("%PDF-1.4").buffer },
+        }),
+      },
+    });
+    assert.equal(result.status, "complete");
+    assert.equal(result.pages_processed, 1);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].model, "gpt-4o");
   });
 
   it("one failed page yields partial document result", async () => {
@@ -469,7 +544,7 @@ describe("uci-document-fallback layer", () => {
         visionProcessor: mockVision,
         ocrProcessor: mockOcr,
         renderPdfPageToPng: async () => ({
-          pngBuffer: Buffer.from("png"),
+          pngBuffer: VALID_PNG,
           mimeType: "image/png",
           width: 100,
           height: 100,
@@ -483,6 +558,13 @@ describe("uci-document-fallback layer", () => {
     assert.equal(result.pages_failed, 1);
     assert.equal(result.status, "partial");
     assert.equal(result.failed_pages.length, 1);
+    assert.equal(result.failed_pages[0].code, "FALLBACK_PAGE_FAILED");
+    const failedPage =
+      tables.coordination_records[0].metadata.uci_document_processing.applications[
+        EXT_APP_A
+      ].documents[0].page_records[1];
+    assert.equal(failedPage.fallback_diagnostics.stage, "openai_request");
+    assert.equal(failedPage.fallback_diagnostics.method, "ocr");
   });
 
   it("collectFallbackPages rejects cross-application documents by scope in run", async () => {

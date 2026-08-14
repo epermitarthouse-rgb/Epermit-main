@@ -48,6 +48,7 @@ export default defineConfig((configEnv) => {
     server: {
       host: "::",
       port: PARALLEL_FRONTEND_PORT,
+      strictPort: true,
       allowedHosts: true,
       watch: {
         ignored: [

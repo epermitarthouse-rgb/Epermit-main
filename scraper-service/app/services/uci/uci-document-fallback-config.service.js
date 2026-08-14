@@ -37,7 +37,12 @@ function getDocumentFallbackConfig(env = process.env) {
       Number(env.UCI_DOCUMENT_OCR_MAX_PAGES_PER_RUN ?? 25) || 25,
     ),
     ai_timeout_ms: Math.max(5000, Number(env.UCI_DOCUMENT_AI_TIMEOUT_MS ?? 90000) || 90000),
-    ai_max_retries: Math.max(0, Number(env.UCI_DOCUMENT_AI_MAX_RETRIES ?? 1) || 1),
+    ai_max_retries: Math.max(
+      0,
+      Number.isFinite(Number(env.UCI_DOCUMENT_AI_MAX_RETRIES))
+        ? Number(env.UCI_DOCUMENT_AI_MAX_RETRIES)
+        : 1,
+    ),
     ocr_min_confidence: Math.min(
       1,
       Math.max(0, Number(env.UCI_DOCUMENT_OCR_MIN_CONFIDENCE ?? 0.6) || 0.6),

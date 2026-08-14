@@ -4,10 +4,10 @@ const { buildCandidateRecord } = require("./uci-load-candidate.service.js");
 const { buildConciseEvidence, evidenceFingerprint } = require("./uci-one-line-extractor.service.js");
 
 const EQUIPMENT_HEADER_PATTERN =
-  /\bTAG\b.*\bDESCRIPTION\b.*\b(?:VOLTS?|VOLTAGE)\b.*\bPHASE\b.*\bAMPS?\b/i;
+  /\bTAG\b.*\b(?:DESCRIPTION|EQUIPMENT)\b.*\b(?:VOLTS?|VOLTAGE)\b.*\bPHASE\b.*\bAMPS?\b/i;
 
 const EQUIPMENT_ROW_PATTERN =
-  /\b(\d{3,4}[A-Z]?)\s+([A-Z][A-Z0-9\s,./\-'"()]+?)\s+(\d{2,3})\s+V\s+(\d)\s+(\d+(?:\.\d+)?)\s+A\s+\d+\s+Hz(?:\s+(\d+(?:\.\d+)?)\s+W)?/gi;
+  /^\s*([A-Z0-9]+(?:-[A-Z0-9]+)*)\s+(.+?)\s+(\d{2,3})\s+V\s+(\d)\s+(\d+(?:\.\d+)?)\s+A\b(.*)$/i;
 
 /**
  * @param {string} text
@@ -32,6 +32,46 @@ function shortenDescription(description) {
 }
 
 /**
+ * Parse only physical text lines. This intentionally never spans a newline:
+ * cross-line matching previously turned dates/addresses into equipment tags and
+ * attached later rows to the preceding tag.
+ *
+ * @param {string} text
+ */
+function parseEquipmentScheduleRows(text) {
+  const rows = [];
+  for (const rawLine of String(text ?? "").split(/\r?\n/)) {
+    const line = rawLine.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+    const match = line.match(EQUIPMENT_ROW_PATTERN);
+    if (!match) continue;
+
+    const tag = match[1].toUpperCase();
+    if (/^(?:19|20)\d{2}$/.test(tag)) continue;
+
+    const description = shortenDescription(match[2]);
+    if (!/[A-Z]/i.test(description)) continue;
+
+    const remainder = match[6];
+    const wattsMatch = remainder.match(/\b(\d+(?:\.\d+)?)\s*W\b/i);
+    const kvaMatch = remainder.match(/\b(\d+(?:\.\d+)?)\s*kVA\b/i);
+
+    rows.push({
+      tag,
+      description,
+      volts: Number(match[3]),
+      phase: match[4],
+      amps: Number(match[5]),
+      watts: wattsMatch ? Number(wattsMatch[1]) : null,
+      kva: kvaMatch ? Number(kvaMatch[1]) : null,
+      evidence: line.slice(0, 500),
+      index: String(text).indexOf(rawLine),
+    });
+  }
+  return rows;
+}
+
+/**
  * @param {string} text
  * @returns {{ parseable: boolean, reason: string | null }}
  */
@@ -43,9 +83,7 @@ function assessEquipmentScheduleLayout(text) {
   if (!EQUIPMENT_HEADER_PATTERN.test(hay)) {
     return { parseable: false, reason: "equipment_schedule_header_not_found" };
   }
-  const rowProbe = EQUIPMENT_ROW_PATTERN.exec(hay);
-  EQUIPMENT_ROW_PATTERN.lastIndex = 0;
-  if (!rowProbe) {
+  if (parseEquipmentScheduleRows(hay).length === 0) {
     return { parseable: false, reason: "equipment_rows_not_structurally_recoverable" };
   }
   return { parseable: true, reason: null };
@@ -87,15 +125,9 @@ function extractEquipmentScheduleFindingsFromText(text, pageNumber, source) {
     );
   };
 
-  let match;
-  while ((match = EQUIPMENT_ROW_PATTERN.exec(pageText)) !== null) {
-    const tag = match[1];
-    const description = shortenDescription(match[2]);
-    const volts = Number(match[3]);
-    const phase = match[4];
-    const amps = Number(match[5]);
-    const watts = match[6] != null ? Number(match[6]) : null;
-    const evidence = buildConciseEvidence(pageText, match.index, match[0].length);
+  for (const row of parseEquipmentScheduleRows(pageText)) {
+    const { tag, description, volts, phase, amps, watts, kva } = row;
+    const evidence = row.evidence;
 
     push({
       field_key: "equipment_schedule_tag",
@@ -176,6 +208,26 @@ function extractEquipmentScheduleFindingsFromText(text, pageNumber, source) {
         capacity_type: "connected_load",
       });
     }
+
+    if (kva != null && Number.isFinite(kva)) {
+      push({
+        field_key: "equipment_schedule_kva",
+        field_label: "Equipment apparent power",
+        raw_value: String(kva),
+        normalized_value: kva,
+        unit: "kVA",
+        entity_type: "equipment",
+        entity_name: tag,
+        fact_type: "electric_load",
+        category: "equipment_schedule",
+        evidence_text: evidence,
+        confidence: 0.82,
+        equipment_description: description,
+        utility_type: "electric",
+        energy_domain: "electric",
+        capacity_type: "connected_load",
+      });
+    }
   }
 
   return { findings: dedupeEquipmentScheduleCandidates(out), layout };
@@ -200,6 +252,7 @@ function dedupeEquipmentScheduleCandidates(candidates) {
 module.exports = {
   detectEquipmentScheduleText,
   assessEquipmentScheduleLayout,
+  parseEquipmentScheduleRows,
   extractEquipmentScheduleFindingsFromText,
   dedupeEquipmentScheduleCandidates,
 };

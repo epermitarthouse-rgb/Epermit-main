@@ -20,6 +20,21 @@ const source = {
   external_application_id: "app-a",
 };
 
+const ASPEN_PAIRED_SCHEDULE = `
+208/120 Wye, 3PH, 4W 208/120 Wye, 3PH, 4W
+PANELBOARD PANELBOARD
+A B
+200A MLO 200A MLO
+TOTAL CONN. LOAD: 63.88 kVA TOTAL CONN. LOAD: 78.97 kVA
+TOTAL DEMAND LOAD: 46.73 kVA TOTAL DEMAND LOAD: 51.33 kVA
+208/120 Wye, 3PH, 4W 208/120 Wye, 3PH, 4W
+PANELBOARD PANELBOARD
+MDP C
+800A MLO 400A MLO
+TOTAL CONN. LOAD: 164.61 kVA TOTAL CONN. LOAD: 80.23 kVA
+TOTAL DEMAND LOAD: 121.50 kVA TOTAL DEMAND LOAD: 55.10 kVA
+`;
+
 describe("uci-panel-schedule-parser", () => {
   it("extracts MDP and branch panel ratings as separate entities", () => {
     const findings = extractPanelScheduleFindingsFromText(PANEL_SCHEDULE_TEXT, 1, source);
@@ -44,5 +59,26 @@ describe("uci-panel-schedule-parser", () => {
   it("does not emit legacy service_amperage field keys", () => {
     const findings = extractPanelScheduleFindingsFromText(PANEL_SCHEDULE_TEXT, 1, source);
     assert.ok(!findings.some((f) => f.field_key === "service_amperage"));
+  });
+
+  it("keeps flattened two-column totals with their panel headers", () => {
+    const findings = extractPanelScheduleFindingsFromText(
+      ASPEN_PAIRED_SCHEDULE,
+      1,
+      source,
+    );
+    const value = (field, panel) =>
+      findings.find((f) => f.field_key === field && f.entity_name === panel)
+        ?.normalized_value;
+
+    assert.equal(value("panel_connected_load_kva", "A"), 63.88);
+    assert.equal(value("panel_demand_load_kva", "B"), 51.33);
+    assert.equal(value("panel_connected_load_kva", "MDP"), 164.61);
+    assert.equal(value("panel_demand_load_kva", "C"), 55.1);
+    assert.ok(
+      findings
+        .filter((f) => /panel_(?:connected|demand)_load_kva/.test(f.field_key))
+        .every((f) => f.is_project_total === false),
+    );
   });
 });

@@ -1,4 +1,5 @@
 /** Frontend-safe types for `/api/uci` JSON (no credentials). */
+import type { UciUtilityType } from "@/lib/uciUtilityTypes";
 
 export type LifecycleState =
   | "NOT_STARTED"
@@ -16,7 +17,7 @@ export interface UtilityProvider {
   name: string;
   display_name?: string | null;
   canonical_name?: string | null;
-  utility_type: string;
+  utility_type: UciUtilityType;
   ownership_type?: string | null;
   cet_relationship?: boolean;
   portal_key?: string | null;
@@ -34,7 +35,7 @@ export interface CoordinationRecord {
   user_id: string | null;
   tenant_id: string | null;
   utility_provider_id: string;
-  utility_type: string | null;
+  utility_type: UciUtilityType | null;
   scope_description: string;
   current_stage: number;
   current_stage_state: LifecycleState;
@@ -202,6 +203,52 @@ export interface UciProvidersResponse {
   tenant_id?: string | null;
 }
 
+export interface UciCreateProviderInput {
+  name: string;
+  utility_type: UciUtilityType;
+}
+
+export interface UciCreateProviderResponse {
+  provider: UtilityProvider;
+  created: boolean;
+  tenant_id: string;
+}
+
+export interface UciPortalHarvestSuggestion {
+  project_id: string;
+  project_name: string;
+  score: number;
+  confidence: "high" | "medium" | "low";
+  reasons: string[];
+}
+
+export interface UciPortalHarvestApplication {
+  provider_slug: string;
+  external_application_id: string;
+  external_job_id: string | null;
+  name: string | null;
+  address: string | null;
+  portal_status: string | null;
+  portal_milestone: string | null;
+  last_synced_at: string | null;
+  documents_count: number;
+  communications_count: number;
+  milestones_count: number;
+  latest_milestone_status: string | null;
+  linked_project: { id: string; name: string } | null;
+  coordination_record_id: string | null;
+  match_status: "Linked" | "Unmatched" | "Needs review";
+  suggestions: UciPortalHarvestSuggestion[];
+  source_duplicate_count: number;
+}
+
+export interface UciPortalHarvestResponse {
+  provider: { slug: string; name: string };
+  last_sync: string | null;
+  applications: UciPortalHarvestApplication[];
+  projects: Array<{ id: string; name: string }>;
+}
+
 export interface UciProjectCoordinationResponse {
   records: CoordinationRecord[];
 }
@@ -247,7 +294,7 @@ export interface UciProviderSetupResponse {
   recommended_address_source: UciProviderSetupAddressSource;
   guidance_steps: string[];
   providers: UciProviderSetupCatalogItem[];
-  utility_types_in_catalog: string[];
+  utility_types_in_catalog: UciUtilityType[];
   auto_selection_enabled: false;
 }
 
@@ -257,7 +304,7 @@ export interface UciProviderSetupCatalogItem {
   name: string;
   display_name?: string;
   canonical_name?: string | null;
-  utility_type: string;
+  utility_type: UciUtilityType;
   ownership_type?: string | null;
   cet_relationship?: boolean;
   portal_key?: string | null;
@@ -367,10 +414,7 @@ export interface UciProviderResolutionResult {
 export interface UciProviderResolutionListResponse {
   project_id: string;
   resolver_version: string;
-  territory_data_available: {
-    electric: boolean;
-    gas: boolean;
-  };
+  territory_data_available: Partial<Record<UciUtilityType, boolean>>;
   address_context: {
     formatted: string | null;
     source: string;
@@ -712,7 +756,7 @@ export interface UciLifecycleMappingResult {
   errors: string[];
 }
 
-export interface UciPepcoApplicationDetailSnapshot extends PepcoApplicationDetail {}
+export type UciPepcoApplicationDetailSnapshot = PepcoApplicationDetail;
 
 /** POST /api/uci/coordination/:id/discovery/pepco/application-details */
 export type UciPepcoApplicationDetailDiscoveryResponse =
@@ -835,4 +879,36 @@ export interface UciRecentEvent {
 
 export interface UciRecentEventsResponse {
   events: UciRecentEvent[];
+}
+
+/** Foundation-only vocabulary. These values do not imply automated decisions. */
+export type UciCosEvidenceStatus = "ADVISORY" | "UTILITY_ISSUED" | "DISCREPANCY";
+export type UciRefundAssessmentStatus = "NOT_ASSESSED" | "UNDER_REVIEW" | "DOCUMENTED";
+export type UciAccountingMode = "DRAFT_HUMAN_APPROVAL";
+
+export interface UciManual811Ticket {
+  ticket_number: string;
+  status: string;
+  requested_at: string;
+  expires_at: string;
+  notes: string;
+}
+
+export interface UciManualConflict {
+  id: string;
+  project_id: string;
+  coordination_record_id: string | null;
+  category: string;
+  summary: string;
+  status: "OPEN" | "MONITORING" | "RESOLVED";
+  created_at: string;
+}
+
+export interface UciManualFoundationNotes {
+  refund_status: UciRefundAssessmentStatus;
+  refund_notes: string;
+  accounting_mode: UciAccountingMode;
+  miss_utility_811: UciManual811Ticket;
+  easement_row_notes: string;
+  inspection_release_notes: string;
 }

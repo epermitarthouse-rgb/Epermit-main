@@ -21,6 +21,11 @@ export interface UciApplicationPackageDocument {
   external_application_id?: string | null;
   confirmed_by?: string | null;
   confirmed_at?: string | null;
+  signature_required?: boolean;
+  signature_status?: "unknown" | "unsigned" | "signed_manual_verified";
+  signature_verified_by?: string | null;
+  signature_verified_at?: string | null;
+  signature_review_note?: string | null;
 }
 
 export type UciPackageDocumentCandidateSource = "project_document" | "pepco_portal";
@@ -71,6 +76,26 @@ export interface UciApplicationPackageMetadata {
   missing_fields?: string[];
   load_profile_analysis_status?: string | null;
   requires_human_review?: boolean;
+  checklist_mode?: "production" | "synthetic_test";
+  checklist_label?: string | null;
+  authoritative_requirements?: boolean;
+  external_submission_allowed?: boolean | null;
+  synthetic_checklist?: {
+    status?: "draft" | "approved";
+    label?: string;
+    approved_by_user_id?: string | null;
+    approved_at?: string | null;
+    approval_note?: string | null;
+  } | null;
+  signature_requirements?: Array<{
+    document_key: string;
+    requirement_key: string;
+    signature_status: "unknown" | "unsigned" | "signed_manual_verified";
+    satisfied: boolean;
+    verified_by?: string | null;
+    verified_at?: string | null;
+    review_note?: string | null;
+  }>;
   notes?: string[];
   project_address?: {
     formatted?: string | null;
@@ -140,6 +165,20 @@ export function parsePackageDocuments(value: unknown): UciApplicationPackageDocu
           rec.external_application_id != null ? String(rec.external_application_id) : null,
         confirmed_by: rec.confirmed_by != null ? String(rec.confirmed_by) : null,
         confirmed_at: rec.confirmed_at != null ? String(rec.confirmed_at) : null,
+        signature_required: rec.signature_required === true,
+        signature_status:
+          rec.signature_status === "unsigned" ||
+          rec.signature_status === "signed_manual_verified"
+            ? rec.signature_status
+            : rec.signature_required === true
+              ? "unknown"
+              : undefined,
+        signature_verified_by:
+          rec.signature_verified_by != null ? String(rec.signature_verified_by) : null,
+        signature_verified_at:
+          rec.signature_verified_at != null ? String(rec.signature_verified_at) : null,
+        signature_review_note:
+          rec.signature_review_note != null ? String(rec.signature_review_note) : null,
       };
     })
     .filter((doc) => doc.key);

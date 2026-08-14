@@ -1,20 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
-  Cable,
   ClipboardList,
+  CloudDownload,
   DollarSign,
   FileCheck2,
-  FileSearch,
   Gauge,
-  GitCompare,
   Inbox,
   Map,
   Network,
   PlugZap,
   Radio,
   Ticket,
-  Wrench,
   Zap,
 } from "lucide-react";
 
@@ -28,7 +25,8 @@ import {
  *
  * Demoted items stay reachable via hub tiles / drawer / existing routes.
  */
-export type UciNavSupport = "active" | "partial" | "mock";
+export type UciNavSupport = "active" | "foundation" | "manual" | "contextual";
+export type UciNavGroup = "operations" | "foundations" | "contextual";
 
 /** Drawer tabs after coordination detail is open */
 export type UciDrawerTab =
@@ -39,6 +37,7 @@ export type UciDrawerTab =
   | "documents"
   | "load-profile"
   | "application-prep"
+  | "energization-closeout"
   | "lifecycle"
   | "cos"
   | "costs";
@@ -47,6 +46,8 @@ export type UciNavSectionId =
   | "overview"
   | "submissions"
   | "communications"
+  | "needs-attention"
+  | "provider-directory"
   | "class-of-service"
   | "ciac"
   | "energization"
@@ -56,15 +57,16 @@ export type UciNavSectionId =
   | "meter-set"
   | "miss-utility"
   | "knowledge-graph"
-  | "conflict-hunter"
-  | "easement"
-  | "portfolio";
+  | "conflicts"
+  | "portfolio"
+  | "portal-harvest";
 
 export type UciNavSection = {
   id: UciNavSectionId;
   label: string;
   icon: LucideIcon;
   support: UciNavSupport;
+  navGroup: UciNavGroup;
   /** Deep link query value */
   section: UciNavSectionId;
   /**
@@ -82,7 +84,7 @@ export type UciNavSection = {
     | { kind: "coming-soon" };
   /** Short copy for Coming Soon / WIP banners */
   note?: string;
-  /** Lovable-shaped Utility Coordination expand children */
+  /** Permanent Utility Coordination navigation */
   primaryNav?: boolean;
   /** Demoted from sidebar — keep reachable from UCI hub tiles */
   hubTile?: boolean;
@@ -90,17 +92,41 @@ export type UciNavSection = {
   hubDescription?: string;
 };
 
-export const UCI_DRAWER_TABS: { id: UciDrawerTab; label: string; pepcoOnly?: boolean }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "portal-sync", label: "Portal sync", pepcoOnly: true },
-  { id: "applications", label: "Applications" },
-  { id: "communications", label: "Communications" },
-  { id: "documents", label: "Documents" },
-  { id: "load-profile", label: "Load profile" },
-  { id: "application-prep", label: "Application prep" },
-  { id: "lifecycle", label: "Lifecycle" },
-  { id: "cos", label: "Class of Service" },
-  { id: "costs", label: "Costs & equipment" },
+export const UCI_DRAWER_TABS: {
+  id: UciDrawerTab;
+  label: string;
+  workspace: string;
+  pepcoOnly?: boolean;
+}[] = [
+  { id: "overview", label: "Overview", workspace: "Record" },
+  { id: "portal-sync", label: "Portal sync", workspace: "Intake", pepcoOnly: true },
+  { id: "documents", label: "Documents", workspace: "Stages 2–4" },
+  { id: "load-profile", label: "Load profile", workspace: "Stages 2–4" },
+  { id: "application-prep", label: "Application package", workspace: "Stages 2–4" },
+  { id: "applications", label: "Utility applications", workspace: "Coordination" },
+  { id: "communications", label: "Communications", workspace: "Coordination" },
+  { id: "cos", label: "Class of Service", workspace: "Decision & costs" },
+  { id: "costs", label: "Costs & equipment", workspace: "Costs" },
+  { id: "energization-closeout", label: "Energization & closeout", workspace: "Stages 8–10" },
+  { id: "lifecycle", label: "Lifecycle history", workspace: "Record" },
+];
+
+export const UCI_RECORD_WORKSPACE_GROUPS: Array<{
+  label: string;
+  tabs: UciDrawerTab[];
+}> = [
+  { label: "Setup", tabs: ["overview"] },
+  {
+    label: "Load, application & submission",
+    tabs: ["documents", "load-profile", "application-prep"],
+  },
+  {
+    label: "Utility response (communications + COS)",
+    tabs: ["applications", "communications", "cos"],
+  },
+  { label: "Costs", tabs: ["costs"] },
+  { label: "Energization & closeout (Stages 8–10)", tabs: ["energization-closeout"] },
+  { label: "Activity & automation", tabs: ["portal-sync", "lifecycle"] },
 ];
 
 /**
@@ -114,6 +140,7 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     label: "Overview",
     icon: Gauge,
     support: "active",
+    navGroup: "contextual",
     section: "overview",
     target: { kind: "hub", anchor: "uci-hub" },
     note: "UCI hub — KPIs, stage rail, records, attention queue",
@@ -122,59 +149,109 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
   },
   {
     id: "submissions",
-    label: "UCI · Submissions",
+    label: "Submissions",
     icon: Radio,
-    support: "mock",
+    support: "active",
+    navGroup: "operations",
     section: "submissions",
-    target: { kind: "drawer-tab", tab: "application-prep" },
-    note: "Coming soon — cross-project submissions hub. Per-record Application prep remains in the coordination drawer.",
+    target: { kind: "external", href: "/uci/submissions" },
+    note: "Cross-project foundation; record package work remains in Stages 2–4.",
     primaryNav: true,
   },
   {
     id: "communications",
-    label: "UCI · Inbox",
+    label: "Inbox",
     icon: Inbox,
-    support: "mock",
+    support: "active",
+    navGroup: "operations",
     section: "communications",
-    target: { kind: "drawer-tab", tab: "communications" },
-    note: "Coming soon — cross-project inbox. Per-record portal communications remain in the coordination drawer.",
+    target: { kind: "external", href: "/uci/inbox" },
+    note: "Cross-project foundation; record communications remain in the record workspace.",
+    primaryNav: true,
+  },
+  {
+    id: "needs-attention",
+    label: "Needs Attention",
+    icon: AlertTriangle,
+    support: "active",
+    navGroup: "operations",
+    section: "needs-attention",
+    target: { kind: "external", href: "/uci/needs-attention" },
+    note: "Operational queue foundation with project and record deep links.",
+    primaryNav: true,
+  },
+  {
+    id: "portfolio",
+    label: "Portfolio",
+    icon: ClipboardList,
+    support: "active",
+    navGroup: "operations",
+    section: "portfolio",
+    target: { kind: "external", href: "/uci/portfolio" },
+    note: "Cross-project portfolio foundation; no invented tenant KPIs.",
+    primaryNav: true,
+  },
+  {
+    id: "portal-harvest",
+    label: "Portal Harvest",
+    icon: CloudDownload,
+    support: "active",
+    navGroup: "operations",
+    section: "portal-harvest",
+    target: { kind: "external", href: "/uci/portal-harvest" },
+    note: "Provider-account inventory with explicit project and coordination links.",
+    primaryNav: true,
+  },
+  {
+    id: "provider-directory",
+    label: "Provider Directory",
+    icon: PlugZap,
+    support: "active",
+    navGroup: "operations",
+    section: "provider-directory",
+    target: { kind: "external", href: "/uci/provider-directory" },
+    note: "Utility provider reference and setup entry point.",
     primaryNav: true,
   },
   {
     id: "class-of-service",
-    label: "UCI · Class of Service",
+    label: "Class of Service",
     icon: FileCheck2,
-    support: "mock",
+    support: "foundation",
+    navGroup: "foundations",
     section: "class-of-service",
-    target: { kind: "drawer-tab", tab: "cos" },
-    note: "Coming soon — portfolio COS table. Per-record COS analysis remains in the coordination drawer.",
+    target: { kind: "external", href: "/uci/class-of-service" },
+    note: "Advisory and utility-issued COS are kept distinct.",
     primaryNav: true,
   },
   {
     id: "ciac",
-    label: "UCI · CIAC & Refunds",
+    label: "CIAC & Refunds",
     icon: DollarSign,
-    support: "mock",
+    support: "manual",
+    navGroup: "foundations",
     section: "ciac",
-    target: { kind: "drawer-tab", tab: "costs" },
-    note: "Coming soon — dedicated CIAC / refund-window tracker. Cost rows remain in the coordination drawer.",
+    target: { kind: "external", href: "/uci/ciac-refunds" },
+    note: "Manual foundation; refund assessment defaults to NOT_ASSESSED.",
     primaryNav: true,
   },
   {
     id: "energization",
-    label: "UCI · Energization",
+    label: "Energization",
     icon: Zap,
-    support: "mock",
+    support: "manual",
+    navGroup: "foundations",
     section: "energization",
-    target: { kind: "drawer-tab", tab: "costs" },
-    note: "Coming soon — multi-party energization choreography. Meter-set / closeout remain in the coordination drawer.",
+    target: { kind: "external", href: "/uci/energization" },
+    note: "Human-gated planning foundation; meter set and closeout remain record work.",
     primaryNav: true,
   },
   {
     id: "load-profile",
     label: "Load Profile",
-    icon: FileSearch,
+    icon: Gauge,
     support: "active",
+    navGroup: "contextual",
     section: "load-profile",
     target: { kind: "drawer-tab", tab: "load-profile" },
     note: "Open a coordination record, then use the Load profile drawer tab.",
@@ -184,98 +261,78 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
   },
   {
     id: "miss-utility",
-    label: "UCI · Miss Utility 811",
+    label: "Miss Utility 811",
     icon: Ticket,
-    support: "mock",
+    support: "manual",
+    navGroup: "foundations",
     section: "miss-utility",
-    target: { kind: "coming-soon" },
-    note: "No PermitPilot backend for 811 / Miss Utility tickets yet.",
+    target: { kind: "external", href: "/uci/miss-utility" },
+    note: "Manual ticket foundation; no automatic 811 filing.",
     primaryNav: true,
   },
   {
     id: "knowledge-graph",
-    label: "UCI · Knowledge Graph",
+    label: "Knowledge",
     icon: Network,
-    support: "mock",
+    support: "foundation",
+    navGroup: "foundations",
     section: "knowledge-graph",
-    target: { kind: "coming-soon" },
-    note: "No PermitPilot graph/nodes backend yet.",
+    target: { kind: "external", href: "/uci/knowledge" },
+    note: "History-search foundation; no claim of a live knowledge graph.",
     primaryNav: true,
   },
   {
     id: "application-builder",
     label: "UCI Builder",
-    icon: Cable,
-    support: "mock",
+    icon: FileCheck2,
+    support: "contextual",
+    navGroup: "contextual",
     section: "application-builder",
-    target: { kind: "external", href: "/uci/application-builder" },
-    note: "Coming soon — full Lovable builder surface. Live package/load APIs remain on /uci/application-builder; owner/billing & Agent QA are not connected.",
-    primaryNav: true,
+    target: { kind: "drawer-tab", tab: "application-prep" },
+    note: "Secondary alias into the Stages 2–4 application package workflow.",
+    primaryNav: false,
   },
   {
     id: "provider-map",
-    label: "Provider Map",
+    label: "Utility Territory Map",
     icon: Map,
-    support: "active",
+    support: "foundation",
+    navGroup: "foundations",
     section: "provider-map",
-    target: { kind: "external", href: "/jurisdictions/map" },
-    note: "Opens the real Jurisdiction Map (not a mock provider map).",
-    primaryNav: false,
-    hubTile: true,
-    hubDescription: "Jurisdiction Map",
+    target: { kind: "external", href: "/uci/utility-territory-map" },
+    note: "Utility territory foundation. It is not the municipal Jurisdiction Map.",
+    primaryNav: true,
   },
   {
     id: "meter-set",
     label: "Meter Set",
     icon: PlugZap,
-    support: "mock",
+    support: "contextual",
+    navGroup: "contextual",
     section: "meter-set",
-    target: { kind: "drawer-tab", tab: "costs" },
-    note: "Coming soon — richer meter-set scheduling. Closeout checklist remains in the coordination drawer Costs tab.",
+    target: { kind: "drawer-tab", tab: "energization-closeout" },
+    note: "Coming soon — richer meter-set scheduling. The real meter-set and closeout workflow is in Energization & closeout.",
     primaryNav: false,
     hubTile: true,
     hubDescription: "Drawer · meter-set / closeout",
   },
   {
-    id: "conflict-hunter",
-    label: "Conflict Hunter",
+    id: "conflicts",
+    label: "Conflicts",
     icon: AlertTriangle,
-    support: "mock",
-    section: "conflict-hunter",
-    target: { kind: "coming-soon" },
-    note: "No conflict-detection service yet.",
-    primaryNav: false,
-    hubTile: true,
-    hubDescription: "Coming soon",
-  },
-  {
-    id: "easement",
-    label: "Easement / Right of Way",
-    icon: GitCompare,
-    support: "mock",
-    section: "easement",
-    target: { kind: "coming-soon" },
-    note: "No easement / ROW domain yet.",
-    primaryNav: false,
-    hubTile: true,
-    hubDescription: "Coming soon",
-  },
-  {
-    id: "portfolio",
-    label: "Portfolio / Quarter View",
-    icon: ClipboardList,
-    support: "mock",
-    section: "portfolio",
-    target: { kind: "coming-soon" },
-    note: "Hub KPIs are live project rollups; firm-wide quarterly Mission Control is not connected yet.",
-    primaryNav: false,
-    hubTile: true,
-    hubDescription: "Coming soon",
+    support: "manual",
+    navGroup: "foundations",
+    section: "conflicts",
+    target: { kind: "external", href: "/uci/conflicts" },
+    note: "Manual conflict register foundation; no unsupported detection claims.",
+    primaryNav: true,
   },
 ];
 
-/** Lovable UCI children under Utility Coordination (Soon badges only). */
+/** Approved operational and foundation destinations under Utility Coordination. */
 export const UCI_PRIMARY_NAV_SECTIONS: UciNavSection[] = UCI_NAV_SECTIONS.filter((s) => s.primaryNav);
+export const UCI_OPERATION_NAV_SECTIONS = UCI_PRIMARY_NAV_SECTIONS.filter((s) => s.navGroup === "operations");
+export const UCI_FOUNDATION_NAV_SECTIONS = UCI_PRIMARY_NAV_SECTIONS.filter((s) => s.navGroup === "foundations");
 
 /** Demoted capabilities — hub tiles so features are not orphaned. */
 export const UCI_HUB_TILE_SECTIONS: UciNavSection[] = UCI_NAV_SECTIONS.filter((s) => s.hubTile);
@@ -299,8 +356,9 @@ export function uciSectionHref(section: UciNavSectionId, extras?: { tab?: UciDra
 }
 
 /** Sidebar status chip — whole UCI WIP; never show Partial. */
-export function uciSidebarBadgeLabel(_support?: UciNavSupport): "Soon" {
-  return "Soon";
+export function uciSidebarBadgeLabel(support?: UciNavSupport): "Active" | "Foundation" | "Manual" | null {
+  if (support === "active") return "Active";
+  if (support === "foundation") return "Foundation";
+  if (support === "manual") return "Manual";
+  return null;
 }
-
-export const UCI_HUB_WRENCH_ICON = Wrench;

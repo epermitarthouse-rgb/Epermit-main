@@ -13,6 +13,9 @@ function getLoadCandidateHelpers() {
 const APPLICATION_PACKAGE_VERSION = "d3-v1";
 const APPLICATION_PACKAGE_IDEMPOTENCY_KEY = "agent_3_application_package:d3-v1";
 const GENERATED_BY = "agent_3_application_builder";
+const SYNTHETIC_TEST_CHECKLIST_MODE = "synthetic_test";
+const SYNTHETIC_TEST_CHECKLIST_LABEL = "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED";
+const SIGNATURE_STATUSES = new Set(["unknown", "unsigned", "signed_manual_verified"]);
 
 const TEMPLATES_ROOT = path.resolve(__dirname, "../../../../uci/application-templates");
 
@@ -97,11 +100,15 @@ function validateProviderContext(record) {
  * @param {string} utilityType
  * @returns {Record<string, unknown> | null}
  */
-function loadTemplateManifest(providerSlug, utilityType) {
+function loadTemplateManifest(providerSlug, utilityType, options = {}) {
   const slug = normalizeProviderSlug(providerSlug);
   const utility = normalizeUtilityType(utilityType);
+  const checklistMode = String(options.checklistMode ?? "").trim().toLowerCase();
 
   const candidates = [
+    ...(checklistMode === SYNTHETIC_TEST_CHECKLIST_MODE
+      ? [path.join(TEMPLATES_ROOT, slug, `${utility}-new-service.synthetic-test.json`)]
+      : []),
     path.join(TEMPLATES_ROOT, slug, `${utility}-new-service.json`),
     path.join(TEMPLATES_ROOT, slug, "default.json"),
   ];
@@ -120,6 +127,60 @@ function loadTemplateManifest(providerSlug, utilityType) {
   }
 
   return null;
+}
+
+function isSyntheticTestTemplate(template) {
+  return (
+    template &&
+    typeof template === "object" &&
+    !Array.isArray(template) &&
+    String(template.checklist_mode ?? "") === SYNTHETIC_TEST_CHECKLIST_MODE &&
+    template.authoritative === false
+  );
+}
+
+function inferSignatureStatus(fileName) {
+  return /(^|[^A-Z0-9])UNSIGNED([^A-Z0-9]|$)/i.test(String(fileName ?? ""))
+    ? "unsigned"
+    : "unknown";
+}
+
+function applyDocumentSignatureRequirements(packageDocuments, requiredDocuments) {
+  const requiredByKey = new Map(requiredDocuments.map((req) => [String(req.key ?? ""), req]));
+  const signatureRequirements = [];
+  const missingSignatureFields = [];
+
+  const documents = packageDocuments.map((doc) => {
+    const key = String(doc.key ?? "");
+    const req = requiredByKey.get(key);
+    if (!req || req.signature_required !== true) return doc;
+
+    const requirementKey = String(req.signature_requirement_key ?? `${key}_signature`);
+    const existingStatus = String(doc.signature_status ?? "");
+    const signatureStatus = SIGNATURE_STATUSES.has(existingStatus)
+      ? existingStatus
+      : inferSignatureStatus(doc.file_name);
+    const satisfied = doc.status === "attached" && signatureStatus === "signed_manual_verified";
+
+    signatureRequirements.push({
+      document_key: key,
+      requirement_key: requirementKey,
+      signature_status: signatureStatus,
+      satisfied,
+      verified_by: doc.signature_verified_by ?? null,
+      verified_at: doc.signature_verified_at ?? null,
+      review_note: doc.signature_review_note ?? null,
+    });
+    if (!satisfied) missingSignatureFields.push(requirementKey);
+
+    return {
+      ...doc,
+      signature_required: true,
+      signature_status: signatureStatus,
+    };
+  });
+
+  return { packageDocuments: documents, signatureRequirements, missingSignatureFields };
 }
 
 /**
@@ -259,6 +320,25 @@ function evaluateRequiredFields(project, loadSummary, requiredFields, coordinati
         value = keys.length ? (Object.keys(verified).length ? verified : calculated) : null;
         present = keys.length > 0;
       }
+    } else if (source.startsWith("load_summary.verified_values.")) {
+      const fieldKey = source.slice("load_summary.verified_values.".length);
+      const verified =
+        loadSummary &&
+        typeof loadSummary === "object" &&
+        !Array.isArray(loadSummary) &&
+        loadSummary.verified_values &&
+        typeof loadSummary.verified_values === "object" &&
+        !Array.isArray(loadSummary.verified_values)
+          ? /** @type {Record<string, unknown>} */ (loadSummary.verified_values)
+          : {};
+      const verifiedValue = verified[fieldKey];
+      value = verifiedValue ?? null;
+      present =
+        verifiedValue != null &&
+        (typeof verifiedValue !== "object" ||
+          !Array.isArray(verifiedValue) &&
+            /** @type {{ value?: unknown }} */ (verifiedValue).value != null &&
+            /** @type {{ value?: unknown }} */ (verifiedValue).value !== "");
     } else {
       value = null;
       present = false;
@@ -358,6 +438,7 @@ async function findApplicationPackageDraft(supabase, coordinationRecordId, proje
  */
 async function runApplicationPackageBuild(supabase, params) {
   const { coordinationRecordId, userId, externalApplicationId } = params;
+  const checklistMode = String(params.checklistMode ?? "").trim().toLowerCase();
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -378,7 +459,7 @@ async function runApplicationPackageBuild(supabase, params) {
 
   const providerSlug = providerCheck.providerSlug;
   const utilityType = normalizeUtilityType(record.utility_type);
-  const template = loadTemplateManifest(providerSlug, utilityType);
+  const template = loadTemplateManifest(providerSlug, utilityType, { checklistMode });
   if (!template) {
     const err = new Error(`No application template available for provider ${providerSlug}`);
     err.statusCode = 404;
@@ -465,9 +546,26 @@ async function runApplicationPackageBuild(supabase, params) {
   const existingPackageDocuments = Array.isArray(existingPackageDraft?.package_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (existingPackageDraft.package_documents)
     : [];
+  const existingPackageMetadata =
+    existingPackageDraft?.agent_draft_metadata?.application_package &&
+    typeof existingPackageDraft.agent_draft_metadata.application_package === "object" &&
+    !Array.isArray(existingPackageDraft.agent_draft_metadata.application_package)
+      ? /** @type {Record<string, unknown>} */ (
+          existingPackageDraft.agent_draft_metadata.application_package
+        )
+      : {};
+  const syntheticTemplate = isSyntheticTestTemplate(template);
+  const existingChecklist =
+    existingPackageMetadata.synthetic_checklist &&
+    typeof existingPackageMetadata.synthetic_checklist === "object" &&
+    !Array.isArray(existingPackageMetadata.synthetic_checklist)
+      ? /** @type {Record<string, unknown>} */ (existingPackageMetadata.synthetic_checklist)
+      : {};
+  const checklistApproved =
+    syntheticTemplate && String(existingChecklist.status ?? "") === "approved";
 
   const { resolvePackageDocumentSlots, extractPepcoPortalFiles } = require("./uci-package-document-bridge.service.js");
-  const docMatch = resolvePackageDocumentSlots({
+  const docMatchRaw = resolvePackageDocumentSlots({
     requiredDocuments,
     projectDocuments: documents,
     existingPackageDocuments,
@@ -478,12 +576,21 @@ async function runApplicationPackageBuild(supabase, params) {
       tenantId: record.tenant_id != null ? String(record.tenant_id) : null,
     },
   });
+  const signatureEval = applyDocumentSignatureRequirements(
+    docMatchRaw.packageDocuments,
+    requiredDocuments,
+  );
   const fieldEval = evaluateRequiredFields(project, loadSummary, requiredFields, record, {
     externalApplicationId,
   });
+  const missingFields = [
+    ...fieldEval.missingFields,
+    ...signatureEval.missingSignatureFields,
+    ...(syntheticTemplate && !checklistApproved ? ["synthetic_checklist_approval"] : []),
+  ];
   const packageStatus = resolvePackageStatus({
-    missingDocuments: docMatch.missingDocuments,
-    missingFields: fieldEval.missingFields,
+    missingDocuments: docMatchRaw.missingDocuments,
+    missingFields,
     loadSummary,
     hasLoadProfileDraft: Boolean(loadProfileDraft),
     addressReviewRequired: fieldEval.addressResolution.address_review_required,
@@ -499,10 +606,24 @@ async function runApplicationPackageBuild(supabase, params) {
       template_id: templateVersion,
       template_provider_slug: providerSlug,
       template_utility_type: utilityType,
+      checklist_mode: syntheticTemplate ? SYNTHETIC_TEST_CHECKLIST_MODE : "production",
+      checklist_label: syntheticTemplate ? SYNTHETIC_TEST_CHECKLIST_LABEL : null,
+      authoritative_requirements: !syntheticTemplate,
+      external_submission_allowed: syntheticTemplate ? false : null,
+      synthetic_checklist: syntheticTemplate
+        ? {
+            status: checklistApproved ? "approved" : "draft",
+            label: SYNTHETIC_TEST_CHECKLIST_LABEL,
+            approved_by_user_id: existingChecklist.approved_by_user_id ?? null,
+            approved_at: existingChecklist.approved_at ?? null,
+            approval_note: existingChecklist.approval_note ?? null,
+          }
+        : null,
       package_status: packageStatus,
-      missing_documents: docMatch.missingDocuments,
-      missing_fields: fieldEval.missingFields,
+      missing_documents: docMatchRaw.missingDocuments,
+      missing_fields: missingFields,
       field_results: fieldEval.fieldResults,
+      signature_requirements: signatureEval.signatureRequirements,
       project_address: {
         formatted: addressResolution.address.formatted,
         source: addressResolution.address.source,
@@ -549,7 +670,7 @@ async function runApplicationPackageBuild(supabase, params) {
     tenant_id: record.tenant_id ?? null,
     provider_slug: providerSlug,
     application_type: String(template.application_type ?? "new_service"),
-    package_documents: docMatch.packageDocuments,
+    package_documents: signatureEval.packageDocuments,
     load_summary: loadSummary ?? {},
     draft_status: "draft",
     record_source: "agent_draft",
@@ -612,8 +733,8 @@ async function runApplicationPackageBuild(supabase, params) {
     coordination_record_id: coordinationRecordId,
     project_id: projectId,
     package_status: packageStatus,
-    missing_documents: docMatch.missingDocuments,
-    missing_fields: fieldEval.missingFields,
+    missing_documents: docMatchRaw.missingDocuments,
+    missing_fields: missingFields,
     application,
     stage_unchanged: true,
     current_stage: record.current_stage,
@@ -704,12 +825,12 @@ async function reviewApplicationPackage(supabase, params) {
       : {};
   const packageStatus = String(pkg.package_status ?? "");
 
-  if (status === "reviewed" && packageStatus === "blocked") {
+  if (status === "reviewed" && packageStatus !== "ready_for_review") {
     const err = new Error(
-      "Application package is blocked — run load profile analysis before marking reviewed",
+      "Application package must be ready_for_review before it can be marked reviewed",
     );
     err.statusCode = 400;
-    err.code = "PACKAGE_BLOCKED";
+    err.code = "PACKAGE_NOT_READY";
     throw err;
   }
 
@@ -766,6 +887,12 @@ module.exports = {
   normalizeProviderSlug,
   validateProviderContext,
   loadTemplateManifest,
+  isSyntheticTestTemplate,
+  inferSignatureStatus,
+  applyDocumentSignatureRequirements,
+  SYNTHETIC_TEST_CHECKLIST_MODE,
+  SYNTHETIC_TEST_CHECKLIST_LABEL,
+  SIGNATURE_STATUSES,
   findLoadProfileDraftApplication,
   matchRequiredDocuments,
   evaluateRequiredFields,

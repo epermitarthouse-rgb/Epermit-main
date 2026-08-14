@@ -34,10 +34,12 @@ import {
   formatUtilityTypeLabel,
   getInitDisabledReasons,
   groupProvidersByUtilityType,
+  getSupportedUtilityTypes,
   hasConfirmableAddress,
   providerDisplayLabel,
   sortProvidersForPicker,
 } from "@/lib/uciSetupWorkflow";
+import type { UciUtilityType } from "@/lib/uciUtilityTypes";
 import type { Project } from "@/types/project";
 import type {
   UciProviderSetupAddressSource,
@@ -96,12 +98,15 @@ type UciSetupWorkflowProps = {
   initPick: Record<string, boolean>;
   onInitPickChange: (slug: string, checked: boolean) => void;
   onClearSelectedProviders: () => void;
+  onCreateProvider: (input: { name: string; utilityType: UciUtilityType }) => Promise<void>;
+  providerCreating: boolean;
   addressSourceAcknowledged: UciProviderSetupAddressSource | null;
   onAddressSourceAcknowledged: (source: UciProviderSetupAddressSource) => void;
   unresolvedUtilityTypes: string[];
   onToggleUnresolvedUtilityType: (utilityType: string, checked: boolean) => void;
   uncoveredUtilityTypes: string[];
   providerSetupConfirmed: boolean;
+  confirmedProviderIds: ReadonlySet<string>;
   onProviderSetupConfirmedChange: (checked: boolean) => void;
   initDisabledReasons: string[];
   initting: boolean;
@@ -259,12 +264,15 @@ export function UciSetupWorkflow({
   initPick,
   onInitPickChange,
   onClearSelectedProviders,
+  onCreateProvider,
+  providerCreating,
   addressSourceAcknowledged,
   onAddressSourceAcknowledged,
   unresolvedUtilityTypes,
   onToggleUnresolvedUtilityType,
   uncoveredUtilityTypes,
   providerSetupConfirmed,
+  confirmedProviderIds,
   onProviderSetupConfirmedChange,
   initDisabledReasons,
   initting,
@@ -276,6 +284,14 @@ export function UciSetupWorkflow({
 }: UciSetupWorkflowProps) {
   const [providerSearchQuery, setProviderSearchQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [createProviderOpen, setCreateProviderOpen] = useState(false);
+  const [newProviderName, setNewProviderName] = useState("");
+  const [newProviderUtilityType, setNewProviderUtilityType] =
+    useState<UciUtilityType>("electric");
+  const supportedUtilityTypes = useMemo(
+    () => getSupportedUtilityTypes(providerCatalogTypes),
+    [providerCatalogTypes],
+  );
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === projectId) ?? null,
@@ -321,6 +337,9 @@ export function UciSetupWorkflow({
 
   const projectAddressLine = selectedProject ? formatProjectAddressLine(selectedProject) : null;
   const initReady = initDisabledReasons.length === 0;
+  const allSelectedProvidersConfirmed =
+    selectedProviders.length > 0 &&
+    selectedProviders.every((provider) => confirmedProviderIds.has(provider.id));
 
   const workflowBody = (
     <div className="space-y-8">
@@ -513,7 +532,7 @@ export function UciSetupWorkflow({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All types</SelectItem>
-                      {providerCatalogTypes.map((utilityType) => (
+                      {supportedUtilityTypes.map((utilityType) => (
                         <SelectItem key={utilityType} value={utilityType}>
                           {formatUtilityTypeLabel(utilityType)}
                         </SelectItem>
@@ -565,6 +584,68 @@ export function UciSetupWorkflow({
                   </Command>
                 </PopoverContent>
               </Popover>
+
+              <Collapsible open={createProviderOpen} onOpenChange={setCreateProviderOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    data-testid="uci-create-provider-toggle"
+                  >
+                    Provider not listed? Create one
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="mt-2 grid gap-3 rounded-lg border border-dashed border-teal/25 p-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
+                    <div className="grid gap-2">
+                      <Label htmlFor="uci-new-provider-name">Provider name</Label>
+                      <Input
+                        id="uci-new-provider-name"
+                        value={newProviderName}
+                        onChange={(event) => setNewProviderName(event.target.value)}
+                        placeholder="Enter the serving utility"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Utility type</Label>
+                      <Select
+                        value={newProviderUtilityType}
+                        onValueChange={(value) =>
+                          setNewProviderUtilityType(value as UciUtilityType)
+                        }
+                      >
+                        <SelectTrigger data-testid="uci-new-provider-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {supportedUtilityTypes.map((utilityType) => (
+                            <SelectItem key={utilityType} value={utilityType}>
+                              {formatUtilityTypeLabel(utilityType)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={!newProviderName.trim() || providerCreating}
+                      onClick={async () => {
+                        await onCreateProvider({
+                          name: newProviderName.trim(),
+                          utilityType: newProviderUtilityType,
+                        });
+                        setNewProviderName("");
+                        setCreateProviderOpen(false);
+                      }}
+                      data-testid="uci-create-provider-submit"
+                    >
+                      {providerCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Create
+                    </Button>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               {initializedSlugs.size > 0 ? (
                 <div className="rounded-lg border border-cream-sunken/80 bg-cream/40 px-3 py-2 text-xs dark:border-teal/20 dark:bg-obsidian/30">
@@ -661,24 +742,36 @@ export function UciSetupWorkflow({
             />
             <div className="space-y-4 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-950/15">
               <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
-                Automatic territory matching is not available yet. Confirm these selections using project
-                knowledge.
+                Electric territory suggestions use available service-territory data. Other supported utility
+                types remain manual until authoritative territory datasets are available.
               </p>
               {providerSetup?.territory_matching_message ? (
                 <p className={cn("text-xs", mutedClass)}>{providerSetup.territory_matching_message}</p>
               ) : null}
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-teal/25 bg-white/70 px-3 py-3 text-sm dark:border-teal/35 dark:bg-obsidian/40">
-                <Checkbox
-                  checked={providerSetupConfirmed}
-                  disabled={providerSetupLoading || addressPresentation.mode === "missing"}
-                  onCheckedChange={(checked) => onProviderSetupConfirmedChange(Boolean(checked))}
-                  className="mt-0.5 shrink-0"
-                  data-testid="uci-provider-confirm-checkbox"
-                />
-                <span className="text-ink-primary-light dark:text-foreground">
-                  I confirm these utility selections for this project.
-                </span>
-              </label>
+              {allSelectedProvidersConfirmed ? (
+                <div
+                  className="flex items-start gap-3 rounded-lg border border-teal/25 bg-white/70 px-3 py-3 text-sm dark:border-teal/35 dark:bg-obsidian/40"
+                  data-testid="uci-provider-confirmation-carried-forward"
+                >
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal" />
+                  <span className="text-ink-primary-light dark:text-foreground">
+                    Provider confirmation carried forward. Choose scopes, then initialize coordination records.
+                  </span>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-teal/25 bg-white/70 px-3 py-3 text-sm dark:border-teal/35 dark:bg-obsidian/40">
+                  <Checkbox
+                    checked={providerSetupConfirmed}
+                    disabled={providerSetupLoading || addressPresentation.mode === "missing"}
+                    onCheckedChange={(checked) => onProviderSetupConfirmedChange(Boolean(checked))}
+                    className="mt-0.5 shrink-0"
+                    data-testid="uci-provider-confirm-checkbox"
+                  />
+                  <span className="text-ink-primary-light dark:text-foreground">
+                    I confirm the additional manual provider selections and scopes for this project.
+                  </span>
+                </label>
+              )}
               <div className="space-y-2">
                 <Button
                   className="bg-teal hover:bg-teal/90 text-white"

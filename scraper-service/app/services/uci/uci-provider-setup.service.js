@@ -4,6 +4,10 @@ const { getProjectForUciAccess, getProjectTenantId } = require("./uci-access.ser
 const { listActiveProvidersForTenant } = require("./uci-providers-tenant.service.js");
 const { listCoordinationRecordsByProject } = require("./uci-records.service.js");
 const {
+  UCI_SUPPORTED_UTILITY_TYPES,
+  requireSupportedUtilityType,
+} = require("./uci-utility-types.js");
+const {
   trimStr,
   normalizeComparableAddress,
   normalizePortalDataObject,
@@ -372,8 +376,8 @@ function normalizeUnresolvedUtilityTypes(input) {
   return [
     ...new Set(
       input
-        .map((entry) => String(entry ?? "").trim().toLowerCase())
-        .filter(Boolean),
+        .filter((entry) => String(entry ?? "").trim())
+        .map((entry) => requireSupportedUtilityType(entry, "unresolved_utility_types entry")),
     ),
   ];
 }
@@ -496,13 +500,7 @@ function buildProviderSetupContext(params) {
     if (slug) initializedSlugSet.add(slug);
   }
 
-  const utilityTypes = [
-    ...new Set(
-      providers
-        .map((provider) => String(provider.utility_type ?? "").trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
+  const utilityTypes = [...UCI_SUPPORTED_UTILITY_TYPES];
 
   return {
     mapping_method: PROVIDER_SETUP_METHOD,

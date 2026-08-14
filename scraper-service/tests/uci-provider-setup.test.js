@@ -208,6 +208,13 @@ describe("UCI D2.0 human-assisted provider setup", () => {
     assert.equal(context.providers[0].suggested, false);
     assert.equal(context.providers[0].already_initialized, false);
     assert.ok(Array.isArray(context.available_address_sources));
+    assert.deepEqual(context.utility_types_in_catalog, [
+      "electric",
+      "gas",
+      "water",
+      "sewer",
+      "telecom",
+    ]);
   });
 
   it("marks already initialized providers without auto-selecting them", () => {
@@ -225,6 +232,13 @@ describe("UCI D2.0 human-assisted provider setup", () => {
     assert.deepEqual(
       normalizeUnresolvedUtilityTypes([" Gas ", "GAS", "", "water"]),
       ["gas", "water"],
+    );
+  });
+
+  it("rejects unsupported unresolved utility types instead of collapsing them", () => {
+    assert.throws(
+      () => normalizeUnresolvedUtilityTypes(["steam"]),
+      (err) => err.code === "UNSUPPORTED_UTILITY_TYPE",
     );
   });
 
@@ -389,6 +403,42 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
 
     const transition = tables.coordination_stage_transitions[0];
     assert.equal(transition.metadata.uci_provider_mapping.method, PROVIDER_SETUP_METHOD);
+  });
+
+  it("initializes separate provider/type records across all supported utility types", async () => {
+    const tables = {
+      coordination_records: [],
+      coordination_stage_transitions: [],
+    };
+    const supabase = createInitMockSupabase(tables);
+    const utilityTypes = ["electric", "gas", "water", "sewer", "telecom"];
+    const resolvedProviders = utilityTypes.map((utilityType) => ({
+      id: `provider-${utilityType}`,
+      slug: `provider-${utilityType}`,
+      utility_type: utilityType,
+    }));
+    const result = await initCoordinationForProviders(supabase, {
+      projectId: "any-project",
+      userId: "user-1",
+      resolvedProviders,
+      providerSetupMetadata: {
+        method: PROVIDER_SETUP_METHOD,
+        confirmed: true,
+        confirmed_by_user_id: "user-1",
+        confirmed_at: "2026-08-14T12:00:00.000Z",
+        address_source: "structured",
+        address_source_acknowledged: "structured",
+        selected_provider_slugs: resolvedProviders.map((provider) => provider.slug),
+        unresolved_utility_types: [],
+        territory_matching_available: false,
+      },
+    });
+    assert.equal(result.created.length, utilityTypes.length);
+    assert.deepEqual(
+      tables.coordination_records.map((record) => record.utility_type),
+      utilityTypes,
+    );
+    assert.equal(tables.coordination_stage_transitions.length, utilityTypes.length);
   });
 
   it("remains idempotent and updates metadata on already existed records", async () => {

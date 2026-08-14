@@ -14,6 +14,13 @@ function indexOfOrFail(source: string, needle: string): number {
 }
 
 describe("UciDashboard project loading generation regression", () => {
+  it("hydrates local UCI state when the shared selected project initializes or changes", () => {
+    assert.match(
+      dashboardSource,
+      /setProjectIdState\(\(current\) =>[\s\S]*?globalSelectedProject\.selectedProjectId[\s\S]*?\[globalSelectedProject\?\.selectedProjectId\]/,
+    );
+  });
+
   it("increments project generation before project-scoped loader effects run", () => {
     const generationEffect = indexOfOrFail(
       dashboardSource,

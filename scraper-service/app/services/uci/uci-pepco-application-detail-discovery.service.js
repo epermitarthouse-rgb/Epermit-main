@@ -383,13 +383,56 @@ async function maybeRunNormalizedPortalSyncAfterPersist(
   }
 
   try {
-    const summary = await runPortalSyncFromPepcoApplications(supabase, {
-      coordinationRecordId: coordinationId,
-      projectId,
-      applications,
-      providerSlug: "pepco",
+    const externalIds = applications
+      .map((application) => String(application.applicationUuid || "").trim())
+      .filter(Boolean);
+    const { data: links, error: linkError } = await supabase
+      .from("uci_portal_harvest_links")
+      .select("external_application_id, project_id, coordination_record_id")
+      .eq("provider_slug", "pepco")
+      .in("external_application_id", externalIds);
+    if (linkError) throw linkError;
+
+    const linkByExternalId = new Map(
+      (links || []).map((link) => [String(link.external_application_id), link]),
+    );
+    const linkedApplications = applications.filter((application) =>
+      linkByExternalId.has(String(application.applicationUuid || "").trim()),
+    );
+    if (!linkedApplications.length) {
+      return buildNormalizedSyncApiResult({
+        status: "not_run",
+        reason: "awaiting_harvest_links",
+      });
+    }
+
+    const aggregate = buildNormalizedSyncApiResult({
+      status: "success",
+      reason:
+        linkedApplications.length < applications.length
+          ? `${applications.length - linkedApplications.length}_unmatched_skipped`
+          : null,
+      synced_at: new Date().toISOString(),
     });
-    return buildNormalizedSyncApiResultFromSummary(summary);
+    for (const application of linkedApplications) {
+      const externalId = String(application.applicationUuid || "").trim();
+      const link = linkByExternalId.get(externalId);
+      const summary = await runPortalSyncFromPepcoApplications(supabase, {
+        coordinationRecordId: String(link.coordination_record_id),
+        projectId: String(link.project_id),
+        applications: [application],
+        providerSlug: "pepco",
+      });
+      const normalized = buildNormalizedSyncApiResultFromSummary(summary);
+      for (const bucket of ["applications", "communications", "milestones"]) {
+        for (const key of ["discovered", "inserted", "updated", "skipped", "failed"]) {
+          aggregate[bucket][key] += normalized[bucket][key];
+        }
+      }
+      aggregate.errors.push(...normalized.errors);
+      if (normalized.status === "failed") aggregate.status = "partial";
+    }
+    return aggregate;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[uci-pepco-app-detail] normalized portal sync failed", {
@@ -423,16 +466,64 @@ function mergeApplicationDetailsByUuid(existingApps, incomingApps) {
     const id = String(app.applicationUuid || "").trim();
     if (id) {
       const copy = { ...app };
+      const previous = map.get(id);
+      const previousDownloads = Array.isArray(previous?.downloadedFiles)
+        ? previous.downloadedFiles
+        : [];
       if (Array.isArray(copy.downloadedFiles)) {
-        copy.downloadedFiles = sanitizeDownloadedFilesForPersistence(
-          /** @type {Array<Record<string, unknown>>} */ (copy.downloadedFiles),
-        );
+        copy.downloadedFiles =
+          copy.downloadedFiles.length > 0
+            ? sanitizeDownloadedFilesForPersistence(
+                /** @type {Array<Record<string, unknown>>} */ (copy.downloadedFiles),
+              )
+            : sanitizeDownloadedFilesForPersistence(
+                /** @type {Array<Record<string, unknown>>} */ (previousDownloads),
+              );
       }
       map.set(id, copy);
     }
   }
 
   return Array.from(map.values());
+}
+
+/**
+ * Build the compatibility metadata consumed by the existing UCI drawer and
+ * document streaming routes while Portal Harvest inventory is rolled out.
+ *
+ * @param {Record<string, unknown>} previousMetadata
+ * @param {Array<Record<string, unknown>>} applications
+ * @param {string} lastStatus
+ * @param {string} now
+ */
+function buildPepcoApplicationDetailDiscoveryMetadata(
+  previousMetadata,
+  applications,
+  lastStatus,
+  now,
+) {
+  const prevDiscovery = previousMetadata.pepco_application_detail_discovery;
+  const prevDiscoveryObj =
+    prevDiscovery && typeof prevDiscovery === "object" && !Array.isArray(prevDiscovery)
+      ? /** @type {{ applications?: unknown }} */ (prevDiscovery)
+      : null;
+  const prevApps = Array.isArray(prevDiscoveryObj?.applications)
+    ? /** @type {Array<Record<string, unknown>>} */ (prevDiscoveryObj.applications)
+    : [];
+  const mergedApplications = mergeApplicationDetailsByUuid(prevApps, applications);
+
+  return {
+    ...previousMetadata,
+    pepco_application_detail_discovery: {
+      lastStatus,
+      lastScrapedAt: now,
+      applicationsScraped: applications.length,
+      storage: "provider_harvest_inventory",
+      // Keep the compatibility snapshot while View/Download and the UCI drawer
+      // still resolve durable storage references from coordination metadata.
+      applications: mergedApplications,
+    },
+  };
 }
 
 /**
@@ -495,7 +586,7 @@ async function persistPepcoApplicationDetailDiscovery(
 
   const { data: row, error: fetchErr } = await supabase
     .from("coordination_records")
-    .select("metadata")
+    .select("metadata, user_id, tenant_id")
     .eq("id", coordinationId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -510,48 +601,70 @@ async function persistPepcoApplicationDetailDiscovery(
       ? /** @type {Record<string, unknown>} */ (row.metadata)
       : {};
 
-  const prevDiscovery = prev.pepco_application_detail_discovery;
-  const prevDiscoveryObj =
-    prevDiscovery && typeof prevDiscovery === "object" && !Array.isArray(prevDiscovery)
-      ? /** @type {{ applications?: unknown }} */ (prevDiscovery)
-      : null;
-  const prevApps = Array.isArray(prevDiscoveryObj?.applications)
-    ? /** @type {Array<Record<string, unknown>>} */ (prevDiscoveryObj.applications)
-    : [];
-
-  const mergedApplications = mergeApplicationDetailsByUuid(prevApps, applications);
-
-  const metadata = { ...prev };
-  metadata.pepco_application_detail_discovery = {
+  const metadata = buildPepcoApplicationDetailDiscoveryMetadata(
+    prev,
+    applications,
     lastStatus,
-    lastScrapedAt: now,
-    applications: mergedApplications,
-  };
+    now,
+  );
+  const persistedApplications = Array.isArray(
+    /** @type {{ applications?: unknown }} */ (metadata.pepco_application_detail_discovery)
+      ?.applications,
+  )
+    ? /** @type {Array<Record<string, unknown>>} */ (
+        /** @type {{ applications: unknown[] }} */ (metadata.pepco_application_detail_discovery)
+          .applications
+      )
+    : applications;
+  const persistedApplicationByUuid = new Map(
+    persistedApplications.map((application) => [
+      String(application.applicationUuid || "").trim(),
+      application,
+    ]),
+  );
 
-  const primary =
-    applications.find((a) => String(a.scrapeStatus || "") === "completed") ||
-    applications.find((a) => String(a.scrapeStatus || "") === "partial") ||
-    applications[applications.length - 1] ||
-    mergedApplications.find((a) => String(a.scrapeStatus || "") === "completed") ||
-    mergedApplications.find((a) => String(a.scrapeStatus || "") === "partial") ||
-    mergedApplications[0] ||
-    null;
-
-  if (primary) {
-    metadata.pepco_current_status =
-      typeof primary.currentStatus === "string" ? primary.currentStatus : null;
-    metadata.pepco_current_milestone =
-      typeof primary.currentMilestone === "string" ? primary.currentMilestone : null;
-    metadata.pepco_status_last_updated_at =
-      typeof primary.statusLastUpdatedAt === "string" ? primary.statusLastUpdatedAt : null;
-    metadata.pepco_message_count =
-      typeof primary.messageCount === "number" ? primary.messageCount : null;
-    metadata.pepco_latest_message_at =
-      typeof primary.latestMessageAt === "string" ? primary.latestMessageAt : null;
-    metadata.pepco_document_count =
-      typeof primary.documentCount === "number" ? primary.documentCount : null;
-    metadata.pepco_overview_project_name = pickOverviewProjectName(primary.overview);
-    metadata.pepco_overview_job_id = pickOverviewJobId(primary.overview);
+  const ownerUserId = String(row?.user_id || "").trim();
+  if (!ownerUserId) {
+    throw Object.assign(new Error("Coordination record has no account owner for harvest inventory."), {
+      code: "HARVEST_OWNER_REQUIRED",
+    });
+  }
+  for (const application of applications) {
+    const externalApplicationId = String(application.applicationUuid || "").trim();
+    if (!externalApplicationId) continue;
+    const overview =
+      application.overview &&
+      typeof application.overview === "object" &&
+      !Array.isArray(application.overview)
+        ? application.overview
+        : {};
+    const snapshot = {
+      ...(persistedApplicationByUuid.get(externalApplicationId) || application),
+    };
+    if (Array.isArray(snapshot.downloadedFiles)) {
+      snapshot.downloadedFiles = sanitizeDownloadedFilesForPersistence(snapshot.downloadedFiles);
+    }
+    const { error: inventoryError } = await supabase
+      .from("uci_portal_harvest_items")
+      .upsert(
+        {
+          provider_slug: "pepco",
+          external_application_id: externalApplicationId,
+          owner_user_id: ownerUserId,
+          tenant_id: row?.tenant_id || null,
+          portal_status:
+            typeof application.currentStatus === "string" ? application.currentStatus : null,
+          portal_milestone:
+            typeof application.currentMilestone === "string" ? application.currentMilestone : null,
+          external_job_id: pickOverviewJobId(overview),
+          snapshot,
+          last_synced_at: now,
+        },
+        { onConflict: "owner_user_id,provider_slug,external_application_id" },
+      );
+    if (inventoryError) {
+      throw Object.assign(new Error(inventoryError.message), { code: "HARVEST_INVENTORY_FAILED" });
+    }
   }
 
   const { error: upErr } = await supabase
@@ -572,33 +685,38 @@ async function scrapeAllApplicationDetails(page, uuids, opts) {
   /** @type {Array<Record<string, unknown>>} */
   const applications = [];
 
-  /** @type {Map<string, Record<string, unknown>>} */
-  let existingAppsByUuid = new Map();
-  if (opts.supabase && opts.coordinationId && opts.projectId) {
-    existingAppsByUuid = await loadExistingPepcoAppsByUuid(
-      opts.supabase,
-      String(opts.coordinationId),
-      String(opts.projectId),
-    );
+  /** @type {Map<string, { project_id: string, coordination_record_id: string }>} */
+  const linksByUuid = new Map();
+  if (opts.supabase && uuids.length > 0) {
+    const { data: links, error: linksError } = await opts.supabase
+      .from("uci_portal_harvest_links")
+      .select("external_application_id, project_id, coordination_record_id")
+      .eq("provider_slug", "pepco")
+      .in("external_application_id", uuids);
+    if (linksError) throw linksError;
+    for (const link of links || []) {
+      linksByUuid.set(String(link.external_application_id), link);
+    }
   }
 
   for (let i = 0; i < uuids.length; i++) {
     const uuid = uuids[i];
     const jobHint = uuid;
     opts.log(`Fetching overview for ${jobHint} (${i + 1}/${uuids.length})`);
-    const priorApp = existingAppsByUuid.get(uuid);
-    const priorDownloads = Array.isArray(priorApp?.downloadedFiles)
-      ? /** @type {Array<Record<string, unknown>>} */ (priorApp.downloadedFiles)
-      : [];
+    const link = linksByUuid.get(uuid);
+    const mayDownload = opts.downloadDocuments === true && Boolean(link);
+    if (opts.downloadDocuments === true && !link) {
+      opts.log(`Skipping document download for unlinked PEPCO application ${uuid}`);
+    }
 
     const detail = await scrapePepcoApplicationDetails(page, uuid, {
       logger: opts.log,
-      downloadDocuments: opts.downloadDocuments === true,
-      coordinationId: opts.coordinationId,
-      projectId: opts.projectId,
+      downloadDocuments: mayDownload,
+      coordinationId: link?.coordination_record_id,
+      projectId: link?.project_id,
       supabase: opts.supabase,
       bearerToken: opts.bearerToken,
-      existingDownloadedFiles: priorDownloads,
+      existingDownloadedFiles: [],
     });
     applications.push(detail);
   }
@@ -1585,6 +1703,7 @@ module.exports = {
   buildNormalizedSyncApiResultFromSummary,
   deriveNormalizedSyncStatusFromSummary,
   mergeApplicationDetailsByUuid,
+  buildPepcoApplicationDetailDiscoveryMetadata,
   buildAppDetailRunOptions,
   resolveAppDetailResumeOptions,
 };
