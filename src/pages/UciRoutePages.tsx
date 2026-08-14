@@ -29,6 +29,7 @@ import type {
 
 type OperationalRecord = CoordinationRecord & {
   projectName: string;
+  providerDisplayName: string | null;
   applications: CoordinationApplication[];
   communications: CoordinationCommunication[];
   costs: CoordinationCost[];
@@ -128,11 +129,15 @@ async function listAccessibleCoordinationProjectIds(): Promise<Set<string>> {
   }
 }
 
-function providerName(record: CoordinationRecord): string {
+function providerName(record: CoordinationRecord & { providerDisplayName?: string | null }): string {
   const provider = Array.isArray(record.utility_providers)
     ? record.utility_providers[0]
     : record.utility_providers;
-  return provider?.display_name || provider?.name || record.utility_type || "Utility";
+  return record.providerDisplayName
+    || provider?.display_name
+    || provider?.name
+    || record.utility_type
+    || "Utility";
 }
 
 function recordHref(record: CoordinationRecord, tab?: string): string {
@@ -243,6 +248,10 @@ function useOperationalRecords(mode: LoadMode, crossProject: boolean) {
         return;
       }
       try {
+        const providerResponse = await listUciProviders().catch(() => null);
+        const providersById = new Map(
+          (providerResponse?.providers ?? []).map((provider) => [provider.id, provider] as const),
+        );
         const coordinationProjectIds = crossProject
           ? await listAccessibleCoordinationProjectIds()
           : null;
@@ -283,6 +292,10 @@ function useOperationalRecords(mode: LoadMode, crossProject: boolean) {
               return {
                 ...record,
                 projectName: project.name,
+                providerDisplayName:
+                  providersById.get(record.utility_provider_id)?.display_name
+                  || providersById.get(record.utility_provider_id)?.name
+                  || null,
                 applications: detail?.applications ?? [],
                 costs: detail?.costs ?? [],
                 communications:
@@ -306,7 +319,8 @@ function useOperationalRecords(mode: LoadMode, crossProject: boolean) {
         if (cancelled) return;
         const failures = settled.filter((result) => result.status === "rejected");
         setPartialFailures(
-          failures.length
+          (providerResponse == null ? 1 : 0)
+            + failures.length
             + settled.reduce(
               (sum, result) => sum + (result.status === "fulfilled" ? result.value.failures : 0),
               0,
