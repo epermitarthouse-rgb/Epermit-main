@@ -398,6 +398,48 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
     }
   });
 
+  it("keeps a reviewed package locked until changes are explicitly requested", async () => {
+    const tables = {
+      coordination_records: [{ ...HUMAN_ASSISTED_RECORD }],
+      projects: [{ ...BASE_PROJECT, id: "proj-1" }],
+      project_documents: [],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT, coordination_record_id: "coord-1", project_id: "proj-1" },
+        {
+          id: "app-pkg-locked",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          record_source: "agent_draft",
+          idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+          draft_status: "reviewed",
+          package_documents: [],
+          agent_draft_metadata: {
+            application_package: {
+              package_status: "ready_for_review",
+              package_review: { reviewed_snapshot: { captured_at: "2026-08-17T00:00:00Z" } },
+            },
+          },
+        },
+      ],
+    };
+
+    await assert.rejects(
+      () =>
+        runApplicationPackageBuild(createApplicationBuilderMockSupabase(tables), {
+          coordinationRecordId: "coord-1",
+          userId: "user-1",
+        }),
+      (err) => {
+        assert.equal(/** @type {{ code?: string }} */ (err).code, "PACKAGE_REVIEW_LOCKED");
+        return true;
+      },
+    );
+    assert.equal(
+      tables.coordination_applications.find((row) => row.id === "app-pkg-locked")?.draft_status,
+      "reviewed",
+    );
+  });
+
   it("rebuilt package resolves portal_data.location and stores address snapshot metadata", async () => {
     const tables = {
       coordination_records: [

@@ -3,6 +3,92 @@
 import type { CoordinationApplication, DraftStatus } from "@/types/uci";
 
 export type UciApplicationPackageStatus = "blocked" | "incomplete" | "ready_for_review";
+export type UciPackageReviewItemStatus =
+  | "not_reviewed"
+  | "confirmed"
+  | "needs_correction"
+  | "ready_for_re_review";
+export type UciPackageReviewStatus =
+  | "draft"
+  | "ready_for_review"
+  | "needs_changes"
+  | "reviewed";
+export type UciPackageValidationStatus = "not_run" | "passed" | "found_blockers";
+
+export interface UciPackageFieldResult {
+  key: string;
+  label: string;
+  status: string;
+  value?: unknown;
+  source?: string;
+  note?: string;
+  address_source?: string;
+}
+
+export interface UciPackageReviewItem {
+  kind?: "field" | "document";
+  key?: string;
+  status?: UciPackageReviewItemStatus;
+  mapping_snapshot?: Record<string, unknown>;
+  reviewed_by_user_id?: string | null;
+  reviewed_at?: string | null;
+  note?: string | null;
+}
+
+export interface UciPackageReview {
+  version?: string;
+  status?: UciPackageReviewStatus;
+  items?: Record<string, UciPackageReviewItem>;
+  reviewed_by_user_id?: string | null;
+  reviewer_display?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  reviewed_snapshot?: Record<string, unknown> | null;
+  review_history?: Array<Record<string, unknown>>;
+  package_correction?: {
+    active?: boolean;
+    note?: string | null;
+    requested_by_user_id?: string | null;
+    requested_at?: string | null;
+    cleared_at?: string | null;
+  } | null;
+}
+
+export interface UciCanonicalPackageReviewItem {
+  id: string;
+  kind: "field" | "document";
+  key: string;
+  status: UciPackageReviewItemStatus;
+  ready: boolean;
+  snapshot: Record<string, unknown>;
+  note?: string | null;
+}
+
+export interface UciCanonicalPackageReviewSummary {
+  status: UciPackageReviewStatus;
+  all_confirmed: boolean;
+  ready_for_final_review: boolean;
+  active_correction_count: number;
+  confirmed_count: number;
+  total_count: number;
+  items: UciCanonicalPackageReviewItem[];
+}
+
+export function parseCanonicalPackageReviewSummary(
+  value: unknown,
+): UciCanonicalPackageReviewSummary | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const summary = value as Partial<UciCanonicalPackageReviewSummary>;
+  if (
+    typeof summary.ready_for_final_review !== "boolean" ||
+    typeof summary.confirmed_count !== "number" ||
+    typeof summary.total_count !== "number" ||
+    !Array.isArray(summary.items)
+  ) {
+    return null;
+  }
+  return summary as UciCanonicalPackageReviewSummary;
+}
 
 export interface UciApplicationPackageDocument {
   key: string;
@@ -68,6 +154,25 @@ export interface UciPackageDocumentCandidatesResponse {
   suggestions_by_slot: Record<string, UciPackageDocumentCandidate[]>;
 }
 
+export function isPackageDocumentCandidateAlreadyMapped(
+  document: UciApplicationPackageDocument,
+  candidate: UciPackageDocumentCandidate | undefined,
+): boolean {
+  if (!candidate || document.status !== "attached") return false;
+  if (candidate.source_type === "project_document") {
+    return (
+      Boolean(document.project_document_id) &&
+      document.project_document_id === candidate.project_document_id
+    );
+  }
+  return (
+    Boolean(document.storage_path) &&
+    document.storage_path === candidate.storage_path &&
+    (document.external_application_id ?? null) ===
+      (candidate.external_application_id ?? null)
+  );
+}
+
 export interface UciApplicationPackageMetadata {
   version?: string;
   template_id?: string | null;
@@ -80,6 +185,8 @@ export interface UciApplicationPackageMetadata {
   checklist_label?: string | null;
   authoritative_requirements?: boolean;
   external_submission_allowed?: boolean | null;
+  built_at?: string | null;
+  built_by_user_id?: string | null;
   synthetic_checklist?: {
     status?: "draft" | "approved";
     label?: string;
@@ -96,6 +203,8 @@ export interface UciApplicationPackageMetadata {
     verified_at?: string | null;
     review_note?: string | null;
   }>;
+  field_results?: UciPackageFieldResult[];
+  package_review?: UciPackageReview | null;
   notes?: string[];
   project_address?: {
     formatted?: string | null;
@@ -114,6 +223,228 @@ export interface UciApplicationPackageMetadata {
     notes?: string | null;
     reviewed_at?: string;
   };
+}
+
+function canonicalReviewSnapshot(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalReviewSnapshot);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((key) => [
+          key,
+          canonicalReviewSnapshot((value as Record<string, unknown>)[key]),
+        ]),
+    );
+  }
+  return value ?? null;
+}
+
+function stableReviewSnapshot(value: unknown): string {
+  return JSON.stringify(canonicalReviewSnapshot(value));
+}
+
+function fieldMappingSnapshot(field: UciPackageFieldResult): Record<string, unknown> {
+  return {
+    key: field.key,
+    label: field.label,
+    status: field.status,
+    value: field.value ?? null,
+    source: field.source ?? "",
+    address_source: field.address_source ?? null,
+  };
+}
+
+function documentMappingSnapshot(document: UciApplicationPackageDocument): Record<string, unknown> {
+  return {
+    key: document.key,
+    label: document.label ?? document.key,
+    status: document.status,
+    file_name: document.file_name ?? null,
+    source: document.source ?? null,
+    project_document_id: document.project_document_id ?? null,
+    external_application_id: document.external_application_id ?? null,
+    storage_path: document.storage_path ?? null,
+    content_hash: document.content_hash ?? null,
+    signature_required: document.signature_required === true,
+    signature_status: document.signature_required ? document.signature_status ?? "unknown" : null,
+    signature_verified_at: document.signature_verified_at ?? null,
+  };
+}
+
+export function getPackageReviewItemStatus(
+  review: UciPackageReview | null | undefined,
+  kind: "field" | "document",
+  key: string,
+  currentSnapshot: Record<string, unknown>,
+): UciPackageReviewItemStatus {
+  const stored = review?.items?.[`${kind}:${key}`];
+  if (
+    (stored?.status === "confirmed" || stored?.status === "needs_correction") &&
+    stableReviewSnapshot(stored.mapping_snapshot) === stableReviewSnapshot(currentSnapshot)
+  ) {
+    return stored.status;
+  }
+  if (
+    stored?.status === "needs_correction" &&
+    ((kind === "field" && currentSnapshot.status === "present") ||
+      (kind === "document" &&
+        currentSnapshot.status === "attached" &&
+        (!currentSnapshot.signature_required ||
+          currentSnapshot.signature_status === "signed_manual_verified")))
+  ) {
+    return "ready_for_re_review";
+  }
+  return "not_reviewed";
+}
+
+export function summarizePackageReview(
+  metadata: UciApplicationPackageMetadata | null | undefined,
+  documents: UciApplicationPackageDocument[],
+  draftStatus?: DraftStatus,
+): {
+  status: UciPackageReviewStatus;
+  allConfirmed: boolean;
+  readyForFinalReview: boolean;
+  activeCorrectionCount: number;
+  confirmedCount: number;
+  totalCount: number;
+  fields: Array<UciPackageFieldResult & { reviewStatus: UciPackageReviewItemStatus; snapshot: Record<string, unknown> }>;
+  documents: Array<UciApplicationPackageDocument & { reviewStatus: UciPackageReviewItemStatus; snapshot: Record<string, unknown> }>;
+} {
+  const review = metadata?.package_review;
+  const fields = (metadata?.field_results ?? []).map((field) => {
+    const snapshot = fieldMappingSnapshot(field);
+    return {
+      ...field,
+      snapshot,
+      reviewStatus: getPackageReviewItemStatus(review, "field", field.key, snapshot),
+    };
+  });
+  const reviewedDocuments = documents.map((document) => {
+    const snapshot = documentMappingSnapshot(document);
+    return {
+      ...document,
+      snapshot,
+      reviewStatus: getPackageReviewItemStatus(review, "document", document.key, snapshot),
+    };
+  });
+  const items = [...fields, ...reviewedDocuments];
+  const allConfirmed =
+    items.length > 0 &&
+    metadata?.package_status === "ready_for_review" &&
+    fields.every((item) => item.status === "present" && item.reviewStatus === "confirmed") &&
+    reviewedDocuments.every(
+      (item) =>
+        item.status === "attached" &&
+        (!item.signature_required || item.signature_status === "signed_manual_verified") &&
+        item.reviewStatus === "confirmed",
+    );
+  const activeCorrectionCount =
+    items.filter((item) => item.reviewStatus === "needs_correction").length +
+    (review?.package_correction?.active ? 1 : 0);
+  const status: UciPackageReviewStatus =
+    draftStatus === "reviewed" && Boolean(review?.reviewed_snapshot)
+      ? "reviewed"
+      : activeCorrectionCount > 0 || draftStatus === "needs_changes"
+        ? "needs_changes"
+        : metadata?.package_status === "ready_for_review"
+          ? "ready_for_review"
+          : "draft";
+  return {
+    status,
+    allConfirmed,
+    readyForFinalReview: allConfirmed && activeCorrectionCount === 0,
+    activeCorrectionCount,
+    confirmedCount: items.filter((item) => item.reviewStatus === "confirmed").length,
+    totalCount: items.length,
+    fields,
+    documents: reviewedDocuments,
+  };
+}
+
+export function formatPackageReviewStatus(status: UciPackageReviewStatus): string {
+  if (status === "ready_for_review") return "Ready for review";
+  if (status === "needs_changes") return "Needs changes";
+  if (status === "reviewed") return "Reviewed";
+  return "Draft";
+}
+
+export function formatPackageReviewItemStatus(status: UciPackageReviewItemStatus): string {
+  if (status === "confirmed") return "Confirmed";
+  if (status === "needs_correction") return "Needs correction";
+  if (status === "ready_for_re_review") return "Ready for re-review";
+  return "Not reviewed";
+}
+
+export function getPackageValidationStatus(
+  metadata: UciApplicationPackageMetadata | null | undefined,
+  validation: Record<string, unknown> | null | undefined,
+): UciPackageValidationStatus {
+  if (
+    metadata?.package_status === "blocked" ||
+    metadata?.package_status === "incomplete" ||
+    validation?.ok === false
+  ) {
+    return "found_blockers";
+  }
+  if (validation?.ok === true) return "passed";
+  return "not_run";
+}
+
+export function formatPackageValidationStatus(status: UciPackageValidationStatus): string {
+  if (status === "passed") return "Passed";
+  if (status === "found_blockers") return "Found blockers";
+  return "Not run";
+}
+
+export function formatPackageMappedValue(value: unknown): string {
+  if (value == null || value === "") return "Not mapped";
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    if (record.value != null) {
+      return `${String(record.value)}${record.unit ? ` ${String(record.unit)}` : ""}`;
+    }
+    return Object.entries(record)
+      .map(([key, nested]) => {
+        if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+          const item = nested as Record<string, unknown>;
+          return `${key.replace(/_/g, " ")}: ${String(item.value ?? "—")}${item.unit ? ` ${String(item.unit)}` : ""}`;
+        }
+        return `${key.replace(/_/g, " ")}: ${String(nested)}`;
+      })
+      .join("; ");
+  }
+  return String(value);
+}
+
+export function formatPackageFieldProvenance(field: UciPackageFieldResult): string {
+  const source = field.source ?? "";
+  if (source.startsWith("project.")) return "Project record";
+  if (!source.startsWith("load_summary.verified_values")) {
+    return "Package source";
+  }
+
+  const value =
+    field.value && typeof field.value === "object" && !Array.isArray(field.value)
+      ? (field.value as Record<string, unknown>)
+      : {};
+  const evidenceSources = Array.isArray(value.evidence_sources)
+    ? value.evidence_sources.filter(
+        (entry): entry is Record<string, unknown> =>
+          Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+      )
+    : [];
+  const primaryEvidence = evidenceSources[0];
+  const documentName = String(
+    primaryEvidence?.source_document_name ?? value.source_document_name ?? "",
+  ).trim();
+  const pageValue = primaryEvidence?.page_number ?? value.page_number;
+  const page =
+    typeof pageValue === "number" || (typeof pageValue === "string" && pageValue.trim())
+      ? ` · page ${String(pageValue)}`
+      : "";
+  return `Agent 2 verified input${documentName ? ` · ${documentName}` : ""}${page}`;
 }
 
 export const APPLICATION_PACKAGE_IDEMPOTENCY_PREFIX = "agent_3_application_package:";

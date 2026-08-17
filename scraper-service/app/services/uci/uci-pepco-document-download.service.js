@@ -49,7 +49,14 @@ function sanitizeCoordinationRecordForApi(record) {
   if (!record || typeof record !== "object") return record;
   const out = { ...record };
   if (out.metadata != null) {
-    out.metadata = sanitizePepcoMetadataForApi(out.metadata);
+    const metadata = sanitizePepcoMetadataForApi(out.metadata);
+    if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+      // The document manifest has a dedicated lazy endpoint. Returning its
+      // full OCR/findings snapshot on every record open added hundreds of KB
+      // to the shared detail response and duplicated Load Profile hydration.
+      delete metadata.uci_document_processing;
+    }
+    out.metadata = metadata;
   }
   return out;
 }

@@ -6,6 +6,7 @@ const {
   SYNTHETIC_TEST_CHECKLIST_MODE,
   SYNTHETIC_TEST_CHECKLIST_LABEL,
   SIGNATURE_STATUSES,
+  resolvePackageStatus,
 } = require("./uci-application-builder.service.js");
 const {
   refreshApplicationPackageDocumentSlots,
@@ -102,7 +103,8 @@ async function approveSyntheticChecklist(supabase, params) {
 }
 
 async function setSyntheticSignatureStatus(supabase, params) {
-  const application = await getApplicationById(supabase, params.applicationId);
+  const application =
+    params.application ?? (await getApplicationById(supabase, params.applicationId));
   if (!application) {
     const err = new Error("Application not found");
     err.statusCode = 404;
@@ -153,17 +155,105 @@ async function setSyntheticSignatureStatus(supabase, params) {
       : doc,
   );
 
-  const refreshed = await refreshApplicationPackageDocumentSlots(supabase, {
-    applicationId: params.applicationId,
-    userId: params.userId,
-    packageDocumentsSeed: nextDocuments,
+  const readinessStartedAt = Date.now();
+  const { metadata, pkg } = applicationPackageMetadata(application);
+  const signatureRequirements = Array.isArray(pkg.signature_requirements)
+    ? pkg.signature_requirements
+    : [];
+  const existingRequirement = signatureRequirements.find(
+    (requirement) => String(requirement?.document_key ?? "") === documentKey,
+  );
+  const requirementKey = String(
+    existingRequirement?.requirement_key ?? `${documentKey}_signature`,
+  );
+  const satisfied = signatureStatus === "signed_manual_verified";
+  const nextRequirement = {
+    ...(existingRequirement &&
+    typeof existingRequirement === "object" &&
+    !Array.isArray(existingRequirement)
+      ? existingRequirement
+      : {}),
+    document_key: documentKey,
+    requirement_key: requirementKey,
+    signature_status: signatureStatus,
+    satisfied,
+    verified_by: satisfied ? params.userId : null,
+    verified_at: satisfied ? verifiedAt : null,
+    review_note: reviewNote || null,
+  };
+  const nextSignatureRequirements = existingRequirement
+    ? signatureRequirements.map((requirement) =>
+        String(requirement?.document_key ?? "") === documentKey
+          ? nextRequirement
+          : requirement,
+      )
+    : [...signatureRequirements, nextRequirement];
+  const priorMissingFields = Array.isArray(pkg.missing_fields) ? pkg.missing_fields : [];
+  const nextMissingFields = priorMissingFields.filter(
+    (field) => String(field) !== requirementKey,
+  );
+  if (!satisfied) nextMissingFields.push(requirementKey);
+  const missingDocuments = Array.isArray(pkg.missing_documents) ? pkg.missing_documents : [];
+  const packageStatus = resolvePackageStatus({
+    missingDocuments,
+    missingFields: nextMissingFields,
+    loadSummary:
+      application.load_summary &&
+      typeof application.load_summary === "object" &&
+      !Array.isArray(application.load_summary)
+        ? application.load_summary
+        : null,
+    hasLoadProfileDraft: Boolean(pkg.load_profile_application_id),
+    addressReviewRequired: pkg.address_review_required === true,
   });
+  const nextMetadata = {
+    ...metadata,
+    application_package: {
+      ...pkg,
+      package_status: packageStatus,
+      missing_fields: nextMissingFields,
+      signature_requirements: nextSignatureRequirements,
+    },
+  };
+  const readinessRecomputeMs = Date.now() - readinessStartedAt;
+
+  const writeStartedAt = Date.now();
+  const { data, error } = await supabase
+    .from("coordination_applications")
+    .update({
+      package_documents: nextDocuments,
+      agent_draft_metadata: nextMetadata,
+      ...(String(application.draft_status) === "reviewed"
+        ? { draft_status: "needs_changes", reviewed_by: null, reviewed_at: null }
+        : {}),
+    })
+    .eq("id", params.applicationId)
+    .select("*")
+    .single();
+  const dbWriteMs = Date.now() - writeStartedAt;
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to update signature status"), {
+      cause: error,
+      statusCode: 500,
+      code: "SIGNATURE_UPDATE_FAILED",
+    });
+  }
+
+  const { withPackageReviewSummary } = require("./uci-package-review.service.js");
   return {
-    ...refreshed,
+    application: withPackageReviewSummary(data),
+    package_status: packageStatus,
+    missing_documents: missingDocuments,
+    missing_fields: nextMissingFields,
+    package_documents: nextDocuments,
     document_key: documentKey,
     signature_status: signatureStatus,
     signature_verified_at:
       signatureStatus === "signed_manual_verified" ? verifiedAt : null,
+    timings: {
+      readiness_recompute_ms: readinessRecomputeMs,
+      db_write_ms: dbWriteMs,
+    },
   };
 }
 

@@ -116,6 +116,7 @@ export default function Projects() {
   const [dragOverStatus, setDragOverStatus] = useState<ProjectStatus | null>(null);
 
   const isCreateRoute = location.pathname === "/projects/new";
+  const editProjectId = new URLSearchParams(location.search).get("project");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -130,6 +131,15 @@ export default function Projects() {
     setSelectedProject(null);
     setFormDialogOpen(true);
   }, [authLoading, user, isCreateRoute]);
+
+  useEffect(() => {
+    if (authLoading || !user || !editProjectId || projects.length === 0) return;
+    const project = projects.find((item) => item.id === editProjectId);
+    if (!project) return;
+    setSelectedProject(project);
+    setSelectedProjectId(project.id);
+    setFormDialogOpen(true);
+  }, [authLoading, user, editProjectId, projects, setSelectedProjectId]);
 
   useEffect(() => {
     const selectedId = selectedProject?.id;
@@ -195,7 +205,7 @@ export default function Projects() {
 
   const handleFormOpenChange = (open: boolean) => {
     setFormDialogOpen(open);
-    if (!open && isCreateRoute) {
+    if (!open && (isCreateRoute || editProjectId)) {
       navigate("/projects", { replace: true });
     }
   };

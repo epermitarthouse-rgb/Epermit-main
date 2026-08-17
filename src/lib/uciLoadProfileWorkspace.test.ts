@@ -8,6 +8,7 @@ import {
   deriveSourceDocumentStatus,
   getDefaultReviewQueueTab,
   getLoadProfileOverview,
+  getLoadProfileScopeCopy,
   getLoadScheduleTotals,
   getServiceSizingRecommendation,
   groupSourceDocumentsByCategory,
@@ -674,6 +675,43 @@ describe("uciLoadProfileWorkspace", () => {
     it("maps field keys to readable labels", () => {
       expect(formatCandidateFieldLabel("service_voltage")).toBe("Service voltage");
       expect(formatCandidateFieldLabel("panel_demand_load_kva")).toBe("Demand load");
+    });
+  });
+
+  describe("provider-aware review queue copy", () => {
+    it("uses PEPCO application wording only for PEPCO scope", () => {
+      expect(
+        getLoadProfileScopeCopy({
+          providerName: "PEPCO",
+          providerSlug: "pepco",
+          selectedApplicationId: null,
+        }),
+      ).toBe(
+        "Select a PEPCO application to scope portal extraction. Manual and project uploads do not require a portal application.",
+      );
+    });
+
+    it("uses the coordination provider name without requiring an application", () => {
+      expect(
+        getLoadProfileScopeCopy({
+          providerName: "Dominion Energy Virginia",
+          providerSlug: "dominion",
+        }),
+      ).toBe(
+        "Review Dominion Energy Virginia documents from project and manual uploads. A portal application is not required.",
+      );
+      expect(
+        getLoadProfileScopeCopy({
+          providerName: "Example Municipal Utility",
+          providerSlug: "example-municipal",
+        }),
+      ).toContain("Review Example Municipal Utility documents");
+    });
+
+    it("falls back to provider-neutral copy", () => {
+      expect(getLoadProfileScopeCopy({})).toBe(
+        "Review project and manual-upload documents. A portal application is not required.",
+      );
     });
   });
 

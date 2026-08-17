@@ -383,7 +383,9 @@ describe("UCI package document bridge service", () => {
           idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
           draft_status: "draft",
           package_documents: [],
-          agent_draft_metadata: { application_package: { package_status: "incomplete" } },
+          agent_draft_metadata: {
+            application_package: { package_status: "incomplete", missing_fields: [] },
+          },
           load_summary: {},
         },
       ],
@@ -406,6 +408,12 @@ describe("UCI package document bridge service", () => {
     assert.equal(sld?.source, "pepco_portal");
     assert.equal(sld?.user_confirmed, true);
     assert.equal(confirmed.missing_documents.includes("single_line_diagram"), false);
+    const mappingHistory =
+      confirmed.application.agent_draft_metadata.application_package.package_review.mapping_history;
+    assert.equal(mappingHistory.length, 1);
+    assert.equal(mappingHistory[0].item_key, "single_line_diagram");
+    assert.equal(mappingHistory[0].prior_mapping, null);
+    assert.equal(mappingHistory[0].next_mapping.file_name, E601_FILE.fileName);
 
     const rebuilt = await runApplicationPackageBuild(supabase, {
       coordinationRecordId: COORD_ID,
@@ -696,6 +704,17 @@ describe("UCI package document bridge service", () => {
     const sld = pkg?.package_documents?.find((d) => d.key === "single_line_diagram");
     assert.equal(sld?.storage_path, E601_FILE.storagePath);
     assert.equal(tables.project_documents.length, 0);
+
+    const beforeNoOp = JSON.stringify(pkg);
+    const noOp = await confirmPackageDocumentMapping(supabase, {
+      applicationId: packageAppId,
+      userId: USER_ID,
+      slotKey: "single_line_diagram",
+      candidateId: pepcoCandidateId(E601_FILE),
+    });
+    assert.equal(noOp.no_change, true);
+    assert.equal(noOp.message, "Already mapped");
+    assert.equal(JSON.stringify(pkg), beforeNoOp);
   });
 
   it("preserves address snapshot metadata on mapping refresh", async () => {

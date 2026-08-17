@@ -24,6 +24,7 @@ const { getProjectTenantId, getProjectForUciAccess } = require("../services/uci/
 const {
   listCoordinationRecordsByProject,
   getCoordinationRecordById,
+  getCoordinationRecordDetailById,
   getCoordinationDetailBundle,
   initCoordinationForProviders,
 } = require("../services/uci/uci-records.service.js");
@@ -43,7 +44,10 @@ const {
 const {
   readProviderResolutionForServiceType,
 } = require("../services/uci/uci-provider-resolution-persistence.js");
-const { recordUserTransition } = require("../services/uci/uci-transitions.service.js");
+const {
+  recordUserTransition,
+  completeStage2EngineeringReview,
+} = require("../services/uci/uci-transitions.service.js");
 const { runLoadProfileAnalysis } = require("../services/uci/uci-load-profile.service.js");
 const {
   runLoadCandidateExtraction,
@@ -71,9 +75,13 @@ const {
 } = require("../services/uci/uci-document-reprocess.service.js");
 const {
   runApplicationPackageBuild,
-  reviewApplicationPackage,
   getApplicationById,
 } = require("../services/uci/uci-application-builder.service.js");
+const {
+  reviewApplicationPackage,
+  updatePackageReviewItem,
+  confirmAllVerifiedFields,
+} = require("../services/uci/uci-package-review.service.js");
 const {
   listPackageDocumentCandidates,
   confirmPackageDocumentMapping,
@@ -140,6 +148,9 @@ const {
   linkHarvestApplication,
   refreshLinkedHarvestData,
 } = require("../services/uci/uci-portal-harvest.service.js");
+const {
+  getUciOperationalSnapshot,
+} = require("../services/uci/uci-operational-snapshot.service.js");
 
 /**
  * @param {string} prefix
@@ -211,6 +222,38 @@ function createUciRouter(opts) {
   const { supabase } = opts;
   configureTerritoryDatasetLoader({ supabase });
   const router = Router();
+
+  router.use("/operations/snapshot", (req, res, next) => {
+    if (req.method !== "GET") return next();
+    const suppliedRequestId = String(req.get("x-request-id") || "").trim();
+    const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : crypto.randomUUID();
+    const startedAt = Date.now();
+    let logged = false;
+    res.set("x-request-id", requestId);
+    res.set(
+      "Access-Control-Expose-Headers",
+      "x-request-id, x-backend-duration-ms, server-timing",
+    );
+    res.locals.uciOperationalRequest = { requestId, startedAt };
+
+    const logCompletion = (outcome) => {
+      if (logged) return;
+      logged = true;
+      console.info("[uci-operational-read]", {
+        request_id: requestId,
+        method: req.method,
+        path: req.originalUrl,
+        status: res.statusCode,
+        outcome,
+        duration_ms: Date.now() - startedAt,
+      });
+    };
+    res.once("finish", () => logCompletion("finished"));
+    res.once("close", () => logCompletion(res.writableEnded ? "finished" : "client_closed"));
+    next();
+  });
 
   // Correlate the three user-triggered Load Profile actions with browser errors.
   // The client reuses the same ID for a safe transport retry, while attempt
@@ -306,6 +349,35 @@ function createUciRouter(opts) {
       });
       res.json({ providers, tenant_id: null });
     } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/operations/snapshot", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const snapshot = await getUciOperationalSnapshot(supabase, { userId: user.id });
+      const requestTiming = res.locals.uciOperationalRequest;
+      const backendDuration = requestTiming
+        ? Date.now() - requestTiming.startedAt
+        : snapshot.diagnostics.service_duration_ms;
+      res.set("x-backend-duration-ms", String(backendDuration));
+      res.set(
+        "Server-Timing",
+        `uci;dur=${backendDuration}, db;dur=${snapshot.diagnostics.service_duration_ms}`,
+      );
+      console.info("[uci-operational-snapshot]", {
+        request_id: requestTiming?.requestId ?? null,
+        backend_duration_ms: backendDuration,
+        ...snapshot.diagnostics,
+      });
+      res.json(snapshot);
+    } catch (err) {
+      const requestTiming = res.locals.uciOperationalRequest;
+      if (requestTiming) {
+        res.set("x-backend-duration-ms", String(Date.now() - requestTiming.startedAt));
+      }
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
     }
@@ -639,10 +711,50 @@ function createUciRouter(opts) {
   });
 
   router.get("/coordination/:id", async (req, res) => {
+    const suppliedRequestId = String(req.get("x-request-id") || "").trim();
+    const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : crypto.randomUUID();
+    const requestStartedAt = Date.now();
+    const routeSteps = [];
+    const timed = async (step, blocking, task) => {
+      const startedAt = Date.now();
+      try {
+        const value = await task();
+        routeSteps.push({
+          step,
+          duration_ms: Date.now() - startedAt,
+          success: true,
+          blocking,
+          request_id: requestId,
+        });
+        return value;
+      } catch (error) {
+        routeSteps.push({
+          step,
+          duration_ms: Date.now() - startedAt,
+          success: false,
+          blocking,
+          request_id: requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    };
+    res.set("x-request-id", requestId);
+    res.set(
+      "Access-Control-Expose-Headers",
+      "x-request-id, x-backend-duration-ms, server-timing",
+    );
+
     try {
-      const user = await requireAuthenticatedUser(req, supabase);
+      const user = await timed("authentication", true, () =>
+        requireAuthenticatedUser(req, supabase),
+      );
       const coordinationId = String(req.params.id || "").trim();
-      const record = await getCoordinationRecordById(supabase, coordinationId);
+      const record = await timed("record", true, () =>
+        getCoordinationRecordDetailById(supabase, coordinationId),
+      );
       if (!record) {
         const err = new Error("Coordination record not found");
         err.statusCode = 404;
@@ -651,17 +763,45 @@ function createUciRouter(opts) {
       }
 
       const projectId = String(record.project_id);
-      await requireProjectAccess({ supabase, userId: user.id, projectId });
-
-      const detail = await getCoordinationDetailBundle(
-        supabase,
-        coordinationId,
-        projectId,
+      await timed("access", true, () =>
+        requireProjectAccess({ supabase, userId: user.id, projectId }),
       );
 
-      res.json(sanitizeCoordinationDetailBundleForApi(detail));
+      const detail = await timed("children", false, () =>
+        getCoordinationDetailBundle(
+          supabase,
+          coordinationId,
+          projectId,
+          { record, requestId },
+        ),
+      );
+      detail.hydration.steps = [
+        ...routeSteps.filter((step) => step.step !== "children"),
+        ...(detail.hydration?.steps ?? []),
+      ];
+      const response = sanitizeCoordinationDetailBundleForApi(detail);
+      const durationMs = Date.now() - requestStartedAt;
+      res.set("x-backend-duration-ms", String(durationMs));
+      res.set("Server-Timing", `uci-detail;dur=${durationMs}`);
+      console.info("[uci-coordination-detail]", {
+        request_id: requestId,
+        coordination_id: coordinationId,
+        status: 200,
+        duration_ms: durationMs,
+        steps: response.hydration?.steps ?? routeSteps,
+      });
+      res.json(response);
     } catch (err) {
       const s = sanitizeUciError(err);
+      const durationMs = Date.now() - requestStartedAt;
+      res.set("x-backend-duration-ms", String(durationMs));
+      console.info("[uci-coordination-detail]", {
+        request_id: requestId,
+        coordination_id: String(req.params.id || "").trim() || null,
+        status: s.httpStatus,
+        duration_ms: durationMs,
+        steps: routeSteps,
+      });
       res.status(s.httpStatus).json(s.body);
     }
   });
@@ -710,6 +850,55 @@ function createUciRouter(opts) {
       res.json({
         coordination: updated,
         transition,
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/complete-stage-2", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const reason = String(body.reason ?? "").trim();
+
+      if (body.confirm_human_review !== true || !reason) {
+        const err = new Error("confirm_human_review=true and a reason are required");
+        err.statusCode = 400;
+        err.code = "HUMAN_REVIEW_CONFIRMATION_REQUIRED";
+        throw err;
+      }
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const result = await completeStage2EngineeringReview(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        reason,
+      });
+
+      res.json({
+        coordination: result.record,
+        transition: result.transition,
+        stage_2_completed: true,
+        stage_3_completed: result.stage3Completed,
+        ready_for_stage_4: result.stage3Completed,
+        application_id: result.application?.id ?? null,
       });
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -1454,31 +1643,85 @@ function createUciRouter(opts) {
   });
 
   router.post("/applications/:id/synthetic-checklist/signature", async (req, res) => {
+    const suppliedRequestId = String(req.get("x-request-id") || "").trim();
+    const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : crypto.randomUUID();
+    const requestStartedAt = Date.now();
+    const stageTimings = {};
+    let responseLogged = false;
+    res.set("x-request-id", requestId);
+    const logResponse = (outcome) => {
+      if (responseLogged) return;
+      responseLogged = true;
+      console.info("[uci-signature-mutation]", {
+        request_id: requestId,
+        application_id: String(req.params.id || "").trim() || null,
+        outcome,
+        status: res.statusCode,
+        total_ms: Date.now() - requestStartedAt,
+        ...stageTimings,
+      });
+    };
+    res.once("finish", () => logResponse("response_sent"));
+    res.once("close", () =>
+      logResponse(res.writableEnded ? "response_sent" : "client_closed"),
+    );
+    console.info("[uci-signature-mutation]", {
+      request_id: requestId,
+      application_id: String(req.params.id || "").trim() || null,
+      outcome: "request_received",
+    });
     try {
+      let stageStartedAt = Date.now();
       const user = await requireAuthenticatedUser(req, supabase);
+      stageTimings.auth_ms = Date.now() - stageStartedAt;
       const applicationId = String(req.params.id || "").trim();
+      stageStartedAt = Date.now();
       const appRow = await getApplicationById(supabase, applicationId);
+      stageTimings.application_fetch_ms = Date.now() - stageStartedAt;
       if (!appRow) {
         const err = new Error("Application not found");
         err.statusCode = 404;
         err.code = "NOT_FOUND";
         throw err;
       }
+      stageStartedAt = Date.now();
       await requireProjectAccess({
         supabase,
         userId: user.id,
         projectId: String(appRow.project_id),
         write: true,
       });
+      stageTimings.access_check_ms = Date.now() - stageStartedAt;
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const result = await setSyntheticSignatureStatus(supabase, {
         applicationId,
+        application: appRow,
         userId: user.id,
         documentKey: body.document_key,
         signatureStatus: body.signature_status,
         reviewNote: body.review_note,
       });
-      res.json(result);
+      Object.assign(stageTimings, result.timings);
+      stageTimings.before_response_ms = Date.now() - requestStartedAt;
+      res.set(
+        "Server-Timing",
+        [
+          `auth;dur=${stageTimings.auth_ms}`,
+          `application;dur=${stageTimings.application_fetch_ms}`,
+          `access;dur=${stageTimings.access_check_ms}`,
+          `readiness;dur=${stageTimings.readiness_recompute_ms}`,
+          `db;dur=${stageTimings.db_write_ms}`,
+        ].join(", "),
+      );
+      res.json({
+        ...result,
+        timings: {
+          ...stageTimings,
+          total_ms: Date.now() - requestStartedAt,
+        },
+      });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
@@ -1513,6 +1756,67 @@ function createUciRouter(opts) {
     }
   });
 
+  router.post("/applications/:id/package-review/items", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updatePackageReviewItem(supabase, {
+        applicationId,
+        userId: user.id,
+        kind: body.kind,
+        key: body.item_key,
+        status: body.status,
+        note: body.note,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/applications/:id/package-review/confirm-verified-fields", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const result = await confirmAllVerifiedFields(supabase, {
+        applicationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
   router.post("/applications/:id/review", async (req, res) => {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
@@ -1539,6 +1843,7 @@ function createUciRouter(opts) {
       const result = await reviewApplicationPackage(supabase, {
         applicationId,
         userId: user.id,
+        reviewerDisplay: user.email || user.user_metadata?.full_name || user.id,
         review: { status, notes },
       });
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageHeader, AlertBanner, MetricCard, Panel, ServicePill } from "@/components/design/ProductPrimitives";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +66,8 @@ import {
   buildCoordinationApplicationPackage,
   checkInCoordinationEquipment,
   classifyCoordinationCommunications,
+  completeStage2EngineeringReview,
+  confirmAllApplicationPackageVerifiedFields,
   confirmApplicationPackageDocumentMapping,
   createCoordinationEquipment,
   createUciProvider,
@@ -106,6 +108,7 @@ import {
   submitPepcoMfaCode,
   transitionCoordination,
   triggerCoordinationSync,
+  updateApplicationPackageReviewItem,
   upsertCoordinationCost,
   UCI_SESSION_EXPIRED_MESSAGE,
   UCI_SYNC_RUN_STORAGE_PREFIX,
@@ -123,6 +126,7 @@ import {
   RefreshCw,
   Eye,
   AlertTriangle,
+  CheckCircle2,
   Layers,
   ListChecks,
   Zap,
@@ -202,15 +206,21 @@ import {
   getLoadProfileDraftApplication,
 } from "@/lib/uciLoadProfile";
 import {
-  applicationPackageStatusTone,
   canSubmitApplication,
-  formatApplicationPackageStatus,
-  formatDraftStatus,
+  formatPackageFieldProvenance,
+  formatPackageMappedValue,
   formatPackageDocumentSource,
+  formatPackageReviewItemStatus,
+  formatPackageReviewStatus,
+  formatPackageValidationStatus,
   formatSuggestionConfidence,
+  getPackageValidationStatus,
   getApplicationPackageDraftApplication,
+  isPackageDocumentCandidateAlreadyMapped,
+  parseCanonicalPackageReviewSummary,
   parseApplicationPackageMetadata,
   parsePackageDocuments,
+  summarizePackageReview,
   type UciPackageDocumentCandidate,
   type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
@@ -535,6 +545,7 @@ export default function UciDashboard() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detail, setDetail] = useState<UciRecordDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
 
   const [toStage, setToStage] = useState<string>("1");
   const [toState, setToState] = useState<LifecycleState>("IN_PROGRESS");
@@ -548,6 +559,7 @@ export default function UciDashboard() {
   const loadProfileInFlightRef = useRef(false);
   const loadCandidateInFlightRef = useRef(false);
   const importFindingsInFlightRef = useRef(false);
+  const stage2CompletionInFlightRef = useRef(false);
   const [loadCandidateResolutionState, setLoadCandidateResolutionState] =
     useState<CandidateResolutionState>({});
   const loadCandidateResolveInFlightRef = useRef(new Set<string>());
@@ -560,6 +572,7 @@ export default function UciDashboard() {
   const [applicationReviewBusy, setApplicationReviewBusy] = useState(false);
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
   const [applicationSubmitBusy, setApplicationSubmitBusy] = useState(false);
+  const [stage2CompletionBusy, setStage2CompletionBusy] = useState(false);
   const [classifyCommsBusy, setClassifyCommsBusy] = useState(false);
   const [reclassifyCommId, setReclassifyCommId] = useState<string | null>(null);
   const [lifecycleProposalBusy, setLifecycleProposalBusy] = useState(false);
@@ -1186,8 +1199,23 @@ export default function UciDashboard() {
   }, [authLoading, user?.id, loadProviderResolution]);
 
   const openDetail = async (id: string) => {
+    const persistedRecord = records.find((record) => record.id === id) ?? null;
     setDetailId(id);
     setDetailOpen(true);
+    setDetailLoadError(null);
+    setDetail((current) => {
+      if (current?.record.id === id) return current;
+      if (!persistedRecord) return null;
+      return {
+        record: persistedRecord,
+        transitions: [],
+        applications: [],
+        costs: [],
+        equipment: [],
+        milestones: [],
+        communications_recent: [],
+      };
+    });
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -1229,8 +1257,9 @@ export default function UciDashboard() {
       setToStage(String(d.record.current_stage ?? 1));
       setToState(d.record.current_stage_state as LifecycleState);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to load detail");
-      setDetail(null);
+      const message = e instanceof Error ? e.message : "Failed to load detail";
+      toast.error(message);
+      setDetailLoadError(message);
     } finally {
       setDetailLoading(false);
     }
@@ -1536,17 +1565,33 @@ export default function UciDashboard() {
     if (!detailId) return;
     setApplicationPrepBusy(true);
     try {
-      const providerSlug = String(
-        detail?.applications?.find((app) => app.application_type === "load_profile")
-          ?.provider_slug || "",
-      ).toLowerCase();
-      await buildCoordinationApplicationPackage(detailId, {
+      const existingPackage = getApplicationPackageDraftApplication(detail?.applications);
+      const existingPackageMeta = parseApplicationPackageMetadata(existingPackage);
+      const result = await buildCoordinationApplicationPackage(detailId, {
         external_application_id: externalApplicationId || undefined,
-        checklist_mode: providerSlug === "dominion" ? "synthetic_test" : undefined,
+        checklist_mode:
+          existingPackageMeta?.checklist_mode === "synthetic_test"
+            ? "synthetic_test"
+            : undefined,
       });
-      const d = await getCoordinationDetail(detailId);
-      setDetail(d);
-      toast.success("Application package draft saved — review missing documents before submission");
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              applications: (current.applications ?? []).some(
+                (application) => application.id === result.application.id,
+              )
+                ? (current.applications ?? []).map((application) =>
+                    application.id === result.application.id ? result.application : application,
+                  )
+                : [...(current.applications ?? []), result.application],
+            }
+          : current,
+      );
+      void getCoordinationDetail(detailId).then(setDetail).catch(() => {
+        // The successful build response is authoritative.
+      });
+      toast.success("Application package draft saved — review missing fields and documents");
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Application package build failed"));
     } finally {
@@ -1559,12 +1604,23 @@ export default function UciDashboard() {
     if (!packageApp) return;
     setApplicationReviewBusy(true);
     try {
-      await reviewCoordinationApplication(packageApp.id, {
+      const result = await reviewCoordinationApplication(packageApp.id, {
         status,
         notes: applicationReviewNotes.trim() || undefined,
       });
-      const d = await getCoordinationDetail(detailId!);
-      setDetail(d);
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              applications: (current.applications ?? []).map((application) =>
+                application.id === result.application.id ? result.application : application,
+              ),
+            }
+          : current,
+      );
+      void getCoordinationDetail(detailId!).then(setDetail).catch(() => {
+        // The successful review response is authoritative; refresh can retry independently.
+      });
       toast.success(status === "reviewed" ? "Application marked reviewed" : "Changes requested");
       if (status === "needs_changes") {
         setApplicationReviewNotes("");
@@ -1599,6 +1655,39 @@ export default function UciDashboard() {
       toast.error(formatUciUserError(e, "Application submission failed"));
     } finally {
       setApplicationSubmitBusy(false);
+    }
+  };
+
+  const handleStage2Completion = async () => {
+    if (!detailId || stage2CompletionInFlightRef.current) return;
+    stage2CompletionInFlightRef.current = true;
+    setStage2CompletionBusy(true);
+    try {
+      const result = await completeStage2EngineeringReview(detailId, {
+        confirm_human_review: true,
+        reason: "Human completed Stage 2 engineering review",
+      });
+      setDetail((current) =>
+        current ? { ...current, record: result.coordination } : current,
+      );
+      setToStage("3");
+      setToState(result.stage_3_completed ? "COMPLETED" : "IN_PROGRESS");
+      void getCoordinationDetail(detailId).then(setDetail).catch(() => {
+        // Completion persisted; background refresh failure is non-fatal.
+      });
+      void refreshCoordination().catch(() => {
+        // The mutation response already updated the active record.
+      });
+      toast.success(
+        result.stage_3_completed
+          ? "Stage 2 completed — the reviewed Stage 3 package remains locked; no Stage 4 action ran"
+          : "Stage 2 completed — Stage 3 application preparation is now active",
+      );
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to complete Stage 2 engineering review"));
+    } finally {
+      stage2CompletionInFlightRef.current = false;
+      setStage2CompletionBusy(false);
     }
   };
 
@@ -1940,6 +2029,12 @@ export default function UciDashboard() {
   }, [providers, initPick, providerSetup?.utility_types_in_catalog, providerSetup]);
 
   const detailRecord = detail?.record;
+  const detailHydrationErrors = detail?.hydration?.errors ?? {};
+  const applicationsHydrationError = detailHydrationErrors.applications?.message ?? null;
+  const communicationsHydrationError = detailHydrationErrors.communications?.message ?? null;
+  const transitionsHydrationError = detailHydrationErrors.transitions?.message ?? null;
+  const costsHydrationError =
+    detailHydrationErrors.costs?.message ?? detailHydrationErrors.equipment?.message ?? null;
   const detailProvider = detailRecord ? getEmbeddedProvider(detailRecord) : null;
   const isPepcoCoordination =
     String(detailProvider?.slug ?? "").toLowerCase() === "pepco";
@@ -2841,6 +2936,21 @@ export default function UciDashboard() {
   }, [coordinationParam, detailId]);
 
   useEffect(() => {
+    if (!detailId || detail?.record.id === detailId) return;
+    const persistedRecord = records.find((record) => record.id === detailId);
+    if (!persistedRecord) return;
+    setDetail({
+      record: persistedRecord,
+      transitions: [],
+      applications: [],
+      costs: [],
+      equipment: [],
+      milestones: [],
+      communications_recent: [],
+    });
+  }, [records, detailId, detail?.record.id]);
+
+  useEffect(() => {
     if (isUciDrawerTab(tabParam)) {
       setDrawerTab(tabParam);
     }
@@ -3398,12 +3508,22 @@ export default function UciDashboard() {
             />
           ) : null}
 
-          {detailLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-foreground" />
-            </div>
-          ) : detail && detailRecord ? (
+          {detail && detailRecord ? (
             <div className="mt-6 space-y-6 pb-10">
+              {detailLoading ? (
+                <AlertBanner
+                  tone="info"
+                  title="Loading persisted detail"
+                  detail="Available record data is shown while child sections hydrate."
+                />
+              ) : null}
+              {detailLoadError ? (
+                <AlertBanner
+                  tone="warn"
+                  title="Some record detail could not be refreshed"
+                  detail={detailLoadError}
+                />
+              ) : null}
               <div>
                 <p className={cn("mb-1.5 text-xs font-semibold uppercase tracking-wide", uciMutedClass)}>
                   Coordination status
@@ -3795,6 +3915,13 @@ export default function UciDashboard() {
                 </TabsContent>
 
                 <TabsContent value="communications" className="mt-4 space-y-4">
+                  {communicationsHydrationError ? (
+                    <AlertBanner
+                      tone="warn"
+                      title="Communications unavailable"
+                      detail={communicationsHydrationError}
+                    />
+                  ) : null}
                   <Card className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
                       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -3879,12 +4006,21 @@ export default function UciDashboard() {
                 </TabsContent>
 
                 <TabsContent value="load-profile" className="mt-4 space-y-4">
+                  {applicationsHydrationError ? (
+                    <AlertBanner
+                      tone="warn"
+                      title="Load Profile unavailable"
+                      detail={applicationsHydrationError}
+                    />
+                  ) : null}
                   <LoadProfileWorkspace
                     coordinationId={detailId ?? ""}
                     applications={(detail.applications ?? []) as CoordinationApplication[]}
                     utilityType={detailRecord.utility_type}
                     selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
                     selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
+                    providerName={detailProvider?.name ?? null}
+                    providerSlug={detailProvider?.slug ?? null}
                     formatWhen={formatWhen}
                     mutedClass={uciMutedClass}
                     toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
@@ -3896,6 +4032,7 @@ export default function UciDashboard() {
                     manualUploadProgress={manualUploadProgress}
                     importFindingsBusy={importFindingsBusy}
                     packageStatus={loadProfilePackageContext.packageStatus}
+                    stage2Completed={detailRecord.current_stage >= 3}
                     hasProjectAddress={loadProfilePackageContext.hasProjectAddress}
                     packageDocumentsComplete={loadProfilePackageContext.packageDocumentsComplete}
                     onAnalyze={() => void handleLoadProfileAnalyze()}
@@ -3915,6 +4052,13 @@ export default function UciDashboard() {
                 </TabsContent>
 
                 <TabsContent value="application-prep" className="mt-4 space-y-4">
+                  {applicationsHydrationError ? (
+                    <AlertBanner
+                      tone="warn"
+                      title="Application Package unavailable"
+                      detail={applicationsHydrationError}
+                    />
+                  ) : null}
                   <ApplicationPrepSection
                     coordinationId={detailId ?? ""}
                     selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
@@ -3927,6 +4071,9 @@ export default function UciDashboard() {
                     prepBusy={applicationPrepBusy}
                     reviewBusy={applicationReviewBusy}
                     submitBusy={applicationSubmitBusy}
+                    stage2CompletionBusy={stage2CompletionBusy}
+                    currentStage={detailRecord.current_stage}
+                    currentStageState={detailRecord.current_stage_state}
                     reviewNotes={applicationReviewNotes}
                     onReviewNotesChange={setApplicationReviewNotes}
                     onBuild={(externalApplicationId) =>
@@ -3934,6 +4081,21 @@ export default function UciDashboard() {
                     }
                     onReview={(status) => void handleApplicationReview(status)}
                     onSubmit={() => void handleApplicationSubmit()}
+                    onCompleteStage2={() => void handleStage2Completion()}
+                    onApplicationMutation={(updatedApplication) => {
+                      setDetail((current) =>
+                        current
+                          ? {
+                              ...current,
+                              applications: (current.applications ?? []).map((application) =>
+                                application.id === updatedApplication.id
+                                  ? updatedApplication
+                                  : application,
+                              ),
+                            }
+                          : current,
+                      );
+                    }}
                     onRefreshDetail={async () => {
                       if (!detailId) return;
                       const d = await getCoordinationDetail(detailId);
@@ -3943,6 +4105,13 @@ export default function UciDashboard() {
                 </TabsContent>
 
                 <TabsContent value="lifecycle" className="mt-4 space-y-4">
+                  {transitionsHydrationError ? (
+                    <AlertBanner
+                      tone="warn"
+                      title="Lifecycle history unavailable"
+                      detail={transitionsHydrationError}
+                    />
+                  ) : null}
                   <LifecycleSection
                     transitions={detail.transitions ?? []}
                     lifecycleProposals={lifecycleProposalsPayload}
@@ -3980,6 +4149,13 @@ export default function UciDashboard() {
                 </TabsContent>
 
                 <TabsContent value="costs" className="mt-4 space-y-4">
+                  {costsHydrationError ? (
+                    <AlertBanner
+                      tone="warn"
+                      title="Costs or equipment unavailable"
+                      detail={costsHydrationError}
+                    />
+                  ) : null}
                   <CostsEquipmentWorkflowPanel
                     costs={(detail.costs ?? []) as import("@/types/uci").CoordinationCost[]}
                     equipment={(detail.equipment ?? []) as import("@/types/uci").CoordinationEquipment[]}
@@ -4016,9 +4192,19 @@ export default function UciDashboard() {
                 </TabsContent>
               </Tabs>
             </div>
+          ) : detailLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-foreground" />
+            </div>
+          ) : detailLoadError ? (
+            <AlertBanner
+              tone="warn"
+              title="Coordination record is available"
+              detail={detailLoadError}
+            />
           ) : (
             <p className="mt-6 text-sm font-medium text-foreground">
-              No detail loaded.
+              Coordination detail does not exist.
             </p>
           )}
         </SheetContent>
@@ -4509,7 +4695,7 @@ function PepcoSystemDataSection({
 /**
  * D3 application preparation — human-confirmed document mapping and package review.
  */
-function ApplicationPrepSection({
+export function ApplicationPrepSection({
   coordinationId,
   selectedPepcoApplicationId,
   selectedPepcoApplicationTitle,
@@ -4521,12 +4707,19 @@ function ApplicationPrepSection({
   prepBusy,
   reviewBusy,
   submitBusy,
+  stage2CompletionBusy,
+  currentStage,
+  currentStageState,
   reviewNotes,
   onReviewNotesChange,
   onBuild,
   onReview,
   onSubmit,
+  onCompleteStage2,
+  onApplicationMutation,
   onRefreshDetail,
+  initialEditingDocumentSlot = null,
+  initialDocumentCandidates = null,
 }: {
   coordinationId: string;
   selectedPepcoApplicationId: string | null;
@@ -4539,18 +4732,35 @@ function ApplicationPrepSection({
   prepBusy: boolean;
   reviewBusy: boolean;
   submitBusy: boolean;
+  stage2CompletionBusy: boolean;
+  currentStage: number;
+  currentStageState: LifecycleState;
   reviewNotes: string;
   onReviewNotesChange: (value: string) => void;
   onBuild: (externalApplicationId?: string | null) => void;
   onReview: (status: "reviewed" | "needs_changes") => void;
   onSubmit: () => void;
+  onCompleteStage2: () => void;
+  onApplicationMutation: (application: CoordinationApplication) => void;
   onRefreshDetail: () => Promise<void>;
+  initialEditingDocumentSlot?: string | null;
+  initialDocumentCandidates?: UciPackageDocumentCandidatesResponse | null;
 }) {
   const loadProfileDraft = getLoadProfileDraftApplication(applications);
   const packageApp = getApplicationPackageDraftApplication(applications);
   const packageMeta = parseApplicationPackageMetadata(packageApp);
   const packageDocs = parsePackageDocuments(packageApp?.package_documents);
-  const tone = applicationPackageStatusTone(packageMeta?.package_status);
+  const packageReview = summarizePackageReview(
+    packageMeta,
+    packageDocs,
+    packageApp?.draft_status,
+  );
+  const canonicalPackageReview = parseCanonicalPackageReviewSummary(
+    packageApp?.package_review_summary,
+  );
+  const canonicalReviewItems = new Map(
+    canonicalPackageReview?.items.map((item) => [item.id, item]) ?? [],
+  );
   const submitReady = canSubmitApplication(packageApp?.draft_status);
   const providerSlug = String(
     packageApp?.provider_slug || loadProfileDraft?.provider_slug || "",
@@ -4558,17 +4768,88 @@ function ApplicationPrepSection({
   const isPepco = providerSlug === "pepco";
   const isDominionSynthetic =
     providerSlug === "dominion" && packageMeta?.checklist_mode === "synthetic_test";
+  const showLegacyDocumentMappingUi = false;
+  const isReviewed = packageApp?.draft_status === "reviewed";
+  const submissionMetadata =
+    packageApp?.agent_draft_metadata?.submission &&
+    typeof packageApp.agent_draft_metadata.submission === "object" &&
+    !Array.isArray(packageApp.agent_draft_metadata.submission)
+      ? (packageApp.agent_draft_metadata.submission as Record<string, unknown>)
+      : null;
+  const validationMetadata =
+    submissionMetadata?.validation &&
+    typeof submissionMetadata.validation === "object" &&
+    !Array.isArray(submissionMetadata.validation)
+      ? (submissionMetadata.validation as Record<string, unknown>)
+      : null;
+  const validationOnlyPassed =
+    submissionMetadata?.validation_only === true && validationMetadata?.ok === true;
+  const packageValidationStatus = getPackageValidationStatus(
+    packageMeta,
+    validationMetadata,
+  );
+  const packageBuiltAt = packageMeta?.built_at || packageApp?.created_at;
 
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidatesScopeError, setCandidatesScopeError] = useState<string | null>(null);
   const [candidatesPayload, setCandidatesPayload] =
-    useState<UciPackageDocumentCandidatesResponse | null>(null);
+    useState<UciPackageDocumentCandidatesResponse | null>(initialDocumentCandidates);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
+  const [reviewItemBusy, setReviewItemBusy] = useState<string | null>(null);
+  const [editingDocumentSlot, setEditingDocumentSlot] = useState<string | null>(
+    initialEditingDocumentSlot,
+  );
+  const [signatureBusyAction, setSignatureBusyAction] = useState<string | null>(null);
+  const [signatureStatusOverrides, setSignatureStatusOverrides] = useState<
+    Record<
+      string,
+      {
+        status: "unsigned" | "signed_manual_verified";
+        note?: string | null;
+        verifiedAt?: string | null;
+      }
+    >
+  >({});
   const [signatureReviewNote, setSignatureReviewNote] = useState("");
   const [selectedCandidateBySlot, setSelectedCandidateBySlot] = useState<
     Record<string, string>
   >({});
+  const effectiveReviewFields = packageReview.fields.map((field) => ({
+    ...field,
+    reviewStatus:
+      canonicalReviewItems.get(`field:${field.key}`)?.status ?? field.reviewStatus,
+  }));
+  const effectiveReviewDocuments = packageReview.documents.map((document) => ({
+    ...document,
+    ...(signatureStatusOverrides[document.key]
+      ? {
+          signature_status: signatureStatusOverrides[document.key].status,
+          signature_review_note: signatureStatusOverrides[document.key].note,
+          signature_verified_at: signatureStatusOverrides[document.key].verifiedAt,
+        }
+      : {}),
+    reviewStatus: canonicalReviewItems.get(`document:${document.key}`)?.status ??
+      (signatureStatusOverrides[document.key]
+        ? document.reviewStatus === "confirmed"
+          ? "not_reviewed"
+          : document.reviewStatus === "needs_correction" &&
+              signatureStatusOverrides[document.key].status === "signed_manual_verified"
+            ? "ready_for_re_review"
+            : document.reviewStatus
+        : document.reviewStatus),
+  }));
+  const effectiveReviewItems = [...effectiveReviewFields, ...effectiveReviewDocuments];
+  const effectiveAllConfirmed = canonicalPackageReview?.ready_for_final_review === true;
+  const effectiveReviewStatus =
+    canonicalPackageReview?.status ??
+    (isReviewed
+      ? "reviewed"
+      : effectiveReviewItems.some((item) => item.reviewStatus === "needs_correction")
+        ? "needs_changes"
+        : packageMeta?.package_status === "ready_for_review"
+          ? "ready_for_review"
+          : "draft");
 
   useEffect(() => {
     setSelectedCandidateBySlot({});
@@ -4622,10 +4903,6 @@ function ApplicationPrepSection({
     }
   }, [coordinationId, packageApp?.id, selectedPepcoApplicationId, isPepco]);
 
-  useEffect(() => {
-    void loadCandidates();
-  }, [loadCandidates, packageApp?.package_documents, packageApp?.id]);
-
   const handleConfirmMapping = async (slotKey: string) => {
     if (!packageApp) return;
     const candidateId = selectedCandidateBySlot[slotKey];
@@ -4635,19 +4912,23 @@ function ApplicationPrepSection({
     }
     setMappingBusySlot(slotKey);
     try {
-      await confirmApplicationPackageDocumentMapping(packageApp.id, {
+      const result = await confirmApplicationPackageDocumentMapping(packageApp.id, {
         slot_key: slotKey,
         candidate_id: candidateId,
         external_application_id: selectedPepcoApplicationId || undefined,
       });
+      if (result.no_change) {
+        toast.info("Already mapped — no change was saved.");
+        return;
+      }
+      onApplicationMutation(result.application as CoordinationApplication);
       setSelectedCandidateBySlot((prev) => {
         const next = { ...prev };
         delete next[slotKey];
         return next;
       });
-      await onRefreshDetail();
-      await loadCandidates();
-      toast.success("Document mapping confirmed — slot marked attached after human review");
+      setEditingDocumentSlot(null);
+      toast.success("Document changed — reconfirm this requirement for package review.");
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Failed to confirm document mapping"));
     } finally {
@@ -4655,13 +4936,26 @@ function ApplicationPrepSection({
     }
   };
 
+  const handleToggleDocumentEditor = (slotKey: string) => {
+    const opening = editingDocumentSlot !== slotKey;
+    setEditingDocumentSlot(opening ? slotKey : null);
+    if (opening && !candidatesPayload && !candidatesLoading) {
+      void loadCandidates();
+    }
+  };
+
   const handleRemoveMapping = async (slotKey: string) => {
     if (!packageApp) return;
     setMappingBusySlot(slotKey);
     try {
-      await removeApplicationPackageDocumentMapping(packageApp.id, { slot_key: slotKey });
-      await onRefreshDetail();
-      await loadCandidates();
+      const result = await removeApplicationPackageDocumentMapping(packageApp.id, {
+        slot_key: slotKey,
+      });
+      onApplicationMutation(result.application as CoordinationApplication);
+      void onRefreshDetail().catch(() => {
+        // Mapping response already contains the persisted package state.
+      });
+      void loadCandidates();
       toast.success("Document mapping removed");
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Failed to remove document mapping"));
@@ -4670,13 +4964,68 @@ function ApplicationPrepSection({
     }
   };
 
+  const handleReviewItem = async (
+    kind: "field" | "document",
+    key: string,
+    status: "confirmed" | "needs_correction",
+  ) => {
+    if (!packageApp) return;
+    setReviewItemBusy(`${kind}:${key}`);
+    try {
+      const result = await updateApplicationPackageReviewItem(packageApp.id, {
+        kind,
+        item_key: key,
+        status,
+        note: status === "needs_correction" ? reviewNotes.trim() || undefined : undefined,
+      });
+      onApplicationMutation(result.application);
+      void onRefreshDetail().catch(() => {
+        // Mutation response already drove the row state; a later refresh can retry independently.
+      });
+      toast.success(
+        status === "confirmed" ? "Package mapping confirmed" : "Mapping needs correction",
+      );
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Package review item update failed"));
+    } finally {
+      setReviewItemBusy(null);
+    }
+  };
+
+  const handleConfirmAllVerifiedFields = async () => {
+    if (!packageApp) return;
+    if (
+      !window.confirm(
+        "Confirm that every eligible Agent 2 verified field is appropriate for this application package?",
+      )
+    ) {
+      return;
+    }
+    setReviewItemBusy("all-fields");
+    try {
+      const result = await confirmAllApplicationPackageVerifiedFields(packageApp.id);
+      onApplicationMutation(result.application);
+      void onRefreshDetail().catch(() => {
+        // Keep the successful mutation state visible if the background refresh is unavailable.
+      });
+      toast.success(`${result.confirmed_count} verified package fields confirmed`);
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Bulk field confirmation failed"));
+    } finally {
+      setReviewItemBusy(null);
+    }
+  };
+
   const handleApproveSyntheticChecklist = async () => {
     if (!packageApp || !isDominionSynthetic) return;
     try {
-      await approveSyntheticApplicationChecklist(packageApp.id, {
+      const result = await approveSyntheticApplicationChecklist(packageApp.id, {
         note: reviewNotes.trim() || "Approved for Highland Springs synthetic Stage 3 testing only",
       });
-      await onRefreshDetail();
+      onApplicationMutation(result.application as CoordinationApplication);
+      void onRefreshDetail().catch(() => {
+        // Checklist approval response is authoritative.
+      });
       toast.success("Synthetic test checklist approved");
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Synthetic checklist approval failed"));
@@ -4688,22 +5037,46 @@ function ApplicationPrepSection({
     signatureStatus: "unsigned" | "signed_manual_verified",
   ) => {
     if (!packageApp || !isDominionSynthetic) return;
-    setMappingBusySlot(documentKey);
+    const actionKey = `${documentKey}:${signatureStatus}`;
+    setSignatureBusyAction(actionKey);
     try {
-      await setSyntheticApplicationSignatureStatus(packageApp.id, {
+      const result = await setSyntheticApplicationSignatureStatus(packageApp.id, {
         document_key: documentKey,
         signature_status: signatureStatus,
         review_note:
           signatureStatus === "signed_manual_verified"
             ? signatureReviewNote.trim()
-            : signatureReviewNote.trim() || undefined,
+            : undefined,
       });
-      await onRefreshDetail();
+      const updatedDocument = parsePackageDocuments(
+        result.application.package_documents,
+      ).find((document) => document.key === documentKey);
+      const returnedStatus =
+        updatedDocument?.signature_status ?? result.signature_status;
+      const persistedStatus =
+        returnedStatus === "signed_manual_verified" || returnedStatus === "unsigned"
+          ? returnedStatus
+          : signatureStatus;
+      onApplicationMutation(result.application);
+      setSignatureStatusOverrides((current) => ({
+        ...current,
+        [documentKey]: {
+          status: persistedStatus,
+          note:
+            updatedDocument?.signature_review_note ??
+            (signatureReviewNote.trim() || null),
+          verifiedAt: updatedDocument?.signature_verified_at ?? null,
+        },
+      }));
+      setSignatureReviewNote("");
+      void onRefreshDetail().catch(() => {
+        toast.warning("Signature saved; package refresh can be retried independently.");
+      });
       toast.success(`Synthetic signature status: ${signatureStatus}`);
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Synthetic signature update failed"));
     } finally {
-      setMappingBusySlot(null);
+      setSignatureBusyAction(null);
     }
   };
 
@@ -4745,13 +5118,12 @@ function ApplicationPrepSection({
   );
 
   const statusBadgeVariant =
-    tone === "blocked"
+    effectiveReviewStatus === "needs_changes"
       ? "destructive"
-      : tone === "warning"
-        ? "destructive"
-        : tone === "info"
-          ? "secondary"
-          : "outline";
+      : effectiveReviewStatus === "ready_for_review" ||
+          effectiveReviewStatus === "reviewed"
+        ? "secondary"
+        : "outline";
 
   return (
     <Card className={uciDrawerChildCardClass}>
@@ -4770,8 +5142,12 @@ function ApplicationPrepSection({
             size="sm"
             className={toolbarOutlineButtonClass}
             disabled={
-              prepBusy || !loadProfileDraft || (isPepco && !selectedPepcoApplicationId)
+              prepBusy ||
+              isReviewed ||
+              !loadProfileDraft ||
+              (isPepco && !selectedPepcoApplicationId)
             }
+            title={isReviewed ? "Request changes before rebuilding the locked package" : undefined}
             onClick={() => onBuild(selectedPepcoApplicationId)}
           >
             {prepBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -4793,13 +5169,36 @@ function ApplicationPrepSection({
           <>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={statusBadgeVariant}>
-                {formatApplicationPackageStatus(packageMeta?.package_status)}
+                {formatPackageReviewStatus(effectiveReviewStatus)}
               </Badge>
-              <Badge variant="outline">{formatDraftStatus(packageApp.draft_status)}</Badge>
-              {packageMeta?.requires_human_review ? (
-                <Badge variant="mutedLight">Human review required</Badge>
-              ) : null}
+              <Badge variant="outline">
+                Automated validation: {formatPackageValidationStatus(packageValidationStatus)}
+              </Badge>
+              {validationOnlyPassed ? <Badge variant="outline">Dry run only</Badge> : null}
             </div>
+
+            {currentStage === 2 ? (
+              <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Stage 2 engineering review is {formatLifecycleState(currentStageState).toLowerCase()}.
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  A human must complete Stage 2. This action enters Stage 3; if this package is
+                  already reviewed and ready, Stage 3 is completed and becomes ready for Stage 4.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={stage2CompletionBusy}
+                  onClick={onCompleteStage2}
+                >
+                  {stage2CompletionBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Complete Stage 2 review
+                </Button>
+              </div>
+            ) : null}
 
             {isDominionSynthetic ? (
               <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
@@ -4825,6 +5224,8 @@ function ApplicationPrepSection({
                     type="button"
                     size="sm"
                     variant="outline"
+                    className="hidden"
+                    aria-hidden="true"
                     onClick={() => void handleSyntheticExport()}
                   >
                     Export read-only JSON
@@ -4840,7 +5241,8 @@ function ApplicationPrepSection({
               </p>
             ) : null}
 
-            <div className="space-y-3 rounded-md border border-border/60 p-3">
+            {showLegacyDocumentMappingUi ? (
+              <div id="package-document-mapping">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                   Document mapping (human confirmation required)
@@ -5037,9 +5439,11 @@ function ApplicationPrepSection({
                   </div>
                 );
               })}
-            </div>
+              </div>
+            ) : null}
 
-            <div>
+            {showLegacyDocumentMappingUi ? (
+              <div>
               <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                 Package documents ({packageDocs.length})
               </p>
@@ -5059,10 +5463,11 @@ function ApplicationPrepSection({
                   </li>
                 ))}
               </ul>
-            </div>
+              </div>
+            ) : null}
 
             {(packageMeta?.missing_documents?.length ?? 0) > 0 ? (
-              <div>
+              <div className="hidden" aria-hidden="true">
                 <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                   Missing documents
                 </p>
@@ -5080,7 +5485,7 @@ function ApplicationPrepSection({
               </p>
             ) : null}
 
-            <div className="space-y-1 rounded-md border border-border/50 bg-muted/10 p-3">
+            <div className="hidden" aria-hidden="true">
               <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                 Project address
               </p>
@@ -5113,7 +5518,7 @@ function ApplicationPrepSection({
             </div>
 
             {(packageMeta?.missing_fields?.length ?? 0) > 0 ? (
-              <div>
+              <div className="hidden" aria-hidden="true">
                 <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
                   Missing fields
                 </p>
@@ -5129,13 +5534,569 @@ function ApplicationPrepSection({
               </div>
             ) : null}
 
-            <p className={cn("text-xs", mutedClass)}>
+            <p className="hidden" aria-hidden="true">
               Load profile status: {packageMeta?.load_profile_analysis_status || "unknown"}
             </p>
 
+            <div className="space-y-3 rounded-md border border-border/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Agent 3 package mapping review
+                  </p>
+                  <p className={cn("text-xs", mutedClass)}>
+                    {formatPackageReviewStatus(effectiveReviewStatus)} ·{" "}
+                    {canonicalPackageReview?.confirmed_count ??
+                      effectiveReviewItems.filter((item) => item.reviewStatus === "confirmed")
+                        .length}{" "}
+                    of {canonicalPackageReview?.total_count ?? effectiveReviewItems.length} confirmed
+                  </p>
+                </div>
+                {!isReviewed ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={reviewItemBusy === "all-fields"}
+                    onClick={() => void handleConfirmAllVerifiedFields()}
+                  >
+                    Confirm all verified fields
+                  </Button>
+                ) : null}
+              </div>
+
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Application fields
+              </p>
+              <div className="overflow-x-auto rounded-md border border-border/50">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Requirement</TableHead>
+                      <TableHead>Mapped value</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Mapping status</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {effectiveReviewFields.map((field) => (
+                      <TableRow key={field.key} id={`package-field-${field.key}`}>
+                        <TableCell className="font-medium">{field.label}</TableCell>
+                        <TableCell className="max-w-xs text-xs">
+                          {formatPackageMappedValue(field.value)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {formatPackageFieldProvenance(field)}
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-[10px] text-muted-foreground">
+                              View technical provenance
+                            </summary>
+                            <code className="break-all text-[10px] text-muted-foreground">
+                              {field.source || "unknown"}
+                            </code>
+                          </details>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "gap-1",
+                              field.reviewStatus === "confirmed" &&
+                                "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                              field.reviewStatus === "needs_correction" &&
+                                "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+                              field.reviewStatus === "ready_for_re_review" &&
+                                "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+                              field.reviewStatus === "not_reviewed" &&
+                                "bg-muted/40 text-muted-foreground",
+                            )}
+                          >
+                            {field.reviewStatus === "confirmed" ? (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            ) : null}
+                            {formatPackageReviewItemStatus(field.reviewStatus)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {isReviewed ? (
+                            <span className={cn("text-xs", mutedClass)}>Snapshot locked</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {field.reviewStatus !== "confirmed" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={
+                                    field.status !== "present" ||
+                                    reviewItemBusy === `field:${field.key}`
+                                  }
+                                  onClick={() =>
+                                    void handleReviewItem("field", field.key, "confirmed")
+                                  }
+                                >
+                                  {reviewItemBusy === `field:${field.key}` ? (
+                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                  ) : null}
+                                  Confirm for package
+                                </Button>
+                              ) : null}
+                              <Button type="button" size="sm" variant="outline" asChild>
+                                <a
+                                  href={
+                                    field.source?.startsWith("load_summary.verified_values")
+                                      ? `/uci/records/${encodeURIComponent(coordinationId)}?tab=load-profile&field=${encodeURIComponent(field.key)}`
+                                      : field.source?.startsWith("project.")
+                                        ? `/projects?project=${encodeURIComponent(packageApp.project_id)}&field=${encodeURIComponent(field.source.slice("project.".length))}`
+                                        : `#package-field-${encodeURIComponent(field.key)}`
+                                  }
+                                >
+                                  {field.source?.startsWith("load_summary.verified_values")
+                                    ? "Open verified input"
+                                    : field.source?.startsWith("project.")
+                                      ? "Edit project field"
+                                      : "Edit mapping"}
+                                </a>
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={
+                                  !reviewNotes.trim() ||
+                                  reviewItemBusy === `field:${field.key}`
+                                }
+                                onClick={() =>
+                                  void handleReviewItem("field", field.key, "needs_correction")
+                                }
+                              >
+                                Flag for correction
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="space-y-2">
+                <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                  Required documents
+                </p>
+                {effectiveReviewDocuments.map((document) => {
+                  const candidates = slotCandidates(document.key);
+                  const suggested =
+                    candidatesPayload?.suggestions_by_slot[document.key] ?? [];
+                  const selection = selectedCandidateBySlot[document.key] ?? "";
+                  const selectedCandidate = candidates.find(
+                    (candidate) => candidate.candidate_id === selection,
+                  );
+                  const selectionAlreadyMapped =
+                    isPackageDocumentCandidateAlreadyMapped(document, selectedCandidate);
+                  const editing = editingDocumentSlot === document.key;
+                  const currentSignatureStatus = document.signature_status ?? "unknown";
+                  return (
+                  <div
+                    key={document.key}
+                    id={`package-document-${document.key}`}
+                    className="grid gap-2 rounded-md border border-border/40 bg-muted/10 p-3 text-xs md:grid-cols-[1.2fr_1fr_1fr_auto]"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {document.label || document.key}
+                      </p>
+                      <p className={mutedClass}>{document.file_name || "No document mapped"}</p>
+                    </div>
+                    <p className={mutedClass}>
+                      {formatPackageDocumentSource(document.source)}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "w-fit gap-1",
+                        document.reviewStatus === "confirmed" &&
+                          "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                        document.reviewStatus === "needs_correction" &&
+                          "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+                        document.reviewStatus === "ready_for_re_review" &&
+                          "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+                        document.reviewStatus === "not_reviewed" &&
+                          "bg-muted/40 text-muted-foreground",
+                      )}
+                    >
+                      {document.reviewStatus === "confirmed" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : null}
+                      {formatPackageReviewItemStatus(document.reviewStatus)}
+                    </Badge>
+                    {isReviewed ? (
+                      <span className={mutedClass}>Snapshot locked</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {document.reviewStatus !== "confirmed" ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={
+                              document.status !== "attached" ||
+                              (document.signature_required &&
+                                document.signature_status !== "signed_manual_verified") ||
+                              reviewItemBusy === `document:${document.key}`
+                            }
+                            onClick={() =>
+                              void handleReviewItem("document", document.key, "confirmed")
+                            }
+                          >
+                            {reviewItemBusy === `document:${document.key}` ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            Confirm document
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleDocumentEditor(document.key)}
+                        >
+                          Change
+                        </Button>
+                        {document.status === "attached" ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={mappingBusySlot === document.key}
+                            onClick={() => void handleRemoveMapping(document.key)}
+                          >
+                            {mappingBusySlot === document.key ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            Remove
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={
+                            !reviewNotes.trim() ||
+                            reviewItemBusy === `document:${document.key}`
+                          }
+                          onClick={() =>
+                            void handleReviewItem("document", document.key, "needs_correction")
+                          }
+                        >
+                          Flag for correction
+                        </Button>
+                      </div>
+                    )}
+                    {document.signature_required ? (
+                      <div className="space-y-2 rounded-md border border-amber-500/30 bg-background p-3 md:col-span-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-medium text-foreground">
+                            Signature:{" "}
+                            {currentSignatureStatus === "signed_manual_verified"
+                              ? "Signed — manually verified ✓"
+                              : currentSignatureStatus === "unsigned"
+                                ? "Unsigned"
+                                : "Unknown"}
+                          </p>
+                          {document.signature_verified_at ? (
+                            <span className={mutedClass}>
+                              Verified {formatWhen(document.signature_verified_at)}
+                            </span>
+                          ) : null}
+                        </div>
+                        {document.signature_review_note ? (
+                          <p className={mutedClass}>
+                            Verification note: {document.signature_review_note}
+                          </p>
+                        ) : null}
+                        {!isReviewed ? (
+                          <>
+                            {currentSignatureStatus !== "signed_manual_verified" ? (
+                              <Input
+                                value={signatureReviewNote}
+                                onChange={(event) =>
+                                  setSignatureReviewNote(event.target.value)
+                                }
+                                placeholder="Verification note required to verify signed"
+                                className="h-8 text-xs"
+                              />
+                            ) : null}
+                            <div className="flex flex-wrap gap-2">
+                              {currentSignatureStatus !== "signed_manual_verified" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={
+                                    !signatureReviewNote.trim() ||
+                                    signatureBusyAction ===
+                                      `${document.key}:signed_manual_verified`
+                                  }
+                                  onClick={() =>
+                                    void handleSignatureStatus(
+                                      document.key,
+                                      "signed_manual_verified",
+                                    )
+                                  }
+                                >
+                                  {signatureBusyAction ===
+                                  `${document.key}:signed_manual_verified` ? (
+                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                  ) : null}
+                                  Verify signed
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={
+                                    signatureBusyAction === `${document.key}:unsigned`
+                                  }
+                                  onClick={() =>
+                                    void handleSignatureStatus(document.key, "unsigned")
+                                  }
+                                >
+                                  {signatureBusyAction === `${document.key}:unsigned` ? (
+                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                  ) : null}
+                                  Mark unsigned
+                                </Button>
+                              )}
+                            </div>
+                          </>
+                        ) : null}
+                        <p className={mutedClass}>
+                          Signature verification is separate from document confirmation.
+                        </p>
+                      </div>
+                    ) : null}
+                    {editing && !isReviewed ? (
+                      <div className="space-y-2 rounded-md border border-border/50 bg-background p-3 md:col-span-4">
+                        {suggested.length > 0 ? (
+                          <p className={mutedClass}>
+                            Suggested only:{" "}
+                            {suggested
+                              .map(
+                                (candidate) =>
+                                  `${candidate.file_name} (${formatSuggestionConfidence(
+                                    candidate.confidence,
+                                  )})`,
+                              )
+                              .join("; ")}
+                          </p>
+                        ) : null}
+                        {candidatesScopeError || candidatesError ? (
+                          <p className="text-destructive">
+                            {candidatesScopeError || candidatesError}
+                          </p>
+                        ) : candidates.length > 0 ? (
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div className="min-w-[14rem] flex-1">
+                              <Label
+                                htmlFor={`review-doc-candidate-${document.key}`}
+                                className="text-xs"
+                              >
+                                Change mapped document
+                              </Label>
+                              <Select
+                                value={selection || undefined}
+                                onValueChange={(value) =>
+                                  setSelectedCandidateBySlot((current) => ({
+                                    ...current,
+                                    [document.key]: value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger
+                                  id={`review-doc-candidate-${document.key}`}
+                                  className="mt-1 h-8 text-xs"
+                                >
+                                  <SelectValue placeholder="Select a document" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {candidates.map((candidate) => (
+                                    <SelectItem
+                                      key={candidate.candidate_id}
+                                      value={candidate.candidate_id}
+                                    >
+                                      {candidate.file_name} (
+                                      {formatPackageDocumentSource(
+                                        candidate.source_type === "pepco_portal"
+                                          ? "pepco_portal"
+                                          : "project_documents",
+                                      )}
+                                      )
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                !selection ||
+                                selectionAlreadyMapped ||
+                                mappingBusySlot === document.key
+                              }
+                              onClick={() => void handleConfirmMapping(document.key)}
+                            >
+                              {mappingBusySlot === document.key ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              Apply mapping
+                            </Button>
+                            {selectionAlreadyMapped ? (
+                              <span className={cn("self-center text-xs", mutedClass)}>
+                                Already mapped · No change
+                              </span>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingDocumentSlot(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : candidatesLoading ? (
+                          <p className={mutedClass}>Loading document candidates…</p>
+                        ) : (
+                          <p className={mutedClass}>No document candidates available.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {effectiveReviewItems.some(
+              (item) =>
+                item.reviewStatus === "needs_correction" ||
+                item.reviewStatus === "ready_for_re_review",
+            ) || packageMeta?.package_review?.package_correction?.active ? (
+              <div
+                id="package-changes-required"
+                className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3"
+              >
+                <p className="text-sm font-semibold text-foreground">Package needs changes</p>
+                {packageMeta?.package_review?.package_correction?.note ? (
+                  <p className={cn("text-xs", mutedClass)}>
+                    Package note: {packageMeta.package_review.package_correction.note}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-[1.1fr_.8fr_1.4fr_auto] gap-2 border-b border-border/50 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <span>Requirement</span>
+                  <span>Issue</span>
+                  <span>Note</span>
+                  <span>Fix issue</span>
+                </div>
+                {effectiveReviewFields
+                  .filter(
+                    (field) =>
+                      field.reviewStatus === "needs_correction" ||
+                      field.reviewStatus === "ready_for_re_review",
+                  )
+                  .map((field) => (
+                    <div
+                      key={`change-field:${field.key}`}
+                      className="grid grid-cols-[1.1fr_.8fr_1.4fr_auto] items-center gap-2 text-xs"
+                    >
+                      <span>{field.label || field.key}</span>
+                      <span>{formatPackageReviewItemStatus(field.reviewStatus)}</span>
+                      <span>
+                        {packageMeta?.package_review?.items?.[`field:${field.key}`]?.note || "—"}
+                      </span>
+                      <Button type="button" size="sm" variant="outline" asChild>
+                        <a
+                          href={
+                            field.source?.startsWith("load_summary.verified_values")
+                              ? `/uci/records/${encodeURIComponent(coordinationId)}?tab=load-profile&field=${encodeURIComponent(field.key)}`
+                              : field.source?.startsWith("project.")
+                                ? `/projects?project=${encodeURIComponent(packageApp.project_id)}&field=${encodeURIComponent(field.source.slice("project.".length))}`
+                                : `#package-field-${encodeURIComponent(field.key)}`
+                          }
+                        >
+                          {field.source?.startsWith("load_summary.verified_values")
+                            ? "Open verified input"
+                            : field.source?.startsWith("project.")
+                              ? "Edit project field"
+                              : "Edit mapping"}
+                        </a>
+                      </Button>
+                    </div>
+                  ))}
+                {effectiveReviewDocuments
+                  .filter(
+                    (document) =>
+                      document.reviewStatus === "needs_correction" ||
+                      document.reviewStatus === "ready_for_re_review",
+                  )
+                  .map((document) => (
+                    <div
+                      key={`change-document:${document.key}`}
+                      className="grid grid-cols-[1.1fr_.8fr_1.4fr_auto] items-center gap-2 text-xs"
+                    >
+                      <span>{document.label || document.key}</span>
+                      <span>{formatPackageReviewItemStatus(document.reviewStatus)}</span>
+                      <span>
+                        {packageMeta?.package_review?.items?.[`document:${document.key}`]?.note ||
+                          "—"}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          handleToggleDocumentEditor(document.key);
+                          requestAnimationFrame(() =>
+                            globalThis.document
+                              .getElementById(`package-document-${document.key}`)
+                              ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                          );
+                        }}
+                      >
+                        Change document
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            ) : null}
+
+            {!isReviewed &&
+            canonicalPackageReview &&
+            !canonicalPackageReview.ready_for_final_review ? (
+              <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold text-foreground">Final review blockers</p>
+                {effectiveReviewItems
+                  .filter((item) => item.reviewStatus !== "confirmed")
+                  .map((item) => (
+                    <p key={`final-blocker:${item.key}`} className={cn("text-xs", mutedClass)}>
+                      {item.label || item.key} ·{" "}
+                      {formatPackageReviewItemStatus(item.reviewStatus)}
+                    </p>
+                  ))}
+                {canonicalPackageReview.active_correction_count > 0 &&
+                effectiveReviewItems.every((item) => item.reviewStatus === "confirmed") ? (
+                  <p className={cn("text-xs", mutedClass)}>
+                    Resolve the active package-level correction.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="space-y-2 rounded-md border border-border/60 p-3">
               <Label htmlFor="application-review-notes" className="text-xs">
-                Review notes (optional)
+                Correction reason (required for Reopen or Flag for correction)
               </Label>
               <Textarea
                 id="application-review-notes"
@@ -5146,34 +6107,34 @@ function ApplicationPrepSection({
                 placeholder="Document review comments for the team"
               />
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    reviewBusy ||
-                    packageApp.draft_status === "reviewed" ||
-                    packageMeta?.package_status !== "ready_for_review"
-                  }
-                  onClick={() => onReview("reviewed")}
-                >
-                  {reviewBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Mark reviewed
-                </Button>
+                {!isReviewed ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={reviewBusy || !effectiveAllConfirmed}
+                    onClick={() => onReview("reviewed")}
+                  >
+                    {reviewBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Mark package reviewed
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   className={toolbarOutlineButtonClass}
-                  disabled={reviewBusy}
+                  disabled={reviewBusy || !reviewNotes.trim()}
                   onClick={() => onReview("needs_changes")}
                 >
-                  Request changes
+                  {isReviewed ? "Reopen review" : "Request changes"}
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="default"
+                  className="hidden"
+                  aria-hidden="true"
                   disabled={!submitReady || submitBusy || packageApp.draft_status === "submitted"}
                   onClick={onSubmit}
                 >
@@ -5181,9 +6142,25 @@ function ApplicationPrepSection({
                   {isDominionSynthetic ? "Run validation-only dry run" : "Submit to utility"}
                 </Button>
               </div>
-              {!submitReady ? (
+              {isReviewed && packageMeta?.package_review ? (
+                <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
+                  Reviewed by{" "}
+                  {packageMeta.package_review.reviewer_display ||
+                    packageMeta.package_review.reviewed_by_user_id ||
+                    packageApp.reviewed_by ||
+                    "unknown reviewer"}
+                  {packageMeta.package_review.reviewed_at || packageApp.reviewed_at
+                    ? ` · ${formatWhen(
+                        packageMeta.package_review.reviewed_at || packageApp.reviewed_at,
+                      )}`
+                    : ""}
+                  . Exact field and document snapshot retained.
+                </p>
+              ) : !submitReady ? (
                 <p className={cn("text-xs", mutedClass)}>
-                  Portal submission stays disabled until draft status is reviewed.
+                  {effectiveAllConfirmed
+                    ? "All required mappings are confirmed. Mark the package reviewed to lock the snapshot."
+                    : "Confirm every required field and document before final review."}
                 </p>
               ) : packageApp.draft_status === "submitted" ? (
                 <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>
@@ -5198,8 +6175,31 @@ function ApplicationPrepSection({
               )}
             </div>
 
+            <div className="space-y-2 rounded-md border border-border/50 bg-muted/10 p-3">
+              <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
+                Automated validation and export
+              </p>
+              <p className="text-sm text-foreground">
+                {formatPackageValidationStatus(packageValidationStatus)}
+              </p>
+              <p className={cn("text-xs", mutedClass)}>
+                Automated checks support the operator review; they never mark the package reviewed.
+                Load profile status: {packageMeta?.load_profile_analysis_status || "unknown"}.
+              </p>
+              {isDominionSynthetic ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleSyntheticExport()}
+                >
+                  Export read-only JSON
+                </Button>
+              ) : null}
+            </div>
+
             <p className={cn("text-xs tabular-nums", mutedClass)}>
-              Package built {formatWhen(packageApp.updated_at)}
+              Package built {formatWhen(packageBuiltAt)}
               {packageApp.reviewed_at ? ` · Reviewed ${formatWhen(packageApp.reviewed_at)}` : ""}
             </p>
           </>

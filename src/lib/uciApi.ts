@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import type {
+  CoordinationApplication,
   LifecycleState,
   UciApplicationsListResponse,
   UciCloseoutPrepareResponse,
@@ -21,6 +22,7 @@ import type {
   UciPortalSyncRunsResponse,
   UciPortfolioViewResponse,
   UciPortalHarvestResponse,
+  UciOperationalSnapshotResponse,
   UciProjectCoordinationResponse,
   UciProviderSetupConfirmation,
   UciProviderSetupResponse,
@@ -337,6 +339,10 @@ const UCI_OPERATIONAL_READ_OPTIONS: UciAuthenticatedFetchOptions = {
   retryOnTransportFailure: false,
   timeoutMs: 10_000,
 };
+const UCI_REVIEW_MUTATION_OPTIONS: UciAuthenticatedFetchOptions = {
+  retryOnTransportFailure: false,
+  timeoutMs: 20_000,
+};
 
 function createUciRequestId(): string {
   return globalThis.crypto?.randomUUID?.() ??
@@ -534,6 +540,54 @@ export async function listUciProviders(
     "Failed to load providers",
     UCI_OPERATIONAL_READ_OPTIONS,
   );
+}
+
+export interface UciOperationalRequestTiming {
+  requestId: string | null;
+  startedAt: string;
+  ttfbMs: number;
+  backendDurationMs: number | null;
+  jsonParseMs: number;
+  requestTotalMs: number;
+}
+
+export async function getUciOperationalSnapshot(): Promise<{
+  snapshot: UciOperationalSnapshotResponse;
+  timing: UciOperationalRequestTiming;
+}> {
+  const now = () => globalThis.performance?.now?.() ?? Date.now();
+  const startedAt = new Date().toISOString();
+  const requestStarted = now();
+  const res = await uciAuthenticatedFetch(
+    "/api/uci/operations/snapshot",
+    {},
+    UCI_OPERATIONAL_READ_OPTIONS,
+  );
+  const headersReceived = now();
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw mapUciHttpError(
+      res.status,
+      err,
+      "Failed to load UCI operational snapshot",
+      res.headers.get(UCI_REQUEST_ID_HEADER),
+    );
+  }
+  const parseStarted = now();
+  const snapshot = (await res.json()) as UciOperationalSnapshotResponse;
+  const completed = now();
+  const rawBackendDuration = Number(res.headers.get("x-backend-duration-ms"));
+  return {
+    snapshot,
+    timing: {
+      requestId: res.headers.get(UCI_REQUEST_ID_HEADER),
+      startedAt,
+      ttfbMs: Math.round((headersReceived - requestStarted) * 10) / 10,
+      backendDurationMs: Number.isFinite(rawBackendDuration) ? rawBackendDuration : null,
+      jsonParseMs: Math.round((completed - parseStarted) * 10) / 10,
+      requestTotalMs: Math.round((completed - requestStarted) * 10) / 10,
+    },
+  };
 }
 
 export async function createUciProvider(
@@ -1044,11 +1098,13 @@ export async function confirmApplicationPackageDocumentMapping(
     external_application_id?: string;
   },
 ): Promise<{
-  application: unknown;
+  application: CoordinationApplication;
   package_status: string;
   missing_documents: string[];
   missing_fields: string[];
   package_documents: unknown[];
+  no_change?: boolean;
+  message?: string;
 }> {
   return uciFetchJson(
     `/api/uci/applications/${encodeURIComponent(applicationId)}/package-documents/confirm`,
@@ -1058,6 +1114,7 @@ export async function confirmApplicationPackageDocumentMapping(
       body: JSON.stringify(payload),
     },
     "Failed to confirm document mapping",
+    UCI_REVIEW_MUTATION_OPTIONS,
   );
 }
 
@@ -1079,6 +1136,7 @@ export async function removeApplicationPackageDocumentMapping(
       body: JSON.stringify(payload),
     },
     "Failed to remove document mapping",
+    UCI_REVIEW_MUTATION_OPTIONS,
   );
 }
 
@@ -1109,9 +1167,21 @@ export async function setSyntheticApplicationSignatureStatus(
     review_note?: string;
   },
 ): Promise<{
-  application: unknown;
+  application: CoordinationApplication;
   package_status: string;
-  signature_status: string;
+  package_documents: unknown[];
+  document_key: string;
+  signature_status: "unknown" | "unsigned" | "signed_manual_verified";
+  signature_verified_at: string | null;
+  timings?: {
+    auth_ms?: number;
+    application_fetch_ms?: number;
+    access_check_ms?: number;
+    readiness_recompute_ms?: number;
+    db_write_ms?: number;
+    before_response_ms?: number;
+    total_ms?: number;
+  };
 }> {
   return uciFetchJson(
     `/api/uci/applications/${encodeURIComponent(applicationId)}/synthetic-checklist/signature`,
@@ -1121,6 +1191,7 @@ export async function setSyntheticApplicationSignatureStatus(
       body: JSON.stringify(payload),
     },
     "Failed to update synthetic signature status",
+    UCI_REVIEW_MUTATION_OPTIONS,
   );
 }
 
@@ -1131,6 +1202,49 @@ export async function exportSyntheticApplicationChecklist(
     `/api/uci/applications/${encodeURIComponent(applicationId)}/synthetic-checklist/export`,
     {},
     "Failed to export synthetic checklist",
+  );
+}
+
+export async function updateApplicationPackageReviewItem(
+  applicationId: string,
+  payload: {
+    kind: "field" | "document";
+    item_key: string;
+    status: "confirmed" | "needs_correction";
+    note?: string;
+  },
+): Promise<{
+  application: CoordinationApplication;
+  package_review: Record<string, unknown>;
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/package-review/items`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update package review item",
+    UCI_REVIEW_MUTATION_OPTIONS,
+  );
+}
+
+export async function confirmAllApplicationPackageVerifiedFields(
+  applicationId: string,
+): Promise<{
+  application: CoordinationApplication;
+  package_review: Record<string, unknown>;
+  confirmed_count: number;
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/package-review/confirm-verified-fields`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    },
+    "Failed to confirm verified package fields",
+    UCI_REVIEW_MUTATION_OPTIONS,
   );
 }
 
@@ -1146,6 +1260,7 @@ export async function reviewCoordinationApplication(
       body: JSON.stringify(payload),
     },
     "Application review failed",
+    UCI_REVIEW_MUTATION_OPTIONS,
   );
 }
 
@@ -1207,6 +1322,21 @@ export async function transitionCoordination(
       body: JSON.stringify(payload),
     },
     "Failed to update stage",
+  );
+}
+
+export async function completeStage2EngineeringReview(
+  coordinationId: string,
+  payload: { reason: string; confirm_human_review: true },
+): Promise<import("@/types/uci").UciStage2CompletionResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/complete-stage-2`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to complete Stage 2 engineering review",
   );
 }
 

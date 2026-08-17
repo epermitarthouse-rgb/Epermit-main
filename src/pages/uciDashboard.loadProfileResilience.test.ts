@@ -10,6 +10,14 @@ const workspaceSource = readFileSync(
   join(__dirname, "..", "components", "uci", "LoadProfileWorkspace.tsx"),
   "utf8",
 );
+const reviewPanelSource = readFileSync(
+  join(__dirname, "..", "components", "uci", "ConnectedLoadReviewPanel.tsx"),
+  "utf8",
+);
+const workspaceLibSource = readFileSync(
+  join(__dirname, "..", "lib", "uciLoadProfileWorkspace.ts"),
+  "utf8",
+);
 
 function actionBlock(start: string, end: string): string {
   const startIndex = dashboardSource.indexOf(start);
@@ -135,6 +143,20 @@ describe("UCI Load Profile action resilience", () => {
       workspaceSource,
       /if \(!coordinationId \|\| !selectedPepcoApplicationId\) return/,
     );
+  });
+
+  it("keeps Review Queue copy provider-aware and manual uploads provider-neutral", () => {
+    assert.doesNotMatch(reviewPanelSource, /Select a PEPCO application to scope extraction/);
+    assert.match(reviewPanelSource, /getLoadProfileScopeCopy/);
+    assert.match(workspaceLibSource, /normalizedSlug === "pepco"/);
+    assert.match(workspaceLibSource, /Review \$\{normalizedName\} documents/);
+    assert.match(
+      workspaceLibSource,
+      /Review project and manual-upload documents\. A portal application is not required\./,
+    );
+    assert.match(workspaceSource, /No portal\s+application is required\./);
+    assert.match(dashboardSource, /providerName=\{detailProvider\?\.name \?\? null\}/);
+    assert.match(dashboardSource, /providerSlug=\{detailProvider\?\.slug \?\? null\}/);
   });
 
   it("uses the document-scoped endpoint with distinct single and batch results", () => {

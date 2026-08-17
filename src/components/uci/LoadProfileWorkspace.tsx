@@ -84,6 +84,8 @@ export function LoadProfileWorkspace({
   utilityType,
   selectedPepcoApplicationId,
   selectedPepcoApplicationTitle,
+  providerName,
+  providerSlug,
   formatWhen,
   mutedClass,
   toolbarOutlineButtonClass,
@@ -95,6 +97,7 @@ export function LoadProfileWorkspace({
   manualUploadProgress,
   importFindingsBusy,
   packageStatus,
+  stage2Completed,
   hasProjectAddress,
   packageDocumentsComplete,
   onAnalyze,
@@ -110,6 +113,8 @@ export function LoadProfileWorkspace({
   utilityType: string | null | undefined;
   selectedPepcoApplicationId: string | null;
   selectedPepcoApplicationTitle?: string | null;
+  providerName?: string | null;
+  providerSlug?: string | null;
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
   toolbarOutlineButtonClass: string;
@@ -121,6 +126,7 @@ export function LoadProfileWorkspace({
   manualUploadProgress: Agent2ManualUploadProgress | null;
   importFindingsBusy: boolean;
   packageStatus?: string | null;
+  stage2Completed?: boolean;
   hasProjectAddress?: boolean;
   packageDocumentsComplete?: boolean;
   onAnalyze: () => void;
@@ -204,8 +210,9 @@ export function LoadProfileWorkspace({
         externalApplicationId: selectedPepcoApplicationId,
         packageStatus,
         packageConnectedLoadSatisfied: undefined,
+        stage2Completed,
       }),
-    [summary, selectedPepcoApplicationId, packageStatus],
+    [summary, selectedPepcoApplicationId, packageStatus, stage2Completed],
   );
 
   const sourceRows = useMemo(
@@ -248,9 +255,9 @@ export function LoadProfileWorkspace({
       buildPackageReadinessChecklist(summary, {
         hasProjectAddress,
         packageDocumentsComplete,
-        humanReviewComplete: false,
+        humanReviewComplete: stage2Completed,
       }),
-    [summary, hasProjectAddress, packageDocumentsComplete],
+    [summary, hasProjectAddress, packageDocumentsComplete, stage2Completed],
   );
   const utilityContract = getUtilityTypeContracts(utilityType ?? summary?.utility_type ?? "electric");
   const bridgeMeta = summary?.load_extraction?.document_findings_bridge;
@@ -405,7 +412,8 @@ export function LoadProfileWorkspace({
                 <p className="text-sm font-medium">Upload supporting document</p>
                 <p className={cn("mt-1 text-xs", mutedClass)}>
                   Upload to project documents, then classify and extract through the same findings
-                  and candidate pipeline. The source will be labeled Manual upload.
+                  and candidate pipeline. The source will be labeled Manual upload. No portal
+                  application is required.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Input
@@ -504,7 +512,7 @@ export function LoadProfileWorkspace({
               {sourceRows.length === 0 ? (
                 <EmptyState
                   title="No source documents"
-                  description="Run extraction after utility documents are scraped."
+                  description="Upload project documents or synchronize provider documents, then run extraction."
                   mutedClass={mutedClass}
                 />
               ) : null}
@@ -569,6 +577,8 @@ export function LoadProfileWorkspace({
                   key={`${summary.load_extraction?.last_extracted_at ?? ""}-${summary.load_extraction?.document_findings_bridge?.last_imported_at ?? ""}-${summary.candidate_values?.length ?? 0}`}
                   summary={summary}
                   selectedPepcoApplicationId={selectedPepcoApplicationId}
+                  providerName={providerName}
+                  providerSlug={providerSlug}
                   connectedLoadReady={overview.connectedLoadSatisfied}
                   candidateBusy={candidateBusy}
                   candidateResolutionState={candidateResolutionState}

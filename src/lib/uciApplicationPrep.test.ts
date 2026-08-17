@@ -5,11 +5,13 @@ import {
   canSubmitApplication,
   formatApplicationPackageStatus,
   formatDraftStatus,
+  formatPackageFieldProvenance,
   formatPackageDocumentSource,
   formatSuggestionConfidence,
   getApplicationPackageDraftApplication,
   parseApplicationPackageMetadata,
   parsePackageDocuments,
+  summarizePackageReview,
 } from "./uciApplicationPrep";
 
 describe("uciApplicationPrep helpers", () => {
@@ -62,6 +64,30 @@ describe("uciApplicationPrep helpers", () => {
     assert.equal(formatPackageDocumentSource("pepco_portal"), "PEPCO portal");
     assert.equal(formatPackageDocumentSource("project_documents"), "PermitPilot upload");
     assert.match(formatSuggestionConfidence("high"), /suggested only/i);
+    assert.equal(
+      formatPackageFieldProvenance({
+        key: "project_address",
+        label: "Project address",
+        status: "present",
+        source: "project.address",
+      }),
+      "Project record",
+    );
+    assert.equal(
+      formatPackageFieldProvenance({
+        key: "connected_load_kva",
+        label: "Connected load",
+        status: "present",
+        source: "load_summary.verified_values.connected_load_kva",
+        value: {
+          value: 410,
+          unit: "kVA",
+          source_document_name: "01_Synthetic_Load_Letter.pdf",
+          page_number: 1,
+        },
+      }),
+      "Agent 2 verified input · 01_Synthetic_Load_Letter.pdf · page 1",
+    );
   });
 
   it("parses confirmed PEPCO portal package document fields", () => {
@@ -98,5 +124,72 @@ describe("uciApplicationPrep helpers", () => {
     const meta = parseApplicationPackageMetadata(app);
     assert.equal(meta?.project_address?.formatted, "200 Sheridan Rd NW, Washington DC");
     assert.equal(meta?.project_address?.source, "portal_data_location");
+  });
+
+  it("derives ready for final review only from matching item snapshots", () => {
+    const fieldSnapshot = {
+      key: "connected_load_kva",
+      label: "Connected load",
+      status: "present",
+      value: { value: 410, unit: "kVA" },
+      source: "load_summary.verified_values.connected_load_kva",
+      address_source: null,
+    };
+    const documentSnapshot = {
+      key: "load_letter",
+      label: "Load letter",
+      status: "attached",
+      file_name: "load.pdf",
+      source: "project_documents",
+      project_document_id: "doc-1",
+      external_application_id: null,
+      storage_path: null,
+      content_hash: null,
+      signature_required: false,
+      signature_status: null,
+      signature_verified_at: null,
+    };
+    const metadata = {
+      package_status: "ready_for_review" as const,
+      field_results: [fieldSnapshot],
+      package_review: {
+        items: {
+          "field:connected_load_kva": {
+            status: "confirmed" as const,
+            mapping_snapshot: Object.fromEntries(
+              Object.entries(fieldSnapshot).sort(([left], [right]) =>
+                right.localeCompare(left),
+              ),
+            ),
+          },
+          "document:load_letter": {
+            status: "confirmed" as const,
+            mapping_snapshot: Object.fromEntries(
+              Object.entries(documentSnapshot).sort(([left], [right]) =>
+                right.localeCompare(left),
+              ),
+            ),
+          },
+        },
+      },
+    };
+    const documents = parsePackageDocuments([
+      {
+        key: "load_letter",
+        label: "Load letter",
+        status: "attached",
+        file_name: "load.pdf",
+        source: "project_documents",
+        project_document_id: "doc-1",
+      },
+    ]);
+    const readySummary = summarizePackageReview(metadata, documents, "draft");
+    assert.equal(readySummary.status, "ready_for_review");
+    assert.equal(readySummary.readyForFinalReview, true);
+    documents[0].file_name = "replacement.pdf";
+    const changedSummary = summarizePackageReview(metadata, documents, "draft");
+    assert.equal(changedSummary.status, "ready_for_review");
+    assert.equal(changedSummary.readyForFinalReview, false);
+    assert.equal(changedSummary.documents[0].reviewStatus, "not_reviewed");
   });
 });

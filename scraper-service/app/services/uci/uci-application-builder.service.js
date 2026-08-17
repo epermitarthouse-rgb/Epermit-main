@@ -543,6 +543,15 @@ async function runApplicationPackageBuild(supabase, params) {
     coordinationRecordId,
     projectId,
   );
+  if (String(existingPackageDraft?.draft_status ?? "") === "reviewed") {
+    throw Object.assign(
+      new Error("Request changes before rebuilding a reviewed package"),
+      {
+        statusCode: 409,
+        code: "PACKAGE_REVIEW_LOCKED",
+      },
+    );
+  }
   const existingPackageDocuments = Array.isArray(existingPackageDraft?.package_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (existingPackageDraft.package_documents)
     : [];
@@ -624,6 +633,12 @@ async function runApplicationPackageBuild(supabase, params) {
       missing_fields: missingFields,
       field_results: fieldEval.fieldResults,
       signature_requirements: signatureEval.signatureRequirements,
+      package_review:
+        existingPackageMetadata.package_review &&
+        typeof existingPackageMetadata.package_review === "object" &&
+        !Array.isArray(existingPackageMetadata.package_review)
+          ? existingPackageMetadata.package_review
+          : null,
       project_address: {
         formatted: addressResolution.address.formatted,
         source: addressResolution.address.source,

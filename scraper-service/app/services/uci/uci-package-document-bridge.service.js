@@ -20,6 +20,7 @@ const {
   sanitizeUciStorageSegment,
   parseUciStoragePathTenant,
 } = require("./uci-document-storage.service.js");
+const { withPackageReviewSummary } = require("./uci-package-review.service.js");
 
 const PACKAGE_SLOT_KEYS = [
   "site_plan",
@@ -780,6 +781,26 @@ async function resolveCandidateForMapping(
   candidateId,
   externalApplicationId,
 ) {
+  const projectDocumentPrefix = "project_document:";
+  if (String(candidateId).startsWith(projectDocumentPrefix)) {
+    const projectDocumentId = String(candidateId).slice(projectDocumentPrefix.length).trim();
+    const doc = await loadProjectDocumentForPackage(supabase, projectId, projectDocumentId);
+    if (!doc) {
+      const err = new Error("Project document not found");
+      err.statusCode = 404;
+      err.code = "PROJECT_DOCUMENT_NOT_FOUND";
+      throw err;
+    }
+    return {
+      candidate_id: candidateId,
+      source_type: "project_document",
+      project_id: projectId,
+      coordination_record_id: coordinationRecordId,
+      project_document_id: String(doc.id),
+      document_type: doc.document_type != null ? String(doc.document_type) : null,
+      file_name: doc.file_name != null ? String(doc.file_name) : null,
+    };
+  }
   const listed = await listPackageDocumentCandidates(supabase, {
     coordinationRecordId,
     projectId,
@@ -849,6 +870,31 @@ async function confirmPackageDocumentMapping(supabase, params) {
     params.externalApplicationId,
   );
 
+  const existingDocs = Array.isArray(application.package_documents)
+    ? /** @type {Array<Record<string, unknown>>} */ (application.package_documents)
+    : [];
+  const existingMapping = existingDocs.find((entry) => String(entry.key) === slotKey);
+  const candidateAlreadyMapped =
+    candidate.source_type === "project_document"
+      ? String(existingMapping?.project_document_id ?? "") ===
+        String(candidate.project_document_id ?? "")
+      : String(existingMapping?.storage_path ?? "") === String(candidate.storage_path ?? "") &&
+        String(existingMapping?.external_application_id ?? "") ===
+          String(candidate.external_application_id ?? "");
+  if (candidateAlreadyMapped) {
+    return {
+      application: withPackageReviewSummary(application),
+      package_status:
+        application.agent_draft_metadata?.application_package?.package_status ?? "incomplete",
+      missing_documents:
+        application.agent_draft_metadata?.application_package?.missing_documents ?? [],
+      missing_fields: application.agent_draft_metadata?.application_package?.missing_fields ?? [],
+      package_documents: existingDocs,
+      no_change: true,
+      message: "Already mapped",
+    };
+  }
+
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
     const err = new Error("Coordination record not found");
@@ -910,50 +956,151 @@ async function confirmPackageDocumentMapping(supabase, params) {
       signature_required: slotDef.signature_required === true,
       signature_status:
         slotDef.signature_required === true &&
-        /(^|[^A-Z0-9])UNSIGNED([^A-Z0-9]|$)/i.test(String(doc.file_name ?? ""))
+        /(^|[^A-Z0-9])UNSIGNED([^A-Z0-9]|$)/i.test(String(candidate.file_name ?? ""))
           ? "unsigned"
           : slotDef.signature_required === true
             ? "unknown"
             : undefined,
     };
   } else {
-    const doc = await loadProjectDocumentForPackage(
-      supabase,
-      projectId,
-      String(candidate.project_document_id),
-    );
-    if (!doc) {
-      const err = new Error("Project document not found");
-      err.statusCode = 404;
-      err.code = "PROJECT_DOCUMENT_NOT_FOUND";
-      throw err;
-    }
-
     mappingEntry = {
       key: slotKey,
       label: String(slotDef.label ?? slotKey),
       status: "attached",
       source: "project_documents",
       user_confirmed: true,
-      project_document_id: String(doc.id),
-      document_type: doc.document_type != null ? String(doc.document_type) : null,
-      file_name: doc.file_name != null ? String(doc.file_name) : null,
+      project_document_id: String(candidate.project_document_id),
+      document_type:
+        candidate.document_type != null ? String(candidate.document_type) : null,
+      file_name: candidate.file_name != null ? String(candidate.file_name) : null,
       confirmed_by: userId,
       confirmed_at: confirmedAt,
     };
   }
 
-  const existingDocs = Array.isArray(application.package_documents)
-    ? /** @type {Array<Record<string, unknown>>} */ (application.package_documents)
-    : [];
   const nextDocs = existingDocs.filter((d) => String(d.key) !== slotKey);
   nextDocs.push(mappingEntry);
 
-  return refreshApplicationPackageDocumentSlots(supabase, {
-    applicationId,
-    userId,
-    packageDocumentsSeed: nextDocs,
-  });
+  const legacyPackageMetadata =
+    application.agent_draft_metadata?.application_package &&
+    typeof application.agent_draft_metadata.application_package === "object" &&
+    !Array.isArray(application.agent_draft_metadata.application_package)
+      ? application.agent_draft_metadata.application_package
+      : null;
+  if (!legacyPackageMetadata || !Array.isArray(legacyPackageMetadata.missing_fields)) {
+    return refreshApplicationPackageDocumentSlots(supabase, {
+      applicationId,
+      userId,
+      packageDocumentsSeed: nextDocs,
+    });
+  }
+
+  const signatureEval = applyDocumentSignatureRequirements(nextDocs, required);
+  const missingDocuments = required
+    .map((entry) => String(entry.key ?? ""))
+    .filter(
+      (key) =>
+        key &&
+        !signatureEval.packageDocuments.some(
+          (entry) => String(entry.key) === key && String(entry.status) === "attached",
+        ),
+    );
+  const previousMetadata =
+    application.agent_draft_metadata &&
+    typeof application.agent_draft_metadata === "object" &&
+    !Array.isArray(application.agent_draft_metadata)
+      ? application.agent_draft_metadata
+      : {};
+  const previousPackage =
+    previousMetadata.application_package &&
+    typeof previousMetadata.application_package === "object" &&
+    !Array.isArray(previousMetadata.application_package)
+      ? previousMetadata.application_package
+      : {};
+  const signatureRequirementKeys = new Set(
+    required
+      .filter((entry) => entry.signature_required === true)
+      .map((entry) => String(entry.signature_requirement_key ?? `${entry.key}_signature`)),
+  );
+  const missingFields = [
+    ...(Array.isArray(previousPackage.missing_fields)
+      ? previousPackage.missing_fields.filter(
+          (key) => !signatureRequirementKeys.has(String(key)),
+        )
+      : []),
+    ...signatureEval.missingSignatureFields,
+  ];
+  const packageStatus =
+    String(previousPackage.package_status) === "blocked"
+      ? "blocked"
+      : missingDocuments.length > 0 || missingFields.length > 0
+        ? "incomplete"
+        : "ready_for_review";
+  const now = new Date().toISOString();
+  const packageReview =
+    previousPackage.package_review &&
+    typeof previousPackage.package_review === "object" &&
+    !Array.isArray(previousPackage.package_review)
+      ? previousPackage.package_review
+      : {};
+  const mappingHistory = Array.isArray(packageReview.mapping_history)
+    ? packageReview.mapping_history
+    : [];
+  const nextMetadata = {
+    ...previousMetadata,
+    application_package: {
+      ...previousPackage,
+      package_status: packageStatus,
+      missing_documents: missingDocuments,
+      missing_fields: missingFields,
+      signature_requirements: signatureEval.signatureRequirements,
+      package_review: {
+        ...packageReview,
+        mapping_history: [
+          ...mappingHistory,
+          {
+            action: "change_document_mapping",
+            item_key: slotKey,
+            actor_user_id: userId,
+            at: now,
+            prior_mapping: existingMapping ?? null,
+            next_mapping: mappingEntry,
+          },
+        ],
+        updated_at: now,
+        updated_by_user_id: userId,
+      },
+      document_mapping_refreshed_at: now,
+      document_mapping_refreshed_by: userId,
+    },
+  };
+  const { data, error } = await supabase
+    .from("coordination_applications")
+    .update({
+      package_documents: signatureEval.packageDocuments,
+      agent_draft_metadata: nextMetadata,
+      ...(String(application.draft_status) === "reviewed"
+        ? { draft_status: "needs_changes", reviewed_by: null, reviewed_at: null }
+        : {}),
+    })
+    .eq("id", applicationId)
+    .select("*")
+    .single();
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to update package document"), {
+      cause: error,
+      statusCode: 500,
+      code: "APPLICATION_UPDATE_FAILED",
+    });
+  }
+  return {
+    application: withPackageReviewSummary(data),
+    package_status: packageStatus,
+    missing_documents: missingDocuments,
+    missing_fields: missingFields,
+    package_documents: signatureEval.packageDocuments,
+    no_change: false,
+  };
 }
 
 /**
@@ -1201,6 +1348,9 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
     .update({
       package_documents: signatureEval.packageDocuments,
       agent_draft_metadata: agentDraftMetadata,
+      ...(String(application.draft_status) === "reviewed"
+        ? { draft_status: "needs_changes", reviewed_by: null, reviewed_at: null }
+        : {}),
     })
     .eq("id", applicationId)
     .select("*")

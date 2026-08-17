@@ -4,6 +4,7 @@ import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import {
   buildCoordinationApplicationPackage,
   approveSyntheticApplicationChecklist,
+  confirmAllApplicationPackageVerifiedFields,
   confirmApplicationPackageDocumentMapping,
   exportSyntheticApplicationChecklist,
   formatUciUserError,
@@ -14,6 +15,7 @@ import {
   reviewCoordinationApplication,
   setSyntheticApplicationSignatureStatus,
   submitCoordinationApplication,
+  updateApplicationPackageReviewItem,
 } from "@/lib/uciApi";
 import {
   getApplicationPackageDraftApplication,
@@ -60,6 +62,8 @@ export function useUciApplicationBuilder() {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
+  const [signatureBusyAction, setSignatureBusyAction] = useState<string | null>(null);
+  const [reviewItemBusy, setReviewItemBusy] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [signatureReviewNote, setSignatureReviewNote] = useState("");
   const [lastSubmitResult, setLastSubmitResult] = useState<UciApplicationSubmitResponse | null>(
@@ -111,6 +115,19 @@ export function useUciApplicationBuilder() {
     const d = await getCoordinationDetail(id);
     setDetail(d);
     return d;
+  }, []);
+
+  const applyApplicationMutation = useCallback((application: CoordinationApplication) => {
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            applications: current.applications.map((item) =>
+              item.id === application.id ? application : item,
+            ),
+          }
+        : current,
+    );
   }, []);
 
   const load = useCallback(async () => {
@@ -224,11 +241,15 @@ export function useUciApplicationBuilder() {
     setBuildBusy(true);
     setActionMessage(null);
     try {
-      await buildCoordinationApplicationPackage(coordinationId, {
+      const result = await buildCoordinationApplicationPackage(coordinationId, {
         external_application_id: externalApplicationId || undefined,
-        checklist_mode: providerSlug === "dominion" ? "synthetic_test" : undefined,
+        checklist_mode:
+          packageMeta?.checklist_mode === "synthetic_test" ? "synthetic_test" : undefined,
       });
-      await refreshDetail(coordinationId);
+      applyApplicationMutation(result.application);
+      void refreshDetail(coordinationId).catch(() => {
+        // The build response is authoritative; a read refresh can retry independently.
+      });
       setActionMessage({
         tone: "ok",
         text: "Application package draft saved — review missing documents before submission",
@@ -248,10 +269,13 @@ export function useUciApplicationBuilder() {
     setReviewBusy(true);
     setActionMessage(null);
     try {
-      await approveSyntheticApplicationChecklist(packageApp.id, {
+      const result = await approveSyntheticApplicationChecklist(packageApp.id, {
         note: reviewNotes.trim() || "Approved for Highland Springs synthetic Stage 3 testing only",
       });
-      await refreshDetail(coordinationId);
+      applyApplicationMutation(result.application as CoordinationApplication);
+      void refreshDetail(coordinationId).catch(() => {
+        // The mutation response already contains the persisted checklist state.
+      });
       setActionMessage({ tone: "ok", text: "Synthetic test checklist approved" });
     } catch (e: unknown) {
       setActionMessage({
@@ -268,18 +292,19 @@ export function useUciApplicationBuilder() {
     status: "unknown" | "unsigned" | "signed_manual_verified",
   ) => {
     if (!packageApp || !coordinationId || !isDominionSynthetic) return;
-    setMappingBusySlot(documentKey);
+    setSignatureBusyAction(`${documentKey}:${status}`);
     setActionMessage(null);
     try {
-      await setSyntheticApplicationSignatureStatus(packageApp.id, {
+      const result = await setSyntheticApplicationSignatureStatus(packageApp.id, {
         document_key: documentKey,
         signature_status: status,
         review_note:
           status === "signed_manual_verified"
             ? signatureReviewNote.trim()
-            : signatureReviewNote.trim() || undefined,
+            : undefined,
       });
-      await refreshDetail(coordinationId);
+      applyApplicationMutation(result.application);
+      setSignatureReviewNote("");
       setActionMessage({
         tone: "ok",
         text:
@@ -287,13 +312,22 @@ export function useUciApplicationBuilder() {
             ? "Synthetic signature manually verified"
             : `Synthetic signature status set to ${status}`,
       });
+      void refreshDetail(coordinationId).catch((refreshError: unknown) => {
+        setActionMessage({
+          tone: "warn",
+          text: `Signature saved, but the latest package refresh failed: ${formatUciUserError(
+            refreshError,
+            "Unable to refresh package details",
+          )}`,
+        });
+      });
     } catch (e: unknown) {
       setActionMessage({
         tone: "bad",
         text: formatUciUserError(e, "Synthetic signature update failed"),
       });
     } finally {
-      setMappingBusySlot(null);
+      setSignatureBusyAction(null);
     }
   };
 
@@ -324,11 +358,14 @@ export function useUciApplicationBuilder() {
     setReviewBusy(true);
     setActionMessage(null);
     try {
-      await reviewCoordinationApplication(packageApp.id, {
+      const result = await reviewCoordinationApplication(packageApp.id, {
         status,
         notes: reviewNotes.trim() || undefined,
       });
-      await refreshDetail(coordinationId);
+      applyApplicationMutation(result.application);
+      void refreshDetail(coordinationId).catch(() => {
+        // The mutation response already contains the canonical reviewed state.
+      });
       setActionMessage({
         tone: "ok",
         text: status === "reviewed" ? "Application marked reviewed" : "Changes requested",
@@ -343,8 +380,76 @@ export function useUciApplicationBuilder() {
     }
   };
 
+  const updateReviewItem = async (
+    kind: "field" | "document",
+    key: string,
+    status: "confirmed" | "needs_correction",
+  ) => {
+    if (!packageApp || !coordinationId) return;
+    setReviewItemBusy(`${kind}:${key}`);
+    setActionMessage(null);
+    try {
+      const result = await updateApplicationPackageReviewItem(packageApp.id, {
+        kind,
+        item_key: key,
+        status,
+        note: status === "needs_correction" ? reviewNotes.trim() || undefined : undefined,
+      });
+      applyApplicationMutation(result.application);
+      setActionMessage({
+        tone: status === "confirmed" ? "ok" : "warn",
+        text:
+          status === "confirmed"
+            ? "Package mapping confirmed"
+            : "Package mapping marked as needing correction",
+      });
+    } catch (e: unknown) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(e, "Package review item update failed"),
+      });
+    } finally {
+      setReviewItemBusy(null);
+    }
+  };
+
+  const confirmAllVerifiedFields = async () => {
+    if (!packageApp || !coordinationId) return;
+    if (
+      !window.confirm(
+        "Confirm that every eligible Agent 2 verified field is appropriate for this application package?",
+      )
+    ) {
+      return;
+    }
+    setReviewItemBusy("all-fields");
+    setActionMessage(null);
+    try {
+      const result = await confirmAllApplicationPackageVerifiedFields(packageApp.id);
+      applyApplicationMutation(result.application);
+      setActionMessage({
+        tone: "ok",
+        text: `${result.confirmed_count} verified package fields confirmed`,
+      });
+    } catch (e: unknown) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(e, "Bulk field confirmation failed"),
+      });
+    } finally {
+      setReviewItemBusy(null);
+    }
+  };
+
   const submitPackage = async () => {
     if (!packageApp || !coordinationId) return;
+    if (!isDominionSynthetic && !isPepco) {
+      setActionMessage({
+        tone: "warn",
+        text: "Validation is unavailable until this provider has an approved validation adapter",
+      });
+      return;
+    }
     if (packageApp.draft_status !== "reviewed") {
       setActionMessage({
         tone: "warn",
@@ -359,7 +464,10 @@ export function useUciApplicationBuilder() {
       // Never pass live_submission_confirmed — dry-run / gated path only.
       const result = await submitCoordinationApplication(packageApp.id);
       setLastSubmitResult(result);
-      await refreshDetail(coordinationId);
+      applyApplicationMutation(result.application);
+      void refreshDetail(coordinationId).catch(() => {
+        // Validation persisted; a failed follow-up read must not turn it into a failed action.
+      });
       if (result.dry_run || result.status === "human_required") {
         setActionMessage({
           tone: "warn",
@@ -397,21 +505,24 @@ export function useUciApplicationBuilder() {
     }
     setMappingBusySlot(slotKey);
     try {
-      await confirmApplicationPackageDocumentMapping(packageApp.id, {
+      const result = await confirmApplicationPackageDocumentMapping(packageApp.id, {
         slot_key: slotKey,
         candidate_id: candidateId,
         external_application_id: externalApplicationId || undefined,
       });
+      if (result.no_change) {
+        setActionMessage({ tone: "warn", text: "Already mapped — no change was saved" });
+        return;
+      }
+      applyApplicationMutation(result.application as CoordinationApplication);
       setSelectedCandidateBySlot((prev) => {
         const next = { ...prev };
         delete next[slotKey];
         return next;
       });
-      await refreshDetail(coordinationId);
-      await loadCandidates();
       setActionMessage({
         tone: "ok",
-        text: "Document mapping confirmed — slot marked attached after human review",
+        text: "Document changed — reconfirm this requirement for package review",
       });
     } catch (e: unknown) {
       setActionMessage({
@@ -427,9 +538,14 @@ export function useUciApplicationBuilder() {
     if (!packageApp || !coordinationId) return;
     setMappingBusySlot(slotKey);
     try {
-      await removeApplicationPackageDocumentMapping(packageApp.id, { slot_key: slotKey });
-      await refreshDetail(coordinationId);
-      await loadCandidates();
+      const result = await removeApplicationPackageDocumentMapping(packageApp.id, {
+        slot_key: slotKey,
+      });
+      applyApplicationMutation(result.application as CoordinationApplication);
+      void refreshDetail(coordinationId).catch(() => {
+        // Mapping response is authoritative.
+      });
+      void loadCandidates();
       setActionMessage({ tone: "ok", text: "Document mapping removed" });
     } catch (e: unknown) {
       setActionMessage({
@@ -489,6 +605,8 @@ export function useUciApplicationBuilder() {
     reviewBusy,
     submitBusy,
     mappingBusySlot,
+    signatureBusyAction,
+    reviewItemBusy,
     reviewNotes,
     setReviewNotes,
     signatureReviewNote,
@@ -501,6 +619,8 @@ export function useUciApplicationBuilder() {
     setSignatureStatus,
     exportSyntheticChecklist,
     markReviewed,
+    updateReviewItem,
+    confirmAllVerifiedFields,
     submitPackage,
     confirmMapping,
     removeMapping,

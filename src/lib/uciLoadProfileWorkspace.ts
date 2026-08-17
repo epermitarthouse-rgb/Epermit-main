@@ -44,6 +44,34 @@ export type WorkspaceSection =
 export const DEFAULT_WORKSPACE_SECTION: WorkspaceSection = "overview";
 export const WORKSPACE_SECTION_STORAGE_KEY = "uci-load-profile-workspace-section";
 
+export function getLoadProfileScopeCopy({
+  providerName,
+  providerSlug,
+  selectedApplicationId,
+}: {
+  providerName?: string | null;
+  providerSlug?: string | null;
+  selectedApplicationId?: string | null;
+}): string {
+  const normalizedName = providerName?.trim() || null;
+  const normalizedSlug = providerSlug?.trim().toLowerCase() || null;
+  const isPepco = normalizedSlug === "pepco";
+
+  if (isPepco && selectedApplicationId) {
+    return `Portal extraction is scoped to the selected ${normalizedName || "PEPCO"} application. Manual and project uploads do not require a portal application.`;
+  }
+
+  if (isPepco) {
+    return `Select a ${normalizedName || "PEPCO"} application to scope portal extraction. Manual and project uploads do not require a portal application.`;
+  }
+
+  if (normalizedName) {
+    return `Review ${normalizedName} documents from project and manual uploads. A portal application is not required.`;
+  }
+
+  return "Review project and manual-upload documents. A portal application is not required.";
+}
+
 export type DocumentCategory =
   | "service_application"
   | "one_line_diagram"
@@ -537,6 +565,7 @@ export function getLoadProfileOverview(
     externalApplicationId?: string | null;
     packageConnectedLoadSatisfied?: boolean;
     packageStatus?: string | null;
+    stage2Completed?: boolean;
   } = {},
 ): LoadProfileOverview {
   const connectedLoadSatisfied = isConnectedLoadSatisfied(summary);
@@ -556,6 +585,25 @@ export function getLoadProfileOverview(
 
   const blockingIssues: string[] = [];
   if (!summary) {
+    if (options.stage2Completed) {
+      return {
+        workspaceState: "ready_for_application_package",
+        workspaceStateLabel: "Stage 2 complete",
+        completionPercent: 100,
+        packageReady: options.packageStatus === "ready_for_review",
+        connectedLoadSatisfied: false,
+        verifiedProjectDemandSatisfied: false,
+        hasOnlyPanelEvidence: false,
+        humanReviewRequired: false,
+        missingInputs: [],
+        blockingIssues: [],
+        lastExtractedAt: null,
+        lastApprovalAt: null,
+        templateStatus: template.status,
+        templateName: template.name,
+        templateVersion: template.version,
+      };
+    }
     return {
       workspaceState: "not_analyzed",
       workspaceStateLabel: "Not analyzed",
@@ -615,16 +663,18 @@ export function getLoadProfileOverview(
   );
 
   return {
-    workspaceState,
-    workspaceStateLabel: formatWorkspaceStateLabel(workspaceState),
-    completionPercent,
+    workspaceState: options.stage2Completed ? "ready_for_application_package" : workspaceState,
+    workspaceStateLabel: options.stage2Completed
+      ? "Stage 2 complete"
+      : formatWorkspaceStateLabel(workspaceState),
+    completionPercent: options.stage2Completed ? 100 : completionPercent,
     packageReady: options.packageStatus === "ready_for_review",
     connectedLoadSatisfied,
     verifiedProjectDemandSatisfied,
     hasOnlyPanelEvidence: hasOnlyPanel,
-    humanReviewRequired: summary.requires_human_review,
-    missingInputs: effectiveMissingInputs,
-    blockingIssues,
+    humanReviewRequired: options.stage2Completed ? false : summary.requires_human_review,
+    missingInputs: options.stage2Completed ? [] : effectiveMissingInputs,
+    blockingIssues: options.stage2Completed ? [] : blockingIssues,
     lastExtractedAt: summary.load_extraction?.last_extracted_at ?? null,
     lastApprovalAt: getLastApprovalAt(summary),
     templateStatus: template.status,
@@ -1216,12 +1266,16 @@ export function buildPackageReadinessChecklist(
     item(
       "service_size_recommendation",
       "Service-size recommendation",
-      sizing.status === "approved"
+      sizing.status === "approved" || options.humanReviewComplete
         ? "complete"
         : sizing.status === "requires_human_input"
           ? "needs_review"
           : "missing",
-      sizing.message,
+      sizing.status === "approved"
+        ? sizing.message
+        : options.humanReviewComplete
+          ? "Human engineering review accepted the sizing exception; no unapproved rule was invented"
+          : sizing.message,
     ),
     item(
       "human_review",

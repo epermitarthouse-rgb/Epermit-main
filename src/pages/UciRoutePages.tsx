@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import { useProjects } from "@/hooks/useProjects";
+import {
+  useUciOperationalSnapshot,
+  type UciOperationalRecord as OperationalRecord,
+} from "@/hooks/useUciOperationalSnapshot";
 import { parseApplicationPackageMetadata } from "@/lib/uciApplicationPrep";
 import { supabase } from "@/lib/supabase";
 import {
@@ -26,15 +30,6 @@ import type {
   UciProviderResolutionListResponse,
   UtilityProvider,
 } from "@/types/uci";
-
-type OperationalRecord = CoordinationRecord & {
-  projectName: string;
-  providerDisplayName: string | null;
-  applications: CoordinationApplication[];
-  communications: CoordinationCommunication[];
-  costs: CoordinationCost[];
-  attentionCount: number;
-};
 
 type LoadMode = "records" | "details" | "attention" | "portfolio";
 
@@ -367,7 +362,7 @@ function CoverageNote({ failures }: { failures: number }) {
 }
 
 export function UciSubmissionsPage() {
-  const state = useOperationalRecords("details", true);
+  const state = useUciOperationalSnapshot("/uci/submissions");
   const rows = state.records.flatMap((record) =>
     record.applications.map((application) => ({ record, application })),
   );
@@ -424,7 +419,7 @@ export function UciSubmissionsPage() {
 }
 
 export function UciInboxPage() {
-  const state = useOperationalRecords("details", true);
+  const state = useUciOperationalSnapshot("/uci/inbox");
   const messages = state.records.flatMap((record) =>
     record.communications.map((message) => ({ record, message })),
   );
@@ -460,7 +455,7 @@ export function UciInboxPage() {
 }
 
 export function UciNeedsAttentionPage() {
-  const state = useOperationalRecords("attention", true);
+  const state = useUciOperationalSnapshot("/uci/needs-attention");
   const messages = state.records.flatMap((record) =>
     record.communications.map((message) => ({ record, message })),
   );
@@ -508,7 +503,7 @@ export function UciNeedsAttentionPage() {
 }
 
 export function UciPortfolioPage() {
-  const state = useOperationalRecords("portfolio", true);
+  const state = useUciOperationalSnapshot("/uci/portfolio");
   return (
     <RouteFrame
       eyebrow="Cross-project operations"

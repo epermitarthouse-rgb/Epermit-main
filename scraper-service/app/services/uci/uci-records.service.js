@@ -1,6 +1,8 @@
 "use strict";
 
-const { listApplicationsByCoordination } = require("./uci-applications.service.js");
+const {
+  listApplicationsForCoordinationDetail,
+} = require("./uci-applications.service.js");
 const {
   mergeProviderResolutionIntoCoordinationMetadata,
 } = require("./uci-provider-resolution-persistence.js");
@@ -18,6 +20,68 @@ const RECORD_WITH_PROVIDER_SELECT = `
     automation_status,
     is_active
   )
+`;
+
+const DETAIL_RECORD_SELECT = `
+  id,
+  project_id,
+  user_id,
+  tenant_id,
+  utility_provider_id,
+  utility_type,
+  scope_description,
+  current_stage,
+  current_stage_state,
+  utility_account_number,
+  utility_contact_name,
+  utility_contact_email,
+  utility_contact_phone,
+  application_submitted_at,
+  acknowledgment_received_at,
+  class_of_service_issued_at,
+  energization_target_date,
+  energization_actual_date,
+  predicted_p50_date,
+  predicted_p90_date,
+  agent_monitored,
+  last_error,
+  created_at,
+  updated_at,
+  utility_providers (
+    id,
+    slug,
+    name,
+    utility_type,
+    primary_portal_type,
+    portal_url,
+    automation_status,
+    is_active
+  ),
+  uci_provider_mapping:metadata->uci_provider_mapping,
+  uci_provider_resolution:metadata->uci_provider_resolution,
+  uci_lifecycle_proposals:metadata->uci_lifecycle_proposals,
+  uci_last_portal_sync_summary:metadata->uci_last_portal_sync_summary,
+  uci_last_portal_sync_at:metadata->uci_last_portal_sync_at,
+  pepco_application_detail_discovery:metadata->pepco_application_detail_discovery,
+  pepco_dashboard_discovery:metadata->pepco_dashboard_discovery,
+  pepco_dashboard_discovery_status:metadata->pepco_dashboard_discovery_status,
+  pepco_dashboard_last_discovered_at:metadata->pepco_dashboard_last_discovered_at,
+  pepco_dashboard_cards_found:metadata->pepco_dashboard_cards_found,
+  pepco_dashboard_application_ids_found:metadata->pepco_dashboard_application_ids_found,
+  pepco_dashboard_discovery_source:metadata->pepco_dashboard_discovery_source,
+  pepco_dashboard_list_api_warning:metadata->pepco_dashboard_list_api_warning,
+  pepco_discovery_last_attempt_at:metadata->pepco_discovery_last_attempt_at,
+  pepco_discovery_last_status:metadata->pepco_discovery_last_status,
+  pepco_discovery_session_status:metadata->pepco_discovery_session_status,
+  pepco_mfa_mode:metadata->pepco_mfa_mode,
+  pepco_overview_project_name:metadata->pepco_overview_project_name,
+  pepco_overview_job_id:metadata->pepco_overview_job_id,
+  pepco_current_milestone:metadata->pepco_current_milestone,
+  pepco_current_status:metadata->pepco_current_status,
+  pepco_status_last_updated_at:metadata->pepco_status_last_updated_at,
+  pepco_latest_message_at:metadata->pepco_latest_message_at,
+  pepco_document_count:metadata->pepco_document_count,
+  pepco_message_count:metadata->pepco_message_count
 `;
 
 /**
@@ -67,13 +131,78 @@ async function getCoordinationRecordById(supabase, id) {
 }
 
 /**
+ * Fetch a record for the interactive detail workspace without the large
+ * uci_document_processing snapshot. Load Profile obtains that snapshot from
+ * its dedicated manifest endpoint only when the tab is opened.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} id
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+async function getCoordinationRecordDetailById(supabase, id) {
+  const { data, error } = await supabase
+    .from("coordination_records")
+    .select(DETAIL_RECORD_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to load coordination record"), {
+      cause: error,
+      statusCode: 500,
+      code: "COORDINATION_FETCH_FAILED",
+    });
+  }
+  if (!data) return null;
+
+  const metadataKeys = [
+    "uci_provider_mapping",
+    "uci_provider_resolution",
+    "uci_lifecycle_proposals",
+    "uci_last_portal_sync_summary",
+    "uci_last_portal_sync_at",
+    "pepco_application_detail_discovery",
+    "pepco_dashboard_discovery",
+    "pepco_dashboard_discovery_status",
+    "pepco_dashboard_last_discovered_at",
+    "pepco_dashboard_cards_found",
+    "pepco_dashboard_application_ids_found",
+    "pepco_dashboard_discovery_source",
+    "pepco_dashboard_list_api_warning",
+    "pepco_discovery_last_attempt_at",
+    "pepco_discovery_last_status",
+    "pepco_discovery_session_status",
+    "pepco_mfa_mode",
+    "pepco_overview_project_name",
+    "pepco_overview_job_id",
+    "pepco_current_milestone",
+    "pepco_current_status",
+    "pepco_status_last_updated_at",
+    "pepco_latest_message_at",
+    "pepco_document_count",
+    "pepco_message_count",
+  ];
+  const record = { ...data, metadata: {} };
+  for (const key of metadataKeys) {
+    if (record[key] != null) record.metadata[key] = record[key];
+    delete record[key];
+  }
+  return record;
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} coordinationRecordId
  * @param {string} projectId
  * @returns {Promise<Record<string, unknown>>}
  */
-async function getCoordinationDetailBundle(supabase, coordinationRecordId, projectId) {
-  const record = await getCoordinationRecordById(supabase, coordinationRecordId);
+async function getCoordinationDetailBundle(
+  supabase,
+  coordinationRecordId,
+  projectId,
+  opts = {},
+) {
+  const record =
+    opts.record ?? (await getCoordinationRecordDetailById(supabase, coordinationRecordId));
   if (!record || String(record.project_id) !== projectId) {
     const err = new Error("Coordination record not found");
     err.statusCode = 404;
@@ -81,101 +210,121 @@ async function getCoordinationDetailBundle(supabase, coordinationRecordId, proje
     throw err;
   }
 
+  const hydrate = async (step, task) => {
+    const startedAt = Date.now();
+    try {
+      const result = await task();
+      if (result?.error) {
+        throw Object.assign(
+          new Error(result.error.message || `Failed to load ${step}`),
+          { cause: result.error },
+        );
+      }
+      return {
+        data: result?.data ?? result ?? [],
+        timing: {
+          step,
+          duration_ms: Date.now() - startedAt,
+          success: true,
+          blocking: false,
+          request_id: opts.requestId ?? null,
+        },
+        error: null,
+      };
+    } catch (error) {
+      return {
+        data: [],
+        timing: {
+          step,
+          duration_ms: Date.now() - startedAt,
+          success: false,
+          blocking: false,
+          request_id: opts.requestId ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        error: {
+          code:
+            error && typeof error === "object" && "code" in error
+              ? String(error.code)
+              : `${step.toUpperCase()}_FETCH_FAILED`,
+          message: error instanceof Error ? error.message : `Failed to load ${step}`,
+        },
+      };
+    }
+  };
+
   const [
-    transitionsResult,
+    transitions,
     applications,
-    costsResult,
-    equipmentResult,
-    milestonesResult,
-    commResult,
+    costs,
+    equipment,
+    milestones,
+    communications,
   ] = await Promise.all([
-    supabase
+    hydrate("transitions", () =>
+      supabase
       .from("coordination_stage_transitions")
       .select("*")
       .eq("coordination_record_id", coordinationRecordId)
       .eq("project_id", projectId)
       .order("created_at", { ascending: false }),
-    listApplicationsByCoordination(supabase, coordinationRecordId, projectId),
-    supabase
+    ),
+    hydrate("applications", () =>
+      listApplicationsForCoordinationDetail(supabase, coordinationRecordId, projectId),
+    ),
+    hydrate("costs", () =>
+      supabase
       .from("coordination_costs")
       .select("*")
       .eq("coordination_record_id", coordinationRecordId)
       .eq("project_id", projectId)
       .order("created_at", { ascending: true }),
-    supabase
+    ),
+    hydrate("equipment", () =>
+      supabase
       .from("coordination_equipment")
       .select("*")
       .eq("coordination_record_id", coordinationRecordId)
       .eq("project_id", projectId)
       .order("created_at", { ascending: true }),
-    supabase
+    ),
+    hydrate("milestones", () =>
+      supabase
       .from("coordination_milestones")
       .select("*")
       .eq("coordination_record_id", coordinationRecordId)
       .eq("project_id", projectId)
       .order("created_at", { ascending: true }),
-    supabase
+    ),
+    hydrate("communications", () =>
+      supabase
       .from("coordination_communications")
       .select("*")
       .eq("coordination_record_id", coordinationRecordId)
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
       .limit(5),
+    ),
   ]);
 
-  const tErr = transitionsResult.error;
-  if (tErr) {
-    throw Object.assign(new Error(tErr.message || "Failed to load transitions"), {
-      cause: tErr,
-      statusCode: 500,
-      code: "TRANSITIONS_FETCH_FAILED",
-    });
-  }
-
-  const cErr = costsResult.error;
-  if (cErr) {
-    throw Object.assign(new Error(cErr.message || "Failed to load costs"), {
-      cause: cErr,
-      statusCode: 500,
-      code: "COSTS_FETCH_FAILED",
-    });
-  }
-
-  const eErr = equipmentResult.error;
-  if (eErr) {
-    throw Object.assign(new Error(eErr.message || "Failed to load equipment"), {
-      cause: eErr,
-      statusCode: 500,
-      code: "EQUIPMENT_FETCH_FAILED",
-    });
-  }
-
-  const mErr = milestonesResult.error;
-  if (mErr) {
-    throw Object.assign(new Error(mErr.message || "Failed to load milestones"), {
-      cause: mErr,
-      statusCode: 500,
-      code: "MILESTONES_FETCH_FAILED",
-    });
-  }
-
-  const commErr = commResult.error;
-  if (commErr) {
-    throw Object.assign(new Error(commErr.message || "Failed to load communications"), {
-      cause: commErr,
-      statusCode: 500,
-      code: "COMMUNICATIONS_FETCH_FAILED",
-    });
-  }
-
+  const children = [transitions, applications, costs, equipment, milestones, communications];
   return {
     record,
-    transitions: transitionsResult.data ?? [],
-    applications,
-    costs: costsResult.data ?? [],
-    equipment: equipmentResult.data ?? [],
-    milestones: milestonesResult.data ?? [],
-    communications_recent: commResult.data ?? [],
+    transitions: transitions.data,
+    applications: applications.data,
+    costs: costs.data,
+    equipment: equipment.data,
+    milestones: milestones.data,
+    communications_recent: communications.data,
+    hydration: {
+      request_id: opts.requestId ?? null,
+      steps: children.map((child) => child.timing),
+      errors: Object.fromEntries(
+        children
+          .filter((child) => child.error)
+          .map((child) => [child.timing.step, child.error]),
+      ),
+    },
   };
 }
 
@@ -400,6 +549,7 @@ async function initCoordinationForProviders(supabase, p) {
 module.exports = {
   listCoordinationRecordsByProject,
   getCoordinationRecordById,
+  getCoordinationRecordDetailById,
   getCoordinationDetailBundle,
   initCoordinationForProviders,
   mergeProviderMappingMetadata,

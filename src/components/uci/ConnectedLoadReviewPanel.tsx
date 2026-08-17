@@ -41,7 +41,10 @@ import {
   type UciLoadProfileSummary,
   type UciVerifiedLoadValue,
 } from "@/lib/uciLoadProfile";
-import { getDefaultReviewQueueTab } from "@/lib/uciLoadProfileWorkspace";
+import {
+  getDefaultReviewQueueTab,
+  getLoadProfileScopeCopy,
+} from "@/lib/uciLoadProfileWorkspace";
 
 const PENDING_GROUP_LABELS: Record<PendingReviewGroup, string> = {
   package_eligible: "Package-eligible project / service values",
@@ -69,6 +72,8 @@ export type CandidateResolutionState = Record<
 export function ConnectedLoadReviewPanel({
   summary,
   selectedPepcoApplicationId,
+  providerName,
+  providerSlug,
   connectedLoadReady,
   candidateBusy,
   candidateResolutionState,
@@ -79,6 +84,8 @@ export function ConnectedLoadReviewPanel({
 }: {
   summary: UciLoadProfileSummary;
   selectedPepcoApplicationId: string | null;
+  providerName?: string | null;
+  providerSlug?: string | null;
   connectedLoadReady: boolean;
   candidateBusy: boolean;
   candidateResolutionState: CandidateResolutionState;
@@ -136,6 +143,11 @@ export function ConnectedLoadReviewPanel({
     [summary, selectedPepcoApplicationId],
   );
   const approvedValues = useMemo(() => getApprovedVerifiedValues(summary), [summary]);
+  const scopeCopy = getLoadProfileScopeCopy({
+    providerName,
+    providerSlug,
+    selectedApplicationId: selectedPepcoApplicationId,
+  });
   const staleGroups = useMemo(
     () =>
       groupStaleHistoryCandidates(
@@ -153,8 +165,8 @@ export function ConnectedLoadReviewPanel({
         <div>
           <p className="text-sm font-medium text-foreground">Connected load review</p>
           <p className={cn("text-[11px]", mutedClass)}>
-            Extract candidates from scraped documents, then approve values with evidence before
-            package build.
+            Extract candidates from available project, manual-upload, and scoped portal documents,
+            then approve values with evidence before package build.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -182,9 +194,7 @@ export function ConnectedLoadReviewPanel({
         </div>
       </div>
 
-      {!selectedPepcoApplicationId ? (
-        <p className={cn("text-xs", mutedClass)}>Select a PEPCO application to scope extraction.</p>
-      ) : null}
+      <p className={cn("text-xs", mutedClass)}>{scopeCopy}</p>
 
       <LoadReviewSummaryHeader
         header={header}
@@ -208,7 +218,7 @@ export function ConnectedLoadReviewPanel({
           {pendingCandidates.length === 0 ? (
             <EmptyTabState
               title="No pending candidates"
-              description="Run extraction after documents are scraped, or check Unresolved and Stale tabs."
+              description="Run extraction after adding or synchronizing documents, or check Unresolved and Stale tabs."
               mutedClass={mutedClass}
             />
           ) : (

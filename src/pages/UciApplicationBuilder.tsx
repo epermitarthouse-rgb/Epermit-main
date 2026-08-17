@@ -13,7 +13,6 @@ import {
   Loader2,
   Save,
   Send,
-  Sparkles,
   Upload,
 } from "lucide-react";
 import { DataSourceBadge } from "@/components/operations/DataSourceBadge";
@@ -32,8 +31,16 @@ import {
   canSubmitApplication,
   formatApplicationPackageStatus,
   formatDraftStatus,
+  formatPackageFieldProvenance,
+  formatPackageMappedValue,
   formatPackageDocumentSource,
+  formatPackageReviewItemStatus,
+  formatPackageReviewStatus,
+  formatPackageValidationStatus,
   formatSuggestionConfidence,
+  getPackageValidationStatus,
+  parseCanonicalPackageReviewSummary,
+  summarizePackageReview,
 } from "@/lib/uciApplicationPrep";
 import {
   LOVABLE_EXHIBIT_PLACEHOLDERS,
@@ -67,6 +74,61 @@ export default function UciApplicationBuilder() {
   );
 
   const submitReady = canSubmitApplication(builder.packageApp?.draft_status);
+  const isReviewed = builder.packageApp?.draft_status === "reviewed";
+  const localPackageReview = summarizePackageReview(
+    builder.packageMeta,
+    builder.packageDocs,
+    builder.packageApp?.draft_status,
+  );
+  const canonicalPackageReview = parseCanonicalPackageReviewSummary(
+    builder.packageApp?.package_review_summary,
+  );
+  const canonicalReviewItems = new Map(
+    canonicalPackageReview?.items.map((item) => [item.id, item]) ?? [],
+  );
+  const packageReview = {
+    ...localPackageReview,
+    ...(canonicalPackageReview
+      ? {
+          status: canonicalPackageReview.status,
+          allConfirmed: canonicalPackageReview.all_confirmed,
+          readyForFinalReview: canonicalPackageReview.ready_for_final_review,
+          activeCorrectionCount: canonicalPackageReview.active_correction_count,
+          confirmedCount: canonicalPackageReview.confirmed_count,
+          totalCount: canonicalPackageReview.total_count,
+        }
+      : {}),
+    fields: localPackageReview.fields.map((field) => ({
+      ...field,
+      reviewStatus:
+        canonicalReviewItems.get(`field:${field.key}`)?.status ?? field.reviewStatus,
+    })),
+    documents: localPackageReview.documents.map((document) => ({
+      ...document,
+      reviewStatus:
+        canonicalReviewItems.get(`document:${document.key}`)?.status ??
+        document.reviewStatus,
+    })),
+  };
+  const submissionMetadata =
+    builder.packageApp?.agent_draft_metadata?.submission &&
+    typeof builder.packageApp.agent_draft_metadata.submission === "object" &&
+    !Array.isArray(builder.packageApp.agent_draft_metadata.submission)
+      ? (builder.packageApp.agent_draft_metadata.submission as Record<string, unknown>)
+      : null;
+  const validationMetadata =
+    submissionMetadata?.validation &&
+    typeof submissionMetadata.validation === "object" &&
+    !Array.isArray(submissionMetadata.validation)
+      ? (submissionMetadata.validation as Record<string, unknown>)
+      : null;
+  const packageValidationStatus = getPackageValidationStatus(
+    builder.packageMeta,
+    validationMetadata,
+  );
+  const validationOnlyPassed =
+    submissionMetadata?.validation_only === true && validationMetadata?.ok === true;
+  const validationSupported = builder.isDominionSynthetic || builder.isPepco;
   const providerLabel = builder.serviceFields.utility || "Utility provider";
 
   const markCompleteAndContinue = () => {
@@ -145,13 +207,15 @@ export default function UciApplicationBuilder() {
             <button
               type="button"
               className="pilot-button-primary"
-              disabled={builder.submitBusy || !submitReady}
+              disabled={builder.submitBusy || !submitReady || !validationSupported}
               title={
-                submitReady
+                !validationSupported
+                  ? "Validation is unavailable until this provider has an approved validation adapter"
+                  : submitReady
                   ? builder.isDominionSynthetic
                     ? "Runs validation only — no email, portal, or lifecycle transition"
                     : "Runs Pepco validation dry-run by default — not a live portal filing"
-                  : "Mark the package reviewed before submit"
+                  : "Mark the package reviewed before validation"
               }
               onClick={() => void builder.submitPackage()}
             >
@@ -162,7 +226,9 @@ export default function UciApplicationBuilder() {
               )}
               {builder.isDominionSynthetic
                 ? "Validate synthetic package"
-                : `Submit to ${providerLabel.includes("Pepco") ? "Pepco" : "utility"}`}
+                : builder.isPepco
+                  ? "Validate PEPCO package"
+                  : "Validation unavailable"}
             </button>
           </div>
         </header>
@@ -520,12 +586,25 @@ export default function UciApplicationBuilder() {
                     ) : (
                       <>
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                          <span className="rounded-md border border-border px-2 py-0.5 font-data text-xs">
-                            {formatApplicationPackageStatus(builder.packageMeta?.package_status)}
-                          </span>
-                          <span className="rounded-md border border-border px-2 py-0.5 font-data text-xs">
-                            {formatDraftStatus(builder.packageApp.draft_status)}
-                          </span>
+                          {isReviewed ? (
+                            <span className="rounded-md border border-border px-2 py-0.5 font-data text-xs">
+                              Reviewed
+                            </span>
+                          ) : (
+                            <>
+                              <span className="rounded-md border border-border px-2 py-0.5 font-data text-xs">
+                                {formatApplicationPackageStatus(builder.packageMeta?.package_status)}
+                              </span>
+                              <span className="rounded-md border border-border px-2 py-0.5 font-data text-xs">
+                                {formatDraftStatus(builder.packageApp.draft_status)}
+                              </span>
+                            </>
+                          )}
+                          {validationOnlyPassed ? (
+                            <span className="rounded-md border border-border px-2 py-0.5 font-data text-xs">
+                              Validation-only passed
+                            </span>
+                          ) : null}
                         </div>
 
                         {builder.isPepco && builder.portalApplications.length > 0 ? (
@@ -668,6 +747,9 @@ export default function UciApplicationBuilder() {
                                           <button
                                             type="button"
                                             className="pilot-button-ghost"
+                                            disabled={
+                                              builder.signatureBusyAction === `${slot.key}:unsigned`
+                                            }
                                             onClick={() =>
                                               void builder.setSignatureStatus(slot.key, "unsigned")
                                             }
@@ -677,7 +759,11 @@ export default function UciApplicationBuilder() {
                                           <button
                                             type="button"
                                             className="pilot-button-primary"
-                                            disabled={!builder.signatureReviewNote.trim()}
+                                            disabled={
+                                              !builder.signatureReviewNote.trim() ||
+                                              builder.signatureBusyAction ===
+                                                `${slot.key}:signed_manual_verified`
+                                            }
                                             onClick={() =>
                                               void builder.setSignatureStatus(
                                                 slot.key,
@@ -685,6 +771,10 @@ export default function UciApplicationBuilder() {
                                               )
                                             }
                                           >
+                                            {builder.signatureBusyAction ===
+                                            `${slot.key}:signed_manual_verified` ? (
+                                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : null}
                                             Manually verify signed
                                           </button>
                                         </div>
@@ -783,75 +873,376 @@ export default function UciApplicationBuilder() {
                     <h2 className="mt-1 font-tight text-xl font-bold text-foreground">
                       Pre-flight check
                     </h2>
-                    <ul className="mt-5 space-y-3 text-sm">
-                      <li className="flex items-start gap-2 text-foreground">
-                        {(builder.packageMeta?.missing_fields?.length ?? 0) === 0 &&
-                        builder.packageApp ? (
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                        ) : (
-                          <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span>
-                          All required fields present
-                          {builder.packageMeta?.missing_fields?.length
-                            ? ` — missing: ${builder.packageMeta.missing_fields.join(", ")}`
-                            : builder.packageApp
-                              ? " — package fields OK or optional only"
-                              : " — build a package draft first"}
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2 text-foreground">
-                        <Construction className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <span>
-                          Load profile within tariff bounds{" "}
-                          <ComingSoonChip detail="No tariff engine" />
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2 text-foreground">
-                        <Construction className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <span>
-                          Exhibits sealed by engineer of record{" "}
-                          <ComingSoonChip detail="No seal verification service" />
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2 text-foreground">
-                        <Construction className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <span>
-                          Account-holder verified against W-9{" "}
-                          <ComingSoonChip detail="No W-9 verification" />
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2 text-foreground">
-                        {(builder.packageMeta?.missing_documents?.length ?? 0) === 0 &&
-                        builder.packageDocs.length > 0 ? (
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                        ) : (
-                          <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span>
-                          Required exhibits attached
-                          {builder.packageMeta?.missing_documents?.length
-                            ? ` — missing: ${builder.packageMeta.missing_documents.join(", ")}`
-                            : ""}
-                        </span>
-                      </li>
-                    </ul>
+                    {builder.packageApp ? (
+                      <div className="mt-5 space-y-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-4">
+                          <div>
+                            <div className="font-tight font-semibold text-foreground">
+                              {formatPackageReviewStatus(packageReview.status)}
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {packageReview.confirmedCount} of {packageReview.totalCount} required
+                              mappings confirmed for this package
+                            </p>
+                          </div>
+                          {!isReviewed ? (
+                            <button
+                              type="button"
+                              className="pilot-button-ghost"
+                              disabled={builder.reviewItemBusy === "all-fields"}
+                              onClick={() => void builder.confirmAllVerifiedFields()}
+                            >
+                              Confirm all verified fields
+                            </button>
+                          ) : null}
+                        </div>
 
-                    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-4">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Sparkles className="h-4 w-4" />
-                        <span className="font-tight font-semibold">Agent QA</span>
-                        <ComingSoonChip detail="No agent QA orchestration backend" />
+                        <div className="overflow-x-auto rounded-md border border-border">
+                          <table className="w-full min-w-[760px] text-left text-xs">
+                            <thead className="bg-muted/40 text-muted-foreground">
+                              <tr>
+                                <th className="px-3 py-2">Requirement</th>
+                                <th className="px-3 py-2">Mapped value</th>
+                                <th className="px-3 py-2">Source</th>
+                                <th className="px-3 py-2">Mapping status</th>
+                                <th className="px-3 py-2">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {packageReview.fields.map((field) => (
+                                <tr key={field.key} className="border-t border-border align-top">
+                                  <td className="px-3 py-3 font-medium">{field.label}</td>
+                                  <td className="max-w-xs px-3 py-3">
+                                    {formatPackageMappedValue(field.value)}
+                                  </td>
+                                  <td className="px-3 py-3 text-muted-foreground">
+                                    {formatPackageFieldProvenance(field)}
+                                    <details className="mt-1">
+                                      <summary className="cursor-pointer text-[10px]">
+                                        View technical provenance
+                                      </summary>
+                                      <code className="break-all text-[10px]">
+                                        {field.source || "unknown"}
+                                      </code>
+                                    </details>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium",
+                                        field.reviewStatus === "confirmed" &&
+                                          "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                                        field.reviewStatus === "needs_correction" &&
+                                          "bg-amber-500/10 text-amber-800 dark:text-amber-200",
+                                        field.reviewStatus === "ready_for_re_review" &&
+                                          "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+                                        field.reviewStatus === "not_reviewed" &&
+                                          "bg-muted text-muted-foreground",
+                                      )}
+                                    >
+                                      {field.reviewStatus === "confirmed" ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                      ) : null}
+                                      {formatPackageReviewItemStatus(field.reviewStatus)}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    {isReviewed ? (
+                                      <span className="text-muted-foreground">Snapshot locked</span>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-1">
+                                        {field.reviewStatus !== "confirmed" ? (
+                                          <button
+                                            type="button"
+                                            className="pilot-button-primary"
+                                            disabled={
+                                              field.status !== "present" ||
+                                              builder.reviewItemBusy === `field:${field.key}`
+                                            }
+                                            onClick={() =>
+                                              void builder.updateReviewItem(
+                                                "field",
+                                                field.key,
+                                                "confirmed",
+                                              )
+                                            }
+                                          >
+                                            {builder.reviewItemBusy === `field:${field.key}` ? (
+                                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : null}
+                                            Confirm for package
+                                          </button>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          className="pilot-button-ghost"
+                                          disabled={
+                                            !builder.reviewNotes.trim() ||
+                                            builder.reviewItemBusy === `field:${field.key}`
+                                          }
+                                          onClick={() =>
+                                            navigate(
+                                              field.source?.startsWith(
+                                                "load_summary.verified_values",
+                                              )
+                                                ? `/uci/records/${encodeURIComponent(builder.coordinationId || "")}?tab=load-profile&field=${encodeURIComponent(field.key)}`
+                                                : field.source?.startsWith("project.")
+                                                  ? `/projects?project=${encodeURIComponent(builder.packageApp?.project_id || "")}&field=${encodeURIComponent(field.source.slice("project.".length))}`
+                                                  : `/uci/records/${encodeURIComponent(builder.coordinationId || "")}?tab=application-prep&field=${encodeURIComponent(field.key)}`,
+                                            )
+                                          }
+                                        >
+                                          {field.source?.startsWith("load_summary.verified_values")
+                                            ? "Open verified input"
+                                            : field.source?.startsWith("project.")
+                                              ? "Edit project field"
+                                              : "Edit mapping"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="pilot-button-ghost"
+                                          disabled={
+                                            !builder.reviewNotes.trim() ||
+                                            builder.reviewItemBusy === `field:${field.key}`
+                                          }
+                                          onClick={() =>
+                                            void builder.updateReviewItem(
+                                              "field",
+                                              field.key,
+                                              "needs_correction",
+                                            )
+                                          }
+                                        >
+                                          Flag for correction
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="pilot-kicker">Required documents</div>
+                          {packageReview.documents.map((document) => (
+                            <div
+                              key={document.key}
+                              className="grid gap-3 rounded-md border border-border p-3 text-xs md:grid-cols-[1.2fr_1fr_1fr_auto]"
+                            >
+                              <div>
+                                <div className="font-medium">{document.label || document.key}</div>
+                                <div className="mt-1 text-muted-foreground">
+                                  {document.file_name || "No document mapped"}
+                                </div>
+                              </div>
+                              <div className="text-muted-foreground">
+                                Source: {formatPackageDocumentSource(document.source)}
+                              </div>
+                              <div>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium",
+                                    document.reviewStatus === "confirmed" &&
+                                      "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                                    document.reviewStatus === "needs_correction" &&
+                                      "bg-amber-500/10 text-amber-800 dark:text-amber-200",
+                                    document.reviewStatus === "ready_for_re_review" &&
+                                      "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+                                    document.reviewStatus === "not_reviewed" &&
+                                      "bg-muted text-muted-foreground",
+                                  )}
+                                >
+                                  {document.reviewStatus === "confirmed" ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  ) : null}
+                                  {formatPackageReviewItemStatus(document.reviewStatus)}
+                                </span>
+                              </div>
+                              {isReviewed ? (
+                                <span className="text-muted-foreground">Snapshot locked</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {document.reviewStatus !== "confirmed" ? (
+                                    <button
+                                      type="button"
+                                      className="pilot-button-primary"
+                                      disabled={
+                                        document.status !== "attached" ||
+                                        (document.signature_required &&
+                                          document.signature_status !== "signed_manual_verified") ||
+                                        builder.reviewItemBusy === `document:${document.key}`
+                                      }
+                                      onClick={() =>
+                                        void builder.updateReviewItem(
+                                          "document",
+                                          document.key,
+                                          "confirmed",
+                                        )
+                                      }
+                                    >
+                                      {builder.reviewItemBusy === `document:${document.key}` ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : null}
+                                      Confirm document
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="pilot-button-ghost"
+                                    onClick={() => setActive("drawings")}
+                                  >
+                                    Change
+                                  </button>
+                                  {document.status === "attached" ? (
+                                    <button
+                                      type="button"
+                                      className="pilot-button-ghost"
+                                      onClick={() => void builder.removeMapping(document.key)}
+                                    >
+                                      Remove
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="pilot-button-ghost"
+                                    disabled={
+                                      !builder.reviewNotes.trim() ||
+                                      builder.reviewItemBusy === `document:${document.key}`
+                                    }
+                                    onClick={() =>
+                                      void builder.updateReviewItem(
+                                        "document",
+                                        document.key,
+                                        "needs_correction",
+                                      )
+                                    }
+                                  >
+                                    Flag for correction
+                                  </button>
+                                </div>
+                              )}
+                              {document.signature_required ? (
+                                <div className="space-y-2 rounded-md border border-amber-500/30 p-3 md:col-span-4">
+                                  <p className="font-medium text-foreground">
+                                    Signature:{" "}
+                                    {document.signature_status === "signed_manual_verified"
+                                      ? "Signed — manually verified ✓"
+                                      : document.signature_status === "unsigned"
+                                        ? "Unsigned"
+                                        : "Unknown"}
+                                  </p>
+                                  {document.signature_review_note ? (
+                                    <p className="text-muted-foreground">
+                                      Verification note: {document.signature_review_note}
+                                    </p>
+                                  ) : null}
+                                  {!isReviewed ? (
+                                    <>
+                                      {document.signature_status !==
+                                      "signed_manual_verified" ? (
+                                        <input
+                                          value={builder.signatureReviewNote}
+                                          onChange={(event) =>
+                                            builder.setSignatureReviewNote(event.target.value)
+                                          }
+                                          placeholder="Verification note required to verify signed"
+                                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs"
+                                        />
+                                      ) : null}
+                                      {document.signature_status ===
+                                      "signed_manual_verified" ? (
+                                        <button
+                                          type="button"
+                                          className="pilot-button-ghost"
+                                          disabled={
+                                            builder.signatureBusyAction ===
+                                            `${document.key}:unsigned`
+                                          }
+                                          onClick={() =>
+                                            void builder.setSignatureStatus(
+                                              document.key,
+                                              "unsigned",
+                                            )
+                                          }
+                                        >
+                                          {builder.signatureBusyAction ===
+                                          `${document.key}:unsigned` ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          ) : null}
+                                          Mark unsigned
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="pilot-button-primary"
+                                          disabled={
+                                            !builder.signatureReviewNote.trim() ||
+                                            builder.signatureBusyAction ===
+                                              `${document.key}:signed_manual_verified`
+                                          }
+                                          onClick={() =>
+                                            void builder.setSignatureStatus(
+                                              document.key,
+                                              "signed_manual_verified",
+                                            )
+                                          }
+                                        >
+                                          {builder.signatureBusyAction ===
+                                          `${document.key}:signed_manual_verified` ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          ) : null}
+                                          Verify signed
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : null}
+                                  <p className="text-muted-foreground">
+                                    Signature verification is separate from document confirmation.
+                                  </p>
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        Never shown as passed without a real service
-                      </span>
-                    </div>
+                    ) : null}
+
+                    {[
+                      ...packageReview.fields,
+                      ...packageReview.documents,
+                    ].some(
+                      (item) =>
+                        item.reviewStatus === "needs_correction" ||
+                        item.reviewStatus === "ready_for_re_review",
+                    ) || builder.packageMeta?.package_review?.package_correction?.active ? (
+                      <div className="mt-6 space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+                        <div className="pilot-kicker">Changes required</div>
+                        {builder.packageMeta?.package_review?.package_correction?.note ? (
+                          <p className="text-xs text-muted-foreground">
+                            {builder.packageMeta.package_review.package_correction.note}
+                          </p>
+                        ) : null}
+                        {[...packageReview.fields, ...packageReview.documents]
+                          .filter(
+                            (item) =>
+                              item.reviewStatus === "needs_correction" ||
+                              item.reviewStatus === "ready_for_re_review",
+                          )
+                          .map((item) => (
+                            <p key={item.key} className="text-xs">
+                              {item.label || item.key} ·{" "}
+                              {formatPackageReviewItemStatus(item.reviewStatus)}
+                            </p>
+                          ))}
+                      </div>
+                    ) : null}
 
                     {builder.packageApp ? (
                       <div className="mt-6 space-y-3 rounded-md border border-border p-4">
                         <Label htmlFor="uci-builder-review-notes" className="text-xs">
-                          Review notes (optional)
+                          Correction reason (required for Reopen or Flag for correction)
                         </Label>
                         <Textarea
                           id="uci-builder-review-notes"
@@ -862,32 +1253,34 @@ export default function UciApplicationBuilder() {
                           placeholder="Document review comments for the team"
                         />
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="pilot-button-primary"
-                            disabled={
-                              builder.reviewBusy ||
-                              builder.packageApp.draft_status === "reviewed" ||
-                              builder.packageMeta?.package_status !== "ready_for_review"
-                            }
-                            onClick={() => void builder.markReviewed("reviewed")}
-                          >
-                            {builder.reviewBusy ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : null}
-                            Mark reviewed
-                          </button>
+                          {!isReviewed ? (
+                            <button
+                              type="button"
+                              className="pilot-button-primary"
+                              disabled={
+                                builder.reviewBusy ||
+                                !packageReview.readyForFinalReview
+                              }
+                              onClick={() => void builder.markReviewed("reviewed")}
+                            >
+                              {builder.reviewBusy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : null}
+                              Mark package reviewed
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="pilot-button-ghost"
-                            disabled={builder.reviewBusy}
+                            disabled={builder.reviewBusy || !builder.reviewNotes.trim()}
                             onClick={() => void builder.markReviewed("needs_changes")}
                           >
-                            Request changes
+                            {isReviewed ? "Reopen review" : "Request changes"}
                           </button>
                           <button
                             type="button"
-                            className="pilot-button-primary"
+                            className="hidden"
+                            aria-hidden="true"
                             disabled={!submitReady || builder.submitBusy}
                             onClick={() => void builder.submitPackage()}
                           >
@@ -903,11 +1296,30 @@ export default function UciApplicationBuilder() {
                           </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {submitReady
+                          {isReviewed && builder.packageMeta?.package_review ? (
+                            <>
+                              Reviewed by{" "}
+                              {builder.packageMeta.package_review.reviewer_display ||
+                                builder.packageMeta.package_review.reviewed_by_user_id ||
+                                builder.packageApp.reviewed_by ||
+                                "unknown reviewer"}
+                              {builder.packageMeta.package_review.reviewed_at ||
+                              builder.packageApp.reviewed_at
+                                ? ` · ${new Date(
+                                    builder.packageMeta.package_review.reviewed_at ||
+                                      builder.packageApp.reviewed_at ||
+                                      "",
+                                  ).toLocaleString()}`
+                                : ""}
+                              . The exact reviewed field and document snapshot is retained.
+                            </>
+                          ) : submitReady
                             ? builder.isDominionSynthetic
                               ? "Reviewed — validation only. No email, portal action, or lifecycle transition."
                               : "Reviewed — submit runs Pepco validation dry-run by default (no live portal submit unless explicitly enabled)."
-                            : "Portal submission stays disabled until draft status is reviewed."}
+                            : packageReview.readyForFinalReview
+                              ? "Every required mapping is confirmed. Mark the package reviewed to lock the snapshot."
+                              : "Confirm every required field and document before final review."}
                         </p>
                         {builder.lastSubmitResult ? (
                           <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">

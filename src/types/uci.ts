@@ -89,6 +89,7 @@ export interface CoordinationApplication {
   reviewed_at: string | null;
   draft_status: DraftStatus;
   agent_draft_metadata: Record<string, unknown>;
+  package_review_summary?: unknown;
   idempotency_key: string | null;
   last_error: string | null;
   provider_slug?: string | null;
@@ -251,6 +252,31 @@ export interface UciPortalHarvestResponse {
 
 export interface UciProjectCoordinationResponse {
   records: CoordinationRecord[];
+}
+
+export interface UciOperationalSnapshotRecord extends CoordinationRecord {
+  project_name: string;
+  provider_display_name: string | null;
+  applications: CoordinationApplication[];
+  communications_recent: CoordinationCommunication[];
+  attention_communications: CoordinationCommunication[];
+  attention_count: number;
+}
+
+export interface UciOperationalSnapshotResponse {
+  records: UciOperationalSnapshotRecord[];
+  generated_at: string;
+  diagnostics: {
+    project_count: number;
+    record_count: number;
+    application_count: number;
+    communication_count: number;
+    db_query_count: number;
+    access_mode: "rpc" | "compatibility";
+    partial_failures: string[];
+    query_durations_ms: Record<string, number>;
+    service_duration_ms: number;
+  };
 }
 
 export interface UciInitResponse {
@@ -458,8 +484,9 @@ export interface UciApplicationPackageBuildResponse {
 export interface UciApplicationReviewResponse {
   application: CoordinationApplication;
   review_status: DraftStatus;
-  reviewed_at: string;
-  reviewed_by: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  package_review?: unknown;
 }
 
 export interface UciApplicationSubmitResponse {
@@ -491,11 +518,30 @@ export interface UciRecordDetailResponse {
   equipment: CoordinationEquipment[];
   milestones: CoordinationMilestone[];
   communications_recent: CoordinationCommunication[];
+  hydration?: {
+    request_id: string | null;
+    steps: Array<{
+      step: string;
+      duration_ms: number;
+      success: boolean;
+      blocking: boolean;
+      request_id: string | null;
+      error?: string;
+    }>;
+    errors: Record<string, { code: string; message: string }>;
+  };
 }
 
 export interface UciTransitionResponse {
   coordination: CoordinationRecord;
   transition: CoordinationTransition;
+}
+
+export interface UciStage2CompletionResponse extends UciTransitionResponse {
+  stage_2_completed: true;
+  stage_3_completed: boolean;
+  ready_for_stage_4: boolean;
+  application_id: string | null;
 }
 
 export interface UciApplicationsListResponse {

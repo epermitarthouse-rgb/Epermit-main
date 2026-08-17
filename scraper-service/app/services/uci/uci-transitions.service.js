@@ -1,5 +1,6 @@
 "use strict";
 
+const APPLICATION_PACKAGE_IDEMPOTENCY_KEY = "agent_3_application_package:d3-v1";
 const VALID_STATES = new Set([
   "NOT_STARTED",
   "IN_PROGRESS",
@@ -26,6 +27,7 @@ function isValidStage(n) {
  * @param {number} p.toStage
  * @param {string} p.toState
  * @param {string} [p.reason]
+ * @param {Record<string, unknown>} [p.metadata]
  * @returns {Promise<{ record: Record<string, unknown>, transition: Record<string, unknown> }>}
  */
 async function recordUserTransition(supabase, p) {
@@ -35,6 +37,7 @@ async function recordUserTransition(supabase, p) {
     toStage,
     toState,
     reason = null,
+    metadata = {},
   } = p;
 
   if (!isValidStage(toStage)) {
@@ -91,7 +94,7 @@ async function recordUserTransition(supabase, p) {
     triggered_by_type: "user",
     triggered_by_id: userId,
     reason: typeof reason === "string" && reason.trim() ? reason.trim() : null,
-    metadata: {},
+    metadata: metadata && typeof metadata === "object" ? metadata : {},
   };
 
   const { data: transition, error: tErr } = await supabase
@@ -128,6 +131,107 @@ async function recordUserTransition(supabase, p) {
   }
 
   return { record: updated, transition };
+}
+
+/**
+ * Explicit human gate between engineering review and application preparation.
+ * A reviewed/ready Agent 3 package closes Stage 3; otherwise Stage 3 starts in progress.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} p
+ * @param {string} p.coordinationRecordId
+ * @param {string} p.userId
+ * @param {string} p.reason
+ * @returns {Promise<{ record: Record<string, unknown>, transition: Record<string, unknown>, stage3Completed: boolean, application: Record<string, unknown> | null }>}
+ */
+async function completeStage2EngineeringReview(supabase, p) {
+  const { coordinationRecordId, userId, reason } = p;
+  const { data: current, error: recordError } = await supabase
+    .from("coordination_records")
+    .select("*")
+    .eq("id", coordinationRecordId)
+    .maybeSingle();
+
+  if (recordError) {
+    throw Object.assign(new Error(recordError.message || "Failed to load coordination record"), {
+      cause: recordError,
+      statusCode: 500,
+      code: "COORDINATION_FETCH_FAILED",
+    });
+  }
+  if (!current) {
+    const err = new Error("Coordination record not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  if (
+    Number(current.current_stage) !== 2 ||
+    String(current.current_stage_state) !== "IN_PROGRESS"
+  ) {
+    const err = new Error("Stage 2 must be active before engineering review can be completed");
+    err.statusCode = 409;
+    err.code = "STAGE_2_NOT_ACTIVE";
+    throw err;
+  }
+
+  const projectId = String(current.project_id);
+  const { data: application, error: applicationError } = await supabase
+    .from("coordination_applications")
+    .select("*")
+    .eq("coordination_record_id", coordinationRecordId)
+    .eq("project_id", projectId)
+    .eq("record_source", "agent_draft")
+    .eq("idempotency_key", APPLICATION_PACKAGE_IDEMPOTENCY_KEY)
+    .maybeSingle();
+
+  if (applicationError) {
+    throw Object.assign(
+      new Error(applicationError.message || "Failed to load application package"),
+      {
+        cause: applicationError,
+        statusCode: 500,
+        code: "APPLICATION_FETCH_FAILED",
+      },
+    );
+  }
+
+  const packageMetadata =
+    application?.agent_draft_metadata?.application_package &&
+    typeof application.agent_draft_metadata.application_package === "object"
+      ? application.agent_draft_metadata.application_package
+      : {};
+  // Final lifecycle disposition must use the same computed gate returned to
+  // Agent 3 clients; persisted draft/package labels alone can become stale.
+  const packageReviewSummary = application
+    ? require("./uci-package-review.service.js").summarizePackageReview(application)
+    : null;
+  const stage3Completed =
+    packageReviewSummary?.status === "reviewed" &&
+    packageReviewSummary?.ready_for_final_review === true &&
+    Boolean(packageReviewSummary?.reviewed_snapshot);
+  const toState = stage3Completed ? "COMPLETED" : "IN_PROGRESS";
+
+  const result = await recordUserTransition(supabase, {
+    coordinationRecordId,
+    userId,
+    toStage: 3,
+    toState,
+    reason,
+    metadata: {
+      action: "complete_stage_2_engineering_review",
+      human_gated: true,
+      stage_2_completed: true,
+      stage_3_disposition: toState,
+      application_id: application?.id ?? null,
+      package_reviewed: String(application?.draft_status ?? "") === "reviewed",
+      package_status: packageMetadata.package_status ?? null,
+      package_review_summary: packageReviewSummary,
+      synthetic_data_auto_advanced: false,
+    },
+  });
+
+  return { ...result, stage3Completed, application: application ?? null };
 }
 
 /**
@@ -249,6 +353,7 @@ async function recordSystemTransition(supabase, p) {
 module.exports = {
   recordUserTransition,
   recordSystemTransition,
+  completeStage2EngineeringReview,
   VALID_STATES,
   isValidStage,
 };

@@ -335,6 +335,12 @@ export function canBuildApplicationPackage(params: {
   if (!params.coordinationId) {
     return { ok: false, reason: "No coordination record selected" };
   }
+  if (getApplicationPackageDraftApplication(params.applications)?.draft_status === "reviewed") {
+    return {
+      ok: false,
+      reason: "Request changes before rebuilding the locked reviewed package",
+    };
+  }
   if (!getLoadProfileDraftApplication(params.applications)) {
     return {
       ok: false,
