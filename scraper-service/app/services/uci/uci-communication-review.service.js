@@ -8,7 +8,10 @@ const { isValidCategory, UCI_COMMUNICATION_CATEGORIES } = require("./uci-communi
 const {
   completeStage5Acknowledgment,
   resolveCompletionFields,
+  evaluateAutoAckEligibility,
+  persistPartialAcknowledgmentEvidence,
   isFlaggedForReview,
+  isRealUtilityPm,
 } = require("./uci-ack-acceptance.service.js");
 const { matchInboundToCoordination } = require("./uci-communication-matcher.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
@@ -259,6 +262,8 @@ async function rematchCommunication(supabase, params) {
 
 /**
  * Confirm acknowledgment (or confirm classification) and apply lifecycle when appropriate.
+ * Stage 5 completion uses the same gates as auto-complete (ticket/account + date + real PM).
+ * Reviewer may supply/confirm PM via extractedFields; originals + edits are audited.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
@@ -299,15 +304,25 @@ async function confirmCommunicationReview(supabase, params) {
     existing.extracted_fields && typeof existing.extracted_fields === "object"
       ? /** @type {Record<string, unknown>} */ (existing.extracted_fields)
       : {};
-  const mergedExtracted = { ...priorExtracted, ...extractedFields };
+  const reviewerExtracted =
+    extractedFields && typeof extractedFields === "object"
+      ? /** @type {Record<string, unknown>} */ (extractedFields)
+      : {};
+  const mergedExtracted = { ...priorExtracted, ...reviewerExtracted };
   const reviewedAt = new Date().toISOString();
+
+  /** Whether this confirm can clear attention before lifecycle (may be re-set if incomplete). */
+  let needsAttention =
+    nextClass === "unclassified" ||
+    nextClass === "escalation_or_problem" ||
+    nextClass === "request_for_information";
 
   const { data: updated, error } = await supabase
     .from("coordination_communications")
     .update({
       classification: nextClass || row.classification,
       classification_confidence: 1,
-      needs_human_attention: nextClass === "unclassified" || nextClass === "escalation_or_problem",
+      needs_human_attention: needsAttention,
       reviewed_by: userId,
       reviewed_at: reviewedAt,
       parsed_summary: note || row.parsed_summary || `Human confirmed ${nextClass}`,
@@ -325,6 +340,9 @@ async function confirmCommunicationReview(supabase, params) {
           previous_classification: row.classification ?? null,
           previous_confidence: row.classification_confidence ?? null,
           machine_classification: existing.agent_5_classification ?? null,
+          original_extracted_fields: priorExtracted,
+          reviewer_extracted_fields: reviewerExtracted,
+          merged_extracted_fields: mergedExtracted,
         },
       },
     })
@@ -356,32 +374,76 @@ async function confirmCommunicationReview(supabase, params) {
       .limit(1)
       .maybeSingle();
 
-    const fields = resolveCompletionFields(mergedExtracted, record || {}, application);
-    fields.ackDate =
-      fields.ackDate ||
-      (updated.message_timestamp ? String(updated.message_timestamp) : new Date().toISOString());
-    if (!fields.pm) fields.pm = "Pending utility contact";
-    if (!fields.nextAction) fields.nextAction = "Monitor for class of service / design review";
+    const eligibility = evaluateAutoAckEligibility({
+      classification: "acknowledgment",
+      confidence: 1,
+      matched: true,
+      flagged: false,
+      extracted: mergedExtracted,
+      record: record || {},
+      application,
+      messageTimestamp: updated.message_timestamp,
+      skipConfidenceCheck: true,
+    });
 
-    // Human confirm may complete even without ticket if reviewer provided note — still prefer ticket
-    if (!fields.ticket && !fields.account && extractedFields.utility_ticket_number) {
-      fields.ticket = String(extractedFields.utility_ticket_number);
+    if (eligibility.eligible) {
+      lifecycle = await completeStage5Acknowledgment(supabase, {
+        coordinationRecordId: String(updated.coordination_record_id),
+        userId,
+        source: "user",
+        communicationId,
+        fields: eligibility.fields,
+        reason: note || "Human confirmed acknowledgment",
+      });
+      needsAttention = false;
+    } else {
+      const evidence = await persistPartialAcknowledgmentEvidence(supabase, {
+        coordinationRecordId: String(updated.coordination_record_id),
+        communicationId,
+        fields: eligibility.fields || resolveCompletionFields(mergedExtracted, record || {}, application),
+        reason: eligibility.reason || "incomplete_acknowledgment",
+        source: "user",
+      });
+      needsAttention = true;
+      lifecycle = {
+        completed: false,
+        reason: eligibility.reason,
+        evidence,
+        stage_state: "AWAITING_UTILITY",
+        sla_stopped: false,
+        fields: eligibility.fields || null,
+      };
     }
 
-    lifecycle = await completeStage5Acknowledgment(supabase, {
-      coordinationRecordId: String(updated.coordination_record_id),
-      userId,
-      source: "user",
-      communicationId,
-      fields: {
-        ticket: fields.ticket,
-        account: fields.account,
-        pm: fields.pm,
-        nextAction: fields.nextAction,
-        ackDate: fields.ackDate,
-      },
-      reason: note || "Human confirmed acknowledgment",
-    });
+    if (needsAttention !== updated.needs_human_attention) {
+      const { data: attentionUpdated } = await supabase
+        .from("coordination_communications")
+        .update({
+          needs_human_attention: needsAttention,
+          agent_processed_metadata: {
+            ...metaOf(updated),
+            extracted_fields: mergedExtracted,
+            stage_5_incomplete: needsAttention
+              ? {
+                  reason: lifecycle?.reason || "incomplete_acknowledgment",
+                  at: reviewedAt,
+                  fields: lifecycle?.fields || null,
+                }
+              : null,
+            review_decision: {
+              ...metaOf(updated).review_decision,
+              lifecycle_completed: Boolean(lifecycle?.completed),
+              lifecycle_reason: lifecycle?.reason || null,
+            },
+          },
+        })
+        .eq("id", communicationId)
+        .select("*")
+        .single();
+      if (attentionUpdated) {
+        Object.assign(updated, attentionUpdated);
+      }
+    }
   }
 
   emitUciEvent(
@@ -392,6 +454,9 @@ async function confirmCommunicationReview(supabase, params) {
       project_id: updated.project_id,
       classification: nextClass,
       lifecycle_applied: Boolean(lifecycle?.completed),
+      real_pm_present: isRealUtilityPm(
+        mergedExtracted.utility_project_manager || lifecycle?.fields?.pm,
+      ),
     },
     { supabase },
   );

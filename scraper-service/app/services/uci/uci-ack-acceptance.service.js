@@ -1,16 +1,50 @@
 "use strict";
 
 /**
- * Stage 5 acknowledgment acceptance — complete Stage 5 when criteria met.
- * Never auto-advances on low confidence, unmatched, flagged-for-review, or classifier failure.
- * Does not start Stage 6.
+ * Stage 5 acknowledgment acceptance — complete Stage 5 only when criteria met:
+ * receipt + ticket/account + ack date + real named PM/coordinator.
+ * Placeholder PM values never satisfy completion. Does not start Stage 6.
  */
 
 const { recordSystemTransition, recordUserTransition } = require("./uci-transitions.service.js");
-const { stopAcknowledgmentSla } = require("./uci-ack-sla.service.js");
+const { startAcknowledgmentSla, stopAcknowledgmentSla } = require("./uci-ack-sla.service.js");
 const { canEnterStage6 } = require("./uci-stage5-entry.service.js");
 const { LOW_CONFIDENCE_THRESHOLD } = require("./uci-communication-categories.js");
 const { emitUciEvent } = require("./uci-events.service.js");
+
+/** Values that must never satisfy the PM/coordinator assignment gate. */
+const PM_PLACEHOLDER_PATTERNS = Object.freeze([
+  /^pending(\s+utility)?(\s+contact)?$/i,
+  /^tbd$/i,
+  /^n\/?a$/i,
+  /^unknown$/i,
+  /^none$/i,
+  /^null$/i,
+  /^-+$/,
+  /^not\s+(yet\s+)?assigned$/i,
+  /^awaiting(\s+assignment)?$/i,
+]);
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isRealUtilityPm(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return false;
+  if (PM_PLACEHOLDER_PATTERNS.some((re) => re.test(s))) return false;
+  return true;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function normalizeUtilityPm(value) {
+  const s = String(value ?? "").trim();
+  if (!isRealUtilityPm(s)) return null;
+  return s;
+}
 
 /**
  * @param {Record<string, unknown>} meta
@@ -20,6 +54,11 @@ function isFlaggedForReview(meta) {
 }
 
 /**
+ * Resolve fields for Stage 5 completion.
+ * PM/coordinator must come from **current** acknowledgment evidence or reviewer
+ * extracted fields — never from stale coordination-level `utility_project_manager`
+ * / `utility_contact_name` left behind by a prior completed acknowledgment.
+ *
  * @param {Record<string, unknown>} extracted
  * @param {Record<string, unknown>} record
  * @param {Record<string, unknown> | null} application
@@ -33,11 +72,8 @@ function resolveCompletionFields(extracted, record, application) {
     (extracted.utility_account_number && String(extracted.utility_account_number).trim()) ||
     (record.utility_account_number && String(record.utility_account_number).trim()) ||
     null;
-  const pm =
-    (extracted.utility_project_manager && String(extracted.utility_project_manager).trim()) ||
-    (record.utility_project_manager && String(record.utility_project_manager).trim()) ||
-    (record.utility_contact_name && String(record.utility_contact_name).trim()) ||
-    null;
+  // Current-evidence PM only (classifier / reviewer on this communication).
+  const pm = normalizeUtilityPm(extracted.utility_project_manager);
   const nextAction =
     (extracted.next_required_action && String(extracted.next_required_action).trim()) ||
     (record.next_required_action && String(record.next_required_action).trim()) ||
@@ -50,7 +86,7 @@ function resolveCompletionFields(extracted, record, application) {
 }
 
 /**
- * Auto-complete eligibility (high-confidence matched acknowledgment).
+ * Shared Stage 5 completion eligibility (auto + human confirm).
  * @param {object} params
  */
 function evaluateAutoAckEligibility(params) {
@@ -62,6 +98,7 @@ function evaluateAutoAckEligibility(params) {
     extracted,
     record,
     application,
+    skipConfidenceCheck = false,
   } = params;
 
   if (flagged) {
@@ -73,33 +110,157 @@ function evaluateAutoAckEligibility(params) {
   if (classification !== "acknowledgment") {
     return { eligible: false, reason: "not_acknowledgment" };
   }
-  const conf = Number(confidence);
-  if (!Number.isFinite(conf) || conf < LOW_CONFIDENCE_THRESHOLD) {
-    return { eligible: false, reason: "low_confidence" };
+  if (!skipConfidenceCheck) {
+    const conf = Number(confidence);
+    if (!Number.isFinite(conf) || conf < LOW_CONFIDENCE_THRESHOLD) {
+      return { eligible: false, reason: "low_confidence" };
+    }
   }
 
   const fields = resolveCompletionFields(extracted || {}, record || {}, application || null);
-  if (!fields.ticket && !fields.account) {
-    return { eligible: false, reason: "missing_ticket_or_account", fields };
+  const resolvedAckDate =
+    fields.ackDate ||
+    (params.messageTimestamp != null ? String(params.messageTimestamp) : null) ||
+    null;
+
+  const resolved = {
+    ...fields,
+    ackDate: resolvedAckDate,
+    pm: fields.pm,
+    nextAction: fields.nextAction,
+  };
+
+  if (!resolved.ticket && !resolved.account) {
+    return { eligible: false, reason: "missing_ticket_or_account", fields: resolved };
   }
-  if (!fields.ackDate && !params.messageTimestamp) {
-    return { eligible: false, reason: "missing_acknowledgment_date", fields };
+  if (!resolved.ackDate) {
+    return { eligible: false, reason: "missing_acknowledgment_date", fields: resolved };
+  }
+  if (!isRealUtilityPm(resolved.pm)) {
+    return { eligible: false, reason: "missing_utility_pm", fields: resolved };
   }
 
   return {
     eligible: true,
     reason: null,
-    fields: {
-      ...fields,
-      ackDate: fields.ackDate || params.messageTimestamp || new Date().toISOString(),
-      pm: fields.pm || "Pending utility contact",
-      nextAction: fields.nextAction,
+    fields: resolved,
+  };
+}
+
+/**
+ * Persist acknowledgment evidence without completing Stage 5 or stopping SLA.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function persistPartialAcknowledgmentEvidence(supabase, params) {
+  const {
+    coordinationRecordId,
+    communicationId = null,
+    fields = {},
+    reason = "partial_acknowledgment_evidence",
+    source = "system",
+  } = params;
+
+  const { data: record, error } = await supabase
+    .from("coordination_records")
+    .select("*")
+    .eq("id", coordinationRecordId)
+    .maybeSingle();
+
+  if (error || !record) {
+    return { persisted: false, reason: error?.message || "record_not_found" };
+  }
+
+  // Never overwrite a completed Stage 5
+  if (
+    Number(record.current_stage) === 5 &&
+    String(record.current_stage_state) === "COMPLETED" &&
+    record.acknowledgment_received_at
+  ) {
+    return { persisted: false, reason: "already_completed", coordination_record: record };
+  }
+
+  const prevMeta =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? /** @type {Record<string, unknown>} */ (record.metadata)
+      : {};
+  const priorEvidence =
+    prevMeta.stage_5_acknowledgment_evidence &&
+    typeof prevMeta.stage_5_acknowledgment_evidence === "object"
+      ? /** @type {Record<string, unknown>} */ (prevMeta.stage_5_acknowledgment_evidence)
+      : {};
+
+  const patch = {
+    metadata: {
+      ...prevMeta,
+      stage_5_acknowledgment_evidence: {
+        ...priorEvidence,
+        updated_at: new Date().toISOString(),
+        communication_id: communicationId,
+        utility_ticket_number: fields.ticket ?? priorEvidence.utility_ticket_number ?? null,
+        utility_account_number: fields.account ?? priorEvidence.utility_account_number ?? null,
+        utility_project_manager: fields.pm ?? priorEvidence.utility_project_manager ?? null,
+        acknowledgment_date: fields.ackDate ?? priorEvidence.acknowledgment_date ?? null,
+        next_required_action: fields.nextAction ?? priorEvidence.next_required_action ?? null,
+        incomplete_reason: reason,
+        source,
+        stage_remains: "AWAITING_UTILITY",
+        sla_stopped: false,
+      },
     },
+  };
+
+  // Capture ticket/account when known without marking acknowledgment complete
+  if (fields.account) {
+    patch.utility_account_number = fields.account;
+  }
+  if (fields.nextAction) {
+    patch.next_required_action = fields.nextAction;
+  }
+
+  const { data: updated, error: upErr } = await supabase
+    .from("coordination_records")
+    .update(patch)
+    .eq("id", coordinationRecordId)
+    .select("*")
+    .single();
+
+  if (upErr) {
+    return { persisted: false, reason: upErr.message || "evidence_update_failed" };
+  }
+
+  if (fields.ticket) {
+    await supabase
+      .from("coordination_applications")
+      .update({ utility_ticket_number: fields.ticket })
+      .eq("coordination_record_id", coordinationRecordId)
+      .is("utility_ticket_number", null);
+  }
+
+  emitUciEvent(
+    "uci.stage5.acknowledgment.evidence_persisted",
+    {
+      coordination_record_id: coordinationRecordId,
+      communication_id: communicationId,
+      incomplete_reason: reason,
+      stage_state: "AWAITING_UTILITY",
+    },
+    { supabase },
+  );
+
+  return {
+    persisted: true,
+    coordination_record: updated,
+    incomplete_reason: reason,
+    stage_state: "AWAITING_UTILITY",
+    sla_stopped: false,
   };
 }
 
 /**
  * Complete Stage 5 and stop SLA. Idempotent if already completed with ack date.
+ * Refuses completion without a real named PM/coordinator.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
@@ -113,6 +274,27 @@ async function completeStage5Acknowledgment(supabase, params) {
     fields,
     reason = "Utility acknowledgment confirmed",
   } = params;
+
+  if (!isRealUtilityPm(fields?.pm)) {
+    const err = new Error(
+      "Stage 5 completion requires a real utility PM/coordinator assignment (placeholders are not allowed)",
+    );
+    err.statusCode = 409;
+    err.code = "MISSING_UTILITY_PM";
+    throw err;
+  }
+  if (!fields?.ticket && !fields?.account) {
+    const err = new Error("Stage 5 completion requires a utility ticket or account number");
+    err.statusCode = 409;
+    err.code = "MISSING_TICKET_OR_ACCOUNT";
+    throw err;
+  }
+  if (!fields?.ackDate) {
+    const err = new Error("Stage 5 completion requires an acknowledgment date");
+    err.statusCode = 409;
+    err.code = "MISSING_ACKNOWLEDGMENT_DATE";
+    throw err;
+  }
 
   const { data: record, error } = await supabase
     .from("coordination_records")
@@ -148,7 +330,7 @@ async function completeStage5Acknowledgment(supabase, params) {
     throw err;
   }
 
-  const ackAt = fields.ackDate || new Date().toISOString();
+  const ackAt = fields.ackDate;
   const prevMeta =
     record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
       ? /** @type {Record<string, unknown>} */ (record.metadata)
@@ -159,7 +341,7 @@ async function completeStage5Acknowledgment(supabase, params) {
     .update({
       acknowledgment_received_at: ackAt,
       utility_account_number: fields.account || record.utility_account_number,
-      utility_project_manager: fields.pm || record.utility_project_manager,
+      utility_project_manager: fields.pm,
       utility_contact_name: fields.pm || record.utility_contact_name,
       next_required_action: fields.nextAction || record.next_required_action,
       metadata: {
@@ -172,6 +354,15 @@ async function completeStage5Acknowledgment(supabase, params) {
           acknowledgment_date: ackAt,
           next_required_action: fields.nextAction,
           source,
+        },
+        // Clear pending evidence once fully completed
+        stage_5_acknowledgment_evidence: {
+          ...(prevMeta.stage_5_acknowledgment_evidence &&
+          typeof prevMeta.stage_5_acknowledgment_evidence === "object"
+            ? prevMeta.stage_5_acknowledgment_evidence
+            : {}),
+          resolved_at: new Date().toISOString(),
+          resolved: true,
         },
       },
     })
@@ -187,7 +378,6 @@ async function completeStage5Acknowledgment(supabase, params) {
     });
   }
 
-  // Mirror ticket onto primary application when present
   if (fields.ticket) {
     await supabase
       .from("coordination_applications")
@@ -232,7 +422,6 @@ async function completeStage5Acknowledgment(supabase, params) {
     reason: "Valid Stage 5 acknowledgment completed",
   });
 
-  // Re-read after SLA stop
   const { data: finalRecord } = await supabase
     .from("coordination_records")
     .select("*")
@@ -264,6 +453,7 @@ async function completeStage5Acknowledgment(supabase, params) {
 
 /**
  * Attempt auto-complete from a classified communication. Safe no-op when ineligible.
+ * PM-less high-confidence acks persist evidence, stay AWAITING_UTILITY, Needs Attention, SLA active.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
@@ -324,7 +514,50 @@ async function maybeAutoCompleteFromCommunication(supabase, params) {
   });
 
   if (!eligibility.eligible) {
-    return { attempted: true, completed: false, reason: eligibility.reason, fields: eligibility.fields };
+    /** @type {Record<string, unknown> | null} */
+    let evidence = null;
+    const shouldPersistEvidence =
+      communication.classification === "acknowledgment" &&
+      (eligibility.reason === "missing_utility_pm" ||
+        eligibility.reason === "missing_ticket_or_account" ||
+        eligibility.reason === "missing_acknowledgment_date");
+
+    if (shouldPersistEvidence) {
+      evidence = await persistPartialAcknowledgmentEvidence(supabase, {
+        coordinationRecordId: String(communication.coordination_record_id),
+        communicationId: String(communication.id),
+        fields: eligibility.fields || {},
+        reason: eligibility.reason,
+        source: "system",
+      });
+
+      // Route to Needs Attention; do not stop SLA
+      await supabase
+        .from("coordination_communications")
+        .update({
+          needs_human_attention: true,
+          agent_processed_metadata: {
+            ...meta,
+            extracted_fields: extracted,
+            stage_5_incomplete: {
+              reason: eligibility.reason,
+              at: new Date().toISOString(),
+              fields: eligibility.fields || null,
+            },
+          },
+        })
+        .eq("id", String(communication.id));
+    }
+
+    return {
+      attempted: true,
+      completed: false,
+      reason: eligibility.reason,
+      fields: eligibility.fields,
+      evidence,
+      stage_state: "AWAITING_UTILITY",
+      sla_stopped: false,
+    };
   }
 
   const result = await completeStage5Acknowledgment(supabase, {
@@ -344,10 +577,179 @@ async function maybeAutoCompleteFromCommunication(supabase, params) {
   };
 }
 
+/**
+ * Reopen Stage 5 to AWAITING_UTILITY after a prior COMPLETED acknowledgment.
+ * Archives prior PM/contact/ack fields into metadata history (non-destructive),
+ * clears operational completion fields so stale contact cannot satisfy the next gate,
+ * and restarts acknowledgment SLA.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function reopenStage5Acknowledgment(supabase, params) {
+  const {
+    coordinationRecordId,
+    userId = null,
+    reason = "Stage 5 acknowledgment reopened for further utility confirmation",
+    source = "user",
+  } = params;
+
+  const { data: record, error } = await supabase
+    .from("coordination_records")
+    .select("*")
+    .eq("id", coordinationRecordId)
+    .maybeSingle();
+
+  if (error || !record) {
+    const err = new Error(error?.message || "Coordination record not found");
+    err.statusCode = error ? 500 : 404;
+    err.code = error ? "COORDINATION_FETCH_FAILED" : "NOT_FOUND";
+    throw err;
+  }
+
+  if (Number(record.current_stage) !== 5) {
+    const err = new Error("Stage 5 reopen requires current_stage=5");
+    err.statusCode = 409;
+    err.code = "STAGE_5_NOT_ACTIVE";
+    throw err;
+  }
+
+  const prevMeta =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? /** @type {Record<string, unknown>} */ (record.metadata)
+      : {};
+  const history = Array.isArray(prevMeta.stage_5_acknowledgment_history)
+    ? [...prevMeta.stage_5_acknowledgment_history]
+    : [];
+
+  const archived = {
+    archived_at: new Date().toISOString(),
+    reopened_by: userId,
+    reopen_reason: reason,
+    source,
+    acknowledgment_received_at: record.acknowledgment_received_at ?? null,
+    utility_project_manager: record.utility_project_manager ?? null,
+    utility_contact_name: record.utility_contact_name ?? null,
+    utility_account_number: record.utility_account_number ?? null,
+    next_required_action: record.next_required_action ?? null,
+    stage_5_acknowledgment: prevMeta.stage_5_acknowledgment ?? null,
+    stage_5_acknowledgment_evidence: prevMeta.stage_5_acknowledgment_evidence ?? null,
+    prior_stage_state: record.current_stage_state ?? null,
+  };
+  history.unshift(archived);
+
+  const { data: cleared, error: clearErr } = await supabase
+    .from("coordination_records")
+    .update({
+      acknowledgment_received_at: null,
+      // Clear operational PM/contact so reopen cannot inherit stale completion evidence.
+      // Historical values remain in stage_5_acknowledgment_history.
+      utility_project_manager: null,
+      utility_contact_name: null,
+      // Leave ack_sla_stopped_at set until startAcknowledgmentSla restarts the timer.
+      metadata: {
+        ...prevMeta,
+        stage_5_acknowledgment_history: history.slice(0, 25),
+        stage_5_acknowledgment: null,
+        stage_5_reopen: {
+          at: archived.archived_at,
+          reason,
+          source,
+          reopened_by: userId,
+        },
+      },
+    })
+    .eq("id", coordinationRecordId)
+    .select("*")
+    .single();
+
+  if (clearErr) {
+    throw Object.assign(new Error(clearErr.message || "Failed to archive Stage 5 acknowledgment"), {
+      cause: clearErr,
+      statusCode: 500,
+      code: "STAGE_5_REOPEN_ARCHIVE_FAILED",
+    });
+  }
+
+  const transitionFn = source === "user" && userId ? recordUserTransition : recordSystemTransition;
+  const transitionParams =
+    source === "user" && userId
+      ? {
+          coordinationRecordId,
+          userId,
+          toStage: 5,
+          toState: "AWAITING_UTILITY",
+          reason,
+          metadata: {
+            stage_5_reopen: true,
+            archived_acknowledgment: {
+              acknowledgment_received_at: archived.acknowledgment_received_at,
+              utility_project_manager: archived.utility_project_manager,
+              utility_contact_name: archived.utility_contact_name,
+            },
+          },
+        }
+      : {
+          coordinationRecordId,
+          toStage: 5,
+          toState: "AWAITING_UTILITY",
+          reason,
+          triggeredByType: "system",
+          triggeredById: null,
+          metadata: {
+            stage_5_reopen: true,
+            archived_acknowledgment: {
+              acknowledgment_received_at: archived.acknowledgment_received_at,
+              utility_project_manager: archived.utility_project_manager,
+              utility_contact_name: archived.utility_contact_name,
+            },
+          },
+        };
+
+  const { record: awaitingRecord, transition } = await transitionFn(supabase, transitionParams);
+
+  const sla = await startAcknowledgmentSla(supabase, {
+    coordinationRecordId,
+    reason: `Stage 5 reopened — ${reason}`,
+  });
+
+  emitUciEvent(
+    "uci.stage5.acknowledgment.reopened",
+    {
+      coordination_record_id: coordinationRecordId,
+      project_id: record.project_id,
+      source,
+      archived_pm: archived.utility_project_manager,
+      archived_contact_name: archived.utility_contact_name,
+    },
+    { supabase },
+  );
+
+  const { data: finalRecord } = await supabase
+    .from("coordination_records")
+    .select("*")
+    .eq("id", coordinationRecordId)
+    .maybeSingle();
+
+  return {
+    reopened: true,
+    coordination_record: finalRecord || sla.coordination_record || awaitingRecord || cleared,
+    transition,
+    sla,
+    archived,
+    history_length: history.length,
+  };
+}
+
 module.exports = {
   isFlaggedForReview,
+  isRealUtilityPm,
+  normalizeUtilityPm,
   resolveCompletionFields,
   evaluateAutoAckEligibility,
+  persistPartialAcknowledgmentEvidence,
   completeStage5Acknowledgment,
   maybeAutoCompleteFromCommunication,
+  reopenStage5Acknowledgment,
+  PM_PLACEHOLDER_PATTERNS,
 };

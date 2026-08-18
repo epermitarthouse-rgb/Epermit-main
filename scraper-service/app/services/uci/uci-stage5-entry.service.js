@@ -171,11 +171,18 @@ async function reconcileLiveTransmissionIntoStage5(supabase, params) {
       !Array.isArray(application.agent_draft_metadata)
         ? /** @type {Record<string, unknown>} */ (application.agent_draft_metadata)
         : {};
-    const mirror = meta.submission_transmission_attempt;
-    if (mirror && typeof mirror === "object" && !Array.isArray(mirror)) {
-      const m = /** @type {Record<string, unknown>} */ (mirror);
-      if (String(m.status) === "sent") attempt = m;
-    }
+    const singular = meta.submission_transmission_attempt;
+    const latest = meta.latest_transmission;
+    const history = Array.isArray(meta.submission_transmission_attempts)
+      ? meta.submission_transmission_attempts
+      : [];
+    const fromHistory = [...history]
+      .reverse()
+      .find((row) => row && typeof row === "object" && String(row.status) === "sent");
+    const mirror = [singular, latest, fromHistory].find(
+      (row) => row && typeof row === "object" && !Array.isArray(row) && String(row.status) === "sent",
+    );
+    if (mirror) attempt = /** @type {Record<string, unknown>} */ (mirror);
   }
 
   if (!attempt || String(attempt.status) !== "sent") {

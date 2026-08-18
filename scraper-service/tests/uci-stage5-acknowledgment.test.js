@@ -32,11 +32,14 @@ const {
 const {
   evaluateAutoAckEligibility,
   completeStage5Acknowledgment,
+  maybeAutoCompleteFromCommunication,
+  isRealUtilityPm,
 } = require("../app/services/uci/uci-ack-acceptance.service.js");
 const { scoreMatch, matchInboundToCoordination } = require("../app/services/uci/uci-communication-matcher.service.js");
 const { canEnterStage6 } = require("../app/services/uci/uci-stage5-entry.service.js");
 const {
   flagCommunicationForReview,
+  confirmCommunicationReview,
 } = require("../app/services/uci/uci-communication-review.service.js");
 const { ingestInboundEmailMessage } = require("../app/services/uci/uci-graph-inbound.service.js");
 
@@ -354,7 +357,10 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
       confidence: 0.7,
       matched: true,
       flagged: false,
-      extracted: { utility_ticket_number: "T1" },
+      extracted: {
+        utility_ticket_number: "T1",
+        utility_project_manager: "Jordan",
+      },
       record: {},
       application: {},
       messageTimestamp: new Date().toISOString(),
@@ -367,7 +373,10 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
       confidence: 0.9,
       matched: true,
       flagged: true,
-      extracted: { utility_ticket_number: "T1" },
+      extracted: {
+        utility_ticket_number: "T1",
+        utility_project_manager: "Jordan",
+      },
       record: {},
       application: {},
       messageTimestamp: new Date().toISOString(),
@@ -376,7 +385,7 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
     assert.equal(flagged.reason, "flagged_for_review");
   });
 
-  it("allows high-confidence matched acknowledgment with ticket", () => {
+  it("allows high-confidence matched acknowledgment with ticket + real PM", () => {
     const ok = evaluateAutoAckEligibility({
       classification: "acknowledgment",
       confidence: 0.9,
@@ -392,9 +401,219 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
       messageTimestamp: "2026-08-19T00:00:00Z",
     });
     assert.equal(ok.eligible, true);
+    assert.equal(ok.fields.pm, "Jordan");
   });
 
-  it("completes Stage 5 without starting Stage 6", async () => {
+  it("rejects missing PM and placeholder PM for completion", () => {
+    assert.equal(isRealUtilityPm("Pending utility contact"), false);
+    assert.equal(isRealUtilityPm("TBD"), false);
+    assert.equal(isRealUtilityPm("Jordan Lee"), true);
+
+    const noPm = evaluateAutoAckEligibility({
+      classification: "acknowledgment",
+      confidence: 0.95,
+      matched: true,
+      flagged: false,
+      extracted: { utility_ticket_number: "T-1" },
+      record: {},
+      application: {},
+      messageTimestamp: "2026-08-19T00:00:00Z",
+    });
+    assert.equal(noPm.eligible, false);
+    assert.equal(noPm.reason, "missing_utility_pm");
+
+    const placeholder = evaluateAutoAckEligibility({
+      classification: "acknowledgment",
+      confidence: 0.95,
+      matched: true,
+      flagged: false,
+      extracted: {
+        utility_ticket_number: "T-1",
+        utility_project_manager: "Pending utility contact",
+      },
+      record: {},
+      application: {},
+      messageTimestamp: "2026-08-19T00:00:00Z",
+    });
+    assert.equal(placeholder.eligible, false);
+    assert.equal(placeholder.reason, "missing_utility_pm");
+  });
+
+  it("does not treat stale utility_contact_name / utility_project_manager as current PM", () => {
+    const stale = evaluateAutoAckEligibility({
+      classification: "acknowledgment",
+      confidence: 0.95,
+      matched: true,
+      flagged: false,
+      extracted: {
+        utility_ticket_number: "T-STALE",
+        // No PM on current acknowledgment evidence
+      },
+      record: {
+        current_stage: 5,
+        current_stage_state: "AWAITING_UTILITY",
+        utility_project_manager: "Jordan Hale",
+        utility_contact_name: "Jordan Hale",
+        utility_account_number: "ACCT-OLD",
+      },
+      application: {},
+      messageTimestamp: "2026-08-19T12:00:00Z",
+    });
+    assert.equal(stale.eligible, false);
+    assert.equal(stale.reason, "missing_utility_pm");
+    assert.equal(stale.fields.pm, null);
+  });
+
+  it("reopen archives prior PM/contact and blocks stale completion until current PM provided", async () => {
+    const { reopenStage5Acknowledgment, maybeAutoCompleteFromCommunication } = require("../app/services/uci/uci-ack-acceptance.service.js");
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "COMPLETED",
+          acknowledgment_received_at: "2026-08-18T21:10:14Z",
+          utility_project_manager: "Jordan Hale",
+          utility_contact_name: "Jordan Hale",
+          utility_account_number: "ACCT-HS-451497",
+          next_required_action: "Monitor COS",
+          metadata: {
+            stage_5_acknowledgment: {
+              utility_project_manager: "Jordan Hale",
+              utility_ticket_number: "T-FULL",
+              source: "system",
+            },
+          },
+          ack_sla_started_at: "2026-08-18T21:10:10Z",
+          ack_sla_due_at: "2026-08-25T21:10:10Z",
+          ack_sla_stopped_at: "2026-08-18T21:10:40Z",
+        },
+      ],
+      coordination_stage_transitions: [],
+      coordination_applications: [{ id: "app-1", coordination_record_id: "coord-1", utility_ticket_number: "T-FULL" }],
+      coordination_communications: [
+        {
+          id: "comm-nopm",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          classification: "acknowledgment",
+          classification_confidence: 0.95,
+          message_timestamp: "2026-08-19T12:00:00Z",
+          needs_human_attention: false,
+          agent_processed_metadata: {
+            extracted_fields: {
+              utility_ticket_number: "T-NOPM",
+              // intentionally no PM
+            },
+          },
+        },
+      ],
+      utility_providers: [],
+    };
+    const supabase = createTableMock(tables);
+
+    const reopened = await reopenStage5Acknowledgment(supabase, {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+      reason: "UAT reopen after completed acknowledgment",
+      source: "user",
+    });
+    assert.equal(reopened.reopened, true);
+    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
+    assert.equal(tables.coordination_records[0].acknowledgment_received_at, null);
+    assert.equal(tables.coordination_records[0].utility_project_manager, null);
+    assert.equal(tables.coordination_records[0].utility_contact_name, null);
+    assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
+    assert.ok(tables.coordination_records[0].ack_sla_started_at);
+    const hist = tables.coordination_records[0].metadata.stage_5_acknowledgment_history;
+    assert.ok(Array.isArray(hist) && hist.length >= 1);
+    assert.equal(hist[0].utility_project_manager, "Jordan Hale");
+    assert.equal(hist[0].utility_contact_name, "Jordan Hale");
+
+    const auto = await maybeAutoCompleteFromCommunication(supabase, {
+      communication: tables.coordination_communications[0],
+    });
+    assert.equal(auto.completed, false);
+    assert.equal(auto.reason, "missing_utility_pm");
+    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
+    assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
+    assert.equal(tables.coordination_communications[0].needs_human_attention, true);
+
+    // Reviewer supplies current PM → completes
+    const { confirmCommunicationReview } = require("../app/services/uci/uci-communication-review.service.js");
+    const confirmed = await confirmCommunicationReview(supabase, {
+      communicationId: "comm-nopm",
+      userId: "user-1",
+      classification: "acknowledgment",
+      extractedFields: {
+        utility_ticket_number: "T-NOPM",
+        utility_project_manager: "Casey Brooks",
+        acknowledgment_date: "2026-08-19",
+      },
+      note: "Reviewer assigned current PM",
+    });
+    assert.equal(confirmed.lifecycle?.completed, true);
+    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.equal(tables.coordination_records[0].utility_project_manager, "Casey Brooks");
+    assert.ok(tables.coordination_records[0].ack_sla_stopped_at);
+    const originalPm =
+      tables.coordination_communications[0].agent_processed_metadata.review_decision
+        .original_extracted_fields.utility_project_manager;
+    assert.equal(originalPm == null, true);
+    assert.equal(
+      tables.coordination_communications[0].agent_processed_metadata.review_decision
+        .reviewer_extracted_fields.utility_project_manager,
+      "Casey Brooks",
+    );
+  });
+
+  it("PM-less high-confidence ack stays AWAITING_UTILITY with Needs Attention; SLA stays active", async () => {
+    const slaStarted = new Date().toISOString();
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "AWAITING_UTILITY",
+          acknowledgment_received_at: null,
+          metadata: {},
+          ack_sla_started_at: slaStarted,
+          ack_sla_due_at: new Date(Date.now() + 86400000).toISOString(),
+          ack_sla_stopped_at: null,
+        },
+      ],
+      coordination_applications: [{ id: "app-1", coordination_record_id: "coord-1", utility_ticket_number: null }],
+      coordination_communications: [
+        {
+          id: "comm-1",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          classification: "acknowledgment",
+          classification_confidence: 0.92,
+          message_timestamp: "2026-08-19T12:00:00Z",
+          needs_human_attention: false,
+          agent_processed_metadata: {
+            extracted_fields: { utility_ticket_number: "T-88" },
+          },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+    const result = await maybeAutoCompleteFromCommunication(createTableMock(tables), {
+      communication: tables.coordination_communications[0],
+    });
+    assert.equal(result.completed, false);
+    assert.equal(result.reason, "missing_utility_pm");
+    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
+    assert.equal(tables.coordination_records[0].acknowledgment_received_at, null);
+    assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
+    assert.ok(tables.coordination_records[0].metadata.stage_5_acknowledgment_evidence);
+    assert.equal(tables.coordination_communications[0].needs_human_attention, true);
+  });
+
+  it("ack + ticket + date + real PM completes Stage 5 and stops SLA", async () => {
     const tables = {
       coordination_records: [
         {
@@ -431,7 +650,157 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
     assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
     assert.ok(tables.coordination_records[0].acknowledgment_received_at);
     assert.ok(tables.coordination_records[0].ack_sla_stopped_at);
+    assert.equal(tables.coordination_records[0].utility_project_manager, "Alex");
     assert.equal(canEnterStage6(tables.coordination_records[0]), true);
+  });
+
+  it("completeStage5Acknowledgment rejects placeholder PM", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "AWAITING_UTILITY",
+          acknowledgment_received_at: null,
+          metadata: {},
+          ack_sla_started_at: new Date().toISOString(),
+          ack_sla_stopped_at: null,
+        },
+      ],
+      coordination_stage_transitions: [],
+      coordination_applications: [],
+    };
+    await assert.rejects(
+      () =>
+        completeStage5Acknowledgment(createTableMock(tables), {
+          coordinationRecordId: "coord-1",
+          fields: {
+            ticket: "T-1",
+            account: null,
+            pm: "Pending utility contact",
+            nextAction: "x",
+            ackDate: "2026-08-19T00:00:00Z",
+          },
+        }),
+      (err) => err && err.code === "MISSING_UTILITY_PM",
+    );
+    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
+    assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
+  });
+
+  it("reviewer adding real PM completes Stage 5; incomplete confirm stays awaiting", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "AWAITING_UTILITY",
+          acknowledgment_received_at: null,
+          metadata: {},
+          ack_sla_started_at: new Date().toISOString(),
+          ack_sla_due_at: new Date(Date.now() + 86400000).toISOString(),
+          ack_sla_stopped_at: null,
+        },
+      ],
+      coordination_applications: [{ id: "app-1", coordination_record_id: "coord-1", utility_ticket_number: null }],
+      coordination_communications: [
+        {
+          id: "comm-1",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          classification: "acknowledgment",
+          classification_confidence: 0.9,
+          message_timestamp: "2026-08-19T10:00:00Z",
+          needs_human_attention: true,
+          agent_processed_metadata: {
+            extracted_fields: { utility_ticket_number: "T-77" },
+          },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+    const supabase = createTableMock(tables);
+
+    const incomplete = await confirmCommunicationReview(supabase, {
+      communicationId: "comm-1",
+      userId: "user-1",
+      classification: "acknowledgment",
+      extractedFields: {},
+      note: "Confirmed receipt but PM still missing",
+    });
+    assert.equal(incomplete.lifecycle?.completed, false);
+    assert.equal(incomplete.lifecycle?.reason, "missing_utility_pm");
+    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
+    assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
+    assert.equal(tables.coordination_communications[0].needs_human_attention, true);
+    assert.ok(
+      tables.coordination_communications[0].agent_processed_metadata.review_decision
+        .original_extracted_fields,
+    );
+
+    const complete = await confirmCommunicationReview(supabase, {
+      communicationId: "comm-1",
+      userId: "user-1",
+      classification: "acknowledgment",
+      extractedFields: { utility_project_manager: "Sam Rivera" },
+      note: "PM assigned by reviewer",
+    });
+    assert.equal(complete.lifecycle?.completed, true);
+    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.equal(tables.coordination_records[0].utility_project_manager, "Sam Rivera");
+    assert.ok(tables.coordination_records[0].ack_sla_stopped_at);
+    assert.equal(
+      tables.coordination_communications[0].agent_processed_metadata.review_decision
+        .reviewer_extracted_fields.utility_project_manager,
+      "Sam Rivera",
+    );
+  });
+
+  it("flagged item with complete data does not auto-complete", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "AWAITING_UTILITY",
+          acknowledgment_received_at: null,
+          metadata: {},
+          ack_sla_started_at: new Date().toISOString(),
+          ack_sla_stopped_at: null,
+        },
+      ],
+      coordination_applications: [],
+      coordination_communications: [
+        {
+          id: "comm-1",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          classification: "acknowledgment",
+          classification_confidence: 0.97,
+          message_timestamp: "2026-08-19T12:00:00Z",
+          needs_human_attention: true,
+          agent_processed_metadata: {
+            flagged_for_review: true,
+            blocks_auto_lifecycle: true,
+            extracted_fields: {
+              utility_ticket_number: "T-1",
+              utility_project_manager: "Alex",
+            },
+          },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+    const result = await maybeAutoCompleteFromCommunication(createTableMock(tables), {
+      communication: tables.coordination_communications[0],
+    });
+    assert.equal(result.completed, false);
+    assert.equal(result.reason, "flagged_for_review");
+    assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
+    assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
   });
 
   it("refuses duplicate Stage 5 complete", async () => {

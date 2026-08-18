@@ -71,7 +71,7 @@ Allowed status values:
 | Stage 5 | Communication classification and attention queue | Functional with human review | Eleven-category LLM+keyword classifier (OpenAI primary when Anthropic absent; 0.75), Graph poll + webhook inbound, portal shared model, matcher/unmatched queue, ack acceptance, Flag/Confirm/Reject/Rematch, SLA start/stop/2×, Needs Attention | Yes — Stage 5 unit + ≥85% synthetic harness | Live Graph Mail.Read, OpenAI key for live LLM path (Anthropic optional), client-labeled accuracy set for production certification | Mailbox / OpenAI / labeled samples | Yes | Yes | P0 | Synthetic accuracy ≥85% verified; production certification blocked on labeled samples |
 | Stage 5 | Acknowledgment SLA engine | Complete (code) | Start on Stage 5 entry, stop on valid ack complete, overdue events, 2× escalation → ESCALATED | Yes — unit tests | Provider SLA business-day policy confirmation | Provider directory SLA columns | Yes (policy) | No | P1 | Defaults to 5 business days |
 | Stage 5 | Graph inbound ingestion | Implemented; live-verify pending | Idempotent Graph `/me/messages` poll + attachments metadata + `POST /webhooks/uci/email-inbound` into shared model / unmatched queue | Yes — unmatched path unit tests | Connected mailbox Mail.Read + webhook secret | Microsoft Graph / mailbox consent | Yes | Yes | P0 | Reuses per-user mailbox OAuth |
-| Stage 5 | Ack auto-complete + Stage 6 guard | Complete (code) | High-confidence matched acknowledgment with ticket/account + date can complete Stage 5; flagged/low-conf/unmatched never auto-advance; Stage 6 only after Stage 5 COMPLETED + ack date | Yes — unit tests | Live utility acknowledgment samples | Utility inbound messages | Yes | No | P0 | Does not start Stage 6 product |
+| Stage 5 | Ack auto-complete + Stage 6 guard | Complete (code) | High-confidence matched acknowledgment completes Stage 5 only with ticket/account + ack date + **real named PM** (placeholders rejected); PM-less acks persist evidence, stay AWAITING_UTILITY, Needs Attention, SLA active; human Confirm uses same gates; Stage 6 only after Stage 5 COMPLETED + ack date | Yes — unit tests | Live utility acknowledgment samples | Utility inbound messages | Yes | No | P0 | Does not start Stage 6 product |
 | Stage 6 | Class-of-service/design review | Partial | Structural analysis and discrepancy inventory can be persisted | Yes — foundation tests | Parse actual COS/design documents and compare engineering values | Utility-issued COS/design documents | Yes | Yes | P2 | Human engineering review remains required |
 | Stage 7 | CIAC and cost tracking | Partial | Manual cost create/update, estimate/actual, and variance work | Yes — service tests | Invoice parsing, approvals, payment workflow, and QuickBooks bridge | Utility invoices / client billing rules | Yes | Yes | P2 | Existing platform QuickBooks should be extended, not duplicated |
 | Stage 8 | Long-lead equipment tracking | Partial | Equipment rows, ETA history, check-in, and slip calculation work | Yes — service tests | Scheduled worker, durable alerts, and utility follow-up integration | Utility ETA communications | Yes | Yes | P2 | Current check-ins are manual |
@@ -890,8 +890,9 @@ yes | dzahid@commun-et.com | dzahid@commun-et.com | 6 | Graph 202 / sent | dc4df
 - 11-category **LLM classifier** (`uci-llm-classifier.service.js`) + keyword fallback; confidence threshold **0.75** everywhere
 - Primary provider: **OpenAI** via existing `createOpenAiClient` when `ANTHROPIC_API_KEY` is absent; Anthropic retained as optional auto-primary when configured
 - Provider/model/version/confidence/fallback audited on `agent_5_classification` metadata only (no provider wording in operator UI)
-- Ack acceptance with ticket/PM/next-action/date capture; high-confidence auto-complete; Flag-for-review blocks auto lifecycle
-- Reviewer Confirm / Reclassify / Rematch / Reject / notes; Needs Attention includes unmatched
+- Ack acceptance requires ticket/account + ack date + **real named PM/coordinator** (placeholders like “Pending utility contact” rejected); high-confidence auto-complete; Flag-for-review blocks auto lifecycle
+- PM-less / incomplete acks persist evidence on the record, remain Stage 5 `AWAITING_UTILITY`, route to Needs Attention, and **keep SLA active** until valid completion
+- Reviewer Confirm / Reclassify / Rematch / Reject / notes; Confirm enforces the same completion gates and audits original + reviewer extracted fields; Needs Attention includes unmatched
 - Stage 6 guard: `canEnterStage6` only after Stage 5 COMPLETED + `acknowledgment_received_at`; no Stage 6 product started
 - Synthetic accuracy harness ≥85%; migration `20260819040000_uci_stage5_acknowledgment.sql`
 
@@ -909,6 +910,19 @@ yes | dzahid@commun-et.com | dzahid@commun-et.com | 6 | Graph 202 / sent | dc4df
 
 ### Provider switch note (2026-08-19)
 Audit found Claude integrated via Anthropic Messages HTTP (no `@anthropic-ai` SDK package) but **not** callable locally (no Anthropic key). Switched Stage 5 primary LLM to existing PermitPilot OpenAI client; keyword fallback retained.
+
+### PM completion gate fix (2026-08-19)
+Aligned auto-complete and human Confirm with §5.3 / roadmap §17: real PM required; no placeholder completion; SLA stops only on valid Stage 5 COMPLETED.
+
+### Stale PM/contact reopen fix (2026-08-19)
+Root cause: after Stage 5 COMPLETED, `utility_contact_name` / `utility_project_manager` remained on the coordination record and `resolveCompletionFields` treated them as PM evidence for a later incomplete/reopened acknowledgment. Fix: completion PM must come from **current** communication extracted/reviewer fields only; `reopenStage5Acknowledgment` archives prior PM/contact/ack into `metadata.stage_5_acknowledgment_history` and clears operational PM/contact before returning to `AWAITING_UTILITY` + SLA restart.
+
+### Highland Stage 5 live UAT (2026-08-19)
+- Reconcile JSONB mirror now accepts `latest_transmission` / history when `submission_transmission_attempts` table is absent remotely.
+- Positive path: Graph self-send synthetic ack → inbound poll → OpenAI `acknowledgment` 0.95 → matched Highland → auto Stage 5 COMPLETED + SLA stop; Stage 6 product not started (`can_enter_stage_6` only).
+- Dedupe: second poll of same message `inserted=false`.
+- Negatives (after audited clean reopen clearing PM/contact/account/ack): PM-less ack stays `AWAITING_UTILITY` + Needs Attention + evidence + SLA active; Flag blocks auto-complete; reviewer PM Confirm → COMPLETED + SLA stop.
+- Note: first PM-less attempt after incomplete reopen incorrectly completed via leftover `utility_contact_name`; clean reopen required for honest negative UAT.
 
 ## Stage 4 operator UI simplification — 2026-08-19
 
