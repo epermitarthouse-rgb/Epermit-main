@@ -350,9 +350,12 @@ const STATUS_LABELS: Record<DocumentProcessingStatus, string> = {
 };
 
 const STAGE_LABELS: Record<string, string> = {
-  agent_2_load_profile: "Agent 2 — Load profile",
-  agent_3_application_package: "Agent 3 — Application package",
-  agent_4_submission: "Agent 4 — Submission",
+  agent_1_provider_mapper: "Utility Provider Mapper",
+  agent_1_utility_provider: "Utility Provider Mapper",
+  agent_1_provider_resolution: "Utility Provider Mapper",
+  agent_2_load_profile: "Load Profile Analyzer",
+  agent_3_application_package: "Application Builder",
+  agent_4_submission: "Submission and Confirmation Tracker",
   equipment_workflow: "Equipment workflow",
   meter_workflow: "Meter workflow",
   cost_workflow: "Cost workflow",

@@ -116,7 +116,10 @@ export default function Projects() {
   const [dragOverStatus, setDragOverStatus] = useState<ProjectStatus | null>(null);
 
   const isCreateRoute = location.pathname === "/projects/new";
-  const editProjectId = new URLSearchParams(location.search).get("project");
+  const routeParams = new URLSearchParams(location.search);
+  const editProjectId = routeParams.get("project");
+  const focusedProjectField = routeParams.get("field");
+  const returnToPackage = routeParams.get("return_to");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -679,6 +682,8 @@ export default function Projects() {
         project={selectedProject}
         onSubmit={handleFormSubmit}
         loading={formLoading}
+        focusField={focusedProjectField}
+        returnTo={returnToPackage}
       />
 
       <ProjectDetailDialog

@@ -412,10 +412,49 @@ describe("UCI D4 application submit service", () => {
   });
 
   it("validates Dominion synthetic checklist without email, portal, or lifecycle advance", async () => {
+    const fieldSnap = {
+      key: "project_address",
+      label: "project_address",
+      status: "present",
+      value: "1 Main",
+      source: "",
+      address_source: null,
+    };
+    const docSnap = {
+      key: "site_plan",
+      label: "Site plan",
+      status: "attached",
+      file_name: "site.pdf",
+      source: null,
+      project_document_id: null,
+      external_application_id: null,
+      storage_path: null,
+      content_hash: null,
+      signature_required: false,
+      signature_status: null,
+      signature_verified_at: null,
+    };
+    const reviewedSnapshot = {
+      snapshot_version: "agent-3-reviewed-package-snapshot-v1",
+      captured_at: "2026-08-18T12:00:00.000Z",
+      documents: [docSnap],
+      fields: [fieldSnap],
+    };
     const synthetic = {
       ...REVIEWED_PACKAGE,
       id: "app-pkg-dominion-synthetic",
       provider_slug: "dominion",
+      submitted_at: null,
+      submission_method: null,
+      utility_ticket_number: null,
+      package_documents: [
+        {
+          key: "site_plan",
+          label: "Site plan",
+          status: "attached",
+          file_name: "site.pdf",
+        },
+      ],
       agent_draft_metadata: {
         application_package: {
           package_status: "ready_for_review",
@@ -424,19 +463,44 @@ describe("UCI D4 application submit service", () => {
           authoritative_requirements: false,
           missing_fields: [],
           missing_documents: [],
-          field_results: [{ key: "project_address", status: "present" }],
-          signature_requirements: [
+          field_results: [
             {
-              document_key: "authorization",
-              signature_status: "signed_manual_verified",
-              satisfied: true,
+              key: "project_address",
+              label: "project_address",
+              status: "present",
+              value: "1 Main",
+              source: "",
             },
           ],
+          signature_requirements: [],
+          package_review: {
+            reviewed_snapshot: reviewedSnapshot,
+            reviewed_at: "2026-08-18T12:00:00.000Z",
+            items: {
+              "field:project_address": {
+                status: "confirmed",
+                mapping_snapshot: fieldSnap,
+              },
+              "document:site_plan": {
+                status: "confirmed",
+                mapping_snapshot: docSnap,
+              },
+            },
+          },
         },
       },
     };
     const tables = createSubmitTables({
       coordination_applications: [synthetic],
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 3,
+          current_stage_state: "COMPLETED",
+        },
+      ],
+      submission_validation_attempts: [],
     });
     const supabase = createSubmitMockSupabase(tables);
     let emailCalled = false;
@@ -457,12 +521,15 @@ describe("UCI D4 application submit service", () => {
     assert.equal(result.lifecycle_advanced, false);
     assert.equal(result.external_side_effects.email_sent, false);
     assert.equal(result.external_side_effects.portal_touched, false);
+    assert.equal(result.external_side_effects.graph_called, false);
     assert.equal(emailCalled, false);
     assert.equal(tables.coordination_records[0].current_stage, 3);
     assert.equal(tables.coordination_applications[0].draft_status, "reviewed");
+    assert.equal(tables.coordination_applications[0].submitted_at, null);
+    assert.equal(tables.submission_validation_attempts.length, 1);
     assert.equal(
-      tables.coordination_applications[0].agent_draft_metadata.submission.confirmation_status,
-      "dry_run",
+      tables.coordination_applications[0].agent_draft_metadata.submission_validation_attempts.length,
+      1,
     );
   });
 });
@@ -483,6 +550,7 @@ function createSubmitTables(overrides = {}) {
     ],
     projects: overrides.projects ?? [{ ...BASE_PROJECT }],
     coordination_stage_transitions: overrides.coordination_stage_transitions ?? [],
+    submission_validation_attempts: overrides.submission_validation_attempts ?? [],
   };
 }
 

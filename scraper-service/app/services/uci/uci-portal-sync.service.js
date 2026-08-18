@@ -161,6 +161,27 @@ async function runPortalSync(supabase, opts) {
     communications: normalizedCommunications,
   });
 
+  // Enqueue Agent 5 classification for newly ingested portal messages (shared model)
+  /** @type {Record<string, unknown> | null} */
+  let classificationResult = null;
+  if ((communicationResult.counts?.inserted || 0) > 0 || (communicationResult.counts?.updated || 0) > 0) {
+    try {
+      const {
+        classifyCoordinationCommunications,
+      } = require("./uci-communication-classifier.service.js");
+      classificationResult = await classifyCoordinationCommunications(supabase, {
+        coordinationRecordId: tenantContext.coordinationRecordId,
+        projectId: tenantContext.projectId,
+      });
+    } catch (classifyErr) {
+      errors.push(
+        classifyErr instanceof Error
+          ? `classification: ${classifyErr.message}`
+          : "classification_failed",
+      );
+    }
+  }
+
   if (await cancelled()) {
     const err = new Error("Portal sync cancelled");
     err.code = "CANCELLED";
@@ -223,6 +244,13 @@ async function runPortalSync(supabase, opts) {
     providerSlug: adapterContext.providerSlug,
     applications: applicationResult.counts,
     communications: communicationResult.counts,
+    classification: classificationResult
+      ? {
+          classified_count: classificationResult.classified_count,
+          skipped_count: classificationResult.skipped_count,
+          classifier_version: classificationResult.classifier_version,
+        }
+      : null,
     milestones: milestoneResult.counts,
     lifecycle,
     warnings,

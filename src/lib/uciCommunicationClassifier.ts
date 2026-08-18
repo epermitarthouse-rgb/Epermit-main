@@ -16,6 +16,8 @@ export const UCI_COMMUNICATION_CATEGORIES = [
 
 export type UciCommunicationCategory = (typeof UCI_COMMUNICATION_CATEGORIES)[number];
 
+export const LOW_CONFIDENCE_THRESHOLD = 0.75;
+
 export function formatCommunicationClassification(value: string | null | undefined): string {
   if (!value) return "Unclassified";
   return value.replace(/_/g, " ");
@@ -28,6 +30,6 @@ export function classificationNeedsAttention(
 ): boolean {
   if (needsHumanAttention) return true;
   if (!classification || classification === "unclassified") return true;
-  if (confidence != null && confidence < 0.7) return true;
+  if (confidence != null && confidence < LOW_CONFIDENCE_THRESHOLD) return true;
   return false;
 }

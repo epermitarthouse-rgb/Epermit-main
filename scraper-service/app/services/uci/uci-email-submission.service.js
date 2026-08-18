@@ -2,59 +2,159 @@
 
 const { getValidAccessTokenForUser } = require("../microsoft/microsoft-graph-auth.service.js");
 const { resolveAddressFromApplicationPackageSnapshot } = require("./uci-provider-setup.service.js");
+const { formatUciPackageVersionLabel } = require("./uci-capability-labels.js");
 
 const EMAIL_SUBMIT_VERSION = "d4-email-v1";
+const EMAIL_TEMPLATE_VERSION = "uci-outbound-email-v2";
+const SYNTHETIC_BODY_WARNING =
+  "This package contains synthetic test documents and is not for construction or utility submission.";
+const SYNTHETIC_SUBJECT_PREFIX = "[TEST]";
 
 /**
- * @param {Record<string, unknown>} application
- * @param {Record<string, unknown>} project
- * @param {string} providerSlug
+ * @param {Record<string, unknown> | null | undefined} application
  */
-function buildUtilitySubmissionEmailContent(application, project, providerSlug) {
-  const address = resolveAddressFromApplicationPackageSnapshot(application, project);
-  const packageMeta =
+function packageMetaFromApplication(application) {
+  const draft =
+    application &&
     application.agent_draft_metadata &&
     typeof application.agent_draft_metadata === "object" &&
     !Array.isArray(application.agent_draft_metadata)
-      ? /** @type {{ application_package?: Record<string, unknown> }} */ (
-          application.agent_draft_metadata
-        ).application_package
+      ? application.agent_draft_metadata
       : null;
+  const pkg = draft && draft.application_package;
+  return pkg && typeof pkg === "object" && !Array.isArray(pkg) ? pkg : null;
+}
 
-  const templateId =
-    packageMeta && packageMeta.template_id != null ? String(packageMeta.template_id) : "unknown";
-  const applicationType = String(application.application_type ?? "new_service");
-  const provider = String(providerSlug || "utility").toUpperCase();
+/**
+ * Recipient-facing synthetic flag (checklist_mode), not Highland-hardcoded.
+ * @param {Record<string, unknown> | null | undefined} application
+ */
+function isSyntheticOutboundPackage(application) {
+  const pkg = packageMetaFromApplication(application);
+  return String(pkg?.checklist_mode ?? "") === "synthetic_test";
+}
+
+/**
+ * @param {unknown} raw
+ */
+function formatApplicationTypeLabel(raw) {
+  const s = String(raw ?? "new_service")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  if (!s) return "New service";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Canonical recipient-facing Stage 4 email subject + body.
+ * Shared by prepare/preview and Graph sendMail payload builders.
+ * Never includes internal agent IDs, Graph/API jargon, or live-send authorization copy.
+ *
+ * @param {Record<string, unknown>} application
+ * @param {Record<string, unknown>} project
+ * @param {string} [_providerSlug] unused — kept for call-site compatibility
+ * @param {{
+ *   attachmentCount?: number,
+ *   synthetic?: boolean,
+ *   packageSnapshotVersion?: string | null,
+ * }} [options]
+ */
+function buildUtilitySubmissionEmailContent(application, project, _providerSlug, options = {}) {
+  const address = resolveAddressFromApplicationPackageSnapshot(application, project);
+  const projectLabel =
+    (project && project.name != null && String(project.name).trim()) ||
+    (address.formatted && String(address.formatted).trim()) ||
+    "project";
+  const applicationType = formatApplicationTypeLabel(application.application_type);
+  const synthetic =
+    typeof options.synthetic === "boolean"
+      ? options.synthetic
+      : isSyntheticOutboundPackage(application);
 
   const attachedDocs = Array.isArray(application.package_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (application.package_documents).filter(
         (d) => String(d.status) === "attached",
       )
     : [];
+  const attachmentCount =
+    typeof options.attachmentCount === "number" && Number.isFinite(options.attachmentCount)
+      ? Math.max(0, Math.floor(options.attachmentCount))
+      : attachedDocs.length;
 
-  const attachmentLines = attachedDocs.map((d) => {
-    const label = d.label != null ? String(d.label) : String(d.key ?? "document");
-    const fileName = d.file_name != null ? String(d.file_name) : "attached file";
-    return `- ${label}: ${fileName}`;
-  });
+  const subjectBase = `Utility Coordination Application Package — ${projectLabel}`;
+  const subject = synthetic ? `${SYNTHETIC_SUBJECT_PREFIX} ${subjectBase}` : subjectBase;
 
-  const subject = `[UCI] ${provider} ${applicationType} application — ${address.formatted || project.name || "project"}`;
-  const body = [
-    `Utility coordination application package for ${provider}.`,
+  /** @type {string[]} */
+  const bodyLines = [
+    "Hello,",
     "",
-    `Project: ${project.name ?? "Unknown"}`,
+    `Please find attached the utility coordination application package for ${projectLabel}.`,
+    "",
+    `Project: ${projectLabel}`,
     `Address: ${address.formatted || "(not set)"}`,
     `Application type: ${applicationType}`,
-    `Template: ${templateId}`,
     "",
-    "Attached documents referenced in package:",
-    attachmentLines.length ? attachmentLines.join("\n") : "(none attached in package)",
-    "",
-    "This message was generated by UCI Agent 4 email submission.",
-    "Engineering load values are included only when verified in load_summary.calculated_values.",
-  ].join("\n");
+    `Attachments: ${attachmentCount}`,
+  ];
 
-  return { subject, body, attachedDocs };
+  if (synthetic) {
+    bodyLines.push("", SYNTHETIC_BODY_WARNING);
+  }
+
+  bodyLines.push("", "Regards,", "Commun-ET");
+
+  const body = bodyLines.join("\n");
+
+  // Audit-only humanized package label (not placed in recipient body).
+  const packageSnapshotVersion =
+    options.packageSnapshotVersion != null
+      ? String(options.packageSnapshotVersion)
+      : null;
+  const packageVersionLabel = packageSnapshotVersion
+    ? formatUciPackageVersionLabel(packageSnapshotVersion)
+    : null;
+
+  return {
+    subject,
+    body,
+    attachedDocs,
+    attachment_count: attachmentCount,
+    synthetic_test: synthetic,
+    template_version: EMAIL_TEMPLATE_VERSION,
+    // Metadata for Tracker/audit — never required in MIME body.
+    audit: {
+      package_snapshot_version: packageSnapshotVersion,
+      package_version_label: packageVersionLabel,
+      generator: "Submission and Confirmation Tracker",
+    },
+  };
+}
+
+/**
+ * @param {unknown} list
+ * @returns {Array<{ emailAddress: { address: string } }>}
+ */
+function toGraphRecipients(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    const email =
+      typeof item === "string"
+        ? item.trim()
+        : item && typeof item === "object" && item.email
+          ? String(item.email).trim()
+          : item && typeof item === "object" && item.address
+            ? String(item.address).trim()
+            : "";
+    const normalized = email.toLowerCase();
+    if (!normalized || !normalized.includes("@") || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push({ emailAddress: { address: email } });
+  }
+  return out;
 }
 
 /**
@@ -62,7 +162,10 @@ function buildUtilitySubmissionEmailContent(application, project, providerSlug) 
  * @param {object} message
  * @param {string} message.subject
  * @param {string} message.body
+ * @param {Array<string|{email?: string, address?: string}>} [message.toRecipients]
+ * @param {Array<string|{email?: string, address?: string}>} [message.ccRecipients]
  * @param {Array<{ file_name?: string, content_base64?: string, content_type?: string }>} [message.attachments]
+ * @param {AbortSignal} [message.signal]
  */
 async function graphSendMail(accessToken, message) {
   const graphAttachments = (message.attachments || [])
@@ -74,6 +177,12 @@ async function graphSendMail(accessToken, message) {
       contentBytes: a.content_base64,
     }));
 
+  const toRecipients = toGraphRecipients(message.toRecipients);
+  const ccRecipients = toGraphRecipients(message.ccRecipients);
+  if (toRecipients.length === 0) {
+    return { ok: false, status: 400, error: "toRecipients is required for Graph sendMail" };
+  }
+
   const payload = {
     message: {
       subject: message.subject,
@@ -81,19 +190,34 @@ async function graphSendMail(accessToken, message) {
         contentType: "Text",
         content: message.body,
       },
+      toRecipients,
+      ccRecipients: ccRecipients.length ? ccRecipients : undefined,
       attachments: graphAttachments.length ? graphAttachments : undefined,
     },
     saveToSentItems: true,
   };
 
-  const r = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  let r;
+  try {
+    r = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: message.signal,
+    });
+  } catch (err) {
+    const name = err && typeof err === "object" && "name" in err ? String(err.name) : "";
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      uncertain: true,
+      status: 0,
+      error: name === "AbortError" ? `Graph sendMail timed out: ${msg}` : `Graph sendMail network error: ${msg}`,
+    };
+  }
 
   if (!r.ok) {
     const text = await r.text();
@@ -104,10 +228,16 @@ async function graphSendMail(accessToken, message) {
     } catch {
       /* ignore */
     }
-    return { ok: false, status: r.status, error: detail };
+    return { ok: false, status: r.status, error: detail, uncertain: false };
   }
 
-  return { ok: true, status: r.status, message_id: `graph-send-${Date.now()}` };
+  // Graph sendMail typically returns 202 with empty body — no durable Graph message id.
+  return {
+    ok: true,
+    status: r.status,
+    message_id: `graph-send-${Date.now()}`,
+    uncertain: false,
+  };
 }
 
 /**
@@ -231,6 +361,11 @@ async function sendUtilitySubmissionEmail(supabase, params) {
 
 module.exports = {
   EMAIL_SUBMIT_VERSION,
+  EMAIL_TEMPLATE_VERSION,
+  SYNTHETIC_BODY_WARNING,
+  SYNTHETIC_SUBJECT_PREFIX,
+  isSyntheticOutboundPackage,
+  formatApplicationTypeLabel,
   buildUtilitySubmissionEmailContent,
   graphSendMail,
   sendUtilitySubmissionEmail,

@@ -9,9 +9,11 @@ const {
 } = require("./microsoft-token-crypto.js");
 
 const GRAPH_SCOPES =
-  "openid profile offline_access User.Read Mail.Read email";
+  "openid profile offline_access User.Read Mail.Read Mail.Send email";
 
-/** @type {readonly string[]} */
+/** @type {readonly string[]}
+ * Warn-only hint for ops mailbox mismatch (PEPCO MFA era). Stage 4 P1 must NOT treat this as
+ * an enforced From allowlist — sender is the connected user's Graph `/me` mailbox. */
 const MS_GRAPH_EXPECTED_MAILBOX_LOWER = ["permitting@commun-et.com"];
 
 /**

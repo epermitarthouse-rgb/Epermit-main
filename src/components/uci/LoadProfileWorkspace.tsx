@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, FileUp, Loader2, RotateCcw } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import {
   ConnectedLoadReviewPanel,
   type CandidateResolutionState,
@@ -148,6 +149,10 @@ export function LoadProfileWorkspace({
     failures: Array<{ document_id: string; message: string }>;
   }>;
 }) {
+  const location = useLocation();
+  const routeParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const focusedFieldKey = routeParams.get("field_key");
+  const returnToPackage = routeParams.get("return_to");
   const [section, setSection] = useState<WorkspaceSection>(
     () => readStoredWorkspaceSection() ?? DEFAULT_WORKSPACE_SECTION,
   );
@@ -174,6 +179,17 @@ export function LoadProfileWorkspace({
   useEffect(() => {
     persistWorkspaceSection(section);
   }, [section]);
+
+  useEffect(() => {
+    if (routeParams.get("section") !== "verified_inputs" || !focusedFieldKey) return;
+    setSection("verified_inputs");
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById(`verified-input-${focusedFieldKey}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusedFieldKey, routeParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -323,7 +339,7 @@ export function LoadProfileWorkspace({
       <CardHeader className="space-y-2 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Agent 2 — Load profile workspace</CardTitle>
+            <CardTitle className="text-base">Load Profile Analyzer</CardTitle>
             <CardDescription className={cn("text-[11px]", mutedClass)}>
               Source evidence → verified inputs → load schedule → service sizing → package readiness.
               No engineering values are guessed.
@@ -519,7 +535,21 @@ export function LoadProfileWorkspace({
             </TabsContent>
 
             <TabsContent value="verified_inputs" className="mt-4 space-y-4">
-              <VerifiedInputsGroups groups={verifiedGroups} mutedClass={mutedClass} />
+              {returnToPackage ? (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/5 p-3 text-sm">
+                  <span>
+                    Reviewing the exact verified load input used by the Application Builder.
+                  </span>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={returnToPackage}>Return to package</a>
+                  </Button>
+                </div>
+              ) : null}
+              <VerifiedInputsGroups
+                groups={verifiedGroups}
+                mutedClass={mutedClass}
+                focusedFieldKey={focusedFieldKey}
+              />
               <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
                 <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm">
                   Add manual verified input
@@ -733,9 +763,11 @@ function SourceDocumentsTable({
 function VerifiedInputsGroups({
   groups,
   mutedClass,
+  focusedFieldKey,
 }: {
   groups: ReturnType<typeof buildVerifiedInputRows>;
   mutedClass: string;
+  focusedFieldKey?: string | null;
 }) {
   const labels: Record<keyof typeof groups, string> = {
     project_service: "Project / service",
@@ -763,7 +795,14 @@ function VerifiedInputsGroups({
             </p>
             <ul className="mt-2 space-y-2">
               {groups[key].map((row) => (
-                <li key={row.id} className="rounded border bg-muted/10 p-2 text-sm">
+                <li
+                  key={row.id}
+                  id={`verified-input-${row.id}`}
+                  className={cn(
+                    "rounded border bg-muted/10 p-2 text-sm",
+                    focusedFieldKey === row.id && "border-primary bg-primary/10 ring-2 ring-primary/20",
+                  )}
+                >
                   <div className="flex flex-wrap gap-2">
                     <span className="font-medium">{row.label}</span>
                     <Badge variant="outline">{getDataLevelLabel(row.dataLevel)}</Badge>

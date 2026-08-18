@@ -624,6 +624,7 @@ async function runApplicationPackageBuild(supabase, params) {
             status: checklistApproved ? "approved" : "draft",
             label: SYNTHETIC_TEST_CHECKLIST_LABEL,
             approved_by_user_id: existingChecklist.approved_by_user_id ?? null,
+            approved_by_display: existingChecklist.approved_by_display ?? null,
             approved_at: existingChecklist.approved_at ?? null,
             approval_note: existingChecklist.approval_note ?? null,
           }
@@ -813,7 +814,7 @@ async function reviewApplicationPackage(supabase, params) {
   }
 
   if (String(application.idempotency_key) !== APPLICATION_PACKAGE_IDEMPOTENCY_KEY) {
-    const err = new Error("Application is not an Agent 3 application package draft");
+    const err = new Error("Application is not an Application Builder package draft");
     err.statusCode = 400;
     err.code = "NOT_APPLICATION_PACKAGE";
     throw err;

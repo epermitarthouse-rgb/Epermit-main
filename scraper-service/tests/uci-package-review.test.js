@@ -143,6 +143,18 @@ describe("Agent 3 package mapping review", () => {
       application.agent_draft_metadata.application_package.package_review.reviewed_snapshot;
     assert.equal(snapshot.field_results[0].value.value, 410);
     assert.equal(snapshot.package_documents[0].file_name, "load-letter.pdf");
+    await assert.rejects(
+      () =>
+        updatePackageReviewItem(supabase, {
+          applicationId: application.id,
+          userId: "operator-1",
+          kind: "document",
+          key: "load_letter",
+          status: "needs_correction",
+          note: "Must reopen first",
+        }),
+      (error) => error.code === "PACKAGE_REVIEW_LOCKED",
+    );
   });
 
   it("invalidates a confirmation when its mapping changes", async () => {
@@ -159,7 +171,7 @@ describe("Agent 3 package mapping review", () => {
     assert.equal(
       summarizePackageReview(application).items.find((item) => item.id === "document:load_letter")
         .status,
-      "not_reviewed",
+      "ready_for_re_review",
     );
   });
 
@@ -206,6 +218,14 @@ describe("Agent 3 package mapping review", () => {
       ).status,
       "confirmed",
     );
+    application.package_documents[0].signature_status = "unsigned";
+    const changedSignature = summarizePackageReview(application);
+    const signatureItem = changedSignature.items.find(
+      (item) => item.id === "document:authorization_letter",
+    );
+    assert.equal(signatureItem.status, "needs_correction");
+    assert.equal(signatureItem.issue_area, "signature");
+    assert.equal(changedSignature.status, "needs_changes");
   });
 
   it("preserves review history through reopen, correction, fix, reconfirm, and new review", async () => {
@@ -235,8 +255,10 @@ describe("Agent 3 package mapping review", () => {
       userId: "operator-2",
       review: { status: "needs_changes", notes: "Wrong load letter" },
     });
-    assert.equal(summarizePackageReview(application).status, "needs_changes");
-    assert.equal(summarizePackageReview(application).confirmed_count, 2);
+    assert.equal(summarizePackageReview(application).status, "ready_for_review");
+    assert.equal(summarizePackageReview(application).active_correction_count, 0);
+    assert.equal(summarizePackageReview(application).ready_for_final_review, true);
+    assert.equal(application.draft_status, "draft");
     assert.deepEqual(
       application.agent_draft_metadata.application_package.package_review.reviewed_snapshot,
       firstSnapshot,
@@ -250,6 +272,8 @@ describe("Agent 3 package mapping review", () => {
       status: "needs_correction",
       note: "Use the revised engineer-issued letter",
     });
+    assert.equal(summarizePackageReview(application).status, "needs_changes");
+    assert.equal(summarizePackageReview(application).active_correction_count, 1);
     application.package_documents[0].file_name = "revised-load-letter.pdf";
     const fixed = summarizePackageReview(application);
     assert.equal(
@@ -276,5 +300,36 @@ describe("Agent 3 package mapping review", () => {
     assert.equal(review.review_history.length, 2);
     assert.deepEqual(review.review_history[0], firstSnapshot);
     assert.equal(review.review_history[1].package_documents[0].file_name, "revised-load-letter.pdf");
+  });
+
+  it("ignores stale package-level and draft correction flags when no current item is actionable", async () => {
+    const application = readyApplication();
+    const supabase = mockSupabase(application);
+    await confirmAllVerifiedFields(supabase, {
+      applicationId: application.id,
+      userId: "operator-1",
+    });
+    await updatePackageReviewItem(supabase, {
+      applicationId: application.id,
+      userId: "operator-1",
+      kind: "document",
+      key: "load_letter",
+      status: "confirmed",
+    });
+    application.draft_status = "needs_changes";
+    application.agent_draft_metadata.application_package.package_review.package_correction = {
+      active: true,
+      note: "Historical reopen reason",
+      requested_by_user_id: "operator-old",
+      requested_at: "2026-08-17T00:00:00.000Z",
+    };
+
+    const summary = summarizePackageReview(application);
+    assert.equal(summary.confirmed_count, 2);
+    assert.equal(summary.total_count, 2);
+    assert.equal(summary.active_correction_count, 0);
+    assert.deepEqual(summary.active_corrections, []);
+    assert.equal(summary.status, "ready_for_review");
+    assert.equal(summary.ready_for_final_review, true);
   });
 });

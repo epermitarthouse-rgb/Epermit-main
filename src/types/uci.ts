@@ -490,9 +490,16 @@ export interface UciApplicationReviewResponse {
 }
 
 export interface UciApplicationSubmitResponse {
-  status?: "confirmed" | "human_required" | "failed";
+  status?:
+    | "confirmed"
+    | "human_required"
+    | "failed"
+    | "validation_passed"
+    | "validation_failed"
+    | "validation_blocked";
   reason?: string;
   dry_run?: boolean;
+  validation_only?: boolean;
   live_submission_enabled?: boolean;
   lifecycle_advanced?: boolean;
   fields_to_submit?: Array<Record<string, unknown>>;
@@ -508,6 +515,41 @@ export interface UciApplicationSubmitResponse {
   coordination_record?: CoordinationRecord;
   transitions?: CoordinationTransition[];
   portal_adapter_used: boolean;
+  external_side_effects?: {
+    email_sent?: boolean;
+    portal_touched?: boolean;
+    live_submission_attempted?: boolean;
+    lifecycle_advanced?: boolean;
+    graph_called?: boolean;
+  };
+  primary_state?: string;
+  secondary_state?: string;
+  synthetic_banner?: string | null;
+  intended_submission_mode?: string;
+  validated_at?: string;
+  attachments?: Array<Record<string, unknown>>;
+  package_snapshot?: Record<string, unknown>;
+  blockers?: Array<Record<string, unknown>>;
+  warnings?: Array<Record<string, unknown>>;
+  readiness?: Record<string, unknown>;
+  attempt?: Record<string, unknown>;
+}
+
+export interface UciSubmissionValidationAttemptResponse extends UciApplicationSubmitResponse {
+  mode: "validation_only";
+  capability?: string;
+  result?: "passed" | "failed" | "blocked";
+}
+
+export interface UciSubmissionValidationAttemptsListResponse {
+  application_id: string;
+  attempts: Array<Record<string, unknown>>;
+  latest_validation?: Record<string, unknown> | null;
+  primary_state: string;
+  source: string;
+  submitted_at?: string | null;
+  application?: CoordinationApplication;
+  table_error?: string;
 }
 
 export interface UciRecordDetailResponse {

@@ -20,8 +20,31 @@ import {
   getProjectProviderResolution,
   listProjectCoordination,
   listProjectNeedsAttentionCommunications,
+  listSubmissionPreparations,
   listUciProviders,
+  prepareSubmissionPackage,
+  updateSubmissionPreparation,
+  confirmSubmissionPreparation,
+  transmitSubmissionPreparation,
+  type UciEmailReadiness,
+  type UciSubmissionPreparationPreview,
+  type UciTransmissionAttemptSummary,
 } from "@/lib/uciApi";
+import {
+  formatUciOperatorMessage,
+  formatUciPackageVersionLabel,
+  formatUciSentSummary,
+} from "@/lib/uciCapabilityLabels";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type {
   CoordinationApplication,
   CoordinationCommunication,
@@ -363,57 +386,549 @@ function CoverageNote({ failures }: { failures: number }) {
 
 export function UciSubmissionsPage() {
   const state = useUciOperationalSnapshot("/uci/submissions");
+  const [searchParams] = useSearchParams();
+  const focusCoordinationId = String(searchParams.get("coordinationId") || "").trim();
+  const focusApplicationId = String(searchParams.get("applicationId") || "").trim();
+  const [prepBusyId, setPrepBusyId] = useState<string | null>(null);
+  const [confirmBusyId, setConfirmBusyId] = useState<string | null>(null);
+  const [transmitBusyId, setTransmitBusyId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [connectOutlookHint, setConnectOutlookHint] = useState(false);
+  const [emailReadiness, setEmailReadiness] = useState<UciEmailReadiness | null>(null);
+  const [prepCache, setPrepCache] = useState<
+    Record<string, UciSubmissionPreparationPreview | null>
+  >({});
+  const [transmissionCache, setTransmissionCache] = useState<
+    Record<string, UciTransmissionAttemptSummary | null>
+  >({});
+  const [recipientDraft, setRecipientDraft] = useState<Record<string, string>>({});
+  const [pendingTransmit, setPendingTransmit] = useState<{
+    applicationId: string;
+    preparationId: string;
+    to: string;
+    from: string;
+    subject: string;
+    attachmentCount: number;
+    synthetic: boolean;
+  } | null>(null);
+
   const rows = state.records.flatMap((record) =>
     record.applications.map((application) => ({ record, application })),
   );
+  const focusedRows = focusCoordinationId
+    ? rows.filter(
+        ({ record, application }) =>
+          record.id === focusCoordinationId &&
+          (!focusApplicationId || application.id === focusApplicationId),
+      )
+    : rows;
+
+  const refreshPreparations = async (applicationId: string) => {
+    try {
+      const listed = await listSubmissionPreparations(applicationId);
+      if (listed.email_readiness) {
+        setEmailReadiness(listed.email_readiness);
+      }
+      setPrepCache((prev) => ({ ...prev, [applicationId]: listed.latest }));
+      if (listed.latest_transmission) {
+        setTransmissionCache((prev) => ({
+          ...prev,
+          [applicationId]: listed.latest_transmission ?? null,
+        }));
+      }
+      const to = listed.latest?.to?.[0]?.email;
+      if (to) {
+        setRecipientDraft((prev) => ({ ...prev, [applicationId]: to }));
+      }
+    } catch {
+      // best-effort until migration applied
+    }
+  };
+
+  useEffect(() => {
+    for (const { application } of focusedRows.slice(0, 12)) {
+      void refreshPreparations(application.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.loading, focusCoordinationId, focusApplicationId, focusedRows.length]);
+
+  const runPrepare = async (applicationId: string) => {
+    if (prepBusyId) return;
+    setPrepBusyId(applicationId);
+    setActionMessage(null);
+    setConnectOutlookHint(false);
+    try {
+      const to = recipientDraft[applicationId]?.trim();
+      const result = await prepareSubmissionPackage(
+        applicationId,
+        to ? { to } : undefined,
+      );
+      setPrepCache((prev) => ({ ...prev, [applicationId]: result }));
+      setEmailReadiness({
+        live_email_flag_enabled: result.live_email_flag_enabled,
+        mail_send_permission_configured: result.mail_send_permission_configured,
+        ready_to_send: result.ready_to_send,
+        production_readiness_blocker: result.production_readiness_blocker,
+        sending_enabled: result.sending_enabled,
+      });
+      setActionMessage(
+        formatUciOperatorMessage(
+          result.message,
+          "Preparation ready — review the preview, then send when ready.",
+        ),
+      );
+      await refreshPreparations(applicationId);
+    } catch (e: unknown) {
+      const msg = formatUciOperatorMessage(
+        formatUciUserError(e, "Prepare failed"),
+        "Prepare failed",
+      );
+      setActionMessage(msg);
+      if (/connect.*outlook|CONNECT_OUTLOOK|mailbox/i.test(msg)) {
+        setConnectOutlookHint(true);
+      }
+    } finally {
+      setPrepBusyId(null);
+    }
+  };
+
+  const saveRecipients = async (applicationId: string, preparationId: string) => {
+    const to = recipientDraft[applicationId]?.trim();
+    if (!to) {
+      setActionMessage("Enter at least one recipient address.");
+      return;
+    }
+    setPrepBusyId(applicationId);
+    try {
+      const result = await updateSubmissionPreparation(applicationId, preparationId, { to });
+      setPrepCache((prev) => ({ ...prev, [applicationId]: result }));
+      setActionMessage("Preview updated with recipient(s).");
+    } catch (e: unknown) {
+      const msg = formatUciOperatorMessage(
+        formatUciUserError(e, "Could not update preview"),
+        "Could not update preview",
+      );
+      setActionMessage(msg);
+      if (/connect.*outlook|CONNECT_OUTLOOK|mailbox/i.test(msg)) {
+        setConnectOutlookHint(true);
+      }
+    } finally {
+      setPrepBusyId(null);
+    }
+  };
+
+  const requestTransmit = (
+    applicationId: string,
+    prep: UciSubmissionPreparationPreview,
+    synthetic: boolean,
+  ) => {
+    const to = recipientDraft[applicationId]?.trim();
+    if (!to) {
+      setActionMessage("Enter an explicit recipient address before sending.");
+      return;
+    }
+    setPendingTransmit({
+      applicationId,
+      preparationId: prep.preparation_id,
+      to,
+      from: String(prep.from || ""),
+      subject: String(prep.subject || ""),
+      attachmentCount: Array.isArray(prep.attachments) ? prep.attachments.length : 0,
+      synthetic,
+    });
+  };
+
+  const runTransmit = async () => {
+    if (!pendingTransmit || transmitBusyId) return;
+    const { applicationId, preparationId, to, synthetic } = pendingTransmit;
+    setPendingTransmit(null);
+    setTransmitBusyId(applicationId);
+    setActionMessage(null);
+    try {
+      const currentPrep = prepCache[applicationId];
+      if (currentPrep && currentPrep.status !== "confirmed_for_transmission") {
+        setConfirmBusyId(applicationId);
+        const confirmed = await confirmSubmissionPreparation(applicationId, preparationId, {
+          to,
+          idempotency_key: `ui-confirm:${preparationId}`,
+        });
+        setPrepCache((prev) => ({ ...prev, [applicationId]: confirmed }));
+        setEmailReadiness({
+          live_email_flag_enabled: confirmed.live_email_flag_enabled,
+          mail_send_permission_configured: confirmed.mail_send_permission_configured,
+          ready_to_send: confirmed.ready_to_send,
+          production_readiness_blocker: confirmed.production_readiness_blocker,
+          sending_enabled: confirmed.sending_enabled,
+        });
+        setConfirmBusyId(null);
+      }
+
+      const result = await transmitSubmissionPreparation(applicationId, preparationId, {
+        to,
+        idempotency_key: `ui-transmit:${preparationId}`,
+        confirm_send: true,
+      });
+      setTransmissionCache((prev) => ({ ...prev, [applicationId]: result }));
+      const fromAddr = String(result.from || result.sender_mailbox || "—");
+      const outcome =
+        result.status === "sent" || result.ok
+          ? formatUciSentSummary({
+              completedAt: result.completed_at || new Date().toISOString(),
+              from: fromAddr,
+              to,
+              attachmentCount: result.attachment_count ?? 0,
+            })
+          : formatUciOperatorMessage(
+              result.message,
+              `Send ${result.status || "failed"}`,
+            );
+      setActionMessage(outcome);
+      await refreshPreparations(applicationId);
+      if (!synthetic) {
+        await state.reload?.();
+      }
+    } catch (e: unknown) {
+      setConfirmBusyId(null);
+      setActionMessage(
+        formatUciOperatorMessage(formatUciUserError(e, "Send failed"), "Send failed"),
+      );
+    } finally {
+      setTransmitBusyId(null);
+    }
+  };
+
+  const anyBusy = Boolean(prepBusyId || confirmBusyId || transmitBusyId);
+  const mailSendOk = emailReadiness?.mail_send_permission_configured === true;
+  const liveFlagOn = emailReadiness?.live_email_flag_enabled === true;
+  const readyToSend = emailReadiness?.ready_to_send === true || (mailSendOk && liveFlagOn);
+
   return (
     <RouteFrame
-      eyebrow="Cross-project operations"
-      title="Application Queue"
-      body="Review real utility application packages and open their record-level preparation workspace."
-      badge="Live application data"
+      eyebrow="Stage 4 · Submission and Confirmation Tracker"
+      title="Submission and Confirmation Tracker"
+      body="Reviewed packages: prepare an email preview from your connected Outlook, then send explicitly. Nothing is sent until you confirm."
+      badge="Prepare · Preview · Send"
     >
-      <RouteLoadState {...state} loadingText="Loading application packages…" />
+      <RouteLoadState {...state} loadingText="Loading submission tracker…" />
       <CoverageNote failures={state.partialFailures} />
       {!state.loading && !state.error ? (
-        <Panel eyebrow="Application preparation" title={`${rows.length} application package row(s)`}>
-          <AlertBanner
-            tone="default"
-            title="Live filing requires confirmation"
-            detail="This queue is read-only. Open the record workspace to build, review, or submit a package."
-          />
-          <div className="mt-4 space-y-3">
-            {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No application packages exist in accessible UCI records.</p>
-            ) : rows.map(({ record, application }) => (
-              <div key={application.id} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="space-y-1">
-                  <RecordLink record={record} tab="application-prep" />
-                  <p className="text-sm">
-                    {providerName(record)} · {record.utility_type || "Utility type not recorded"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Package {applicationPackageStatus(application)} · {lifecycleLabel(record)} · {record.current_stage_state}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Last activity {latestActivity(record)}
-                  </p>
-                  {applicationBlockers(application).length ? (
-                    <p className="text-xs text-amber-700">
-                      Blockers: {applicationBlockers(application).join("; ")}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-emerald-700">No recorded package blockers.</p>
-                  )}
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link to={recordHref(record, "application-prep")}>Open package</Link>
-                </Button>
-              </div>
-            ))}
+        <Panel
+          eyebrow="Submission journey"
+          title={`${focusedRows.length} package row(s)${focusCoordinationId ? " · focused record" : ""}`}
+        >
+          {!mailSendOk ? (
+            <AlertBanner
+              tone="warn"
+              title="Email sending unavailable"
+              detail="Connect or reconnect Outlook in Settings so your mailbox can send email."
+            />
+          ) : !liveFlagOn ? (
+            <AlertBanner
+              tone="warn"
+              title="Email sending is not enabled"
+              detail="Your mailbox is connected, but sending is turned off in this environment."
+            />
+          ) : null}
+          {connectOutlookHint ? (
+            <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
+              <p className="font-medium">Connect Outlook to continue</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Email preparation needs your Microsoft 365 mailbox linked in Settings.
+              </p>
+              <Button asChild size="sm" className="mt-2" variant="outline">
+                <Link to="/settings">Connect Outlook</Link>
+              </Button>
+            </div>
+          ) : null}
+          {actionMessage ? (
+            <p className="mt-3 text-sm text-muted-foreground">{actionMessage}</p>
+          ) : null}
+          <div className="mt-4 space-y-4">
+            {focusedRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No application packages match this tracker view.
+              </p>
+            ) : (
+              focusedRows.map(({ record, application }) => {
+                const meta = application.agent_draft_metadata as
+                  | Record<string, unknown>
+                  | undefined;
+                const prep = prepCache[application.id];
+                const transmission =
+                  transmissionCache[application.id] ||
+                  (meta?.latest_transmission && typeof meta.latest_transmission === "object"
+                    ? (meta.latest_transmission as UciTransmissionAttemptSummary)
+                    : null);
+                const isReviewed = application.draft_status === "reviewed";
+                const synthetic =
+                  String(application.provider_slug || "").toLowerCase() === "dominion" &&
+                  String(
+                    (parseApplicationPackageMetadata(application) as { checklist_mode?: string } | null)
+                      ?.checklist_mode || "",
+                  ) === "synthetic_test";
+                const confirmed = prep?.status === "confirmed_for_transmission";
+                const packageReady = prep?.ready_to_send === true || readyToSend;
+                const prepSent = Boolean(
+                  prep &&
+                    transmission &&
+                    String(transmission.preparation_id || "") === String(prep.preparation_id) &&
+                    (String(transmission.status || "").toLowerCase() === "sent" ||
+                      transmission.ok === true),
+                );
+                const priorSent =
+                  Boolean(
+                    transmission &&
+                      (String(transmission.status || "").toLowerCase() === "sent" ||
+                        transmission.ok === true),
+                  ) && !prepSent;
+                const attachmentCount = Array.isArray(prep?.attachments)
+                  ? prep.attachments.length
+                  : transmission?.attachment_count ?? 0;
+                const toEditable = Boolean(prep && !prepSent);
+                const secondaryLabel = prepSent
+                  ? "Sent"
+                  : confirmed
+                    ? packageReady
+                      ? "Ready to send"
+                      : "Prepared"
+                    : prep
+                      ? "Prepared"
+                      : null;
+                const sentSummary = transmission
+                  ? formatUciSentSummary({
+                      completedAt: transmission.completed_at || transmission.claimed_at,
+                      from:
+                        transmission.from ||
+                        transmission.sender_mailbox ||
+                        prep?.from ||
+                        null,
+                      to:
+                        transmission.to ||
+                        transmission.to_recipients ||
+                        recipientDraft[application.id] ||
+                        null,
+                      attachmentCount: transmission.attachment_count ?? attachmentCount,
+                    })
+                  : null;
+
+                return (
+                  <div key={application.id} className="space-y-3 rounded-lg border p-4">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                      <div className="space-y-1">
+                        <RecordLink record={record} tab="application-prep" />
+                        <p className="text-sm">
+                          {providerName(record)} · {record.utility_type || "Utility type not recorded"}
+                        </p>
+                        <p className="text-xs">
+                          Primary:{" "}
+                          <span className="font-semibold">
+                            {application.submitted_at ? "Submitted" : "Not submitted"}
+                          </span>
+                          {secondaryLabel ? (
+                            <>
+                              {" · "}
+                              <span
+                                className={
+                                  prepSent
+                                    ? "font-semibold text-emerald-800 dark:text-emerald-200"
+                                    : "font-semibold"
+                                }
+                              >
+                                {secondaryLabel}
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
+                        {prepSent && sentSummary ? (
+                          <p className="text-xs text-emerald-900 dark:text-emerald-100">
+                            {sentSummary}
+                          </p>
+                        ) : null}
+                        {priorSent && sentSummary ? (
+                          <p className="text-xs text-muted-foreground">Last sent · {sentSummary.replace(/^Sent\s+/i, "")}</p>
+                        ) : null}
+                        {synthetic ? (
+                          <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                            SYNTHETIC TEST — NO EXTERNAL SUBMISSION
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={recordHref(record, "application-prep")}>Open package</Link>
+                        </Button>
+                        {prepSent ? (
+                          <Button
+                            size="sm"
+                            disabled={!isReviewed || anyBusy}
+                            onClick={() => void runPrepare(application.id)}
+                          >
+                            {prepBusyId === application.id
+                              ? "Preparing…"
+                              : synthetic
+                                ? "Send another test"
+                                : "Create new transmission"}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={!isReviewed || anyBusy || confirmed}
+                            onClick={() => void runPrepare(application.id)}
+                          >
+                            {prepBusyId === application.id ? "Preparing…" : "Prepare submission"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {prep && !prepSent ? (
+                      <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
+                        <p className="font-semibold text-sm text-foreground">Email preview</p>
+                        <p>
+                          From:{" "}
+                          <span className="font-semibold text-foreground">
+                            {prep.from || "(connect Outlook)"}
+                          </span>
+                          {prep.sender_mailbox_verified ? " · verified" : ""}
+                        </p>
+                        <p>
+                          Provider: {String(prep.provider || "—")} · Project:{" "}
+                          {String(prep.project_name || "—")}
+                        </p>
+                        <p>
+                          Package:{" "}
+                          <span className="text-foreground">
+                            {formatUciPackageVersionLabel(
+                              prep.package_version || "agent-3-reviewed-package-snapshot-v1",
+                            )}
+                          </span>
+                        </p>
+                        <p>Subject: {String(prep.subject || "—")}</p>
+                        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded border bg-background p-2 text-[11px] text-muted-foreground">
+                          {String(prep.body || "")}
+                        </pre>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Attachments ({attachmentCount})
+                          </p>
+                          <ul className="mt-1 list-disc pl-4">
+                            {(prep.attachments || []).map((doc, idx) => (
+                              <li key={`${String(doc.key ?? "a")}-${idx}`}>
+                                {String(doc.label || doc.key || "document")}
+                                {doc.file_name ? ` · ${String(doc.file_name)}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="space-y-1 pt-1">
+                          <label className="text-foreground" htmlFor={`to-${application.id}`}>
+                            To (required — explicit recipient)
+                          </label>
+                          <Input
+                            id={`to-${application.id}`}
+                            value={recipientDraft[application.id] ?? ""}
+                            onChange={(e) =>
+                              setRecipientDraft((prev) => ({
+                                ...prev,
+                                [application.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="utility-test@example.com"
+                            disabled={!toEditable || anyBusy}
+                            className="max-w-md"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={anyBusy || !toEditable}
+                            onClick={() =>
+                              void saveRecipients(application.id, prep.preparation_id)
+                            }
+                          >
+                            Update preview
+                          </Button>
+                          {packageReady ? (
+                            <Button
+                              size="sm"
+                              disabled={anyBusy}
+                              onClick={() =>
+                                requestTransmit(application.id, prep, synthetic)
+                              }
+                            >
+                              {transmitBusyId === application.id
+                                ? "Sending…"
+                                : synthetic
+                                  ? "Send test email"
+                                  : "Send submission"}
+                            </Button>
+                          ) : prep.production_readiness_blocker ? (
+                            <div className="w-full rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+                              <p className="font-semibold">
+                                {formatUciOperatorMessage(
+                                  prep.production_readiness_blocker,
+                                  "Email sending is not available.",
+                                )}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {prepSent ? (
+                      <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-100">
+                        <p className="font-medium">{sentSummary}</p>
+                        <p className="mt-1 text-muted-foreground">
+                          This transmission stays on record. Use{" "}
+                          {synthetic ? "Send another test" : "Create new transmission"} for a new
+                          preview and send.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
           </div>
         </Panel>
       ) : null}
+
+      <AlertDialog
+        open={Boolean(pendingTransmit)}
+        onOpenChange={(open) => {
+          if (!open) setPendingTransmit(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send this email?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>This sends the previewed message and attachments from your connected mailbox.</p>
+                {pendingTransmit ? (
+                  <ul className="list-disc pl-4 text-foreground">
+                    <li>From: {pendingTransmit.from || "—"}</li>
+                    <li>To: {pendingTransmit.to}</li>
+                    <li>Subject: {pendingTransmit.subject || "—"}</li>
+                    <li>Attachments: {pendingTransmit.attachmentCount}</li>
+                    {pendingTransmit.synthetic ? (
+                      <li>SYNTHETIC TEST — self-send only</li>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void runTransmit()}>
+              Confirm send
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </RouteFrame>
   );
 }

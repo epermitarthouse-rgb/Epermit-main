@@ -25,6 +25,63 @@ export interface UciPackageFieldResult {
   address_source?: string;
 }
 
+function firstEvidenceSource(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const sources = Array.isArray(record.evidence_sources) ? record.evidence_sources : [];
+  const first = sources.find(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+  );
+  return first ?? {};
+}
+
+export function getPackageFieldSourceHref(
+  field: UciPackageFieldResult,
+  context: {
+    coordinationId: string;
+    applicationId: string;
+    projectId: string;
+  },
+): string | null {
+  const returnTo = `/uci/records/${encodeURIComponent(context.coordinationId)}?tab=application-prep&application=${encodeURIComponent(context.applicationId)}&item=${encodeURIComponent(`field:${field.key}`)}#package-field-${encodeURIComponent(field.key)}`;
+  if (field.source?.startsWith("load_summary.verified_values")) {
+    const value =
+      field.value && typeof field.value === "object" && !Array.isArray(field.value)
+        ? (field.value as Record<string, unknown>)
+        : {};
+    const evidence = firstEvidenceSource(field.value);
+    const fieldKey =
+      field.source.slice("load_summary.verified_values.".length) || field.key;
+    const verifiedValueId = String(
+      value.original_candidate_id ?? evidence.candidate_id ?? fieldKey,
+    );
+    const sourceDocumentId = String(
+      value.source_document_id ?? evidence.source_document_id ?? "",
+    );
+    const params = new URLSearchParams({
+      tab: "load-profile",
+      section: "verified_inputs",
+      field_key: fieldKey,
+      verified_value_id: verifiedValueId,
+      return_to: returnTo,
+    });
+    if (sourceDocumentId) params.set("source_document_id", sourceDocumentId);
+    return `/uci/records/${encodeURIComponent(context.coordinationId)}?${params.toString()}#verified-input-${encodeURIComponent(fieldKey)}`;
+  }
+  if (field.source?.startsWith("project.")) {
+    const projectField = field.source.slice("project.".length);
+    const params = new URLSearchParams({
+      project: context.projectId,
+      mode: "edit",
+      field: projectField,
+      return_to: returnTo,
+    });
+    return `/projects?${params.toString()}#project-field-${encodeURIComponent(projectField)}`;
+  }
+  return null;
+}
+
 export interface UciPackageReviewItem {
   kind?: "field" | "document";
   key?: string;
@@ -33,6 +90,7 @@ export interface UciPackageReviewItem {
   reviewed_by_user_id?: string | null;
   reviewed_at?: string | null;
   note?: string | null;
+  issue_area?: "mapping" | "signature" | null;
 }
 
 export interface UciPackageReview {
@@ -62,6 +120,7 @@ export interface UciCanonicalPackageReviewItem {
   ready: boolean;
   snapshot: Record<string, unknown>;
   note?: string | null;
+  issue_area?: "mapping" | "signature" | null;
 }
 
 export interface UciCanonicalPackageReviewSummary {
@@ -69,6 +128,7 @@ export interface UciCanonicalPackageReviewSummary {
   all_confirmed: boolean;
   ready_for_final_review: boolean;
   active_correction_count: number;
+  active_corrections?: UciCanonicalPackageReviewItem[];
   confirmed_count: number;
   total_count: number;
   items: UciCanonicalPackageReviewItem[];
@@ -185,12 +245,19 @@ export interface UciApplicationPackageMetadata {
   checklist_label?: string | null;
   authoritative_requirements?: boolean;
   external_submission_allowed?: boolean | null;
+  requirements_approval?: {
+    status?: "approved";
+    approved_by_display?: string | null;
+    approved_at?: string | null;
+    version?: string | null;
+  } | null;
   built_at?: string | null;
   built_by_user_id?: string | null;
   synthetic_checklist?: {
     status?: "draft" | "approved";
     label?: string;
     approved_by_user_id?: string | null;
+    approved_by_display?: string | null;
     approved_at?: string | null;
     approval_note?: string | null;
   } | null;
@@ -286,7 +353,7 @@ export function getPackageReviewItemStatus(
     return stored.status;
   }
   if (
-    stored?.status === "needs_correction" &&
+    (stored?.status === "confirmed" || stored?.status === "needs_correction") &&
     ((kind === "field" && currentSnapshot.status === "present") ||
       (kind === "document" &&
         currentSnapshot.status === "attached" &&
@@ -294,6 +361,9 @@ export function getPackageReviewItemStatus(
           currentSnapshot.signature_status === "signed_manual_verified")))
   ) {
     return "ready_for_re_review";
+  }
+  if (stored?.status === "confirmed" || stored?.status === "needs_correction") {
+    return "needs_correction";
   }
   return "not_reviewed";
 }
@@ -340,13 +410,15 @@ export function summarizePackageReview(
         (!item.signature_required || item.signature_status === "signed_manual_verified") &&
         item.reviewStatus === "confirmed",
     );
-  const activeCorrectionCount =
-    items.filter((item) => item.reviewStatus === "needs_correction").length +
-    (review?.package_correction?.active ? 1 : 0);
+  const activeCorrectionCount = items.filter(
+    (item) =>
+      item.reviewStatus === "needs_correction" ||
+      item.reviewStatus === "ready_for_re_review",
+  ).length;
   const status: UciPackageReviewStatus =
     draftStatus === "reviewed" && Boolean(review?.reviewed_snapshot)
       ? "reviewed"
-      : activeCorrectionCount > 0 || draftStatus === "needs_changes"
+      : activeCorrectionCount > 0
         ? "needs_changes"
         : metadata?.package_status === "ready_for_review"
           ? "ready_for_review"
@@ -444,7 +516,7 @@ export function formatPackageFieldProvenance(field: UciPackageFieldResult): stri
     typeof pageValue === "number" || (typeof pageValue === "string" && pageValue.trim())
       ? ` · page ${String(pageValue)}`
       : "";
-  return `Agent 2 verified input${documentName ? ` · ${documentName}` : ""}${page}`;
+  return `Load Profile Analyzer — Verified Input${documentName ? ` · ${documentName}` : ""}${page}`;
 }
 
 export const APPLICATION_PACKAGE_IDEMPOTENCY_PREFIX = "agent_3_application_package:";

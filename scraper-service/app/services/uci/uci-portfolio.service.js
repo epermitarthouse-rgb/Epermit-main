@@ -18,7 +18,7 @@ async function getProjectPortfolioView(supabase, projectId) {
       .select("id, coordination_record_id, needs_human_attention, classification")
       .eq("project_id", projectId)
       .or(
-        "needs_human_attention.eq.true,classification.is.null,classification.eq.unclassified,classification_confidence.lt.0.7",
+        "needs_human_attention.eq.true,classification.is.null,classification.eq.unclassified,classification_confidence.lt.0.75",
       ),
   ]);
 

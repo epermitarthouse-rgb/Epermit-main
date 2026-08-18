@@ -79,7 +79,7 @@ function isAttentionCommunication(row) {
     row.needs_human_attention === true ||
     row.classification == null ||
     row.classification === "unclassified" ||
-    (Number.isFinite(confidence) && confidence < 0.7)
+    (Number.isFinite(confidence) && confidence < 0.75)
   );
 }
 

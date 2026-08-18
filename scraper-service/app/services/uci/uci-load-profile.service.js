@@ -647,7 +647,7 @@ async function runLoadProfileAnalysis(supabase, params) {
       coordinationRecordId,
       toStage: 2,
       toState: "IN_PROGRESS",
-      reason: "Agent 2 load profile analysis started",
+      reason: "Load Profile Analyzer started",
       triggeredByType: "system",
       triggeredById: userId,
       metadata: {

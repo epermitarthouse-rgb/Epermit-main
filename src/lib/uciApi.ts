@@ -14,6 +14,8 @@ import type {
   UciApplicationPackageBuildResponse,
   UciApplicationReviewResponse,
   UciApplicationSubmitResponse,
+  UciSubmissionValidationAttemptResponse,
+  UciSubmissionValidationAttemptsListResponse,
   UciMeterSetPrepareResponse,
   UciMilestonesListResponse,
   UciPepcoDashboardDiscoveryResponse,
@@ -1205,6 +1207,67 @@ export async function exportSyntheticApplicationChecklist(
   );
 }
 
+export type UciPackageExportFormat = "summary.pdf" | "complete.zip" | "structured-json";
+
+export async function openApplicationPackageDocument(
+  applicationId: string,
+  documentKey: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const path = `/api/uci/applications/${encodeURIComponent(
+    applicationId,
+  )}/package/documents/${encodeURIComponent(documentKey)}/open`;
+  const res = await uciAuthenticatedFetch(
+    path,
+    {},
+    { retryOnTransportFailure: false, timeoutMs: 30_000 },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw mapUciHttpError(
+      res.status,
+      err,
+      "Failed to open package document",
+      res.headers.get(UCI_REQUEST_ID_HEADER),
+    );
+  }
+  const disposition = res.headers.get("content-disposition") ?? "";
+  return {
+    blob: await res.blob(),
+    fileName: disposition.match(/filename="([^"]+)"/i)?.[1] || documentKey,
+  };
+}
+
+export async function downloadApplicationPackageExport(
+  applicationId: string,
+  format: UciPackageExportFormat,
+): Promise<{ blob: Blob; fileName: string }> {
+  const path = `/api/uci/applications/${encodeURIComponent(
+    applicationId,
+  )}/package/export/${encodeURIComponent(format)}`;
+  const res = await uciAuthenticatedFetch(
+    path,
+    {},
+    { retryOnTransportFailure: false, timeoutMs: format === "complete.zip" ? 120_000 : 30_000 },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw mapUciHttpError(
+      res.status,
+      err,
+      "Failed to download application package",
+      res.headers.get(UCI_REQUEST_ID_HEADER),
+    );
+  }
+  const fallbackExtension =
+    format === "summary.pdf" ? "pdf" : format === "complete.zip" ? "zip" : "json";
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const dispositionName = disposition.match(/filename="([^"]+)"/i)?.[1];
+  return {
+    blob: await res.blob(),
+    fileName: dispositionName || `uci-package-${applicationId}.${fallbackExtension}`,
+  };
+}
+
 export async function updateApplicationPackageReviewItem(
   applicationId: string,
   payload: {
@@ -1212,6 +1275,7 @@ export async function updateApplicationPackageReviewItem(
     item_key: string;
     status: "confirmed" | "needs_correction";
     note?: string;
+    issue_area?: "mapping" | "signature";
   },
 ): Promise<{
   application: CoordinationApplication;
@@ -1280,6 +1344,190 @@ export async function submitCoordinationApplication(
       body: JSON.stringify(options ?? {}),
     },
     "Application submission failed",
+  );
+}
+
+/** Stage 4 P0 — validation_only; never live submit / Graph / portal / Stage 5. */
+export async function validateSubmissionPackage(
+  applicationId: string,
+): Promise<UciSubmissionValidationAttemptResponse> {
+  return uciFetchJson<UciSubmissionValidationAttemptResponse>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/validation-attempts`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    },
+    "Submission package validation failed",
+  );
+}
+
+export async function listSubmissionValidationAttempts(
+  applicationId: string,
+): Promise<UciSubmissionValidationAttemptsListResponse> {
+  return uciFetchJson<UciSubmissionValidationAttemptsListResponse>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/validation-attempts`,
+    {},
+    "Failed to load validation attempts",
+  );
+}
+
+export type UciSubmissionPreparationPreview = {
+  preparation_id: string;
+  status: string;
+  method?: string;
+  from?: string | null;
+  sender_mailbox_verified?: boolean;
+  to?: Array<{ email: string }>;
+  cc?: Array<{ email: string }>;
+  subject?: string | null;
+  body?: string | null;
+  provider?: string | null;
+  project_name?: string | null;
+  package_version?: string | null;
+  package_snapshot_id?: string | null;
+  attachments?: Array<Record<string, unknown>>;
+  sending_enabled?: boolean;
+  ready_to_send?: boolean;
+  live_email_flag_enabled?: boolean;
+  mail_send_permission_configured?: boolean;
+  production_readiness_blocker?: string | null;
+  graph_send_attempted?: boolean;
+  confirmed_at?: string | null;
+  confirmation_message?: string | null;
+  prepared_at?: string;
+  primary_state?: string;
+  secondary_state?: string;
+  message?: string;
+  connect_outlook?: boolean;
+  external_side_effects?: Record<string, unknown>;
+  idempotent_replay?: boolean;
+  submitted_at?: string | null;
+};
+
+export type UciEmailReadiness = {
+  live_email_flag_enabled?: boolean;
+  mail_send_permission_configured?: boolean;
+  ready_to_send?: boolean;
+  production_readiness_blocker?: string | null;
+  sending_enabled?: boolean;
+};
+
+export type UciTransmissionAttemptSummary = {
+  id?: string;
+  transmission_id?: string;
+  status?: string;
+  preparation_id?: string;
+  idempotency_key?: string;
+  sender_mailbox?: string | null;
+  from?: string | null;
+  to_recipients?: Array<{ email: string }> | string[];
+  to?: Array<{ email: string }> | string[];
+  subject?: string | null;
+  attachment_count?: number;
+  attachment_names?: string[];
+  graph_http_status?: number | null;
+  graph_message_id?: string | null;
+  graph_error?: string | null;
+  claimed_at?: string | null;
+  completed_at?: string | null;
+  ok?: boolean;
+  message?: string;
+  stage_5_advanced?: boolean;
+  submitted_at?: string | null;
+  idempotent_replay?: boolean;
+};
+
+export async function prepareSubmissionPackage(
+  applicationId: string,
+  options?: { to?: string; to_recipients?: string[]; cc?: string },
+): Promise<UciSubmissionPreparationPreview> {
+  return uciFetchJson<UciSubmissionPreparationPreview>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/submission-preparations`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options ?? {}),
+    },
+    "Prepare submission failed",
+  );
+}
+
+export async function listSubmissionPreparations(
+  applicationId: string,
+): Promise<{
+  application_id: string;
+  primary_state: string;
+  submitted_at: string | null;
+  preparations: UciSubmissionPreparationPreview[];
+  latest: UciSubmissionPreparationPreview | null;
+  source?: string;
+  email_readiness?: UciEmailReadiness;
+  latest_transmission?: UciTransmissionAttemptSummary | null;
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/submission-preparations`,
+    {},
+    "Failed to load submission preparations",
+  );
+}
+
+export async function updateSubmissionPreparation(
+  applicationId: string,
+  preparationId: string,
+  patch: { to?: string; to_recipients?: string[]; cc?: string; subject?: string; body?: string },
+): Promise<UciSubmissionPreparationPreview> {
+  return uciFetchJson<UciSubmissionPreparationPreview>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/submission-preparations/${encodeURIComponent(preparationId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+    "Update submission preview failed",
+  );
+}
+
+export async function confirmSubmissionPreparation(
+  applicationId: string,
+  preparationId: string,
+  options?: {
+    to?: string;
+    to_recipients?: string[];
+    cc?: string;
+    idempotency_key?: string;
+  },
+): Promise<UciSubmissionPreparationPreview> {
+  return uciFetchJson<UciSubmissionPreparationPreview>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/submission-preparations/${encodeURIComponent(preparationId)}/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options ?? {}),
+    },
+    "Confirm submission failed",
+  );
+}
+
+export async function transmitSubmissionPreparation(
+  applicationId: string,
+  preparationId: string,
+  options?: {
+    to?: string;
+    to_recipients?: string[];
+    cc?: string;
+    idempotency_key?: string;
+    confirm_send?: boolean;
+  },
+): Promise<UciTransmissionAttemptSummary> {
+  return uciFetchJson<UciTransmissionAttemptSummary>(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/submission-preparations/${encodeURIComponent(preparationId)}/transmit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options ?? {}),
+    },
+    "Transmit submission failed",
   );
 }
 
@@ -1745,6 +1993,110 @@ export async function reclassifyCommunication(
       body: JSON.stringify(payload),
     },
     "Failed to reclassify communication",
+  );
+}
+
+export async function flagCommunicationForReview(
+  communicationId: string,
+  payload?: { note?: string },
+): Promise<{ communication: unknown; flagged: boolean }> {
+  return uciFetchJson(
+    `/api/uci/communications/${encodeURIComponent(communicationId)}/flag-for-review`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to flag communication for review",
+  );
+}
+
+export async function confirmCommunicationReview(
+  communicationId: string,
+  payload?: {
+    classification?: string;
+    extracted_fields?: Record<string, unknown>;
+    note?: string;
+    apply_lifecycle?: boolean;
+  },
+): Promise<{ communication: unknown; lifecycle: unknown }> {
+  return uciFetchJson(
+    `/api/uci/communications/${encodeURIComponent(communicationId)}/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to confirm communication review",
+  );
+}
+
+export async function rejectCommunicationAsIrrelevant(
+  communicationId: string,
+  payload?: { note?: string },
+): Promise<{ communication: unknown }> {
+  return uciFetchJson(
+    `/api/uci/communications/${encodeURIComponent(communicationId)}/reject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to reject communication",
+  );
+}
+
+export async function rematchCommunication(
+  communicationId: string,
+  payload?: { coordination_record_id?: string; note?: string },
+): Promise<{ communication: unknown }> {
+  return uciFetchJson(
+    `/api/uci/communications/${encodeURIComponent(communicationId)}/rematch`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to rematch communication",
+  );
+}
+
+export async function reconcileApplicationStage5(
+  applicationId: string,
+  payload?: {
+    transmission_id?: string;
+    preparation_id?: string;
+    utility_ticket_number?: string;
+  },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/reconcile-stage5`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to reconcile live transmission into Stage 5",
+  );
+}
+
+export async function pollGraphInboundCommunications(
+  payload?: {
+    project_id?: string;
+    tenant_id?: string;
+    provider_slug?: string;
+    top?: number;
+    received_after?: string;
+  },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/communications/inbound/graph-poll`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to poll Graph inbound mailbox",
   );
 }
 

@@ -1,6 +1,33 @@
 import { supabase } from "@/lib/supabase";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 
+/** Cross-tab signal after OAuth callback so Settings can refetch without a full reload. */
+export const MICROSOFT_MAILBOX_SYNC_CHANNEL = "permitpilot-microsoft-mailbox";
+export const MICROSOFT_MAILBOX_SYNC_STORAGE_KEY = "permitpilot:microsoft-mailbox-connected";
+
+export type MicrosoftMailboxSyncPayload = {
+  type: "connected";
+  at: number;
+  mailbox_email?: string | null;
+};
+
+export function parseMicrosoftMailboxSyncStorageValue(
+  raw: string | null,
+): MicrosoftMailboxSyncPayload | null {
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(raw) as Partial<MicrosoftMailboxSyncPayload>;
+    if (!obj || obj.type !== "connected" || typeof obj.at !== "number") return null;
+    return {
+      type: "connected",
+      at: obj.at,
+      mailbox_email: typeof obj.mailbox_email === "string" ? obj.mailbox_email : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function bearer(): Promise<Record<string, string>> {
   const {
     data: { session },
@@ -20,6 +47,8 @@ async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
+/** Legacy OAuth start hint / PEPCO MFA convenience only — NOT the Stage 4 From sender.
+ * Stage 4 P1 sends as the connected Graph `/me` identity stored per PermitPilot user. */
 export const DEFAULT_MICROSOFT_MAILBOX = "Permitting@commun-et.com";
 
 export type MicrosoftMailboxStatus = {

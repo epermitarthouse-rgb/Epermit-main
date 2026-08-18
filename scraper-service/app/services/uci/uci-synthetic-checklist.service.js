@@ -35,7 +35,7 @@ function requireSyntheticChecklistApplication(application) {
     String(application.record_source) !== "agent_draft" ||
     String(application.idempotency_key) !== APPLICATION_PACKAGE_IDEMPOTENCY_KEY
   ) {
-    const err = new Error("Application is not an Agent 3 application package");
+    const err = new Error("Application is not an Application Builder package");
     err.statusCode = 400;
     err.code = "NOT_APPLICATION_PACKAGE";
     throw err;
@@ -72,6 +72,7 @@ async function approveSyntheticChecklist(supabase, params) {
         status: "approved",
         label: SYNTHETIC_TEST_CHECKLIST_LABEL,
         approved_by_user_id: params.userId,
+        approved_by_display: params.approverDisplay ?? null,
         approved_at: approvedAt,
         approval_note: approvalNote || "Approved for synthetic Stage 3 testing only",
       },
@@ -110,6 +111,12 @@ async function setSyntheticSignatureStatus(supabase, params) {
     err.statusCode = 404;
     err.code = "NOT_FOUND";
     throw err;
+  }
+  if (String(application.draft_status) === "reviewed") {
+    throw Object.assign(new Error("Reopen review before changing signature verification"), {
+      statusCode: 409,
+      code: "PACKAGE_REVIEW_LOCKED",
+    });
   }
   requireSyntheticChecklistApplication(application);
 

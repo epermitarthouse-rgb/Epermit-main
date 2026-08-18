@@ -135,8 +135,8 @@ describe("uciDocumentProcessing", () => {
   });
 
   it("formats UCI stage labels for agent consumers", () => {
-    expect(formatUciStage("agent_2_load_profile")).toContain("Agent 2");
-    expect(formatUciStage("agent_3_application_package")).toContain("Agent 3");
+    expect(formatUciStage("agent_2_load_profile")).toContain("Load Profile Analyzer");
+    expect(formatUciStage("agent_3_application_package")).toContain("Application Builder");
   });
 
   it("supports empty coverage summary state", () => {

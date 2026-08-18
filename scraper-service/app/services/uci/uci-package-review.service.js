@@ -7,6 +7,8 @@ const {
 
 const ITEM_STATUSES = new Set(["confirmed", "needs_correction"]);
 const REVIEW_VERSION = "agent-3-package-review-v2";
+const PACKAGE_REVIEW_APPLICATION_SELECT =
+  "id, coordination_record_id, project_id, application_type, package_documents, submission_method, utility_ticket_number, submitted_at, submitted_by, reviewed_by, reviewed_at, draft_status, agent_draft_metadata, idempotency_key, last_error, provider_slug, record_source, created_at, updated_at";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -22,7 +24,7 @@ function packageContext(application) {
     String(application.record_source) !== "agent_draft" ||
     String(application.idempotency_key) !== APPLICATION_PACKAGE_IDEMPOTENCY_KEY
   ) {
-    throw Object.assign(new Error("Application is not an Agent 3 application package"), {
+    throw Object.assign(new Error("Application is not an Application Builder package"), {
       statusCode: 400,
       code: "NOT_APPLICATION_PACKAGE",
     });
@@ -117,8 +119,10 @@ function summarizePackageReview(application) {
         ? stored.status === "confirmed" || stored.status === "needs_correction"
           ? stored.status
           : "not_reviewed"
-        : stored.status === "needs_correction" && itemReady(kind, snapshot)
-          ? "ready_for_re_review"
+        : stored.status === "confirmed" || stored.status === "needs_correction"
+          ? itemReady(kind, snapshot)
+            ? "ready_for_re_review"
+            : "needs_correction"
           : "not_reviewed";
       return {
         id,
@@ -131,6 +135,13 @@ function summarizePackageReview(application) {
           stored.reviewed_by_user_id != null ? String(stored.reviewed_by_user_id) : null,
         reviewed_at: stored.reviewed_at != null ? String(stored.reviewed_at) : null,
         note: stored.note != null ? String(stored.note) : null,
+        issue_area:
+          stored.issue_area === "signature" || stored.issue_area === "mapping"
+            ? stored.issue_area
+            : kind === "document" &&
+                asObject(stored.mapping_snapshot).signature_status !== snapshot.signature_status
+              ? "signature"
+              : "mapping",
       };
     },
   );
@@ -139,16 +150,14 @@ function summarizePackageReview(application) {
     items.every((item) => item.ready && item.status === "confirmed") &&
     String(pkg.package_status ?? "") === "ready_for_review";
   const packageCorrection = asObject(review.package_correction);
-  const activeCorrectionCount =
-    items.filter((item) => item.status === "needs_correction").length +
-    (packageCorrection.active === true ? 1 : 0);
+  const activeCorrections = items.filter(
+    (item) => item.status === "needs_correction" || item.status === "ready_for_re_review",
+  );
+  const activeCorrectionCount = activeCorrections.length;
   let status = "draft";
   if (String(application.draft_status) === "reviewed" && review.reviewed_snapshot) {
     status = "reviewed";
-  } else if (
-    activeCorrectionCount > 0 ||
-    String(application.draft_status) === "needs_changes"
-  ) {
+  } else if (activeCorrectionCount > 0) {
     status = "needs_changes";
   } else if (String(pkg.package_status ?? "") === "ready_for_review") {
     status = "ready_for_review";
@@ -159,6 +168,7 @@ function summarizePackageReview(application) {
     all_confirmed: allConfirmed,
     ready_for_final_review: allConfirmed && activeCorrectionCount === 0,
     active_correction_count: activeCorrectionCount,
+    active_corrections: activeCorrections,
     confirmed_count: items.filter((item) => item.status === "confirmed").length,
     total_count: items.length,
     items,
@@ -185,8 +195,25 @@ function summarizePackageReview(application) {
 function withPackageReviewSummary(application) {
   return {
     ...application,
+    load_summary: application.load_summary ?? {},
     package_review_summary: summarizePackageReview(application),
   };
+}
+
+async function getPackageReviewApplicationById(supabase, applicationId) {
+  const { data, error } = await supabase
+    .from("coordination_applications")
+    .select(PACKAGE_REVIEW_APPLICATION_SELECT)
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to load application package"), {
+      cause: error,
+      statusCode: 500,
+      code: "APPLICATION_FETCH_FAILED",
+    });
+  }
+  return data;
 }
 
 async function persistReviewMetadata(supabase, application, packageReview, extraPatch = {}) {
@@ -198,11 +225,12 @@ async function persistReviewMetadata(supabase, application, packageReview, extra
       package_review: packageReview,
     },
   };
-  const { data, error } = await supabase
+  const patch = { agent_draft_metadata: nextMetadata, ...extraPatch };
+  const { error } = await supabase
     .from("coordination_applications")
-    .update({ agent_draft_metadata: nextMetadata, ...extraPatch })
+    .update(patch)
     .eq("id", application.id)
-    .select("*")
+    .select("id")
     .single();
   if (error) {
     throw Object.assign(new Error(error.message || "Failed to update package review"), {
@@ -211,11 +239,12 @@ async function persistReviewMetadata(supabase, application, packageReview, extra
       code: "PACKAGE_REVIEW_UPDATE_FAILED",
     });
   }
-  return data;
+  return { ...application, ...patch };
 }
 
 async function updatePackageReviewItem(supabase, params) {
-  const application = await getApplicationById(supabase, params.applicationId);
+  const application =
+    params.application ?? (await getApplicationById(supabase, params.applicationId));
   if (!application) {
     throw Object.assign(new Error("Application not found"), { statusCode: 404, code: "NOT_FOUND" });
   }
@@ -235,6 +264,12 @@ async function updatePackageReviewItem(supabase, params) {
       code: "ALREADY_SUBMITTED",
     });
   }
+  if (String(application.draft_status) === "reviewed") {
+    throw Object.assign(new Error("Reopen review before changing package requirements"), {
+      statusCode: 409,
+      code: "PACKAGE_REVIEW_LOCKED",
+    });
+  }
   const current = currentItems(application);
   const snapshot = current[kind === "field" ? "fields" : "documents"].find(
     (item) => item.key === key,
@@ -252,6 +287,8 @@ async function updatePackageReviewItem(supabase, params) {
     });
   }
   const correctionNote = String(params.note ?? "").trim();
+  const issueArea =
+    kind === "document" && params.issueArea === "signature" ? "signature" : "mapping";
   if (status === "needs_correction" && !correctionNote) {
     throw Object.assign(new Error("A correction note is required"), {
       statusCode: 400,
@@ -267,6 +304,7 @@ async function updatePackageReviewItem(supabase, params) {
     actor_user_id: params.userId,
     at: now,
     note: correctionNote || null,
+    issue_area: status === "needs_correction" ? issueArea : null,
     mapping_snapshot: snapshot,
   };
   const nextReview = {
@@ -290,6 +328,7 @@ async function updatePackageReviewItem(supabase, params) {
         reviewed_by_user_id: params.userId,
         reviewed_at: now,
         note: correctionNote || null,
+        issue_area: status === "needs_correction" ? issueArea : null,
         audit_log: [...(Array.isArray(priorItem.audit_log) ? priorItem.audit_log : []), auditEntry],
       },
     },
@@ -310,9 +349,16 @@ async function updatePackageReviewItem(supabase, params) {
 }
 
 async function confirmAllVerifiedFields(supabase, params) {
-  const application = await getApplicationById(supabase, params.applicationId);
+  const application =
+    params.application ?? (await getApplicationById(supabase, params.applicationId));
   if (!application) {
     throw Object.assign(new Error("Application not found"), { statusCode: 404, code: "NOT_FOUND" });
+  }
+  if (String(application.draft_status) === "reviewed") {
+    throw Object.assign(new Error("Reopen review before changing package requirements"), {
+      statusCode: 409,
+      code: "PACKAGE_REVIEW_LOCKED",
+    });
   }
   const { review } = packageContext(application);
   const storedItems = asObject(review.items);
@@ -367,7 +413,8 @@ async function confirmAllVerifiedFields(supabase, params) {
 }
 
 async function reviewApplicationPackage(supabase, params) {
-  const application = await getApplicationById(supabase, params.applicationId);
+  const application =
+    params.application ?? (await getApplicationById(supabase, params.applicationId));
   if (!application) {
     throw Object.assign(new Error("Application not found"), { statusCode: 404, code: "NOT_FOUND" });
   }
@@ -431,6 +478,19 @@ async function reviewApplicationPackage(supabase, params) {
         }
       : review.reviewed_snapshot ?? null;
   const priorHistory = Array.isArray(review.review_history) ? review.review_history : [];
+  const correctionHistory = Array.isArray(review.correction_history)
+    ? review.correction_history
+    : [];
+  const reopenEvent =
+    status === "needs_changes"
+      ? {
+          action: "reopen_review",
+          reason: notes,
+          actor_user_id: params.userId,
+          at: now,
+          prior_reviewed_snapshot_captured_at: review.reviewed_snapshot?.captured_at ?? null,
+        }
+      : null;
   const nextReview = {
     ...review,
     version: REVIEW_VERSION,
@@ -443,14 +503,18 @@ async function reviewApplicationPackage(supabase, params) {
     reviewed_snapshot: reviewedSnapshot,
     review_history:
       status === "reviewed" ? [...priorHistory, reviewedSnapshot] : priorHistory,
+    correction_history:
+      reopenEvent ? [...correctionHistory, reopenEvent] : correctionHistory,
     package_correction:
       status === "needs_changes"
         ? {
-            active: true,
+            active: false,
             note: notes,
             requested_by_user_id: params.userId,
             requested_at: now,
             prior_reviewed_snapshot_captured_at: review.reviewed_snapshot?.captured_at ?? null,
+            cleared_at: now,
+            cleared_by_user_id: params.userId,
           }
         : {
             ...asObject(review.package_correction),
@@ -462,7 +526,7 @@ async function reviewApplicationPackage(supabase, params) {
     updated_by_user_id: params.userId,
   };
   const updated = await persistReviewMetadata(supabase, application, nextReview, {
-    draft_status: status,
+    draft_status: status === "reviewed" ? "reviewed" : "draft",
     reviewed_by: status === "reviewed" ? params.userId : null,
     reviewed_at: status === "reviewed" ? now : null,
   });
@@ -477,9 +541,11 @@ async function reviewApplicationPackage(supabase, params) {
 
 module.exports = {
   REVIEW_VERSION,
+  PACKAGE_REVIEW_APPLICATION_SELECT,
   currentItems,
   summarizePackageReview,
   withPackageReviewSummary,
+  getPackageReviewApplicationById,
   updatePackageReviewItem,
   confirmAllVerifiedFields,
   reviewApplicationPackage,

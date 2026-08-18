@@ -138,15 +138,25 @@ function renderApplicationPackage(options?: {
   editingDocumentSlot?: string | null;
   signatureStatus?: "unsigned" | "signed_manual_verified";
   canonicalAuthorizationStatus?: "confirmed" | "not_reviewed";
+  stalePackageCorrection?: boolean;
+  reviewed?: boolean;
 }): string {
   const signatureStatus = options?.signatureStatus ?? "signed_manual_verified";
   const authorizationStatus = options?.canonicalAuthorizationStatus;
   const renderedPackage = {
     ...packageApplication,
+    ...(options?.reviewed
+      ? {
+          draft_status: "reviewed" as const,
+          reviewed_by: "reviewer-1",
+          reviewed_at: "2026-08-17T02:00:00.000Z",
+        }
+      : {}),
+    ...(options?.stalePackageCorrection ? { draft_status: "needs_changes" as const } : {}),
     ...(authorizationStatus
       ? {
           package_review_summary: {
-            status: "ready_for_review",
+            status: options?.reviewed ? "reviewed" : "ready_for_review",
             all_confirmed: authorizationStatus === "confirmed",
             ready_for_final_review: authorizationStatus === "confirmed",
             active_correction_count: 0,
@@ -187,6 +197,24 @@ function renderApplicationPackage(options?: {
             : null,
       },
     ],
+    agent_draft_metadata: options?.stalePackageCorrection
+      ? {
+          ...packageApplication.agent_draft_metadata,
+          application_package: {
+            ...(packageApplication.agent_draft_metadata.application_package as Record<
+              string,
+              unknown
+            >),
+            package_review: {
+              items: {},
+              package_correction: {
+                active: true,
+                note: "Historical reopen reason",
+              },
+            },
+          },
+        }
+      : packageApplication.agent_draft_metadata,
   };
   return renderToStaticMarkup(
     createElement(ApplicationPrepSection, {
@@ -223,32 +251,35 @@ describe("ApplicationPrepSection render regression", () => {
     const html = renderApplicationPackage();
     assert.match(html, /Application fields/);
     assert.match(html, /Required documents/);
-    assert.match(html, /Signed — manually verified ✓/);
+    assert.match(html, /Signed ✓/);
     assert.match(html, /Mark unsigned/);
-    assert.match(html, /Verification note: Compared with signed source/);
+    assert.match(html, /Signature history/);
+    assert.match(html, /Project record/);
+    assert.doesNotMatch(html, /View technical provenance/);
+    assert.doesNotMatch(html, /project\.address/);
     assert.doesNotMatch(html, /Document mapping \(human confirmation required\)/);
     assert.doesNotMatch(html, /Package documents \(/);
   });
 
   it("routes project-backed fields to the exact project correction surface", () => {
     const html = renderApplicationPackage();
-    assert.match(html, /Edit project field/);
-    assert.match(html, /\/projects\?project=project-test&amp;field=address/);
-    assert.match(html, /Flag for correction/);
+    assert.match(html, /Open project field/);
+    assert.match(html, /\/projects\?project=project-test&amp;mode=edit&amp;field=address/);
+    assert.match(html, /Request change/);
   });
 
   it("renders unsigned and signed mutation states without requiring a refetch", () => {
     const unsignedHtml = renderApplicationPackage({ signatureStatus: "unsigned" });
-    assert.match(unsignedHtml, /Signature:.*Unsigned/);
-    assert.match(unsignedHtml, /Verify signed/);
+    assert.match(unsignedHtml, /Unsigned — action required/);
+    assert.match(unsignedHtml, /Mark signed/);
     assert.doesNotMatch(unsignedHtml, /Mark unsigned/);
 
     const signedHtml = renderApplicationPackage({
       signatureStatus: "signed_manual_verified",
     });
-    assert.match(signedHtml, /Signed — manually verified ✓/);
+    assert.match(signedHtml, /Signed ✓/);
     assert.match(signedHtml, /Mark unsigned/);
-    assert.doesNotMatch(signedHtml, /Verify signed/);
+    assert.doesNotMatch(signedHtml, /Mark signed/);
   });
 
   it("renders the document change editor inside the required document row", () => {
@@ -265,5 +296,28 @@ describe("ApplicationPrepSection render regression", () => {
     assert.match(html, /Authorization \/ LOA ·.*Not reviewed/);
     assert.match(html, /<button[^>]*disabled[^>]*>.*Mark package reviewed/s);
     assert.doesNotMatch(html, /All required mappings are confirmed/);
+  });
+
+  it("does not render an empty correction table or phantom blocker from stale flags", () => {
+    const html = renderApplicationPackage({
+      canonicalAuthorizationStatus: "confirmed",
+      stalePackageCorrection: true,
+    });
+    assert.match(html, /Ready for review/);
+    assert.doesNotMatch(html, /Package needs changes/);
+    assert.doesNotMatch(html, /Resolve the active package-level correction/);
+    assert.doesNotMatch(html, /Final review blockers/);
+  });
+
+  it("renders a clean reviewed state without stale or repeated actions", () => {
+    const html = renderApplicationPackage({
+      canonicalAuthorizationStatus: "confirmed",
+      reviewed: true,
+    });
+    assert.match(html, /Reviewed package ✓/);
+    assert.match(html, /Test checklist approved ✓/);
+    assert.doesNotMatch(html, /Approve synthetic checklist/);
+    assert.doesNotMatch(html, /Snapshot locked/);
+    assert.match(html, /Reopen review/);
   });
 });

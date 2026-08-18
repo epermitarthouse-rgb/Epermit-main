@@ -9,6 +9,7 @@ import {
   formatPackageDocumentSource,
   formatSuggestionConfidence,
   getApplicationPackageDraftApplication,
+  getPackageFieldSourceHref,
   parseApplicationPackageMetadata,
   parsePackageDocuments,
   summarizePackageReview,
@@ -86,8 +87,36 @@ describe("uciApplicationPrep helpers", () => {
           page_number: 1,
         },
       }),
-      "Agent 2 verified input · 01_Synthetic_Load_Letter.pdf · page 1",
+      "Load Profile Analyzer — Verified Input · 01_Synthetic_Load_Letter.pdf · page 1",
     );
+  });
+
+  it("builds an exact verified-input deep link with return context", () => {
+    const href = getPackageFieldSourceHref(
+      {
+        key: "connected_load_kw",
+        label: "Connected load",
+        status: "present",
+        source: "load_summary.verified_values.connected_load_kw",
+        value: {
+          original_candidate_id: "candidate-7",
+          source_document_id: "document-4",
+          value: 125,
+        },
+      },
+      {
+        coordinationId: "coord-1",
+        applicationId: "package-1",
+        projectId: "project-1",
+      },
+    );
+    assert.ok(href);
+    assert.match(href, /section=verified_inputs/);
+    assert.match(href, /field_key=connected_load_kw/);
+    assert.match(href, /verified_value_id=candidate-7/);
+    assert.match(href, /source_document_id=document-4/);
+    assert.match(href, /return_to=/);
+    assert.match(href, /#verified-input-connected_load_kw$/);
   });
 
   it("parses confirmed PEPCO portal package document fields", () => {
@@ -171,6 +200,10 @@ describe("uciApplicationPrep helpers", () => {
             ),
           },
         },
+        package_correction: {
+          active: false,
+          note: null as string | null,
+        },
       },
     };
     const documents = parsePackageDocuments([
@@ -186,10 +219,18 @@ describe("uciApplicationPrep helpers", () => {
     const readySummary = summarizePackageReview(metadata, documents, "draft");
     assert.equal(readySummary.status, "ready_for_review");
     assert.equal(readySummary.readyForFinalReview, true);
+    metadata.package_review.package_correction = {
+      active: true,
+      note: "Historical reopen reason",
+    };
+    const staleFlagSummary = summarizePackageReview(metadata, documents, "needs_changes");
+    assert.equal(staleFlagSummary.activeCorrectionCount, 0);
+    assert.equal(staleFlagSummary.status, "ready_for_review");
+    assert.equal(staleFlagSummary.readyForFinalReview, true);
     documents[0].file_name = "replacement.pdf";
     const changedSummary = summarizePackageReview(metadata, documents, "draft");
-    assert.equal(changedSummary.status, "ready_for_review");
+    assert.equal(changedSummary.status, "needs_changes");
     assert.equal(changedSummary.readyForFinalReview, false);
-    assert.equal(changedSummary.documents[0].reviewStatus, "not_reviewed");
+    assert.equal(changedSummary.documents[0].reviewStatus, "ready_for_re_review");
   });
 });

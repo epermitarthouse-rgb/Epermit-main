@@ -32,7 +32,7 @@ describe("uciActionTracker data", () => {
 
     expect(bySeq[5].status).toBe("Partial");
     expect(bySeq[5].subStatus).toMatch(/Electric scope: Complete/i);
-    expect(bySeq[5].subStatus).toMatch(/Full Agent 1: Partial/i);
+    expect(bySeq[5].subStatus).toMatch(/Full Utility Provider Mapper: Partial/i);
 
     expect(bySeq[6].status).toBe("Partial");
     expect(bySeq[7].status).toBe("Scaffolded");

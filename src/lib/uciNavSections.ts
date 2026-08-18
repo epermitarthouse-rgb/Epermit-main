@@ -149,13 +149,13 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
   },
   {
     id: "submissions",
-    label: "Submissions",
+    label: "Submission Tracker",
     icon: Radio,
     support: "active",
     navGroup: "operations",
     section: "submissions",
     target: { kind: "external", href: "/uci/submissions" },
-    note: "Cross-project foundation; record package work remains in Stages 2–4.",
+    note: "Submission and Confirmation Tracker — prepare, preview, and send.",
     primaryNav: true,
   },
   {

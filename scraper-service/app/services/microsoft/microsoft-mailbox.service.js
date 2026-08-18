@@ -467,6 +467,39 @@ async function pollGraphMailboxForPepcoMfaCode(supabase, userId, opts) {
 }
 
 /**
+ * Normalize scopes from microsoft_mailbox_connections.scopes (TEXT[]) or string.
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalizeMailboxScopes(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map((s) => String(s || "").trim()).filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    return raw
+      .split(/[\s,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+/**
+ * True when delegated token scopes include Mail.Send (exact or URL-form).
+ * @param {unknown} rawScopes
+ */
+function scopesIncludeMailSend(rawScopes) {
+  return normalizeMailboxScopes(rawScopes).some((scope) => {
+    const s = scope.toLowerCase();
+    return (
+      s === "mail.send" ||
+      s.endsWith("/mail.send") ||
+      s.includes("mail.send")
+    );
+  });
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} userId
  * @returns {Promise<{
@@ -475,12 +508,14 @@ async function pollGraphMailboxForPepcoMfaCode(supabase, userId, opts) {
  *   last_connected_at: string | null;
  *   last_checked_at: string | null;
  *   last_error: string | null;
+ *   scopes: string[];
+ *   mail_send_permission_configured: boolean;
  * }>}
  */
 async function getMailboxStatusForUser(supabase, userId) {
   const { data, error } = await supabase
     .from("microsoft_mailbox_connections")
-    .select("mailbox_email,status,last_connected_at,last_checked_at,last_error")
+    .select("mailbox_email,status,last_connected_at,last_checked_at,last_error,scopes")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -491,12 +526,15 @@ async function getMailboxStatusForUser(supabase, userId) {
       last_connected_at: null,
       last_checked_at: null,
       last_error: null,
+      scopes: [],
+      mail_send_permission_configured: false,
     };
   }
 
   const ok =
     String(data.status || "").toLowerCase() === "connected" &&
     !!(data.mailbox_email && String(data.mailbox_email).trim());
+  const scopes = normalizeMailboxScopes(data.scopes);
 
   return {
     connected: ok,
@@ -507,6 +545,8 @@ async function getMailboxStatusForUser(supabase, userId) {
       typeof data.last_error === "string" && String(data.last_error).trim()
         ? String(data.last_error).trim()
         : null,
+    scopes,
+    mail_send_permission_configured: ok && scopesIncludeMailSend(scopes),
   };
 }
 
@@ -514,4 +554,6 @@ module.exports = {
   countLatestMailboxMessages,
   pollGraphMailboxForPepcoMfaCode,
   getMailboxStatusForUser,
+  normalizeMailboxScopes,
+  scopesIncludeMailSend,
 };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,44 +8,134 @@ import {
   DEFAULT_MICROSOFT_MAILBOX,
   getMicrosoftAuthorizeUrl,
   getMicrosoftMailboxStatus,
+  MICROSOFT_MAILBOX_SYNC_CHANNEL,
+  MICROSOFT_MAILBOX_SYNC_STORAGE_KEY,
+  parseMicrosoftMailboxSyncStorageValue,
   testMicrosoftMailboxRead,
+  type MicrosoftMailboxStatus,
 } from "@/lib/microsoftMailboxApi";
 import { cn } from "@/lib/utils";
 import { EDITORIAL_FORM_CARD } from "@/components/layout/editorialPageChrome";
 
+const POST_CONNECT_POLL_MS = 2500;
+const POST_CONNECT_POLL_MAX_MS = 120_000;
+
 export function MicrosoftMailboxConnector() {
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
-  const [status, setStatus] = useState<{
-    connected: boolean;
-    mailbox_email?: string | null;
-    last_connected_at?: string | null;
-    last_checked_at?: string | null;
-  } | null>(null);
+  const [status, setStatus] = useState<MicrosoftMailboxStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const pollUntilRef = useRef<number>(0);
+  const pollTimerRef = useRef<number | null>(null);
 
-  const reload = useCallback(async () => {
-    setBusy(true);
+  const reload = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setBusy(true);
     try {
       const st = await getMicrosoftMailboxStatus();
       setStatus(st);
+      setLoadError(null);
+      return st;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not load Microsoft mailbox status");
-      setStatus({ connected: false });
+      const message = e instanceof Error ? e.message : "Could not load Microsoft mailbox status";
+      setLoadError(message);
+      // Do not overwrite a known connected state with a false "Not connected" on transient API failure
+      // (e.g. parallel scraper on :3002 briefly down while Vite on :5001 stays up).
+      setStatus((prev) => (prev?.connected ? prev : { connected: false }));
+      if (!opts?.quiet) toast.error(message);
+      return null;
     } finally {
-      setBusy(false);
+      if (!opts?.quiet) setBusy(false);
     }
   }, []);
+
+  const stopPolling = useCallback(() => {
+    pollUntilRef.current = 0;
+    if (pollTimerRef.current != null) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const schedulePollTick = useCallback(() => {
+    if (pollTimerRef.current != null) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (Date.now() >= pollUntilRef.current) return;
+    pollTimerRef.current = window.setTimeout(async () => {
+      pollTimerRef.current = null;
+      const st = await reload({ quiet: true });
+      if (st?.connected) {
+        stopPolling();
+        toast.success(
+          st.mailbox_email
+            ? `Microsoft mailbox connected (${st.mailbox_email}).`
+            : "Microsoft mailbox connected.",
+        );
+        return;
+      }
+      schedulePollTick();
+    }, POST_CONNECT_POLL_MS);
+  }, [reload, stopPolling]);
+
+  const beginPostConnectPolling = useCallback(() => {
+    pollUntilRef.current = Date.now() + POST_CONNECT_POLL_MAX_MS;
+    schedulePollTick();
+  }, [schedulePollTick]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    const onVisibleOrFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      void reload({ quiet: true });
+    };
+    window.addEventListener("focus", onVisibleOrFocus);
+    document.addEventListener("visibilitychange", onVisibleOrFocus);
+
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key !== MICROSOFT_MAILBOX_SYNC_STORAGE_KEY) return;
+      if (!parseMicrosoftMailboxSyncStorageValue(ev.newValue)) return;
+      beginPostConnectPolling();
+      void reload({ quiet: true }).then((st) => {
+        if (st?.connected) stopPolling();
+      });
+    };
+    window.addEventListener("storage", onStorage);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel(MICROSOFT_MAILBOX_SYNC_CHANNEL);
+      channel.onmessage = (ev: MessageEvent) => {
+        const data = ev?.data as { type?: string } | null;
+        if (!data || data.type !== "connected") return;
+        beginPostConnectPolling();
+        void reload({ quiet: true }).then((st) => {
+          if (st?.connected) stopPolling();
+        });
+      };
+    } catch {
+      channel = null;
+    }
+
+    return () => {
+      window.removeEventListener("focus", onVisibleOrFocus);
+      document.removeEventListener("visibilitychange", onVisibleOrFocus);
+      window.removeEventListener("storage", onStorage);
+      channel?.close();
+      stopPolling();
+    };
+  }, [beginPostConnectPolling, reload, stopPolling]);
 
   const connect = async () => {
     setBusy(true);
     try {
       const url = await getMicrosoftAuthorizeUrl(DEFAULT_MICROSOFT_MAILBOX);
       window.open(url, "_blank", "noopener,noreferrer");
-      toast.message("Continue Microsoft sign-in in the new tab, then refresh status here.");
+      beginPostConnectPolling();
+      toast.message("Continue Microsoft sign-in in the new tab — status will refresh automatically.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not start Microsoft OAuth");
     } finally {
@@ -78,8 +168,7 @@ export function MicrosoftMailboxConnector() {
           )}
         </CardTitle>
         <CardDescription>
-          Connect <span className="font-mono text-xs">{DEFAULT_MICROSOFT_MAILBOX}</span> via Microsoft Graph for
-          optional PEPCO email MFA automation. Tokens are encrypted on the PermitPilot scraper backend.
+          Connect your Microsoft 365 mailbox via Graph. Tokens are stored **per PermitPilot user** (encrypted on the scraper). Stage 4 email submissions will send as **your connected mailbox** (`/me/sendMail`) — not a hardcoded shared address. Optional shared ops mailboxes (e.g. for PEPCO MFA) are separate from Stage 4 From identity.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -87,6 +176,11 @@ export function MicrosoftMailboxConnector() {
           <p className="text-sm">
             Mailbox:{" "}
             <span className="font-semibold">{status.mailbox_email}</span>
+          </p>
+        ) : null}
+        {loadError ? (
+          <p className="text-xs text-destructive">
+            Status check failed ({loadError}). If you just connected Outlook, confirm the parallel scraper is running on port 3002, then refresh.
           </p>
         ) : null}
         {(status?.last_connected_at || status?.last_checked_at) && (

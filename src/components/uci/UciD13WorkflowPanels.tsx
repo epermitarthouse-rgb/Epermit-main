@@ -196,16 +196,24 @@ export function CommunicationReclassifyRow({
   comm,
   busy,
   onReclassify,
+  onFlagForReview,
+  onConfirm,
+  onReject,
   mutedClass,
   toolbarOutlineButtonClass,
 }: {
   comm: CoordinationCommunication;
   busy: boolean;
   onReclassify: (communicationId: string, classification: string) => void;
+  onFlagForReview?: (communicationId: string) => void;
+  onConfirm?: (communicationId: string, classification: string) => void;
+  onReject?: (communicationId: string) => void;
   mutedClass: string;
   toolbarOutlineButtonClass: string;
 }) {
   const [category, setCategory] = useState(comm.classification || "unclassified");
+  const flagged =
+    Boolean((comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review);
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <Select value={category} onValueChange={setCategory}>
@@ -231,7 +239,45 @@ export function CommunicationReclassifyRow({
         {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
         Reclassify
       </Button>
-      <span className={cn("text-[10px]", mutedClass)}>Human override preserved</span>
+      {onConfirm ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={toolbarOutlineButtonClass}
+          disabled={busy}
+          onClick={() => onConfirm(comm.id, category)}
+        >
+          Confirm
+        </Button>
+      ) : null}
+      {onFlagForReview ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={toolbarOutlineButtonClass}
+          disabled={busy || flagged}
+          onClick={() => onFlagForReview(comm.id)}
+        >
+          {flagged ? "Flagged" : "Flag for review"}
+        </Button>
+      ) : null}
+      {onReject ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={toolbarOutlineButtonClass}
+          disabled={busy}
+          onClick={() => onReject(comm.id)}
+        >
+          Reject
+        </Button>
+      ) : null}
+      <span className={cn("text-[10px]", mutedClass)}>
+        {flagged ? "Auto-lifecycle blocked pending review" : "Human override preserved"}
+      </span>
     </div>
   );
 }
@@ -554,6 +600,11 @@ export function useSyncRunPolling(
   const [pollError, setPollError] = useState<string | null>(null);
   const failCountRef = useRef(0);
   const inFlightRef = useRef(false);
+  const onTerminalRef = useRef(onTerminal);
+
+  useEffect(() => {
+    onTerminalRef.current = onTerminal;
+  }, [onTerminal]);
 
   const refresh = useCallback(async () => {
     if (!coordinationId || inFlightRef.current) return;
@@ -568,7 +619,7 @@ export function useSyncRunPolling(
       const terminal = ["completed", "failed", "cancelled"].includes(
         String(result.activeRun?.status || "").toLowerCase(),
       );
-      if (terminal) onTerminal?.();
+      if (terminal) onTerminalRef.current?.();
     } catch (e: unknown) {
       failCountRef.current += 1;
       setPollError(e instanceof Error ? e.message : "Failed to load sync runs");
@@ -576,7 +627,7 @@ export function useSyncRunPolling(
       inFlightRef.current = false;
       setLoading(false);
     }
-  }, [coordinationId, pollFn, onTerminal]);
+  }, [coordinationId, pollFn]);
 
   useEffect(() => {
     if (!coordinationId) {

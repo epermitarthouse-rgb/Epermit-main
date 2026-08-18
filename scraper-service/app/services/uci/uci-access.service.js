@@ -83,21 +83,20 @@ async function requireTenantAccess({ supabase, userId, tenantId }) {
  */
 async function requireTenantProjectAccess({ supabase, userId, projectId, write = false }) {
   const project = await getProjectTenantId(supabase, projectId);
-  if (project?.tenant_id) {
-    await requireTenantAccess({ supabase, userId, tenantId: project.tenant_id });
-  }
-
-  if (write) {
-    await requireProjectEditorAccess({ supabase, userId, projectId });
-  } else {
-    const ok = await assertProjectAccess({ supabase, userId, projectId });
-    if (!ok) {
-      const err = new Error("Forbidden: no access to this project");
-      err.statusCode = 403;
-      err.code = "PROJECT_ACCESS_DENIED";
-      throw err;
-    }
-  }
+  const tenantCheck = project?.tenant_id
+    ? requireTenantAccess({ supabase, userId, tenantId: project.tenant_id })
+    : Promise.resolve();
+  const projectCheck = write
+    ? requireProjectEditorAccess({ supabase, userId, projectId })
+    : assertProjectAccess({ supabase, userId, projectId }).then((ok) => {
+        if (!ok) {
+          const err = new Error("Forbidden: no access to this project");
+          err.statusCode = 403;
+          err.code = "PROJECT_ACCESS_DENIED";
+          throw err;
+        }
+      });
+  await Promise.all([tenantCheck, projectCheck]);
 }
 
 /**
@@ -419,6 +418,13 @@ function sanitizeUciError(error) {
     body.available_applications = /** @type {{ available_applications?: unknown }} */ (
       err
     ).available_applications;
+  }
+
+  if (
+    /** @type {{ details?: unknown }} */ (err).details &&
+    typeof /** @type {{ details?: unknown }} */ (err).details === "object"
+  ) {
+    body.details = /** @type {{ details?: unknown }} */ (err).details;
   }
 
   return {

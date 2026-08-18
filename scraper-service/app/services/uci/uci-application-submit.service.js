@@ -12,6 +12,9 @@ const {
   runPepcoPortalSubmissionOnPage,
 } = require("./uci-pepco-submission.service.js");
 const { sendUtilitySubmissionEmail, EMAIL_SUBMIT_VERSION } = require("./uci-email-submission.service.js");
+const {
+  validateSubmissionPackage,
+} = require("./uci-submission-validation.service.js");
 
 const SUBMIT_VERSION = "d4-v1";
 const GENERATED_BY = "agent_4_submission";
@@ -36,7 +39,7 @@ function validateSubmitEligibility(application) {
     return {
       ok: false,
       code: "NOT_APPLICATION_PACKAGE",
-      message: "Application is not an Agent 3 application package draft",
+      message: "Application is not an Application Builder package draft",
     };
   }
 
@@ -99,77 +102,16 @@ function validateSubmitEligibility(application) {
   return { ok: true };
 }
 
+/**
+ * Legacy synthetic intercept — delegates to Stage 4 P0 validation-only tracker.
+ * Never calls Graph/portal and never sets submitted_at / Stage 5.
+ */
 async function runSyntheticChecklistValidationDryRun(supabase, params) {
   const { application, userId } = params;
-  const metadata =
-    application.agent_draft_metadata &&
-    typeof application.agent_draft_metadata === "object" &&
-    !Array.isArray(application.agent_draft_metadata)
-      ? application.agent_draft_metadata
-      : {};
-  const pkg =
-    metadata.application_package &&
-    typeof metadata.application_package === "object" &&
-    !Array.isArray(metadata.application_package)
-      ? metadata.application_package
-      : {};
-  const generatedAt = new Date().toISOString();
-  const fieldResults = Array.isArray(pkg.field_results) ? pkg.field_results : [];
-  const documents = Array.isArray(application.package_documents)
-    ? application.package_documents
-    : [];
-  const validationErrors = [
-    ...(Array.isArray(pkg.missing_fields) ? pkg.missing_fields : []),
-    ...(Array.isArray(pkg.missing_documents) ? pkg.missing_documents : []),
-  ];
-  const submissionMetadata = {
-    version: SUBMIT_VERSION,
-    method: "validation_only",
-    provider_slug: String(application.provider_slug ?? ""),
-    generated_by: GENERATED_BY,
-    generated_at: generatedAt,
-    submitted_by_user_id: userId,
-    dry_run: true,
-    validation_only: true,
-    synthetic_test: true,
-    checklist_label: pkg.checklist_label ?? "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED",
-    confirmation_status: "dry_run",
-    external_side_effects: {
-      email_sent: false,
-      portal_touched: false,
-      live_submission_attempted: false,
-      lifecycle_advanced: false,
-    },
-    validation: {
-      ok: validationErrors.length === 0 && String(pkg.package_status) === "ready_for_review",
-      package_status: pkg.package_status ?? null,
-      field_count: fieldResults.length,
-      attached_document_count: documents.filter((doc) => doc.status === "attached").length,
-      signature_requirements: pkg.signature_requirements ?? [],
-      validation_errors: validationErrors,
-    },
-  };
-
-  await persistSubmissionAttempt(supabase, {
+  return validateSubmissionPackage(supabase, {
     applicationId: String(application.id),
-    application,
-    metadata,
-    submissionMetadata,
+    userId,
   });
-
-  return {
-    status: "validation_passed",
-    reason: "synthetic_dominion_validation_only",
-    submission_method: "validation_only",
-    dry_run: true,
-    validation_only: true,
-    lifecycle_advanced: false,
-    external_side_effects: submissionMetadata.external_side_effects,
-    application,
-    submission_metadata: submissionMetadata,
-    message:
-      "Synthetic checklist validation passed. No email was sent, no portal was touched, and lifecycle was not advanced.",
-  };
 }
 
 /**
@@ -194,16 +136,41 @@ function resolveSubmissionMethod(providerSlug) {
  */
 async function persistSubmissionAttempt(supabase, params) {
   const { applicationId, metadata, submissionMetadata } = params;
-  const updatedAgentMetadata = {
-    ...metadata,
-    submission: submissionMetadata,
-  };
+  const isValidationOnly =
+    submissionMetadata.validation_only === true ||
+    submissionMetadata.method === "validation_only" ||
+    (submissionMetadata.dry_run === true &&
+      String(submissionMetadata.confirmation_status) === "dry_run" &&
+      submissionMetadata.synthetic_test === true);
+
+  // Append-only validation history; never treat dry-run as real submission success.
+  const priorAttempts = Array.isArray(metadata.submission_attempts)
+    ? metadata.submission_attempts
+    : [];
+  const updatedAgentMetadata = isValidationOnly
+    ? {
+        ...metadata,
+        submission_attempts: [
+          ...priorAttempts,
+          {
+            ...submissionMetadata,
+            recorded_at: submissionMetadata.generated_at || new Date().toISOString(),
+          },
+        ],
+        // Legacy pointer only — Stage 4 P0 authoritative history is
+        // submission_validation_attempts / submission_validation_attempts JSONB.
+        latest_validation: submissionMetadata,
+      }
+    : {
+        ...metadata,
+        submission: submissionMetadata,
+      };
 
   const patch = {
     agent_draft_metadata: updatedAgentMetadata,
   };
 
-  if (submissionMetadata.confirmation_status === "confirmed") {
+  if (!isValidationOnly && submissionMetadata.confirmation_status === "confirmed") {
     Object.assign(patch, {
       draft_status: "submitted",
       submission_method: submissionMetadata.method,
@@ -212,7 +179,7 @@ async function persistSubmissionAttempt(supabase, params) {
       utility_ticket_number: submissionMetadata.utility_ticket_number ?? null,
       last_error: null,
     });
-  } else if (submissionMetadata.confirmation_status === "failed") {
+  } else if (!isValidationOnly && submissionMetadata.confirmation_status === "failed") {
     Object.assign(patch, {
       last_error: submissionMetadata.failure_message ?? "Submission failed",
     });
@@ -265,9 +232,22 @@ async function advanceLifecycleAfterConfirmedSubmission(supabase, params) {
     },
   );
 
+  // A4.11 — start acknowledgment SLA when Stage 5 enters AWAITING_UTILITY
+  let sla = null;
+  try {
+    const { startAcknowledgmentSla } = require("./uci-ack-sla.service.js");
+    sla = await startAcknowledgmentSla(supabase, {
+      coordinationRecordId,
+      reason: "Awaiting utility acknowledgment after confirmed submission",
+    });
+  } catch {
+    sla = { started: false, error: true };
+  }
+
   return {
-    coordination_record: finalRecord,
+    coordination_record: sla?.coordination_record || finalRecord,
     transitions: [stage4Transition, stage5Transition],
+    sla,
   };
 }
 

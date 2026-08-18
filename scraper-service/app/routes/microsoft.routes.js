@@ -26,16 +26,38 @@ const {
   getMailboxStatusForUser,
 } = require("../services/microsoft/microsoft-mailbox.service.js");
 
-const DEFAULT_MAILBOX_EMAIL = "Permitting@commun-et.com";
+const DEFAULT_MAILBOX_EMAIL = "Permitting@commun-et.com"; // OAuth start query default / legacy hint only — not Stage 4 From
 
 /**
  * HTML shell for OAuth callback (no redirects to SPA required).
  *
  * @param {string} bodyText
+ * @param {{ notifyConnected?: boolean, mailboxEmail?: string | null }} [opts]
  */
-function htmlShell(bodyText) {
+function htmlShell(bodyText, opts = {}) {
   const safeBody = String(bodyText || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Microsoft mailbox</title></head><body style="font-family:system-ui,sans-serif;padding:24px"><p>${safeBody}</p></body></html>`;
+  const notify = opts && opts.notifyConnected === true;
+  const mailbox =
+    opts && typeof opts.mailboxEmail === "string" && opts.mailboxEmail.trim()
+      ? opts.mailboxEmail.trim()
+      : "";
+  const safeMailboxJson = JSON.stringify(mailbox);
+  const notifyScript = notify
+    ? `<script>
+(function () {
+  var payload = { type: "connected", at: Date.now(), mailbox_email: ${safeMailboxJson} || null };
+  try {
+    localStorage.setItem("permitpilot:microsoft-mailbox-connected", JSON.stringify(payload));
+  } catch (e) {}
+  try {
+    var bc = new BroadcastChannel("permitpilot-microsoft-mailbox");
+    bc.postMessage(payload);
+    bc.close();
+  } catch (e) {}
+})();
+</script>`
+    : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Microsoft mailbox</title>${notifyScript}</head><body style="font-family:system-ui,sans-serif;padding:24px"><p>${safeBody}</p></body></html>`;
 }
 
 /**
@@ -205,7 +227,12 @@ function createMicrosoftRouter(opts) {
         .send(htmlShell("Microsoft mailbox tokens could not be stored. Verify server configuration and try again."));
     }
 
-    return res.status(200).send(htmlShell("Microsoft mailbox connected. You can close this tab."));
+    return res.status(200).send(
+      htmlShell("Microsoft mailbox connected. You can close this tab.", {
+        notifyConnected: true,
+        mailboxEmail: mailboxResolved,
+      }),
+    );
   });
 
   router.get("/mailbox/status", async (req, res) => {

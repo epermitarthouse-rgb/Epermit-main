@@ -9,6 +9,7 @@ const appSource = readFileSync(join(__dirname, "../App.tsx"), "utf8");
 const navSource = readFileSync(join(__dirname, "../lib/uciNavSections.ts"), "utf8");
 const hookSource = readFileSync(join(__dirname, "../hooks/useUciApplicationBuilder.ts"), "utf8");
 const dashboardSource = readFileSync(join(__dirname, "UciDashboard.tsx"), "utf8");
+const builderSource = readFileSync(join(__dirname, "UciApplicationBuilder.tsx"), "utf8");
 
 describe("UCI Application Builder route wiring", () => {
   it("mounts the real builder at /uci/application-builder", () => {
@@ -32,5 +33,10 @@ describe("UCI Application Builder route wiring", () => {
   it("never enables live Pepco submission from the Builder hook", () => {
     assert.match(hookSource, /Never pass live_submission_confirmed/);
     assert.doesNotMatch(hookSource, /live_submission_confirmed:\s*true/);
+  });
+
+  it("keeps technical provenance out of operator package views", () => {
+    assert.doesNotMatch(dashboardSource, /View technical provenance/);
+    assert.doesNotMatch(builderSource, /View technical provenance/);
   });
 });

@@ -81,6 +81,7 @@ const {
   reviewApplicationPackage,
   updatePackageReviewItem,
   confirmAllVerifiedFields,
+  getPackageReviewApplicationById,
 } = require("../services/uci/uci-package-review.service.js");
 const {
   listPackageDocumentCandidates,
@@ -89,10 +90,31 @@ const {
 } = require("../services/uci/uci-package-document-bridge.service.js");
 const { submitApplicationPackage } = require("../services/uci/uci-application-submit.service.js");
 const {
+  validateSubmissionPackage,
+  listSubmissionValidationAttempts,
+} = require("../services/uci/uci-submission-validation.service.js");
+const {
+  prepareSubmission,
+  updateSubmissionPreparation,
+  confirmSubmissionPreparation,
+  listSubmissionPreparations,
+  getSubmissionPreparationPreview,
+} = require("../services/uci/uci-submission-prepare.service.js");
+const {
+  transmitSubmissionPreparation,
+} = require("../services/uci/uci-submission-transmission.service.js");
+const {
   approveSyntheticChecklist,
   setSyntheticSignatureStatus,
   exportSyntheticChecklistPackage,
 } = require("../services/uci/uci-synthetic-checklist.service.js");
+const {
+  loadPackageExportContext,
+  buildStructuredPackageExport,
+  renderPackageSummaryPdf,
+  resolveMappedOriginals,
+  buildCompletePackageZip,
+} = require("../services/uci/uci-package-export.service.js");
 const { listApplicationsByCoordination } = require("../services/uci/uci-applications.service.js");
 const { runPortalSync } = require("../services/uci/uci-portal-sync.service.js");
 const {
@@ -114,6 +136,26 @@ const {
   reclassifyCommunication,
   getCommunicationById,
 } = require("../services/uci/uci-communication-classifier.service.js");
+const {
+  flagCommunicationForReview,
+  rejectCommunicationAsIrrelevant,
+  rematchCommunication,
+  confirmCommunicationReview,
+  addCommunicationReviewNote,
+} = require("../services/uci/uci-communication-review.service.js");
+const {
+  reconcileLiveTransmissionIntoStage5,
+  canEnterStage6,
+} = require("../services/uci/uci-stage5-entry.service.js");
+const {
+  sweepAcknowledgmentSlas,
+  evaluateAcknowledgmentSla,
+} = require("../services/uci/uci-ack-sla.service.js");
+const {
+  pollGraphInboundForUser,
+  ingestEmailInboundWebhook,
+} = require("../services/uci/uci-graph-inbound.service.js");
+
 const { runCosDiscrepancyAnalysis } = require("../services/uci/uci-cos-analyst.service.js");
 const { listCostsByCoordination, upsertCostRecord } = require("../services/uci/uci-costs.service.js");
 const {
@@ -1547,7 +1589,7 @@ function createUciRouter(opts) {
           ? String(body.external_application_id).trim()
           : undefined;
 
-      const appRow = await getApplicationById(supabase, applicationId);
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
       if (!appRow) {
         const err = new Error("Application not found");
         err.statusCode = 404;
@@ -1564,6 +1606,7 @@ function createUciRouter(opts) {
 
       const result = await confirmPackageDocumentMapping(supabase, {
         applicationId,
+        application: appRow,
         userId: user.id,
         slotKey,
         candidateId,
@@ -1633,6 +1676,7 @@ function createUciRouter(opts) {
       const result = await approveSyntheticChecklist(supabase, {
         applicationId,
         userId: user.id,
+        approverDisplay: user.user_metadata?.full_name || user.email || null,
         note: body.note,
       });
       res.json(result);
@@ -1678,7 +1722,7 @@ function createUciRouter(opts) {
       stageTimings.auth_ms = Date.now() - stageStartedAt;
       const applicationId = String(req.params.id || "").trim();
       stageStartedAt = Date.now();
-      const appRow = await getApplicationById(supabase, applicationId);
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
       stageTimings.application_fetch_ms = Date.now() - stageStartedAt;
       if (!appRow) {
         const err = new Error("Application not found");
@@ -1756,11 +1800,124 @@ function createUciRouter(opts) {
     }
   });
 
+  router.get("/applications/:id/package/documents/:documentKey/open", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const documentKey = String(req.params.documentKey || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+      });
+      const context = await loadPackageExportContext(supabase, {
+        applicationId,
+        application: appRow,
+      });
+      const originals = await resolveMappedOriginals(supabase, context);
+      const original = originals.find((entry) => entry.key === documentKey);
+      if (!original) {
+        const err = new Error("Mapped package document not found");
+        err.statusCode = 404;
+        err.code = "PACKAGE_DOCUMENT_NOT_FOUND";
+        throw err;
+      }
+      const safeName = String(original.original_file_name || "document.bin").replace(/["\r\n]/g, "_");
+      const extension = safeName.split(".").pop()?.toLowerCase();
+      const contentType =
+        extension === "pdf"
+          ? "application/pdf"
+          : extension === "png"
+            ? "image/png"
+            : extension === "jpg" || extension === "jpeg"
+              ? "image/jpeg"
+              : "application/octet-stream";
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      return res.send(original.buffer);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      return res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/applications/:id/package/export/:format", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const format = String(req.params.format || "").trim().toLowerCase();
+      if (!["structured-json", "summary.pdf", "complete.zip"].includes(format)) {
+        const err = new Error("Export format must be structured-json, summary.pdf, or complete.zip");
+        err.statusCode = 400;
+        err.code = "INVALID_PACKAGE_EXPORT_FORMAT";
+        throw err;
+      }
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+      });
+      const context = await loadPackageExportContext(supabase, {
+        applicationId,
+        application: appRow,
+      });
+      const generatedAt = new Date().toISOString();
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+
+      if (format === "structured-json") {
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="uci-package-${applicationId}-structured.json"`,
+        );
+        return res.json(buildStructuredPackageExport(context, generatedAt));
+      }
+      if (format === "summary.pdf") {
+        const pdf = await renderPackageSummaryPdf(context, generatedAt);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="uci-package-${applicationId}-summary.pdf"`,
+        );
+        res.setHeader("Content-Length", String(pdf.length));
+        return res.send(pdf);
+      }
+
+      const zip = await buildCompletePackageZip(supabase, context, generatedAt);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="uci-package-${applicationId}-complete.zip"`,
+      );
+      res.setHeader("Content-Length", String(zip.buffer.length));
+      return res.send(zip.buffer);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      return res.status(s.httpStatus).json(s.body);
+    }
+  });
+
   router.post("/applications/:id/package-review/items", async (req, res) => {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
       const applicationId = String(req.params.id || "").trim();
-      const appRow = await getApplicationById(supabase, applicationId);
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
       if (!appRow) {
         const err = new Error("Application not found");
         err.statusCode = 404;
@@ -1776,11 +1933,13 @@ function createUciRouter(opts) {
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const result = await updatePackageReviewItem(supabase, {
         applicationId,
+        application: appRow,
         userId: user.id,
         kind: body.kind,
         key: body.item_key,
         status: body.status,
         note: body.note,
+        issueArea: body.issue_area,
       });
       res.json(result);
     } catch (err) {
@@ -1793,7 +1952,7 @@ function createUciRouter(opts) {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
       const applicationId = String(req.params.id || "").trim();
-      const appRow = await getApplicationById(supabase, applicationId);
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
       if (!appRow) {
         const err = new Error("Application not found");
         err.statusCode = 404;
@@ -1808,6 +1967,7 @@ function createUciRouter(opts) {
       });
       const result = await confirmAllVerifiedFields(supabase, {
         applicationId,
+        application: appRow,
         userId: user.id,
       });
       res.json(result);
@@ -1825,7 +1985,7 @@ function createUciRouter(opts) {
       const status = String(body.status ?? "").trim();
       const notes = body.notes != null ? String(body.notes) : undefined;
 
-      const appRow = await getApplicationById(supabase, applicationId);
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
       if (!appRow) {
         const err = new Error("Application not found");
         err.statusCode = 404;
@@ -1842,6 +2002,7 @@ function createUciRouter(opts) {
 
       const result = await reviewApplicationPackage(supabase, {
         applicationId,
+        application: appRow,
         userId: user.id,
         reviewerDisplay: user.email || user.user_metadata?.full_name || user.id,
         review: { status, notes },
@@ -1889,6 +2050,297 @@ function createUciRouter(opts) {
       });
 
       res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  /** Stage 4 P0 — validation_only; never Graph/portal/Stage 5. */
+  router.post("/applications/:id/validation-attempts", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+
+      const result = await validateSubmissionPackage(supabase, {
+        applicationId,
+        userId: user.id,
+      });
+
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/applications/:id/validation-attempts", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: false,
+      });
+
+      const result = await listSubmissionValidationAttempts(supabase, applicationId);
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  /** Stage 4 P1 — Prepare → Preview → Confirm (email). Never Graph sendMail / Stage 5. */
+  router.post("/applications/:id/submission-preparations", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await prepareSubmission(supabase, {
+        applicationId,
+        userId: user.id,
+        options: body,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/applications/:id/submission-preparations", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: false,
+      });
+      const result = await listSubmissionPreparations(supabase, applicationId, {
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/applications/:id/submission-preparations/:prepId", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const preparationId = String(req.params.prepId || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: false,
+      });
+      const result = await getSubmissionPreparationPreview(supabase, {
+        applicationId,
+        preparationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.patch("/applications/:id/submission-preparations/:prepId", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const preparationId = String(req.params.prepId || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateSubmissionPreparation(supabase, {
+        applicationId,
+        preparationId,
+        userId: user.id,
+        patch: body,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/applications/:id/submission-preparations/:prepId/confirm", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const preparationId = String(req.params.prepId || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await confirmSubmissionPreparation(supabase, {
+        applicationId,
+        preparationId,
+        userId: user.id,
+        options: body,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  /** Stage 4 controlled live email transmission — Graph sendMail once; Stage 5 via reconcile endpoint. */
+  router.post("/applications/:id/submission-preparations/:prepId/transmit", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const preparationId = String(req.params.prepId || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await transmitSubmissionPreparation(supabase, {
+        applicationId,
+        preparationId,
+        userId: user.id,
+        options: body,
+      });
+      const httpStatus = result.ok || result.idempotent_replay ? 200 : result.status === "outcome_unknown" ? 409 : 502;
+      res.status(httpStatus).json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  /** Stage 4→5 handoff after live transmission is successfully sent/reconciled. */
+  router.post("/applications/:id/reconcile-stage5", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await reconcileLiveTransmissionIntoStage5(supabase, {
+        applicationId,
+        userId: user.id,
+        transmissionId: body.transmission_id ? String(body.transmission_id) : undefined,
+        preparationId: body.preparation_id ? String(body.preparation_id) : undefined,
+        utilityTicketNumber: body.utility_ticket_number
+          ? String(body.utility_ticket_number)
+          : undefined,
+      });
+      if (result.coordination_record) {
+        // Guard: Stage 6 must not start from Stage 5 entry
+        if (Number(result.coordination_record.current_stage) >= 6) {
+          const err = new Error("Stage 6 must not start from Stage 5 entry");
+          err.statusCode = 500;
+          err.code = "STAGE_6_PREMATURE";
+          throw err;
+        }
+      }
+      res.json({ ...result, can_enter_stage_6: canEnterStage6(result.coordination_record || {}) });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
@@ -2169,6 +2621,228 @@ function createUciRouter(opts) {
         review: { classification, notes },
       });
 
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/communications/:id/flag-for-review", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const communicationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const comm = await getCommunicationById(supabase, communicationId);
+      if (!comm) {
+        const err = new Error("Communication not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(comm.project_id),
+        write: true,
+      });
+      const result = await flagCommunicationForReview(supabase, {
+        communicationId,
+        userId: user.id,
+        note: body.note != null ? String(body.note) : undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/communications/:id/reject", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const communicationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const comm = await getCommunicationById(supabase, communicationId);
+      if (!comm) {
+        const err = new Error("Communication not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(comm.project_id),
+        write: true,
+      });
+      const result = await rejectCommunicationAsIrrelevant(supabase, {
+        communicationId,
+        userId: user.id,
+        note: body.note != null ? String(body.note) : undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/communications/:id/rematch", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const communicationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const comm = await getCommunicationById(supabase, communicationId);
+      if (!comm) {
+        const err = new Error("Communication not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(comm.project_id),
+        write: true,
+      });
+      const result = await rematchCommunication(supabase, {
+        communicationId,
+        userId: user.id,
+        coordinationRecordId: body.coordination_record_id
+          ? String(body.coordination_record_id)
+          : undefined,
+        note: body.note != null ? String(body.note) : undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/communications/:id/confirm", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const communicationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const comm = await getCommunicationById(supabase, communicationId);
+      if (!comm) {
+        const err = new Error("Communication not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(comm.project_id),
+        write: true,
+      });
+      const result = await confirmCommunicationReview(supabase, {
+        communicationId,
+        userId: user.id,
+        classification: body.classification ? String(body.classification) : undefined,
+        extractedFields:
+          body.extracted_fields && typeof body.extracted_fields === "object"
+            ? body.extracted_fields
+            : {},
+        note: body.note != null ? String(body.note) : undefined,
+        applyLifecycle: body.apply_lifecycle !== false,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/communications/:id/notes", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const communicationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const comm = await getCommunicationById(supabase, communicationId);
+      if (!comm) {
+        const err = new Error("Communication not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(comm.project_id),
+        write: true,
+      });
+      const result = await addCommunicationReviewNote(supabase, {
+        communicationId,
+        userId: user.id,
+        note: body.note,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/communications/inbound/graph-poll", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const projectId = body.project_id ? String(body.project_id).trim() : null;
+      if (projectId) {
+        await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      }
+      const result = await pollGraphInboundForUser(supabase, {
+        userId: user.id,
+        projectId,
+        tenantId: body.tenant_id ? String(body.tenant_id) : null,
+        providerSlug: body.provider_slug ? String(body.provider_slug) : null,
+        top: body.top != null ? Number(body.top) : 25,
+        receivedAfterIso: body.received_after ? String(body.received_after) : null,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/ack-sla/evaluate", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+      });
+      const result = await evaluateAcknowledgmentSla(supabase, coordinationId);
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/ack-sla/sweep", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      // Operator-scoped: only evaluates records the user can already read via RLS
+      void user;
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await sweepAcknowledgmentSlas(supabase, {
+        limit: body.limit != null ? Number(body.limit) : 50,
+      });
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);

@@ -6,15 +6,15 @@ import {
   approveSyntheticApplicationChecklist,
   confirmAllApplicationPackageVerifiedFields,
   confirmApplicationPackageDocumentMapping,
-  exportSyntheticApplicationChecklist,
   formatUciUserError,
   getCoordinationDetail,
   listApplicationPackageDocumentCandidates,
   listProjectCoordination,
+  openApplicationPackageDocument,
   removeApplicationPackageDocumentMapping,
   reviewCoordinationApplication,
   setSyntheticApplicationSignatureStatus,
-  submitCoordinationApplication,
+  validateSubmissionPackage,
   updateApplicationPackageReviewItem,
 } from "@/lib/uciApi";
 import {
@@ -39,6 +39,7 @@ import type {
   CoordinationRecord,
   UciApplicationSubmitResponse,
   UciRecordDetailResponse,
+  UciSubmissionValidationAttemptResponse,
 } from "@/types/uci";
 
 export function useUciApplicationBuilder() {
@@ -62,13 +63,14 @@ export function useUciApplicationBuilder() {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
+  const [documentOpenBusy, setDocumentOpenBusy] = useState<string | null>(null);
   const [signatureBusyAction, setSignatureBusyAction] = useState<string | null>(null);
   const [reviewItemBusy, setReviewItemBusy] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [signatureReviewNote, setSignatureReviewNote] = useState("");
-  const [lastSubmitResult, setLastSubmitResult] = useState<UciApplicationSubmitResponse | null>(
-    null,
-  );
+  const [lastSubmitResult, setLastSubmitResult] = useState<
+    UciApplicationSubmitResponse | UciSubmissionValidationAttemptResponse | null
+  >(null);
   const [selectedCandidateBySlot, setSelectedCandidateBySlot] = useState<Record<string, string>>(
     {},
   );
@@ -309,7 +311,7 @@ export function useUciApplicationBuilder() {
         tone: "ok",
         text:
           status === "signed_manual_verified"
-            ? "Synthetic signature manually verified"
+            ? "Signature marked signed"
             : `Synthetic signature status set to ${status}`,
       });
       void refreshDetail(coordinationId).catch((refreshError: unknown) => {
@@ -328,28 +330,6 @@ export function useUciApplicationBuilder() {
       });
     } finally {
       setSignatureBusyAction(null);
-    }
-  };
-
-  const exportSyntheticChecklist = async () => {
-    if (!packageApp || !isDominionSynthetic) return;
-    try {
-      const payload = await exportSyntheticApplicationChecklist(packageApp.id);
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `uci-synthetic-checklist-${packageApp.id}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setActionMessage({ tone: "ok", text: "Read-only synthetic checklist exported" });
-    } catch (e: unknown) {
-      setActionMessage({
-        tone: "bad",
-        text: formatUciUserError(e, "Synthetic checklist export failed"),
-      });
     }
   };
 
@@ -384,6 +364,8 @@ export function useUciApplicationBuilder() {
     kind: "field" | "document",
     key: string,
     status: "confirmed" | "needs_correction",
+    correctionReason?: string,
+    issueArea?: "mapping" | "signature",
   ) => {
     if (!packageApp || !coordinationId) return;
     setReviewItemBusy(`${kind}:${key}`);
@@ -393,15 +375,19 @@ export function useUciApplicationBuilder() {
         kind,
         item_key: key,
         status,
-        note: status === "needs_correction" ? reviewNotes.trim() || undefined : undefined,
+        note:
+          status === "needs_correction"
+            ? correctionReason?.trim() || reviewNotes.trim() || undefined
+            : undefined,
+        issue_area: status === "needs_correction" ? issueArea ?? "mapping" : undefined,
       });
       applyApplicationMutation(result.application);
       setActionMessage({
         tone: status === "confirmed" ? "ok" : "warn",
         text:
           status === "confirmed"
-            ? "Package mapping confirmed"
-            : "Package mapping marked as needing correction",
+            ? "Package item confirmed"
+            : "Change requested",
       });
     } catch (e: unknown) {
       setActionMessage({
@@ -417,7 +403,7 @@ export function useUciApplicationBuilder() {
     if (!packageApp || !coordinationId) return;
     if (
       !window.confirm(
-        "Confirm that every eligible Agent 2 verified field is appropriate for this application package?",
+        "Confirm that every eligible Load Profile Analyzer field is appropriate for this application package?",
       )
     ) {
       return;
@@ -443,53 +429,60 @@ export function useUciApplicationBuilder() {
 
   const submitPackage = async () => {
     if (!packageApp || !coordinationId) return;
-    if (!isDominionSynthetic && !isPepco) {
-      setActionMessage({
-        tone: "warn",
-        text: "Validation is unavailable until this provider has an approved validation adapter",
-      });
-      return;
-    }
     if (packageApp.draft_status !== "reviewed") {
       setActionMessage({
         tone: "warn",
-        text: "Portal submission stays disabled until draft status is reviewed",
+        text: "Validate submission package stays disabled until the package is Reviewed",
       });
       return;
     }
+    if (submitBusy) return;
     setSubmitBusy(true);
     setActionMessage(null);
     setLastSubmitResult(null);
     try {
-      // Never pass live_submission_confirmed — dry-run / gated path only.
-      const result = await submitCoordinationApplication(packageApp.id);
+      // Stage 4 P0: dedicated validation_only endpoint — never live submit.
+      const result = await validateSubmissionPackage(packageApp.id);
       setLastSubmitResult(result);
       applyApplicationMutation(result.application);
       void refreshDetail(coordinationId).catch(() => {
         // Validation persisted; a failed follow-up read must not turn it into a failed action.
       });
-      if (result.dry_run || result.status === "human_required") {
+      if (result.result === "blocked" || result.status === "validation_blocked") {
+        const blockerText = Array.isArray(result.blockers)
+          ? result.blockers
+              .map((b) =>
+                typeof b === "object" && b && "message" in b
+                  ? String((b as { message?: unknown }).message ?? "")
+                  : "",
+              )
+              .filter(Boolean)
+              .join("; ")
+          : "";
         setActionMessage({
           tone: "warn",
           text:
+            blockerText ||
             result.message ||
-            "Submission completed as validation dry-run / human-required — not a live portal filing",
+            "Validation blocked — package remains Not submitted",
         });
-      } else if (result.status === "failed") {
+      } else if (result.result === "failed" || result.status === "validation_failed") {
         setActionMessage({
           tone: "bad",
-          text: result.message || result.reason || "Submission failed",
+          text: result.message || "Validation failed — package remains Not submitted",
         });
       } else {
         setActionMessage({
           tone: "ok",
-          text: result.message || "Submission recorded — confirm utility acknowledgment separately",
+          text:
+            result.message ||
+            "Validation passed — package remains Not submitted. Actual submission is not configured.",
         });
       }
     } catch (e: unknown) {
       setActionMessage({
         tone: "bad",
-        text: formatUciUserError(e, "Application submission failed"),
+        text: formatUciUserError(e, "Submission package validation failed"),
       });
     } finally {
       setSubmitBusy(false);
@@ -557,6 +550,29 @@ export function useUciApplicationBuilder() {
     }
   };
 
+  const openDocument = async (documentKey: string) => {
+    if (!packageApp) return;
+    setDocumentOpenBusy(documentKey);
+    setActionMessage(null);
+    try {
+      const result = await openApplicationPackageDocument(packageApp.id, documentKey);
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(error, "Failed to open document"),
+      });
+    } finally {
+      setDocumentOpenBusy(null);
+    }
+  };
+
   const projectAddress =
     packageMeta?.project_address?.formatted?.trim() ||
     (typeof project?.address === "string" ? project.address.trim() : "") ||
@@ -605,6 +621,7 @@ export function useUciApplicationBuilder() {
     reviewBusy,
     submitBusy,
     mappingBusySlot,
+    documentOpenBusy,
     signatureBusyAction,
     reviewItemBusy,
     reviewNotes,
@@ -617,13 +634,13 @@ export function useUciApplicationBuilder() {
     saveDraft,
     approveSyntheticChecklist,
     setSignatureStatus,
-    exportSyntheticChecklist,
     markReviewed,
     updateReviewItem,
     confirmAllVerifiedFields,
     submitPackage,
     confirmMapping,
     removeMapping,
+    openDocument,
     reload: load,
     sections,
     completion,

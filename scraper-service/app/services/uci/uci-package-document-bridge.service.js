@@ -837,7 +837,8 @@ async function confirmPackageDocumentMapping(supabase, params) {
     throw err;
   }
 
-  const application = await getApplicationById(supabase, applicationId);
+  const application =
+    params.application ?? (await getApplicationById(supabase, applicationId));
   if (!application) {
     const err = new Error("Application not found");
     err.statusCode = 404;
@@ -894,37 +895,62 @@ async function confirmPackageDocumentMapping(supabase, params) {
       message: "Already mapped",
     };
   }
-
-  const record = await getCoordinationRecordById(supabase, coordinationRecordId);
-  if (!record) {
-    const err = new Error("Coordination record not found");
-    err.statusCode = 404;
-    err.code = "NOT_FOUND";
-    throw err;
+  if (String(application.draft_status) === "reviewed") {
+    throw Object.assign(new Error("Reopen review before changing package documents"), {
+      statusCode: 409,
+      code: "PACKAGE_REVIEW_LOCKED",
+    });
   }
 
-  const providerCheck = validateProviderContext(record);
-  if (!providerCheck.ok) {
-    const err = new Error(providerCheck.message);
-    err.statusCode = 400;
-    err.code = providerCheck.code;
-    throw err;
-  }
-
-  const template = loadTemplateManifest(
-    providerCheck.providerSlug,
-    normalizeUtilityType(record.utility_type),
-    {
-      checklistMode:
-        application.agent_draft_metadata?.application_package?.checklist_mode != null
-          ? String(application.agent_draft_metadata.application_package.checklist_mode)
-          : undefined,
-    },
-  );
-  const required = Array.isArray(template?.required_documents)
-    ? /** @type {Array<Record<string, unknown>>} */ (template.required_documents)
+  const packageMetadata = application.agent_draft_metadata?.application_package;
+  const storedSignatureRequirements = Array.isArray(packageMetadata?.signature_requirements)
+    ? packageMetadata.signature_requirements
     : [];
-  const slotDef = required.find((r) => String(r.key) === slotKey);
+  /** @type {Array<Record<string, unknown>>} */
+  let required = existingMapping
+    ? existingDocs.map((document) => {
+        const signature = storedSignatureRequirements.find(
+          (entry) => String(entry.document_key) === String(document.key),
+        );
+        return {
+          key: document.key,
+          label: document.label,
+          signature_required: document.signature_required === true,
+          signature_requirement_key: signature?.requirement_key,
+        };
+      })
+    : [];
+  let slotDef = required.find((entry) => String(entry.key) === slotKey);
+  if (!slotDef) {
+    const record = await getCoordinationRecordById(supabase, coordinationRecordId);
+    if (!record) {
+      const err = new Error("Coordination record not found");
+      err.statusCode = 404;
+      err.code = "NOT_FOUND";
+      throw err;
+    }
+    const providerCheck = validateProviderContext(record);
+    if (!providerCheck.ok) {
+      const err = new Error(providerCheck.message);
+      err.statusCode = 400;
+      err.code = providerCheck.code;
+      throw err;
+    }
+    const template = loadTemplateManifest(
+      providerCheck.providerSlug,
+      normalizeUtilityType(record.utility_type),
+      {
+        checklistMode:
+          packageMetadata?.checklist_mode != null
+            ? String(packageMetadata.checklist_mode)
+            : undefined,
+      },
+    );
+    required = Array.isArray(template?.required_documents)
+      ? /** @type {Array<Record<string, unknown>>} */ (template.required_documents)
+      : [];
+    slotDef = required.find((entry) => String(entry.key) === slotKey);
+  }
   if (!slotDef) {
     const err = new Error(`Unknown package document slot: ${slotKey}`);
     err.statusCode = 400;
@@ -1074,17 +1100,18 @@ async function confirmPackageDocumentMapping(supabase, params) {
       document_mapping_refreshed_by: userId,
     },
   };
-  const { data, error } = await supabase
+  const patch = {
+    package_documents: signatureEval.packageDocuments,
+    agent_draft_metadata: nextMetadata,
+    ...(String(application.draft_status) === "reviewed"
+      ? { draft_status: "needs_changes", reviewed_by: null, reviewed_at: null }
+      : {}),
+  };
+  const { error } = await supabase
     .from("coordination_applications")
-    .update({
-      package_documents: signatureEval.packageDocuments,
-      agent_draft_metadata: nextMetadata,
-      ...(String(application.draft_status) === "reviewed"
-        ? { draft_status: "needs_changes", reviewed_by: null, reviewed_at: null }
-        : {}),
-    })
+    .update(patch)
     .eq("id", applicationId)
-    .select("*")
+    .select("id")
     .single();
   if (error) {
     throw Object.assign(new Error(error.message || "Failed to update package document"), {
@@ -1094,7 +1121,7 @@ async function confirmPackageDocumentMapping(supabase, params) {
     });
   }
   return {
-    application: withPackageReviewSummary(data),
+    application: withPackageReviewSummary({ ...application, ...patch }),
     package_status: packageStatus,
     missing_documents: missingDocuments,
     missing_fields: missingFields,

@@ -38,6 +38,8 @@ interface ProjectFormDialogProps {
   project?: Project | null;
   onSubmit: (data: CreateProjectData | UpdateProjectData) => Promise<void>;
   loading?: boolean;
+  focusField?: string | null;
+  returnTo?: string | null;
 }
 
 const US_STATES = [
@@ -176,6 +178,8 @@ export function ProjectFormDialog({
   project,
   onSubmit,
   loading = false,
+  focusField,
+  returnTo,
 }: ProjectFormDialogProps) {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
@@ -203,6 +207,16 @@ export function ProjectFormDialog({
     reimbursement_amount: '',
     reimbursement_description: '',
   });
+
+  useEffect(() => {
+    if (!open || !focusField) return;
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(focusField);
+      target?.focus();
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusField, open]);
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
@@ -468,7 +482,7 @@ export function ProjectFormDialog({
                   value={formData.project_type}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, project_type: value as ProjectType }))}
                 >
-                  <SelectTrigger className={errors.project_type ? 'border-destructive' : ''}>
+                  <SelectTrigger id="project_type" className={errors.project_type ? 'border-destructive' : ''}>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border shadow-lg z-50">
@@ -923,6 +937,11 @@ export function ProjectFormDialog({
           </div>
 
           <DialogFooter>
+            {returnTo ? (
+              <Button type="button" variant="ghost" asChild>
+                <a href={returnTo}>Return to package</a>
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
