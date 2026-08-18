@@ -30,7 +30,7 @@ describe("UCI D5 keyword classifier", () => {
   it("classifies payment due as ciac_invoice", () => {
     const result = classifyCommunicationText("Contract Sent", "payment due soon");
     assert.equal(result.classification, "ciac_invoice");
-    assert.ok(result.classification_confidence >= 0.7);
+    assert.ok(result.classification_confidence >= 0.75);
   });
 
   it("classifies missing documents as request_for_information", () => {
@@ -143,8 +143,8 @@ describe("UCI D5 classifyCoordinationCommunications integration", () => {
 });
 
 describe("UCI D5 buildClassificationPatch", () => {
-  it("preserves existing portal attention flag when classifying", () => {
-    const patch = buildClassificationPatch({
+  it("preserves existing portal attention flag when classifying", async () => {
+    const patch = await buildClassificationPatch({
       raw_subject: "Update",
       raw_body: "hello",
       needs_human_attention: true,

@@ -4,6 +4,28 @@ const { sanitizeApplicationRowsForApi } = require("./uci-sync-utils.js");
 
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} communicationId
+ */
+async function getCommunicationById(supabase, communicationId) {
+  const { data, error } = await supabase
+    .from("coordination_communications")
+    .select("*")
+    .eq("id", communicationId)
+    .maybeSingle();
+
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to load communication"), {
+      cause: error,
+      statusCode: 500,
+      code: "COMMUNICATION_FETCH_FAILED",
+    });
+  }
+
+  return data ?? null;
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} coordinationRecordId
  * @param {string} projectId
  * @param {{ limit?: number, offset?: number }} [pagination]
@@ -113,6 +135,7 @@ async function listMilestonesByCoordination(
 }
 
 module.exports = {
+  getCommunicationById,
   listCommunicationsByCoordination,
   listMilestonesByCoordination,
   sanitizeApplicationRowsForApi,

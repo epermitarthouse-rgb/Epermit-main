@@ -68,7 +68,7 @@ Allowed status values:
 | Stage 4 | Submission snapshot / attempt audit / idempotency | Partial | Validation + preparations tables applied; transmission attempts claimed before Graph (JSONB mirror until remote migration applied); Highland live idempotency key replay verified | Yes — Highland 2026-08-18 live UAT | Apply `20260818210000_submission_transmission_attempts.sql` on `eeqxyjrcldivtpikcpvk` | Technical implementation | No | Yes | P1 | Validation/prep ≠ transmission; `outcome_unknown` refuses blind retry |
 | Stage 4 | Production live utility submission | Blocked by technical dependency | PEPCO live path exists behind explicit gates; no production-ready Dominion path | Fixture tests only | Operator-validated portal/email execution, confirmation evidence, incident handling | Utility portals / mailbox / runbooks | Yes | Yes | P0 | Never infer production readiness from dry-run results |
 | Stage 4 | Stage 4 → Stage 5 handoff | Complete (code) | Live transmit reconcile endpoint `POST /applications/:id/reconcile-stage5` plus legacy confirmed submit both enter Stage 5 `AWAITING_UTILITY` and start ack SLA; Stage 6 never starts | Yes — unit tests | Apply Stage 5 migration remotely; live utility ack still external | Lifecycle + transmission services | Yes (live proof) | No | P0 | Transmit itself still does not auto-advance; reconcile after `status=sent` |
-| Stage 5 | Communication classification and attention queue | Functional with human review | Eleven-category Claude+keyword classifier (0.75), Graph poll + webhook inbound, portal shared model, matcher/unmatched queue, ack acceptance, Flag/Confirm/Reject/Rematch, SLA start/stop/2×, Needs Attention | Yes — Stage 5 unit + ≥85% synthetic harness | Live Graph Mail.Read, Anthropic key for Claude live path, client-labeled accuracy set for production certification | Mailbox / Claude / labeled samples | Yes | Yes | P0 | Synthetic accuracy ≥85% verified; production certification blocked on labeled samples |
+| Stage 5 | Communication classification and attention queue | Functional with human review | Eleven-category LLM+keyword classifier (OpenAI primary when Anthropic absent; 0.75), Graph poll + webhook inbound, portal shared model, matcher/unmatched queue, ack acceptance, Flag/Confirm/Reject/Rematch, SLA start/stop/2×, Needs Attention | Yes — Stage 5 unit + ≥85% synthetic harness | Live Graph Mail.Read, OpenAI key for live LLM path (Anthropic optional), client-labeled accuracy set for production certification | Mailbox / OpenAI / labeled samples | Yes | Yes | P0 | Synthetic accuracy ≥85% verified; production certification blocked on labeled samples |
 | Stage 5 | Acknowledgment SLA engine | Complete (code) | Start on Stage 5 entry, stop on valid ack complete, overdue events, 2× escalation → ESCALATED | Yes — unit tests | Provider SLA business-day policy confirmation | Provider directory SLA columns | Yes (policy) | No | P1 | Defaults to 5 business days |
 | Stage 5 | Graph inbound ingestion | Implemented; live-verify pending | Idempotent Graph `/me/messages` poll + attachments metadata + `POST /webhooks/uci/email-inbound` into shared model / unmatched queue | Yes — unmatched path unit tests | Connected mailbox Mail.Read + webhook secret | Microsoft Graph / mailbox consent | Yes | Yes | P0 | Reuses per-user mailbox OAuth |
 | Stage 5 | Ack auto-complete + Stage 6 guard | Complete (code) | High-confidence matched acknowledgment with ticket/account + date can complete Stage 5; flagged/low-conf/unmatched never auto-advance; Stage 6 only after Stage 5 COMPLETED + ack date | Yes — unit tests | Live utility acknowledgment samples | Utility inbound messages | Yes | No | P0 | Does not start Stage 6 product |
@@ -881,13 +881,15 @@ yes | dzahid@commun-et.com | dzahid@commun-et.com | 6 | Graph 202 / sent | dc4df
 
 ## Stage 5 Acknowledgment / Communication Parser — 2026-08-19
 
-**Status:** Stage 5 product implemented in code with automated tests. Live Graph/Claude/client-labeled certification remain external verification dependencies.
+**Status:** Stage 5 product implemented in code with automated tests. Live Graph/LLM/client-labeled certification remain external verification dependencies.
 
 ### Implemented
 - Stage 4→5 handoff from live transmission reconcile + legacy confirmed submit; ack SLA start/stop/overdue/2× escalation
 - Graph inbound poll + webhook ingest (idempotent); portal sync shares `coordination_communications` and enqueues classification
 - Matcher (ticket/account/address/sender/thread/provider/LC) + unmatched queue table
-- 11-category Claude classifier + keyword fallback; confidence threshold **0.75** everywhere
+- 11-category **LLM classifier** (`uci-llm-classifier.service.js`) + keyword fallback; confidence threshold **0.75** everywhere
+- Primary provider: **OpenAI** via existing `createOpenAiClient` when `ANTHROPIC_API_KEY` is absent; Anthropic retained as optional auto-primary when configured
+- Provider/model/version/confidence/fallback audited on `agent_5_classification` metadata only (no provider wording in operator UI)
 - Ack acceptance with ticket/PM/next-action/date capture; high-confidence auto-complete; Flag-for-review blocks auto lifecycle
 - Reviewer Confirm / Reclassify / Rematch / Reject / notes; Needs Attention includes unmatched
 - Stage 6 guard: `canEnterStage6` only after Stage 5 COMPLETED + `acknowledgment_received_at`; no Stage 6 product started
@@ -895,13 +897,18 @@ yes | dzahid@commun-et.com | dzahid@commun-et.com | 6 | Graph 202 / sent | dc4df
 
 ### External / live-verification dependencies
 - Microsoft Graph Mail.Read (or equivalent) on operator mailbox for live inbound
-- `ANTHROPIC_API_KEY` (+ optional `UCI_CLAUDE_CLASSIFIER_ENABLED`) for live Claude path (keyword fallback always available)
+- `OPENAI_API_KEY` for live LLM path (keyword fallback always available; Stage 5 does **not** block on missing Anthropic)
+- Optional `ANTHROPIC_API_KEY` (+ `UCI_CLAUDE_CLASSIFIER_ENABLED`) if Claude should be primary under `UCI_LLM_CLASSIFIER_PROVIDER=auto`
 - Client-labeled utility message sample set for production ≥85% certification
 - Apply Stage 5 migration on remote Supabase
 - `UCI_EMAIL_INBOUND_WEBHOOK_SECRET` for webhook auth when exposing public ingest
 
 ### Local env (gitignored)
 - `scraper-service/.env` already has `UCI_EMAIL_LIVE_SUBMISSION_ENABLED=true` (not committed).
+- Local `OPENAI_API_KEY` present; `ANTHROPIC_API_KEY` not configured — Stage 5 uses OpenAI primary.
+
+### Provider switch note (2026-08-19)
+Audit found Claude integrated via Anthropic Messages HTTP (no `@anthropic-ai` SDK package) but **not** callable locally (no Anthropic key). Switched Stage 5 primary LLM to existing PermitPilot OpenAI client; keyword fallback retained.
 
 ## Stage 4 operator UI simplification — 2026-08-19
 

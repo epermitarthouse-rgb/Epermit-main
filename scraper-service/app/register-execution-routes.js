@@ -3009,6 +3009,32 @@ app.use("/api/microsoft", createMicrosoftRouter({ supabase }));
 const { createUciRouter } = require("./routes/uci.routes.js");
 app.use("/api/uci", createUciRouter({ supabase }));
 
+// Stage 5 inbound email webhook (Phases §7.1) — secured by shared secret when configured
+const {
+  ingestEmailInboundWebhook,
+} = require("./services/uci/uci-graph-inbound.service.js");
+app.post("/webhooks/uci/email-inbound", async (req, res) => {
+  try {
+    const configuredSecret = String(process.env.UCI_EMAIL_INBOUND_WEBHOOK_SECRET || "").trim();
+    if (configuredSecret) {
+      const provided =
+        String(req.get("x-uci-webhook-secret") || req.query.secret || "").trim();
+      if (!provided || provided !== configuredSecret) {
+        return res.status(401).json({ error: "unauthorized", code: "WEBHOOK_UNAUTHORIZED" });
+      }
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const result = await ingestEmailInboundWebhook(supabase, body);
+    res.status(200).json(result);
+  } catch (err) {
+    const status = err?.statusCode && Number.isFinite(err.statusCode) ? err.statusCode : 500;
+    res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+      code: err?.code || "WEBHOOK_INGEST_FAILED",
+    });
+  }
+});
+
 function isMontgomeryPortalSubtypePayload(data) {
   return (
     data &&

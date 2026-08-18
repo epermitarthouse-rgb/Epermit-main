@@ -67,6 +67,13 @@ async function upsertPortalCommunications(supabase, opts) {
         continue;
       }
 
+      const portalMeta =
+        comm.agent_processed_metadata &&
+        typeof comm.agent_processed_metadata === "object" &&
+        !Array.isArray(comm.agent_processed_metadata)
+          ? comm.agent_processed_metadata
+          : {};
+
       const row = {
         coordination_record_id: opts.coordinationRecordId,
         project_id: opts.projectId,
@@ -77,6 +84,7 @@ async function upsertPortalCommunications(supabase, opts) {
         idempotency_key: idempotencyKey,
         direction: comm.direction ?? null,
         channel: comm.channel,
+        // New portal rows start unclassified; never wipe Agent 5 results on re-sync.
         classification: null,
         classification_confidence: null,
         raw_subject: comm.raw_subject ?? null,
@@ -86,7 +94,11 @@ async function upsertPortalCommunications(supabase, opts) {
         parsed_action_items: [],
         thread_id: comm.thread_id ?? comm.external_application_id,
         needs_human_attention: comm.needs_human_attention === true,
-        agent_processed_metadata: comm.agent_processed_metadata ?? {},
+        agent_processed_metadata: {
+          ...portalMeta,
+          source: portalMeta.source || "portal_sync",
+          channel_model: "shared_coordination_communications",
+        },
         message_timestamp: comm.message_timestamp ?? null,
       };
 
@@ -103,14 +115,39 @@ async function upsertPortalCommunications(supabase, opts) {
         continue;
       }
 
-      if (!communicationRowChanged(existing, row)) {
+      // Preserve classification / review state; only refresh transport fields.
+      const updateRow = {
+        direction: row.direction,
+        channel: row.channel,
+        raw_subject: row.raw_subject,
+        raw_body: row.raw_body,
+        sender: existing.sender ?? null,
+        recipient: existing.recipient ?? null,
+        message_timestamp: row.message_timestamp,
+        thread_id: row.thread_id ?? existing.thread_id,
+        external_message_id: row.external_message_id ?? existing.external_message_id,
+        needs_human_attention:
+          existing.needs_human_attention === true || row.needs_human_attention === true,
+        agent_processed_metadata: {
+          ...(existing.agent_processed_metadata &&
+          typeof existing.agent_processed_metadata === "object" &&
+          !Array.isArray(existing.agent_processed_metadata)
+            ? existing.agent_processed_metadata
+            : {}),
+          ...portalMeta,
+          source: "portal_sync",
+          channel_model: "shared_coordination_communications",
+        },
+      };
+
+      if (!communicationRowChanged(existing, { ...existing, ...updateRow })) {
         counts.skipped += 1;
         continue;
       }
 
       const { error: upErr } = await supabase
         .from("coordination_communications")
-        .update(row)
+        .update(updateRow)
         .eq("id", existing.id);
 
       if (upErr) {
