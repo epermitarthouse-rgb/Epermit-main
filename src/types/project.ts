@@ -129,6 +129,8 @@ export interface Project {
   m1_trigger_source: string | null;
   m2_trigger_source: string | null;
   m3_trigger_source: string | null;
+  /** Soft-archive timestamp; archived projects are hidden from active lists. */
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }

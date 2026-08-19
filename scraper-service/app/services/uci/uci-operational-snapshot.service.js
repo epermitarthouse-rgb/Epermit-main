@@ -1,5 +1,9 @@
 "use strict";
 
+const {
+  isActionableNeedsAttentionCommunication,
+} = require("./uci-needs-attention.util.js");
+
 const RECORD_SELECT = `
   id,
   project_id,
@@ -10,6 +14,7 @@ const RECORD_SELECT = `
   scope_description,
   current_stage,
   current_stage_state,
+  acknowledgment_received_at,
   class_of_service_issued_at,
   energization_target_date,
   energization_actual_date,
@@ -41,6 +46,10 @@ const APPLICATION_SELECT = `
   last_error,
   last_synced_at,
   agent_draft_metadata,
+  idempotency_key,
+  record_source,
+  submitted_at,
+  provider_slug,
   created_at,
   updated_at
 `;
@@ -55,8 +64,14 @@ const COMMUNICATION_SELECT = `
   classification_confidence,
   raw_subject,
   raw_body,
+  sender,
+  recipient,
   parsed_summary,
+  thread_id,
   needs_human_attention,
+  reviewed_at,
+  reviewed_by,
+  agent_processed_metadata,
   message_timestamp,
   created_at,
   updated_at
@@ -73,14 +88,9 @@ function asRows(result, code, fallback) {
   return Array.isArray(result.data) ? result.data : [];
 }
 
-function isAttentionCommunication(row) {
-  const confidence = Number(row.classification_confidence);
-  return (
-    row.needs_human_attention === true ||
-    row.classification == null ||
-    row.classification === "unclassified" ||
-    (Number.isFinite(confidence) && confidence < 0.75)
-  );
+/** @deprecated Prefer isActionableNeedsAttentionCommunication — kept for tests. */
+function isAttentionCommunication(row, record) {
+  return isActionableNeedsAttentionCommunication(row, record);
 }
 
 function recentCommunicationsByRecord(rows, limit = 5) {
@@ -299,11 +309,13 @@ async function getUciOperationalSnapshot(supabase, params) {
     applicationsByRecord.set(recordId, existing);
   }
   const recentByRecord = recentCommunicationsByRecord(communications);
+  const recordsById = new Map(records.map((record) => [String(record.id), record]));
   const attentionCountByRecord = new Map();
   const attentionByRecord = new Map();
   for (const communication of communications) {
-    if (!isAttentionCommunication(communication)) continue;
     const recordId = String(communication.coordination_record_id || "");
+    const record = recordsById.get(recordId) || null;
+    if (!isActionableNeedsAttentionCommunication(communication, record)) continue;
     attentionCountByRecord.set(recordId, (attentionCountByRecord.get(recordId) || 0) + 1);
     const existing = attentionByRecord.get(recordId) || [];
     existing.push(communication);

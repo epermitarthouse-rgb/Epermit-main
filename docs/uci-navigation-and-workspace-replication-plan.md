@@ -518,3 +518,14 @@ This is a **cross-cutting global-search gap**, not something to fix by adding a 
 - **No functionality removed.** Every one of the ~25 current PP UCI features/panels/endpoints in §B has a named destination in the proposed structure; two components (`PortfolioSummarySection`, part of dead code) and one endpoint (`listRecentUciEvents`) were found to be pre-existing unused code, flagged as optional Phase-3 cleanup only, not touched by the nav restructuring itself.
 - **The riskiest current-state items** (checksum-protected lifecycle proposals, document-slot mapping, load-candidate verified inputs) are explicitly called out as "relocate only, do not rewrite" in §B and §G.
 - **The search bar problem is real but out of scope for a UCI-only fix** — it's a global Command Palette label/behavior mismatch, captured as PD-19.
+
+### Amendment — record workspace chrome (UI only)
+
+Full-record route `/uci/records/:coordinationId` chrome was reorganized for scannability without changing lifecycle logic or tab targets:
+
+- `ProjectSummaryHeader` — project name primary; provider/address secondary; quiet Change project
+- `CoordinationStatusSummary` — Stage / State / Acknowledged tiles + plain-language status from the record
+- `WorkflowStageNavigator` — parent milestones → child `TabsTrigger`s (same `UCI_RECORD_WORKSPACE_GROUPS` / `?tab=` routing)
+- `NextStepNotice` — contextual next-step copy from stage/state/active tab (`uciWorkspaceGuidance.ts`)
+
+Communications card bodies remain under `TabsContent value="communications"` and were intentionally left alone.

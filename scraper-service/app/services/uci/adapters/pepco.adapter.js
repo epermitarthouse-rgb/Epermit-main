@@ -141,17 +141,20 @@ function normalizeOneMessage(message, externalApplicationId, context) {
   const messageDateTime =
     typeof message.messageDateTime === "string" ? message.messageDateTime : null;
   const isInternalUser = message.isInternalUser === true;
+  const isSpoc = message.isSPOC === true;
 
   const bodyParts = [senderMessage, receiverMessage].filter(Boolean);
   const rawBody = bodyParts.length ? bodyParts.join("\n") : null;
 
-  const direction = isInternalUser ? "outbound" : "inbound";
-  const sender = isInternalUser
+  // Commun-ET / portal user → utility = outbound; utility (incl. SPOC) → Commun-ET = inbound.
+  // Prefer explicit SPOC as inbound so utility messages are never mislabeled outbound.
+  const direction = isSpoc ? "inbound" : isInternalUser ? "outbound" : "inbound";
+  const sender = isInternalUser && !isSpoc
     ? receiverName || "Portal user"
-    : message.isSPOC === true
+    : isSpoc
       ? "PEPCO SPOC"
       : "PEPCO";
-  const recipient = isInternalUser ? "PEPCO" : receiverName || "Project team";
+  const recipient = isInternalUser && !isSpoc ? "PEPCO" : receiverName || "Project team";
 
   const externalMessageId =
     typeof message.messageId === "string" && String(message.messageId).trim()

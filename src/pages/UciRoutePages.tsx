@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Search } from "lucide-react";
+import { toast } from "sonner";
 import { AlertBanner, PageHeader, Panel } from "@/components/design/ProductPrimitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,10 @@ import {
   useUciOperationalSnapshot,
   type UciOperationalRecord as OperationalRecord,
 } from "@/hooks/useUciOperationalSnapshot";
-import { parseApplicationPackageMetadata } from "@/lib/uciApplicationPrep";
+import {
+  getApplicationPackageDraftApplication,
+  parseApplicationPackageMetadata,
+} from "@/lib/uciApplicationPrep";
 import { supabase } from "@/lib/supabase";
 import {
   formatUciUserError,
@@ -26,6 +30,8 @@ import {
   updateSubmissionPreparation,
   confirmSubmissionPreparation,
   transmitSubmissionPreparation,
+  confirmCommunicationReview,
+  flagCommunicationForReview,
   type UciEmailReadiness,
   type UciSubmissionPreparationPreview,
   type UciTransmissionAttemptSummary,
@@ -35,6 +41,18 @@ import {
   formatUciPackageVersionLabel,
   formatUciSentSummary,
 } from "@/lib/uciCapabilityLabels";
+import {
+  buildCommunicationCardModel,
+  buildInboxAuditHistoryModel,
+  communicationNeedsOperatorAttention,
+  formatCommunicationSubjectForDisplay,
+  groupInboxItemsByThread,
+  isSyntheticUatCommunication,
+  partitionOperatorInboxFeed,
+  type InboxThreadGroup,
+} from "@/lib/uciCommunicationPresentation";
+import { CommunicationQuickActions } from "@/components/uci/UciD13WorkflowPanels";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -161,6 +179,100 @@ function providerName(record: CoordinationRecord & { providerDisplayName?: strin
 function recordHref(record: CoordinationRecord, tab?: string): string {
   const base = `/uci/records/${encodeURIComponent(record.id)}`;
   return tab ? `${base}?tab=${encodeURIComponent(tab)}` : base;
+}
+
+function useOperationalCommunicationActions(reload: () => void) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const handleConfirm = async (communicationId: string, classification: string) => {
+    setBusyId(communicationId);
+    try {
+      await confirmCommunicationReview(communicationId, {
+        classification,
+        apply_lifecycle: true,
+      });
+      toast.success("Communication confirmed");
+      reload();
+    } catch (error: unknown) {
+      toast.error(formatUciUserError(error, "Confirm review failed"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleFlag = async (communicationId: string) => {
+    setBusyId(communicationId);
+    try {
+      await flagCommunicationForReview(communicationId, {
+        note: "Flagged for human review from operational queue",
+      });
+      toast.success("Flagged for human review — auto-lifecycle blocked");
+      reload();
+    } catch (error: unknown) {
+      toast.error(formatUciUserError(error, "Flag for review failed"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return { busyId, handleConfirm, handleFlag };
+}
+
+function OperationalCommunicationCard({
+  record,
+  message,
+  reload,
+  className,
+}: {
+  record: OperationalRecord;
+  message: CoordinationCommunication;
+  reload: () => void;
+  className?: string;
+}) {
+  const { busyId, handleConfirm, handleFlag } = useOperationalCommunicationActions(reload);
+  const model = buildCommunicationCardModel(message, {
+    providerName: providerName(record),
+    record,
+  });
+  const reasons = model.attentionReasons;
+  const workspaceHref = recordHref(record, "communications");
+
+  return (
+    <div className={cn("rounded-lg border p-3", className)}>
+      <RecordLink record={record} tab="communications" />
+      <p className="mt-1 font-medium">{model.title}</p>
+      {model.subtitle ? <p className="text-xs text-muted-foreground">{model.subtitle}</p> : null}
+      {reasons.length > 0 ? (
+        <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+          Why this needs attention: {reasons[0]}
+        </p>
+      ) : null}
+      {model.detailLine ? (
+        <p className="text-xs text-muted-foreground">{model.detailLine}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {formatCommunicationSubjectForDisplay(message.raw_subject)}
+        </p>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        {providerName(record)} · {record.utility_type || "Utility"} ·{" "}
+        {model.directionLabel || "direction unknown"} ·{" "}
+        {message.message_timestamp
+          ? new Date(message.message_timestamp).toLocaleString()
+          : new Date(message.created_at).toLocaleString()}
+      </p>
+      <CommunicationQuickActions
+        comm={message}
+        record={record}
+        providerName={providerName(record)}
+        busy={busyId === message.id}
+        onConfirm={(id, classification) => void handleConfirm(id, classification)}
+        onFlagForReview={(id) => void handleFlag(id)}
+        toolbarOutlineButtonClass="h-7 text-[11px]"
+        workspaceHref={workspaceHref}
+      />
+    </div>
+  );
 }
 
 function RecordLink({
@@ -384,6 +496,35 @@ function CoverageNote({ failures }: { failures: number }) {
   ) : null;
 }
 
+function isTransmissionSent(
+  transmission: UciTransmissionAttemptSummary | null | undefined,
+): boolean {
+  if (!transmission) return false;
+  return (
+    String(transmission.status || "").toLowerCase() === "sent" || transmission.ok === true
+  );
+}
+
+function transmissionAttemptList(
+  application: CoordinationApplication,
+): UciTransmissionAttemptSummary[] {
+  const meta = application.agent_draft_metadata as Record<string, unknown> | undefined;
+  const history = Array.isArray(meta?.submission_transmission_attempts)
+    ? (meta.submission_transmission_attempts as UciTransmissionAttemptSummary[])
+    : [];
+  const latest =
+    meta?.latest_transmission && typeof meta.latest_transmission === "object"
+      ? (meta.latest_transmission as UciTransmissionAttemptSummary)
+      : null;
+  if (!latest) return history;
+  const latestId = String(latest.id || latest.transmission_id || "");
+  if (!latestId) return history.length > 0 ? history : [latest];
+  if (history.some((row) => String(row.id || row.transmission_id || "") === latestId)) {
+    return history;
+  }
+  return [...history, latest];
+}
+
 export function UciSubmissionsPage() {
   const state = useUciOperationalSnapshot("/uci/submissions");
   const [searchParams] = useSearchParams();
@@ -401,6 +542,7 @@ export function UciSubmissionsPage() {
   const [transmissionCache, setTransmissionCache] = useState<
     Record<string, UciTransmissionAttemptSummary | null>
   >({});
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
   const [recipientDraft, setRecipientDraft] = useState<Record<string, string>>({});
   const [pendingTransmit, setPendingTransmit] = useState<{
     applicationId: string;
@@ -412,9 +554,20 @@ export function UciSubmissionsPage() {
     synthetic: boolean;
   } | null>(null);
 
-  const rows = state.records.flatMap((record) =>
-    record.applications.map((application) => ({ record, application })),
-  );
+  // One top-level row per coordination application package (not load-profile /
+  // portal rows, and not per preparation/transmission attempt).
+  const rows = useMemo(() => {
+    const out: Array<{ record: OperationalRecord; application: CoordinationApplication }> = [];
+    for (const record of state.records) {
+      const packageApp =
+        getApplicationPackageDraftApplication(record.applications) ||
+        record.applications.find((app) => parseApplicationPackageMetadata(app) != null) ||
+        null;
+      if (!packageApp) continue;
+      out.push({ record, application: packageApp });
+    }
+    return out;
+  }, [state.records]);
   const focusedRows = focusCoordinationId
     ? rows.filter(
         ({ record, application }) =>
@@ -614,7 +767,7 @@ export function UciSubmissionsPage() {
       {!state.loading && !state.error ? (
         <Panel
           eyebrow="Submission journey"
-          title={`${focusedRows.length} package row(s)${focusCoordinationId ? " · focused record" : ""}`}
+          title={`${focusedRows.length} package${focusedRows.length === 1 ? "" : "s"}${focusCoordinationId ? " · focused record" : ""}`}
         >
           {!mailSendOk ? (
             <AlertBanner
@@ -672,20 +825,15 @@ export function UciSubmissionsPage() {
                   prep &&
                     transmission &&
                     String(transmission.preparation_id || "") === String(prep.preparation_id) &&
-                    (String(transmission.status || "").toLowerCase() === "sent" ||
-                      transmission.ok === true),
+                    isTransmissionSent(transmission),
                 );
                 const priorSent =
-                  Boolean(
-                    transmission &&
-                      (String(transmission.status || "").toLowerCase() === "sent" ||
-                        transmission.ok === true),
-                  ) && !prepSent;
+                  isTransmissionSent(transmission) && !prepSent;
                 const attachmentCount = Array.isArray(prep?.attachments)
                   ? prep.attachments.length
                   : transmission?.attachment_count ?? 0;
                 const toEditable = Boolean(prep && !prepSent);
-                const secondaryLabel = prepSent
+                const transmissionLabel = prepSent
                   ? "Sent"
                   : confirmed
                     ? packageReady
@@ -693,7 +841,12 @@ export function UciSubmissionsPage() {
                       : "Prepared"
                     : prep
                       ? "Prepared"
-                      : null;
+                      : priorSent
+                        ? "Sent (prior)"
+                        : "Not prepared";
+                const providerConfirmation = application.submitted_at
+                  ? "Submitted"
+                  : "Not submitted";
                 const sentSummary = transmission
                   ? formatUciSentSummary({
                       completedAt: transmission.completed_at || transmission.claimed_at,
@@ -710,9 +863,46 @@ export function UciSubmissionsPage() {
                       attachmentCount: transmission.attachment_count ?? attachmentCount,
                     })
                   : null;
+                const attempts = (() => {
+                  const fromMeta = transmissionAttemptList(application);
+                  const cached = transmissionCache[application.id];
+                  if (!cached) return fromMeta;
+                  const cachedId = String(cached.id || cached.transmission_id || "");
+                  if (
+                    !cachedId ||
+                    fromMeta.some(
+                      (row) => String(row.id || row.transmission_id || "") === cachedId,
+                    )
+                  ) {
+                    return fromMeta;
+                  }
+                  return [...fromMeta, cached];
+                })()
+                  .slice()
+                  .sort((a, b) => {
+                    const aAt = Date.parse(String(a.completed_at || a.claimed_at || "")) || 0;
+                    const bAt = Date.parse(String(b.completed_at || b.claimed_at || "")) || 0;
+                    return bAt - aAt;
+                  });
+                const sentAttempts = attempts.filter(isTransmissionSent);
+                const currentPrepId = prep ? String(prep.preparation_id) : "";
+                const displayHistory = sentAttempts.filter((row) => {
+                  // Current open prep that itself was sent → keep that attempt on the primary row.
+                  if (
+                    prepSent &&
+                    currentPrepId &&
+                    String(row.preparation_id || "") === currentPrepId
+                  ) {
+                    return false;
+                  }
+                  // Otherwise every sent attempt is history (including last send while a new prep is open).
+                  return true;
+                });
+                const historyCount = displayHistory.length;
+                const historyExpanded = historyOpen[application.id] === true;
 
                 return (
-                  <div key={application.id} className="space-y-3 rounded-lg border p-4">
+                  <div key={`${record.id}:${application.id}`} className="space-y-3 rounded-lg border p-4">
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                       <div className="space-y-1">
                         <RecordLink record={record} tab="application-prep" />
@@ -720,32 +910,29 @@ export function UciSubmissionsPage() {
                           {providerName(record)} · {record.utility_type || "Utility type not recorded"}
                         </p>
                         <p className="text-xs">
-                          Primary:{" "}
-                          <span className="font-semibold">
-                            {application.submitted_at ? "Submitted" : "Not submitted"}
+                          Transmission:{" "}
+                          <span
+                            className={
+                              prepSent || priorSent
+                                ? "font-semibold text-emerald-800 dark:text-emerald-200"
+                                : "font-semibold"
+                            }
+                          >
+                            {transmissionLabel}
                           </span>
-                          {secondaryLabel ? (
-                            <>
-                              {" · "}
-                              <span
-                                className={
-                                  prepSent
-                                    ? "font-semibold text-emerald-800 dark:text-emerald-200"
-                                    : "font-semibold"
-                                }
-                              >
-                                {secondaryLabel}
-                              </span>
-                            </>
-                          ) : null}
+                          {" · "}
+                          Provider confirmation:{" "}
+                          <span className="font-semibold">{providerConfirmation}</span>
                         </p>
                         {prepSent && sentSummary ? (
                           <p className="text-xs text-emerald-900 dark:text-emerald-100">
-                            {sentSummary}
+                            Current · {sentSummary}
                           </p>
                         ) : null}
                         {priorSent && sentSummary ? (
-                          <p className="text-xs text-muted-foreground">Last sent · {sentSummary.replace(/^Sent\s+/i, "")}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Last sent · {sentSummary.replace(/^Sent\s+/i, "")}
+                          </p>
                         ) : null}
                         {synthetic ? (
                           <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
@@ -887,6 +1074,43 @@ export function UciSubmissionsPage() {
                         </p>
                       </div>
                     ) : null}
+
+                    {historyCount > 0 ? (
+                      <div className="rounded-md border px-3 py-2 text-xs">
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between text-left font-medium text-foreground"
+                          onClick={() =>
+                            setHistoryOpen((prev) => ({
+                              ...prev,
+                              [application.id]: !historyExpanded,
+                            }))
+                          }
+                        >
+                          <span>Transmission history ({historyCount})</span>
+                          <span className="text-muted-foreground">
+                            {historyExpanded ? "Hide" : "Show"}
+                          </span>
+                        </button>
+                        {historyExpanded ? (
+                          <ul className="mt-2 space-y-2 border-t pt-2 text-muted-foreground">
+                            {displayHistory.map((row, idx) => {
+                              const summary = formatUciSentSummary({
+                                completedAt: row.completed_at || row.claimed_at,
+                                from: row.from || row.sender_mailbox || null,
+                                to: row.to || row.to_recipients || null,
+                                attachmentCount: row.attachment_count ?? 0,
+                              });
+                              return (
+                                <li key={String(row.id || row.transmission_id || idx)}>
+                                  {summary}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })
@@ -933,37 +1157,144 @@ export function UciSubmissionsPage() {
   );
 }
 
+function InboxAuditHistoryCard({
+  record,
+  message,
+}: {
+  record: OperationalRecord;
+  message: CoordinationCommunication;
+}) {
+  const audit = buildInboxAuditHistoryModel(message, record);
+  return (
+    <div className="rounded-lg border border-dashed p-3">
+      <RecordLink record={record} tab="communications" />
+      <p className="mt-1 text-sm font-medium">
+        Synthetic UAT · {formatCommunicationSubjectForDisplay(message.raw_subject)}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{audit.detailLine}</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Kept for audit — not deleted. Open the coordination record for full message history.
+      </p>
+    </div>
+  );
+}
+
+function InboxThreadCard({
+  group,
+  reload,
+}: {
+  group: InboxThreadGroup<OperationalRecord>;
+  reload: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const older = group.messages.slice(1);
+  return (
+    <div className="space-y-2">
+      <OperationalCommunicationCard
+        record={group.record}
+        message={group.latest}
+        reload={reload}
+      />
+      {group.messages.length > 1 ? (
+        <div className="pl-3">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? "Hide" : "Show"} {group.messages.length - 1} earlier message
+            {group.messages.length - 1 === 1 ? "" : "s"} in this conversation
+            {group.threadId ? " (thread)" : ""}
+          </button>
+          {expanded
+            ? older.map((message) => (
+                <div key={message.id} className="mt-2 rounded-md border bg-muted/20 p-2">
+                  <p className="text-xs font-medium">
+                    {formatCommunicationSubjectForDisplay(message.raw_subject)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {message.message_timestamp
+                      ? new Date(message.message_timestamp).toLocaleString()
+                      : new Date(message.created_at).toLocaleString()}
+                    {message.classification
+                      ? ` · ${message.classification.replace(/_/g, " ")}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function UciInboxPage() {
   const state = useUciOperationalSnapshot("/uci/inbox");
   const messages = state.records.flatMap((record) =>
     record.communications.map((message) => ({ record, message })),
   );
+  const { primary, auditHistory } = useMemo(
+    () => partitionOperatorInboxFeed(messages),
+    [messages],
+  );
+  const primaryThreads = useMemo(() => groupInboxItemsByThread(primary), [primary]);
+  const actionableSyntheticCount = primary.filter(({ message }) =>
+    isSyntheticUatCommunication(message),
+  ).length;
+
   return (
     <RouteFrame
       eyebrow="Cross-project operations"
       title="Utility Communications Inbox"
-      body="Recent utility messages retain their source project and coordination record."
+      body="Live utility messages stay in the primary feed (grouped by conversation thread when available). Resolved synthetic UAT items move to Test / Audit history — records are never deleted."
       badge="Live communications"
     >
       <RouteLoadState {...state} loadingText="Loading utility communications…" />
       <CoverageNote failures={state.partialFailures} />
       {!state.loading && !state.error ? (
-        <Panel eyebrow="Coordination messages" title={`${messages.length} recent message(s)`}>
-          <div className="space-y-3">
-            {messages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No utility communications yet.</p>
-            ) : messages.map(({ record, message }) => (
-              <div key={message.id} className="rounded-lg border p-3">
-                <RecordLink record={record} tab="communications" />
-                <p className="mt-1 font-medium">{message.raw_subject || "(no subject)"}</p>
-                <p className="text-xs text-muted-foreground">{message.parsed_summary || message.raw_body || "No message summary"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {providerName(record)} · {record.utility_type || "Utility"} · {message.direction || "direction unknown"} · {message.message_timestamp ? new Date(message.message_timestamp).toLocaleString() : new Date(message.created_at).toLocaleString()}
+        <div className="space-y-6">
+          <Panel
+            eyebrow="Operator inbox"
+            title={`${primaryThreads.length} conversation(s) · ${primary.length} message(s)`}
+          >
+            <div className="space-y-3">
+              {primary.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No active utility communications. Resolved synthetic UAT items appear under Test /
+                  Audit history below.
                 </p>
+              ) : (
+                primaryThreads.map((group) => (
+                  <InboxThreadCard key={group.key} group={group} reload={state.reload} />
+                ))
+              )}
+              {actionableSyntheticCount > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {actionableSyntheticCount} synthetic test item
+                  {actionableSyntheticCount === 1 ? "" : "s"} remain visible because operator
+                  action is still required.
+                </p>
+              ) : null}
+            </div>
+          </Panel>
+          {auditHistory.length > 0 ? (
+            <Panel
+              eyebrow="Test / Audit history"
+              title={`${auditHistory.length} synthetic UAT message(s)`}
+            >
+              <p className="mb-3 text-xs text-muted-foreground">
+                Controlled Stage 5 / synthetic test emails that no longer need operator action.
+                Listed separately with ticket, time, and result — not merged, not deleted.
+              </p>
+              <div className="space-y-3">
+                {auditHistory.map(({ record, message }) => (
+                  <InboxAuditHistoryCard key={message.id} record={record} message={message} />
+                ))}
               </div>
-            ))}
-          </div>
-        </Panel>
+            </Panel>
+          ) : null}
+        </div>
       ) : null}
     </RouteFrame>
   );
@@ -971,47 +1302,79 @@ export function UciInboxPage() {
 
 export function UciNeedsAttentionPage() {
   const state = useUciOperationalSnapshot("/uci/needs-attention");
+  // Defense-in-depth: backend snapshot should already be actionable-only; re-filter so
+  // cards never show "not operator attention" while remaining in this queue.
   const messages = state.records.flatMap((record) =>
-    record.communications.map((message) => ({ record, message })),
+    record.communications
+      .filter((message) => communicationNeedsOperatorAttention(message, record))
+      .map((message) => ({ record, message })),
   );
   const blockers = state.records.flatMap((record) => {
     const items = recordBlockers(record);
     return items.length ? [{ record, items }] : [];
   });
-  const total = messages.length + blockers.reduce((sum, item) => sum + item.items.length, 0);
+  const blockerCount = blockers.reduce((sum, item) => sum + item.items.length, 0);
+  const total = messages.length + blockerCount;
   return (
     <RouteFrame
       eyebrow="Cross-project operations"
       title="Attention Queue"
-      body="Live messages flagged by the needs-attention endpoint for human review."
+      body="Actionable unresolved utility communications and application readiness items that need operator review."
       badge="Human review required"
     >
       <RouteLoadState {...state} loadingText="Loading needs-attention communications…" />
       <CoverageNote failures={state.partialFailures} />
       {!state.loading && !state.error ? (
-        <Panel eyebrow="Operational attention" title={`${total} flagged item(s)`}>
-          <div className="space-y-3">
-            {total === 0 ? (
-              <p className="text-sm text-muted-foreground">No UCI records, messages, or blockers currently need attention.</p>
-            ) : null}
-            {messages.map(({ record, message }) => (
-              <div key={message.id} className="rounded-lg border border-amber-500/30 p-3">
-                <RecordLink record={record} tab="communications" />
-                <p className="mt-1 font-medium">{message.raw_subject || "(no subject)"}</p>
-                <p className="text-xs text-muted-foreground">{message.parsed_summary || message.raw_body || "No summary"}</p>
+        <div className="space-y-6">
+          {total === 0 ? (
+            <Panel eyebrow="Operational attention" title="Nothing flagged">
+              <p className="text-sm text-muted-foreground">
+                No UCI records, messages, or blockers currently need attention.
+              </p>
+            </Panel>
+          ) : null}
+          {messages.length > 0 ? (
+            <Panel
+              eyebrow="Utility communications"
+              title={`${messages.length} message(s) needing attention`}
+            >
+              <div className="space-y-3">
+                {messages.map(({ record, message }) => (
+                  <OperationalCommunicationCard
+                    key={message.id}
+                    record={record}
+                    message={message}
+                    reload={state.reload}
+                    className="border-amber-500/30"
+                  />
+                ))}
               </div>
-            ))}
-            {blockers.map(({ record, items }) => (
-              <div key={`blockers-${record.id}`} className="rounded-lg border border-amber-500/30 p-3">
-                <RecordLink record={record} tab="application-prep" />
-                <p className="mt-1 text-sm font-medium">Recorded blockers</p>
-                <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
-                  {items.map((item, index) => <li key={`${record.id}-${index}`}>{item}</li>)}
-                </ul>
+            </Panel>
+          ) : null}
+          {blockers.length > 0 ? (
+            <Panel
+              eyebrow="Application / package readiness"
+              title={`${blockerCount} readiness blocker(s)`}
+            >
+              <div className="space-y-3">
+                {blockers.map(({ record, items }) => (
+                  <div
+                    key={`blockers-${record.id}`}
+                    className="rounded-lg border border-amber-500/30 p-3"
+                  >
+                    <RecordLink record={record} tab="application-prep" />
+                    <p className="mt-1 text-sm font-medium">Recorded blockers</p>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+                      {items.map((item, index) => (
+                        <li key={`${record.id}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </Panel>
+            </Panel>
+          ) : null}
+        </div>
       ) : null}
     </RouteFrame>
   );

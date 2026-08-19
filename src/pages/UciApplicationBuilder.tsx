@@ -15,6 +15,11 @@ import {
 } from "lucide-react";
 import { DataSourceBadge } from "@/components/operations/DataSourceBadge";
 import { PackageDownloadMenu } from "@/components/uci/PackageDownloadMenu";
+import {
+  RemoveFromPackageDialog,
+  useRemoveFromPackageConfirm,
+} from "@/components/uci/RemoveFromPackageDialog";
+import { isPackageDocumentRemovalLocked } from "@/lib/projectDestructiveSafety";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -74,6 +79,8 @@ export default function UciApplicationBuilder() {
   const navigate = useNavigate();
   const builder = useUciApplicationBuilder();
   const [active, setActive] = useState<UciBuilderSectionId>("service");
+  const removeFromPackage = useRemoveFromPackageConfirm();
+  const packageRemovalLocked = isPackageDocumentRemovalLocked(builder.packageApp);
 
   const sectionState = useMemo(
     () => Object.fromEntries(builder.sections.map((s) => [s.id, s])),
@@ -809,10 +816,22 @@ export default function UciApplicationBuilder() {
                                     <button
                                       type="button"
                                       className="pilot-button-ghost"
-                                      disabled={builder.mappingBusySlot === slot.key}
-                                      onClick={() => void builder.removeMapping(slot.key)}
+                                      disabled={
+                                        builder.mappingBusySlot === slot.key || packageRemovalLocked
+                                      }
+                                      title={
+                                        packageRemovalLocked
+                                          ? "Remove is locked after review or submission history"
+                                          : "Remove from package"
+                                      }
+                                      onClick={() =>
+                                        removeFromPackage.openConfirm(
+                                          slot.key,
+                                          slot.label || slot.key,
+                                        )
+                                      }
                                     >
-                                      Remove
+                                      Remove from package
                                     </button>
                                   ) : null}
                                 </div>
@@ -1221,9 +1240,23 @@ export default function UciApplicationBuilder() {
                                     <button
                                       type="button"
                                       className="pilot-button-ghost"
-                                      onClick={() => void builder.removeMapping(document.key)}
+                                      disabled={
+                                        builder.mappingBusySlot === document.key ||
+                                        packageRemovalLocked
+                                      }
+                                      title={
+                                        packageRemovalLocked
+                                          ? "Remove is locked after review or submission history"
+                                          : "Remove from package"
+                                      }
+                                      onClick={() =>
+                                        removeFromPackage.openConfirm(
+                                          document.key,
+                                          document.label || document.key,
+                                        )
+                                      }
                                     >
-                                      Remove
+                                      Remove from package
                                     </button>
                                   ) : null}
                                   <button
@@ -1624,6 +1657,24 @@ export default function UciApplicationBuilder() {
           </>
         )}
       </div>
+      <RemoveFromPackageDialog
+        open={Boolean(removeFromPackage.pendingSlot)}
+        onOpenChange={(open) => {
+          if (!open) removeFromPackage.closeConfirm();
+        }}
+        slotLabel={removeFromPackage.pendingSlot?.label || "document"}
+        locked={packageRemovalLocked}
+        loading={
+          Boolean(removeFromPackage.pendingSlot) &&
+          builder.mappingBusySlot === removeFromPackage.pendingSlot?.key
+        }
+        onConfirm={async () => {
+          const key = removeFromPackage.pendingSlot?.key;
+          if (!key) return;
+          await builder.removeMapping(key);
+          removeFromPackage.closeConfirm();
+        }}
+      />
     </>
   );
 }

@@ -47,10 +47,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { PackageDownloadMenu } from "@/components/uci/PackageDownloadMenu";
+import {
+  RemoveFromPackageDialog,
+  useRemoveFromPackageConfirm,
+} from "@/components/uci/RemoveFromPackageDialog";
+import { isPackageDocumentRemovalLocked } from "@/lib/projectDestructiveSafety";
 import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
@@ -183,7 +188,7 @@ import {
   getProviderMappingFromMetadata,
 } from "@/lib/uciLifecycleProposals";
 import {
-  CommunicationReclassifyRow,
+  CommunicationOperatorCard,
   CosAnalysisPanel,
   CostsEquipmentWorkflowPanel,
   LifecycleProposalActions,
@@ -202,8 +207,6 @@ import { UciComingSoonPanel } from "@/components/uci/UciComingSoonPanel";
 import {
   getUciNavSection,
   isUciDrawerTab,
-  UCI_DRAWER_TABS,
-  UCI_RECORD_WORKSPACE_GROUPS,
   type UciDrawerTab,
 } from "@/lib/uciNavSections";
 import {
@@ -231,6 +234,11 @@ import {
 } from "@/lib/uciApplicationPrep";
 import { UciSetupWorkflow } from "@/components/uci/UciSetupWorkflow";
 import { UciProjectContextBar } from "@/components/uci/UciProjectContextBar";
+import { ProjectSummaryHeader } from "@/components/uci/ProjectSummaryHeader";
+import { CoordinationStatusSummary } from "@/components/uci/CoordinationStatusSummary";
+import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator";
+import { NextStepNotice } from "@/components/uci/NextStepNotice";
+import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
   buildInitializedSlugSet,
   countSelectedProviders,
@@ -239,9 +247,11 @@ import {
   providerDisplayLabel as workflowProviderDisplayLabel,
 } from "@/lib/uciSetupWorkflow";
 import {
-  classificationNeedsAttention,
-  formatCommunicationClassification,
-} from "@/lib/uciCommunicationClassifier";
+  buildCommunicationCardModel,
+  buildStage5CommunicationsBanner,
+  countCommunicationsNeedingAttention,
+  getCommunicationsTabLabel,
+} from "@/lib/uciCommunicationPresentation";
 
 const LIFECYCLE_OPTIONS: LifecycleState[] = [
   "NOT_STARTED",
@@ -3550,13 +3560,25 @@ export default function UciDashboard() {
           </SheetHeader>
 
           {uciSelectedProject ? (
-            <UciProjectContextBar
-              project={uciSelectedProject}
-              mutedClass={uciMutedClass}
-              onChangeProject={handleChangeProjectRequest}
-              compact
-              className="mt-4"
-            />
+            isRecordWorkspace ? (
+              <ProjectSummaryHeader
+                project={uciSelectedProject}
+                provider={detailProvider}
+                utilityType={detailRecord?.utility_type ?? detailProvider?.utility_type}
+                recordId={detailRecord?.id ?? detailId}
+                mutedClass={uciMutedClass}
+                onChangeProject={handleChangeProjectRequest}
+                className="mt-4"
+              />
+            ) : (
+              <UciProjectContextBar
+                project={uciSelectedProject}
+                mutedClass={uciMutedClass}
+                onChangeProject={handleChangeProjectRequest}
+                compact
+                className="mt-4"
+              />
+            )
           ) : null}
 
           {detail && detailRecord ? (
@@ -3575,102 +3597,87 @@ export default function UciDashboard() {
                   detail={detailLoadError}
                 />
               ) : null}
-              <div>
-                <p className={cn("mb-1.5 text-xs font-semibold uppercase tracking-wide", uciMutedClass)}>
-                  Coordination status
-                </p>
-                <div
-                  className={cn(
-                    "grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border/50 bg-card/40 px-3 py-2 text-xs",
-                    "sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-1",
-                    "dark:border-teal/20 dark:bg-muted/30",
-                  )}
-                >
-                  <CoordinationStatusField
-                    label="Stage"
-                    value={String(detailRecord.current_stage)}
-                    mutedClass={uciMutedClass}
-                  />
-                  <CoordinationStatusField
-                    label="State"
-                    value={formatLifecycleState(detailRecord.current_stage_state)}
-                    mutedClass={uciMutedClass}
-                  />
-                  <CoordinationStatusField
-                    label="Submitted"
-                    value={formatDateOnly(detailRecord.application_submitted_at)}
-                    mutedClass={uciMutedClass}
-                    hideIfEmpty
-                  />
-                  <CoordinationStatusField
-                    label="Acknowledged"
-                    value={formatDateOnly(detailRecord.acknowledgment_received_at)}
-                    mutedClass={uciMutedClass}
-                    hideIfEmpty
-                  />
-                  <CoordinationStatusField
-                    label="COS issued"
-                    value={formatDateOnly(detailRecord.class_of_service_issued_at)}
-                    mutedClass={uciMutedClass}
-                    hideIfEmpty
-                  />
-                  <CoordinationStatusField
-                    label="Energization target"
-                    value={formatDateOnly(detailRecord.energization_target_date)}
-                    mutedClass={uciMutedClass}
-                    hideIfEmpty
-                  />
-                  {detailRecord.energization_actual_date ? (
-                    <CoordinationStatusField
-                      label="Energization actual"
-                      value={formatDateOnly(detailRecord.energization_actual_date)}
-                      mutedClass={uciMutedClass}
-                    />
-                  ) : null}
-                </div>
-                {detailRecord.last_error ? (
-                  <p className="mt-1.5 text-xs text-destructive">
-                    <span className="font-medium">Last error:</span> {detailRecord.last_error}
-                  </p>
-                ) : null}
-              </div>
+              <CoordinationStatusSummary
+                record={detailRecord}
+                mutedClass={uciMutedClass}
+                stateBadgeClassName={uciLifecycleStateBadgeClass}
+                formatDateOnly={formatDateOnly}
+              />
 
               <Tabs
                 value={isRecordWorkspace ? drawerTab : "overview"}
                 onValueChange={(v) => {
                   if (isRecordWorkspace && isUciDrawerTab(v)) updateDrawerTab(v);
                 }}
-                className="mt-4"
+                className="mt-2"
               >
                 {isRecordWorkspace ? (
-                  <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 lg:grid-cols-2 xl:grid-cols-3">
-                    {UCI_RECORD_WORKSPACE_GROUPS.map((group) => {
-                      const tabs = UCI_DRAWER_TABS.filter(
-                        (tab) => group.tabs.includes(tab.id) && (!tab.pepcoOnly || isPepcoCoordination),
-                      );
-                      if (tabs.length === 0) return null;
-                      return (
-                        <div key={group.label} className="space-y-1.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            {group.label}
-                          </p>
-                          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-background/60 p-1">
-                            {tabs.map((tab) => (
-                              <TabsTrigger key={tab.id} value={tab.id} className="text-xs" title={`${tab.workspace} workspace`}>
-                                {tab.label}
-                              </TabsTrigger>
-                            ))}
-                          </TabsList>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    <WorkflowStageNavigator
+                      activeTab={drawerTab}
+                      currentStage={Number(detailRecord.current_stage)}
+                      isPepcoCoordination={isPepcoCoordination}
+                    />
+                    <NextStepNotice
+                      notice={buildNextStepNotice({
+                        stage: Number(detailRecord.current_stage),
+                        state: detailRecord.current_stage_state,
+                        activeTab: drawerTab,
+                        lastError: detailRecord.last_error,
+                      })}
+                      activeTab={drawerTab}
+                      onSelectTab={(tab) => updateDrawerTab(tab)}
+                    />
                   </div>
                 ) : (
-                  <AlertBanner
-                    tone="default"
-                    title="Preview only"
-                    detail="Status and recent activity are shown here. Open the full workspace to author lifecycle work."
-                  />
+                  <>
+                    <AlertBanner
+                      tone="default"
+                      title="Preview only"
+                      detail="Status and recent activity are shown here. Open the full workspace to author lifecycle work."
+                    />
+                    {detailRecord && detailId ? (
+                      (() => {
+                        const comms = (detail.communications_recent ??
+                          []) as CoordinationCommunication[];
+                        const attentionCount = countCommunicationsNeedingAttention(
+                          comms,
+                          detailRecord,
+                        );
+                        const stage5Active = Number(detailRecord.current_stage) === 5;
+                        if (attentionCount === 0 && !stage5Active) return null;
+                        return (
+                          <AlertBanner
+                            tone={attentionCount > 0 ? "warn" : "info"}
+                            title={
+                              attentionCount > 0
+                                ? `${attentionCount} communication(s) need attention`
+                                : "Stage 5 · Utility acknowledgment"
+                            }
+                            detail={
+                              attentionCount > 0
+                                ? "Open communications to confirm, flag, or review utility messages."
+                                : "Open the full workspace to review utility acknowledgment."
+                            }
+                            action={
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="default"
+                                onClick={() =>
+                                  navigate(
+                                    `/uci/records/${encodeURIComponent(detailId)}?tab=communications`,
+                                  )
+                                }
+                              >
+                                Open communications
+                              </Button>
+                            }
+                          />
+                        );
+                      })()
+                    ) : null}
+                  </>
                 )}
 
                 <TabsContent value="overview" className="mt-4 space-y-4">
@@ -3973,10 +3980,29 @@ export default function UciDashboard() {
                       detail={communicationsHydrationError}
                     />
                   ) : null}
+                  {detailRecord
+                    ? (() => {
+                        const stage5Banner = buildStage5CommunicationsBanner(
+                          detailRecord,
+                          (detail.communications_recent ?? []) as CoordinationCommunication[],
+                        );
+                        return stage5Banner ? (
+                          <AlertBanner
+                            tone={stage5Banner.tone}
+                            title={stage5Banner.title}
+                            detail={stage5Banner.detail ?? undefined}
+                          />
+                        ) : null;
+                      })()
+                    : null}
                   <Card className={uciDrawerChildCardClass}>
                     <CardHeader className={uciDrawerChildCardHeaderClass}>
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <CardTitle className={uciDrawerChildCardTitleClass}>Communications</CardTitle>
+                        <CardTitle className={uciDrawerChildCardTitleClass}>
+                          {detailRecord
+                            ? getCommunicationsTabLabel(detailRecord)
+                            : "Communications"}
+                        </CardTitle>
                         <Button
                           type="button"
                           variant="outline"
@@ -3998,51 +4024,24 @@ export default function UciDashboard() {
                       ) : (
                         <div className="space-y-3">
                           {(detail.communications_recent as CoordinationCommunication[]).map((comm) => (
-                            <div key={comm.id} className={uciTransitionCardClass}>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant="outline">{comm.direction || "—"}</Badge>
-                                <Badge variant="secondary">{comm.channel || "message"}</Badge>
-                                {comm.classification ? (
-                                  <Badge variant="outline" className="capitalize text-[10px]">
-                                    {formatCommunicationClassification(comm.classification)}
-                                  </Badge>
-                                ) : null}
-                                {classificationNeedsAttention(
-                                  comm.classification,
-                                  comm.classification_confidence != null
-                                    ? Number(comm.classification_confidence)
-                                    : null,
-                                  comm.needs_human_attention,
-                                ) ? (
-                                  <Badge variant="destructive">Needs attention</Badge>
-                                ) : null}
-                              </div>
-                              <p className="mt-2 font-medium text-foreground">
-                                {comm.raw_subject || "(no subject)"}
-                              </p>
-                              {comm.raw_body ? (
-                                <p className={cn("mt-1 text-sm", uciMutedClass)}>{comm.raw_body}</p>
-                              ) : null}
-                              <p className={cn("mt-1 text-xs tabular-nums", uciMutedClass)}>
-                                {formatWhen(comm.message_timestamp || comm.created_at)}
-                                {comm.sender ? ` · ${comm.sender}` : ""}
-                                {comm.recipient ? ` → ${comm.recipient}` : ""}
-                              </p>
-                              <CommunicationReclassifyRow
-                                comm={comm}
-                                busy={reclassifyCommId === comm.id}
-                                onReclassify={(id, classification) =>
-                                  void handleReclassifyCommunication(id, classification)
-                                }
-                                onFlagForReview={(id) => void handleFlagCommunicationForReview(id)}
-                                onConfirm={(id, classification) =>
-                                  void handleConfirmCommunication(id, classification)
-                                }
-                                onReject={(id) => void handleRejectCommunication(id)}
-                                mutedClass={uciMutedClass}
-                                toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                              />
-                            </div>
+                            <CommunicationOperatorCard
+                              key={comm.id}
+                              comm={comm}
+                              providerName={detailProvider?.name ?? detailProvider?.display_name}
+                              record={detailRecord}
+                              busy={reclassifyCommId === comm.id}
+                              onReclassify={(id, classification) =>
+                                void handleReclassifyCommunication(id, classification)
+                              }
+                              onFlagForReview={(id) => void handleFlagCommunicationForReview(id)}
+                              onConfirm={(id, classification) =>
+                                void handleConfirmCommunication(id, classification)
+                              }
+                              onReject={(id) => void handleRejectCommunication(id)}
+                              mutedClass={uciMutedClass}
+                              toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                              cardClassName={uciTransitionCardClass}
+                            />
                           ))}
                         </div>
                       )}
@@ -4428,27 +4427,6 @@ function RecordManualMilestoneFoundations({
   );
 }
 
-function CoordinationStatusField({
-  label,
-  value,
-  mutedClass,
-  hideIfEmpty,
-}: {
-  label: string;
-  value: string;
-  mutedClass: string;
-  hideIfEmpty?: boolean;
-}) {
-  if (hideIfEmpty && (!value || value === "—")) return null;
-  return (
-    <div className="min-w-0">
-      <p className={cn("text-[10px] uppercase tracking-wide", mutedClass)}>{label}</p>
-      <p className="text-xs font-medium text-foreground">{value}</p>
-    </div>
-  );
-}
-
-/** Compact progress indicator for the currently selected PEPCO project only. */
 function PepcoSelectedProjectProgress({
   isBusy,
   isAwaitingVerification,
@@ -4557,43 +4535,36 @@ function CommunicationPreviewRow({
   mutedClass: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const model = buildCommunicationCardModel(comm);
   const body = comm.raw_body?.trim() || null;
   const isLong = Boolean(body && body.length > COMMUNICATION_PREVIEW_LIMIT);
 
   return (
     <div className={uciSystemDataRowClass}>
       <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium text-foreground">{comm.raw_subject || "(no subject)"}</p>
-        {comm.classification ? (
-          <Badge variant="outline" className="text-[10px] capitalize">
-            {formatCommunicationClassification(comm.classification)}
-          </Badge>
-        ) : null}
-        {classificationNeedsAttention(
-          comm.classification,
-          comm.classification_confidence != null ? Number(comm.classification_confidence) : null,
-          comm.needs_human_attention,
-        ) ? (
+        <p className="font-medium text-foreground">{model.title}</p>
+        {model.actions.needsAttention ? (
           <Badge variant="destructive" className="text-[10px]">
             Needs attention
           </Badge>
         ) : null}
       </div>
+      {model.subtitle ? (
+        <p className={cn("mt-0.5 text-[11px]", mutedClass)}>{model.subtitle}</p>
+      ) : null}
       <p className={cn("mt-0.5 text-[11px] tabular-nums", mutedClass)}>
         {formatWhen(comm.message_timestamp || comm.created_at)}
       </p>
-      {body ? (
-        <p className={cn("mt-1 leading-snug text-foreground/90", !expanded && "line-clamp-2")}>
-          {body}
-        </p>
+      {body && expanded ? (
+        <p className={cn("mt-1 leading-snug text-foreground/90")}>{body}</p>
       ) : null}
-      {isLong ? (
+      {body ? (
         <button
           type="button"
           className="mt-1 text-[11px] font-medium text-primary underline underline-offset-2"
           onClick={() => setExpanded((v) => !v)}
         >
-          {expanded ? "Show less" : "View full message"}
+          {expanded ? "Hide message" : isLong ? "View message" : "View message"}
         </button>
       ) : null}
     </div>
@@ -4864,6 +4835,8 @@ export function ApplicationPrepSection({
   const [candidatesPayload, setCandidatesPayload] =
     useState<UciPackageDocumentCandidatesResponse | null>(initialDocumentCandidates);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
+  const removeFromPackage = useRemoveFromPackageConfirm();
+  const packageRemovalLocked = isPackageDocumentRemovalLocked(packageApp);
   const [documentOpenBusy, setDocumentOpenBusy] = useState<string | null>(null);
   const [reviewItemBusy, setReviewItemBusy] = useState<string | null>(null);
   const [editingDocumentSlot, setEditingDocumentSlot] = useState<string | null>(
@@ -5502,13 +5475,23 @@ export function ApplicationPrepSection({
                           size="sm"
                           variant="outline"
                           className={cn("mt-1", toolbarOutlineButtonClass)}
-                          disabled={mappingBusySlot === slotKey}
-                          onClick={() => void handleRemoveMapping(slotKey)}
+                          disabled={mappingBusySlot === slotKey || packageRemovalLocked}
+                          title={
+                            packageRemovalLocked
+                              ? "Remove is locked after review or submission history"
+                              : "Remove from package"
+                          }
+                          onClick={() =>
+                            removeFromPackage.openConfirm(
+                              slotKey,
+                              packageDocs.find((d) => d.key === slotKey)?.label || slotKey,
+                            )
+                          }
                         >
                           {mappingBusySlot === slotKey ? (
                             <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                           ) : null}
-                          Remove
+                          Remove from package
                         </Button>
                       </div>
                     ) : (
@@ -5915,13 +5898,23 @@ export function ApplicationPrepSection({
                             type="button"
                             size="sm"
                             variant="outline"
-                            disabled={mappingBusySlot === document.key}
-                            onClick={() => void handleRemoveMapping(document.key)}
+                            disabled={mappingBusySlot === document.key || packageRemovalLocked}
+                            title={
+                              packageRemovalLocked
+                                ? "Remove is locked after review or submission history"
+                                : "Remove from package"
+                            }
+                            onClick={() =>
+                              removeFromPackage.openConfirm(
+                                document.key,
+                                document.label || document.key,
+                              )
+                            }
                           >
                             {mappingBusySlot === document.key ? (
                               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : null}
-                            Remove
+                            Remove from package
                           </Button>
                         ) : null}
                         <Button
@@ -6451,6 +6444,24 @@ export function ApplicationPrepSection({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            <RemoveFromPackageDialog
+              open={Boolean(removeFromPackage.pendingSlot)}
+              onOpenChange={(open) => {
+                if (!open) removeFromPackage.closeConfirm();
+              }}
+              slotLabel={removeFromPackage.pendingSlot?.label || "document"}
+              locked={packageRemovalLocked}
+              loading={
+                Boolean(removeFromPackage.pendingSlot) &&
+                mappingBusySlot === removeFromPackage.pendingSlot?.key
+              }
+              onConfirm={async () => {
+                const key = removeFromPackage.pendingSlot?.key;
+                if (!key) return;
+                await handleRemoveMapping(key);
+                removeFromPackage.closeConfirm();
+              }}
+            />
           </>
         )}
       </CardContent>
@@ -6459,9 +6470,7 @@ export function ApplicationPrepSection({
 }
 
 /**
- * Compact lifecycle timeline plus the manual stage-update form; collapsed by
- * default to keep the main workflow uncluttered. When opened, the transition
- * summary is shown directly; the manual update form stays nested under its
+ * Lifecycle summary is shown directly; the manual update form stays nested under its
  * own "Update stage" toggle (collapsed by default) so it's never permanently
  * expanded.
  */

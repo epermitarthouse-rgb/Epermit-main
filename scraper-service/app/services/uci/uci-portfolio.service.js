@@ -1,5 +1,10 @@
 "use strict";
 
+const {
+  isActionableNeedsAttentionCommunication,
+  LOW_CONFIDENCE_THRESHOLD,
+} = require("./uci-needs-attention.util.js");
+
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} projectId
@@ -9,16 +14,18 @@ async function getProjectPortfolioView(supabase, projectId) {
     supabase
       .from("coordination_records")
       .select(
-        "id, utility_type, current_stage, current_stage_state, utility_provider_id, metadata, created_at, updated_at",
+        "id, utility_type, current_stage, current_stage_state, utility_provider_id, acknowledgment_received_at, metadata, created_at, updated_at",
       )
       .eq("project_id", projectId)
       .order("updated_at", { ascending: false }),
     supabase
       .from("coordination_communications")
-      .select("id, coordination_record_id, needs_human_attention, classification")
+      .select(
+        "id, coordination_record_id, direction, classification, classification_confidence, needs_human_attention, reviewed_at, reviewed_by, raw_subject, sender, recipient, agent_processed_metadata",
+      )
       .eq("project_id", projectId)
       .or(
-        "needs_human_attention.eq.true,classification.is.null,classification.eq.unclassified,classification_confidence.lt.0.75",
+        `needs_human_attention.eq.true,classification.is.null,classification.eq.unclassified,classification_confidence.lt.${LOW_CONFIDENCE_THRESHOLD}`,
       ),
   ]);
 
@@ -30,7 +37,17 @@ async function getProjectPortfolioView(supabase, projectId) {
   }
 
   const records = Array.isArray(recordsResult.data) ? recordsResult.data : [];
-  const attentionComms = Array.isArray(commsResult.data) ? commsResult.data : [];
+  const candidateComms = Array.isArray(commsResult.data) ? commsResult.data : [];
+  const recordsById = new Map(records.map((r) => [String(r.id), r]));
+  const attentionComms = candidateComms.filter((comm) =>
+    isActionableNeedsAttentionCommunication(comm, recordsById.get(String(comm.coordination_record_id))),
+  );
+
+  const attentionCountByRecord = new Map();
+  for (const comm of attentionComms) {
+    const recordId = String(comm.coordination_record_id || "");
+    attentionCountByRecord.set(recordId, (attentionCountByRecord.get(recordId) || 0) + 1);
+  }
 
   const stageSummary = {};
   for (let stage = 1; stage <= 10; stage += 1) {
@@ -54,6 +71,7 @@ async function getProjectPortfolioView(supabase, projectId) {
       utility_type: r.utility_type,
       current_stage: r.current_stage,
       current_stage_state: r.current_stage_state,
+      needs_attention_count: attentionCountByRecord.get(String(r.id)) || 0,
       has_cos_analysis: Boolean(
         r.metadata &&
           typeof r.metadata === "object" &&
@@ -64,6 +82,7 @@ async function getProjectPortfolioView(supabase, projectId) {
           typeof r.metadata === "object" &&
           /** @type {{ uci_closeout_package?: unknown }} */ (r.metadata).uci_closeout_package,
       ),
+      updated_at: r.updated_at,
     })),
     generated_at: new Date().toISOString(),
     version: "d11-v1",

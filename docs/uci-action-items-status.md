@@ -1,6 +1,6 @@
 # UCI action items and dependency status
 
-Last updated: 2026-08-18
+Last updated: 2026-08-19
 
 This is the central lifecycle tracker for Utility Coordination Intelligence. Production capability and synthetic/test capability are tracked separately. A synthetic result never makes the corresponding production row complete.
 
@@ -23,8 +23,8 @@ Allowed status values:
 | Cross-stage | UCI navigation and application workspace | Complete | Persistent Project Workspace entry, operational child pages, UCI hub, record drawer tabs, and `/uci/application-builder` are wired locally | Yes — authenticated headless click-through with Highland Springs plus route/navigation tests | Production deployment is tracked separately from code completeness | Product code / runtime environment | No | No | P1 | Runtime verified real rows and `/uci/records/:id` deep links; no heading-only completion claim |
 | Cross-stage | Provider type directory and aliases | Complete | Canonical provider catalog includes electric/gas/water/sewer/telecom entries and Dominion Virginia slug resolution | Yes — provider directory tests | Ongoing catalog maintenance | Provider directory catalog | No | No | P2 | Directory identity is not territory or application-requirement authority |
 | Cross-stage | Submissions child route | Partial | Real application/package rows now use one cached operational snapshot instead of project/record fan-out | Source and service tests; authenticated post-fix timing pending | Apply migration and capture cold/warm runtime timing with Highland Springs | Local navigation + operational snapshot API | No | Yes | P2 | Read-only queue; do not mark Complete until measured first-useful-render improvement |
-| Cross-stage | Inbox child route | Partial | Stored communications now use the shared cached operational snapshot with fixed DB query count | Source and service tests; authenticated post-fix timing pending | Apply migration and capture PEPCO cold/warm runtime timing | Local navigation + operational snapshot API | No | Yes | P2 | No scrape, sync, OCR, or rebuild occurs on open |
-| Cross-stage | Needs Attention child route | Partial | Flagged messages and persisted blockers now come from the same fixed-query snapshot | Source and service tests; authenticated post-fix timing pending | Apply migration and verify partial-child-query failure rendering | Local navigation + operational snapshot API | No | Yes | P2 | Classifier/ingestion capability remains separately partial |
+| Cross-stage | Inbox child route | Partial | Primary feed demotes non-actionable synthetic UAT to Test / Audit history; production groups by `thread_id`; snapshot includes thread/review metadata | Presentation unit tests; Highland synthetic ack audit | Authenticated Inbox smoke after deploy | Local navigation + operational snapshot API | No | Yes | P2 | No deletes; unresolved synthetic Needs Attention stays in primary feed |
+| Cross-stage | Needs Attention child route | Partial | Queue/count = actionable unresolved only (excludes outbound package transmissions, completed acks, resolved/rejected, inert synthetic history); cards show one **Why this needs attention** reason | Source and service tests; authenticated post-fix timing pending | Apply migration and verify partial-child-query failure rendering | Local navigation + operational snapshot API | No | Yes | P2 | Classifier/ingestion capability remains separately partial |
 | Cross-stage | Portfolio child route | Partial | Cross-project rollup now uses one shared request and reuses its cache across tabs | Source and service tests; authenticated post-fix timing pending | Apply migration and capture cold/warm runtime timing | Local navigation + operational snapshot API | No | Yes | P2 | Separate from firm-wide reporting/export completeness |
 | Cross-stage | Portal Harvest route | Complete | Existing dedicated harvest inventory/link/refresh page is mounted with bounded loading and explicit error/empty states | Authenticated runtime — 3 harvested applications | Connector production validation | Local navigation + portal services | Yes | Yes | P2 | Frontend route complete; intake connector breadth remains Partial |
 | Cross-stage | Provider Directory child route | Complete | Searchable live provider catalog renders real provider records and portal actions | Authenticated runtime — 56 providers | Catalog maintenance and production deployment | Local navigation implementation | No | No | P2 | Directory identity is not territory authority |
@@ -59,7 +59,7 @@ Allowed status values:
 | Stage 3 | Field schedule CSV/XLSX export | Not started | Field results are already readable in the summary PDF and machine-readable in structured JSON | Assessed 2026-08-18 | Add only for a demonstrated reviewer spreadsheet workflow or provider-accepted schedule; otherwise it duplicates the implemented formats | Reviewer/provider workflow decision | Yes | No | P2 | Potentially useful for sorting/filtering large field sets, but not part of the minimum package and never utility-submittable by assumption |
 | Stage 3 | Generated provider application PDF/form | Not started | PEPCO has portal selector mappings, but no provider PDF template, AcroForm/coordinate map, or generated application artifact; Dominion production requirements are absent | No | Obtain and version an authoritative provider form plus field/attachment mapping and rendering/validation rules | Provider-issued template and client approval | Yes | Yes | P0 | Expose only when the selected provider/template explicitly supports generation |
 | Stage 3 | Combined package PDF | Not started | Individual mapped originals can be PDFs, but UCI has no merge pipeline or package-level compatibility checks | No | Add opt-in merge only for compatible unsigned/copy PDFs, preserve originals separately, define ordering/bookmarks, and record exclusions | Approved package policy + PDF merge implementation | Yes | Yes | P3 | Never replace the ZIP of originals; avoid modifying signed PDFs or implying the merged derivative is an original |
-| Stage 4 | Submission and Confirmation Tracker (capability UX) | Partial / synthetic UAT | P0 validation + P1 Prepare→Preview→Confirm on `/uci/submissions`; primary **Not submitted**; confirmed packages show Mail.Send readiness blocker; live send controls unreachable | Source + Highland table UAT 2026-08-18 | Capture proof after live send is intentionally enabled; production delivery channels | Product UX + Stage 4 APIs | No | Yes | P0 | Do not treat confirm as Submitted |
+| Stage 4 | Submission and Confirmation Tracker (capability UX) | Partial / synthetic UAT | P0 validation + P1 Prepare→Preview→Send on `/uci/submissions`; one package row per coordination; Transmission vs Provider confirmation; live-send wired when Mail.Send + live flag | Source + Highland UAT 2026-08-18/19 | Capture proof after live send; production delivery channels | Product UX + Stage 4 APIs | No | Yes | P0 | Do not treat email Sent as Provider confirmation Submitted |
 | Stage 4 | PEPCO validation dry run | Partial | PEPCO field/attachment validation and optional browser population stop before final submit by default | Yes — fixture/browser tests | Production portal selector verification and operator acceptance | PEPCO portal | Yes | Yes | P0 | Live PEPCO remains environment- and confirmation-gated; HTTP route does not inject Playwright |
 | Stage 4 | Dominion synthetic validation-only dry run | Test-only / synthetic | Dedicated `POST /api/uci/applications/:id/validation-attempts` + append-only `submission_validation_attempts`; Builder/Tracker call validation_only only; never Graph/portal/Stage 5 | Yes — unit tests + Highland Springs P0 UAT | Keep zero external/lifecycle side effects; production Dominion path still blocked | Synthetic checklist | No | No | P0 | Dry run ≠ submitted; `submitted_at` stays null |
 | Stage 4 | Non-PEPCO email (Microsoft Graph) | Partial / controlled live UAT | Delegated `/me/sendMail` with `toRecipients` + binary attachments via new `transmit` path (`uci-submission-transmission.service.js`). Live flag local-only. Highland self-send UAT passed 2026-08-18 | Unit + Highland live self-send (Sent Items verified) | Apply `submission_transmission_attempts` migration on remote; production recipients; Stage 5 still off for email UAT | Client recipients + tenant Mail.Send | Yes | Yes | P1 | Do not use legacy `submitViaEmail` (advances Stage 5) |
@@ -895,6 +895,7 @@ yes | dzahid@commun-et.com | dzahid@commun-et.com | 6 | Graph 202 / sent | dc4df
 - Reviewer Confirm / Reclassify / Rematch / Reject / notes; Confirm enforces the same completion gates and audits original + reviewer extracted fields; Needs Attention includes unmatched
 - Stage 6 guard: `canEnterStage6` only after Stage 5 COMPLETED + `acknowledgment_received_at`; no Stage 6 product started
 - Synthetic accuracy harness ≥85%; migration `20260819040000_uci_stage5_acknowledgment.sql`
+- **Operator UX (2026-08-19):** Inbox + Needs Attention inline Confirm/Flag; split attention queue (utility comms vs package readiness); Stage 5 banner + tab label on record Communications; human review timeline (raw JSON only under Audit detail); hub preview CTA to `/uci/records/:id?tab=communications`
 
 ### External / live-verification dependencies
 - Microsoft Graph Mail.Read (or equivalent) on operator mailbox for live inbound
@@ -921,8 +922,40 @@ Root cause: after Stage 5 COMPLETED, `utility_contact_name` / `utility_project_m
 - Reconcile JSONB mirror now accepts `latest_transmission` / history when `submission_transmission_attempts` table is absent remotely.
 - Positive path: Graph self-send synthetic ack → inbound poll → OpenAI `acknowledgment` 0.95 → matched Highland → auto Stage 5 COMPLETED + SLA stop; Stage 6 product not started (`can_enter_stage_6` only).
 - Dedupe: second poll of same message `inserted=false`.
-- Negatives (after audited clean reopen clearing PM/contact/account/ack): PM-less ack stays `AWAITING_UTILITY` + Needs Attention + evidence + SLA active; Flag blocks auto-complete; reviewer PM Confirm → COMPLETED + SLA stop.
-- Note: first PM-less attempt after incomplete reopen incorrectly completed via leftover `utility_contact_name`; clean reopen required for honest negative UAT.
+- Negatives (after audited clean reopen clearing PM/contact/account/ack): acknowledgment without utility PM/coordinator stays `AWAITING_UTILITY` + Needs Attention + evidence + SLA active; Flag blocks auto-complete; reviewer PM Confirm → COMPLETED + SLA stop.
+- Note: first incomplete-ack attempt after incomplete reopen incorrectly completed via leftover `utility_contact_name`; clean reopen required for honest negative UAT.
+
+## Stage 5 Communications UI hardening (operator UAT) — 2026-08-19
+
+**Status:** UI/presentation first. Lifecycle/classifier unchanged except direction/dedupe fixes below.
+
+### Delivered
+- Structured acknowledgment card summary (classification, confidence, ticket/PM, ack date, next action, Stage 5 status); raw body under **View message**
+- Explicit Needs Attention reasons (missing utility PM/coordinator, low confidence, unmatched, flagged, unclassified inbound) — never “PM-less” / `nopm` / “Ack WITHOUT PM” in operator UI
+- State-aware actions (auto-completed → resolved + history/flag; Needs Attention → Confirm/Reclassify/Flag/Reject; Rejected → no Confirm)
+- Replaced “Human override preserved” with `Reviewed by … · classification changed|confirmed` when applicable
+- Self-send / `[TEST] Utility Coordination Application Package` Graph inbox echoes link to existing outbound transmission (`linked_outbound_echo`) instead of a new inbound Needs Attention row; genuine utility replies still ingest
+- PEPCO portal direction: SPOC/utility → inbound; internal portal user → outbound; portal re-sync does not overwrite Graph/outbound direction
+- UAT/internal ids (`s5uat-…`, `s5neg-…`) stripped from normal subjects/cards; audit/history only
+- Shared helpers: `src/lib/uciCommunicationPresentation.ts`
+
+### Needs Attention actionable-only filter (2026-08-19)
+- **Bug:** snapshot/`needs_attention` treated `classification IS NULL` as attention, so Stage 4 outbound package rows (`Outbound transmission · … not operator attention`) entered the queue/count
+- **Fix:** shared `uci-needs-attention.util.js` + frontend `communicationNeedsOperatorAttention` — include low-confidence / unclassified **inbound** / unmatched / missing ack data / flagged / unresolved classifier failures; exclude outbound transmissions, sent package echoes, completed acks, resolved/rejected, inert synthetic history
+- Cards show one clear **Why this needs attention** reason; queue never keeps items labeled “not operator attention”
+- PEPCO outbound Unclassified rows: direction correct (portal user → utility); not actionable for this queue
+- Records preserved; Stage 5 lifecycle unchanged
+
+### Inbox Test / Audit history (2026-08-19)
+- Duplicate-looking Highland Springs Stage 5 acks are **separate** synthetic Graph UAT emails (different message/conversation IDs) — not merged, not deleted
+- Non-actionable synthetic UAT (`[UCI SYNTHETIC TEST]`, `s5uat|s5neg`, synthetic body/metadata) is removed from the **primary Inbox feed** and listed under **Test / Audit history** with received time, ticket/reference, classification, and test status
+- Unresolved synthetic items that still Need Attention remain in the normal Inbox until confirmed/resolved
+- Production messages continue to group by `thread_id` (latest card + expandable earlier messages)
+- Operational snapshot communications select now includes `thread_id` plus review metadata for these filters
+
+### Backend behavior
+- Stage 5 ack acceptance / classifier / completion gates unchanged
+- Direction/dedupe-only: `uci-graph-inbound.service.js` echo link; `pepco.adapter.js` direction; `uci-communication-sync.service.js` preserve outbound/Graph direction
 
 ## Stage 4 operator UI simplification — 2026-08-19
 
@@ -938,4 +971,34 @@ Root cause: after Stage 5 COMPLETED, `utility_contact_name` / `utility_project_m
 - Tracker: compact sent line; hide Graph/Stage 5/env jargon; capability package label `Application Builder · Reviewed package v1`; Create new transmission / Send another test after sent.
 - Shared `src/lib/uciCapabilityLabels.ts` for agent→capability and package/sent formatting.
 - Application Builder primary action routes to Tracker Prepare (Validate button removed from primary UI).
+
+## Stage 4 Submission Tracker duplicate-row fix — 2026-08-19
+
+**Status:** UI grouping + status copy only. No DB delete/merge; preparations/transmissions remain append-only.
+
+### Root cause
+- Tracker flat-mapped **every** `coordination_applications` row under a coordination record.
+- Highland (and typical packages) have both a Load Profile Analyzer draft and an Application Builder package draft; both rendered as top-level rows with the same project/provider title.
+- “Create new transmission” only appends a preparation/transmission under the package app — it did not create the duplicate; the load-profile sibling row made it look like two package rows.
+
+### Fix
+- One top-level row per **Application Builder package** (`getApplicationPackageDraftApplication` / package metadata), keyed by coordination + package id.
+- Current transmission state on the primary row; older sent attempts under **Transmission history (N)**.
+- Status split for operators: **Transmission** (email prepare/send) vs **Provider confirmation** (`submitted_at` lifecycle — still Not submitted after email Sent until Stage 5 reconcile / confirmed ticket).
+- Operational snapshot application select now includes `idempotency_key`, `record_source`, `submitted_at`, `provider_slug` so package identity and confirmation state are available without extra fetches.
+
+## P0 destructive-action safety — 2026-08-19
+
+**Scope:** P0 only (project delete gate + package Remove lock + RLS hygiene). P1/P2 (harvest unlink, close-coordination rename, etc.) not implemented.
+
+### Delivered
+- **Project delete gated:** `useProjects.deleteProject` and Settings duplicate/test cleanup refuse hard delete when any UCI dependency exists (`src/lib/projectDestructiveSafety.ts`). Dialog explains cascade risk and offers **Archive project** (`projects.archived_at`). Empty disposable projects require typed name confirmation before permanent delete.
+- **DB defense:** migration `20260819120000_uci_destructive_action_safety.sql` — `archived_at`, `BEFORE DELETE` trigger `prevent_destructive_project_delete_with_uci` (blocks when `coordination_records` exist), drops authenticated DELETE RLS on `coordination_stage_transitions`, `coordination_communications`, `coordination_applications`. Service role still bypasses RLS. `submission_*` already had no DELETE policies.
+- **Package Remove locked:** `removePackageDocumentMapping` rejects `PACKAGE_REVIEW_LOCKED` / `PACKAGE_SUBMITTED_LOCKED` / `PACKAGE_PREPARATION_LOCKED` / `PACKAGE_TRANSMISSION_LOCKED` / `PACKAGE_SUBMISSION_HISTORY_LOCKED`. UI uses **Remove from package** confirm dialog; control disabled when reviewed/submitted.
+- **Tests:** frontend `projectDestructiveSafety.test.ts`; backend package-bridge lock/allow cases; migration content test `uci-destructive-action-safety.test.js`.
+
+### Remaining cascade risk
+- Hard delete of truly empty projects still cascades non-UCI child rows (comments, documents) by design.
+- `coordination_records` / costs / equipment / milestones still have editor DELETE RLS (soft-void / close-coordination is P1–P2).
+- Package Remove UI lock covers reviewed/submitted; preparation/transmission locks are enforced on the API even if UI only knows draft status.
 

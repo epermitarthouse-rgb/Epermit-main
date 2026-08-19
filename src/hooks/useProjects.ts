@@ -6,6 +6,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { logProjectActivity } from '@/lib/activityLogger';
 import {
+  formatUciDependencyBlockReason,
+  getProjectUciDependencySummary,
+  hasUciDependencies,
+} from '@/lib/projectDestructiveSafety';
+import {
   DASHBOARD_SELECTED_PROJECT_QUERY_KEY,
   SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
 } from '@/lib/portalMonitorScrapeOptions';
@@ -38,6 +43,7 @@ const PHASE_4_PLUS_OPTIONAL_PROJECT_COLUMNS = new Set([
   'm1_trigger_source',
   'm2_trigger_source',
   'm3_trigger_source',
+  'archived_at',
 ]);
 
 const PROJECT_COLUMN_LIST = [
@@ -90,6 +96,7 @@ const PROJECT_COLUMN_LIST = [
   'm1_trigger_source',
   'm2_trigger_source',
   'm3_trigger_source',
+  'archived_at',
 ] as const;
 
 const PROJECT_SELECT_COLUMNS = PROJECT_COLUMN_LIST.join(',');
@@ -116,6 +123,7 @@ const PROJECT_EXTENDED_DEFAULTS_FOR_PARTIAL_ROWS: Pick<
   | 'm1_trigger_source'
   | 'm2_trigger_source'
   | 'm3_trigger_source'
+  | 'archived_at'
 > = {
   client_name: null,
   client_email: null,
@@ -133,6 +141,7 @@ const PROJECT_EXTENDED_DEFAULTS_FOR_PARTIAL_ROWS: Pick<
   m1_trigger_source: null,
   m2_trigger_source: null,
   m3_trigger_source: null,
+  archived_at: null,
 };
 
 function normalizeProjectRow(row: Record<string, unknown>): Project {
@@ -142,6 +151,10 @@ function normalizeProjectRow(row: Record<string, unknown>): Project {
     m1_triggered: Boolean(row.m1_triggered),
     m2_triggered: Boolean(row.m2_triggered),
     m3_triggered: Boolean(row.m3_triggered),
+    archived_at:
+      row.archived_at == null || row.archived_at === ""
+        ? null
+        : String(row.archived_at),
   };
 }
 
@@ -212,7 +225,9 @@ async function loadProjectsFromDb(): Promise<Project[]> {
 
   if (fetchError) throw fetchError;
 
-  return ((data || []) as Record<string, unknown>[]).map(normalizeProjectRow);
+  return ((data || []) as Record<string, unknown>[])
+    .map(normalizeProjectRow)
+    .filter((project) => !project.archived_at);
 }
 
 /**
@@ -382,6 +397,12 @@ export function useProjects() {
 
   const deleteProject = async (id: string): Promise<boolean> => {
     try {
+      const summary = await getProjectUciDependencySummary(id);
+      if (hasUciDependencies(summary)) {
+        toast.error(formatUciDependencyBlockReason(summary));
+        return false;
+      }
+
       const { error: deleteError } = await supabase
         .from('projects')
         .delete()
@@ -396,6 +417,49 @@ export function useProjects() {
       const message = err instanceof Error ? err.message : 'Failed to delete project';
       toast.error(message);
       console.error('Error deleting project:', err);
+      return false;
+    }
+  };
+
+  const archiveProject = async (id: string): Promise<boolean> => {
+    if (!user) {
+      toast.error('You must be logged in to archive a project');
+      return false;
+    }
+
+    try {
+      const archivedAt = new Date().toISOString();
+      const { data, error: updateError } = await supabase
+        .from('projects')
+        .update({ archived_at: archivedAt })
+        .eq('id', id)
+        .select(PROJECT_SELECT_COLUMNS)
+        .maybeSingle();
+
+      if (updateError && isProjectsSchemaMismatchError(updateError)) {
+        toast.error(
+          'Archive is unavailable until the project archive migration is applied. Deletion remains blocked for projects with utility coordination history.',
+        );
+        return false;
+      }
+      if (updateError) throw updateError;
+      if (!data) throw new Error('Project not found');
+
+      patchProjectsCache((prev) => prev.filter((p) => p.id !== id));
+      await logProjectActivity(
+        id,
+        user.id,
+        'project_updated',
+        'Project archived to preserve utility coordination history',
+        undefined,
+        { archived_at: archivedAt, action: 'archive' },
+      );
+      toast.success('Project archived');
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to archive project';
+      toast.error(message);
+      console.error('Error archiving project:', err);
       return false;
     }
   };
@@ -449,6 +513,7 @@ export function useProjects() {
     createProject,
     updateProject,
     deleteProject,
+    archiveProject,
     getProjectsByStatus,
   };
 }

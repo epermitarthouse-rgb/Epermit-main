@@ -242,23 +242,28 @@ async function listNeedsAttentionCommunications(supabase, params) {
   const { projectId, coordinationRecordId, limit: rawLimit, offset: rawOffset } = params;
   const limit = Math.min(Math.max(Number(rawLimit) || 25, 1), 100);
   const offset = Math.max(Number(rawOffset) || 0, 0);
+  const {
+    isActionableNeedsAttentionCommunication,
+  } = require("./uci-needs-attention.util.js");
 
+  // Broad DB OR, then post-filter to actionable unresolved only (excludes outbound,
+  // completed acks, resolved/rejected, synthetic history).
   let query = supabase
     .from("coordination_communications")
-    .select("*", { count: "exact" })
+    .select("*")
     .eq("project_id", projectId)
     .or(
       `needs_human_attention.eq.true,classification.is.null,classification.eq.unclassified,classification_confidence.lt.${LOW_CONFIDENCE_THRESHOLD}`,
     )
     .order("message_timestamp", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .limit(500);
 
   if (coordinationRecordId) {
     query = query.eq("coordination_record_id", coordinationRecordId);
   }
 
-  const { data, error, count } = await query;
+  const { data, error } = await query;
 
   if (error) {
     throw Object.assign(new Error(error.message || "Failed to load needs-attention queue"), {
@@ -267,6 +272,30 @@ async function listNeedsAttentionCommunications(supabase, params) {
       code: "NEEDS_ATTENTION_FETCH_FAILED",
     });
   }
+
+  const candidates = Array.isArray(data) ? data : [];
+  const recordIds = [
+    ...new Set(candidates.map((row) => String(row.coordination_record_id || "")).filter(Boolean)),
+  ];
+  /** @type {Map<string, Record<string, unknown>>} */
+  const recordsById = new Map();
+  if (recordIds.length) {
+    const { data: records } = await supabase
+      .from("coordination_records")
+      .select("id, current_stage, current_stage_state, acknowledgment_received_at")
+      .in("id", recordIds);
+    for (const record of Array.isArray(records) ? records : []) {
+      recordsById.set(String(record.id), record);
+    }
+  }
+
+  const actionable = candidates.filter((row) =>
+    isActionableNeedsAttentionCommunication(
+      row,
+      recordsById.get(String(row.coordination_record_id || "")),
+    ),
+  );
+  const page = actionable.slice(offset, offset + limit);
 
   // Also surface unmatched inbound for the project
   const { data: unmatched } = await supabase
@@ -278,9 +307,9 @@ async function listNeedsAttentionCommunications(supabase, params) {
     .limit(limit);
 
   return {
-    communications: Array.isArray(data) ? data : [],
+    communications: page,
     unmatched_inbound: Array.isArray(unmatched) ? unmatched : [],
-    total: count ?? 0,
+    total: actionable.length,
     limit,
     offset,
     confidence_threshold: LOW_CONFIDENCE_THRESHOLD,

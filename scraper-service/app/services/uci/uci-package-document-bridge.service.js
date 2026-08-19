@@ -1131,6 +1131,100 @@ async function confirmPackageDocumentMapping(supabase, params) {
 }
 
 /**
+ * True when any row exists for the application in an optional audit table.
+ * Missing tables (pre-migration) are treated as empty.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} table
+ * @param {string} applicationId
+ */
+async function applicationHasAuditRows(supabase, table, applicationId) {
+  const { data, error } = await supabase
+    .from(table)
+    .select("id")
+    .eq("application_id", applicationId)
+    .limit(1);
+
+  if (error) {
+    const msg = String(error.message || "").toLowerCase();
+    if (
+      error.code === "42P01" ||
+      error.code === "PGRST205" ||
+      msg.includes("does not exist") ||
+      msg.includes("schema cache")
+    ) {
+      return false;
+    }
+    throw Object.assign(new Error(error.message || `Failed to read ${table}`), {
+      cause: error,
+      statusCode: 500,
+      code: "AUDIT_LOOKUP_FAILED",
+    });
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * Block destructive package mapping removal after review / prepare / transmit / submit.
+ * Source documents remain on the project; operators must supersede with a new package.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} application
+ */
+async function assertPackageDocumentRemovalAllowed(supabase, application) {
+  const draftStatus = String(application.draft_status || "");
+  if (draftStatus === "reviewed") {
+    throw Object.assign(
+      new Error(
+        "Package is reviewed — reopen / request changes and use a new package if correction is needed. Source documents are preserved.",
+      ),
+      { statusCode: 409, code: "PACKAGE_REVIEW_LOCKED" },
+    );
+  }
+  if (draftStatus === "submitted" || application.submitted_at) {
+    throw Object.assign(
+      new Error(
+        "Package is submitted — destructive Remove is blocked. Source documents and historical package snapshots are preserved.",
+      ),
+      { statusCode: 409, code: "PACKAGE_SUBMITTED_LOCKED" },
+    );
+  }
+
+  const applicationId = String(application.id || "");
+  const [hasPrep, hasTransmission, hasValidation] = await Promise.all([
+    applicationHasAuditRows(supabase, "submission_preparations", applicationId),
+    applicationHasAuditRows(supabase, "submission_transmission_attempts", applicationId),
+    applicationHasAuditRows(supabase, "submission_validation_attempts", applicationId),
+  ]);
+
+  if (hasTransmission) {
+    throw Object.assign(
+      new Error(
+        "Package has transmission history — destructive Remove is blocked. Prepare a new / superseded package instead.",
+      ),
+      { statusCode: 409, code: "PACKAGE_TRANSMISSION_LOCKED" },
+    );
+  }
+  if (hasPrep) {
+    throw Object.assign(
+      new Error(
+        "Package has a submission preparation — destructive Remove is blocked. Prepare a new / superseded package instead.",
+      ),
+      { statusCode: 409, code: "PACKAGE_PREPARATION_LOCKED" },
+    );
+  }
+  if (hasValidation) {
+    throw Object.assign(
+      new Error(
+        "Package has validation history — destructive Remove is blocked. Prepare a new / superseded package instead.",
+      ),
+      { statusCode: 409, code: "PACKAGE_SUBMISSION_HISTORY_LOCKED" },
+    );
+  }
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
  * @param {string} params.applicationId
@@ -1155,6 +1249,8 @@ async function removePackageDocumentMapping(supabase, params) {
     err.code = "NOT_FOUND";
     throw err;
   }
+
+  await assertPackageDocumentRemovalAllowed(supabase, application);
 
   const existingDocs = Array.isArray(application.package_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (application.package_documents)
@@ -1415,5 +1511,6 @@ module.exports = {
   listPackageDocumentCandidates,
   confirmPackageDocumentMapping,
   removePackageDocumentMapping,
+  assertPackageDocumentRemovalAllowed,
   refreshApplicationPackageDocumentSlots,
 };

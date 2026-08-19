@@ -116,8 +116,21 @@ async function upsertPortalCommunications(supabase, opts) {
       }
 
       // Preserve classification / review state; only refresh transport fields.
+      // Never overwrite Graph/outbound direction with portal heuristics.
+      const existingMeta =
+        existing.agent_processed_metadata &&
+        typeof existing.agent_processed_metadata === "object" &&
+        !Array.isArray(existing.agent_processed_metadata)
+          ? /** @type {Record<string, unknown>} */ (existing.agent_processed_metadata)
+          : {};
+      const preserveDirection =
+        existingMeta.source === "graph_inbound" ||
+        existingMeta.source === "stage4_live_transmit" ||
+        existingMeta.inbound_echo != null ||
+        String(existing.direction || "") === "outbound";
+
       const updateRow = {
-        direction: row.direction,
+        direction: preserveDirection ? existing.direction : row.direction,
         channel: row.channel,
         raw_subject: row.raw_subject,
         raw_body: row.raw_body,
@@ -129,13 +142,11 @@ async function upsertPortalCommunications(supabase, opts) {
         needs_human_attention:
           existing.needs_human_attention === true || row.needs_human_attention === true,
         agent_processed_metadata: {
-          ...(existing.agent_processed_metadata &&
-          typeof existing.agent_processed_metadata === "object" &&
-          !Array.isArray(existing.agent_processed_metadata)
-            ? existing.agent_processed_metadata
-            : {}),
+          ...existingMeta,
           ...portalMeta,
-          source: "portal_sync",
+          source: preserveDirection
+            ? existingMeta.source || "portal_sync"
+            : "portal_sync",
           channel_model: "shared_coordination_communications",
         },
       };

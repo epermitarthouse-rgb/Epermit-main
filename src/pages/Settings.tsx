@@ -12,6 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
 import { supabase } from "@/lib/supabase";
+import {
+  getProjectUciDependencySummary,
+  hasUciDependencies,
+} from "@/lib/projectDestructiveSafety";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -315,12 +319,30 @@ export default function Settings() {
         }
       }
 
+      let deleted = 0;
+      let skippedUci = 0;
       for (const projectId of toDelete) {
+        const summary = await getProjectUciDependencySummary(projectId);
+        if (hasUciDependencies(summary)) {
+          skippedUci += 1;
+          continue;
+        }
         await supabase.from("parsed_comments").delete().eq("project_id", projectId);
-        await supabase.from("projects").delete().eq("id", projectId);
+        const { error: deleteError } = await supabase
+          .from("projects")
+          .delete()
+          .eq("id", projectId);
+        if (deleteError) throw deleteError;
+        deleted += 1;
       }
 
-      toast.success(`Removed ${toDelete.length} duplicate projects`);
+      if (skippedUci > 0) {
+        toast.success(
+          `Removed ${deleted} duplicate project${deleted === 1 ? "" : "s"}; skipped ${skippedUci} with utility coordination history (archive those instead).`,
+        );
+      } else {
+        toast.success(`Removed ${deleted} duplicate projects`);
+      }
     } catch (error) {
       console.error("Remove duplicate projects error:", error);
       toast.error("Failed to remove duplicate projects");
@@ -333,17 +355,38 @@ export default function Settings() {
     if (!user?.id) return;
     setClearingTestData(true);
     try {
-      const { data: deleted, error } = await supabase
+      const { data: candidates, error: fetchError } = await supabase
         .from("projects")
-        .delete()
+        .select("id")
         .eq("user_id", user.id)
         .is("portal_data", null)
-        .is("permit_number", null)
-        .select("id");
+        .is("permit_number", null);
 
-      if (error) throw error;
-      const count = (deleted ?? []).length;
-      toast.success(`Removed ${count} empty test projects`);
+      if (fetchError) throw fetchError;
+
+      let deleted = 0;
+      let skippedUci = 0;
+      for (const row of candidates ?? []) {
+        const summary = await getProjectUciDependencySummary(row.id);
+        if (hasUciDependencies(summary)) {
+          skippedUci += 1;
+          continue;
+        }
+        const { error: deleteError } = await supabase
+          .from("projects")
+          .delete()
+          .eq("id", row.id);
+        if (deleteError) throw deleteError;
+        deleted += 1;
+      }
+
+      if (skippedUci > 0) {
+        toast.success(
+          `Removed ${deleted} empty test project${deleted === 1 ? "" : "s"}; skipped ${skippedUci} with utility coordination history.`,
+        );
+      } else {
+        toast.success(`Removed ${deleted} empty test projects`);
+      }
     } catch (error) {
       console.error("Clear test data error:", error);
       toast.error("Failed to clear test data");
@@ -822,7 +865,7 @@ export default function Settings() {
                     <div className="space-y-2">
                       <Label>Remove Duplicate Projects</Label>
                       <p className="text-sm text-muted-foreground">
-                        For each permit number with multiple projects, keeps the most recently checked and deletes the rest (including their comments).
+                        For each permit number with multiple projects, keeps the most recently checked and deletes the rest (including their comments). Projects with utility coordination history are skipped — archive them instead.
                       </p>
                       <Button variant="outline" onClick={handleRemoveDuplicateProjects} disabled={removingDuplicates}>
                         {removingDuplicates ? (
@@ -837,7 +880,7 @@ export default function Settings() {
                     <div className="space-y-2">
                       <Label>Clear Test Data</Label>
                       <p className="text-sm text-muted-foreground">
-                        Deletes all projects that have no portal data and no permit number (empty test entries).
+                        Deletes empty projects with no portal data and no permit number. Projects with utility coordination history are skipped.
                       </p>
                       <Button variant="outline" onClick={handleClearTestData} disabled={clearingTestData}>
                         {clearingTestData ? (

@@ -123,6 +123,9 @@ function createBridgeMockSupabase(tables) {
         order() {
           return api;
         },
+        limit() {
+          return api;
+        },
         maybeSingle() {
           const row = store.find((r) =>
             filters.every((f) => String(r[f.column]) === String(f.value)),
@@ -513,6 +516,7 @@ describe("UCI package document bridge service", () => {
           project_id: PROJECT_ID,
           record_source: "agent_draft",
           idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+          draft_status: "draft",
           package_documents: [
             {
               key: "single_line_diagram",
@@ -530,6 +534,9 @@ describe("UCI package document bridge service", () => {
           load_summary: {},
         },
       ],
+      submission_preparations: [],
+      submission_transmission_attempts: [],
+      submission_validation_attempts: [],
     };
 
     const supabase = createBridgeMockSupabase(tables);
@@ -541,6 +548,165 @@ describe("UCI package document bridge service", () => {
 
     const sld = removed.package_documents.find((d) => d.key === "single_line_diagram");
     assert.equal(sld?.status, "missing");
+    assert.ok(removed.missing_documents.includes("single_line_diagram"));
+  });
+
+  it("blocks remove after package is reviewed", async () => {
+    const packageAppId = "app-pkg-reviewed-lock";
+    const tables = {
+      coordination_records: [HUMAN_ASSISTED_RECORD],
+      projects: [
+        {
+          id: PROJECT_ID,
+          project_type: "tenant_improvement",
+          address: "100 Main St",
+          city: "Washington",
+          state: "DC",
+        },
+      ],
+      project_documents: [],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT },
+        {
+          id: packageAppId,
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+          draft_status: "reviewed",
+          package_documents: [
+            {
+              key: "single_line_diagram",
+              label: "Single-line diagram",
+              status: "attached",
+              source: "pepco_portal",
+              user_confirmed: true,
+              storage_path: E601_FILE.storagePath,
+            },
+          ],
+          agent_draft_metadata: {},
+        },
+      ],
+      submission_preparations: [],
+      submission_transmission_attempts: [],
+      submission_validation_attempts: [],
+    };
+
+    await assert.rejects(
+      () =>
+        removePackageDocumentMapping(createBridgeMockSupabase(tables), {
+          applicationId: packageAppId,
+          userId: USER_ID,
+          slotKey: "single_line_diagram",
+        }),
+      (error) => error.code === "PACKAGE_REVIEW_LOCKED",
+    );
+  });
+
+  it("blocks remove when transmission history exists", async () => {
+    const packageAppId = "app-pkg-tx-lock";
+    const tables = {
+      coordination_records: [HUMAN_ASSISTED_RECORD],
+      projects: [
+        {
+          id: PROJECT_ID,
+          project_type: "tenant_improvement",
+          address: "100 Main St",
+          city: "Washington",
+          state: "DC",
+        },
+      ],
+      project_documents: [],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT },
+        {
+          id: packageAppId,
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+          draft_status: "needs_changes",
+          package_documents: [
+            {
+              key: "single_line_diagram",
+              label: "Single-line diagram",
+              status: "attached",
+              source: "pepco_portal",
+              user_confirmed: true,
+              storage_path: E601_FILE.storagePath,
+            },
+          ],
+          agent_draft_metadata: {},
+        },
+      ],
+      submission_preparations: [],
+      submission_transmission_attempts: [
+        { id: "tx-1", application_id: packageAppId, project_id: PROJECT_ID },
+      ],
+      submission_validation_attempts: [],
+    };
+
+    await assert.rejects(
+      () =>
+        removePackageDocumentMapping(createBridgeMockSupabase(tables), {
+          applicationId: packageAppId,
+          userId: USER_ID,
+          slotKey: "single_line_diagram",
+        }),
+      (error) => error.code === "PACKAGE_TRANSMISSION_LOCKED",
+    );
+  });
+
+  it("allows remove for pre-review draft without submission history", async () => {
+    const packageAppId = "app-pkg-pre-review-remove";
+    const tables = {
+      coordination_records: [HUMAN_ASSISTED_RECORD],
+      projects: [
+        {
+          id: PROJECT_ID,
+          project_type: "tenant_improvement",
+          address: "100 Main St",
+          city: "Washington",
+          state: "DC",
+        },
+      ],
+      project_documents: [],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT },
+        {
+          id: packageAppId,
+          coordination_record_id: COORD_ID,
+          project_id: PROJECT_ID,
+          record_source: "agent_draft",
+          idempotency_key: APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+          draft_status: "draft",
+          package_documents: [
+            {
+              key: "single_line_diagram",
+              label: "Single-line diagram",
+              status: "attached",
+              source: "pepco_portal",
+              user_confirmed: true,
+              idempotency_key: "pepco:e601",
+              storage_path: E601_FILE.storagePath,
+              confirmed_by: USER_ID,
+              confirmed_at: "2026-07-15T11:00:00.000Z",
+            },
+          ],
+          agent_draft_metadata: {},
+          load_summary: {},
+        },
+      ],
+      submission_preparations: [],
+      submission_transmission_attempts: [],
+      submission_validation_attempts: [],
+    };
+
+    const removed = await removePackageDocumentMapping(createBridgeMockSupabase(tables), {
+      applicationId: packageAppId,
+      userId: USER_ID,
+      slotKey: "single_line_diagram",
+    });
     assert.ok(removed.missing_documents.includes("single_line_diagram"));
   });
 

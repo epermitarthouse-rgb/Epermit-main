@@ -98,6 +98,7 @@ export default function Projects() {
     createProject,
     updateProject,
     deleteProject,
+    archiveProject,
   } = useProjects();
   const { setSelectedProjectId } = useSelectedProject();
 
@@ -272,8 +273,19 @@ export default function Projects() {
     if (!selectedProject) return;
     setDeleteLoading(true);
     try {
-      await deleteProject(selectedProject.id);
-      setDeleteDialogOpen(false);
+      const ok = await deleteProject(selectedProject.id);
+      if (ok) setDeleteDialogOpen(false);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleArchiveConfirm = async () => {
+    if (!selectedProject) return;
+    setDeleteLoading(true);
+    try {
+      const ok = await archiveProject(selectedProject.id);
+      if (ok) setDeleteDialogOpen(false);
     } finally {
       setDeleteLoading(false);
     }
@@ -701,7 +713,8 @@ export default function Projects() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         project={selectedProject}
-        onConfirm={handleDeleteConfirm}
+        onDelete={handleDeleteConfirm}
+        onArchive={handleArchiveConfirm}
         loading={deleteLoading}
       />
     </div>

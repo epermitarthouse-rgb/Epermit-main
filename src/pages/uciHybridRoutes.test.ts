@@ -19,7 +19,10 @@ describe("UCI hybrid architecture routes", () => {
     assert.match(dashboardSource, /Coordination preview/);
     assert.match(dashboardSource, /Open full workspace/);
     assert.match(dashboardSource, /Preview only/);
-    assert.match(dashboardSource, /UCI_RECORD_WORKSPACE_GROUPS/);
+    assert.match(dashboardSource, /WorkflowStageNavigator/);
+    assert.match(dashboardSource, /ProjectSummaryHeader/);
+    assert.match(dashboardSource, /CoordinationStatusSummary/);
+    assert.match(navSource, /UCI_RECORD_WORKSPACE_GROUPS/);
     assert.match(dashboardSource, /RecordManualMilestoneFoundations/);
   });
 
@@ -43,6 +46,9 @@ describe("UCI hybrid architecture routes", () => {
     assert.doesNotMatch(appSource, /path="\/uci\/:foundation"/);
     assert.doesNotMatch(appSource, /UciFoundationPage/);
     assert.match(routePagesSource, /export function UciSubmissionsPage/);
+    assert.match(routePagesSource, /getApplicationPackageDraftApplication/);
+    assert.match(routePagesSource, /Transmission history/);
+    assert.match(routePagesSource, /Provider confirmation/);
     assert.match(routePagesSource, /export function UciInboxPage/);
     assert.match(routePagesSource, /export function UciNeedsAttentionPage/);
     assert.match(routePagesSource, /export function UciPortfolioPage/);
@@ -56,7 +62,8 @@ describe("UCI hybrid architecture routes", () => {
     assert.match(sidebarSource, /to="\/uci"/);
     assert.match(routePagesSource, /\.from\("coordination_records"\)/);
     assert.match(routePagesSource, /settleWithConcurrency/);
-    assert.match(routePagesSource, /No utility communications yet/);
+    assert.match(routePagesSource, /No active utility communications/);
+    assert.match(routePagesSource, /Test \/ Audit history/);
   });
 
   it("does not confuse municipal jurisdiction mapping with utility territory", () => {

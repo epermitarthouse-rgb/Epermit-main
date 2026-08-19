@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,12 @@ import {
   UCI_COMMUNICATION_CATEGORIES,
   formatCommunicationClassification,
 } from "@/lib/uciCommunicationClassifier";
+import {
+  buildCommunicationCardModel,
+  buildCommunicationReviewTimeline,
+  formatOperatorTimelineWhen,
+  type CommunicationActionPlan,
+} from "@/lib/uciCommunicationPresentation";
 import type {
   CoordinationCommunication,
   CoordinationCost,
@@ -199,8 +206,10 @@ export function CommunicationReclassifyRow({
   onFlagForReview,
   onConfirm,
   onReject,
+  onViewHistory,
   mutedClass,
   toolbarOutlineButtonClass,
+  actions,
 }: {
   comm: CoordinationCommunication;
   busy: boolean;
@@ -208,50 +217,219 @@ export function CommunicationReclassifyRow({
   onFlagForReview?: (communicationId: string) => void;
   onConfirm?: (communicationId: string, classification: string) => void;
   onReject?: (communicationId: string) => void;
+  onViewHistory?: (communicationId: string) => void;
   mutedClass: string;
   toolbarOutlineButtonClass: string;
+  actions?: CommunicationActionPlan;
 }) {
   const [category, setCategory] = useState(comm.classification || "unclassified");
-  const flagged =
-    Boolean((comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review);
+  const plan = actions ?? buildCommunicationCardModel(comm).actions;
+  const flagged = Boolean(
+    (comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review,
+  );
+  const overrideLine = buildCommunicationCardModel(comm).overrideLine;
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {plan.showReclassify ? (
+          <>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="h-7 w-[180px] text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UCI_COMMUNICATION_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {formatCommunicationClassification(cat)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={busy}
+              onClick={() => onReclassify(comm.id, category)}
+            >
+              {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Reclassify
+            </Button>
+          </>
+        ) : null}
+        {plan.showConfirm && onConfirm ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={toolbarOutlineButtonClass}
+            disabled={busy}
+            onClick={() => onConfirm(comm.id, category)}
+          >
+            Confirm
+          </Button>
+        ) : null}
+        {plan.showFlag && onFlagForReview ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={toolbarOutlineButtonClass}
+            disabled={busy || flagged}
+            onClick={() => onFlagForReview(comm.id)}
+          >
+            {flagged ? "Flagged" : "Flag for review"}
+          </Button>
+        ) : null}
+        {plan.showReject && onReject ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={toolbarOutlineButtonClass}
+            disabled={busy}
+            onClick={() => onReject(comm.id)}
+          >
+            Reject
+          </Button>
+        ) : null}
+        {plan.showViewHistory && onViewHistory ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => onViewHistory(comm.id)}
+          >
+            View history
+          </Button>
+        ) : plan.showViewHistory ? (
+          <span className={cn("text-[11px]", mutedClass)}>View history</span>
+        ) : null}
+      </div>
+      {overrideLine ? <p className={cn("text-[10px]", mutedClass)}>{overrideLine}</p> : null}
+    </div>
+  );
+}
+
+export function CommunicationReviewTimeline({
+  comm,
+  record,
+  mutedClass,
+  showAuditDetail = false,
+}: {
+  comm: CoordinationCommunication;
+  record?: CoordinationRecord | null;
+  mutedClass: string;
+  showAuditDetail?: boolean;
+}) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  const events = buildCommunicationReviewTimeline(comm, record);
+  const meta = (comm.agent_processed_metadata || {}) as Record<string, unknown>;
+
+  if (events.length === 0) {
+    return <p className={cn("text-[11px]", mutedClass)}>No review history yet.</p>;
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <ul className="space-y-1.5 border-l border-border/60 pl-3">
+        {events.map((event, index) => (
+          <li key={`${event.label}-${index}`} className={cn("text-[11px]", mutedClass)}>
+            <span className="font-medium text-foreground">{event.label}</span>
+            {event.at ? ` · ${formatOperatorTimelineWhen(event.at)}` : null}
+            {event.detail ? <p className="mt-0.5">{event.detail}</p> : null}
+          </li>
+        ))}
+      </ul>
+      {showAuditDetail ? (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[10px]"
+            onClick={() => setAuditOpen((value) => !value)}
+          >
+            {auditOpen ? "Hide audit detail" : "Audit detail"}
+          </Button>
+          {auditOpen ? (
+            <pre
+              className={cn(
+                "max-h-40 overflow-auto rounded bg-muted/20 p-2 font-mono text-[10px]",
+                mutedClass,
+              )}
+            >
+              {JSON.stringify(
+                {
+                  reviewed_by: comm.reviewed_by,
+                  reviewed_at: comm.reviewed_at,
+                  review_decision: meta.review_decision ?? null,
+                  stage_5_incomplete: meta.stage_5_incomplete ?? null,
+                  stage_5_completion: meta.stage_5_completion ?? null,
+                  classification: comm.classification,
+                  confidence: comm.classification_confidence,
+                },
+                null,
+                2,
+              )}
+            </pre>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Lightweight Confirm / Flag actions for operational queues (Inbox, Needs Attention). */
+export function CommunicationQuickActions({
+  comm,
+  record,
+  providerName,
+  busy,
+  onConfirm,
+  onFlagForReview,
+  toolbarOutlineButtonClass,
+  workspaceHref,
+}: {
+  comm: CoordinationCommunication;
+  record?: CoordinationRecord | null;
+  providerName?: string | null;
+  busy: boolean;
+  onConfirm?: (communicationId: string, classification: string) => void;
+  onFlagForReview?: (communicationId: string) => void;
+  toolbarOutlineButtonClass: string;
+  workspaceHref?: string;
+}) {
+  const model = buildCommunicationCardModel(comm, { providerName, record });
+  const flagged = Boolean(
+    (comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review,
+  );
+  const showComplexLink =
+    Boolean(workspaceHref) && (model.actions.showReclassify || model.actions.showReject);
+
+  if (!model.actions.showConfirm && !model.actions.showFlag && !showComplexLink) {
+    return null;
+  }
+
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <Select value={category} onValueChange={setCategory}>
-        <SelectTrigger className="h-7 w-[180px] text-[11px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {UCI_COMMUNICATION_CATEGORIES.map((cat) => (
-            <SelectItem key={cat} value={cat}>
-              {formatCommunicationClassification(cat)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={toolbarOutlineButtonClass}
-        disabled={busy}
-        onClick={() => onReclassify(comm.id, category)}
-      >
-        {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-        Reclassify
-      </Button>
-      {onConfirm ? (
+      {model.actions.showConfirm && onConfirm ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
           className={toolbarOutlineButtonClass}
           disabled={busy}
-          onClick={() => onConfirm(comm.id, category)}
+          onClick={() => onConfirm(comm.id, comm.classification || "acknowledgment")}
         >
+          {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
           Confirm
         </Button>
       ) : null}
-      {onFlagForReview ? (
+      {model.actions.showFlag && onFlagForReview ? (
         <Button
           type="button"
           size="sm"
@@ -263,21 +441,126 @@ export function CommunicationReclassifyRow({
           {flagged ? "Flagged" : "Flag for review"}
         </Button>
       ) : null}
-      {onReject ? (
+      {showComplexLink ? (
         <Button
           type="button"
           size="sm"
-          variant="outline"
-          className={toolbarOutlineButtonClass}
-          disabled={busy}
-          onClick={() => onReject(comm.id)}
+          variant="ghost"
+          className="h-7 px-2 text-[11px]"
+          asChild
         >
-          Reject
+          <Link to={workspaceHref!}>Reclassify or reject in workspace</Link>
         </Button>
       ) : null}
-      <span className={cn("text-[10px]", mutedClass)}>
-        {flagged ? "Auto-lifecycle blocked pending review" : "Human override preserved"}
-      </span>
+    </div>
+  );
+}
+
+export function CommunicationOperatorCard({
+  comm,
+  providerName,
+  record,
+  busy,
+  onReclassify,
+  onFlagForReview,
+  onConfirm,
+  onReject,
+  mutedClass,
+  toolbarOutlineButtonClass,
+  cardClassName,
+}: {
+  comm: CoordinationCommunication;
+  providerName?: string | null;
+  record?: CoordinationRecord | null;
+  busy: boolean;
+  onReclassify?: (communicationId: string, classification: string) => void;
+  onFlagForReview?: (communicationId: string) => void;
+  onConfirm?: (communicationId: string, classification: string) => void;
+  onReject?: (communicationId: string) => void;
+  mutedClass: string;
+  toolbarOutlineButtonClass: string;
+  cardClassName?: string;
+}) {
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const model = buildCommunicationCardModel(comm, { providerName, record });
+
+  return (
+    <div className={cardClassName}>
+      <div className="flex flex-wrap items-center gap-2">
+        {model.directionLabel ? <Badge variant="outline">{model.directionLabel}</Badge> : null}
+        {model.actions.needsAttention ? (
+          <Badge variant="destructive">Needs attention</Badge>
+        ) : model.actions.resolved ? (
+          <Badge variant="secondary">Resolved</Badge>
+        ) : null}
+      </div>
+      <p className="mt-2 font-medium text-foreground">{model.title}</p>
+      {model.subtitle ? <p className={cn("mt-0.5 text-xs", mutedClass)}>{model.subtitle}</p> : null}
+      {model.actions.needsAttention && model.attentionReasons.length > 1 ? (
+        <ul className={cn("mt-1 list-disc pl-4 text-[11px]", mutedClass)}>
+          {model.attentionReasons.slice(1).map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+      {model.detailLine ? (
+        <p className={cn("mt-1 text-xs tabular-nums", mutedClass)}>{model.detailLine}</p>
+      ) : null}
+      {model.nextLine ? <p className={cn("mt-1 text-xs", mutedClass)}>{model.nextLine}</p> : null}
+      {!model.isAcknowledgment && model.displaySubject !== "(no subject)" ? (
+        <p className={cn("mt-1 text-xs", mutedClass)}>{model.displaySubject}</p>
+      ) : null}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {model.actions.showViewMessage && comm.raw_body ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => setMessageOpen((v) => !v)}
+          >
+            {messageOpen ? "Hide message" : "View message"}
+          </Button>
+        ) : null}
+        {model.actions.showViewHistory ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => setHistoryOpen((v) => !v)}
+          >
+            {historyOpen ? "Hide history" : "View history"}
+          </Button>
+        ) : null}
+      </div>
+      {messageOpen && comm.raw_body ? (
+        <pre className={cn("mt-2 max-h-40 overflow-auto rounded bg-muted/20 p-2 text-[11px] whitespace-pre-wrap", mutedClass)}>
+          {comm.raw_body}
+        </pre>
+      ) : null}
+      {historyOpen ? (
+        <CommunicationReviewTimeline
+          comm={comm}
+          record={record}
+          mutedClass={mutedClass}
+          showAuditDetail
+        />
+      ) : null}
+      {onReclassify ? (
+        <CommunicationReclassifyRow
+          comm={comm}
+          busy={busy}
+          actions={model.actions}
+          onReclassify={onReclassify}
+          onFlagForReview={onFlagForReview}
+          onConfirm={onConfirm}
+          onReject={onReject}
+          mutedClass={mutedClass}
+          toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+        />
+      ) : null}
     </div>
   );
 }

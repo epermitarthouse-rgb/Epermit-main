@@ -149,7 +149,15 @@ describe("UCI D11 portfolio", () => {
         { id: "c1", project_id: "proj-1", current_stage: 3, current_stage_state: "IN_PROGRESS", metadata: {} },
         { id: "c2", project_id: "proj-1", current_stage: 5, current_stage_state: "AWAITING_UTILITY", metadata: {} },
       ],
-      coordination_communications: [{ needs_human_attention: true }],
+      coordination_communications: [
+        {
+          id: "comm-1",
+          coordination_record_id: "c2",
+          direction: "inbound",
+          needs_human_attention: true,
+          classification: "unclassified",
+        },
+      ],
     };
     const supabase = createMockSupabase(tables);
 
@@ -193,6 +201,9 @@ function createMockSupabase(tables) {
           return api;
         },
         order() {
+          return api;
+        },
+        limit() {
           return api;
         },
         range() {

@@ -104,7 +104,7 @@ export const UCI_DRAWER_TABS: {
   { id: "load-profile", label: "Load profile", workspace: "Stages 2–4" },
   { id: "application-prep", label: "Application package", workspace: "Stages 2–4" },
   { id: "applications", label: "Utility applications", workspace: "Coordination" },
-  { id: "communications", label: "Communications", workspace: "Coordination" },
+  { id: "communications", label: "Communications", workspace: "Stage 5 · Utility acknowledgment" },
   { id: "cos", label: "Class of Service", workspace: "Decision & costs" },
   { id: "costs", label: "Costs & equipment", workspace: "Costs" },
   { id: "energization-closeout", label: "Energization & closeout", workspace: "Stages 8–10" },
@@ -112,27 +112,49 @@ export const UCI_DRAWER_TABS: {
 ];
 
 export const UCI_RECORD_WORKSPACE_GROUPS: Array<{
+  /** Primary milestone label in the workflow navigator */
   label: string;
+  /** Compact label for dense / mobile stepper chips */
+  shortLabel: string;
   tabs: UciDrawerTab[];
+  /**
+   * Lifecycle stages this group covers for progress styling.
+   * `null` = supporting/activity group (never marked completed by stage alone).
+   */
+  stageRange: [number, number] | null;
 }> = [
-  { label: "Setup", tabs: ["overview"] },
+  { label: "Setup", shortLabel: "Setup", tabs: ["overview"], stageRange: [0, 1] },
   {
     label: "Load, application & submission",
+    shortLabel: "Prepare & submit",
     tabs: ["documents", "load-profile", "application-prep"],
+    stageRange: [2, 4],
   },
   {
-    label: "Utility response (communications + COS)",
+    label: "Utility response",
+    shortLabel: "Utility response",
     tabs: ["applications", "communications", "cos"],
+    stageRange: [5, 6],
   },
-  { label: "Costs", tabs: ["costs"] },
-  { label: "Energization & closeout (Stages 8–10)", tabs: ["energization-closeout"] },
-  { label: "Activity & automation", tabs: ["portal-sync", "lifecycle"] },
+  { label: "Costs", shortLabel: "Costs", tabs: ["costs"], stageRange: [7, 7] },
+  {
+    label: "Energization & closeout",
+    shortLabel: "Energize",
+    tabs: ["energization-closeout"],
+    stageRange: [8, 10],
+  },
+  {
+    label: "Activity & automation",
+    shortLabel: "Activity",
+    tabs: ["portal-sync", "lifecycle"],
+    stageRange: null,
+  },
 ];
 
 /**
  * Full UCI section catalog (deep-links + hub). Sidebar uses
- * {@link UCI_PRIMARY_NAV_SECTIONS} only — no Partial badges in the shell
- * (whole UCI is WIP → Coming Soon / Soon).
+ * {@link UCI_PRIMARY_NAV_SECTIONS} only — Active/Foundation/Manual badges;
+ * unfinished foundations stay labeled separately from UAT-verified operations queues.
  */
 export const UCI_NAV_SECTIONS: UciNavSection[] = [
   {
@@ -166,7 +188,7 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     navGroup: "operations",
     section: "communications",
     target: { kind: "external", href: "/uci/inbox" },
-    note: "Cross-project foundation; record communications remain in the record workspace.",
+    note: "Stage 5 utility acknowledgment inbox — cross-project view with Confirm/Flag; full review in record workspace.",
     primaryNav: true,
   },
   {
@@ -177,7 +199,7 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     navGroup: "operations",
     section: "needs-attention",
     target: { kind: "external", href: "/uci/needs-attention" },
-    note: "Operational queue foundation with project and record deep links.",
+    note: "Stage 5 communications and application readiness queues with deep links to the record workspace.",
     primaryNav: true,
   },
   {
@@ -355,7 +377,7 @@ export function uciSectionHref(section: UciNavSectionId, extras?: { tab?: UciDra
   return `/uci?${params.toString()}`;
 }
 
-/** Sidebar status chip — whole UCI WIP; never show Partial. */
+/** Sidebar status chip for implemented UCI destinations. */
 export function uciSidebarBadgeLabel(support?: UciNavSupport): "Active" | "Foundation" | "Manual" | null {
   if (support === "active") return "Active";
   if (support === "foundation") return "Foundation";

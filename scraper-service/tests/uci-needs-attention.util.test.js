@@ -1,0 +1,122 @@
+"use strict";
+
+const { describe, it } = require("node:test");
+const assert = require("node:assert/strict");
+const {
+  isActionableNeedsAttentionCommunication,
+  isOutboundTransmission,
+  isOwnOutboundPackageEcho,
+} = require("../app/services/uci/uci-needs-attention.util.js");
+
+describe("uci-needs-attention.util", () => {
+  it("excludes Stage 4 outbound package transmissions (null classification)", () => {
+    const row = {
+      direction: "outbound",
+      classification: null,
+      needs_human_attention: false,
+      raw_subject: "Utility Coordination Application Package — Highland Springs",
+      agent_processed_metadata: {
+        source: "stage4_live_transmit",
+        stage5_handoff: true,
+      },
+    };
+    assert.equal(isOwnOutboundPackageEcho(row), true);
+    assert.equal(isOutboundTransmission(row), true);
+    assert.equal(isActionableNeedsAttentionCommunication(row), false);
+  });
+
+  it("excludes PEPCO outbound unclassified portal messages", () => {
+    const row = {
+      direction: "outbound",
+      classification: null,
+      needs_human_attention: true,
+      raw_subject: "Submitted",
+      sender: "Portal user",
+      recipient: "PEPCO",
+      agent_processed_metadata: { source: "portal_sync", provider_slug: "pepco" },
+    };
+    assert.equal(isActionableNeedsAttentionCommunication(row), false);
+  });
+
+  it("includes unclassified inbound utility communications", () => {
+    const row = {
+      direction: "inbound",
+      classification: null,
+      needs_human_attention: false,
+      raw_subject: "Your application update",
+    };
+    assert.equal(isActionableNeedsAttentionCommunication(row), true);
+  });
+
+  it("includes low-confidence inbound classification", () => {
+    const row = {
+      direction: "inbound",
+      classification: "status_update",
+      classification_confidence: 0.4,
+      needs_human_attention: false,
+    };
+    assert.equal(isActionableNeedsAttentionCommunication(row), true);
+  });
+
+  it("excludes rejected and completed acknowledgments", () => {
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "unclassified",
+        needs_human_attention: true,
+        agent_processed_metadata: { rejected_irrelevant: true },
+      }),
+      false,
+    );
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "acknowledgment",
+        needs_human_attention: true,
+        agent_processed_metadata: { stage_5_auto_completed: true },
+      }),
+      false,
+    );
+  });
+
+  it("excludes confirmed/resolved review items", () => {
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "acknowledgment",
+        needs_human_attention: false,
+        reviewed_at: "2026-08-19T12:00:00.000Z",
+        agent_processed_metadata: {
+          human_confirmed: true,
+          review_decision: { action: "confirm" },
+        },
+      }),
+      false,
+    );
+  });
+
+  it("includes flagged-for-review and missing acknowledgment data", () => {
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "acknowledgment",
+        classification_confidence: 0.95,
+        needs_human_attention: false,
+        agent_processed_metadata: { flagged_for_review: true },
+      }),
+      true,
+    );
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "acknowledgment",
+        classification_confidence: 0.95,
+        needs_human_attention: true,
+        agent_processed_metadata: {
+          stage_5_incomplete: { reason: "missing_utility_pm" },
+        },
+      }),
+      true,
+    );
+  });
+});

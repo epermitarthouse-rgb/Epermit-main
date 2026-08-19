@@ -4,6 +4,7 @@
  * Graph inbound email ingestion into the shared communications model (Phases §7.1).
  * Reuses per-user Microsoft mailbox OAuth (same as PEPCO MFA / Stage 4 transmit).
  * Idempotent on Graph message id / internetMessageId.
+ * Self-send echoes of known outbound transmissions are linked — not re-ingested as Needs Attention.
  */
 
 const crypto = require("crypto");
@@ -16,6 +17,172 @@ const { classifySingleCommunication } = require("./uci-communication-classifier.
 const { emitUciEvent } = require("./uci-events.service.js");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+
+const OWN_PACKAGE_SUBJECT_RE = /utility\s+coordination\s+application\s+package/i;
+
+/**
+ * @param {string | null | undefined} a
+ * @param {string | null | undefined} b
+ */
+function emailsEqual(a, b) {
+  const left = String(a || "")
+    .trim()
+    .toLowerCase();
+  const right = String(b || "")
+    .trim()
+    .toLowerCase();
+  return Boolean(left && right && left === right);
+}
+
+/**
+ * Detect Graph inbox echo of our own Stage 4 outbound transmission (self-send / Sent Items).
+ * Does not suppress genuine utility replies (different sender).
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} normalized
+ */
+async function findLinkedOutboundEcho(supabase, normalized) {
+  const subject = String(normalized.raw_subject || "").trim();
+  const sender = String(normalized.sender || "")
+    .trim()
+    .toLowerCase();
+  const conversationId = normalized.conversation_id || normalized.thread_id || null;
+  const internetMessageId = normalized.internet_message_id
+    ? String(normalized.internet_message_id)
+    : null;
+  const graphId = normalized.external_message_id ? String(normalized.external_message_id) : null;
+
+  /** @type {Array<Record<string, unknown>>} */
+  let candidates = [];
+
+  if (conversationId) {
+    const { data } = await supabase
+      .from("coordination_communications")
+      .select("*")
+      .eq("direction", "outbound")
+      .eq("thread_id", String(conversationId))
+      .order("message_timestamp", { ascending: false })
+      .limit(8);
+    if (Array.isArray(data)) candidates.push(...data);
+  }
+
+  if (graphId) {
+    const { data } = await supabase
+      .from("coordination_communications")
+      .select("*")
+      .eq("direction", "outbound")
+      .eq("external_message_id", graphId)
+      .limit(4);
+    if (Array.isArray(data)) candidates.push(...data);
+  }
+
+  if (subject && candidates.length === 0) {
+    const { data } = await supabase
+      .from("coordination_communications")
+      .select("*")
+      .eq("direction", "outbound")
+      .eq("raw_subject", subject)
+      .order("message_timestamp", { ascending: false })
+      .limit(12);
+    if (Array.isArray(data)) candidates.push(...data);
+  }
+
+  const seen = new Set();
+  for (const outbound of candidates) {
+    if (!outbound?.id || seen.has(String(outbound.id))) continue;
+    seen.add(String(outbound.id));
+
+    const outMeta =
+      outbound.agent_processed_metadata &&
+      typeof outbound.agent_processed_metadata === "object" &&
+      !Array.isArray(outbound.agent_processed_metadata)
+        ? /** @type {Record<string, unknown>} */ (outbound.agent_processed_metadata)
+        : {};
+
+    const outSender = String(outbound.sender || "")
+      .trim()
+      .toLowerCase();
+    const outInternet =
+      outMeta.internet_message_id != null ? String(outMeta.internet_message_id) : null;
+    const sameGraphId =
+      graphId && outbound.external_message_id && String(outbound.external_message_id) === graphId;
+    const sameInternet =
+      internetMessageId && outInternet && internetMessageId === outInternet;
+    const sameThread =
+      conversationId &&
+      outbound.thread_id &&
+      String(outbound.thread_id) === String(conversationId);
+    const sameSubject =
+      subject &&
+      outbound.raw_subject &&
+      String(outbound.raw_subject).trim() === subject;
+    const senderIsSelf = Boolean(sender && outSender && emailsEqual(sender, outSender));
+
+    // Self-send: sender matches the outbound Commun-ET mailbox (or exact Graph/internet id).
+    const isSelfEcho =
+      sameGraphId ||
+      sameInternet ||
+      (senderIsSelf && (sameThread || sameSubject)) ||
+      (OWN_PACKAGE_SUBJECT_RE.test(subject) &&
+        senderIsSelf &&
+        (sameSubject || sameThread) &&
+        (outMeta.source === "stage4_live_transmit" || outMeta.stage5_handoff === true));
+
+    if (!isSelfEcho) continue;
+
+    // Extra safety: never treat a different sender as echo when only thread matches.
+    if (!sameGraphId && !sameInternet && sender && outSender && !senderIsSelf) {
+      continue;
+    }
+
+    return outbound;
+  }
+
+  return null;
+}
+
+/**
+ * Annotate existing outbound with inbox echo metadata; do not create a new inbound row.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} outbound
+ * @param {object} normalized
+ */
+async function linkOutboundEcho(supabase, outbound, normalized) {
+  const existingMeta =
+    outbound.agent_processed_metadata &&
+    typeof outbound.agent_processed_metadata === "object" &&
+    !Array.isArray(outbound.agent_processed_metadata)
+      ? /** @type {Record<string, unknown>} */ (outbound.agent_processed_metadata)
+      : {};
+
+  const patchMeta = {
+    ...existingMeta,
+    internet_message_id:
+      existingMeta.internet_message_id || normalized.internet_message_id || null,
+    inbound_echo: {
+      linked_at: new Date().toISOString(),
+      graph_message_id: normalized.external_message_id || null,
+      internet_message_id: normalized.internet_message_id || null,
+      conversation_id: normalized.conversation_id || null,
+      idempotency_key: normalized.idempotency_key || null,
+      reason: "self_send_or_sent_items_echo",
+    },
+  };
+
+  const { data } = await supabase
+    .from("coordination_communications")
+    .update({
+      needs_human_attention: false,
+      agent_processed_metadata: patchMeta,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", String(outbound.id))
+    .select("*")
+    .maybeSingle();
+
+  return data || { ...outbound, agent_processed_metadata: patchMeta, needs_human_attention: false };
+}
 
 /**
  * @param {string} accessToken
@@ -241,6 +408,34 @@ async function ingestInboundEmailMessage(supabase, params) {
     throw err;
   }
 
+  // Link self-send / Sent Items echoes to existing outbound transmission — do not create
+  // a second inbound Needs Attention row for our own application package.
+  const outboundEcho = await findLinkedOutboundEcho(supabase, normalized);
+  if (outboundEcho) {
+    const linked = await linkOutboundEcho(supabase, outboundEcho, normalized);
+    emitUciEvent(
+      "uci.communication.outbound_echo_linked",
+      {
+        outbound_communication_id: linked?.id || outboundEcho.id,
+        idempotency_key: normalized.idempotency_key,
+        graph_message_id: normalized.external_message_id,
+      },
+      { supabase },
+    );
+    return {
+      status: "linked_outbound_echo",
+      unmatched: null,
+      inserted: false,
+      match: {
+        matched: true,
+        coordination_record_id: linked?.coordination_record_id || outboundEcho.coordination_record_id,
+        reason: "outbound_echo",
+      },
+      communication: linked,
+      classification: null,
+    };
+  }
+
   const match = await matchInboundToCoordination(
     supabase,
     {
@@ -397,7 +592,6 @@ async function pollGraphInboundForUser(supabase, params) {
   /** @type {Array<Record<string, unknown>>} */
   const results = [];
   for (const message of values) {
-    // Skip drafts / sent-looking when from is self — still allow utility replies
     const normalized = normalizeGraphMessage(message);
     if (!normalized.external_message_id) continue;
 
@@ -510,4 +704,6 @@ module.exports = {
   ingestEmailInboundWebhook,
   upsertUnmatchedInbound,
   upsertMatchedCommunication,
+  findLinkedOutboundEcho,
+  linkOutboundEcho,
 };
