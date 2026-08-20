@@ -20,8 +20,8 @@ const settledCost = {
   actual_amount: 1000,
   client_approval_status: "approved",
   paid_at: "2026-08-10T00:00:00.000Z",
-  quickbooks_invoice_id: "QB-1",
   client_billed_at: "2026-08-11T00:00:00.000Z",
+  quickbooks_invoice_id: "QB-1",
 };
 
 describe("Track B guards", () => {
@@ -44,7 +44,7 @@ describe("Track B guards", () => {
     );
   });
 
-  it("canCompleteStage7 requires approved paid billed costs and open billing_hold blocks", () => {
+  it("canCompleteStage7 requires approved paid internally billed costs; QB sync optional", () => {
     assert.equal(canCompleteStage7({}, [settledCost]), true);
     assert.equal(canCompleteStage7({}, []), false);
     assert.equal(
@@ -52,12 +52,23 @@ describe("Track B guards", () => {
       false,
     );
     assert.equal(
+      canCompleteStage7({}, [
+        {
+          ...settledCost,
+          quickbooks_invoice_id: null,
+          qb_sync_status: "failed",
+          qb_last_error: "[QB_SUBSCRIPTION_INACTIVE] subscription ended",
+        },
+      ]),
+      true,
+    );
+    assert.equal(
       canCompleteStage7({}, [{ ...settledCost, quickbooks_invoice_id: null, client_billed_at: null, qb_sync_status: "retry" }]),
       false,
     );
   });
 
-  it("stage7BlockReasons surfaces QB failure for retry status", () => {
+  it("stage7BlockReasons surfaces QB failure only after internal client invoice exists", () => {
     const { stage7BlockReasons } = require("../app/services/uci/uci-lifecycle-guards.service.js");
     const { BLOCKED_REASON_CODES } = require("../app/services/uci/uci-lifecycle-constants.js");
     const reasons = stage7BlockReasons([
@@ -66,11 +77,23 @@ describe("Track B guards", () => {
         actual_amount: 1150,
         client_approval_status: "approved",
         paid_at: "2026-08-10T00:00:00.000Z",
+        client_billed_at: "2026-08-11T00:00:00.000Z",
         qb_sync_status: "retry",
       },
     ]);
     assert.ok(reasons.includes(BLOCKED_REASON_CODES.COST_QB_FAILED));
     assert.ok(!reasons.includes(BLOCKED_REASON_CODES.COST_APPROVAL_PENDING));
+
+    const pendingInternal = stage7BlockReasons([
+      {
+        id: "c1",
+        actual_amount: 1150,
+        client_approval_status: "approved",
+        paid_at: "2026-08-10T00:00:00.000Z",
+        qb_sync_status: "retry",
+      },
+    ]);
+    assert.ok(!pendingInternal.includes(BLOCKED_REASON_CODES.COST_QB_FAILED));
   });
 
   it("canEnterStage8 requires Stage 7 COMPLETED and settled costs", () => {

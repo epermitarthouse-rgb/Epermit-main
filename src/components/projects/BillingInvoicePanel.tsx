@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -17,7 +17,9 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { getScraperBaseUrl } from '@/lib/scraperBaseUrl';
+import { fetchProjectCoordinationCosts } from '@/lib/operations/operations-real-data';
 import { Project } from '@/types/project';
+import type { CoordinationCost } from '@/types/uci';
 import { cn } from '@/lib/utils';
 
 export type InvoiceMilestone = 'M1' | 'M2' | 'M3';
@@ -199,6 +201,18 @@ async function postInvoiceTrigger(body: Record<string, unknown>): Promise<Invoic
 
 export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoicePanelProps) {
   const gateMsg = billingGateMessage(project);
+  const [utilityInvoices, setUtilityInvoices] = useState<CoordinationCost[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchProjectCoordinationCosts(project.id).then(({ data }) => {
+      if (cancelled) return;
+      setUtilityInvoices(data.filter((row) => Boolean(row.client_billed_at)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id, onBillingRefresh]);
 
   const [modalMilestone, setModalMilestone] = useState<InvoiceMilestone | null>(null);
   const [reimbursementRaw, setReimbursementRaw] = useState('0');
@@ -350,6 +364,48 @@ export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoic
           {gateMsg}
         </div>
       ) : null}
+
+      <div className="space-y-2">
+        <h3 className="font-display text-lg font-normal tracking-tight text-foreground">
+          Utility client invoices
+        </h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          UCI passthrough invoices billed to the client from utility coordination costs. QuickBooks
+          invoice IDs appear when background sync succeeds.
+        </p>
+        {utilityInvoices.length === 0 ? (
+          <p className="rounded-lg border border-border bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
+            No utility client invoices yet for this project.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Cost type</th>
+                  <th className="px-3 py-2 font-medium text-right">Amount</th>
+                  <th className="px-3 py-2 font-medium">Client billed</th>
+                  <th className="px-3 py-2 font-medium">QB invoice</th>
+                  <th className="px-3 py-2 font-medium">QB status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {utilityInvoices.map((row) => (
+                  <tr key={row.id} className="border-b border-border/50">
+                    <td className="px-3 py-2 font-medium">{row.cost_type || 'Utility cost'}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatMoney(Number(row.actual_amount))}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{displayDateTime(row.client_billed_at)}</td>
+                    <td className="px-3 py-2 font-mono text-xs break-all">{displayLine(row.quickbooks_invoice_id)}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                      {row.qb_sync_status ? String(row.qb_sync_status).replace(/_/g, ' ') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {MILESTONE_DEFS.map(def => {

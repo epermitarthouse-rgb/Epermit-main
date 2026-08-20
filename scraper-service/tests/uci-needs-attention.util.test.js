@@ -40,6 +40,7 @@ describe("uci-needs-attention.util", () => {
           actual_amount: 1150,
           client_approval_status: "approved",
           paid_at: "2026-08-10T00:00:00.000Z",
+          client_billed_at: "2026-08-11T00:00:00.000Z",
           qb_sync_status: "failed",
         },
       ],

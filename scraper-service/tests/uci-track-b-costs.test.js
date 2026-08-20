@@ -9,7 +9,9 @@ const {
   createUciPassthroughInvoice,
   retryUciPassthroughInvoice,
   classifyQbInvoiceError,
+  ensureInternalClientInvoice,
 } = require("../app/services/uci/uci-qb-passthrough.service.js");
+const { canCompleteStage7 } = require("../app/services/uci/uci-lifecycle-guards.service.js");
 const { createTrackBMockSupabase, stage6CompletedRecord } = require("./helpers/uci-track-b-mock.js");
 
 describe("Track B Agent 8 costs", () => {
@@ -83,6 +85,7 @@ describe("Track B Agent 8 costs", () => {
       paid_at: "2026-08-10T00:00:00.000Z",
       actual_amount: 1500,
       cost_type: "CIAC",
+      client_approval_status: "approved",
       qb_attempt_count: 0,
     };
     assert.equal(requestIdForCost(cost), "cost-abc");
@@ -160,6 +163,7 @@ describe("Track B Agent 8 costs", () => {
       paid_at: "2026-08-10T00:00:00.000Z",
       actual_amount: 1150,
       cost_type: "CIAC",
+      client_approval_status: "approved",
       qb_attempt_count: 0,
     };
     const tables = {
@@ -184,6 +188,7 @@ describe("Track B Agent 8 costs", () => {
     assert.equal(result.retryable, false);
     assert.equal(result.error_code, "quickbooks_customer_missing");
     assert.equal(tables.coordination_costs[0].qb_sync_status, "failed");
+    assert.ok(tables.coordination_costs[0].client_billed_at);
     assert.match(String(tables.coordination_costs[0].qb_last_error), /client_name and\/or client_email/);
   });
 
@@ -195,6 +200,7 @@ describe("Track B Agent 8 costs", () => {
       paid_at: "2026-08-10T00:00:00.000Z",
       actual_amount: 1150,
       cost_type: "CIAC",
+      client_approval_status: "approved",
       qb_attempt_count: 0,
     };
     const tables = {
@@ -215,11 +221,12 @@ describe("Track B Agent 8 costs", () => {
     assert.equal(result.reason, "failed");
     assert.equal(result.retryable, false);
     assert.equal(tables.coordination_costs[0].qb_sync_status, "failed");
+    assert.ok(tables.coordination_costs[0].client_billed_at);
     assert.match(String(tables.coordination_costs[0].qb_last_error), /QB_NOT_CONNECTED/);
     assert.equal(tables.coordination_costs[0].quickbooks_invoice_id, undefined);
   });
 
-  it("manual retry is idempotent and stores external invoice id on success", async () => {
+  it("manual retry remains available after internal invoice with failed QB sync", async () => {
     const cost = {
       id: "cost-retry",
       project_id: "proj-1",
@@ -227,9 +234,11 @@ describe("Track B Agent 8 costs", () => {
       paid_at: "2026-08-10T00:00:00.000Z",
       actual_amount: 1150,
       cost_type: "CIAC",
+      client_approval_status: "approved",
+      client_billed_at: "2026-08-11T00:00:00.000Z",
       qb_sync_status: "failed",
       qb_attempt_count: 1,
-      qb_last_error: "[QB_NOT_CONNECTED] QuickBooks is not connected",
+      qb_last_error: "[QB_SUBSCRIPTION_INACTIVE] subscription ended",
     };
     const tables = {
       coordination_costs: [{ ...cost }],
@@ -267,6 +276,77 @@ describe("Track B Agent 8 costs", () => {
     assert.equal(classified.retryable, false);
   });
 
+  it("classifies inactive QuickBooks subscription as non-retryable failed", () => {
+    const classified = classifyQbInvoiceError(
+      Object.assign(
+        new Error(
+          "Invalid Company Status: Subscription period has ended or cancelled or there was a billing problem",
+        ),
+        { code: "QB_API_ERROR" },
+      ),
+    );
+    assert.equal(classified.status, "failed");
+    assert.equal(classified.retryable, false);
+    assert.equal(classified.code, "QB_SUBSCRIPTION_INACTIVE");
+  });
+
+  it("creates internal client invoice before QB sync and keeps it when QB fails", async () => {
+    const cost = {
+      id: "cost-qb-sub",
+      project_id: "proj-1",
+      coordination_record_id: "coord-1",
+      paid_at: "2026-08-10T00:00:00.000Z",
+      actual_amount: 1150,
+      cost_type: "CIAC",
+      client_approval_status: "approved",
+      qb_attempt_count: 0,
+    };
+    const tables = {
+      coordination_costs: [{ ...cost }],
+      projects: [{ id: "proj-1", name: "Highland Springs", client_name: "Client" }],
+      coordination_records: [stage6CompletedRecord()],
+    };
+    const supabase = createTrackBMockSupabase(tables);
+    const result = await createUciPassthroughInvoice(supabase, {
+      cost,
+      getValidConnectionFn: async () => {
+        const err = new Error(
+          "Invalid Company Status: Subscription period has ended or cancelled or there was a billing problem",
+        );
+        err.code = "QB_API_ERROR";
+        throw err;
+      },
+      queryFn: async () => ({}),
+    });
+    assert.equal(result.reason, "failed");
+    assert.equal(result.retryable, false);
+    assert.equal(result.error_code, "QB_SUBSCRIPTION_INACTIVE");
+    assert.ok(tables.coordination_costs[0].client_billed_at);
+    assert.equal(tables.coordination_costs[0].quickbooks_invoice_id, undefined);
+    assert.equal(tables.coordination_costs[0].qb_sync_status, "failed");
+    assert.equal(canCompleteStage7({}, [tables.coordination_costs[0]]), true);
+  });
+
+  it("ensureInternalClientInvoice is idempotent and visible for project invoice reads", async () => {
+    const cost = {
+      id: "cost-internal",
+      project_id: "proj-1",
+      coordination_record_id: "coord-1",
+      paid_at: "2026-08-10T00:00:00.000Z",
+      actual_amount: 900,
+      cost_type: "CIAC",
+      client_approval_status: "approved",
+      qb_sync_status: "not_ready",
+    };
+    const tables = { coordination_costs: [{ ...cost }] };
+    const supabase = createTrackBMockSupabase(tables);
+    const first = await ensureInternalClientInvoice(supabase, { cost });
+    assert.equal(first.ensured, true);
+    assert.ok(tables.coordination_costs[0].client_billed_at);
+    const second = await ensureInternalClientInvoice(supabase, { cost: tables.coordination_costs[0] });
+    assert.equal(second.reason, "already_billed");
+  });
+
   it("recordCostPayment triggers invoice attempt after utility paid", async () => {
     const tables = {
       coordination_costs: [
@@ -300,5 +380,6 @@ describe("Track B Agent 8 costs", () => {
     });
     assert.equal(createCalls, 1);
     assert.equal(tables.coordination_costs[0].quickbooks_invoice_id, "QB-PAY-1");
+    assert.ok(tables.coordination_costs[0].client_billed_at);
   });
 });

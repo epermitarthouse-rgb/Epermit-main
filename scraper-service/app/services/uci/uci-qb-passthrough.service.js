@@ -74,6 +74,17 @@ function classifyQbInvoiceError(err) {
   ]);
   const nonRetryablePattern =
     /customerId is required|not connected|authentication failed|OAuth is not configured|Could not resolve a QuickBooks item|client_name and\/or client_email|QuickBooks customer resolution failed/i;
+  const subscriptionInactivePattern =
+    /subscription period has ended|cancelled your subscription|Invalid Company Status|billing problem|trial or subscription period ended/i;
+
+  if (subscriptionInactivePattern.test(message)) {
+    return {
+      status: "failed",
+      code: code === "QB_API_ERROR" ? "QB_SUBSCRIPTION_INACTIVE" : code,
+      retryable: false,
+      message,
+    };
+  }
 
   if (nonRetryableCodes.has(code) || nonRetryablePattern.test(message)) {
     return { status: "failed", code, retryable: false, message };
@@ -163,6 +174,64 @@ async function resolveQbItemId(supabase, project, params = {}) {
   return itemId;
 }
 
+/**
+ * Persist internal client invoice (client_billed_at) before optional QB sync.
+ * Stage 7 gates on this timestamp, not on quickbooks_invoice_id.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function ensureInternalClientInvoice(supabase, params) {
+  const { cost, userId = null } = params;
+  if (!cost?.id) {
+    return { ensured: false, reason: "missing_cost" };
+  }
+  if (!cost.paid_at) {
+    return { ensured: false, reason: "not_paid" };
+  }
+  if (String(cost.client_approval_status || "") !== "approved") {
+    return { ensured: false, reason: "not_approved" };
+  }
+  if (cost.billing_hold === true && !cost.human_override_bill_at) {
+    return { ensured: false, reason: "billing_hold" };
+  }
+  if (Number(cost.actual_amount) == null || !Number.isFinite(Number(cost.actual_amount))) {
+    return { ensured: false, reason: "no_actual_amount" };
+  }
+  if (cost.client_billed_at) {
+    return { ensured: false, reason: "already_billed", cost };
+  }
+
+  const billedAt = new Date().toISOString();
+  const nextQbStatus =
+    String(cost.qb_sync_status || "") === "not_ready" ? "ready" : cost.qb_sync_status;
+  const { data: updated } = await supabase
+    .from("coordination_costs")
+    .update({
+      client_billed_at: billedAt,
+      qb_sync_status: nextQbStatus,
+      updated_at: billedAt,
+    })
+    .eq("id", cost.id)
+    .select("*")
+    .single();
+
+  emitUciEvent(
+    UCI_LIFECYCLE_EVENTS.COST_BILLED,
+    {
+      coordination_record_id: cost.coordination_record_id,
+      project_id: cost.project_id,
+      cost_id: cost.id,
+      request_id: requestIdForCost(cost),
+      user_id: userId,
+      internal_only: true,
+    },
+    { supabase },
+  );
+
+  return { ensured: true, cost: updated || cost, billed_at: billedAt };
+}
+
 async function markInvoiceSucceeded(supabase, params) {
   const { cost, invoiceId, userId = null, requestId = null } = params;
   const billedAt = new Date().toISOString();
@@ -226,21 +295,31 @@ async function createUciPassthroughInvoice(supabase, params) {
     return { created: false, reason: "no_actual_amount" };
   }
 
-  const requestId = requestIdForCost(cost);
+  const internal = await ensureInternalClientInvoice(supabase, { cost, userId });
+  if (internal.reason === "not_approved") {
+    return { created: false, reason: "not_approved" };
+  }
+  if (internal.reason === "billing_hold" || internal.reason === "no_actual_amount" || internal.reason === "not_paid") {
+    return { created: false, reason: internal.reason };
+  }
+  let workingCost = internal.cost || cost;
+
+  const requestId = requestIdForCost(workingCost);
   const attemptAt = new Date().toISOString();
   await supabase
     .from("coordination_costs")
     .update({
       qb_sync_status: "pending",
-      qb_attempt_count: Number(cost.qb_attempt_count || 0) + 1,
+      qb_attempt_count: Number(workingCost.qb_attempt_count || 0) + 1,
       updated_at: attemptAt,
     })
-    .eq("id", cost.id);
+    .eq("id", workingCost.id);
+  workingCost = { ...workingCost, qb_sync_status: "pending", qb_attempt_count: Number(workingCost.qb_attempt_count || 0) + 1 };
 
   const existing = await queryInvoiceByRequestId(supabase, { requestId, queryFn });
   if (existing.found && existing.invoice_id) {
     const updated = await markInvoiceSucceeded(supabase, {
-      cost,
+      cost: workingCost,
       invoiceId: existing.invoice_id,
       userId,
       requestId,
@@ -254,7 +333,7 @@ async function createUciPassthroughInvoice(supabase, params) {
     };
   }
 
-  const { project, record } = await loadProjectAndRecord(supabase, cost);
+  const { project, record } = await loadProjectAndRecord(supabase, workingCost);
 
   try {
     if (typeof params.getValidConnectionFn === "function") {
@@ -265,14 +344,18 @@ async function createUciPassthroughInvoice(supabase, params) {
   } catch (err) {
     const classified = classifyQbInvoiceError(err);
     const lastError = formatQbLastError(classified.code, classified.message);
-    await supabase
+    const failedAt = new Date().toISOString();
+    const { data: failedCost } = await supabase
       .from("coordination_costs")
       .update({
         qb_sync_status: classified.status,
         qb_last_error: lastError,
-        updated_at: new Date().toISOString(),
+        updated_at: failedAt,
       })
-      .eq("id", cost.id);
+      .eq("id", workingCost.id)
+      .select("*")
+      .single();
+    const latest = failedCost || workingCost;
     return {
       created: false,
       reason: classified.status === "failed" ? "failed" : "uncertain",
@@ -280,12 +363,15 @@ async function createUciPassthroughInvoice(supabase, params) {
       error_code: classified.code,
       retryable: classified.retryable,
       request_id: requestId,
+      cost: latest,
+      internal_billed: Boolean(latest.client_billed_at),
       billing: {
         qb_sync_status: classified.status,
         qb_last_error: lastError,
-        qb_attempt_count: Number(cost.qb_attempt_count || 0) + 1,
-        last_attempted_at: new Date().toISOString(),
-        next_retry_at: classified.retryable ? computeNextRetryAt(new Date().toISOString(), classified.status) : null,
+        qb_attempt_count: Number(workingCost.qb_attempt_count || 0),
+        client_billed_at: latest.client_billed_at ?? workingCost.client_billed_at ?? null,
+        last_attempted_at: failedAt,
+        next_retry_at: classified.retryable ? computeNextRetryAt(failedAt, classified.status) : null,
       },
     };
   }
@@ -302,14 +388,18 @@ async function createUciPassthroughInvoice(supabase, params) {
   } catch (err) {
     const classified = classifyQbInvoiceError(err);
     const lastError = formatQbLastError(classified.code, classified.message);
-    await supabase
+    const failedAt = new Date().toISOString();
+    const { data: failedCost } = await supabase
       .from("coordination_costs")
       .update({
         qb_sync_status: classified.status,
         qb_last_error: lastError,
-        updated_at: new Date().toISOString(),
+        updated_at: failedAt,
       })
-      .eq("id", cost.id);
+      .eq("id", workingCost.id)
+      .select("*")
+      .single();
+    const latest = failedCost || workingCost;
     return {
       created: false,
       reason: classified.status === "failed" ? "failed" : "uncertain",
@@ -317,29 +407,25 @@ async function createUciPassthroughInvoice(supabase, params) {
       error_code: classified.code,
       retryable: classified.retryable,
       request_id: requestId,
-      billing: {
-        qb_sync_status: classified.status,
-        qb_last_error: lastError,
-        qb_attempt_count: Number(cost.qb_attempt_count || 0) + 1,
-        last_attempted_at: new Date().toISOString(),
-        next_retry_at: classified.retryable ? computeNextRetryAt(new Date().toISOString(), classified.status) : null,
-      },
+      cost: latest,
+      internal_billed: Boolean(latest.client_billed_at),
+      billing: billingSnapshot({ ...latest, qb_sync_status: classified.status, qb_last_error: lastError, updated_at: failedAt }),
     };
   }
 
   const payload = {
     CustomerRef: { value: String(customerId) },
-    PrivateNote: memoForCost(project, record, cost),
-    CustomerMemo: { value: memoForCost(project, record, cost) },
+    PrivateNote: memoForCost(project, record, workingCost),
+    CustomerMemo: { value: memoForCost(project, record, workingCost) },
     Line: [
       {
         DetailType: "SalesItemLineDetail",
-        Amount: Number(cost.actual_amount),
-        Description: `Utility ${cost.cost_type} passthrough (zero markup)`,
+        Amount: Number(workingCost.actual_amount),
+        Description: `Utility ${workingCost.cost_type} passthrough (zero markup)`,
         SalesItemLineDetail: {
           ItemRef: { value: String(itemId) },
           Qty: 1,
-          UnitPrice: Number(cost.actual_amount),
+          UnitPrice: Number(workingCost.actual_amount),
         },
       },
     ],
@@ -370,7 +456,7 @@ async function createUciPassthroughInvoice(supabase, params) {
       });
     }
     const updated = await markInvoiceSucceeded(supabase, {
-      cost,
+      cost: workingCost,
       invoiceId,
       userId,
       requestId,
@@ -387,7 +473,7 @@ async function createUciPassthroughInvoice(supabase, params) {
     const requery = await queryInvoiceByRequestId(supabase, { requestId, queryFn });
     if (requery.found && requery.invoice_id) {
       const updated = await markInvoiceSucceeded(supabase, {
-        cost,
+        cost: workingCost,
         invoiceId: requery.invoice_id,
         userId,
         requestId,
@@ -403,14 +489,17 @@ async function createUciPassthroughInvoice(supabase, params) {
 
     const lastError = formatQbLastError(classified.code, classified.message);
     const failedAt = new Date().toISOString();
-    await supabase
+    const { data: failedCost } = await supabase
       .from("coordination_costs")
       .update({
         qb_sync_status: classified.status,
         qb_last_error: lastError,
         updated_at: failedAt,
       })
-      .eq("id", cost.id);
+      .eq("id", workingCost.id)
+      .select("*")
+      .single();
+    const latest = failedCost || workingCost;
 
     return {
       created: false,
@@ -419,13 +508,9 @@ async function createUciPassthroughInvoice(supabase, params) {
       error_code: classified.code,
       retryable: classified.retryable,
       request_id: requestId,
-      billing: {
-        qb_sync_status: classified.status,
-        qb_last_error: lastError,
-        qb_attempt_count: Number(cost.qb_attempt_count || 0) + 1,
-        last_attempted_at: failedAt,
-        next_retry_at: classified.retryable ? computeNextRetryAt(failedAt, classified.status) : null,
-      },
+      cost: latest,
+      internal_billed: Boolean(latest.client_billed_at),
+      billing: billingSnapshot({ ...latest, qb_sync_status: classified.status, qb_last_error: lastError, updated_at: failedAt }),
     };
   }
 }
@@ -568,6 +653,7 @@ module.exports = {
   parseQbLastError,
   computeNextRetryAt,
   billingSnapshot,
+  ensureInternalClientInvoice,
   createUciPassthroughInvoice,
   retryPendingUciInvoices,
   retryUciPassthroughInvoice,

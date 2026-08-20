@@ -56,7 +56,6 @@ function isCostSettled(cost) {
     actual != null &&
     String(cost.client_approval_status || "") === "approved" &&
     Boolean(cost.paid_at) &&
-    Boolean(cost.quickbooks_invoice_id) &&
     Boolean(cost.client_billed_at)
   );
 }
@@ -66,7 +65,8 @@ function costHasOpenBillingHold(cost) {
 }
 
 /**
- * ≥1 known cost; each has actual, approved, paid_at, and QB invoice + client_billed_at.
+ * ≥1 known cost; each has actual, approved, paid_at, and internal client_billed_at.
+ * QuickBooks sync is optional metadata — qb_sync_status does not gate completion.
  * billing_hold without later bill keeps the stage OPEN.
  *
  * @param {Record<string, unknown>} record
@@ -341,6 +341,7 @@ function stage7BlockReasons(costs = []) {
     if (!cost.paid_at) reasons.push(BLOCKED_REASON_CODES.COST_UNPAID_INVOICE);
     const qbStatus = String(cost.qb_sync_status || "");
     if (
+      cost.client_billed_at &&
       cost.paid_at &&
       !cost.quickbooks_invoice_id &&
       ["retry", "failed", "uncertain"].includes(qbStatus)

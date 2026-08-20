@@ -1563,7 +1563,7 @@ export function CostsEquipmentWorkflowPanel({
             </Button>
           ) : (
             <p className={mutedClass}>
-              Stage 7 completes when every known cost is approved, paid, and billed to the client.
+              Stage 7 completes when every known cost is approved, paid, and billed to the client. QuickBooks sync is optional.
             </p>
           )}
         </CardContent>

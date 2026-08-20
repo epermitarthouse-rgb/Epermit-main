@@ -272,7 +272,7 @@ export async function fetchProjectCoordinationCosts(
   const { data, error } = await client
     .from("coordination_costs")
     .select(
-      "id, coordination_record_id, project_id, cost_type, estimated_amount, estimated_at, actual_amount, actual_received_at, variance_pct, invoice_received_doc_ref, paid_at, payment_method, client_billed_at, quickbooks_invoice_id, notes, created_at, updated_at",
+      "id, coordination_record_id, project_id, cost_type, estimated_amount, estimated_at, actual_amount, actual_received_at, variance_pct, invoice_received_doc_ref, paid_at, payment_method, client_billed_at, quickbooks_invoice_id, qb_sync_status, qb_last_error, notes, created_at, updated_at",
     )
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
