@@ -1461,6 +1461,16 @@ export function CostsEquipmentWorkflowPanel({
                   {cost.qb_attempt_count != null && cost.qb_attempt_count > 0 ? (
                     <p className={`${mutedClass} text-[10px]`}>Invoice attempts: {cost.qb_attempt_count}</p>
                   ) : null}
+                  {canRetryClientInvoice(cost) && cost.updated_at ? (
+                    <p className={`${mutedClass} text-[10px]`}>
+                      Last invoice attempt {formatWhen(cost.updated_at)}
+                    </p>
+                  ) : null}
+                  {cost.quickbooks_invoice_id ? (
+                    <p className={`${mutedClass} text-[10px]`}>
+                      QuickBooks invoice {cost.quickbooks_invoice_id}
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap gap-1.5">
                     {approval !== "approved" && onApproveCost ? (
                       <Button

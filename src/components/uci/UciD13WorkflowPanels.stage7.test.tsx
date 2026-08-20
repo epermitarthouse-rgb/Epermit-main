@@ -28,4 +28,16 @@ describe("CostsEquipmentWorkflowPanel Stage 7 zero-cost regression", () => {
     assert.match(dashboardSource, /<CostsEquipmentWorkflowPanel/);
     assert.match(dashboardSource, /detail\.costs \?\? \[\]/);
   });
+
+  it("surfaces QuickBooks retry controls and invoice failure context on cost rows", () => {
+    assert.match(panelSource, /function canRetryClientInvoice/);
+    assert.match(panelSource, /status === "failed" \|\| status === "retry" \|\| status === "uncertain"/);
+    assert.match(panelSource, /Retry client invoice/);
+    assert.match(panelSource, /cost\.qb_last_error/);
+    assert.match(panelSource, /Invoice attempts: \{cost\.qb_attempt_count\}/);
+    assert.match(panelSource, /Last invoice attempt \{formatWhen\(cost\.updated_at\)\}/);
+    assert.match(panelSource, /QuickBooks invoice \{cost\.quickbooks_invoice_id\}/);
+    assert.match(dashboardSource, /onRetryInvoice=\{\(costId\) =>/);
+    assert.match(dashboardSource, /retryCoordinationCostInvoice\(detailId!, costId\)/);
+  });
 });

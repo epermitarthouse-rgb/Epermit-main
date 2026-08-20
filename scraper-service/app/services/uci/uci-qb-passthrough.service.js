@@ -7,6 +7,7 @@
 
 const qbApi = require("../quickbooks/qb-api.service.js");
 const { getDefaultItemId, getDefaultItemName } = require("../quickbooks/qb-config.js");
+const { resolveProjectQbCustomerId } = require("../quickbooks/qb-project-customer.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
 const { UCI_LIFECYCLE_EVENTS, BLOCKED_REASON_CODES } = require("./uci-lifecycle-constants.js");
 const { resolveUciAlert } = require("./uci-alerts.service.js");
@@ -66,11 +67,13 @@ function classifyQbInvoiceError(err) {
     "QB_NOT_CONNECTED",
     "QB_CONFIG_MISSING",
     "QB_TOKEN_REFRESH_FAILED",
+    "QB_CUSTOMER_SAVE_FAILED",
     "quickbooks_not_connected",
     "quickbooks_item_missing",
+    "quickbooks_customer_missing",
   ]);
   const nonRetryablePattern =
-    /customerId is required|not connected|authentication failed|OAuth is not configured|Could not resolve a QuickBooks item/i;
+    /customerId is required|not connected|authentication failed|OAuth is not configured|Could not resolve a QuickBooks item|client_name and\/or client_email|QuickBooks customer resolution failed/i;
 
   if (nonRetryableCodes.has(code) || nonRetryablePattern.test(message)) {
     return { status: "failed", code, retryable: false, message };
@@ -126,45 +129,6 @@ async function loadProjectAndRecord(supabase, cost) {
       .maybeSingle(),
   ]);
   return { project: project || {}, record: record || {} };
-}
-
-async function resolveQbCustomerId(supabase, project, params = {}) {
-  const projectId = String(project.id || params.projectId || "");
-  let customerId =
-    project.qb_customer_id != null && String(project.qb_customer_id).trim()
-      ? String(project.qb_customer_id).trim()
-      : params.qbCustomerId != null && String(params.qbCustomerId).trim()
-        ? String(params.qbCustomerId).trim()
-        : "";
-
-  if (customerId) return customerId;
-
-  const displayName =
-    (project.client_name != null && String(project.client_name).trim()) ||
-    (project.client_email != null ? String(project.client_email).split("@")[0].trim() : "") ||
-    "Customer";
-  const email =
-    project.client_email != null && String(project.client_email).trim()
-      ? String(project.client_email).trim()
-      : undefined;
-
-  const createCustomerFn =
-    typeof params.getOrCreateCustomerFn === "function"
-      ? params.getOrCreateCustomerFn
-      : (opts) => qbApi.getOrCreateCustomer(supabase, opts);
-  const cust = await createCustomerFn({ name: displayName, email });
-  customerId = String(cust.id);
-
-  if (projectId) {
-    const { error } = await supabase.from("projects").update({ qb_customer_id: customerId }).eq("id", projectId);
-    if (error) {
-      throw Object.assign(new Error(`Failed to save qb_customer_id: ${error.message}`), {
-        code: "QB_CUSTOMER_SAVE_FAILED",
-      });
-    }
-  }
-
-  return customerId;
 }
 
 async function resolveQbItemId(supabase, project, params = {}) {
@@ -329,7 +293,7 @@ async function createUciPassthroughInvoice(supabase, params) {
   let customerId;
   let itemId;
   try {
-    customerId = await resolveQbCustomerId(supabase, project, {
+    customerId = await resolveProjectQbCustomerId(supabase, project, {
       projectId: cost.project_id,
       qbCustomerId: params.qbCustomerId,
       getOrCreateCustomerFn: params.getOrCreateCustomerFn,
@@ -385,13 +349,19 @@ async function createUciPassthroughInvoice(supabase, params) {
     const creator =
       typeof createInvoiceFn === "function"
         ? createInvoiceFn
-        : async () =>
-            qbApi.createDraftInvoice(supabase, {
+        : async () => {
+            if (!customerId || String(customerId).trim() === "") {
+              throw Object.assign(new Error("createDraftInvoice: customerId is required."), {
+                code: "quickbooks_customer_missing",
+              });
+            }
+            return qbApi.createDraftInvoice(supabase, {
               customerId,
               lines: payload.Line,
               privateNote: payload.PrivateNote,
               customerMemo: payload.CustomerMemo,
             });
+          };
     const created = await creator(payload);
     const invoiceId = created?.id || created?.invoice_id || extractInvoiceId(created);
     if (!invoiceId) {

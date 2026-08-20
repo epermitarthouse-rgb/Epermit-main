@@ -3,6 +3,10 @@
 const { generateInvoicePayload } = require("./qb-invoice-payload.js");
 const qbApi = require("./qb-api.service.js");
 const { getDefaultItemId, getDefaultItemName } = require("./qb-config.js");
+const {
+  validateProjectClientPresent,
+  resolveProjectQbCustomerId,
+} = require("./qb-project-customer.service.js");
 
 const MILESTONE_PCT = {
   M1: 0.4,
@@ -61,13 +65,6 @@ function milestoneDuplicateBlocked(project, milestone) {
     return Boolean(project.m3_triggered) || Boolean(project.qb_invoice_id_m3?.trim?.());
   }
   return false;
-}
-
-function validateClientPresent(project) {
-  const name = project.client_name != null ? String(project.client_name).trim() : "";
-  const email =
-    project.client_email != null ? String(project.client_email).trim() : "";
-  return name.length > 0 || email.length > 0;
 }
 
 /**
@@ -166,7 +163,7 @@ async function executeInvoiceTrigger(supabase, body) {
     );
   }
 
-  if (!validateClientPresent(project)) {
+  if (!validateProjectClientPresent(project)) {
     throw new InvoiceTriggerError(
       "invoice_trigger_validation_failed",
       "Project must have client_name and/or client_email.",
@@ -243,50 +240,22 @@ async function executeInvoiceTrigger(supabase, body) {
     );
   }
 
-  let customerId =
-    project.qb_customer_id != null &&
-    String(project.qb_customer_id).trim()
-      ? String(project.qb_customer_id).trim()
-      : "";
-
-  if (!customerId) {
-    const displayName =
-      (project.client_name != null && String(project.client_name).trim()) ||
-      (project.client_email != null
-        ? String(project.client_email).split("@")[0].trim()
-        : "") ||
-      "Customer";
-    const email =
-      project.client_email != null && String(project.client_email).trim()
-        ? String(project.client_email).trim()
-        : undefined;
-
-    try {
-      const cust = await qbApi.getOrCreateCustomer(supabase, {
-        name: displayName,
-        email,
-      });
-      customerId = cust.id;
-    } catch (e) {
+  let customerId;
+  try {
+    customerId = await resolveProjectQbCustomerId(supabase, project, { projectId });
+  } catch (e) {
+    const code = e && typeof e === "object" && e.code != null ? String(e.code) : "";
+    if (code === "quickbooks_customer_missing") {
       throw new InvoiceTriggerError(
-        "invoice_trigger_failed",
-        `QuickBooks customer resolution failed: ${e.message || String(e)}`,
-        502,
+        "invoice_trigger_validation_failed",
+        e.message || "Project must have client_name and/or client_email.",
       );
     }
-
-    const { error: custSaveErr } = await supabase
-      .from("projects")
-      .update({ qb_customer_id: customerId })
-      .eq("id", projectId);
-
-    if (custSaveErr) {
-      throw new InvoiceTriggerError(
-        "invoice_trigger_failed",
-        `Failed to save qb_customer_id: ${custSaveErr.message}`,
-        502,
-      );
-    }
+    throw new InvoiceTriggerError(
+      "invoice_trigger_failed",
+      e.message || String(e),
+      502,
+    );
   }
 
   let itemId = qbItemIdBody || null;

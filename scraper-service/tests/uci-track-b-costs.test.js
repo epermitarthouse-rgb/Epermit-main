@@ -149,6 +149,42 @@ describe("Track B Agent 8 costs", () => {
     assert.equal(result.invoice_id, "QB-1150");
     assert.equal(tables.coordination_costs[0].quickbooks_invoice_id, "QB-1150");
     assert.equal(tables.coordination_costs[0].qb_sync_status, "succeeded");
+    assert.equal(tables.projects[0].qb_customer_id, "CUST-HS");
+  });
+
+  it("fails closed when project has no qb_customer_id and no client contact", async () => {
+    const cost = {
+      id: "cost-no-client",
+      project_id: "proj-1",
+      coordination_record_id: "coord-1",
+      paid_at: "2026-08-10T00:00:00.000Z",
+      actual_amount: 1150,
+      cost_type: "CIAC",
+      qb_attempt_count: 0,
+    };
+    const tables = {
+      coordination_costs: [{ ...cost }],
+      projects: [{ id: "proj-1", name: "Highland Springs" }],
+      coordination_records: [stage6CompletedRecord()],
+    };
+    const supabase = createTrackBMockSupabase(tables);
+    let createCalls = 0;
+    const result = await createUciPassthroughInvoice(supabase, {
+      cost,
+      getValidConnectionFn: async () => ({}),
+      queryFn: async () => ({}),
+      createInvoiceFn: async () => {
+        createCalls += 1;
+        return { id: "QB-SHOULD-NOT-RUN" };
+      },
+      qbItemId: "ITEM-1",
+    });
+    assert.equal(createCalls, 0);
+    assert.equal(result.reason, "failed");
+    assert.equal(result.retryable, false);
+    assert.equal(result.error_code, "quickbooks_customer_missing");
+    assert.equal(tables.coordination_costs[0].qb_sync_status, "failed");
+    assert.match(String(tables.coordination_costs[0].qb_last_error), /client_name and\/or client_email/);
   });
 
   it("stores actionable failed state when QuickBooks is not connected", async () => {
