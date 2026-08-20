@@ -55,14 +55,28 @@ function isGasConstructionScheduleDocument(name, text) {
  * @param {string} name
  * @param {string} text
  */
-function shouldParseAsGasDocument(name, text) {
+function hasGasDomainSignals(name, text) {
   const haystack = `${name} ${String(text ?? "").slice(0, 4000)}`;
-  if (/\bGAS\b/i.test(name) || /\b(BTU\s*\/?\s*H|BTUH|GAS[\s-]*LOAD)\b/i.test(haystack)) {
+  return (
+    /\bGAS\b/i.test(name) ||
+    /\b(BTU\s*\/?\s*H|BTUH|CFH|GAS[\s-]*LOAD|WASHINGTON[\s-]*GAS|\bWGL\b)\b/i.test(haystack)
+  );
+}
+
+/**
+ * @param {string} name
+ * @param {string} text
+ */
+function shouldParseAsGasDocument(name, text) {
+  if (hasGasDomainSignals(name, text)) {
     return true;
   }
   const docType = classifyDocumentType({ file_name: name, text });
+  // load_profile also matches electric load letters — never route those through gas parsing.
+  if (docType === "load_profile") {
+    return false;
+  }
   return [
-    "load_profile",
     "equipment_schedule",
     "service_plan",
     "meter_regulator",

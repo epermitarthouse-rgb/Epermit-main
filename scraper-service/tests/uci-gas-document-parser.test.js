@@ -6,6 +6,7 @@ const {
   extractGasDocumentFindingsFromText,
   extractGasConstructionScheduleDates,
   normalizeGasPressureValue,
+  shouldParseAsGasDocument,
 } = require("../app/services/uci/uci-gas-document-parser.service.js");
 const { extractCandidatesFromKnownDocumentText } = require("../app/services/uci/uci-load-candidate.service.js");
 
@@ -215,5 +216,16 @@ describe("uci-gas-document-parser", () => {
       "02/22/2027",
     );
     assert.ok(!construction.some((finding) => finding.field_key === "connected_load_btuh"));
+  });
+
+  it("does not route electric load letters through the gas parser", () => {
+    const electricText = [
+      "Project connected load 410 kVA",
+      "Project demand load 315 kVA",
+      "Requested service amperage 1000 A",
+    ].join("\n");
+    assert.equal(shouldParseAsGasDocument("01_Synthetic_Load_Letter.pdf", electricText), false);
+    assert.equal(shouldParseAsGasDocument("Electric Load Letter.pdf", electricText), false);
+    assert.equal(shouldParseAsGasDocument("01_GAS_LOAD_PROFILE.pdf", "Connected Load 600,000 BTUH"), true);
   });
 });

@@ -913,4 +913,46 @@ describe("uci-document-processing.service", () => {
     assert.ok(findings.some((f) => f.uci_stages.includes("agent_2_load_profile")));
     assert.ok(!findings.some((f) => f.field_key === "service_amperage"));
   });
+
+  it("extracts electric synthetic load letter project totals for two projects with identical text", () => {
+    const text = [
+      "Groundbreak 02/22/2027",
+      "Requested service amperage 1000 A",
+      "Requested voltage 120/208 V",
+      "Wire configuration 4 wire",
+      "Meter count 1",
+      "Project connected load 410 kVA",
+      "Project demand load 315 kVA",
+      "Requested in-service target 01/15/2027",
+    ].join("\n");
+
+    for (const [projectId, contentHash] of [
+      ["proj-highland-springs", "hash-highland-load-letter"],
+      ["proj-culpeper", "hash-culpeper-load-letter"],
+    ]) {
+      const { findings } = extractBroadFindingsFromPages(
+        [{ pageNumber: 1, text }],
+        {
+          source_type: "manual_upload",
+          source_document_name: "01_Synthetic_Load_Letter.pdf",
+          source_document_id: `${projectId}-load-letter`,
+          source_content_hash: contentHash,
+          external_application_id: "",
+        },
+        `uci_doc:${projectId}`,
+        ["supporting_document"],
+      );
+
+      const connected = findings.find((f) => f.field_key === "connected_load_kva");
+      const demand = findings.find((f) => f.field_key === "demand_load_kva");
+      assert.equal(connected?.normalized_value, 410, projectId);
+      assert.equal(demand?.normalized_value, 315, projectId);
+      assert.equal(connected?.entity_type, "project_service", projectId);
+      assert.equal(demand?.entity_type, "project_service", projectId);
+      assert.equal(connected?.is_project_total, true, projectId);
+      assert.equal(demand?.is_project_total, true, projectId);
+      assert.equal(connected?.package_eligible, true, projectId);
+      assert.equal(demand?.package_eligible, true, projectId);
+    }
+  });
 });

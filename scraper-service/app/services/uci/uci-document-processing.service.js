@@ -866,6 +866,8 @@ function candidateRecordToFinding(candidate, documentId, documentRoles) {
     unit: candidate.unit != null ? String(candidate.unit) : null,
     entity_type: candidate.entity_type != null ? String(candidate.entity_type) : "",
     entity_name: candidate.entity_name != null ? String(candidate.entity_name) : null,
+    is_project_total:
+      candidate.is_project_total != null ? Boolean(candidate.is_project_total) : null,
     page_number: candidate.page_number != null ? Number(candidate.page_number) : null,
     evidence_text: String(candidate.evidence_text ?? "").slice(0, 500),
     evidence_fingerprint:
@@ -1095,10 +1097,10 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
     const hasComcheck = isComcheckRole || detectComcheckReportText(text);
     const hasEquipmentSchedule =
       isEquipmentScheduleRole || detectEquipmentScheduleText(text);
-    const hasGasLoadDocument =
-      documentRoles.includes("load_calculation") ||
-      documentRoles.includes("meter_or_service_evidence") ||
-      shouldParseAsGasDocument(String(source.source_document_name ?? ""), text);
+    const hasGasLoadDocument = shouldParseAsGasDocument(
+      String(source.source_document_name ?? ""),
+      text,
+    );
     const hasUtilityApplication =
       isUtilityApplicationRole ||
       /\bService\s+Installation\s*&\s*Upgrades\s+Application\b/i.test(text) ||
