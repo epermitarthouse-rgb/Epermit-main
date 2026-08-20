@@ -260,6 +260,12 @@ import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator"
 import { NextStepNotice } from "@/components/uci/NextStepNotice";
 import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
+  buildStageStateMatrix,
+  isUnassignedRequiredProvider,
+  providerNeedsConfirmationReason,
+  stageStateEntries,
+} from "@/lib/uciLifecycleMatrix";
+import {
   buildInitializedSlugSet,
   countSelectedProviders,
   deriveAddressPresentation,
@@ -2474,7 +2480,7 @@ export default function UciDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, records.length]);
+  }, [projectId, records]);
 
   const hasPepcoDashboardCards =
     (pepcoDashboardFromMetadata?.cards.length ?? 0) > 0 ||
@@ -3137,8 +3143,8 @@ export default function UciDashboard() {
     }
   };
 
-  /** Real-data KPI + stage rail derived from portfolio/records — presentation only, no invented metrics. */
-  const uciCoordinationRecordCount = portfolio?.coordination_record_count ?? records.length;
+  /** Real-data KPI + stage rail derived from the same records as the table. */
+  const uciCoordinationRecordCount = records.length || portfolio?.coordination_record_count || 0;
   const uciNeedsAttentionCount = portfolio?.needs_attention_communication_count ?? 0;
   const uciMappedProviderCount = useMemo(() => {
     const names = new Set<string>();
@@ -3148,16 +3154,18 @@ export default function UciDashboard() {
     }
     return names.size;
   }, [records, providerDisplayLabel]);
-  const uciStageSummary = useMemo(() => portfolio?.stage_summary ?? {}, [portfolio]);
-  const uciStageStateMatrix = useMemo(() => {
-    const matrix = new Map<number, Map<string, number>>();
-    for (const record of records) {
-      const states = matrix.get(record.current_stage) ?? new Map<string, number>();
-      states.set(record.current_stage_state, (states.get(record.current_stage_state) ?? 0) + 1);
-      matrix.set(record.current_stage, states);
+  const uciStageStateMatrix = useMemo(() => buildStageStateMatrix(records), [records]);
+  const uciStageSummary = useMemo(() => {
+    const summary: Record<string, number> = {};
+    for (const [stage, bucket] of uciStageStateMatrix.stages) {
+      if (bucket.recordCount > 0) summary[String(stage)] = bucket.recordCount;
     }
-    return matrix;
-  }, [records]);
+    return summary;
+  }, [uciStageStateMatrix]);
+  const openAssignProvider = useCallback(() => {
+    setSetupSectionExpanded(true);
+    document.getElementById("uci-setup-workflow")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const uciCompletedRecordCount = useMemo(
     () => records.filter((record) => record.current_stage_state === "COMPLETED").length,
     [records],
@@ -3169,15 +3177,33 @@ export default function UciDashboard() {
       ).length,
     [records],
   );
-  const uciAttentionRecords = useMemo(
-    () => (portfolio?.records ?? []).filter((r) => r.needs_attention_count > 0),
-    [portfolio],
+  const uciUnassignedRecords = useMemo(
+    () => records.filter((record) => isUnassignedRequiredProvider(record)),
+    [records],
   );
+  const uciAttentionRecords = useMemo(() => {
+    const flagged = (portfolio?.records ?? []).filter((r) => r.needs_attention_count > 0);
+    const seen = new Set(flagged.map((r) => r.id));
+    const unassigned = uciUnassignedRecords
+      .filter((record) => !seen.has(record.id))
+      .map((record) => ({
+        id: record.id,
+        utility_type: record.utility_type,
+        current_stage: record.current_stage,
+        current_stage_state: record.current_stage_state,
+        needs_attention_count: 0,
+        updated_at: record.updated_at,
+        unassigned: true as const,
+      }));
+    return [...unassigned, ...flagged];
+  }, [portfolio, uciUnassignedRecords]);
   const uciPrimaryNextAction = !projectId
     ? "Select a project to begin utility coordination."
     : records.length === 0
       ? "Confirm providers and initialize coordination records."
-      : uciAttentionRecords.length > 0
+      : uciUnassignedRecords.length > 0
+        ? providerNeedsConfirmationReason(uciUnassignedRecords[0]?.utility_type)
+        : uciAttentionRecords.length > 0
         ? `Review ${uciAttentionRecords.length} coordination record(s) with flagged communications.`
         : uciRiskRecordCount > 0
           ? `Resolve ${uciRiskRecordCount} blocked or escalated coordination record(s).`
@@ -3515,8 +3541,8 @@ export default function UciDashboard() {
             ) : (
               <div className="flex items-start gap-1 overflow-x-auto pb-1">
                 {STAGE_OPTIONS.map((stage) => {
-                  const count = uciStageSummary[String(stage)] ?? 0;
-                  const states = Array.from(uciStageStateMatrix.get(stage)?.entries() ?? []);
+                  const count = uciStageStateMatrix.stages.get(stage)?.recordCount ?? 0;
+                  const states = stageStateEntries(uciStageStateMatrix.stages.get(stage));
                   return (
                     <div key={stage} className="flex min-w-[92px] flex-1 flex-col items-center gap-1.5">
                       <div
@@ -3601,8 +3627,18 @@ export default function UciDashboard() {
                         >
                           <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
                             <div className="space-y-1">
-                              <span>{prov ? providerDisplayLabel(prov) : "—"}</span>
-                              {getProviderMappingFromMetadata(r.metadata)?.confirmed_at ? (
+                              <span>
+                                {isUnassignedRequiredProvider(r)
+                                  ? "Not assigned"
+                                  : prov
+                                    ? providerDisplayLabel(prov)
+                                    : "—"}
+                              </span>
+                              {isUnassignedRequiredProvider(r) ? (
+                                <p className="text-[10px] font-normal text-muted-foreground">
+                                  {providerNeedsConfirmationReason(r.utility_type)}
+                                </p>
+                              ) : getProviderMappingFromMetadata(r.metadata)?.confirmed_at ? (
                                 <Badge variant="outline" className="text-[10px]">
                                   Mapping confirmed
                                 </Badge>
@@ -3629,7 +3665,12 @@ export default function UciDashboard() {
                             {formatWhen(r.updated_at)}
                           </TableCell>
                           <TableCell className={uciTableCellClass}>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              {isUnassignedRequiredProvider(r) ? (
+                                <Button variant="default" size="sm" onClick={openAssignProvider}>
+                                  Assign provider
+                                </Button>
+                              ) : null}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -3680,7 +3721,9 @@ export default function UciDashboard() {
                             {r.utility_type ?? "Utility"} · Stage {r.current_stage}
                           </p>
                           <p className={cn("truncate", uciMutedClass)}>
-                            {r.needs_attention_count} flagged · {formatLifecycleState(r.current_stage_state)}
+                            {"unassigned" in r && r.unassigned
+                              ? providerNeedsConfirmationReason(r.utility_type)
+                              : `${r.needs_attention_count} flagged · ${formatLifecycleState(r.current_stage_state)}`}
                           </p>
                         </div>
                         <Button
@@ -3688,10 +3731,20 @@ export default function UciDashboard() {
                           variant="outline"
                           size="sm"
                           className="shrink-0"
-                          onClick={() => void openDetail(r.id)}
+                          onClick={() =>
+                            "unassigned" in r && r.unassigned
+                              ? openAssignProvider()
+                              : void openDetail(r.id)
+                          }
                         >
-                          <Eye className="mr-1 h-3.5 w-3.5" />
-                          View
+                          {"unassigned" in r && r.unassigned ? (
+                            "Assign provider"
+                          ) : (
+                            <>
+                              <Eye className="mr-1 h-3.5 w-3.5" />
+                              View
+                            </>
+                          )}
                         </Button>
                       </li>
                     ))}
@@ -4888,7 +4941,9 @@ function RecordManualMilestoneFoundations({
       <CardHeader className={uciDrawerChildCardHeaderClass}>
         <CardTitle className={uciDrawerChildCardTitleClass}>Easement / ROW</CardTitle>
         <CardDescription className="text-[11px]">
-          Optional notes for the deferred Easement / ROW foundation. Inspection release is recorded in the meter-set workflow below and stored on the coordination record.
+          Deferred Agent 7 capability. Easement / ROW automation is not enabled. Notes stay local
+          to this browser and are not a live UCI record. Inspection release is recorded on the
+          Energization & closeout tab — Agent 10 automation is also not enabled.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 px-4 py-4">

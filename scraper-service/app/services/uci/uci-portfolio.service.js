@@ -69,6 +69,7 @@ async function getProjectPortfolioView(supabase, projectId) {
     records: records.map((r) => ({
       id: r.id,
       utility_type: r.utility_type,
+      utility_provider_id: r.utility_provider_id ?? null,
       current_stage: r.current_stage,
       current_stage_state: r.current_stage_state,
       needs_attention_count: attentionCountByRecord.get(String(r.id)) || 0,

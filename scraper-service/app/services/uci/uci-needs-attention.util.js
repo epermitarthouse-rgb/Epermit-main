@@ -208,13 +208,25 @@ function listRecordNeedsAttention(record, ctx = {}) {
     }
   }
 
+  const costRows = Array.isArray(ctx.costs) ? ctx.costs : [];
+  if (stage === 7 && costRows.length < 1) {
+    codes = codes.filter((code) => code !== BLOCKED_REASON_CODES.COST_APPROVAL_PENDING);
+  }
+
   const unique = [...new Set(codes.filter(Boolean))];
-  return unique.map((code) => ({
+  if (!record.utility_provider_id) {
+    unique.push(BLOCKED_REASON_CODES.PROVIDER_MAPPING_BLOCKED);
+  }
+  const deduped = [...new Set(unique.filter(Boolean))];
+  return deduped.map((code) => ({
     kind: "record",
     coordination_record_id: record.id,
     project_id: record.project_id,
     code,
-    label: RECORD_REASON_LABELS[code] || String(code).replace(/_/g, " ").toLowerCase(),
+    label:
+      code === BLOCKED_REASON_CODES.PROVIDER_MAPPING_BLOCKED && record.utility_type
+        ? `${String(record.utility_type).charAt(0).toUpperCase()}${String(record.utility_type).slice(1)} provider needs confirmation`
+        : RECORD_REASON_LABELS[code] || String(code).replace(/_/g, " ").toLowerCase(),
     stage,
     state: record.current_stage_state,
   }));
@@ -240,6 +252,10 @@ function isActionableNeedsAttentionCommunication(row, record) {
   if (isRejected(row)) return false;
   if (isAutoCompletedAck(row, record)) return false;
   if (isManuallyResolved(row) && asMeta(row).flagged_for_review !== true) return false;
+  const stage6 = asRecord(asMeta(row).stage_6_cos);
+  if (stage6.auto_completed === true || asMeta(row).stage_6_auto_completed === true) return false;
+  const reviewStatus = String(stage6.review_status || "");
+  if (reviewStatus === "approved" || reviewStatus === "superseded") return false;
   return hasAttentionSignal(row);
 }
 

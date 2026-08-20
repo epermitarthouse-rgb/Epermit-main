@@ -1,0 +1,42 @@
+---
+description: Use only the epermitarthouse GitHub account for this repo (never jiyanaveed).
+alwaysApply: true
+---
+
+# GitHub identity: epermitarthouse only
+
+GitHub remote for this project is `origin` → `epermitarthouse-rgb/Epermit-main`.
+
+For **ALL** git/GitHub operations in this repo (PRs, `gh`, API, collaborator checks, reviews): use the **epermitarthouse-rgb** GitHub account only. Commit attribution is already set on the machine.
+
+## Never use personal accounts
+
+- NEVER use `jiyanaveed` or `daniyalAMBL` as the GitHub CLI / API identity for this project.
+- Do NOT fall back to `jiyanaveed` when `gh pr create` fails with "must be a collaborator". That means the wrong GitHub account is active — switch identity and retry.
+- Do NOT update git config (`user.name` / `user.email`).
+
+## Before any GitHub API call
+
+Before `gh pr create`, `gh api`, or other GitHub API calls, check:
+
+```bash
+gh api user --jq .login
+```
+
+If the login is not `epermitarthouse-rgb`, switch first:
+
+```bash
+gh auth switch --user epermitarthouse-rgb
+```
+
+If that fails, log in as epermitarthouse-rgb:
+
+```bash
+gh auth login --hostname github.com --git-protocol ssh --web --skip-ssh-key
+```
+
+Do not proceed with READ-only personal accounts.
+
+## SSH / git push
+
+SSH already authenticates as `epermitarthouse-rgb` for `git push`; that is the correct git identity for this repo.

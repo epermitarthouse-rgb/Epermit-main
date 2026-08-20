@@ -2,6 +2,7 @@
 
 const {
   isActionableNeedsAttentionCommunication,
+  listRecordNeedsAttention,
 } = require("./uci-needs-attention.util.js");
 
 const RECORD_SELECT = `
@@ -14,11 +15,25 @@ const RECORD_SELECT = `
   scope_description,
   current_stage,
   current_stage_state,
+  application_submitted_at,
   acknowledgment_received_at,
   class_of_service_issued_at,
   energization_target_date,
   energization_actual_date,
+  predicted_p50_date,
+  predicted_p90_date,
+  predicted_p50_previous,
+  predicted_p50_computed_at,
+  prediction_baseline_source,
+  prediction_sample_size,
+  prediction_reason,
+  inspection_release_received_at,
+  meter_set_scheduled_at,
+  site_readiness_confirmed_at,
+  energization_date_conflict,
+  closeout_package_doc_id,
   last_error,
+  metadata,
   created_at,
   updated_at,
   utility_providers (
@@ -330,6 +345,7 @@ async function getUciOperationalSnapshot(supabase, params) {
       const provider = Array.isArray(record.utility_providers)
         ? record.utility_providers[0]
         : record.utility_providers;
+      const recordAttention = listRecordNeedsAttention(record);
       return {
         ...record,
         project_name: projectNameById.get(String(record.project_id)) || "Unnamed project",
@@ -337,7 +353,9 @@ async function getUciOperationalSnapshot(supabase, params) {
         applications: applicationsByRecord.get(String(record.id)) || [],
         communications_recent: recentByRecord.get(String(record.id)) || [],
         attention_communications: attentionByRecord.get(String(record.id)) || [],
-        attention_count: attentionCountByRecord.get(String(record.id)) || 0,
+        attention_count:
+          (attentionCountByRecord.get(String(record.id)) || 0) + recordAttention.length,
+        record_attention: recordAttention,
       };
     }),
     generated_at: new Date().toISOString(),

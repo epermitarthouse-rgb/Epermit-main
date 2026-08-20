@@ -20,12 +20,13 @@ const {
   getSubmissionPreparationPreview,
   isUciEmailLiveSubmissionEnabled,
   resolveMailSendPermissionConfigured,
+  assertLiveEmailAllowlists,
   MAIL_SEND_PERMISSION_BLOCKER,
 } = require("./uci-submission-prepare.service.js");
 const {
   getValidAccessTokenForUser,
 } = require("../microsoft/microsoft-graph-auth.service.js");
-const { graphSendMail, SYNTHETIC_BODY_WARNING, SYNTHETIC_SUBJECT_PREFIX } = require("./uci-email-submission.service.js");
+const { graphSendMail, SYNTHETIC_BODY_WARNING, SYNTHETIC_NO_EXTERNAL_BANNER, SYNTHETIC_SUBJECT_PREFIX } = require("./uci-email-submission.service.js");
 const { UCI_DOCUMENTS_STORAGE_BUCKET } = require("./uci-document-storage.service.js");
 
 const TRANSMIT_VERSION = "stage4-transmit-p1-v1";
@@ -65,14 +66,17 @@ function ensureSyntheticSubject(subject, application) {
 function ensureSyntheticBody(body, application) {
   const base = String(body || "");
   if (!isDominionSyntheticPackage(application)) return base;
-  // Preview and send share the same template; do not prepend internal UAT/auth language.
-  if (new RegExp(SYNTHETIC_BODY_WARNING.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(base)) {
-    return base;
+  let next = base;
+  if (!new RegExp(SYNTHETIC_NO_EXTERNAL_BANNER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(next)) {
+    next = `${next.trimEnd()}\n\n${SYNTHETIC_NO_EXTERNAL_BANNER}`;
   }
-  if (/synthetic test documents|not for construction or utility submission/i.test(base)) {
-    return base;
+  if (new RegExp(SYNTHETIC_BODY_WARNING.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(next)) {
+    return next;
   }
-  return `${base.trimEnd()}\n\n${SYNTHETIC_BODY_WARNING}\n`;
+  if (/synthetic test documents|not for construction or utility submission/i.test(next)) {
+    return next;
+  }
+  return `${next.trimEnd()}\n\n${SYNTHETIC_BODY_WARNING}\n`;
 }
 
 async function downloadStorageBuffer(supabase, bucket, storagePath) {
@@ -352,6 +356,10 @@ async function transmitSubmissionPreparation(supabase, params) {
     err.code = "RECIPIENT_REQUIRED";
     throw err;
   }
+  assertLiveEmailAllowlists({
+    sender: sender.sender_mailbox,
+    recipients: [...toRecipients, ...ccRecipients],
+  });
 
   const binaries = await resolveTransmissionAttachments(
     supabase,
@@ -515,8 +523,11 @@ async function transmitSubmissionPreparation(supabase, params) {
 
   const completedAt = new Date().toISOString();
   let nextStatus = "failed";
-  if (sendResult.ok) nextStatus = "sent";
-  else if (sendResult.uncertain) nextStatus = "outcome_unknown";
+  if (sendResult.ok && sendResult.message_id && sendResult.unreconciled !== true && sendResult.uncertain !== true) {
+    nextStatus = "sent";
+  } else if (sendResult.ok || sendResult.uncertain) {
+    nextStatus = "outcome_unknown";
+  }
 
   const resultPatch = {
     status: nextStatus,

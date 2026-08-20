@@ -64,6 +64,15 @@ describe("UCI hybrid architecture routes", () => {
     assert.match(routePagesSource, /settleWithConcurrency/);
     assert.match(routePagesSource, /No active utility communications/);
     assert.match(routePagesSource, /Test \/ Audit history/);
+    assert.match(routePagesSource, /Open thread/);
+    assert.match(routePagesSource, /groupPortfolioByProject/);
+    assert.match(routePagesSource, /LIVE EMAIL SEND/);
+    assert.match(dashboardSource, /Assign provider/);
+    assert.match(dashboardSource, /buildStageStateMatrix/);
+    assert.match(navSource, /support: "active"/);
+    assert.match(navSource, /href: "\/uci\/class-of-service"/);
+    assert.match(navSource, /Stage 6 Design Review/);
+    assert.match(navSource, /no automatic 811 filing/);
   });
 
   it("does not confuse municipal jurisdiction mapping with utility territory", () => {

@@ -50,6 +50,87 @@ function providersForType(providers, utilityType) {
   return providers.filter((p) => String(p.utility_type || "").toLowerCase() === utilityType);
 }
 
+function providerNeedsConfirmationReason(utilityType) {
+  const type = String(utilityType || "utility").trim().toLowerCase() || "utility";
+  return `${type.charAt(0).toUpperCase()}${type.slice(1)} provider needs confirmation`;
+}
+
+/**
+ * Coverage lifecycle for a required utility type.
+ * Null provider_id stays BLOCKED until a human assigns (or unique electric EIA bind).
+ * Never auto-binds gas/water/sewer/telecom.
+ *
+ * @param {{
+ *   utilityType: string,
+ *   typeProviders: Array<Record<string, unknown>>,
+ *   electricResolution?: Record<string, unknown> | null,
+ *   snapshotOk?: boolean,
+ * }} params
+ */
+function resolveCoverageForRequiredType(params) {
+  const { utilityType, typeProviders, electricResolution = null, snapshotOk = true } = params;
+  /** @type {Record<string, unknown>} */
+  const mapping = {
+    method: "agent_1_mapper",
+    utility_type: utilityType,
+    generated_at: new Date().toISOString(),
+  };
+  let providerId = null;
+  let stageState = "BLOCKED";
+  let reason = `No ${utilityType} provider in directory`;
+
+  if (utilityType === "electric" && electricResolution) {
+    const status = String(electricResolution.status || "");
+    const suggested = electricResolution.suggested_provider_id
+      ? String(electricResolution.suggested_provider_id)
+      : null;
+    const candidates = Array.isArray(electricResolution.candidates)
+      ? electricResolution.candidates
+      : [];
+    const uniqueBindable =
+      status === "resolved" &&
+      suggested &&
+      typeProviders.some((p) => String(p.id) === suggested) &&
+      candidates.length === 1 &&
+      electricResolution.boundary_risk !== true;
+
+    if (uniqueBindable) {
+      providerId = suggested;
+      stageState = "COMPLETED";
+      reason = "Electric territory uniquely matched";
+    } else if (status === "geocoding_failed" || !snapshotOk) {
+      stageState = "BLOCKED";
+      reason = "Address geocoding failed";
+    } else {
+      if (candidates.length > 1) {
+        mapping.ambiguous_provider_ids = candidates
+          .map((c) => (c && typeof c === "object" ? c.provider_id || c.id : c))
+          .filter(Boolean);
+      }
+      stageState = "BLOCKED";
+      reason = providerNeedsConfirmationReason("electric");
+    }
+  } else if (typeProviders.length === 1) {
+    mapping.suggested_provider_id = typeProviders[0].id;
+    mapping.suggested_provider_slug = typeProviders[0].slug;
+    stageState = "BLOCKED";
+    reason = providerNeedsConfirmationReason(utilityType);
+  } else if (typeProviders.length > 1) {
+    mapping.ambiguous_provider_ids = typeProviders.map((p) => p.id);
+    stageState = "BLOCKED";
+    reason = providerNeedsConfirmationReason(utilityType);
+  }
+
+  return { providerId, stageState, reason, mapping };
+}
+
+/** Only rewrite Stage 1 rows that still have no configured provider. Never rewind Stage 2–10. */
+function shouldRewriteCoverageLifecycle(existing) {
+  if (!existing) return false;
+  if (Number(existing.current_stage) !== 1) return false;
+  return !existing.utility_provider_id;
+}
+
 async function upsertCoverageRow(supabase, params) {
   const {
     projectId,
@@ -75,7 +156,7 @@ async function upsertCoverageRow(supabase, params) {
     const patch = {
       metadata: { ...asObject(existing.metadata), ...asObject(metadata) },
     };
-    if (providerId && !existing.utility_provider_id) {
+    if (providerId && !existing.utility_provider_id && Number(existing.current_stage) === 1) {
       patch.utility_provider_id = providerId;
     }
     if (tenantId && !existing.tenant_id) patch.tenant_id = tenantId;
@@ -86,7 +167,7 @@ async function upsertCoverageRow(supabase, params) {
       .select("*")
       .single();
     const row = updated || { ...existing, ...patch };
-    if (String(row.current_stage_state) !== stageState || Number(row.current_stage) !== 1) {
+    if (shouldRewriteCoverageLifecycle(existing) && String(row.current_stage_state) !== stageState) {
       try {
         const trans = await recordSystemTransition(supabase, {
           coordinationRecordId: String(row.id),
@@ -232,58 +313,21 @@ async function mapProjectUtilities(supabase, params) {
 
   for (const utilityType of types) {
     const typeProviders = providersForType(providers, utilityType);
-    let providerId = null;
-    let stageState = "BLOCKED";
-    let reason = `No ${utilityType} provider in directory`;
+    const coverage = resolveCoverageForRequiredType({
+      utilityType,
+      typeProviders,
+      electricResolution: utilityType === "electric" ? electricResolution : null,
+      snapshotOk: snapshot.ok,
+    });
+    const providerId = coverage.providerId;
+    const stageState = coverage.stageState;
+    const reason = coverage.reason;
     const mappingMeta = {
       uci_site_address: snapshot,
-      uci_provider_mapping: {
-        method: "agent_1_mapper",
-        utility_type: utilityType,
-        generated_at: new Date().toISOString(),
-      },
+      uci_provider_mapping: coverage.mapping,
     };
-
     if (utilityType === "electric" && electricResolution) {
       mappingMeta.uci_provider_resolution = electricResolution;
-      const status = String(electricResolution.status || "");
-      const suggested = electricResolution.suggested_provider_id
-        ? String(electricResolution.suggested_provider_id)
-        : null;
-      const candidates = Array.isArray(electricResolution.candidates)
-        ? electricResolution.candidates
-        : [];
-      const uniqueBindable =
-        status === "resolved" &&
-        suggested &&
-        typeProviders.some((p) => String(p.id) === suggested) &&
-        candidates.length === 1 &&
-        electricResolution.boundary_risk !== true;
-
-      if (uniqueBindable) {
-        providerId = suggested;
-        stageState = "COMPLETED";
-        reason = "Electric territory uniquely matched";
-      } else if (candidates.length > 1 || electricResolution.requires_human_confirmation) {
-        stageState = "IN_PROGRESS";
-        reason = "Electric provider mapping requires human confirmation";
-      } else if (status === "geocoding_failed" || !snapshot.ok) {
-        stageState = "BLOCKED";
-        reason = "Address geocoding failed";
-      } else {
-        stageState = "BLOCKED";
-        reason = "No electric provider mapped";
-      }
-    } else if (typeProviders.length === 1) {
-      // Non-electric: never auto-bind. Placeholder stays BLOCKED until human confirm.
-      mappingMeta.uci_provider_mapping.suggested_provider_id = typeProviders[0].id;
-      mappingMeta.uci_provider_mapping.suggested_provider_slug = typeProviders[0].slug;
-      stageState = "BLOCKED";
-      reason = `${utilityType} provider must be confirmed by a human`;
-    } else if (typeProviders.length > 1) {
-      mappingMeta.uci_provider_mapping.ambiguous_provider_ids = typeProviders.map((p) => p.id);
-      stageState = "IN_PROGRESS";
-      reason = `Multiple ${utilityType} providers — human selection required`;
     }
 
     const upserted = await upsertCoverageRow(supabase, {
@@ -399,6 +443,9 @@ async function applyConfirmedProviders(supabase, params) {
 module.exports = {
   DEFAULT_REQUIRED_TYPES,
   requiredUtilityTypes,
+  resolveCoverageForRequiredType,
+  shouldRewriteCoverageLifecycle,
+  providerNeedsConfirmationReason,
   mapProjectUtilities,
   applyConfirmedProviders,
   maybeRunAgent2,

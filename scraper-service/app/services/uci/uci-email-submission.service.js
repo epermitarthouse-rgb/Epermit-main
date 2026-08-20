@@ -8,6 +8,7 @@ const EMAIL_SUBMIT_VERSION = "d4-email-v1";
 const EMAIL_TEMPLATE_VERSION = "uci-outbound-email-v2";
 const SYNTHETIC_BODY_WARNING =
   "This package contains synthetic test documents and is not for construction or utility submission.";
+const SYNTHETIC_NO_EXTERNAL_BANNER = "SYNTHETIC TEST — NO EXTERNAL SUBMISSION";
 const SYNTHETIC_SUBJECT_PREFIX = "[TEST]";
 
 /**
@@ -100,7 +101,8 @@ function buildUtilitySubmissionEmailContent(application, project, _providerSlug,
   ];
 
   if (synthetic) {
-    bodyLines.push("", SYNTHETIC_BODY_WARNING);
+    bodyLines.push("", SYNTHETIC_NO_EXTERNAL_BANNER);
+    bodyLines.push(SYNTHETIC_BODY_WARNING);
   }
 
   bodyLines.push("", "Regards,", "Commun-ET");
@@ -393,6 +395,7 @@ module.exports = {
   EMAIL_SUBMIT_VERSION,
   EMAIL_TEMPLATE_VERSION,
   SYNTHETIC_BODY_WARNING,
+  SYNTHETIC_NO_EXTERNAL_BANNER,
   SYNTHETIC_SUBJECT_PREFIX,
   isSyntheticOutboundPackage,
   formatApplicationTypeLabel,

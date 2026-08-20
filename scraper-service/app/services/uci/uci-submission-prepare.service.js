@@ -164,6 +164,67 @@ function normalizeEmail(value) {
     .toLowerCase();
 }
 
+function parseEmailAllowlist(raw) {
+  return parseRecipientList(raw).map((item) => normalizeEmail(item.email)).filter(Boolean);
+}
+
+function getAllowedSenderMailboxes() {
+  return parseEmailAllowlist(process.env.UCI_EMAIL_ALLOWED_SENDERS);
+}
+
+function getAllowedRecipientAddresses() {
+  return parseEmailAllowlist(process.env.UCI_EMAIL_ALLOWED_RECIPIENTS);
+}
+
+/**
+ * Live send may only use documented test mailboxes. Empty allowlists fail closed.
+ * @param {{ sender?: string, recipients?: Array<{ email?: string } | string> }} params
+ */
+function assertLiveEmailAllowlists(params = {}) {
+  const sender = normalizeEmail(params.sender);
+  const recipients = (Array.isArray(params.recipients) ? params.recipients : [])
+    .map((item) => normalizeEmail(typeof item === "string" ? item : item?.email))
+    .filter(Boolean);
+  const allowedSenders = getAllowedSenderMailboxes();
+  const allowedRecipients = getAllowedRecipientAddresses();
+
+  if (allowedSenders.length === 0) {
+    const err = new Error(
+      "Live email send requires UCI_EMAIL_ALLOWED_SENDERS (test mailboxes only; no utility inboxes)",
+    );
+    err.statusCode = 403;
+    err.code = "SENDER_ALLOWLIST_REQUIRED";
+    throw err;
+  }
+  if (allowedRecipients.length === 0) {
+    const err = new Error(
+      "Live email send requires UCI_EMAIL_ALLOWED_RECIPIENTS (test addresses only; no utility inboxes)",
+    );
+    err.statusCode = 403;
+    err.code = "RECIPIENT_ALLOWLIST_REQUIRED";
+    throw err;
+  }
+  if (!sender || !allowedSenders.includes(sender)) {
+    const err = new Error("Sender mailbox is not on the approved test allowlist");
+    err.statusCode = 403;
+    err.code = "SENDER_NOT_ALLOWED";
+    throw err;
+  }
+  if (recipients.length === 0) {
+    const err = new Error("Recipient address required for transmission");
+    err.statusCode = 400;
+    err.code = "RECIPIENT_REQUIRED";
+    throw err;
+  }
+  const blocked = recipients.filter((email) => !allowedRecipients.includes(email));
+  if (blocked.length) {
+    const err = new Error("Recipient is not on the approved test allowlist");
+    err.statusCode = 403;
+    err.code = "RECIPIENT_NOT_ALLOWED";
+    throw err;
+  }
+}
+
 function parseRecipientList(raw) {
   if (raw == null) return [];
   const list = Array.isArray(raw)
@@ -1048,5 +1109,9 @@ module.exports = {
   getSubmissionPreparationPreview,
   resolveConnectedSenderMailbox,
   parseRecipientList,
+  parseEmailAllowlist,
+  getAllowedSenderMailboxes,
+  getAllowedRecipientAddresses,
+  assertLiveEmailAllowlists,
   toPreview,
 };
