@@ -43,6 +43,20 @@ const DETAIL_RECORD_SELECT = `
   energization_actual_date,
   predicted_p50_date,
   predicted_p90_date,
+  predicted_p50_previous,
+  predicted_p50_computed_at,
+  prediction_baseline_source,
+  prediction_sample_size,
+  prediction_reason,
+  inspection_release_received_at,
+  meter_set_scheduled_at,
+  site_readiness_confirmed_at,
+  site_contact_name,
+  site_contact_email,
+  site_contact_phone,
+  energization_date_conflict,
+  closeout_package_doc_id,
+  metadata,
   agent_monitored,
   last_error,
   created_at,
@@ -260,6 +274,7 @@ async function getCoordinationDetailBundle(
     equipment,
     milestones,
     communications,
+    cosDesignRecords,
   ] = await Promise.all([
     hydrate("transitions", () =>
       supabase
@@ -302,12 +317,31 @@ async function getCoordinationDetailBundle(
       .select("*")
       .eq("coordination_record_id", coordinationRecordId)
       .eq("project_id", projectId)
+      // Match operational snapshot ordering so Inbox + record Communications
+      // show the same canonical window (classification is per-row, not thread-level).
+      .order("message_timestamp", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(25),
+    ),
+    hydrate("cos_design_records", () =>
+      supabase
+        .from("coordination_cos_design_records")
+        .select("*")
+        .eq("coordination_record_id", coordinationRecordId)
+        .eq("project_id", projectId)
+        .order("version", { ascending: false }),
     ),
   ]);
 
-  const children = [transitions, applications, costs, equipment, milestones, communications];
+  const children = [
+    transitions,
+    applications,
+    costs,
+    equipment,
+    milestones,
+    communications,
+    cosDesignRecords,
+  ];
   return {
     record,
     transitions: transitions.data,
@@ -316,6 +350,7 @@ async function getCoordinationDetailBundle(
     equipment: equipment.data,
     milestones: milestones.data,
     communications_recent: communications.data,
+    cos_design_records: cosDesignRecords.data,
     hydration: {
       request_id: opts.requestId ?? null,
       steps: children.map((child) => child.timing),
@@ -376,14 +411,21 @@ async function initCoordinationForProviders(supabase, p) {
     throw err;
   }
 
-  const providerIds = resolvedProviders.map((r) => r.id);
+  let tenantId = null;
+  try {
+    const q = supabase.from("projects").select("tenant_id").eq("id", projectId);
+    const res = typeof q.maybeSingle === "function" ? await q.maybeSingle() : await q;
+    const row = Array.isArray(res?.data) ? res.data[0] : res?.data;
+    if (row?.tenant_id) tenantId = String(row.tenant_id);
+  } catch {
+    tenantId = null;
+  }
 
   const { data: existingRows, error: exErr } = await supabase
     .from("coordination_records")
-    .select("id, utility_provider_id, utility_type")
+    .select("id, utility_provider_id, utility_type, metadata, tenant_id, current_stage, current_stage_state")
     .eq("project_id", projectId)
-    .eq("scope_description", "")
-    .in("utility_provider_id", providerIds);
+    .eq("scope_description", "");
 
   if (exErr) {
     throw Object.assign(new Error(exErr.message || "Failed to query existing coordination"), {
@@ -404,6 +446,11 @@ async function initCoordinationForProviders(supabase, p) {
     (Array.isArray(existingRows) ? existingRows : [])
       .filter((r) => !String(r.utility_type ?? "").trim())
       .map((r) => String(r.utility_provider_id)),
+  );
+  const existingByType = new Map(
+    (Array.isArray(existingRows) ? existingRows : [])
+      .filter((r) => String(r.utility_type ?? "").trim())
+      .map((r) => [String(r.utility_type).trim().toLowerCase(), r]),
   );
 
   /** @type {Array<Record<string, unknown>>} */
@@ -433,14 +480,61 @@ async function initCoordinationForProviders(supabase, p) {
       metadata = mergeProviderResolutionIntoCoordinationMetadata(metadata, resolutionSnapshot);
     }
 
+    const typeRow = existingByType.get(utilityType);
+    if (typeRow && !typeRow.utility_provider_id) {
+      const nextMetadata = {
+        ...(typeRow.metadata && typeof typeRow.metadata === "object" ? typeRow.metadata : {}),
+        ...metadata,
+      };
+      const { data: filled, error: fillErr } = await supabase
+        .from("coordination_records")
+        .update({
+          utility_provider_id: pid,
+          tenant_id: typeRow.tenant_id || tenantId,
+          metadata: nextMetadata,
+        })
+        .eq("id", typeRow.id)
+        .select("*")
+        .single();
+      if (fillErr) {
+        throw Object.assign(new Error(fillErr.message || "Failed to assign utility provider"), {
+          cause: fillErr,
+          statusCode: 500,
+          code: "COORDINATION_UPDATE_FAILED",
+        });
+      }
+      const filledRow = filled || { ...typeRow, utility_provider_id: pid, metadata: nextMetadata };
+      await supabase.from("coordination_stage_transitions").insert({
+        coordination_record_id: filledRow.id,
+        project_id: projectId,
+        from_stage: 1,
+        from_state: typeRow.current_stage_state || "BLOCKED",
+        to_stage: 1,
+        to_state: "COMPLETED",
+        triggered_by_type: "user",
+        triggered_by_id: userId,
+        reason: "Human confirmed utility provider mapping",
+        metadata: providerSetupMetadata ? { uci_provider_mapping: providerSetupMetadata } : {},
+      });
+      existingProviderTypes.add(providerTypeKey);
+      existingByType.set(utilityType, filledRow);
+      created.push(filledRow);
+      continue;
+    }
+    if (typeRow && typeRow.utility_provider_id) {
+      continue;
+    }
+
     const insertRow = {
       project_id: projectId,
       user_id: userId,
+      tenant_id: tenantId,
       utility_provider_id: pid,
       utility_type: utilityType,
       scope_description: "",
       current_stage: 1,
-      current_stage_state: "NOT_STARTED",
+      current_stage_state: "COMPLETED",
+      current_stage_entered_at: new Date().toISOString(),
       metadata,
     };
 
@@ -466,10 +560,10 @@ async function initCoordinationForProviders(supabase, p) {
       from_stage: null,
       from_state: null,
       to_stage: 1,
-      to_state: "NOT_STARTED",
-      triggered_by_type: "system",
-      triggered_by_id: null,
-      reason: "Initialization",
+      to_state: "COMPLETED",
+      triggered_by_type: "user",
+      triggered_by_id: userId,
+      reason: "Human confirmed utility provider mapping",
       metadata: providerSetupMetadata ? { uci_provider_mapping: providerSetupMetadata } : {},
     });
 
@@ -536,6 +630,19 @@ async function initCoordinationForProviders(supabase, p) {
       }
 
       record.metadata = nextMetadata;
+    }
+  }
+
+  for (const row of created) {
+    try {
+      const { maybeRunAgent2 } = require("./uci-provider-intake.service.js");
+      await maybeRunAgent2(
+        supabase,
+        { ...row, current_stage: 1, current_stage_state: "COMPLETED" },
+        userId,
+      );
+    } catch {
+      // Load analysis is best-effort after mapping; operator can retry from /uci.
     }
   }
 

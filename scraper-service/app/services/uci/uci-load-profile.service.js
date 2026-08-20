@@ -3,6 +3,8 @@
 const { getCoordinationRecordById } = require("./uci-records.service.js");
 const { resolveProjectAddressForProviderSetup } = require("./uci-provider-setup.service.js");
 const { recordSystemTransition } = require("./uci-transitions.service.js");
+const { computeLoadEngine } = require("./uci-load-engine.service.js");
+const { raiseUciAlert } = require("./uci-alerts.service.js");
 
 const LOAD_PROFILE_VERSION = "d2.1-v1";
 const LOAD_PROFILE_IDEMPOTENCY_KEY = "agent_2_load_profile:d2.1-v1";
@@ -348,13 +350,14 @@ function assertNoInferredEngineeringValues(calculatedValues) {
   if (!calculatedValues || typeof calculatedValues !== "object" || Array.isArray(calculatedValues)) {
     return;
   }
-  for (const key of Object.keys(/** @type {Record<string, unknown>} */ (calculatedValues))) {
-    if (FORBIDDEN_INFERRED_KEYS.has(key.toLowerCase())) {
-      const err = new Error("Internal load profile invariant violated: inferred engineering value");
-      err.statusCode = 500;
-      err.code = "LOAD_PROFILE_INVARIANT";
-      throw err;
-    }
+  for (const [key, value] of Object.entries(/** @type {Record<string, unknown>} */ (calculatedValues))) {
+    if (!FORBIDDEN_INFERRED_KEYS.has(key.toLowerCase())) continue;
+    // Engine values must carry explicit provenance — never a bare number from sqft.
+    if (value && typeof value === "object" && !Array.isArray(value) && value.source) continue;
+    const err = new Error("Internal load profile invariant violated: inferred engineering value");
+    err.statusCode = 500;
+    err.code = "LOAD_PROFILE_INVARIANT";
+    throw err;
   }
 }
 
@@ -367,6 +370,7 @@ function assertNoInferredEngineeringValues(calculatedValues) {
  * @param {string[]} params.needsVerification
  * @param {Array<{ id?: string, document_type?: string, file_name?: string }>} params.sourceDocuments
  * @param {string} params.userId
+ * @param {Record<string, unknown>} [params.engine]
  */
 function buildLoadSummary(params) {
   const {
@@ -377,34 +381,65 @@ function buildLoadSummary(params) {
     needsVerification,
     sourceDocuments,
     userId,
+    engine,
   } = params;
 
-  const analysisStatus = resolveAnalysisStatus({ missingInputs, needsVerification });
-  const calculatedValues = {};
+  const calculatedValues =
+    engine && engine.calculated_values && typeof engine.calculated_values === "object"
+      ? engine.calculated_values
+      : {};
 
   assertNoInferredEngineeringValues(calculatedValues);
+
+  const mergedNeeds = [
+    ...new Set([
+      ...(Array.isArray(needsVerification) ? needsVerification : []),
+      ...(Array.isArray(engine?.needs_verification) ? engine.needs_verification : []),
+    ]),
+  ];
+  const engineNotes = Array.isArray(engine?.notes) ? engine.notes : [];
 
   return reconcileLoadProfileReadiness({
     version: LOAD_PROFILE_VERSION,
     utility_type: normalizeUtilityType(utilityType),
-    analysis_status: analysisStatus,
+    analysis_status: resolveAnalysisStatus({
+      missingInputs,
+      needsVerification: mergedNeeds,
+    }),
     inputs_used: inputsUsed,
-    missing_inputs: missingInputs,
-    needs_verification: needsVerification,
+    missing_inputs: missingInputs.filter((k) => {
+      // Calculated service size satisfies engineering inventory gaps.
+      if (calculatedValues.service_size && k.startsWith("connected")) return false;
+      if (calculatedValues.service_size && ["btu_demand", "gpm_or_dfu", "fixture_or_demand_data", "fixture_units_or_flow", "meter_or_service_size"].includes(k)) {
+        return false;
+      }
+      return true;
+    }),
+    needs_verification: mergedNeeds,
     assumptions: {
-      template_id: null,
-      template_version: null,
+      template_id: engine?.template_id ?? null,
+      template_version: engine?.template_id ?? null,
       notes: [
-        "No verified in-repo load template applied in D2.1",
+        ...(engineNotes.length
+          ? engineNotes
+          : ["Load engine applied NEC 220 / gas BTU / DFU tables with explicit provenance"]),
         "Square footage alone does not produce engineering load numbers",
       ],
     },
     calculated_values: calculatedValues,
+    calculation_provenance: engine
+      ? {
+          method: engine.method,
+          template_id: engine.template_id,
+          template_source: engine.template_source,
+          template_is_mcdonalds_official: engine.template_is_mcdonalds_official === true,
+          masquerades_as_historical: false,
+        }
+      : { method: null, template_id: null, masquerades_as_historical: false },
     source_documents: sourceDocuments,
     generated_at: generatedAt,
-    generated_by: GENERATED_BY,
     generated_by_user_id: userId,
-    requires_human_review: true,
+    oversized: engine?.oversized === true,
   });
 }
 
@@ -533,6 +568,16 @@ async function runLoadProfileAnalysis(supabase, params) {
       ? /** @type {Record<string, unknown>} */ (existing.load_summary)
       : {};
 
+  const engine = computeLoadEngine({
+    utilityType,
+    project,
+    equipment,
+    verifiedValues:
+      prevSummary.verified_values && typeof prevSummary.verified_values === "object"
+        ? prevSummary.verified_values
+        : {},
+  });
+
   const loadSummary = reconcileLoadProfileReadiness({
     ...buildLoadSummary({
       utilityType,
@@ -542,6 +587,7 @@ async function runLoadProfileAnalysis(supabase, params) {
       needsVerification,
       sourceDocuments: inventory.sourceDocuments,
       userId,
+      engine,
     }),
     candidate_values: Array.isArray(prevSummary.candidate_values) ? prevSummary.candidate_values : [],
     verified_values:
@@ -642,21 +688,51 @@ async function runLoadProfileAnalysis(supabase, params) {
   let stageUnchanged = true;
   const currentStage = Number(record.current_stage) || 1;
   const currentState = String(record.current_stage_state ?? "NOT_STARTED");
-  if (currentStage < 2 || (currentStage === 2 && currentState === "NOT_STARTED")) {
+  const hasServiceSize = Boolean(loadSummary?.calculated_values?.service_size);
+  const toState = hasServiceSize ? "COMPLETED" : "IN_PROGRESS";
+  if (
+    currentStage < 2 ||
+    (currentStage === 2 && currentState !== toState) ||
+    (currentStage === 1 && hasServiceSize)
+  ) {
     const lifecycle = await recordSystemTransition(supabase, {
       coordinationRecordId,
       toStage: 2,
-      toState: "IN_PROGRESS",
-      reason: "Load Profile Analyzer started",
+      toState,
+      reason: hasServiceSize
+        ? "Load Profile Analyzer completed service sizing"
+        : "Load Profile Analyzer started",
       triggeredByType: "system",
       triggeredById: userId,
       metadata: {
         source: GENERATED_BY,
         load_profile_version: LOAD_PROFILE_VERSION,
+        oversized: engine.oversized === true,
       },
     });
     lifecycleRecord = lifecycle.record;
     stageUnchanged = false;
+  }
+
+  if (engine.oversized === true) {
+    await raiseUciAlert(supabase, {
+      record: lifecycleRecord,
+      severity: "P1",
+      code: "LOAD_OVERSIZED",
+      message: "Calculated electric service exceeds 800A",
+    }).catch(() => null);
+  }
+
+  if (hasServiceSize && Number(lifecycleRecord.current_stage) === 2) {
+    try {
+      const { runApplicationPackageBuild } = require("./uci-application-builder.service.js");
+      await runApplicationPackageBuild(supabase, {
+        coordinationRecordId,
+        userId,
+      });
+    } catch {
+      // Agent 3 draft is best-effort; operator can rebuild from Application Builder.
+    }
   }
 
   return {

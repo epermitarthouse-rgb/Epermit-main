@@ -63,7 +63,7 @@ async function createEquipmentRecord(supabase, params) {
     eta_history: Array.isArray(equipment.eta_history) ? equipment.eta_history : [],
     status,
     last_check_in_at: equipment.last_check_in_at ?? null,
-    next_check_in_at: equipment.next_check_in_at ?? null,
+    next_check_in_at: equipment.next_check_in_at ?? new Date().toISOString(),
     weeks_of_slip: equipment.weeks_of_slip ?? null,
   };
 
@@ -88,62 +88,16 @@ async function createEquipmentRecord(supabase, params) {
  * @param {object} params
  */
 async function recordEquipmentCheckIn(supabase, params) {
-  const { equipmentId, projectId, currentEta, status } = params;
-
-  const { data: existing, error: fetchErr } = await supabase
-    .from("coordination_equipment")
-    .select("*")
-    .eq("id", equipmentId)
-    .eq("project_id", projectId)
-    .maybeSingle();
-
-  if (fetchErr || !existing) {
-    const err = new Error("Equipment record not found");
-    err.statusCode = 404;
-    err.code = "NOT_FOUND";
-    throw err;
-  }
-
-  const now = new Date().toISOString();
-  const history = Array.isArray(existing.eta_history) ? [...existing.eta_history] : [];
-  if (existing.current_eta) {
-    history.push({ eta: existing.current_eta, recorded_at: now });
-  }
-
-  let weeksOfSlip = existing.weeks_of_slip;
-  if (existing.initial_eta && currentEta) {
-    const initial = new Date(existing.initial_eta);
-    const current = new Date(currentEta);
-    if (!Number.isNaN(initial.getTime()) && !Number.isNaN(current.getTime())) {
-      weeksOfSlip = Number(((current.getTime() - initial.getTime()) / (7 * 86400000)).toFixed(2));
-    }
-  }
-
-  const { data, error } = await supabase
-    .from("coordination_equipment")
-    .update({
-      current_eta: currentEta ?? existing.current_eta,
-      status: status ?? existing.status,
-      eta_history: history,
-      last_check_in_at: now,
-      next_check_in_at: new Date(Date.now() + 7 * 86400000).toISOString(),
-      weeks_of_slip: weeksOfSlip,
-    })
-    .eq("id", equipmentId)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw Object.assign(new Error(error.message || "Failed to record equipment check-in"), {
-      statusCode: 500,
-      code: "EQUIPMENT_UPDATE_FAILED",
-    });
-  }
-
-  return {
-    equipment: data,
-    slip_alert: weeksOfSlip != null && Number(weeksOfSlip) > 2,
-  };
+  const { equipmentId, projectId, currentEta, status, source = "operator" } = params;
+  const { appendEquipmentEta } = require("./uci-equipment-tracker.service.js");
+  return appendEquipmentEta(supabase, {
+    equipmentId,
+    projectId,
+    eta: currentEta,
+    status,
+    source,
+    checkInMethod: "manual_recovery",
+  });
 }
 
 module.exports = {

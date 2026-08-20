@@ -1,0 +1,25 @@
+{
+  "version": "d3-generic-default-v1",
+  "provider_slug": "_generic",
+  "utility_type": "unknown",
+  "application_type": "new_service",
+  "effective_date": "2026-08-20",
+  "description": "Last-resort generic application template.",
+  "template_gap": true,
+  "required_documents": [
+    {
+      "key": "site_plan",
+      "label": "Site plan",
+      "aliases": ["site_plan"]
+    }
+  ],
+  "required_fields": [
+    {
+      "key": "project_address",
+      "label": "Project address",
+      "source": "project.address",
+      "required": true
+    }
+  ],
+  "notes": ["Generic fallback — not a utility-issued form"]
+}

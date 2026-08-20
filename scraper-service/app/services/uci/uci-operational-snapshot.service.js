@@ -93,7 +93,10 @@ function isAttentionCommunication(row, record) {
   return isActionableNeedsAttentionCommunication(row, record);
 }
 
-function recentCommunicationsByRecord(rows, limit = 5) {
+/** Shared recent-window size for Inbox + record Communications (same canonical rows). */
+const RECENT_COMMUNICATIONS_LIMIT = 25;
+
+function recentCommunicationsByRecord(rows, limit = RECENT_COMMUNICATIONS_LIMIT) {
   const byRecord = new Map();
   for (const row of rows) {
     const recordId = String(row.coordination_record_id || "");

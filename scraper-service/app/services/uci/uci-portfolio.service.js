@@ -14,7 +14,7 @@ async function getProjectPortfolioView(supabase, projectId) {
     supabase
       .from("coordination_records")
       .select(
-        "id, utility_type, current_stage, current_stage_state, utility_provider_id, acknowledgment_received_at, metadata, created_at, updated_at",
+        "id, utility_type, current_stage, current_stage_state, utility_provider_id, acknowledgment_received_at, predicted_p50_date, predicted_p90_date, prediction_baseline_source, prediction_reason, metadata, created_at, updated_at",
       )
       .eq("project_id", projectId)
       .order("updated_at", { ascending: false }),
@@ -82,6 +82,11 @@ async function getProjectPortfolioView(supabase, projectId) {
           typeof r.metadata === "object" &&
           /** @type {{ uci_closeout_package?: unknown }} */ (r.metadata).uci_closeout_package,
       ),
+      predicted_p50_date: r.predicted_p50_date ?? null,
+      predicted_p90_date: r.predicted_p90_date ?? null,
+      prediction_baseline_source: r.prediction_baseline_source ?? null,
+      typical_label: "Typical (P50)",
+      conservative_label: "Conservative (P90)",
       updated_at: r.updated_at,
     })),
     generated_at: new Date().toISOString(),

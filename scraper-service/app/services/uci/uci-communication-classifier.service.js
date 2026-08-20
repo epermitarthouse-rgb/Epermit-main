@@ -19,6 +19,7 @@ const {
   maybeAutoCompleteFromCommunication,
   isFlaggedForReview,
 } = require("./uci-ack-acceptance.service.js");
+const { maybeEnterStage6FromCommunication } = require("./uci-stage6-entry.service.js");
 
 /**
  * @param {Record<string, unknown>} row
@@ -164,7 +165,29 @@ async function classifyCoordinationCommunications(supabase, params) {
     const auto = await maybeAutoCompleteFromCommunication(supabase, {
       communication: updated,
     });
-    lifecycleResults.push({ communication_id: updated.id, ...auto });
+    const stage6 = await maybeEnterStage6FromCommunication(supabase, {
+      communication: updated,
+      deps,
+    });
+    let dispatch = { dispatched: false, reason: "not_attempted" };
+    try {
+      const { dispatchClassifiedCommunication } = require("./uci-communication-dispatch.service.js");
+      dispatch = await dispatchClassifiedCommunication(supabase, {
+        communication: updated,
+      });
+    } catch (err) {
+      dispatch = {
+        dispatched: false,
+        reason: "dispatch_failed",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    lifecycleResults.push({
+      communication_id: updated.id,
+      ...auto,
+      stage_6: stage6,
+      track_b: dispatch,
+    });
   }
 
   return {
@@ -230,8 +253,25 @@ async function classifySingleCommunication(supabase, params) {
   const lifecycle = await maybeAutoCompleteFromCommunication(supabase, {
     communication: updated,
   });
+  const stage6 = await maybeEnterStage6FromCommunication(supabase, {
+    communication: updated,
+    deps,
+  });
+  let dispatch = { dispatched: false, reason: "not_attempted" };
+  try {
+    const { dispatchClassifiedCommunication } = require("./uci-communication-dispatch.service.js");
+    dispatch = await dispatchClassifiedCommunication(supabase, {
+      communication: updated,
+    });
+  } catch (err) {
+    dispatch = {
+      dispatched: false,
+      reason: "dispatch_failed",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 
-  return { communication: updated, skipped: false, lifecycle };
+  return { communication: updated, skipped: false, lifecycle, stage_6: stage6, track_b: dispatch };
 }
 
 /**
@@ -244,6 +284,8 @@ async function listNeedsAttentionCommunications(supabase, params) {
   const offset = Math.max(Number(rawOffset) || 0, 0);
   const {
     isActionableNeedsAttentionCommunication,
+    isActionableCosDesignAttention,
+    listRecordNeedsAttention,
   } = require("./uci-needs-attention.util.js");
 
   // Broad DB OR, then post-filter to actionable unresolved only (excludes outbound,
@@ -282,7 +324,7 @@ async function listNeedsAttentionCommunications(supabase, params) {
   if (recordIds.length) {
     const { data: records } = await supabase
       .from("coordination_records")
-      .select("id, current_stage, current_stage_state, acknowledgment_received_at")
+      .select("id, project_id, current_stage, current_stage_state, acknowledgment_received_at, inspection_release_received_at, meter_set_scheduled_at, site_readiness_confirmed_at, energization_date_conflict, closeout_package_doc_id, metadata")
       .in("id", recordIds);
     for (const record of Array.isArray(records) ? records : []) {
       recordsById.set(String(record.id), record);
@@ -306,9 +348,33 @@ async function listNeedsAttentionCommunications(supabase, params) {
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  let cosQuery = supabase
+    .from("coordination_cos_design_records")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("needs_human_attention", true)
+    .eq("is_current", true)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (coordinationRecordId) {
+    cosQuery = cosQuery.eq("coordination_record_id", coordinationRecordId);
+  }
+  const { data: cosRows } = await cosQuery;
+  const cosAttention = (Array.isArray(cosRows) ? cosRows : []).filter((row) =>
+    isActionableCosDesignAttention(row),
+  );
+
+  /** @type {Array<Record<string, unknown>>} */
+  const recordAttention = [];
+  for (const record of recordsById.values()) {
+    recordAttention.push(...listRecordNeedsAttention(record));
+  }
+
   return {
     communications: page,
     unmatched_inbound: Array.isArray(unmatched) ? unmatched : [],
+    cos_design_attention: cosAttention,
+    record_attention: recordAttention,
     total: actionable.length,
     limit,
     offset,
@@ -405,6 +471,8 @@ async function reclassifyCommunication(supabase, params) {
 
   /** @type {Record<string, unknown> | null} */
   let lifecycle = null;
+  /** @type {Record<string, unknown> | null} */
+  let stage6 = null;
   if (classification === "acknowledgment" && !needsHumanAttention) {
     lifecycle = await maybeAutoCompleteFromCommunication(supabase, {
       communication: {
@@ -418,6 +486,44 @@ async function reclassifyCommunication(supabase, params) {
       },
     });
   }
+  if (
+    (classification === "class_of_service" || classification === "design_review_response") &&
+    !needsHumanAttention
+  ) {
+    stage6 = await maybeEnterStage6FromCommunication(supabase, {
+      communication: {
+        ...data,
+        classification_confidence: 1,
+        agent_processed_metadata: {
+          ...data.agent_processed_metadata,
+          blocks_auto_lifecycle: false,
+          flagged_for_review: false,
+        },
+      },
+    });
+  }
+
+  let trackB = { dispatched: false, reason: "not_attempted" };
+  try {
+    const { dispatchClassifiedCommunication } = require("./uci-communication-dispatch.service.js");
+    trackB = await dispatchClassifiedCommunication(supabase, {
+      communication: {
+        ...data,
+        classification_confidence: 1,
+        agent_processed_metadata: {
+          ...data.agent_processed_metadata,
+          blocks_auto_lifecycle: false,
+          flagged_for_review: false,
+        },
+      },
+    });
+  } catch (err) {
+    trackB = {
+      dispatched: false,
+      reason: "dispatch_failed",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 
   return {
     communication: data,
@@ -425,6 +531,8 @@ async function reclassifyCommunication(supabase, params) {
     reviewed_at: reviewedAt,
     reviewed_by: userId,
     lifecycle,
+    stage_6: stage6,
+    track_b: trackB,
   };
 }
 

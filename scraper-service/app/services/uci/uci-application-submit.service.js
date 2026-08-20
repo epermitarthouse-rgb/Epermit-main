@@ -15,9 +15,15 @@ const { sendUtilitySubmissionEmail, EMAIL_SUBMIT_VERSION } = require("./uci-emai
 const {
   validateSubmissionPackage,
 } = require("./uci-submission-validation.service.js");
+const { retryWithExponentialBackoff } = require("./uci-retry.util.js");
+const { raiseUciAlert } = require("./uci-alerts.service.js");
 
 const SUBMIT_VERSION = "d4-v1";
 const GENERATED_BY = "agent_4_submission";
+
+function isEmailLiveSubmissionEnabled() {
+  return process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED === "true";
+}
 
 /** Providers with portal submit automation. */
 const PORTAL_SUBMIT_ADAPTERS = new Set(["pepco"]);
@@ -51,7 +57,10 @@ function validateSubmitEligibility(application) {
     };
   }
 
-  if (String(application.draft_status) !== "reviewed") {
+  if (
+    String(application.draft_status) !== "reviewed" &&
+    String(application.draft_status) !== "approved_for_submission"
+  ) {
     return {
       ok: false,
       code: "REVIEW_REQUIRED",
@@ -135,7 +144,7 @@ function resolveSubmissionMethod(providerSlug) {
  * @param {Record<string, unknown>} params.submissionMetadata
  */
 async function persistSubmissionAttempt(supabase, params) {
-  const { applicationId, metadata, submissionMetadata } = params;
+  const { applicationId, application = {}, metadata, submissionMetadata } = params;
   const isValidationOnly =
     submissionMetadata.validation_only === true ||
     submissionMetadata.method === "validation_only" ||
@@ -177,6 +186,9 @@ async function persistSubmissionAttempt(supabase, params) {
       submitted_at: submissionMetadata.submitted_at,
       submitted_by: submissionMetadata.submitted_by_user_id,
       utility_ticket_number: submissionMetadata.utility_ticket_number ?? null,
+      graph_message_id: submissionMetadata.email?.message_id ?? application.graph_message_id ?? null,
+      graph_internet_message_id:
+        submissionMetadata.email?.internet_message_id ?? application.graph_internet_message_id ?? null,
       last_error: null,
     });
   } else if (!isValidationOnly && submissionMetadata.confirmation_status === "failed") {
@@ -296,22 +308,50 @@ async function submitViaPepcoPortal(supabase, params) {
   /** @type {Record<string, unknown>} */
   let portalOutcome;
 
-  if (portalPopulate && deps.page) {
-    portalOutcome = await runPepcoPortalSubmissionOnPage({
-      page: deps.page,
-      application,
-      project,
-      liveSubmissionConfirmed: liveConfirmed,
-      uploadFn: deps.uploadFn,
-    });
-  } else if (portalPopulate && typeof deps.runBrowserPopulate === "function") {
-    portalOutcome = await deps.runBrowserPopulate({
-      application,
-      project,
-      liveSubmissionConfirmed: liveConfirmed,
-    });
+  const runPortal = async () => {
+    if (portalPopulate && deps.page) {
+      return runPepcoPortalSubmissionOnPage({
+        page: deps.page,
+        application,
+        project,
+        liveSubmissionConfirmed: liveConfirmed,
+        uploadFn: deps.uploadFn,
+        credentialId: options.credential_id,
+      });
+    }
+    if (portalPopulate && typeof deps.runBrowserPopulate === "function") {
+      return deps.runBrowserPopulate({
+        application,
+        project,
+        liveSubmissionConfirmed: liveConfirmed,
+        credentialId: options.credential_id,
+      });
+    }
+    return runPepcoValidationDryRun({ application, project });
+  };
+
+  if (liveConfirmed && portalPopulate) {
+    const retried = await retryWithExponentialBackoff(runPortal, { attempts: 3, baseMs: 1000 });
+    if (!retried.ok) {
+      const fallback = await submitViaEmail(supabase, {
+        application,
+        project,
+        record,
+        userId,
+        deps,
+        options: { ...options, portal_email_fallback: true },
+      });
+      return {
+        ...fallback,
+        portal_adapter_used: true,
+        portal_email_fallback: true,
+        portal_retry_error:
+          retried.error instanceof Error ? retried.error.message : String(retried.error),
+      };
+    }
+    portalOutcome = retried.result;
   } else {
-    portalOutcome = runPepcoValidationDryRun({ application, project });
+    portalOutcome = await runPortal();
   }
 
   if (portalOutcome.ok === false && portalOutcome.code) {
@@ -332,6 +372,22 @@ async function submitViaPepcoPortal(supabase, params) {
     (portalOutcome.confirmation &&
       typeof portalOutcome.confirmation === "object" &&
       /** @type {{ ticket_number?: unknown }} */ (portalOutcome.confirmation).ticket_number);
+
+  if (!isConfirmed && liveConfirmed) {
+    const fallback = await submitViaEmail(supabase, {
+      application,
+      project,
+      record,
+      userId,
+      deps,
+      options: { ...options, portal_email_fallback: true },
+    });
+    return {
+      ...fallback,
+      portal_adapter_used: true,
+      portal_email_fallback: true,
+    };
+  }
 
   if (!isConfirmed) {
     const dryRunMetadata = {
@@ -470,7 +526,22 @@ async function submitViaPepcoPortal(supabase, params) {
  * @param {object} params
  */
 async function submitViaEmail(supabase, params) {
-  const { application, project, record, userId, deps = {} } = params;
+  const { application, project, record, userId, deps = {}, options = {} } = params;
+  const injectedMailer = typeof deps.sendMailFn === "function";
+  const injectedToken = typeof deps.getAccessTokenFn === "function";
+  if (
+    !injectedMailer &&
+    !injectedToken &&
+    !isEmailLiveSubmissionEnabled() &&
+    options.allow_email_without_live_flag !== true
+  ) {
+    const err = new Error(
+      "Live email submission is disabled — set UCI_EMAIL_LIVE_SUBMISSION_ENABLED=true after explicit approval",
+    );
+    err.statusCode = 403;
+    err.code = "LIVE_EMAIL_DISABLED";
+    throw err;
+  }
   const providerSlug = String(application.provider_slug ?? "").trim().toLowerCase() || "utility";
   const metadata =
     application.agent_draft_metadata &&
@@ -552,6 +623,9 @@ async function submitViaEmail(supabase, params) {
     utility_ticket_number: null,
     email: {
       message_id: emailResult.message_id,
+      internet_message_id: emailResult.internet_message_id || null,
+      reconciled: emailResult.reconciled !== false && Boolean(emailResult.message_id),
+      unreconciled: !emailResult.message_id,
       subject: emailResult.subject,
       attachment_count: emailResult.attachment_count,
       referenced_documents: emailResult.referenced_documents,
@@ -564,6 +638,15 @@ async function submitViaEmail(supabase, params) {
     metadata,
     submissionMetadata,
   });
+
+  if (!emailResult.message_id) {
+    await raiseUciAlert(supabase, {
+      record,
+      severity: "P2",
+      code: "GRAPH_UNRECONCILED",
+      message: "Graph accepted sendMail but the Sent Items message was not found",
+    }).catch(() => null);
+  }
 
   const lifecycle = await advanceLifecycleAfterConfirmedSubmission(supabase, {
     coordinationRecordId: String(record.id),

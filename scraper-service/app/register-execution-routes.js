@@ -91,6 +91,12 @@ const arlingtonJobStore = require("../lib/arlington-job-store.js");
 const arlingtonOrchestration = require("../lib/arlington-orchestration.js");
 const { startArlingtonDurableWorkerLoop } = require("../lib/arlington-durable-worker-loop.js");
 const { startUciDurableWorkerLoop } = require("./services/uci/uci-durable-worker-loop.js");
+const {
+  startUciGraphInboundPoller,
+} = require("./services/uci/uci-graph-inbound-poller.service.js");
+const {
+  startUciLifecycleScheduler,
+} = require("./services/uci/uci-lifecycle-scheduler.service.js");
 const { mirrorSessionProgress } = require("../lib/session-progress.js");
 const {
   shouldAbort,
@@ -13509,6 +13515,8 @@ app.post("/api/filing/reauth", async (req, res) => {
     sanitizeStorageKey,
   }),
     uciWorker: startUciDurableWorkerLoop({ supabase }),
+    graphInboundPoller: startUciGraphInboundPoller({ supabase }),
+    lifecycleScheduler: startUciLifecycleScheduler({ supabase }),
   };
 }
 

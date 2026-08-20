@@ -111,6 +111,8 @@ function loadTemplateManifest(providerSlug, utilityType, options = {}) {
       : []),
     path.join(TEMPLATES_ROOT, slug, `${utility}-new-service.json`),
     path.join(TEMPLATES_ROOT, slug, "default.json"),
+    path.join(TEMPLATES_ROOT, "_generic", `${utility}-new-service.json`),
+    path.join(TEMPLATES_ROOT, "_generic", "default.json"),
   ];
 
   for (const filePath of candidates) {
@@ -466,6 +468,31 @@ async function runApplicationPackageBuild(supabase, params) {
     err.code = "TEMPLATE_NOT_FOUND";
     throw err;
   }
+  const usedGenericFallback = template.template_gap === true || String(template.provider_slug) === "_generic";
+  if (usedGenericFallback) {
+    const { emitUciEvent } = require("./uci-events.service.js");
+    emitUciEvent(
+      "uci.template_gap",
+      {
+        coordination_record_id: coordinationRecordId,
+        project_id: projectId,
+        provider_slug: providerSlug,
+        utility_type: utilityType,
+      },
+      { supabase },
+    );
+    try {
+      const { raiseUciAlert } = require("./uci-alerts.service.js");
+      await raiseUciAlert(supabase, {
+        record,
+        severity: "P2",
+        code: "TEMPLATE_GAP",
+        message: `No utility-specific template for ${providerSlug} — generic ${utilityType} fallback in use`,
+      });
+    } catch {
+      /* ignore */
+    }
+  }
 
   const [projectResult, documentsResult, applicationsResult] = await Promise.all([
     supabase.from("projects").select("*").eq("id", projectId).maybeSingle(),
@@ -589,6 +616,27 @@ async function runApplicationPackageBuild(supabase, params) {
     docMatchRaw.packageDocuments,
     requiredDocuments,
   );
+  /** @type {Array<Record<string, unknown>>} */
+  let packageDocuments = [...signatureEval.packageDocuments];
+  /** @type {string[]} */
+  let missingDocuments = [...docMatchRaw.missingDocuments];
+  try {
+    const { attachLoadWorksheetToPackage } = require("./uci-load-worksheet.service.js");
+    const worksheet = await attachLoadWorksheetToPackage(supabase, {
+      record,
+      project,
+      loadSummary,
+      userId,
+    });
+    if (worksheet) {
+      const idx = packageDocuments.findIndex((d) => String(d.key) === "load_calculation_worksheet");
+      if (idx >= 0) packageDocuments[idx] = { ...packageDocuments[idx], ...worksheet, status: "attached" };
+      else packageDocuments.push(worksheet);
+      missingDocuments = missingDocuments.filter((key) => key !== "load_calculation_worksheet");
+    }
+  } catch {
+    // Worksheet is generated when possible; package build still proceeds without it.
+  }
   const fieldEval = evaluateRequiredFields(project, loadSummary, requiredFields, record, {
     externalApplicationId,
   });
@@ -598,7 +646,7 @@ async function runApplicationPackageBuild(supabase, params) {
     ...(syntheticTemplate && !checklistApproved ? ["synthetic_checklist_approval"] : []),
   ];
   const packageStatus = resolvePackageStatus({
-    missingDocuments: docMatchRaw.missingDocuments,
+    missingDocuments,
     missingFields,
     loadSummary,
     hasLoadProfileDraft: Boolean(loadProfileDraft),
@@ -630,7 +678,7 @@ async function runApplicationPackageBuild(supabase, params) {
           }
         : null,
       package_status: packageStatus,
-      missing_documents: docMatchRaw.missingDocuments,
+      missing_documents: missingDocuments,
       missing_fields: missingFields,
       field_results: fieldEval.fieldResults,
       signature_requirements: signatureEval.signatureRequirements,
@@ -676,7 +724,11 @@ async function runApplicationPackageBuild(supabase, params) {
       notes: [
         "D3 foundation package — structural assembly only",
         "No auto-submit; review required before D4 submission",
+        ...(usedGenericFallback
+          ? [`Generic fallback template used for ${providerSlug} — utility-specific form not yet built`]
+          : []),
       ],
+      template_gap: usedGenericFallback,
     },
   };
 
@@ -686,7 +738,7 @@ async function runApplicationPackageBuild(supabase, params) {
     tenant_id: record.tenant_id ?? null,
     provider_slug: providerSlug,
     application_type: String(template.application_type ?? "new_service"),
-    package_documents: signatureEval.packageDocuments,
+    package_documents: packageDocuments,
     load_summary: loadSummary ?? {},
     draft_status: "draft",
     record_source: "agent_draft",
@@ -749,7 +801,7 @@ async function runApplicationPackageBuild(supabase, params) {
     coordination_record_id: coordinationRecordId,
     project_id: projectId,
     package_status: packageStatus,
-    missing_documents: docMatchRaw.missingDocuments,
+    missing_documents: missingDocuments,
     missing_fields: missingFields,
     application,
     stage_unchanged: true,

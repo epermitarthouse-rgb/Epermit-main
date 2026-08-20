@@ -119,4 +119,46 @@ describe("uci-needs-attention.util", () => {
       true,
     );
   });
+
+  it("excludes inert synthetic unclassified test artifacts from Needs Attention", () => {
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "unclassified",
+        classification_confidence: 0.6,
+        needs_human_attention: true,
+        raw_subject: "Synthetic test -Highland Springs LC 451497",
+        raw_body: "test\r\n",
+      }),
+      false,
+    );
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "unclassified",
+        classification_confidence: 0.6,
+        needs_human_attention: true,
+        raw_subject:
+          "[TEST] Utility Coordination Application Package — McDonald's Highland Springs, VA - LC 451497",
+        raw_body: "Please find attached the utility coordination application package.",
+      }),
+      false,
+    );
+    // Proper Stage 6 COS synthetic with open attention remains actionable.
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "class_of_service",
+        classification_confidence: 0.95,
+        needs_human_attention: true,
+        raw_subject:
+          "[SYNTHETIC TEST] Class of Service — Highland Springs matching COS (auto-poller UAT)",
+        raw_body: "SYNTHETIC TEST — NOT A REAL DOMINION / UTILITY DOCUMENT",
+        agent_processed_metadata: {
+          stage_6_cos: { review_status: "ready_for_approval" },
+        },
+      }),
+      true,
+    );
+  });
 });

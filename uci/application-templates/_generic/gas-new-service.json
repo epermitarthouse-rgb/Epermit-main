@@ -1,0 +1,35 @@
+{
+  "version": "d3-generic-gas-v1",
+  "provider_slug": "_generic",
+  "utility_type": "gas",
+  "application_type": "new_service",
+  "effective_date": "2026-08-20",
+  "description": "Generic gas new-service package fallback.",
+  "template_gap": true,
+  "required_documents": [
+    {
+      "key": "load_calculation_worksheet",
+      "label": "Load calculation worksheet",
+      "aliases": ["load_worksheet", "load_calc", "btu_schedule"]
+    },
+    {
+      "key": "site_plan",
+      "label": "Site plan",
+      "aliases": ["site_plan", "civil_plan", "site"]
+    },
+    {
+      "key": "equipment_cut_sheets",
+      "label": "Equipment cut sheets",
+      "aliases": ["cut_sheet", "equipment_spec"]
+    }
+  ],
+  "required_fields": [
+    {
+      "key": "project_address",
+      "label": "Project address",
+      "source": "project.address",
+      "required": true
+    }
+  ],
+  "notes": ["Generic fallback — not a utility-issued form"]
+}

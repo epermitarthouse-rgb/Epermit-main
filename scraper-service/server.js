@@ -13,7 +13,8 @@ const {
 } = require("./app/services/uci/uci-document-fallback-config.service.js");
 
 const app = createSharedHttpApp({ scraperServiceRoot: __dirname });
-const { PORT, arlingtonWorker, uciWorker } = registerExecutionRoutes(app);
+const { PORT, arlingtonWorker, uciWorker, graphInboundPoller, lifecycleScheduler } =
+  registerExecutionRoutes(app);
 const documentFallbackConfig = getDocumentFallbackConfig();
 console.log(
   "[SCRAPER SERVER] UCI document fallback runtime",
@@ -39,6 +40,14 @@ process.on("SIGINT", () => {
   if (uciWorker && typeof uciWorker.stop === "function") {
     console.log("[SCRAPER SERVER] Stopping background UCI durable portal sync worker");
     uciWorker.stop();
+  }
+  if (graphInboundPoller && typeof graphInboundPoller.stop === "function") {
+    console.log("[SCRAPER SERVER] Stopping background UCI Graph inbound mailbox poller");
+    graphInboundPoller.stop();
+  }
+  if (lifecycleScheduler && typeof lifecycleScheduler.stop === "function") {
+    console.log("[SCRAPER SERVER] Stopping background UCI lifecycle scheduler");
+    lifecycleScheduler.stop();
   }
   for (const sid of Object.keys(sessions)) cleanupSession(sid, "sigint");
   process.exit(0);
@@ -95,6 +104,11 @@ async function startServer() {
     if (uciWorker?.workerId) {
       console.log(
         `[SCRAPER SERVER] Background UCI durable portal sync worker active workerId=${uciWorker.workerId}`,
+      );
+    }
+    if (graphInboundPoller?.pollerId) {
+      console.log(
+        `[SCRAPER SERVER] Background UCI Graph inbound poller active pollerId=${graphInboundPoller.pollerId} intervalMs=${graphInboundPoller.intervalMs}`,
       );
     }
     console.log(`

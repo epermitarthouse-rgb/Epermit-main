@@ -1,0 +1,11 @@
+SYNTHETIC TEST - NOT A REAL DOMINION / UTILITY DOCUMENT
+Class of Service determination - Highland Springs SYNTHETIC TEST
+Project: McDonalds Highland Springs, VA - LC 451497
+Assigned voltage: 120/208 V
+Assigned service: 400 A
+3-phase
+Meter location: Front vault
+Transformer: 300 kVA pad-mount
+CIAC estimate: $12,500
+Dated: 2026-08-19
+SYNTHETIC TEST - deliberately undersized vs verified Load Profile (1000 A).

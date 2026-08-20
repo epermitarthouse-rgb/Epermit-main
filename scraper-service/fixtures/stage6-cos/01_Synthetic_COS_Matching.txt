@@ -1,0 +1,10 @@
+SYNTHETIC TEST - NOT A REAL DOMINION / UTILITY DOCUMENT
+Class of Service issued - Highland Springs SYNTHETIC TEST
+Project: McDonalds Highland Springs, VA - LC 451497
+Assigned voltage: 120/208 V
+Service capacity: 1000 A
+3-phase 4-wire
+Number of meters: 1
+Meter location: Rear of building
+Transformer: 500 kVA pad-mount
+Dated: 2026-08-19
