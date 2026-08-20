@@ -422,6 +422,8 @@ async function buildCloseoutPdf(params) {
   return {
     buffer,
     hash: contentHash(buffer),
+    title: "Utility Coordination Closeout Report",
+    page_count: pdf.getPageCount(),
     sections: [
       "project_summary",
       "stage_transitions",
