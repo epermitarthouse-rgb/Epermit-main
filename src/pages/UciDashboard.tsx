@@ -256,6 +256,7 @@ import {
   getPackageValidationStatus,
   getPackageFieldSourceHref,
   canRepairReviewedPackageDocuments,
+  applicationReviewPersisted,
   getApplicationPackageDraftApplication,
   isPackageDocumentCandidateAlreadyMapped,
   parseCanonicalPackageReviewSummary,
@@ -1845,6 +1846,9 @@ export default function UciDashboard() {
         status,
         notes: applicationReviewNotes.trim() || undefined,
       });
+      if (status === "reviewed" && !applicationReviewPersisted(result.application)) {
+        throw new Error("Mark reviewed did not persist — refresh and try again");
+      }
       setDetail((current) =>
         current
           ? {
@@ -6135,7 +6139,7 @@ export function ApplicationPrepSection({
               slot. Filename suggestions are not verified attachments.
             </CardDescription>
           </div>
-          {!isReviewed ? (
+          {!isReviewed && !repairEligibility.ok ? (
             <Button
               type="button"
               variant="outline"
@@ -6220,6 +6224,16 @@ export function ApplicationPrepSection({
                     Use Repair package to persist real document IDs, then re-confirm affected slots and mark reviewed again.
                   </p>
                 ) : null}
+              </div>
+            ) : repairEligibility.ok ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  Reviewed package needs document repair
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  Required attachment references are unresolved ({repairEligibility.unresolvedKeys.join(", ")}).
+                  Use Repair package to persist real document IDs, then re-confirm affected slots and mark reviewed again.
+                </p>
               </div>
             ) : null}
 

@@ -15,6 +15,7 @@ import {
 import {
   getApplicationPackageDraftApplication,
   parseApplicationPackageMetadata,
+  preparationBlocksNewPrepare,
 } from "@/lib/uciApplicationPrep";
 import { supabase } from "@/lib/supabase";
 import {
@@ -841,7 +842,7 @@ export function UciSubmissionsPage() {
                     (parseApplicationPackageMetadata(application) as { checklist_mode?: string } | null)
                       ?.checklist_mode || "",
                   ) === "synthetic_test";
-                const confirmed = prep?.status === "confirmed_for_transmission";
+                const confirmed = preparationBlocksNewPrepare(prep);
                 const packageReady = prep?.ready_to_send === true || readyToSend;
                 const prepSent = Boolean(
                   prep &&

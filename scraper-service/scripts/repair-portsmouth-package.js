@@ -88,8 +88,7 @@ async function main() {
 
   const result = await repairReviewedPackageDocuments(supabase, {
     applicationId: application.id,
-    application,
-    userId: application.reviewed_by || "service-role-repair",
+    ...(application.reviewed_by ? { userId: application.reviewed_by } : {}),
   });
 
   console.log(

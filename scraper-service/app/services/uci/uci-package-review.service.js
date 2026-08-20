@@ -117,11 +117,40 @@ function findUnresolvedPackageDocumentReferences(documents) {
   return unresolved;
 }
 
-function packageDocumentsNeedRepair(application) {
-  const documents = Array.isArray(application?.package_documents)
-    ? application.package_documents
+function packageReviewFromApplication(application) {
+  const metadata = asObject(application?.agent_draft_metadata);
+  const pkg = asObject(metadata.application_package);
+  return asObject(pkg.package_review);
+}
+
+function packageHasReviewedRecoverySnapshot(application) {
+  if (String(application?.draft_status) === "reviewed") return true;
+  const review = packageReviewFromApplication(application);
+  return Boolean(review.reviewed_snapshot);
+}
+
+function mergedPackageDocumentsForRepair(application) {
+  const live = Array.isArray(application?.package_documents) ? application.package_documents : [];
+  const review = packageReviewFromApplication(application);
+  const snapshotDocs = Array.isArray(review.reviewed_snapshot?.package_documents)
+    ? review.reviewed_snapshot.package_documents
     : [];
-  return findUnresolvedPackageDocumentReferences(documents);
+  const byKey = new Map();
+  for (const raw of snapshotDocs) {
+    const doc = asObject(raw);
+    const key = doc.key != null ? String(doc.key) : "";
+    if (key) byKey.set(key, doc);
+  }
+  for (const raw of live) {
+    const doc = asObject(raw);
+    const key = doc.key != null ? String(doc.key) : "";
+    if (key) byKey.set(key, doc);
+  }
+  return [...byKey.values()];
+}
+
+function packageDocumentsNeedRepair(application) {
+  return findUnresolvedPackageDocumentReferences(mergedPackageDocumentsForRepair(application));
 }
 
 function itemReady(kind, snapshot) {
@@ -259,6 +288,55 @@ async function getPackageReviewApplicationById(supabase, applicationId) {
   return data;
 }
 
+function assertReviewPersistenceMatches(application, packageReview, extraPatch = {}) {
+  if (extraPatch.draft_status != null) {
+    const expected = String(extraPatch.draft_status);
+    const actual = String(application?.draft_status ?? "");
+    if (actual !== expected) {
+      throw Object.assign(
+        new Error(
+          `Package review draft_status did not persist (expected ${expected}, got ${actual || "empty"})`,
+        ),
+        { statusCode: 500, code: "PACKAGE_REVIEW_PERSIST_MISMATCH" },
+      );
+    }
+  }
+  const persistedReview = packageReviewFromApplication(application);
+  if (packageReview.reviewed_snapshot) {
+    if (!persistedReview.reviewed_snapshot) {
+      throw Object.assign(new Error("Reviewed snapshot did not persist on mark reviewed"), {
+        statusCode: 500,
+        code: "PACKAGE_REVIEW_PERSIST_MISMATCH",
+      });
+    }
+    const expectedWorksheet = (
+      Array.isArray(packageReview.reviewed_snapshot.package_documents)
+        ? packageReview.reviewed_snapshot.package_documents
+        : []
+    ).find((doc) => String(asObject(doc).key) === "load_calculation_worksheet");
+    const persistedWorksheet = (
+      Array.isArray(persistedReview.reviewed_snapshot.package_documents)
+        ? persistedReview.reviewed_snapshot.package_documents
+        : []
+    ).find((doc) => String(asObject(doc).key) === "load_calculation_worksheet");
+    if (
+      expectedWorksheet &&
+      String(asObject(expectedWorksheet).project_document_id ?? "") !==
+        String(asObject(persistedWorksheet).project_document_id ?? "")
+    ) {
+      throw Object.assign(
+        new Error("Reviewed snapshot worksheet project_document_id did not persist"),
+        { statusCode: 500, code: "PACKAGE_REVIEW_PERSIST_MISMATCH" },
+      );
+    }
+  } else if (packageReview.reviewed_snapshot === null && persistedReview.reviewed_snapshot) {
+    throw Object.assign(new Error("Reviewed snapshot clear did not persist"), {
+      statusCode: 500,
+      code: "PACKAGE_REVIEW_PERSIST_MISMATCH",
+    });
+  }
+}
+
 async function persistReviewMetadata(supabase, application, packageReview, extraPatch = {}) {
   const { metadata, pkg } = packageContext(application);
   const nextMetadata = {
@@ -282,7 +360,15 @@ async function persistReviewMetadata(supabase, application, packageReview, extra
       code: "PACKAGE_REVIEW_UPDATE_FAILED",
     });
   }
-  return { ...application, ...patch };
+  const persisted = await getPackageReviewApplicationById(supabase, application.id);
+  if (!persisted) {
+    throw Object.assign(new Error("Application not found after package review update"), {
+      statusCode: 500,
+      code: "PACKAGE_REVIEW_PERSIST_VERIFY_FAILED",
+    });
+  }
+  assertReviewPersistenceMatches(persisted, packageReview, extraPatch);
+  return persisted;
 }
 
 async function updatePackageReviewItem(supabase, params) {
@@ -467,7 +553,7 @@ async function repairReviewedPackageDocuments(supabase, params) {
   if (!application) {
     throw Object.assign(new Error("Application not found"), { statusCode: 404, code: "NOT_FOUND" });
   }
-  if (String(application.draft_status) !== "reviewed") {
+  if (!packageHasReviewedRecoverySnapshot(application)) {
     throw Object.assign(
       new Error("Only reviewed application packages with unresolved document references can be repaired"),
       { statusCode: 409, code: "PACKAGE_NOT_REVIEWED" },
@@ -539,11 +625,15 @@ async function repairReviewedPackageDocuments(supabase, params) {
         ? application.load_summary
         : {};
 
-  const { attachLoadWorksheetToPackage } = require("./uci-load-worksheet.service.js");
-  const worksheet = await attachLoadWorksheetToPackage(supabase, {
+  const worksheetSlot = mergedPackageDocumentsForRepair(application).find(
+    (doc) => String(doc.key) === "load_calculation_worksheet",
+  );
+  const { persistWorksheetFromPackageSlot } = require("./uci-load-worksheet.service.js");
+  const worksheet = await persistWorksheetFromPackageSlot(supabase, {
     record,
     project: projectResult.data,
     loadSummary,
+    worksheetSlot,
     userId: params.userId,
   });
 
@@ -748,12 +838,34 @@ async function reviewApplicationPackage(supabase, params) {
     reviewed_by: status === "reviewed" ? params.userId : null,
     reviewed_at: status === "reviewed" ? now : null,
   });
+  const persistedSummary = summarizePackageReview(updated);
+  if (status === "reviewed") {
+    if (
+      String(updated.draft_status) !== "reviewed" ||
+      persistedSummary.status !== "reviewed" ||
+      !persistedSummary.reviewed_snapshot
+    ) {
+      throw Object.assign(
+        new Error("Mark reviewed did not persist reviewed status and immutable snapshot"),
+        { statusCode: 500, code: "PACKAGE_REVIEW_PERSIST_MISMATCH" },
+      );
+    }
+    const { blockStaleConfirmedPreparations } = require("./uci-submission-prepare.service.js");
+    await blockStaleConfirmedPreparations(supabase, {
+      applicationId: String(application.id),
+      application: updated,
+      reviewSummary: persistedSummary,
+      userId: params.userId,
+      reason: "reviewed_snapshot_changed",
+    });
+  }
   return {
     application: withPackageReviewSummary(updated),
     review_status: status,
     reviewed_at: status === "reviewed" ? now : null,
     reviewed_by: status === "reviewed" ? params.userId : null,
-    package_review: summarizePackageReview(updated),
+    package_review: persistedSummary,
+    stale_preparations_blocked: status === "reviewed" ? true : undefined,
   };
 }
 
@@ -764,6 +876,8 @@ module.exports = {
   isPersistedProjectDocumentId,
   documentMappingReady,
   findUnresolvedPackageDocumentReferences,
+  packageHasReviewedRecoverySnapshot,
+  mergedPackageDocumentsForRepair,
   packageDocumentsNeedRepair,
   itemReady,
   summarizePackageReview,

@@ -1097,6 +1097,155 @@ async function getSubmissionPreparationPreview(supabase, params) {
   };
 }
 
+function reviewSnapshotAttachmentIds(reviewSummary) {
+  const snapshot = asObject(reviewSummary?.reviewed_snapshot);
+  const docs = Array.isArray(snapshot.package_documents)
+    ? snapshot.package_documents
+    : Array.isArray(snapshot.documents)
+      ? snapshot.documents
+      : [];
+  /** @type {Record<string, string | null>} */
+  const attachmentIds = {};
+  for (const raw of docs) {
+    const doc = asObject(raw);
+    const key = doc.key != null ? String(doc.key) : "";
+    if (!key) continue;
+    attachmentIds[key] = doc.project_document_id != null ? String(doc.project_document_id) : null;
+  }
+  return {
+    captured_at: snapshot.captured_at != null ? String(snapshot.captured_at) : null,
+    attachment_ids: attachmentIds,
+  };
+}
+
+function preparationAttachmentIds(prepRow) {
+  const attachments = Array.isArray(prepRow.attachments) ? prepRow.attachments : [];
+  /** @type {Record<string, string | null>} */
+  const attachmentIds = {};
+  for (const raw of attachments) {
+    const row = asObject(raw);
+    const key = row.key != null ? String(row.key) : "";
+    if (!key) continue;
+    attachmentIds[key] =
+      row.project_document_id != null ? String(row.project_document_id) : null;
+  }
+  return {
+    captured_at:
+      prepRow.package_snapshot_captured_at != null
+        ? String(prepRow.package_snapshot_captured_at)
+        : null,
+    attachment_ids: attachmentIds,
+  };
+}
+
+function preparationMatchesReviewSnapshot(prepRow, reviewSummary) {
+  const current = reviewSnapshotAttachmentIds(reviewSummary);
+  const prep = preparationAttachmentIds(prepRow);
+  if (!reviewSummary?.reviewed_snapshot) return true;
+  if (current.captured_at && prep.captured_at && current.captured_at === prep.captured_at) {
+    return true;
+  }
+  const keys = new Set([
+    ...Object.keys(current.attachment_ids),
+    ...Object.keys(prep.attachment_ids),
+  ]);
+  if (keys.size === 0) {
+    return current.captured_at === prep.captured_at;
+  }
+  for (const key of keys) {
+    if (current.attachment_ids[key] !== prep.attachment_ids[key]) return false;
+  }
+  return true;
+}
+
+function preparationIsStaleForReviewSnapshot(prepRow, reviewSummary) {
+  if (String(prepRow?.status ?? "") !== "confirmed_for_transmission") return false;
+  if (!reviewSummary?.reviewed_snapshot) return false;
+  return !preparationMatchesReviewSnapshot(prepRow, reviewSummary);
+}
+
+/**
+ * Block confirmed preparations whose attachment snapshot no longer matches the
+ * current reviewed snapshot (recovery after repair / re-review).
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function blockStaleConfirmedPreparations(supabase, params) {
+  const applicationId = String(params.applicationId ?? "");
+  const reviewSummary = params.reviewSummary;
+  const userId = params.userId != null ? String(params.userId) : null;
+  const reason = String(params.reason ?? "reviewed_snapshot_changed");
+  const now = new Date().toISOString();
+  let application = params.application ?? null;
+
+  /** @type {Array<Record<string, unknown>>} */
+  let candidates = [];
+  const { data, error } = await supabase
+    .from("submission_preparations")
+    .select("*")
+    .eq("application_id", applicationId)
+    .eq("status", "confirmed_for_transmission");
+  if (!error && Array.isArray(data)) {
+    candidates = data;
+  } else if (!application) {
+    application = await getApplicationById(supabase, applicationId);
+  }
+  if (candidates.length === 0 && application) {
+    const metadata = asObject(application.agent_draft_metadata);
+    const history = Array.isArray(metadata.submission_preparations)
+      ? metadata.submission_preparations
+      : [];
+    candidates = history.filter((row) => String(row.status) === "confirmed_for_transmission");
+  }
+
+  /** @type {Array<{ id: string, status: string }>} */
+  const blocked = [];
+  for (const row of candidates) {
+    if (!preparationIsStaleForReviewSnapshot(row, reviewSummary)) continue;
+    const blocker = {
+      code: "STALE_REVIEWED_SNAPSHOT",
+      message:
+        "Confirmed against a prior reviewed snapshot — blocked after package re-review; prepare again",
+      blocked_at: now,
+      blocked_by_user_id: userId,
+      reason,
+      prior_package_snapshot_captured_at: row.package_snapshot_captured_at ?? null,
+      current_package_snapshot_captured_at:
+        reviewSummary?.reviewed_snapshot?.captured_at ?? null,
+    };
+    const patch = {
+      status: "blocked",
+      blockers: [blocker],
+      updated_at: now,
+    };
+    if (row.id && (!error || candidates === data)) {
+      const updateResult = await supabase
+        .from("submission_preparations")
+        .update(patch)
+        .eq("id", String(row.id))
+        .select("id")
+        .single();
+      if (updateResult.error) {
+        throw Object.assign(
+          new Error(updateResult.error.message || "Failed to block stale submission preparation"),
+          { statusCode: 500, code: "PREPARE_STALE_BLOCK_FAILED", cause: updateResult.error },
+        );
+      }
+    }
+    if (!application) {
+      application = await getApplicationById(supabase, applicationId);
+    }
+    if (application) {
+      await appendPreparationPointer(supabase, application, { ...row, ...patch }, {
+        table_persisted: !error,
+      });
+    }
+    blocked.push({ id: String(row.id), status: "blocked" });
+  }
+  return { blocked_count: blocked.length, blocked };
+}
+
 module.exports = {
   PREPARE_VERSION,
   CAPABILITY,
@@ -1120,4 +1269,9 @@ module.exports = {
   getAllowedRecipientAddresses,
   assertLiveEmailAllowlists,
   toPreview,
+  reviewSnapshotAttachmentIds,
+  preparationAttachmentIds,
+  preparationMatchesReviewSnapshot,
+  preparationIsStaleForReviewSnapshot,
+  blockStaleConfirmedPreparations,
 };

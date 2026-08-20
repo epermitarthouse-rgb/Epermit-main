@@ -245,22 +245,7 @@ export default function UciApplicationBuilder() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!isReviewed ? (
-              <button
-                type="button"
-                className="pilot-button-ghost"
-                disabled={builder.buildBusy || !builder.buildEligibility.ok}
-                title={builder.buildEligibility.reason ?? "Save application package draft"}
-                onClick={() => void builder.saveDraft()}
-              >
-                {builder.buildBusy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save draft
-              </button>
-            ) : builder.repairEligibility.ok ? (
+            {builder.repairEligibility.ok ? (
               <button
                 type="button"
                 className="pilot-button-ghost"
@@ -274,6 +259,21 @@ export default function UciApplicationBuilder() {
                   <Save className="h-4 w-4" />
                 )}
                 Repair package
+              </button>
+            ) : !isReviewed ? (
+              <button
+                type="button"
+                className="pilot-button-ghost"
+                disabled={builder.buildBusy || !builder.buildEligibility.ok}
+                title={builder.buildEligibility.reason ?? "Save application package draft"}
+                onClick={() => void builder.saveDraft()}
+              >
+                {builder.buildBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save draft
               </button>
             ) : null}
             {isReviewed && builder.coordinationId ? (

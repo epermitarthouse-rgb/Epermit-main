@@ -26,6 +26,7 @@ import {
   parseApplicationPackageMetadata,
   parsePackageDocuments,
   canRepairReviewedPackageDocuments,
+  applicationReviewPersisted,
   type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
 import {
@@ -394,6 +395,9 @@ export function useUciApplicationBuilder() {
         status,
         notes: reviewNotes.trim() || undefined,
       });
+      if (status === "reviewed" && !applicationReviewPersisted(result.application)) {
+        throw new Error("Mark reviewed did not persist — refresh and try again");
+      }
       applyApplicationMutation(result.application);
       void refreshDetail(coordinationId).catch(() => {
         // The mutation response already contains the canonical reviewed state.

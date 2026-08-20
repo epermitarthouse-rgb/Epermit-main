@@ -191,6 +191,39 @@ export function findUnresolvedPackageDocumentReferences(
   return unresolved;
 }
 
+export function packageHasReviewedRecoverySnapshot(
+  packageApp: CoordinationApplication | null | undefined,
+): boolean {
+  if (!packageApp) return false;
+  if (packageApp.draft_status === "reviewed") return true;
+  const review = parseApplicationPackageMetadata(packageApp)?.package_review;
+  return Boolean(review?.reviewed_snapshot);
+}
+
+export function mergePackageDocumentsForRepair(
+  liveDocuments: UciApplicationPackageDocument[],
+  snapshotDocuments: unknown,
+): UciApplicationPackageDocument[] {
+  const byKey = new Map<string, UciApplicationPackageDocument>();
+  for (const document of parsePackageDocuments(snapshotDocuments)) {
+    byKey.set(document.key, document);
+  }
+  for (const document of liveDocuments) {
+    byKey.set(document.key, document);
+  }
+  return [...byKey.values()];
+}
+
+export function collectRepairablePackageDocuments(
+  packageApp: CoordinationApplication | null | undefined,
+  liveDocuments: UciApplicationPackageDocument[],
+): UciApplicationPackageDocument[] {
+  const snapshotDocuments =
+    parseApplicationPackageMetadata(packageApp)?.package_review?.reviewed_snapshot
+      ?.package_documents;
+  return mergePackageDocumentsForRepair(liveDocuments, snapshotDocuments);
+}
+
 export function canRepairReviewedPackageDocuments(
   packageApp: CoordinationApplication | null | undefined,
   documents: UciApplicationPackageDocument[],
@@ -198,14 +231,16 @@ export function canRepairReviewedPackageDocuments(
   if (!packageApp) {
     return { ok: false, reason: "No application package exists", unresolvedKeys: [] };
   }
-  if (packageApp.draft_status !== "reviewed") {
+  if (!packageHasReviewedRecoverySnapshot(packageApp)) {
     return {
       ok: false,
       reason: "Repair is only available for reviewed packages with unresolved document references",
       unresolvedKeys: [],
     };
   }
-  const unresolved = findUnresolvedPackageDocumentReferences(documents);
+  const unresolved = findUnresolvedPackageDocumentReferences(
+    collectRepairablePackageDocuments(packageApp, documents),
+  );
   if (unresolved.length === 0) {
     return {
       ok: false,
@@ -687,6 +722,21 @@ export function applicationPackageStatusTone(
 
 export function canSubmitApplication(draftStatus: DraftStatus | undefined): boolean {
   return draftStatus === "reviewed";
+}
+
+/** Only a live confirmed prep blocks creating another preparation. */
+export function preparationBlocksNewPrepare(
+  prep: { status?: string | null } | null | undefined,
+): boolean {
+  return String(prep?.status ?? "") === "confirmed_for_transmission";
+}
+
+export function applicationReviewPersisted(
+  application: CoordinationApplication | null | undefined,
+): boolean {
+  if (!application || application.draft_status !== "reviewed") return false;
+  const review = parseApplicationPackageMetadata(application)?.package_review;
+  return Boolean(review?.reviewed_snapshot);
 }
 
 export function formatPackageDocumentSource(source: string | undefined): string {

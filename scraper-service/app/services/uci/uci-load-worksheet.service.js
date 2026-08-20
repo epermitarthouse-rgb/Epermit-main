@@ -74,11 +74,128 @@ async function buildLoadWorksheetPdf(params) {
   return Buffer.from(bytes);
 }
 
+const PERSISTED_PROJECT_DOCUMENT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveWorksheetUserId(params) {
+  const candidates = [params.userId, params.record?.user_id, params.project?.user_id];
+  for (const candidate of candidates) {
+    const id = candidate != null ? String(candidate).trim() : "";
+    if (id && PERSISTED_PROJECT_DOCUMENT_ID.test(id)) return id;
+  }
+  return null;
+}
+
 function worksheetPersistError(message, code, extra = {}) {
   return Object.assign(new Error(message), {
     statusCode: extra.statusCode ?? 500,
     code,
     cause: extra.cause,
+  });
+}
+
+function buildWorksheetPackageSlot(projectDocument, worksheetSlot = {}) {
+  const projectDocumentId = String(projectDocument.id);
+  const fileName =
+    (worksheetSlot.file_name != null && String(worksheetSlot.file_name).trim()) ||
+    String(projectDocument.file_name || "uci-load-worksheet.pdf");
+  const storagePath =
+    (worksheetSlot.storage_path != null && String(worksheetSlot.storage_path).trim()) ||
+    (projectDocument.file_path != null ? String(projectDocument.file_path) : null);
+  return {
+    key: "load_calculation_worksheet",
+    label: "Load calculation worksheet",
+    status: "attached",
+    source: worksheetSlot.source != null ? String(worksheetSlot.source) : "generated_worksheet",
+    generated: worksheetSlot.generated === true,
+    generated_by:
+      worksheetSlot.generated_by != null ? String(worksheetSlot.generated_by) : "uci-load-worksheet",
+    file_name: fileName,
+    storage_path: storagePath,
+    project_document_id: projectDocumentId,
+    project_document: {
+      id: projectDocumentId,
+      document_type: "load_calculation_worksheet",
+      file_name: fileName,
+    },
+  };
+}
+
+/**
+ * Reuse an existing package worksheet file when possible, otherwise generate a new PDF.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function persistWorksheetFromPackageSlot(supabase, params) {
+  const { record, project, loadSummary, worksheetSlot = null, userId = null } = params;
+  const projectId = record?.project_id != null ? String(record.project_id) : "";
+  if (!projectId) {
+    throw worksheetPersistError("project_id is required to attach load calculation worksheet", "WORKSHEET_PROJECT_REQUIRED", {
+      statusCode: 400,
+    });
+  }
+
+  const resolvedUserId = resolveWorksheetUserId({ userId, record, project });
+  if (!resolvedUserId) {
+    throw worksheetPersistError(
+      "user_id is required to persist load calculation worksheet in project_documents",
+      "WORKSHEET_USER_REQUIRED",
+      { statusCode: 400 },
+    );
+  }
+
+  const slot = worksheetSlot && typeof worksheetSlot === "object" ? worksheetSlot : {};
+  const { data: existing, error: existingError } = await supabase
+    .from("project_documents")
+    .select("id, file_name, file_path, document_type")
+    .eq("project_id", projectId)
+    .eq("document_type", "load_calculation_worksheet")
+    .limit(5);
+  if (existingError) {
+    throw worksheetPersistError(
+      existingError.message || "Failed to look up existing load calculation worksheet",
+      "WORKSHEET_DOCUMENT_LOOKUP_FAILED",
+      { cause: existingError },
+    );
+  }
+  const prior = Array.isArray(existing) ? existing[0] : null;
+  if (prior?.id) {
+    return buildWorksheetPackageSlot(prior, slot);
+  }
+
+  const storagePath = slot.storage_path != null ? String(slot.storage_path).trim() : "";
+  const fileName = slot.file_name != null ? String(slot.file_name).trim() : "";
+  if (storagePath && fileName) {
+    const { data: inserted, error: insertError } = await supabase
+      .from("project_documents")
+      .insert({
+        project_id: projectId,
+        user_id: resolvedUserId,
+        file_name: fileName,
+        file_path: storagePath,
+        file_size: slot.file_size != null ? Number(slot.file_size) || 0 : 0,
+        file_type: "application/pdf",
+        document_type: "load_calculation_worksheet",
+        description: "Generated UCI load calculation worksheet",
+      })
+      .select("id, file_name, file_path, document_type")
+      .single();
+    if (insertError || !inserted?.id) {
+      throw worksheetPersistError(
+        insertError?.message || "Failed to persist load calculation worksheet in project_documents",
+        "WORKSHEET_DOCUMENT_PERSIST_FAILED",
+        { cause: insertError },
+      );
+    }
+    return buildWorksheetPackageSlot(inserted, slot);
+  }
+
+  return attachLoadWorksheetToPackage(supabase, {
+    record,
+    project,
+    loadSummary,
+    userId: resolvedUserId,
   });
 }
 
@@ -99,14 +216,7 @@ async function attachLoadWorksheetToPackage(supabase, params) {
     });
   }
 
-  const resolvedUserId =
-    userId != null && String(userId).trim()
-      ? String(userId).trim()
-      : record?.user_id != null && String(record.user_id).trim()
-        ? String(record.user_id).trim()
-        : project?.user_id != null && String(project.user_id).trim()
-          ? String(project.user_id).trim()
-          : null;
+  const resolvedUserId = resolveWorksheetUserId({ userId, record, project });
   if (!resolvedUserId) {
     throw worksheetPersistError(
       "user_id is required to persist load calculation worksheet in project_documents",
@@ -205,25 +315,25 @@ async function attachLoadWorksheetToPackage(supabase, params) {
     );
   }
 
-  return {
-    key: "load_calculation_worksheet",
-    label: "Load calculation worksheet",
-    status: "attached",
-    source: "generated_worksheet",
-    generated: true,
-    generated_by: "uci-load-worksheet",
-    file_name: fileName,
-    storage_path: storagePath,
-    project_document_id: projectDocumentId,
-    project_document: {
+  return buildWorksheetPackageSlot(
+    {
       id: projectDocumentId,
-      document_type: "load_calculation_worksheet",
       file_name: fileName,
+      file_path: storagePath,
+      document_type: "load_calculation_worksheet",
     },
-  };
+    {
+      source: "generated_worksheet",
+      generated: true,
+      generated_by: "uci-load-worksheet",
+      file_name: fileName,
+      storage_path: storagePath,
+    },
+  );
 }
 
 module.exports = {
   buildLoadWorksheetPdf,
   attachLoadWorksheetToPackage,
+  persistWorksheetFromPackageSlot,
 };

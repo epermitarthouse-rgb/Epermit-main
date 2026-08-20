@@ -16,6 +16,8 @@ const {
 } = require("../app/services/uci/uci-submission-validation.service.js");
 const { createTrackBMockSupabase } = require("./helpers/uci-track-b-mock.js");
 
+const TEST_USER_ID = "550e8400-e29b-41d4-a716-446655440001";
+
 describe("UCI attachment document reference gates", () => {
   it("isPersistedProjectDocumentId rejects synthetic and accepts UUIDs", () => {
     assert.equal(isPersistedProjectDocumentId("generated-worksheet-coord-1"), false);
@@ -48,14 +50,14 @@ describe("UCI attachment document reference gates", () => {
   it("persisted load worksheet returns real project_document_id (idempotent)", async () => {
     const tables = {
       project_documents: [],
-      projects: [{ id: "proj-1", user_id: "user-1" }],
+      projects: [{ id: "proj-1", user_id: TEST_USER_ID }],
     };
     const supabase = createTrackBMockSupabase(tables);
     const params = {
-      record: { id: "coord-1", project_id: "proj-1", utility_type: "electric", user_id: "user-1" },
-      project: { id: "proj-1", name: "Portsmouth", user_id: "user-1" },
+      record: { id: "coord-1", project_id: "proj-1", utility_type: "electric", user_id: TEST_USER_ID },
+      project: { id: "proj-1", name: "Portsmouth", user_id: TEST_USER_ID },
       loadSummary: { calculated_values: { service_size: { value: "400A" } } },
-      userId: "user-1",
+      userId: TEST_USER_ID,
     };
     const first = await attachLoadWorksheetToPackage(supabase, params);
     assert.equal(first.status, "attached");
@@ -63,6 +65,42 @@ describe("UCI attachment document reference gates", () => {
     assert.equal(tables.project_documents.length, 1);
 
     const second = await attachLoadWorksheetToPackage(supabase, params);
+    assert.equal(second.project_document_id, first.project_document_id);
+    assert.equal(tables.project_documents.length, 1);
+  });
+
+  it("persistWorksheetFromPackageSlot reuses existing storage path without regenerating PDF", async () => {
+    const tables = {
+      project_documents: [],
+      projects: [{ id: "proj-1", user_id: TEST_USER_ID }],
+    };
+    const supabase = createTrackBMockSupabase(tables);
+    const { persistWorksheetFromPackageSlot } = require("../app/services/uci/uci-load-worksheet.service.js");
+    const slot = {
+      file_name: "uci-load-worksheet-f656209f.pdf",
+      storage_path: "uci/project/coord/worksheet.pdf",
+      source: "generated_worksheet",
+      generated: true,
+    };
+    const first = await persistWorksheetFromPackageSlot(supabase, {
+      record: { id: "coord-1", project_id: "proj-1", utility_type: "electric", user_id: TEST_USER_ID },
+      project: { id: "proj-1", name: "Portsmouth", user_id: TEST_USER_ID },
+      loadSummary: {},
+      worksheetSlot: slot,
+      userId: TEST_USER_ID,
+    });
+    assert.ok(isPersistedProjectDocumentId(first.project_document_id));
+    assert.equal(first.file_name, slot.file_name);
+    assert.equal(first.storage_path, slot.storage_path);
+    assert.equal(tables.project_documents.length, 1);
+
+    const second = await persistWorksheetFromPackageSlot(supabase, {
+      record: { id: "coord-1", project_id: "proj-1", utility_type: "electric", user_id: TEST_USER_ID },
+      project: { id: "proj-1", name: "Portsmouth", user_id: TEST_USER_ID },
+      loadSummary: {},
+      worksheetSlot: slot,
+      userId: TEST_USER_ID,
+    });
     assert.equal(second.project_document_id, first.project_document_id);
     assert.equal(tables.project_documents.length, 1);
   });
