@@ -165,7 +165,15 @@ async function resolveEnergizationDateConflict(supabase, params) {
 }
 
 async function attachCloseoutArtifact(supabase, params) {
-  const { coordinationRecordId, kind, docId = null, label = null, source = "operator" } = params;
+  const {
+    coordinationRecordId,
+    kind,
+    docId = null,
+    label = null,
+    source = "operator",
+    communicationId = null,
+    confirmedBy = null,
+  } = params;
   const allowed = new Set(["utility_confirmation", "final_meter_reading", "commissioning_signoff"]);
   if (!allowed.has(String(kind))) {
     const err = new Error("artifact kind must be utility_confirmation, final_meter_reading, or commissioning_signoff");
@@ -188,7 +196,7 @@ async function attachCloseoutArtifact(supabase, params) {
   if (alreadyPresent) {
     return { record, previous: record, idempotent: true };
   }
-  const evidence = buildEvidenceRef({ kind, source, docId, label });
+  const evidence = buildEvidenceRef({ kind, source, docId, label, communicationId, confirmedBy });
   const nextMeta = mergeCloseoutArtifact(record, kind, evidence);
   return updateCoordinationRecordFields(supabase, {
     coordinationRecordId,

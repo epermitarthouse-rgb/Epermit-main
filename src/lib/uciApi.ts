@@ -2560,7 +2560,13 @@ export async function recordMeterSetOutcome(
 
 export async function attachCloseoutArtifact(
   coordinationId: string,
-  payload: { kind: string; doc_id?: string; label?: string },
+  payload: {
+    kind: string;
+    doc_id?: string;
+    label?: string;
+    communication_id?: string;
+    source?: string;
+  },
 ): Promise<Record<string, unknown>> {
   return uciFetchJson(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/artifacts`,

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -1749,6 +1750,458 @@ export function getCloseoutArtifactEvidence(
     : null;
 }
 
+export type CloseoutEvidenceSourceType =
+  | "communication"
+  | "stage_9_milestone"
+  | "uploaded_document"
+  | "existing_record";
+
+export type CloseoutEvidenceStatus = "confirmed" | "inherited" | "missing";
+
+export interface CloseoutEvidenceResolution {
+  status: CloseoutEvidenceStatus;
+  sourceType: CloseoutEvidenceSourceType | null;
+  sourceName: string | null;
+  sourceId: string | null;
+  capturedAt: string | null;
+  confirmedBy: string | null;
+  note: string | null;
+  docId: string | null;
+}
+
+const CLOSEOUT_EVIDENCE_SOURCE_LABELS: Record<CloseoutEvidenceSourceType, string> = {
+  communication: "communication",
+  stage_9_milestone: "Stage 9 milestone",
+  uploaded_document: "uploaded document",
+  existing_record: "existing record",
+};
+
+function closeoutArtifactDocId(
+  record: CoordinationRecord | null | undefined,
+  key: CloseoutArtifactKey,
+): string | null {
+  const artifacts = readCloseoutArtifacts(record);
+  const docKey = `${key}_doc_id`;
+  const raw = artifacts[docKey];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+function communicationHaystack(comm: CoordinationCommunication): string {
+  return `${comm.raw_subject ?? ""} ${comm.raw_body ?? ""} ${comm.parsed_summary ?? ""}`.toLowerCase();
+}
+
+function communicationDisplayName(comm: CoordinationCommunication): string {
+  const subject = String(comm.raw_subject || "").trim();
+  if (subject) return subject.length > 72 ? `${subject.slice(0, 69)}…` : subject;
+  const summary = String(comm.parsed_summary || "").trim();
+  if (summary) return summary.length > 72 ? `${summary.slice(0, 69)}…` : summary;
+  return formatCommunicationClassification(comm.classification);
+}
+
+function findInboundCommunication(
+  communications: CoordinationCommunication[],
+  predicate: (comm: CoordinationCommunication) => boolean,
+): CoordinationCommunication | undefined {
+  return (
+    communications.find((comm) => comm.direction === "inbound" && predicate(comm)) ||
+    communications.find(predicate)
+  );
+}
+
+function mapPersistedEvidenceSource(
+  evidence: Record<string, unknown>,
+  docId: string | null,
+  checklistOnly: boolean,
+): Pick<CloseoutEvidenceResolution, "sourceType" | "sourceName" | "sourceId" | "docId"> {
+  const communicationId =
+    typeof evidence.communication_id === "string" ? evidence.communication_id : null;
+  const evidenceDocId = typeof evidence.doc_id === "string" ? evidence.doc_id : docId;
+  const source = String(evidence.source || "");
+
+  if (communicationId || source.includes("communication") || source === "energization_confirmation") {
+    return {
+      sourceType: "communication",
+      sourceName: typeof evidence.label === "string" ? evidence.label : "Utility communication",
+      sourceId: communicationId,
+      docId: evidenceDocId,
+    };
+  }
+  if (source === "stage_9_milestone") {
+    return {
+      sourceType: "stage_9_milestone",
+      sourceName: typeof evidence.label === "string" ? evidence.label : "Stage 9 milestone",
+      sourceId: communicationId,
+      docId: evidenceDocId,
+    };
+  }
+  if (evidenceDocId) {
+    return {
+      sourceType: "uploaded_document",
+      sourceName: evidenceDocId,
+      sourceId: evidenceDocId,
+      docId: evidenceDocId,
+    };
+  }
+  if (checklistOnly) {
+    return {
+      sourceType: "stage_9_milestone",
+      sourceName: "Closeout checklist — utility energization confirmed",
+      sourceId: "utility_energization_confirmed",
+      docId: null,
+    };
+  }
+  return {
+    sourceType: "existing_record",
+    sourceName: typeof evidence.label === "string" ? evidence.label : "Persisted closeout artifact",
+    sourceId: typeof evidence.kind === "string" ? evidence.kind : null,
+    docId: null,
+  };
+}
+
+function findInheritedUtilityConfirmation(
+  communications: CoordinationCommunication[],
+): CoordinationCommunication | undefined {
+  return findInboundCommunication(
+    communications,
+    (comm) => String(comm.classification || "") === "energization_confirmation",
+  );
+}
+
+function findInheritedFinalMeterReading(
+  communications: CoordinationCommunication[],
+  milestones: CoordinationMilestone[],
+): {
+  communication?: CoordinationCommunication;
+  milestone?: CoordinationMilestone;
+} {
+  const communication = findInboundCommunication(communications, (comm) =>
+    /final meter reading|meter reading attached|meter read(ing)?/.test(communicationHaystack(comm)),
+  );
+  const milestone = milestones.find(
+    (m) => m.milestone_type === "meter_set" && m.status === "completed",
+  );
+  return { communication, milestone };
+}
+
+function findInheritedCommissioningSignoff(
+  communications: CoordinationCommunication[],
+): CoordinationCommunication | undefined {
+  return findInboundCommunication(communications, (comm) =>
+    /commissioning/.test(communicationHaystack(comm)),
+  );
+}
+
+/** Resolves Stage 10 evidence from persisted artifacts, documents, milestones, and communications. */
+export function resolveCloseoutArtifactEvidence(params: {
+  record: CoordinationRecord | null | undefined;
+  key: CloseoutArtifactKey;
+  communications?: CoordinationCommunication[];
+  milestones?: CoordinationMilestone[];
+}): CloseoutEvidenceResolution {
+  const { record, key, communications = [], milestones = [] } = params;
+  const evidence = getCloseoutArtifactEvidence(record, key);
+  const docId = closeoutArtifactDocId(record, key);
+  const checklistUtility =
+    key === "utility_confirmation" && closeoutChecklistFlag(record, "utility_energization_confirmed");
+
+  if (hasCloseoutArtifactOnRecord(record, key)) {
+    if (evidence) {
+      const checklistOnly = checklistUtility && !evidence.communication_id && !evidence.doc_id;
+      const mapped = mapPersistedEvidenceSource(evidence, docId, checklistOnly);
+      return {
+        status: "confirmed",
+        ...mapped,
+        capturedAt: typeof evidence.captured_at === "string" ? evidence.captured_at : null,
+        confirmedBy:
+          typeof evidence.confirmed_by === "string"
+            ? evidence.confirmed_by
+            : evidence.source === "operator"
+              ? "Operator"
+              : null,
+        note: typeof evidence.label === "string" ? evidence.label : null,
+      };
+    }
+    if (docId) {
+      return {
+        status: "confirmed",
+        sourceType: "uploaded_document",
+        sourceName: docId,
+        sourceId: docId,
+        capturedAt: null,
+        confirmedBy: null,
+        note: null,
+        docId,
+      };
+    }
+    if (checklistUtility) {
+      return {
+        status: "confirmed",
+        sourceType: "stage_9_milestone",
+        sourceName: "Closeout checklist — utility energization confirmed",
+        sourceId: "utility_energization_confirmed",
+        capturedAt: null,
+        confirmedBy: null,
+        note: null,
+        docId: null,
+      };
+    }
+  }
+
+  if (key === "utility_confirmation") {
+    const comm = findInheritedUtilityConfirmation(communications);
+    if (comm) {
+      return {
+        status: "inherited",
+        sourceType: "communication",
+        sourceName: communicationDisplayName(comm),
+        sourceId: comm.id,
+        capturedAt: comm.message_timestamp || comm.created_at,
+        confirmedBy: null,
+        note: null,
+        docId: null,
+      };
+    }
+  }
+
+  if (key === "final_meter_reading") {
+    const inherited = findInheritedFinalMeterReading(communications, milestones);
+    if (inherited.communication) {
+      return {
+        status: "inherited",
+        sourceType: "communication",
+        sourceName: communicationDisplayName(inherited.communication),
+        sourceId: inherited.communication.id,
+        capturedAt:
+          inherited.communication.message_timestamp || inherited.communication.created_at,
+        confirmedBy: null,
+        note: null,
+        docId: null,
+      };
+    }
+    if (inherited.milestone) {
+      const when =
+        inherited.milestone.actual_date ||
+        inherited.milestone.occurred_at ||
+        inherited.milestone.created_at;
+      return {
+        status: "inherited",
+        sourceType: "stage_9_milestone",
+        sourceName: "Meter set completed",
+        sourceId: inherited.milestone.id,
+        capturedAt: when ?? null,
+        confirmedBy: null,
+        note: null,
+        docId: null,
+      };
+    }
+  }
+
+  if (key === "commissioning_signoff") {
+    const comm = findInheritedCommissioningSignoff(communications);
+    if (comm) {
+      return {
+        status: "inherited",
+        sourceType: "communication",
+        sourceName: communicationDisplayName(comm),
+        sourceId: comm.id,
+        capturedAt: comm.message_timestamp || comm.created_at,
+        confirmedBy: null,
+        note: null,
+        docId: null,
+      };
+    }
+  }
+
+  return {
+    status: "missing",
+    sourceType: null,
+    sourceName: null,
+    sourceId: null,
+    capturedAt: null,
+    confirmedBy: null,
+    note: null,
+    docId: null,
+  };
+}
+
+export function formatCloseoutEvidenceSourceLabel(resolution: CloseoutEvidenceResolution): string | null {
+  if (!resolution.sourceType) return null;
+  const base = CLOSEOUT_EVIDENCE_SOURCE_LABELS[resolution.sourceType];
+  if (resolution.sourceName) return `${base} · ${resolution.sourceName}`;
+  return base;
+}
+
+function CloseoutArtifactEvidenceRow({
+  artifactKey,
+  label,
+  resolution,
+  closeoutBusy,
+  onConfirm,
+  mutedClass,
+  formatWhen,
+}: {
+  artifactKey: CloseoutArtifactKey;
+  label: string;
+  resolution: CloseoutEvidenceResolution;
+  closeoutBusy: boolean;
+  onConfirm: (payload: {
+    kind: CloseoutArtifactKey;
+    label?: string;
+    doc_id?: string;
+    communication_id?: string;
+    source?: string;
+  }) => void;
+  mutedClass: string;
+  formatWhen: (iso: string | null | undefined) => string;
+}) {
+  const [note, setNote] = useState("");
+  const [docRef, setDocRef] = useState("");
+  const [showConfirmForm, setShowConfirmForm] = useState(false);
+
+  const sourceLabel = formatCloseoutEvidenceSourceLabel(resolution);
+
+  const submitConfirmation = () => {
+    const trimmedNote = note.trim();
+    const trimmedDoc = docRef.trim();
+    if (resolution.status === "missing" && !trimmedNote) return;
+
+    const defaultLabel =
+      resolution.status === "inherited" && sourceLabel
+        ? `Confirmed from ${sourceLabel}`
+        : trimmedNote;
+
+    onConfirm({
+      kind: artifactKey,
+      label: trimmedNote || defaultLabel,
+      doc_id: trimmedDoc || undefined,
+      communication_id:
+        resolution.status === "inherited" && resolution.sourceType === "communication"
+          ? resolution.sourceId || undefined
+          : undefined,
+      source:
+        resolution.status === "inherited" && resolution.sourceType === "communication"
+          ? "communication"
+          : resolution.status === "inherited" && resolution.sourceType === "stage_9_milestone"
+            ? "stage_9_milestone"
+            : "operator",
+    });
+    setShowConfirmForm(false);
+    setNote("");
+    setDocRef("");
+  };
+
+  return (
+    <li className="rounded-md border border-border/50 px-2 py-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="font-medium">{label}</p>
+          {resolution.status === "confirmed" ? (
+            <>
+              <p className="text-teal">
+                <CheckCircle2 className="mr-1 inline h-3 w-3 shrink-0" />
+                Found / Confirmed
+              </p>
+              {sourceLabel ? <p className={mutedClass}>Source: {sourceLabel}</p> : null}
+              {resolution.sourceId ? (
+                <p className={cn("tabular-nums", mutedClass)}>Ref: {resolution.sourceId}</p>
+              ) : null}
+              {resolution.capturedAt ? (
+                <p className={cn("tabular-nums", mutedClass)}>{formatWhen(resolution.capturedAt)}</p>
+              ) : null}
+              {resolution.confirmedBy ? (
+                <p className={mutedClass}>Confirmed by {resolution.confirmedBy}</p>
+              ) : null}
+              {resolution.note && resolution.note !== resolution.sourceName ? (
+                <p className={mutedClass}>Note: {resolution.note}</p>
+              ) : null}
+            </>
+          ) : resolution.status === "inherited" ? (
+            <>
+              <p className="text-amber-700 dark:text-amber-400">
+                Found in prior UCI records — confirm to attach
+              </p>
+              {sourceLabel ? <p className={mutedClass}>Source: {sourceLabel}</p> : null}
+              {resolution.sourceId ? (
+                <p className={cn("tabular-nums", mutedClass)}>Ref: {resolution.sourceId}</p>
+              ) : null}
+              {resolution.capturedAt ? (
+                <p className={cn("tabular-nums", mutedClass)}>{formatWhen(resolution.capturedAt)}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-muted-foreground">
+              Not found in prior UCI records — manual confirmation required
+            </p>
+          )}
+        </div>
+        {resolution.status === "confirmed" ? (
+          <Badge variant="secondary" className="shrink-0 text-[10px] text-teal">
+            <CheckCircle2 className="mr-1 inline h-3 w-3" />
+            Confirmed
+          </Badge>
+        ) : null}
+      </div>
+
+      {resolution.status !== "confirmed" ? (
+        <div className="mt-2 space-y-2">
+          {showConfirmForm ? (
+            <>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={
+                  resolution.status === "missing"
+                    ? "Confirmation note (required for external evidence)"
+                    : "Optional note"
+                }
+                className="min-h-[52px] text-xs"
+                rows={2}
+              />
+              <Input
+                value={docRef}
+                onChange={(e) => setDocRef(e.target.value)}
+                placeholder="Evidence reference or document ID (optional)"
+                className="h-8 text-xs"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={closeoutBusy || (resolution.status === "missing" && !note.trim())}
+                  onClick={submitConfirmation}
+                >
+                  {closeoutBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                  Confirm evidence
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={closeoutBusy}
+                  onClick={() => setShowConfirmForm(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={closeoutBusy}
+              onClick={() => setShowConfirmForm(true)}
+            >
+              {resolution.status === "inherited" ? "Confirm from UCI record" : "Confirm manually"}
+            </Button>
+          )}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
 export function hasMeterSetRequestSent(
   recordId: string | null | undefined,
   communications: CoordinationCommunication[] = [],
@@ -1930,7 +2383,13 @@ export function MeterSetCloseoutPanel({
   onConfirmSiteReadiness: () => void;
   onRecordOutcome: (payload: { outcome: string; actual_date?: string; reschedule_date?: string }) => void;
   onCompleteStage9: () => void;
-  onAttachArtifact: (kind: string) => void;
+  onAttachArtifact: (payload: {
+    kind: CloseoutArtifactKey;
+    label?: string;
+    doc_id?: string;
+    communication_id?: string;
+    source?: string;
+  }) => void;
   onMarkEnergized: (actualDate: string) => void;
   onResolveDateConflict: () => void;
   onGenerateCloseout: () => void;
@@ -2133,38 +2592,25 @@ export function MeterSetCloseoutPanel({
               </Button>
             </div>
           ) : null}
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {closeoutArtifactRows.map(({ key, label }) => {
-              const onFile = actionState.artifacts[key];
-              const evidence = getCloseoutArtifactEvidence(record, key);
-              const capturedAt =
-                typeof evidence?.captured_at === "string" ? evidence.captured_at : null;
+              const resolution = resolveCloseoutArtifactEvidence({
+                record,
+                key,
+                communications,
+                milestones,
+              });
               return (
-                <li key={key} className="flex flex-wrap items-center justify-between gap-2">
-                  <span className={cn(onFile && "text-teal")}>
-                    {label}:{" "}
-                    {onFile ? (
-                      <>
-                        Received ✓
-                        {capturedAt ? (
-                          <span className={cn("ml-1 tabular-nums", mutedClass)}>· {formatWhen(capturedAt)}</span>
-                        ) : null}
-                      </>
-                    ) : (
-                      "missing"
-                    )}
-                  </span>
-                  <WorkflowCompletedActionButton
-                    completed={onFile}
-                    completedLabel="Received ✓"
-                    pendingLabel="Record received"
-                    timestamp={capturedAt}
-                    busy={closeoutBusy}
-                    onClick={() => onAttachArtifact(key)}
-                    toolbarOutlineButtonClass={toolbarOutlineButtonClass}
-                    formatWhen={formatWhen}
-                  />
-                </li>
+                <CloseoutArtifactEvidenceRow
+                  key={key}
+                  artifactKey={key}
+                  label={label}
+                  resolution={resolution}
+                  closeoutBusy={closeoutBusy}
+                  onConfirm={onAttachArtifact}
+                  mutedClass={mutedClass}
+                  formatWhen={formatWhen}
+                />
               );
             })}
             <li className="flex flex-wrap items-center justify-between gap-2">

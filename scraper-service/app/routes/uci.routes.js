@@ -4417,6 +4417,8 @@ function createUciRouter(opts) {
         docId: body.doc_id,
         label: body.label,
         source: body.source || "operator",
+        communicationId: body.communication_id,
+        confirmedBy: user.email || user.id,
       });
       res.json(result);
     } catch (err) {

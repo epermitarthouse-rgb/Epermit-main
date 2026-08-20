@@ -4893,11 +4893,18 @@ export default function UciDashboard() {
                         "meter",
                       )
                     }
-                    onAttachArtifact={(kind) =>
+                    onAttachArtifact={(payload) =>
                       void runLifecycleAction(
-                        () => attachCloseoutArtifact(detailId!, { kind, label: "Recorded in workspace" }),
-                        "Artifact recorded",
-                        "Failed to record artifact",
+                        () =>
+                          attachCloseoutArtifact(detailId!, {
+                            kind: payload.kind,
+                            label: payload.label,
+                            doc_id: payload.doc_id,
+                            communication_id: payload.communication_id,
+                            source: payload.source,
+                          }),
+                        "Evidence confirmed",
+                        "Failed to confirm evidence",
                         "closeout",
                       )
                     }

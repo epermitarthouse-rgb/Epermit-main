@@ -30,6 +30,7 @@ function buildEvidenceRef(params) {
     content_hash: params.contentHash ?? params.content_hash ?? null,
     captured_at: params.capturedAt || new Date().toISOString(),
     label: params.label || null,
+    confirmed_by: params.confirmedBy ?? params.confirmed_by ?? null,
   };
 }
 

@@ -7,11 +7,13 @@ import type { CoordinationCommunication, CoordinationMilestone, CoordinationReco
 import {
   deriveCloseoutPdfInfo,
   deriveMeterSetCloseoutActionState,
+  formatCloseoutEvidenceSourceLabel,
   getCloseoutArtifactEvidence,
   hasCloseoutArtifactOnRecord,
   hasMeterSetRequestSent,
   meterSetCrewCompleted,
   meterSetNoShowRecorded,
+  resolveCloseoutArtifactEvidence,
 } from "./UciD13WorkflowPanels.tsx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -28,7 +30,6 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.match(panelSource, /Site ready ✓/);
     assert.match(panelSource, /Crew completed ✓/);
     assert.match(panelSource, /No-show recorded ✓/);
-    assert.match(panelSource, /Received ✓/);
     assert.match(panelSource, /Energized ✓/);
     assert.match(panelSource, /PDF generated ✓/);
     assert.match(panelSource, /WorkflowCompletedActionButton/);
@@ -43,8 +44,17 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
   it("uses backend-aligned closeout artifact detection instead of raw metadata truthiness", () => {
     assert.match(panelSource, /hasCloseoutArtifactOnRecord/);
     assert.match(panelSource, /utility_confirmation_doc_id/);
-    assert.match(panelSource, /Received ✓/);
     assert.doesNotMatch(panelSource, /artifacts\[key\] \? "on file"/);
+  });
+
+  it("shows explicit Stage 10 evidence clarity instead of vague Record received", () => {
+    assert.match(panelSource, /Found \/ Confirmed/);
+    assert.match(panelSource, /Not found in prior UCI records — manual confirmation required/);
+    assert.match(panelSource, /Confirm from UCI record/);
+    assert.match(panelSource, /Confirm manually/);
+    assert.match(panelSource, /CloseoutArtifactEvidenceRow/);
+    assert.match(panelSource, /resolveCloseoutArtifactEvidence/);
+    assert.doesNotMatch(panelSource, /pendingLabel="Record received"/);
   });
 
   it("exposes a visible closeout PDF open action beside archived status", () => {
@@ -150,5 +160,118 @@ describe("deriveMeterSetCloseoutActionState", () => {
     assert.equal(state.closeoutPdfGenerated, true);
     assert.equal(state.closeoutPdfDocumentId, "doc-closeout-1");
     assert.equal(state.closeoutPdfFileName, "uci-closeout-rec-1.pdf");
+  });
+});
+
+describe("resolveCloseoutArtifactEvidence", () => {
+  const baseRecord = { id: "rec-1", metadata: {} } as CoordinationRecord;
+
+  it("marks persisted artifacts as confirmed with source details", () => {
+    const record = {
+      ...baseRecord,
+      metadata: {
+        closeout_artifacts: {
+          utility_confirmation: {
+            kind: "utility_confirmation",
+            source: "communication",
+            communication_id: "comm-energize-1",
+            captured_at: "2026-09-02T12:00:00.000Z",
+            label: "Service energized",
+          },
+        },
+      },
+    } as CoordinationRecord;
+
+    const resolution = resolveCloseoutArtifactEvidence({
+      record,
+      key: "utility_confirmation",
+    });
+    assert.equal(resolution.status, "confirmed");
+    assert.equal(resolution.sourceType, "communication");
+    assert.equal(resolution.sourceId, "comm-energize-1");
+    assert.equal(
+      formatCloseoutEvidenceSourceLabel(resolution),
+      "communication · Service energized",
+    );
+  });
+
+  it("shows manual confirmation metadata after operator confirmation", () => {
+    const record = {
+      ...baseRecord,
+      metadata: {
+        closeout_artifacts: {
+          commissioning_signoff: {
+            kind: "commissioning_signoff",
+            source: "operator",
+            captured_at: "2026-09-05T09:00:00.000Z",
+            label: "Signed by commissioning agent on site",
+            confirmed_by: "operator@example.com",
+          },
+        },
+      },
+    } as CoordinationRecord;
+
+    const resolution = resolveCloseoutArtifactEvidence({
+      record,
+      key: "commissioning_signoff",
+    });
+    assert.equal(resolution.status, "confirmed");
+    assert.equal(resolution.sourceType, "existing_record");
+    assert.equal(resolution.confirmedBy, "operator@example.com");
+    assert.equal(resolution.note, "Signed by commissioning agent on site");
+  });
+
+  it("detects inherited utility confirmation from energization communication", () => {
+    const communications = [
+      {
+        id: "comm-1",
+        direction: "inbound",
+        classification: "energization_confirmation",
+        raw_subject: "Service energized",
+        created_at: "2026-09-02T12:00:00.000Z",
+      } as CoordinationCommunication,
+    ];
+
+    const resolution = resolveCloseoutArtifactEvidence({
+      record: baseRecord,
+      key: "utility_confirmation",
+      communications,
+    });
+    assert.equal(resolution.status, "inherited");
+    assert.equal(resolution.sourceType, "communication");
+    assert.equal(resolution.sourceName, "Service energized");
+    assert.equal(resolution.sourceId, "comm-1");
+  });
+
+  it("detects inherited final meter reading from Stage 9 milestone", () => {
+    const milestones = [
+      {
+        id: "ms-1",
+        milestone_type: "meter_set",
+        status: "completed",
+        actual_date: "2026-09-01",
+      } as CoordinationMilestone,
+    ];
+
+    const resolution = resolveCloseoutArtifactEvidence({
+      record: baseRecord,
+      key: "final_meter_reading",
+      milestones,
+    });
+    assert.equal(resolution.status, "inherited");
+    assert.equal(resolution.sourceType, "stage_9_milestone");
+    assert.equal(resolution.sourceName, "Meter set completed");
+    assert.equal(resolution.sourceId, "ms-1");
+  });
+
+  it("returns missing when no internal evidence exists", () => {
+    const resolution = resolveCloseoutArtifactEvidence({
+      record: baseRecord,
+      key: "commissioning_signoff",
+      communications: [],
+      milestones: [],
+    });
+    assert.equal(resolution.status, "missing");
+    assert.equal(resolution.sourceType, null);
   });
 });
