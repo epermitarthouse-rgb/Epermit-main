@@ -46,3 +46,24 @@ export function getStage3HandoffButtonLabel(options: {
   }
   return "Enter Stage 3";
 }
+
+/** Stage 3 application preparation finished; Stage 4 submission entry is pending. */
+export function isStage3CompletedAwaitingStage4Handoff(
+  stage: number,
+  state: LifecycleState | string | undefined,
+  packageReviewed: boolean,
+): boolean {
+  return stage === 3 && state === "COMPLETED" && packageReviewed;
+}
+
+export function canShowEnterStage4HandoffButton(
+  stage: number,
+  state: LifecycleState | string | undefined,
+  packageReviewed: boolean,
+): boolean {
+  return isStage3CompletedAwaitingStage4Handoff(stage, state, packageReviewed);
+}
+
+export function canShowStage4StatusPanel(stage: number): boolean {
+  return stage >= 4;
+}

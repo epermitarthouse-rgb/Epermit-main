@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageHeader, AlertBanner, MetricCard, Panel, ServicePill } from "@/components/design/ProductPrimitives";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,7 @@ import {
   checkInCoordinationEquipment,
   classifyCoordinationCommunications,
   completeStage2EngineeringReview,
+  completeStage3PackageReviewHandoff,
   confirmAllApplicationPackageVerifiedFields,
   confirmApplicationPackageDocumentMapping,
   createCoordinationEquipment,
@@ -276,7 +277,9 @@ import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
   canShowCompleteStage2ReviewButton,
   canShowEnterStage3HandoffButton,
+  canShowEnterStage4HandoffButton,
   canShowStage3StatusPanel,
+  canShowStage4StatusPanel,
   getStage3HandoffButtonLabel,
 } from "@/lib/uciStageHandoff";
 import {
@@ -644,6 +647,7 @@ export default function UciDashboard() {
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
   const [applicationSubmitBusy, setApplicationSubmitBusy] = useState(false);
   const [stage2CompletionBusy, setStage2CompletionBusy] = useState(false);
+  const [stage3CompletionBusy, setStage3CompletionBusy] = useState(false);
   const [classifyCommsBusy, setClassifyCommsBusy] = useState(false);
   const [reclassifyCommId, setReclassifyCommId] = useState<string | null>(null);
   const [lifecycleProposalBusy, setLifecycleProposalBusy] = useState(false);
@@ -1787,7 +1791,7 @@ export default function UciDashboard() {
 
   const handleApplicationReview = async (status: "reviewed" | "needs_changes") => {
     const packageApp = getApplicationPackageDraftApplication(detail?.applications);
-    if (!packageApp) return;
+    if (!packageApp || !detailId) return;
     setApplicationReviewBusy(true);
     try {
       const result = await reviewCoordinationApplication(packageApp.id, {
@@ -1801,14 +1805,25 @@ export default function UciDashboard() {
               applications: (current.applications ?? []).map((application) =>
                 application.id === result.application.id ? result.application : application,
               ),
+              ...(result.coordination ? { record: result.coordination } : {}),
             }
           : current,
       );
-      void getCoordinationDetail(detailId!).then(applyCoordinationDetail).catch(() => {
-        // The successful review response is authoritative; refresh can retry independently.
-      });
-      toast.success(status === "reviewed" ? "Application marked reviewed" : "Changes requested");
-      if (status === "needs_changes") {
+      if (result.coordination) {
+        syncCoordinationListRecord(result.coordination);
+      }
+      const refreshed = await getCoordinationDetail(detailId);
+      applyCoordinationDetail(refreshed);
+      if (status === "reviewed") {
+        if (result.lifecycle_handoff_required && !result.stage_4_entered) {
+          toast.error("Package reviewed but Stage 4 transition failed — retry from lifecycle or contact support");
+        } else if (result.stage_4_entered) {
+          toast.success("Application reviewed — Stage 4 submission workflow is now active");
+        } else {
+          toast.success("Application marked reviewed");
+        }
+      } else {
+        toast.success("Changes requested");
         setApplicationReviewNotes("");
       }
     } catch (e: unknown) {
@@ -1857,24 +1872,44 @@ export default function UciDashboard() {
         current ? { ...current, record: result.coordination } : current,
       );
       syncCoordinationListRecord(result.coordination);
-      setToStage("3");
-      setToState(result.stage_3_completed ? "COMPLETED" : "IN_PROGRESS");
-      void getCoordinationDetail(detailId).then(applyCoordinationDetail).catch(() => {
-        // Completion persisted; background refresh failure is non-fatal.
-      });
+      const refreshed = await getCoordinationDetail(detailId);
+      applyCoordinationDetail(refreshed);
       void refreshCoordination().catch(() => {
         // The mutation response already updated the active record.
       });
       toast.success(
-        result.stage_3_completed
-          ? "Stage 2 completed — the reviewed Stage 3 package remains locked; no Stage 4 action ran"
-          : "Stage 2 completed — Stage 3 application preparation is now active",
+        result.stage_4_entered
+          ? "Stage 2 completed — Stage 4 submission workflow is now active"
+          : result.stage_3_completed
+            ? "Stage 2 completed — Stage 3 application preparation is complete"
+            : "Stage 2 completed — Stage 3 application preparation is now active",
       );
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Failed to complete Stage 2 engineering review"));
     } finally {
       stage2CompletionInFlightRef.current = false;
       setStage2CompletionBusy(false);
+    }
+  };
+
+  const handleStage3Completion = async () => {
+    if (!detailId || stage3CompletionBusy) return;
+    setStage3CompletionBusy(true);
+    try {
+      const result = await completeStage3PackageReviewHandoff(detailId, {
+        reason: "Human completed Stage 3 application package review",
+      });
+      setDetail((current) =>
+        current ? { ...current, record: result.coordination } : current,
+      );
+      syncCoordinationListRecord(result.coordination);
+      const refreshed = await getCoordinationDetail(detailId);
+      applyCoordinationDetail(refreshed);
+      toast.success("Stage 4 submission workflow is now active");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to enter Stage 4 submission workflow"));
+    } finally {
+      setStage3CompletionBusy(false);
     }
   };
 
@@ -4747,6 +4782,7 @@ export default function UciDashboard() {
                     reviewBusy={applicationReviewBusy}
                     submitBusy={applicationSubmitBusy}
                     stage2CompletionBusy={stage2CompletionBusy}
+                    stage3CompletionBusy={stage3CompletionBusy}
                     currentStage={detailRecord.current_stage}
                     currentStageState={detailRecord.current_stage_state}
                     reviewNotes={applicationReviewNotes}
@@ -4761,6 +4797,7 @@ export default function UciDashboard() {
                     onReview={(status) => void handleApplicationReview(status)}
                     onSubmit={() => void handleApplicationSubmit()}
                     onCompleteStage2={() => void handleStage2Completion()}
+                    onCompleteStage3={() => void handleStage3Completion()}
                     onApplicationMutation={(updatedApplication) => {
                       setDetail((current) =>
                         current
@@ -5561,6 +5598,7 @@ export function ApplicationPrepSection({
   reviewBusy,
   submitBusy,
   stage2CompletionBusy,
+  stage3CompletionBusy,
   currentStage,
   currentStageState,
   reviewNotes,
@@ -5569,6 +5607,7 @@ export function ApplicationPrepSection({
   onReview,
   onSubmit,
   onCompleteStage2,
+  onCompleteStage3,
   onApplicationMutation,
   onRefreshDetail,
   applicationTemplateForceVisible = false,
@@ -5590,6 +5629,7 @@ export function ApplicationPrepSection({
   reviewBusy: boolean;
   submitBusy: boolean;
   stage2CompletionBusy: boolean;
+  stage3CompletionBusy: boolean;
   currentStage: number;
   currentStageState: LifecycleState;
   reviewNotes: string;
@@ -5598,6 +5638,7 @@ export function ApplicationPrepSection({
   onReview: (status: "reviewed" | "needs_changes") => void;
   onSubmit: () => void;
   onCompleteStage2: () => void;
+  onCompleteStage3: () => void;
   onApplicationMutation: (application: CoordinationApplication) => void;
   onRefreshDetail: () => Promise<void>;
   applicationTemplateForceVisible?: boolean;
@@ -6173,6 +6214,52 @@ export function ApplicationPrepSection({
                       ? "All required items are confirmed. Mark the package reviewed to complete Stage 3."
                       : "Confirm every required field and document, then mark the package reviewed."}
                 </p>
+              </div>
+            ) : null}
+
+            {canShowEnterStage4HandoffButton(currentStage, currentStageState, isReviewed) ? (
+              <div className="space-y-2 rounded-md border border-teal-500/30 bg-teal-500/5 p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Stage 3 is complete and the package is reviewed.
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  Enter Stage 4 to open the submission workflow — prepare, preview, and transmit the
+                  reviewed package.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={stage3CompletionBusy}
+                  onClick={onCompleteStage3}
+                >
+                  {stage3CompletionBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Enter Stage 4 submission
+                </Button>
+              </div>
+            ) : null}
+
+            {canShowStage4StatusPanel(currentStage) ? (
+              <div className="space-y-2 rounded-md border border-teal-500/30 bg-teal-500/5 p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Stage 4 submission is{" "}
+                  {formatLifecycleState(currentStageState).toLowerCase()}.
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  {isReviewed
+                    ? "Submission controls are enabled on the Submission Tracker — prepare and send the reviewed package."
+                    : "Complete package review before preparing submission."}
+                </p>
+                <Button asChild size="sm" variant="outline" className={toolbarOutlineButtonClass}>
+                  <Link
+                    to={`/uci/submissions?coordinationId=${encodeURIComponent(coordinationId)}${
+                      packageApp ? `&applicationId=${encodeURIComponent(packageApp.id)}` : ""
+                    }`}
+                  >
+                    Open Submission Tracker
+                  </Link>
+                </Button>
               </div>
             ) : null}
 

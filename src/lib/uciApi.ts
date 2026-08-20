@@ -1748,6 +1748,21 @@ export async function completeStage2EngineeringReview(
   );
 }
 
+export async function completeStage3PackageReviewHandoff(
+  coordinationId: string,
+  payload: { reason: string },
+): Promise<import("@/types/uci").UciStage3CompletionResponse> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/complete-stage-3`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to enter Stage 4 submission workflow",
+  );
+}
+
 export async function listCoordinationApplications(
   coordinationId: string,
 ): Promise<UciApplicationsListResponse> {

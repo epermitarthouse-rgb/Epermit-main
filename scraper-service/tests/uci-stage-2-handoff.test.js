@@ -119,12 +119,13 @@ describe("UCI Stage 2 human handoff", () => {
       reason: "Engineering review completed by test operator",
     });
 
-    assert.equal(result.record.current_stage, 3);
-    assert.equal(result.record.current_stage_state, "COMPLETED");
+    assert.equal(result.record.current_stage, 4);
+    assert.equal(result.record.current_stage_state, "IN_PROGRESS");
     assert.equal(result.stage3Completed, true);
-    assert.equal(result.transition.triggered_by_type, "user");
-    assert.equal(result.transition.metadata.human_gated, true);
-    assert.equal(result.transition.metadata.synthetic_data_auto_advanced, false);
+    assert.equal(result.stage4Entered, true);
+    assert.equal(result.stage3Transition.metadata.human_gated, true);
+    assert.equal(result.stage3Transition.metadata.synthetic_data_auto_advanced, false);
+    assert.equal(result.transition.metadata.action, "complete_stage_3_package_review");
   });
 
   it("starts Stage 3 in progress when no reviewed package exists", async () => {

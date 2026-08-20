@@ -48,6 +48,7 @@ const {
 const {
   recordUserTransition,
   completeStage2EngineeringReview,
+  completeStage3PackageReviewHandoff,
 } = require("../services/uci/uci-transitions.service.js");
 const { runLoadProfileAnalysis } = require("../services/uci/uci-load-profile.service.js");
 const {
@@ -1038,8 +1039,66 @@ function createUciRouter(opts) {
         transition: result.transition,
         stage_2_completed: true,
         stage_3_completed: result.stage3Completed,
-        ready_for_stage_4: result.stage3Completed,
+        stage_4_entered: result.stage4Entered === true,
+        ready_for_stage_4: result.stage4Entered === true,
+        stage_3_transition: result.stage3Transition ?? null,
         application_id: result.application?.id ?? null,
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/complete-stage-3", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const reason = String(body.reason ?? "").trim();
+
+      if (!reason) {
+        const err = new Error("A reason is required to enter Stage 4 submission");
+        err.statusCode = 400;
+        err.code = "STAGE_3_HANDOFF_REASON_REQUIRED";
+        throw err;
+      }
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const result = await completeStage3PackageReviewHandoff(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        reason,
+        requireActiveStage3: true,
+      });
+
+      if (!result.stage4Entered) {
+        const err = new Error("Coordination is not eligible for Stage 4 submission entry");
+        err.statusCode = 409;
+        err.code = result.skipReason === "already_at_stage_4" ? "ALREADY_AT_STAGE_4" : "STAGE_3_NOT_ACTIVE";
+        throw err;
+      }
+
+      res.json({
+        coordination: result.record,
+        transition: result.transition,
+        stage_3_completed: true,
+        stage_4_entered: true,
+        ready_for_stage_4: true,
       });
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -2340,7 +2399,39 @@ function createUciRouter(opts) {
         review: { status, notes },
       });
 
-      res.json(result);
+      let lifecycleHandoff = null;
+      let lifecycleHandoffRequired = false;
+      if (status === "reviewed") {
+        const coordinationRecord = await getCoordinationRecordById(
+          supabase,
+          String(appRow.coordination_record_id),
+        );
+        const coordinationStage = Number(coordinationRecord?.current_stage ?? 0);
+        lifecycleHandoffRequired = coordinationStage === 3;
+
+        lifecycleHandoff = await completeStage3PackageReviewHandoff(supabase, {
+          coordinationRecordId: String(appRow.coordination_record_id),
+          userId: user.id,
+          reason: "Application package marked reviewed — entering Stage 4 submission",
+          application: result.application,
+          requireActiveStage3: lifecycleHandoffRequired,
+        });
+
+        if (lifecycleHandoffRequired && !lifecycleHandoff.stage4Entered) {
+          const err = new Error("Package reviewed but Stage 4 lifecycle transition did not complete");
+          err.statusCode = 500;
+          err.code = "STAGE_4_HANDOFF_FAILED";
+          throw err;
+        }
+      }
+
+      res.json({
+        ...result,
+        coordination: lifecycleHandoff?.record ?? null,
+        transition: lifecycleHandoff?.transition ?? null,
+        stage_4_entered: lifecycleHandoff?.stage4Entered === true,
+        lifecycle_handoff_required: lifecycleHandoffRequired,
+      });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

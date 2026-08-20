@@ -626,6 +626,16 @@ export interface UciApplicationReviewResponse {
   reviewed_at: string | null;
   reviewed_by: string | null;
   package_review?: unknown;
+  coordination?: CoordinationRecord | null;
+  transition?: CoordinationTransition | null;
+  stage_4_entered?: boolean;
+  lifecycle_handoff_required?: boolean;
+}
+
+export interface UciStage3CompletionResponse extends UciTransitionResponse {
+  stage_3_completed: true;
+  stage_4_entered: true;
+  ready_for_stage_4: true;
 }
 
 export interface UciApplicationSubmitResponse {
@@ -721,7 +731,9 @@ export interface UciTransitionResponse {
 export interface UciStage2CompletionResponse extends UciTransitionResponse {
   stage_2_completed: true;
   stage_3_completed: boolean;
+  stage_4_entered: boolean;
   ready_for_stage_4: boolean;
+  stage_3_transition?: CoordinationTransition | null;
   application_id: string | null;
 }
 

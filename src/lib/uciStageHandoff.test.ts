@@ -4,10 +4,13 @@ import { describe, it } from "node:test";
 import {
   canShowCompleteStage2ReviewButton,
   canShowEnterStage3HandoffButton,
+  canShowEnterStage4HandoffButton,
   canShowStage3StatusPanel,
+  canShowStage4StatusPanel,
   getStage3HandoffButtonLabel,
   isStage2CompletedAwaitingStage3Handoff,
   isStage2EngineeringReviewActive,
+  isStage3CompletedAwaitingStage4Handoff,
 } from "./uciStageHandoff";
 
 describe("uciStageHandoff", () => {
@@ -53,5 +56,23 @@ describe("uciStageHandoff", () => {
       getStage3HandoffButtonLabel({ packageReady: true, packageReviewed: true }),
       "Complete Stage 3",
     );
+  });
+
+  it("detects completed Stage 3 awaiting Stage 4 handoff", () => {
+    assert.equal(isStage3CompletedAwaitingStage4Handoff(3, "COMPLETED", true), true);
+    assert.equal(isStage3CompletedAwaitingStage4Handoff(3, "COMPLETED", false), false);
+    assert.equal(isStage3CompletedAwaitingStage4Handoff(3, "IN_PROGRESS", true), false);
+    assert.equal(isStage3CompletedAwaitingStage4Handoff(4, "IN_PROGRESS", true), false);
+  });
+
+  it("shows Stage 4 handoff CTA when Stage 3 is completed with reviewed package", () => {
+    assert.equal(canShowEnterStage4HandoffButton(3, "COMPLETED", true), true);
+    assert.equal(canShowEnterStage4HandoffButton(3, "IN_PROGRESS", true), false);
+  });
+
+  it("shows Stage 4 status panel once lifecycle has entered Stage 4", () => {
+    assert.equal(canShowStage4StatusPanel(3), false);
+    assert.equal(canShowStage4StatusPanel(4), true);
+    assert.equal(canShowStage4StatusPanel(5), true);
   });
 });

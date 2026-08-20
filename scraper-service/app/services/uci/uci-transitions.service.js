@@ -297,7 +297,144 @@ async function completeStage2EngineeringReview(supabase, p) {
     },
   });
 
-  return { ...result, stage3Completed, application: application ?? null };
+  if (stage3Completed) {
+    const stage4Handoff = await completeStage3PackageReviewHandoff(supabase, {
+      coordinationRecordId,
+      userId,
+      reason: `${reason} — Stage 3 complete, entering Stage 4 submission`,
+      application: application ?? null,
+      requireActiveStage3: true,
+    });
+    return {
+      record: stage4Handoff.record,
+      transition: stage4Handoff.transition,
+      stage3Completed: true,
+      stage3Transition: result.transition,
+      stage4Entered: stage4Handoff.stage4Entered,
+      application: application ?? null,
+    };
+  }
+
+  return { ...result, stage3Completed, stage4Entered: false, application: application ?? null };
+}
+
+/**
+ * Human gate after Agent 3 package review — enter Stage 4 submission workflow.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} p
+ * @param {string} p.coordinationRecordId
+ * @param {string} p.userId
+ * @param {string} p.reason
+ * @param {Record<string, unknown> | null} [p.application]
+ * @param {boolean} [p.requireActiveStage3] When true, stage must be 3 (throws otherwise).
+ * @returns {Promise<{ record: Record<string, unknown>, transition: Record<string, unknown> | null, stage4Entered: boolean, skipped?: boolean, skipReason?: string }>}
+ */
+async function completeStage3PackageReviewHandoff(supabase, p) {
+  const { coordinationRecordId, userId, reason, requireActiveStage3 = false } = p;
+  const { data: current, error: recordError } = await supabase
+    .from("coordination_records")
+    .select("*")
+    .eq("id", coordinationRecordId)
+    .maybeSingle();
+
+  if (recordError) {
+    throw Object.assign(new Error(recordError.message || "Failed to load coordination record"), {
+      cause: recordError,
+      statusCode: 500,
+      code: "COORDINATION_FETCH_FAILED",
+    });
+  }
+  if (!current) {
+    const err = new Error("Coordination record not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+
+  const stage = Number(current.current_stage);
+  if (stage >= 4) {
+    return {
+      record: current,
+      transition: null,
+      stage4Entered: false,
+      skipped: true,
+      skipReason: "already_at_stage_4",
+    };
+  }
+  if (stage !== 3) {
+    if (requireActiveStage3) {
+      const err = new Error("Stage 3 must be active before entering Stage 4 submission");
+      err.statusCode = 409;
+      err.code = "STAGE_3_NOT_ACTIVE";
+      throw err;
+    }
+    return {
+      record: current,
+      transition: null,
+      stage4Entered: false,
+      skipped: true,
+      skipReason: "stage_3_not_active",
+    };
+  }
+
+  const projectId = String(current.project_id);
+  let application = p.application ?? null;
+  if (!application) {
+    const { data: loadedApplication, error: applicationError } = await supabase
+      .from("coordination_applications")
+      .select("*")
+      .eq("coordination_record_id", coordinationRecordId)
+      .eq("project_id", projectId)
+      .eq("record_source", "agent_draft")
+      .eq("idempotency_key", APPLICATION_PACKAGE_IDEMPOTENCY_KEY)
+      .maybeSingle();
+
+    if (applicationError) {
+      throw Object.assign(
+        new Error(applicationError.message || "Failed to load application package"),
+        {
+          cause: applicationError,
+          statusCode: 500,
+          code: "APPLICATION_FETCH_FAILED",
+        },
+      );
+    }
+    application = loadedApplication ?? null;
+  }
+
+  const packageReviewSummary = application
+    ? require("./uci-package-review.service.js").summarizePackageReview(application)
+    : null;
+  const packageReviewed =
+    packageReviewSummary?.status === "reviewed" &&
+    packageReviewSummary?.ready_for_final_review === true &&
+    Boolean(packageReviewSummary?.reviewed_snapshot);
+  if (!packageReviewed) {
+    const err = new Error(
+      "Reviewed application package with immutable snapshot is required before Stage 4",
+    );
+    err.statusCode = 409;
+    err.code = "STAGE_3_PACKAGE_NOT_REVIEWED";
+    throw err;
+  }
+
+  const result = await recordUserTransition(supabase, {
+    coordinationRecordId,
+    userId,
+    toStage: 4,
+    toState: "IN_PROGRESS",
+    reason,
+    metadata: {
+      action: "complete_stage_3_package_review",
+      human_gated: true,
+      stage_3_completed: true,
+      application_id: application?.id ?? null,
+      package_review_summary: packageReviewSummary,
+    },
+  });
+
+  return { ...result, stage4Entered: true };
 }
 
 /**
@@ -438,6 +575,7 @@ module.exports = {
   recordUserTransition,
   recordSystemTransition,
   completeStage2EngineeringReview,
+  completeStage3PackageReviewHandoff,
   VALID_STATES,
   isValidStage,
 };

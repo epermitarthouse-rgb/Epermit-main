@@ -35,4 +35,12 @@ describe("UciDashboard Stage 2 → Stage 3 handoff regression", () => {
     assert.match(handoffSource, /getStage3HandoffButtonLabel/);
     assert.match(dashboardSource, /getStage3HandoffButtonLabel\(\{/);
   });
+
+  it("wires Stage 3 reviewed package to Stage 4 submission handoff", () => {
+    assert.match(handoffSource, /canShowEnterStage4HandoffButton/);
+    assert.match(handoffSource, /canShowStage4StatusPanel/);
+    assert.match(dashboardSource, /completeStage3PackageReviewHandoff/);
+    assert.match(dashboardSource, /stage_4_entered/);
+    assert.match(dashboardSource, /Enter Stage 4 submission/);
+  });
 });
