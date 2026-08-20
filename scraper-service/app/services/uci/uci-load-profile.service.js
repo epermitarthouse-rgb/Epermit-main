@@ -5,6 +5,10 @@ const { resolveProjectAddressForProviderSetup } = require("./uci-provider-setup.
 const { recordSystemTransition } = require("./uci-transitions.service.js");
 const { computeLoadEngine } = require("./uci-load-engine.service.js");
 const { raiseUciAlert } = require("./uci-alerts.service.js");
+const {
+  getStage2MissingInputs: getCanonicalStage2MissingInputs,
+  computeStage2Readiness,
+} = require("./uci-stage2-readiness.service.js");
 
 const LOAD_PROFILE_VERSION = "d2.1-v1";
 const LOAD_PROFILE_IDEMPOTENCY_KEY = "agent_2_load_profile:d2.1-v1";
@@ -174,25 +178,7 @@ function verifiedEntryHasValue(entry) {
  * @param {Record<string, unknown>} loadSummary
  */
 function getStage2MissingInputs(loadSummary) {
-  const utilityType = normalizeUtilityType(loadSummary?.utility_type);
-  const verified =
-    loadSummary?.verified_values &&
-    typeof loadSummary.verified_values === "object" &&
-    !Array.isArray(loadSummary.verified_values)
-      ? /** @type {Record<string, unknown>} */ (loadSummary.verified_values)
-      : {};
-
-  if (utilityType === "electric") {
-    return Object.entries(ELECTRIC_STAGE_2_REQUIREMENTS)
-      .filter(([, keys]) => !keys.some((key) => verifiedEntryHasValue(verified[key])))
-      .map(([requirement]) => requirement);
-  }
-
-  const historicalMissing = Array.isArray(loadSummary?.missing_inputs)
-    ? loadSummary.missing_inputs.map(String)
-    : [];
-  const required = new Set(requiredInputsForUtilityType(utilityType));
-  return historicalMissing.filter((input) => required.has(input));
+  return getCanonicalStage2MissingInputs(loadSummary);
 }
 
 /**
@@ -201,10 +187,15 @@ function getStage2MissingInputs(loadSummary) {
  *
  * @param {Record<string, unknown>} loadSummary
  */
-function reconcileLoadProfileReadiness(loadSummary) {
+function reconcileLoadProfileReadiness(loadSummary, options = {}) {
   const missingInputs = getStage2MissingInputs(loadSummary);
-  return {
+  const enriched = {
     ...loadSummary,
+    missing_inputs: missingInputs,
+  };
+  const stage2Readiness = computeStage2Readiness(enriched, options);
+  return {
+    ...enriched,
     analysis_status:
       loadSummary?.analysis_status === "blocked"
         ? "blocked"
@@ -214,7 +205,7 @@ function reconcileLoadProfileReadiness(loadSummary) {
               ? loadSummary.needs_verification
               : [],
           }),
-    missing_inputs: missingInputs,
+    stage2_readiness: stage2Readiness,
   };
 }
 

@@ -16,6 +16,10 @@ const {
 } = require("./uci-package-document-bridge.service.js");
 const { UCI_DOCUMENTS_STORAGE_BUCKET } = require("./uci-document-storage.service.js");
 const { downloadFromSupabaseStorage } = require("../../../shared/supabase-storage-upload.js");
+const {
+  resolveLoadProfileScopeKey,
+  isCoordinationScopedScopeKey,
+} = require("./uci-load-profile-scope.util.js");
 
 const LOAD_EXTRACTION_SCHEMA_VERSION = "row6-v4";
 
@@ -565,6 +569,9 @@ function loadFieldMeaning(fieldKey) {
   if (key.includes("demand") && key.includes("kw")) return "demand_kw";
   if (key.includes("connected") && key.includes("kva")) return "connected_kva";
   if (key.includes("connected") && key.includes("kw")) return "connected_kw";
+  if (key === "connected_load_btuh" || key === "connected_gas_equipment") return "connected_load_btuh";
+  if (key === "requested_load_btuh" || key === "btu_demand") return "requested_load_btuh";
+  if (key === "pressure_requirements") return "pressure_requirements";
   return key;
 }
 
@@ -695,7 +702,13 @@ function candidateDedupPriority(candidate) {
  */
 function semanticDedupKey(candidate) {
   const meaning = loadFieldMeaning(String(candidate.field_key ?? ""));
-  if (meaning.startsWith("demand_") || meaning.startsWith("connected_")) {
+  if (
+    meaning.startsWith("demand_") ||
+    meaning.startsWith("connected_") ||
+    meaning === "requested_load_btuh" ||
+    meaning === "connected_load_btuh" ||
+    meaning === "pressure_requirements"
+  ) {
     return [
       candidate.source_content_hash,
       candidate.source_document_name,
@@ -1171,6 +1184,11 @@ function extractCandidatesFromKnownDocumentText(text, pageNumber, source) {
     return comcheckParser.extractComcheckFindingsFromText(pageText, pageNumber, source);
   }
 
+  const gasParser = require("./uci-gas-document-parser.service.js");
+  if (gasParser.shouldParseAsGasDocument(name, pageText)) {
+    return gasParser.extractGasDocumentFindingsFromText(pageText, pageNumber, source);
+  }
+
   const equipmentParser = require("./uci-equipment-schedule-parser.service.js");
   if (
     /\bEQUIPMENT\s+(?:UTILITY\s+)?SCHEDULE\b/i.test(name) ||
@@ -1608,52 +1626,54 @@ async function extractPdfPages(buffer, deps = {}) {
  */
 function discoverLoadSourceDocuments(record, params) {
   const externalApplicationId = String(params.externalApplicationId || "").trim();
-  if (!externalApplicationId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
-
   const projectId = String(record.project_id ?? "");
   const coordinationRecordId = String(record.id ?? "");
   const tenantId = record.tenant_id != null ? String(record.tenant_id) : null;
   const accessContext = { projectId, coordinationRecordId, tenantId };
 
-  const pepcoFiles = extractPepcoPortalFiles(record, {
-    externalApplicationId,
-  }).filter((file) => isPepcoPortalFileAccessible(file, accessContext));
-
   /** @type {Array<Record<string, unknown>>} */
   const documents = [];
 
-  for (const file of pepcoFiles) {
-    const fileName = String(file.fileName ?? file.documentName ?? "").trim();
-    const storagePath = String(file.storagePath ?? "");
-    const externalAppId = String(file.external_application_id ?? "");
-    if (externalAppId && externalAppId !== externalApplicationId) continue;
+  if (externalApplicationId) {
+    const pepcoFiles = extractPepcoPortalFiles(record, {
+      externalApplicationId,
+    }).filter((file) => isPepcoPortalFileAccessible(file, accessContext));
 
-    documents.push({
-      source_type: "pepco_portal_document",
-      source_document_id: file.idempotencyKey != null ? String(file.idempotencyKey) : null,
-      source_document_name: fileName,
-      file_name: fileName,
-      document_type: file.pepco_document_type != null ? String(file.pepco_document_type) : null,
-      pepco_document_type: file.pepco_document_type != null ? String(file.pepco_document_type) : null,
-      storage_bucket:
-        file.storageBucket != null ? String(file.storageBucket) : UCI_DOCUMENTS_STORAGE_BUCKET,
-      storage_path: storagePath,
-      content_hash: file.contentHash != null ? String(file.contentHash) : "",
-      external_application_id: externalAppId,
-      project_id: projectId,
-      coordination_record_id: coordinationRecordId,
-      tenant_id: tenantId,
-    });
+    for (const file of pepcoFiles) {
+      const fileName = String(file.fileName ?? file.documentName ?? "").trim();
+      const storagePath = String(file.storagePath ?? "");
+      const externalAppId = String(file.external_application_id ?? "");
+      if (externalAppId && externalAppId !== externalApplicationId) continue;
+
+      documents.push({
+        source_type: "pepco_portal_document",
+        source_document_id: file.idempotencyKey != null ? String(file.idempotencyKey) : null,
+        source_document_name: fileName,
+        file_name: fileName,
+        document_type: file.pepco_document_type != null ? String(file.pepco_document_type) : null,
+        pepco_document_type: file.pepco_document_type != null ? String(file.pepco_document_type) : null,
+        storage_bucket:
+          file.storageBucket != null ? String(file.storageBucket) : UCI_DOCUMENTS_STORAGE_BUCKET,
+        storage_path: storagePath,
+        content_hash: file.contentHash != null ? String(file.contentHash) : "",
+        external_application_id: externalAppId,
+        project_id: projectId,
+        coordination_record_id: coordinationRecordId,
+        tenant_id: tenantId,
+      });
+    }
   }
+
+  const { resolveLoadExtractionScope } = require("./uci-load-extraction-scope.service.js");
+  const scope = resolveLoadExtractionScope({
+    externalApplicationId,
+    coordinationRecordId,
+  });
 
   return {
     documents,
-    external_application_id: externalApplicationId,
+    external_application_id: scope.externalApplicationId,
+    extraction_scope_key: scope.scopeKey,
     project_id: projectId,
     coordination_record_id: coordinationRecordId,
     tenant_id: tenantId,
@@ -1914,13 +1934,13 @@ function getStructuredApplicationFromRecord(record, externalApplicationId) {
  */
 async function runLoadCandidateExtraction(supabase, params) {
   const { coordinationRecordId, userId, externalApplicationId, refresh = false, deps = {} } = params;
-  const extAppId = String(externalApplicationId || "").trim();
-  if (!extAppId) {
-    const err = new Error("external_application_id is required");
-    err.statusCode = 400;
-    err.code = "EXTERNAL_APPLICATION_REQUIRED";
-    throw err;
-  }
+  const { resolveLoadExtractionScope } = require("./uci-load-extraction-scope.service.js");
+  const scope = resolveLoadExtractionScope({
+    externalApplicationId,
+    coordinationRecordId,
+  });
+  const extAppId = scope.externalApplicationId || "";
+  const scopeKey = scope.scopeKey;
 
   const record = await getCoordinationRecordById(supabase, coordinationRecordId);
   if (!record) {
@@ -2034,7 +2054,7 @@ async function runLoadCandidateExtraction(supabase, params) {
           });
           continue;
         }
-        if (String(doc.external_application_id ?? "") !== extAppId) {
+        if (extAppId && String(doc.external_application_id ?? "") !== extAppId) {
           documentFailureCount += 1;
           failedDocuments.push({
             document_name: docName,
@@ -2173,7 +2193,9 @@ async function runLoadCandidateExtraction(supabase, params) {
   if (!hasProcessableOutput && rankedDocs.length === 0 && !structuredApp) {
     throw new LoadCandidateExtractionError({
       stage: "document_discovery",
-      message: "No load-bearing documents discovered for the selected external application",
+      message: extAppId
+        ? "No load-bearing documents discovered for the selected external application"
+        : "No load-bearing documents discovered for this coordination record",
       statusCode: 422,
     });
   }
@@ -2246,7 +2268,8 @@ async function runLoadCandidateExtraction(supabase, params) {
   const loadExtraction = {
     ...existingExtraction,
     schema_version: LOAD_EXTRACTION_SCHEMA_VERSION,
-    external_application_id: extAppId,
+    external_application_id: extAppId || null,
+    extraction_scope_key: scopeKey,
     last_extracted_at: new Date().toISOString(),
     last_extracted_by: userId,
     extraction_status: extractionStatus,
@@ -2301,7 +2324,8 @@ async function runLoadCandidateExtraction(supabase, params) {
   return {
     coordination_record_id: coordinationRecordId,
     project_id: projectId,
-    external_application_id: extAppId,
+    external_application_id: extAppId || null,
+    extraction_scope_key: scopeKey,
     extraction_status: extractionStatus,
     candidates: mergedCandidates,
     failed_documents: failedDocuments,
@@ -2917,6 +2941,8 @@ module.exports = {
   assignConflictGroups,
   mergeCandidates,
   markStaleCandidates,
+  resolveLoadProfileScopeKey,
+  isCoordinationScopedScopeKey,
   runLoadCandidateExtraction,
   listLoadCandidates,
   resolveLoadCandidate,

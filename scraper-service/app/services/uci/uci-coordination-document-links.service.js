@@ -1,6 +1,7 @@
 "use strict";
 
 const { getCoordinationRecordById } = require("./uci-records.service.js");
+const { classifyDocumentType } = require("./uci-document-classification.service.js");
 
 const LINKS_TABLE = "uci_coordination_document_links";
 const PROJECT_DOCUMENTS_SELECT =
@@ -157,12 +158,16 @@ function classifyDocumentUtilityScope(doc) {
     }
   }
 
+  const classifiedType = classifyDocumentType(doc);
+
   for (const classifier of UTILITY_CLASSIFIERS) {
     if (classifier.tests.some((test) => test.test(haystack))) {
       return {
         utilityType: classifier.utilityType,
         confidence: classifier.confidence,
-        documentType: electricCrossUtilityType || projectLevelType || classifier.utilityType,
+        documentType: classifiedType === "supporting_document"
+          ? electricCrossUtilityType || projectLevelType || classifiedType
+          : classifiedType,
         electricCrossUtilityType,
         projectLevel,
       };
@@ -173,7 +178,9 @@ function classifyDocumentUtilityScope(doc) {
     return {
       utilityType: "project_level",
       confidence: "high",
-      documentType: projectLevelType || "project_level",
+      documentType: classifiedType === "supporting_document"
+        ? projectLevelType || "project_level"
+        : classifiedType,
       electricCrossUtilityType,
       projectLevel: true,
     };
@@ -181,8 +188,8 @@ function classifyDocumentUtilityScope(doc) {
 
   return {
     utilityType: "unknown",
-    confidence: "low",
-    documentType: String(doc.document_type || "other"),
+    confidence: classifiedType === "supporting_document" ? "low" : "medium",
+    documentType: classifiedType,
     electricCrossUtilityType,
     projectLevel: false,
   };
@@ -515,6 +522,34 @@ function processingStatusLabel(status) {
 }
 
 /**
+ * @param {Record<string, unknown> | null} manifest
+ * @returns {string | null}
+ */
+function processingStatusReason(manifest) {
+  if (!manifest || typeof manifest !== "object") return null;
+  const status = String(manifest.processing_status || "");
+  const failure = manifest.failure_reason != null ? String(manifest.failure_reason).trim() : "";
+  if (failure) return failure;
+  const warnings = Array.isArray(manifest.findings_quality_warnings)
+    ? manifest.findings_quality_warnings.map(String).filter(Boolean)
+    : [];
+  if (warnings.length > 0) return warnings[0];
+  const findingsStatus = String(manifest.findings_extraction_status || "");
+  if (findingsStatus === "no_supported_findings") {
+    return "Parsing completed but produced no relevant findings";
+  }
+  if (findingsStatus === "vision_required_for_structured_findings") {
+    return "Structured extraction requires OCR/Vision fallback or manual review";
+  }
+  if (status === "partial") {
+    return "Parser completed partially; some pages or findings could not be extracted";
+  }
+  if (status === "unsupported") return "Unsupported document structure or format";
+  if (status === "failed") return "Document processing failed";
+  return null;
+}
+
+/**
  * @param {Array<Record<string, unknown>>} manifestDocuments
  * @param {Record<string, unknown>} doc
  */
@@ -548,7 +583,7 @@ async function getLoadProfileDocumentScope(supabase, params) {
   const scoped = await resolveScopedProjectDocuments(supabase, { record, userId });
   const extAppId = String(externalApplicationId || "").trim();
   const { getDocumentProcessingState } = require("./uci-document-processing.service.js");
-  const processingState = getDocumentProcessingState(record.metadata, extAppId);
+  const processingState = getDocumentProcessingState(record.metadata, extAppId, coordinationRecordId);
   const manifestDocuments = Array.isArray(processingState?.documents) ? processingState.documents : [];
   const linksByDoc = new Map(scoped.links.map((row) => [String(row.project_document_id), row]));
   const recordUtilityType = normalizeUtilityType(record.utility_type);
@@ -575,6 +610,7 @@ async function getLoadProfileDocumentScope(supabase, params) {
       linked_at: link?.linked_at || null,
       processing_status: manifest?.processing_status || "pending",
       processing_status_label: processingStatusLabel(manifest?.processing_status),
+      processing_status_reason: processingStatusReason(manifest),
       findings_count: Number(manifest?.findings_count || 0),
       linked: Boolean(link && !link.unlinked_at),
       unlinked_at: link?.unlinked_at || null,
@@ -617,6 +653,7 @@ async function getLoadProfileDocumentScope(supabase, params) {
       linked_at: manifest.processed_at || null,
       processing_status: manifest.processing_status || "pending",
       processing_status_label: processingStatusLabel(manifest.processing_status),
+      processing_status_reason: processingStatusReason(manifest),
       findings_count: Number(manifest.findings_count || 0),
       linked: true,
       unlinked_at: null,
@@ -956,6 +993,7 @@ module.exports = {
   shouldAutoIncludeDocument,
   resolveRelevance,
   formatProvenanceLabel,
+  processingStatusReason,
   includedProjectDocumentIds,
   listLinkRows,
   ensureAutomaticDocumentLinks,

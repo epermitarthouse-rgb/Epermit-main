@@ -2,6 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const { buildCoordinationScopeKey } = require("../app/services/uci/uci-load-extraction-scope.service.js");
 const {
   DOCUMENT_PROCESSING_SCHEMA_VERSION,
   MANUAL_DOCUMENT_SCOPE_KEY,
@@ -242,12 +243,13 @@ describe("uci-document-processing.service", () => {
     assert.equal(manualResult.documents.length, 1);
     assert.equal(manualResult.documents[0].source_type, "manual_upload");
     assert.ok(manualResult.findings_count > 0);
-    const manualState = getDocumentProcessingState(record.metadata, null);
+    const updatedMetadata = tables.coordination_records[0].metadata;
+    const manualState = getDocumentProcessingState(updatedMetadata, null, COORD_ID);
     assert.ok(manualState);
     assert.equal(manualState.project_id, PROJECT_ID);
     assert.equal(manualState.coordination_record_id, COORD_ID);
     assert.equal(manualState.tenant_id, TENANT_A);
-    assert.ok(record.metadata.uci_document_processing.applications[MANUAL_DOCUMENT_SCOPE_KEY]);
+    assert.ok(updatedMetadata.uci_document_processing.applications[buildCoordinationScopeKey(COORD_ID)]);
 
     record.metadata.pepco_application_detail_discovery = {
       applications: [{ applicationUuid: EXT_APP_A, downloadedFiles: [] }],
@@ -267,7 +269,7 @@ describe("uci-document-processing.service", () => {
     assert.equal(linkedManualDocuments[0].document_id, manualResult.documents[0].document_id);
     const linkedDocumentIds = linkedResult.documents.map((document) => document.document_id);
     assert.equal(new Set(linkedDocumentIds).size, linkedDocumentIds.length);
-    const linkedState = getDocumentProcessingState(record.metadata, EXT_APP_A);
+    const linkedState = getDocumentProcessingState(record.metadata, EXT_APP_A, COORD_ID);
     const linkedFindingIds = linkedState.findings.map((finding) => finding.finding_id);
     assert.equal(new Set(linkedFindingIds).size, linkedFindingIds.length);
   });

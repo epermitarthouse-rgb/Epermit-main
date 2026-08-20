@@ -43,6 +43,7 @@ import {
 } from "@/lib/uciLoadProfile";
 import {
   getDefaultReviewQueueTab,
+  getLoadExtractionEligibility,
   getLoadProfileScopeCopy,
 } from "@/lib/uciLoadProfileWorkspace";
 
@@ -148,6 +149,11 @@ export function ConnectedLoadReviewPanel({
     providerSlug,
     selectedApplicationId: selectedPepcoApplicationId,
   });
+  const extractionEligibility = getLoadExtractionEligibility({
+    providerSlug,
+    selectedPortalApplicationId: selectedPepcoApplicationId,
+    hasAnalyzedLoadProfile: Boolean(summary),
+  });
   const staleGroups = useMemo(
     () =>
       groupStaleHistoryCandidates(
@@ -175,7 +181,8 @@ export function ConnectedLoadReviewPanel({
             variant="outline"
             size="sm"
             className={toolbarOutlineButtonClass}
-            disabled={candidateBusy || !selectedPepcoApplicationId}
+            disabled={candidateBusy || !extractionEligibility.eligible}
+            title={extractionEligibility.disabledReason ?? undefined}
             onClick={() => onExtractCandidates(false)}
           >
             {candidateBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -186,7 +193,8 @@ export function ConnectedLoadReviewPanel({
             variant="ghost"
             size="sm"
             className={toolbarOutlineButtonClass}
-            disabled={candidateBusy || !selectedPepcoApplicationId}
+            disabled={candidateBusy || !extractionEligibility.eligible}
+            title={extractionEligibility.disabledReason ?? undefined}
             onClick={() => onExtractCandidates(true)}
           >
             Refresh

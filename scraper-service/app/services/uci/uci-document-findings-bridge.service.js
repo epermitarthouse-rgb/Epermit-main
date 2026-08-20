@@ -458,7 +458,7 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
     (Array.isArray(documentIds) ? documentIds : []).map(String).filter(Boolean),
   );
 
-  const processingState = getDocumentProcessingState(record.metadata, extAppId);
+  const processingState = getDocumentProcessingState(record.metadata, extAppId, coordinationRecordId);
   if (!processingState) {
     return {
       status: "partial",
@@ -481,7 +481,17 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
   });
   const includedProjectIds = scoped.includedIds;
 
-  if (String(processingState.external_application_id ?? "") !== extAppId) {
+  const { resolveLoadExtractionScope } = require("./uci-load-extraction-scope.service.js");
+  const extractionScope = resolveLoadExtractionScope({
+    externalApplicationId: extAppId,
+    coordinationRecordId,
+  });
+  const stateScopeKey = String(
+    processingState.extraction_scope_key ??
+      processingState.external_application_id ??
+      "",
+  ).trim();
+  if (stateScopeKey && stateScopeKey !== extractionScope.scopeKey) {
     const err = new Error("Document processing state scope mismatch");
     err.statusCode = 400;
     err.code = "SCOPE_MISMATCH";

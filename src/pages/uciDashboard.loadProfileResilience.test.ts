@@ -65,8 +65,9 @@ describe("UCI Load Profile action resilience", () => {
     assert.match(extract, /finally\s*\{[\s\S]*setLoadCandidateBusy\(false\)/);
     assert.match(importFindings, /finally\s*\{[\s\S]*setImportFindingsBusy\(false\)/);
     assert.match(workspaceSource, /disabled=\{analyzeBusy\}/);
-    assert.match(workspaceSource, /disabled=\{candidateBusy \|\| !selectedPepcoApplicationId\}/);
-    assert.match(workspaceSource, /disabled=\{importFindingsBusy \|\| !selectedPepcoApplicationId\}/);
+    assert.match(workspaceSource, /disabled=\{candidateBusy \|\| !extractionEligibility\.eligible\}/);
+    assert.match(workspaceSource, /disabled=\{importFindingsBusy \|\| !extractionEligibility\.eligible\}/);
+    assert.match(workspaceSource, /getLoadExtractionEligibility/);
   });
 
   it("keeps Source documents and manual upload visible before analysis", () => {

@@ -66,6 +66,8 @@ import {
   DEFAULT_WORKSPACE_SECTION,
   getDataLevelLabel,
   getLoadProfileOverview,
+  getLoadExtractionEligibility,
+  formatSourceUtilityTypeLabel,
   getLoadScheduleTotals,
   getServiceSizingRecommendation,
   getUtilityTypeContracts,
@@ -311,6 +313,11 @@ export function LoadProfileWorkspace({
   );
   const utilityContract = getUtilityTypeContracts(utilityType ?? summary?.utility_type ?? "electric");
   const bridgeMeta = summary?.load_extraction?.document_findings_bridge;
+  const extractionEligibility = getLoadExtractionEligibility({
+    providerSlug,
+    selectedPortalApplicationId: selectedPepcoApplicationId,
+    hasAnalyzedLoadProfile: Boolean(summary),
+  });
   const uploadExternalApplicationId =
     selectedPepcoApplicationId ??
     summary?.load_extraction?.external_application_id ??
@@ -477,7 +484,8 @@ export function LoadProfileWorkspace({
               variant="outline"
               size="sm"
               className={toolbarOutlineButtonClass}
-              disabled={candidateBusy || !selectedPepcoApplicationId}
+              disabled={candidateBusy || !extractionEligibility.eligible}
+              title={extractionEligibility.disabledReason ?? undefined}
               onClick={() => onExtractCandidates(false)}
             >
               {candidateBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -488,7 +496,8 @@ export function LoadProfileWorkspace({
               variant="outline"
               size="sm"
               className={toolbarOutlineButtonClass}
-              disabled={importFindingsBusy || !selectedPepcoApplicationId}
+              disabled={importFindingsBusy || !extractionEligibility.eligible}
+              title={extractionEligibility.disabledReason ?? undefined}
               onClick={() => onImportDocumentFindings(false)}
             >
               {importFindingsBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -496,6 +505,9 @@ export function LoadProfileWorkspace({
             </Button>
           </div>
         </div>
+        {extractionEligibility.disabledReason ? (
+          <p className={cn("text-xs", mutedClass)}>{extractionEligibility.disabledReason}</p>
+        ) : null}
         {bridgeMeta?.last_imported_at ? (
           <p className={cn("text-xs", mutedClass)}>
             Last document import: {formatWhen(bridgeMeta.last_imported_at)} ·{" "}
@@ -569,7 +581,7 @@ export function LoadProfileWorkspace({
                     <TableHeader>
                       <TableRow>
                         <TableHead>Document</TableHead>
-                        <TableHead>Source utility / type</TableHead>
+                        <TableHead>Source utility</TableHead>
                         <TableHead>Document type</TableHead>
                         <TableHead>Processing</TableHead>
                         <TableHead>Analysis</TableHead>
@@ -583,13 +595,21 @@ export function LoadProfileWorkspace({
                             <p className="text-sm font-medium">{row.file_name}</p>
                           </TableCell>
                           <TableCell className={cn("text-xs", mutedClass)}>
-                            {row.provenance_label}
+                            {formatSourceUtilityTypeLabel(row.source_utility_type)}
+                            {row.provenance_label ? (
+                              <span className="block text-[10px] opacity-80">{row.provenance_label}</span>
+                            ) : null}
                           </TableCell>
                           <TableCell className={cn("text-xs", mutedClass)}>
                             {row.classified_document_type.replace(/_/g, " ")}
                           </TableCell>
                           <TableCell className={cn("text-xs", mutedClass)}>
                             {row.processing_status_label}
+                            {row.processing_status_reason ? (
+                              <span className="block text-[10px] text-amber-700 dark:text-amber-300">
+                                {row.processing_status_reason}
+                              </span>
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             <Badge variant={row.included_in_analysis ? "secondary" : "outline"}>

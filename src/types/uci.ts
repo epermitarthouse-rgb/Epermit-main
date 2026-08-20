@@ -584,6 +584,7 @@ export interface UciLoadProfileDocumentScopeRow {
   linked_at: string | null;
   processing_status: string;
   processing_status_label: string;
+  processing_status_reason?: string | null;
   findings_count: number;
   linked: boolean;
   unlinked_at: string | null;

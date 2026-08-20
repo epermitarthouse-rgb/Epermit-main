@@ -17,6 +17,26 @@ export interface UciLoadProfileSourceDocument {
   file_name?: string;
 }
 
+export interface UciStage2ReadinessBucket {
+  key: string;
+  complete: boolean;
+  detail: string;
+}
+
+export interface UciStage2Readiness {
+  version: string;
+  progress_percent: number;
+  completion_eligible: boolean;
+  complete: boolean;
+  lifecycle_state: string;
+  lifecycle_state_label: string;
+  missing_required_inputs: string[];
+  newly_discovered_required_inputs: string[];
+  progress_decrease_reason: string | null;
+  blocking_issues: string[];
+  buckets: UciStage2ReadinessBucket[];
+}
+
 export interface UciLoadProfileSummary {
   version: string;
   utility_type: string;
@@ -24,6 +44,7 @@ export interface UciLoadProfileSummary {
   inputs_used: UciLoadProfileInputUsed[];
   missing_inputs: string[];
   needs_verification: string[];
+  stage2_readiness?: UciStage2Readiness | null;
   assumptions: {
     template_id: string | null;
     template_version: string | null;

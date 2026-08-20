@@ -41,6 +41,10 @@ const {
   extractEquipmentScheduleFindingsFromText,
   assessEquipmentScheduleLayout,
 } = require("./uci-equipment-schedule-parser.service.js");
+const {
+  shouldParseAsGasDocument,
+  extractGasDocumentFindingsFromText,
+} = require("./uci-gas-document-parser.service.js");
 const { evidenceFingerprint } = require("./uci-one-line-extractor.service.js");
 
 const DOCUMENT_PROCESSING_SCHEMA_VERSION = "row-doc-v2";
@@ -50,7 +54,10 @@ const PROJECT_DOCUMENTS_SELECT =
   "id, project_id, document_type, file_name, file_path, file_type, description, created_at";
 
 const METADATA_KEY = "uci_document_processing";
-const MANUAL_DOCUMENT_SCOPE_KEY = "__manual__";
+const {
+  resolveDocumentProcessingScopeKey,
+  MANUAL_DOCUMENT_SCOPE_KEY,
+} = require("./uci-load-extraction-scope.service.js");
 
 /** @type {readonly string[]} */
 const UCI_DOCUMENT_ROLES = [
@@ -83,6 +90,9 @@ const ROLE_CLASSIFICATION_RULES = [
   { role: "panel_schedule", confidence: "high", test: /\bPANEL[\s-]*SCHEDULES?\b/i },
   { role: "one_line_diagram", confidence: "high", test: /\b(ONE[\s-]*LINE|SINGLE[\s-]*LINE)\b/i },
   { role: "load_calculation", confidence: "high", test: /\bLOAD[\s-]*CALC/i },
+  { role: "load_calculation", confidence: "high", test: /\bGAS[\s-]*LOAD[\s-]*(PROFILE|LETTER|CALC)\b/i },
+  { role: "meter_or_service_evidence", confidence: "high", test: /\bMETER[\s-]*REGULATOR\b/i },
+  { role: "meter_or_service_evidence", confidence: "high", test: /\bPIPING[\s-]*AND[\s-]*SERVICE[\s-]*PLAN\b/i },
   { role: "equipment_schedule", confidence: "high", test: /\bEQUIPMENT[\s-]*(UTILITY[\s-]*)?SCHEDULE\b/i },
   { role: "equipment_cut_sheet", confidence: "high", test: /\b(CUT[\s-]*SHEET|CUTSHEET)\b/i },
   { role: "site_plan", confidence: "high", test: /\bSITE[\s-]*PLAN\b/i },
@@ -170,6 +180,13 @@ const AGENT_2_FIELD_KEYS = new Set([
   "construction_start_date",
   "construction_completion_date",
   "requested_in_service_date",
+  "connected_load_btuh",
+  "requested_load_btuh",
+  "btu_demand",
+  "pressure_requirements",
+  "requested_service_line",
+  "gas_regulator",
+  "meter_location",
 ]);
 
 /** Agent 2 engineering categories beyond explicit field keys. */
@@ -271,6 +288,13 @@ const FIELD_KEY_TO_CATEGORY = {
   construction_start_date: "construction_schedule",
   construction_completion_date: "construction_schedule",
   requested_in_service_date: "construction_schedule",
+  connected_load_btuh: "gas_load",
+  requested_load_btuh: "gas_load",
+  btu_demand: "gas_load",
+  pressure_requirements: "gas_load",
+  requested_service_line: "gas_load",
+  gas_regulator: "gas_load",
+  meter_location: "meter_or_service_evidence",
   comcheck_energy_code: "compliance_evidence",
   comcheck_project_title: "compliance_evidence",
   comcheck_project_location: "compliance_evidence",
@@ -1066,6 +1090,10 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
     const hasComcheck = isComcheckRole || detectComcheckReportText(text);
     const hasEquipmentSchedule =
       isEquipmentScheduleRole || detectEquipmentScheduleText(text);
+    const hasGasLoadDocument =
+      documentRoles.includes("load_calculation") ||
+      documentRoles.includes("meter_or_service_evidence") ||
+      shouldParseAsGasDocument(String(source.source_document_name ?? ""), text);
     const hasUtilityApplication =
       isUtilityApplicationRole ||
       /\bService\s+Installation\s*&\s*Upgrades\s+Application\b/i.test(text) ||
@@ -1091,6 +1119,10 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
       }
     }
 
+    if (hasGasLoadDocument) {
+      candidates.push(...extractGasDocumentFindingsFromText(text, pageNum, source));
+    }
+
     if (hasUtilityApplication) {
       candidates.push(...extractUtilityApplicationCandidatesFromText(text, pageNum, source));
     }
@@ -1100,6 +1132,7 @@ function extractBroadFindingsFromPages(pages, source, documentId, documentRoles)
       hasOneLine ||
       hasComcheck ||
       hasEquipmentSchedule ||
+      hasGasLoadDocument ||
       hasUtilityApplication;
     const reviewOnlyDocument = documentRoles.some((role) =>
       ["electrical_specification", "electrical_plan"].includes(role),
@@ -1243,8 +1276,8 @@ function evaluateRunCompletion(state) {
   /** @type {string[]} */
   const blockers = [];
 
-  if (!state.external_application_id) {
-    blockers.push("External application scope is missing");
+  if (!state.external_application_id && !state.extraction_scope_key) {
+    blockers.push("Document processing scope is missing");
   }
 
   const pending = docs.filter((d) =>
@@ -1349,8 +1382,9 @@ function sanitizeDocumentProcessingForApi(state) {
 /**
  * @param {unknown} metadata
  * @param {string} externalApplicationId
+ * @param {string} [coordinationRecordId]
  */
-function getDocumentProcessingState(metadata, externalApplicationId) {
+function getDocumentProcessingState(metadata, externalApplicationId, coordinationRecordId = null) {
   const meta = parseCoordinationMetadata(metadata);
   const root = meta[METADATA_KEY];
   if (!root || typeof root !== "object" || Array.isArray(root)) return null;
@@ -1358,8 +1392,15 @@ function getDocumentProcessingState(metadata, externalApplicationId) {
   const apps = /** @type {{ applications?: unknown }} */ (root).applications;
   if (!apps || typeof apps !== "object" || Array.isArray(apps)) return null;
 
-  const scopeKey = String(externalApplicationId || "").trim() || MANUAL_DOCUMENT_SCOPE_KEY;
-  const state = /** @type {Record<string, unknown>} */ (apps)[scopeKey];
+  const scopeKey = resolveDocumentProcessingScopeKey({
+    externalApplicationId,
+    coordinationRecordId,
+  });
+  const appMap = /** @type {Record<string, unknown>} */ (apps);
+  let state = appMap[scopeKey];
+  if (!state && scopeKey.startsWith("coordination:")) {
+    state = appMap[MANUAL_DOCUMENT_SCOPE_KEY];
+  }
   if (!state || typeof state !== "object" || Array.isArray(state)) return null;
   return /** @type {Record<string, unknown>} */ (state);
 }
@@ -1399,7 +1440,10 @@ async function persistDocumentProcessingState(supabase, params) {
       ? { .../** @type {Record<string, unknown>} */ (prevRoot.applications) }
       : {};
 
-  const scopeKey = String(externalApplicationId || "").trim() || MANUAL_DOCUMENT_SCOPE_KEY;
+  const scopeKey = resolveDocumentProcessingScopeKey({
+    externalApplicationId,
+    coordinationRecordId,
+  });
   prevApps[scopeKey] = state;
 
   const nextMetadata = {
@@ -1438,6 +1482,11 @@ async function runDocumentProcessing(supabase, params) {
     deps = {},
   } = params;
   const extAppId = String(externalApplicationId || "").trim();
+  const { resolveLoadExtractionScope } = require("./uci-load-extraction-scope.service.js");
+  const extractionScope = resolveLoadExtractionScope({
+    externalApplicationId: extAppId,
+    coordinationRecordId,
+  });
   const requestedDocumentIds = new Set(
     (Array.isArray(documentIds) ? documentIds : []).map(String).filter(Boolean),
   );
@@ -1499,8 +1548,11 @@ async function runDocumentProcessing(supabase, params) {
     throw err;
   }
 
-  const previousState = getDocumentProcessingState(record.metadata, extAppId);
-  const manualState = extAppId ? getDocumentProcessingState(record.metadata, "") : null;
+  const previousState = getDocumentProcessingState(record.metadata, extAppId, coordinationRecordIdStr);
+  const manualState =
+    extAppId && extractionScope.scopeKey !== MANUAL_DOCUMENT_SCOPE_KEY
+      ? getDocumentProcessingState(record.metadata, "", coordinationRecordIdStr)
+      : null;
   const previousDocs = [];
   const previousDocumentKeys = new Set();
   for (const state of [previousState, manualState]) {
@@ -1576,7 +1628,8 @@ async function runDocumentProcessing(supabase, params) {
 
   const runState = {
     schema_version: DOCUMENT_PROCESSING_SCHEMA_VERSION,
-    external_application_id: extAppId,
+    external_application_id: extAppId || null,
+    extraction_scope_key: extractionScope.scopeKey,
     provider_slug: discovery.provider_slug,
     provider_id: discovery.provider_id,
     tenant_id: discovery.tenant_id,
@@ -2049,8 +2102,8 @@ async function getDocumentProcessingManifest(supabase, params) {
   }
 
   const state =
-    getDocumentProcessingState(record.metadata, extAppId) ||
-    (extAppId ? getDocumentProcessingState(record.metadata, "") : null);
+    getDocumentProcessingState(record.metadata, extAppId, coordinationRecordId) ||
+    (extAppId ? getDocumentProcessingState(record.metadata, "", coordinationRecordId) : null);
   if (!state) {
     return {
       coordination_record_id: String(coordinationRecordId),

@@ -559,6 +559,35 @@ export function getTemplateStatus(summary: UciLoadProfileSummary | null): {
   return { status: "draft", name: templateId, version: templateVersion };
 }
 
+export function getLoadExtractionEligibility(params: {
+  providerSlug?: string | null;
+  selectedPortalApplicationId?: string | null;
+  hasAnalyzedLoadProfile?: boolean;
+}): { eligible: boolean; disabledReason: string | null } {
+  if (!params.hasAnalyzedLoadProfile) {
+    return {
+      eligible: false,
+      disabledReason: "Run load profile analysis before extracting candidates",
+    };
+  }
+  const isPepco = String(params.providerSlug ?? "").trim().toLowerCase() === "pepco";
+  if (isPepco && !String(params.selectedPortalApplicationId ?? "").trim()) {
+    return {
+      eligible: true,
+      disabledReason:
+        "No portal application selected — extraction uses project and manual-upload documents only",
+    };
+  }
+  return { eligible: true, disabledReason: null };
+}
+
+export function formatSourceUtilityTypeLabel(value: string | null | undefined): string {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return "Unknown";
+  if (normalized === "project_level") return "Project-level";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export function getLoadProfileOverview(
   summary: UciLoadProfileSummary | null,
   options: {
@@ -641,9 +670,19 @@ export function getLoadProfileOverview(
     );
   }
 
+  const stage2 = summary?.stage2_readiness ?? null;
+
   let workspaceState: LoadProfileWorkspaceState = "extraction_available";
   if (summary.analysis_status === "blocked") workspaceState = "blocked";
-  else if (blockingReviewCandidates > 0) workspaceState = "needs_review";
+  else if (stage2?.lifecycle_state === "needs_review" || blockingReviewCandidates > 0) {
+    workspaceState = "needs_review";
+  } else if (stage2?.lifecycle_state === "missing_engineering_inputs") {
+    workspaceState = "missing_engineering_inputs";
+  } else if (stage2?.lifecycle_state === "ready_for_service_sizing") {
+    workspaceState = "ready_for_service_sizing";
+  } else if (stage2?.lifecycle_state === "ready_for_application_package") {
+    workspaceState = "ready_for_application_package";
+  } else if (blockingReviewCandidates > 0) workspaceState = "needs_review";
   else if (effectiveMissingInputs.length > 0 || !connectedLoadSatisfied)
     workspaceState = "missing_engineering_inputs";
   else if (connectedLoadSatisfied) {
@@ -655,26 +694,38 @@ export function getLoadProfileOverview(
       : "missing_engineering_inputs";
   }
 
-  const completionPercent = computeCompletionPercent(
-    summary,
-    connectedLoadSatisfied,
-    counts,
-    effectiveMissingInputs,
-  );
+  const completionPercent =
+    stage2 && Number.isFinite(stage2.progress_percent)
+      ? stage2.progress_percent
+      : computeCompletionPercent(summary, connectedLoadSatisfied, counts, effectiveMissingInputs);
+
+  const resolvedBlockingIssues =
+    stage2?.blocking_issues?.length && !options.stage2Completed
+      ? stage2.blocking_issues
+      : blockingIssues;
+  const resolvedMissingInputs =
+    stage2?.missing_required_inputs?.length && !options.stage2Completed
+      ? stage2.missing_required_inputs
+      : effectiveMissingInputs;
+  const resolvedWorkspaceState = stage2?.lifecycle_state && !options.stage2Completed
+    ? (stage2.lifecycle_state as LoadProfileWorkspaceState)
+    : workspaceState;
+  const resolvedWorkspaceLabel =
+    stage2?.lifecycle_state_label && !options.stage2Completed
+      ? stage2.lifecycle_state_label
+      : formatWorkspaceStateLabel(workspaceState);
 
   return {
-    workspaceState: options.stage2Completed ? "ready_for_application_package" : workspaceState,
-    workspaceStateLabel: options.stage2Completed
-      ? "Stage 2 complete"
-      : formatWorkspaceStateLabel(workspaceState),
+    workspaceState: options.stage2Completed ? "ready_for_application_package" : resolvedWorkspaceState,
+    workspaceStateLabel: options.stage2Completed ? "Stage 2 complete" : resolvedWorkspaceLabel,
     completionPercent: options.stage2Completed ? 100 : completionPercent,
     packageReady: options.packageStatus === "ready_for_review",
     connectedLoadSatisfied,
     verifiedProjectDemandSatisfied,
     hasOnlyPanelEvidence: hasOnlyPanel,
     humanReviewRequired: options.stage2Completed ? false : summary.requires_human_review,
-    missingInputs: options.stage2Completed ? [] : effectiveMissingInputs,
-    blockingIssues: options.stage2Completed ? [] : blockingIssues,
+    missingInputs: options.stage2Completed ? [] : resolvedMissingInputs,
+    blockingIssues: options.stage2Completed ? [] : resolvedBlockingIssues,
     lastExtractedAt: summary.load_extraction?.last_extracted_at ?? null,
     lastApprovalAt: getLastApprovalAt(summary),
     templateStatus: template.status,

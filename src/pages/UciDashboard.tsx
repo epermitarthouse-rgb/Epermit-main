@@ -1342,13 +1342,13 @@ export default function UciDashboard() {
     }
   };
 
-  const handleLoadCandidateExtract = async (externalApplicationId: string, refresh = false) => {
-    if (!detailId || !externalApplicationId || loadCandidateInFlightRef.current) return;
+  const handleLoadCandidateExtract = async (externalApplicationId?: string | null, refresh = false) => {
+    if (!detailId || loadCandidateInFlightRef.current) return;
     loadCandidateInFlightRef.current = true;
     setLoadCandidateBusy(true);
     try {
       const result = await extractCoordinationLoadCandidates(detailId, {
-        external_application_id: externalApplicationId,
+        external_application_id: externalApplicationId?.trim() || undefined,
         refresh,
       });
       const d = await getCoordinationDetail(detailId);
@@ -1369,13 +1369,13 @@ export default function UciDashboard() {
     }
   };
 
-  const handleImportDocumentFindings = async (externalApplicationId: string, refresh = false) => {
-    if (!detailId || !externalApplicationId || importFindingsInFlightRef.current) return;
+  const handleImportDocumentFindings = async (externalApplicationId?: string | null, refresh = false) => {
+    if (!detailId || importFindingsInFlightRef.current) return;
     importFindingsInFlightRef.current = true;
     setImportFindingsBusy(true);
     try {
       const result = await importCoordinationDocumentFindings(detailId, {
-        external_application_id: externalApplicationId,
+        external_application_id: externalApplicationId?.trim() || undefined,
         refresh,
       });
       const d = await getCoordinationDetail(detailId);
@@ -4483,10 +4483,10 @@ export default function UciDashboard() {
                     packageDocumentsComplete={loadProfilePackageContext.packageDocumentsComplete}
                     onAnalyze={() => void handleLoadProfileAnalyze()}
                     onExtractCandidates={(refresh) =>
-                      void handleLoadCandidateExtract(selectedPepcoProject?.applicationId ?? "", refresh)
+                      void handleLoadCandidateExtract(selectedPepcoProject?.applicationId ?? null, refresh)
                     }
                     onImportDocumentFindings={(refresh) =>
-                      void handleImportDocumentFindings(selectedPepcoProject?.applicationId ?? "", refresh)
+                      void handleImportDocumentFindings(selectedPepcoProject?.applicationId ?? null, refresh)
                     }
                     onResolveCandidate={(candidateId, action, opts) =>
                       void handleLoadCandidateResolve(candidateId, action, opts)
