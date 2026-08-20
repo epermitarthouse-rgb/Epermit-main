@@ -637,6 +637,91 @@ async function ingestInboundEmailMessage(supabase, params) {
 }
 
 /**
+ * Promote a row from uci_unmatched_inbound_messages into the matched pipeline.
+ * Idempotent when the communication already exists.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function reprocessUnmatchedInboundMessage(supabase, params) {
+  const {
+    unmatchedId,
+    projectId = null,
+    tenantId = null,
+    providerSlug = null,
+    mailboxUserId = null,
+    accessToken = null,
+    deps = {},
+  } = params;
+
+  const { data: row, error } = await supabase
+    .from("uci_unmatched_inbound_messages")
+    .select("*")
+    .eq("id", unmatchedId)
+    .maybeSingle();
+  if (error || !row) {
+    const err = new Error("Unmatched inbound message not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+
+  const normalized = {
+    external_message_id: row.external_message_id ? String(row.external_message_id) : null,
+    internet_message_id: row.internet_message_id ? String(row.internet_message_id) : null,
+    conversation_id: row.conversation_id ? String(row.conversation_id) : null,
+    thread_id: row.conversation_id ? String(row.conversation_id) : null,
+    raw_subject: row.raw_subject ?? null,
+    raw_body: row.raw_body ?? null,
+    sender: row.sender ?? null,
+    recipient: row.recipient ?? null,
+    message_timestamp: row.message_timestamp ?? row.created_at ?? new Date().toISOString(),
+    raw_attachments: Array.isArray(row.raw_attachments) ? row.raw_attachments : [],
+    idempotency_key: row.idempotency_key
+      ? String(row.idempotency_key)
+      : `graph:${row.external_message_id || row.internet_message_id || row.id}`,
+  };
+
+  const result = await ingestInboundEmailMessage(supabase, {
+    normalized,
+    mailboxUserId: mailboxUserId || row.mailbox_user_id || null,
+    projectId: projectId || row.project_id || null,
+    tenantId,
+    providerSlug: providerSlug || row.provider_slug || null,
+    accessToken,
+    deps,
+  });
+
+  if (result.status === "matched" || result.status === "linked_outbound_echo") {
+    await supabase
+      .from("uci_unmatched_inbound_messages")
+      .update({
+        match_status: "matched",
+        needs_human_attention: false,
+        updated_at: new Date().toISOString(),
+        agent_processed_metadata: {
+          ...(row.agent_processed_metadata &&
+          typeof row.agent_processed_metadata === "object" &&
+          !Array.isArray(row.agent_processed_metadata)
+            ? row.agent_processed_metadata
+            : {}),
+          reprocessed_at: new Date().toISOString(),
+          reprocess_result: {
+            status: result.status,
+            communication_id: result.communication?.id ?? null,
+          },
+        },
+      })
+      .eq("id", unmatchedId);
+  }
+
+  return {
+    unmatched_id: unmatchedId,
+    ...result,
+  };
+}
+
+/**
  * Poll connected user mailbox for recent inbound messages and ingest.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
@@ -803,6 +888,7 @@ async function ingestEmailInboundWebhook(supabase, payload) {
 module.exports = {
   normalizeGraphMessage,
   ingestInboundEmailMessage,
+  reprocessUnmatchedInboundMessage,
   pollGraphInboundForUser,
   ingestEmailInboundWebhook,
   upsertUnmatchedInbound,

@@ -959,6 +959,28 @@ describe("Stage 5 classify + reclassify integration", () => {
   });
 });
 
+describe("Stage 5 matcher — synthetic demo ack", () => {
+  it("matches [UCI SYNTHETIC DEMO] ack body to outbound LC subject", () => {
+    const inbound = {
+      raw_subject: "[UCI SYNTHETIC DEMO]",
+      raw_body:
+        "Dominion Energy has received the utility coordination application package for McDonald's Portsmouth, VA - LC 451554.\nApplication reference: DOM-DEMO-451554\nStatus: Received and under review.",
+      sender: "epermitarthouse@gmail.com",
+      provider_slug: "dominion",
+    };
+    const candidate = {
+      provider_slug: "dominion",
+      outbound_subject:
+        "Utility Coordination Application Package — McDonald's Portsmouth, VA - LC 451554",
+    };
+    const { score, reasons } = scoreMatch(inbound, candidate);
+    assert.ok(score >= 25, `expected score >= 25, got ${score}`);
+    assert.ok(reasons.includes("lc_outbound_subject"));
+    assert.ok(reasons.includes("outbound_location_in_body"));
+    assert.ok(reasons.includes("dom_demo_ref"));
+  });
+});
+
 describe("Stage 5 Graph inbound unmatched path", () => {
   it("stores unmatched inbound without inventing a coordination link", async () => {
     const tables = {

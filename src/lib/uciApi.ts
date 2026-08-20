@@ -1713,6 +1713,30 @@ export async function transmitSubmissionPreparation(
   );
 }
 
+export async function reconcileLiveTransmissionStage5(
+  applicationId: string,
+  options?: {
+    transmission_id?: string;
+    preparation_id?: string;
+    utility_ticket_number?: string;
+  },
+): Promise<{
+  ok?: boolean;
+  submitted_at?: string | null;
+  stage_5_advanced?: boolean;
+  coordination_record?: { current_stage?: number; current_stage_state?: string };
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/reconcile-stage5`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options ?? {}),
+    },
+    "Stage 5 reconcile failed",
+  );
+}
+
 export async function classifyCoordinationCommunications(
   coordinationId: string,
 ): Promise<{

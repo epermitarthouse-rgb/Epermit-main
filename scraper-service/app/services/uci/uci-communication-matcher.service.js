@@ -105,6 +105,46 @@ function scoreMatch(inbound, candidate) {
     reasons.push("lc_number");
   }
 
+  const outSubject = norm(candidate.outbound_subject);
+  const lcInOutbound = outSubject.match(/\blc[- ]?(\d{4,})\b/);
+  if (lcInMessage && lcInOutbound && lcInMessage[1] === lcInOutbound[1]) {
+    score += 40;
+    reasons.push("lc_outbound_subject");
+  }
+
+  if (outSubject) {
+    const locationMatch =
+      outSubject.match(/—\s*(.+?)\s*-\s*lc/i) ||
+      outSubject.match(/-\s*(.+?)\s*-\s*lc/i);
+    if (locationMatch) {
+      const location = norm(locationMatch[1]);
+      if (location.length >= 8 && haystack.includes(location)) {
+        score += 30;
+        reasons.push("outbound_location_in_body");
+      }
+    }
+
+    const domDemoRef = haystack.match(/\bdom[-_]?demo[-_]?(\d{4,})\b/i);
+    if (domDemoRef && lcInOutbound && domDemoRef[1] === lcInOutbound[1]) {
+      score += 35;
+      reasons.push("dom_demo_ref");
+    }
+
+    const appRefMatch = haystack.match(
+      /\b(?:application\s+reference|app(?:lication)?\s+ref(?:erence)?)\s*[:#]?\s*([a-z0-9][a-z0-9._-]+)/i,
+    );
+    if (appRefMatch) {
+      const appRef = norm(appRefMatch[1]);
+      if (
+        outSubject.includes(appRef) ||
+        (lcInOutbound && appRef.includes(lcInOutbound[1]))
+      ) {
+        score += 35;
+        reasons.push("application_reference");
+      }
+    }
+  }
+
   return { score, reasons };
 }
 
@@ -179,15 +219,22 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
 
   const { data: outbound } = await supabase
     .from("coordination_communications")
-    .select("coordination_record_id, thread_id, external_message_id")
+    .select("coordination_record_id, thread_id, external_message_id, raw_subject, message_timestamp")
     .in("coordination_record_id", recordIds)
     .eq("direction", "outbound")
-    .not("thread_id", "is", null)
+    .order("message_timestamp", { ascending: false })
     .limit(200);
 
   const threadByRecord = new Map();
+  const subjectByRecord = new Map();
   for (const row of Array.isArray(outbound) ? outbound : []) {
-    if (row.thread_id) threadByRecord.set(String(row.coordination_record_id), String(row.thread_id));
+    const key = String(row.coordination_record_id);
+    if (row.thread_id && !threadByRecord.has(key)) {
+      threadByRecord.set(key, String(row.thread_id));
+    }
+    if (row.raw_subject && !subjectByRecord.has(key)) {
+      subjectByRecord.set(key, String(row.raw_subject));
+    }
   }
 
   /** @type {Array<{ coordination_record_id: string, project_id: string, score: number, reasons: string[] }>} */
@@ -216,6 +263,7 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
       job_id: meta.job_id,
       thread_id: threadByRecord.get(String(record.id)),
       outbound_thread_id: threadByRecord.get(String(record.id)),
+      outbound_subject: subjectByRecord.get(String(record.id)),
     };
 
     const { score, reasons } = scoreMatch(inbound, candidate);

@@ -32,6 +32,8 @@ const { UCI_DOCUMENTS_STORAGE_BUCKET } = require("./uci-document-storage.service
 
 const TRANSMIT_VERSION = "stage4-transmit-p1-v1";
 const DEFAULT_GRAPH_TIMEOUT_MS = 60_000;
+const EXTENDED_SENT_ITEMS_ATTEMPTS = 8;
+const EXTENDED_SENT_ITEMS_DELAY_MS = 1200;
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -272,6 +274,210 @@ async function updateTransmissionAttempt(supabase, attemptId, applicationId, pat
     .eq("application_id", applicationId)
     .select("*")
     .single();
+}
+
+function recipientEmails(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((item) =>
+      typeof item === "string"
+        ? item.trim()
+        : item && typeof item === "object" && item.email
+          ? String(item.email).trim()
+          : "",
+    )
+    .filter(Boolean);
+}
+
+/**
+ * Graph /me/sendMail often returns 202 with no message id. Retry Sent Items lookup
+ * before leaving the attempt in outcome_unknown.
+ * @param {string} accessToken
+ * @param {Record<string, unknown>} sendResult
+ * @param {{ subject: string, toRecipients: unknown[], claimedAt: string }} context
+ */
+async function maybePromoteGraphSendResult(accessToken, sendResult, context) {
+  const needsPromotion =
+    sendResult.ok === true &&
+    Number(sendResult.status) === 202 &&
+    (!sendResult.message_id || sendResult.unreconciled === true || sendResult.uncertain === true);
+  if (!needsPromotion) return sendResult;
+
+  const { reconcileSentItemsMessage } = require("./uci-graph-sent-items.service.js");
+  const retried = await reconcileSentItemsMessage(accessToken, {
+    subject: context.subject,
+    to: recipientEmails(context.toRecipients),
+    sentAfter: context.claimedAt ? new Date(context.claimedAt) : new Date(Date.now() - 120_000),
+    attempts: EXTENDED_SENT_ITEMS_ATTEMPTS,
+    delayMs: EXTENDED_SENT_ITEMS_DELAY_MS,
+  });
+  if (!retried.reconciled || !retried.message_id) return sendResult;
+
+  return {
+    ...sendResult,
+    message_id: retried.message_id,
+    internet_message_id: retried.internet_message_id || null,
+    reconciled: true,
+    unreconciled: false,
+    uncertain: false,
+  };
+}
+
+function buildSentTransmissionPatch(sendResult, completedAt) {
+  return {
+    status: "sent",
+    graph_send_attempted: true,
+    graph_http_status: sendResult.status ?? null,
+    graph_message_id: sendResult.message_id ?? null,
+    graph_error: null,
+    completed_at: completedAt,
+    outcome_detail: {
+      version: TRANSMIT_VERSION,
+      phase: "graph_sendMail",
+      uncertain: false,
+      http_status: sendResult.status ?? null,
+      promoted_from_outcome_unknown: sendResult.promoted_from_outcome_unknown === true,
+    },
+    external_side_effects: {
+      email_sent: true,
+      portal_touched: false,
+      live_submission_attempted: true,
+      lifecycle_advanced: false,
+      graph_called: true,
+      graph_send_mail_called: true,
+      stage_5_advanced: false,
+    },
+    updated_at: completedAt,
+  };
+}
+
+/**
+ * Backfill a Graph 202 transmission that delivered email but stayed outcome_unknown.
+ * Does not call Graph sendMail again.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function repairTransmissionOutcomeAfterSuccessfulGraphSend(supabase, params) {
+  const {
+    applicationId,
+    transmissionId,
+    userId = null,
+    accessToken = null,
+    forceSyntheticMessageId = false,
+  } = params;
+
+  const { data: attemptRow, error } = await supabase
+    .from("submission_transmission_attempts")
+    .select("*")
+    .eq("id", transmissionId)
+    .eq("application_id", applicationId)
+    .maybeSingle();
+  if (error || !attemptRow) {
+    const err = new Error("Transmission attempt not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+
+  if (String(attemptRow.status) === "sent" && attemptRow.graph_message_id) {
+    return { attempt: attemptRow, repaired: false, already_sent: true };
+  }
+
+  const graphHttpStatus = Number(attemptRow.graph_http_status);
+  const sideEffects = asObject(attemptRow.external_side_effects);
+  const graphSendCalled = sideEffects.graph_send_mail_called === true;
+  if (
+    String(attemptRow.status) !== "outcome_unknown" ||
+    graphHttpStatus !== 202 ||
+    !graphSendCalled
+  ) {
+    const err = new Error(
+      "Transmission is not a reconcilable Graph 202 outcome_unknown send",
+    );
+    err.statusCode = 409;
+    err.code = "TRANSMISSION_NOT_REPAIRABLE";
+    throw err;
+  }
+
+  let messageId = attemptRow.graph_message_id ? String(attemptRow.graph_message_id) : null;
+  if (!messageId && accessToken) {
+    const promoted = await maybePromoteGraphSendResult(
+      accessToken,
+      {
+        ok: true,
+        status: 202,
+        message_id: null,
+        unreconciled: true,
+        uncertain: true,
+      },
+      {
+        subject: String(attemptRow.subject || ""),
+        toRecipients: attemptRow.to_recipients,
+        claimedAt: String(attemptRow.claimed_at || attemptRow.completed_at || ""),
+      },
+    );
+    messageId = promoted.message_id ? String(promoted.message_id) : null;
+  }
+
+  if (!messageId && forceSyntheticMessageId) {
+    messageId = `transmit-${String(attemptRow.id)}`;
+  }
+  if (!messageId) {
+    const err = new Error(
+      "Could not reconcile Graph message id — pass accessToken or forceSyntheticMessageId",
+    );
+    err.statusCode = 409;
+    err.code = "GRAPH_MESSAGE_ID_MISSING";
+    throw err;
+  }
+
+  const completedAt = new Date().toISOString();
+  const patch = buildSentTransmissionPatch(
+    {
+      status: 202,
+      message_id: messageId,
+      promoted_from_outcome_unknown: true,
+    },
+    completedAt,
+  );
+
+  const updated = await updateTransmissionAttempt(
+    supabase,
+    String(attemptRow.id),
+    applicationId,
+    patch,
+  );
+  const attempt = updated.data || { ...attemptRow, ...patch };
+
+  await supabase
+    .from("submission_preparations")
+    .update({
+      graph_send_attempted: true,
+      external_side_effects: {
+        email_sent: true,
+        portal_touched: false,
+        live_submission_attempted: true,
+        lifecycle_advanced: false,
+        graph_called: true,
+        graph_send_mail_called: true,
+      },
+      updated_at: completedAt,
+    })
+    .eq("id", String(attempt.preparation_id))
+    .eq("application_id", applicationId);
+
+  const application = await getApplicationById(supabase, applicationId);
+  if (application) {
+    await mirrorTransmissionPointer(supabase, application, attempt, { table_persisted: true });
+  }
+
+  return {
+    attempt,
+    repaired: true,
+    already_sent: false,
+    operator_user_id: userId,
+  };
 }
 
 /**
@@ -526,9 +732,20 @@ async function transmitSubmissionPreparation(supabase, params) {
     clearTimeout(timer);
   }
 
+  sendResult = await maybePromoteGraphSendResult(accessToken, sendResult, {
+    subject,
+    toRecipients,
+    claimedAt,
+  });
+
   const completedAt = new Date().toISOString();
   let nextStatus = "failed";
-  if (sendResult.ok && sendResult.message_id && sendResult.unreconciled !== true && sendResult.uncertain !== true) {
+  if (
+    sendResult.ok &&
+    sendResult.message_id &&
+    sendResult.unreconciled !== true &&
+    sendResult.uncertain !== true
+  ) {
     nextStatus = "sent";
   } else if (sendResult.ok || sendResult.uncertain) {
     nextStatus = "outcome_unknown";
@@ -634,6 +851,7 @@ module.exports = {
   TRANSMIT_VERSION,
   SYNTHETIC_SUBJECT_PREFIX,
   transmitSubmissionPreparation,
+  repairTransmissionOutcomeAfterSuccessfulGraphSend,
   resolveTransmissionAttachments,
   ensureSyntheticSubject,
   ensureSyntheticBody,

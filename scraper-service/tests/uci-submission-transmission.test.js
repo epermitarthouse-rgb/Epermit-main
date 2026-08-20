@@ -291,6 +291,64 @@ describe("uci-submission-transmission", () => {
     assert.equal(sendCalls, 1);
   });
 
+  it("promotes outcome_unknown to sent when extended Sent Items reconciliation succeeds", async () => {
+    process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED = "true";
+    process.env.UCI_EMAIL_ALLOWED_SENDERS = "dzahid@commun-et.com";
+    process.env.UCI_EMAIL_ALLOWED_RECIPIENTS = "dzahid@commun-et.com";
+    const tables = createTables();
+    const supabase = createMockSupabase(tables);
+    let reconcileCalls = 0;
+    const deps = {
+      mailSendPermissionConfigured: true,
+      getMailboxStatusForUser: async () => ({
+        connected: true,
+        mailbox_email: "dzahid@commun-et.com",
+        scopes: ["Mail.Read", "Mail.Send"],
+        mail_send_permission_configured: true,
+      }),
+      getValidAccessTokenForUser: async () => "token",
+      fetchGraphMe: async () => ({ mail: "dzahid@commun-et.com" }),
+      sendMailFn: async () => ({
+        ok: true,
+        status: 202,
+        message_id: null,
+        unreconciled: true,
+        uncertain: true,
+      }),
+    };
+
+    const originalReconcile = require("../app/services/uci/uci-graph-sent-items.service.js")
+      .reconcileSentItemsMessage;
+    require("../app/services/uci/uci-graph-sent-items.service.js").reconcileSentItemsMessage =
+      async () => {
+        reconcileCalls += 1;
+        return {
+          ok: true,
+          reconciled: true,
+          message_id: "graph-sent-promoted",
+          internet_message_id: "<promoted@mail>",
+        };
+      };
+
+    try {
+      const result = await transmitSubmissionPreparation(supabase, {
+        applicationId: APP_ID,
+        preparationId: PREP_ID,
+        userId: USER_ID,
+        options: { idempotency_key: "uat-promote-1" },
+        deps,
+      });
+      assert.equal(result.ok, true);
+      assert.equal(result.status, "sent");
+      assert.equal(result.graph_message_id, "graph-sent-promoted");
+      assert.equal(tables.submission_transmission_attempts[0].status, "sent");
+      assert.ok(reconcileCalls >= 1);
+    } finally {
+      require("../app/services/uci/uci-graph-sent-items.service.js").reconcileSentItemsMessage =
+        originalReconcile;
+    }
+  });
+
   it("rejects a real utility recipient even when live send is on", async () => {
     process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED = "true";
     process.env.UCI_EMAIL_ALLOWED_SENDERS = "dzahid@commun-et.com";

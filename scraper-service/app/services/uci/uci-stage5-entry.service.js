@@ -14,6 +14,40 @@ const { startAcknowledgmentSla } = require("./uci-ack-sla.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
 const { getApplicationById } = require("./uci-application-builder.service.js");
 
+function formatTransmissionRecipients(value) {
+  if (value == null) return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (!Array.isArray(value)) return String(value);
+  const emails = value
+    .map((item) =>
+      typeof item === "string"
+        ? item.trim()
+        : item && typeof item === "object" && item.email
+          ? String(item.email).trim()
+          : "",
+    )
+    .filter(Boolean);
+  return emails.length ? emails.join(", ") : null;
+}
+
+function resolveTransmissionSender(attempt) {
+  if (!attempt || typeof attempt !== "object") return null;
+  return (
+    (attempt.sender_mailbox != null && String(attempt.sender_mailbox).trim()) ||
+    (attempt.from != null && String(attempt.from).trim()) ||
+    null
+  );
+}
+
+function resolveTransmissionRecipients(attempt) {
+  if (!attempt || typeof attempt !== "object") return null;
+  return (
+    formatTransmissionRecipients(attempt.to_recipients) ||
+    formatTransmissionRecipients(attempt.to) ||
+    null
+  );
+}
+
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
@@ -258,8 +292,8 @@ async function reconcileLiveTransmissionIntoStage5(supabase, params) {
       raw_subject: attempt.subject ?? null,
       raw_body: null,
       raw_attachments: [],
-      sender: attempt.from ?? null,
-      recipient: Array.isArray(attempt.to) ? attempt.to.join(", ") : attempt.to ?? null,
+      sender: resolveTransmissionSender(attempt),
+      recipient: resolveTransmissionRecipients(attempt),
       external_message_id: attempt.graph_message_id ? String(attempt.graph_message_id) : null,
       thread_id: attempt.conversation_id ? String(attempt.conversation_id) : null,
       idempotency_key: outboundKey,
@@ -271,6 +305,18 @@ async function reconcileLiveTransmissionIntoStage5(supabase, params) {
         stage5_handoff: true,
       },
     });
+  } else {
+    const sender = resolveTransmissionSender(attempt);
+    const recipient = resolveTransmissionRecipients(attempt);
+    const patch = { updated_at: new Date().toISOString() };
+    if (sender) patch.sender = sender;
+    if (recipient) patch.recipient = recipient;
+    if (patch.sender || patch.recipient) {
+      await supabase
+        .from("coordination_communications")
+        .update(patch)
+        .eq("id", String(existingOutbound.id));
+    }
   }
 
   const entry = await enterStage5AwaitingUtility(supabase, {
@@ -351,4 +397,7 @@ module.exports = {
   reconcileLiveTransmissionIntoStage5,
   assertStage6NotStartedFromStage5Entry,
   canEnterStage6,
+  resolveTransmissionSender,
+  resolveTransmissionRecipients,
+  formatTransmissionRecipients,
 };

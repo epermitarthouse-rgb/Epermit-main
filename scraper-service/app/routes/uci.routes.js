@@ -2742,12 +2742,41 @@ function createUciRouter(opts) {
         write: true,
       });
       const body = req.body && typeof req.body === "object" ? req.body : {};
-      const result = await transmitSubmissionPreparation(supabase, {
+      let result = await transmitSubmissionPreparation(supabase, {
         applicationId,
         preparationId,
         userId: user.id,
         options: body,
       });
+
+      if (
+        (result.status === "sent" || (result.idempotent_replay && result.ok)) &&
+        result.stage_5_advanced !== true
+      ) {
+        try {
+          const stage5 = await reconcileLiveTransmissionIntoStage5(supabase, {
+            applicationId,
+            userId: user.id,
+            transmissionId: result.transmission_id ? String(result.transmission_id) : undefined,
+            preparationId,
+          });
+          result = {
+            ...result,
+            submitted_at: stage5.submitted_at ?? null,
+            lifecycle_advanced: true,
+            stage_5_advanced: true,
+            stage_5: stage5,
+          };
+        } catch (reconcileErr) {
+          result = {
+            ...result,
+            stage_5_advanced: false,
+            stage_5_reconcile_error:
+              reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr),
+          };
+        }
+      }
+
       const httpStatus = result.ok || result.idempotent_replay ? 200 : result.status === "outcome_unknown" ? 409 : 502;
       res.status(httpStatus).json(result);
     } catch (err) {

@@ -522,6 +522,21 @@ function isTransmissionSent(
   );
 }
 
+function isTransmissionUncertain(
+  transmission: UciTransmissionAttemptSummary | null | undefined,
+): boolean {
+  if (!transmission) return false;
+  return String(transmission.status || "").toLowerCase() === "outcome_unknown";
+}
+
+function transmissionMatchesPrep(
+  transmission: UciTransmissionAttemptSummary | null | undefined,
+  prep: UciSubmissionPreparationPreview | null | undefined,
+): boolean {
+  if (!transmission || !prep) return false;
+  return String(transmission.preparation_id || "") === String(prep.preparation_id || "");
+}
+
 function transmissionAttemptList(
   application: CoordinationApplication,
 ): UciTransmissionAttemptSummary[] {
@@ -600,12 +615,10 @@ export function UciSubmissionsPage() {
         setEmailReadiness(listed.email_readiness);
       }
       setPrepCache((prev) => ({ ...prev, [applicationId]: listed.latest }));
-      if (listed.latest_transmission) {
-        setTransmissionCache((prev) => ({
-          ...prev,
-          [applicationId]: listed.latest_transmission ?? null,
-        }));
-      }
+      setTransmissionCache((prev) => ({
+        ...prev,
+        [applicationId]: listed.latest_transmission ?? null,
+      }));
       const to = listed.latest?.to?.[0]?.email;
       if (to) {
         setRecipientDraft((prev) => ({ ...prev, [applicationId]: to }));
@@ -740,23 +753,27 @@ export function UciSubmissionsPage() {
       });
       setTransmissionCache((prev) => ({ ...prev, [applicationId]: result }));
       const fromAddr = String(result.from || result.sender_mailbox || "—");
+      const sentNow = result.status === "sent" || result.ok;
       const outcome =
-        result.status === "sent" || result.ok
+        sentNow
           ? formatUciSentSummary({
               completedAt: result.completed_at || new Date().toISOString(),
               from: fromAddr,
               to,
               attachmentCount: result.attachment_count ?? 0,
             })
-          : formatUciOperatorMessage(
-              result.message,
-              `Send ${result.status || "failed"}`,
-            );
+          : result.status === "outcome_unknown"
+            ? formatUciOperatorMessage(
+                result.message,
+                "Email may have been sent — outcome is uncertain. Do not retry blindly.",
+              )
+            : formatUciOperatorMessage(
+                result.message,
+                `Send ${result.status || "failed"}`,
+              );
       setActionMessage(outcome);
       await refreshPreparations(applicationId);
-      if (!synthetic) {
-        await state.reload?.();
-      }
+      await state.reload?.();
     } catch (e: unknown) {
       setConfirmBusyId(null);
       setActionMessage(
@@ -835,6 +852,9 @@ export function UciSubmissionsPage() {
                   (meta?.latest_transmission && typeof meta.latest_transmission === "object"
                     ? (meta.latest_transmission as UciTransmissionAttemptSummary)
                     : null);
+                const transmissionForPrep = transmissionMatchesPrep(transmission, prep)
+                  ? transmission
+                  : null;
                 const isReviewed = application.draft_status === "reviewed";
                 const synthetic =
                   String(application.provider_slug || "").toLowerCase() === "dominion" &&
@@ -845,45 +865,55 @@ export function UciSubmissionsPage() {
                 const confirmed = preparationBlocksNewPrepare(prep);
                 const packageReady = prep?.ready_to_send === true || readyToSend;
                 const prepSent = Boolean(
-                  prep &&
-                    transmission &&
-                    String(transmission.preparation_id || "") === String(prep.preparation_id) &&
-                    isTransmissionSent(transmission),
+                  transmissionForPrep && isTransmissionSent(transmissionForPrep),
                 );
+                const prepUncertain = Boolean(
+                  transmissionForPrep && isTransmissionUncertain(transmissionForPrep),
+                );
+                const providerSubmitted = Boolean(application.submitted_at);
                 const priorSent =
-                  isTransmissionSent(transmission) && !prepSent;
+                  isTransmissionSent(transmission) &&
+                  !prepSent &&
+                  !transmissionMatchesPrep(transmission, prep);
                 const attachmentCount = Array.isArray(prep?.attachments)
                   ? prep.attachments.length
                   : transmission?.attachment_count ?? 0;
-                const toEditable = Boolean(prep && !prepSent);
-                const transmissionLabel = prepSent
-                  ? "Sent"
-                  : confirmed
-                    ? packageReady
-                      ? "Ready to send"
-                      : "Prepared"
-                    : prep
-                      ? "Prepared"
+                const toEditable = Boolean(prep && !prepSent && !prepUncertain && !providerSubmitted);
+                const transmissionLabel =
+                  prepSent || providerSubmitted
+                    ? "Sent"
+                    : prepUncertain
+                      ? "Send outcome uncertain"
                       : priorSent
                         ? "Sent (prior)"
-                        : "Not prepared";
-                const providerConfirmation = application.submitted_at
+                        : confirmed
+                          ? packageReady
+                            ? "Ready to send"
+                            : "Prepared"
+                          : prep
+                            ? "Prepared"
+                            : "Not prepared";
+                const providerConfirmation = providerSubmitted
                   ? "Submitted"
                   : "Not submitted";
-                const sentSummary = transmission
+                const sentSummary = (prepSent ? transmissionForPrep : transmission)
                   ? formatUciSentSummary({
-                      completedAt: transmission.completed_at || transmission.claimed_at,
+                      completedAt:
+                        (prepSent ? transmissionForPrep : transmission)?.completed_at ||
+                        (prepSent ? transmissionForPrep : transmission)?.claimed_at,
                       from:
-                        transmission.from ||
-                        transmission.sender_mailbox ||
+                        (prepSent ? transmissionForPrep : transmission)?.from ||
+                        (prepSent ? transmissionForPrep : transmission)?.sender_mailbox ||
                         prep?.from ||
                         null,
                       to:
-                        transmission.to ||
-                        transmission.to_recipients ||
+                        (prepSent ? transmissionForPrep : transmission)?.to ||
+                        (prepSent ? transmissionForPrep : transmission)?.to_recipients ||
                         recipientDraft[application.id] ||
                         null,
-                      attachmentCount: transmission.attachment_count ?? attachmentCount,
+                      attachmentCount:
+                        (prepSent ? transmissionForPrep : transmission)?.attachment_count ??
+                        attachmentCount,
                     })
                   : null;
                 const attempts = (() => {
@@ -936,9 +966,11 @@ export function UciSubmissionsPage() {
                           Transmission:{" "}
                           <span
                             className={
-                              prepSent || priorSent
+                              prepSent || priorSent || providerSubmitted
                                 ? "font-semibold text-emerald-800 dark:text-emerald-200"
-                                : "font-semibold"
+                                : prepUncertain
+                                  ? "font-semibold text-amber-800 dark:text-amber-200"
+                                  : "font-semibold"
                             }
                           >
                             {transmissionLabel}
@@ -950,6 +982,10 @@ export function UciSubmissionsPage() {
                         {prepSent && sentSummary ? (
                           <p className="text-xs text-emerald-900 dark:text-emerald-100">
                             Current · {sentSummary}
+                          </p>
+                        ) : providerSubmitted && sentSummary ? (
+                          <p className="text-xs text-emerald-900 dark:text-emerald-100">
+                            Submitted · {sentSummary}
                           </p>
                         ) : null}
                         {priorSent && sentSummary ? (
@@ -979,6 +1015,18 @@ export function UciSubmissionsPage() {
                                 ? "Send another test"
                                 : "Create new transmission"}
                           </Button>
+                        ) : providerSubmitted ? (
+                          <Button
+                            size="sm"
+                            disabled={!isReviewed || anyBusy}
+                            onClick={() => void runPrepare(application.id)}
+                          >
+                            {prepBusyId === application.id
+                              ? "Preparing…"
+                              : synthetic
+                                ? "Send another test"
+                                : "Create new transmission"}
+                          </Button>
                         ) : (
                           <Button
                             size="sm"
@@ -991,7 +1039,7 @@ export function UciSubmissionsPage() {
                       </div>
                     </div>
 
-                    {prep && !prepSent ? (
+                    {prep && !prepSent && !providerSubmitted ? (
                       <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
                         <p className="font-semibold text-sm text-foreground">Email preview</p>
                         <p>
@@ -1059,7 +1107,7 @@ export function UciSubmissionsPage() {
                           >
                             Update preview
                           </Button>
-                          {packageReady ? (
+                          {packageReady && !prepUncertain ? (
                             <Button
                               size="sm"
                               disabled={anyBusy}
@@ -1073,6 +1121,13 @@ export function UciSubmissionsPage() {
                                   ? "Send test email"
                                   : "Send submission"}
                             </Button>
+                          ) : prepUncertain ? (
+                            <div className="w-full rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+                              <p className="font-semibold">
+                                A prior send attempt has an uncertain outcome. Do not send again
+                                until an operator confirms delivery or the record is reconciled.
+                              </p>
+                            </div>
                           ) : prep.production_readiness_blocker ? (
                             <div className="w-full rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
                               <p className="font-semibold">
@@ -1087,9 +1142,9 @@ export function UciSubmissionsPage() {
                       </div>
                     ) : null}
 
-                    {prepSent ? (
+                    {prepSent || providerSubmitted ? (
                       <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-100">
-                        <p className="font-medium">{sentSummary}</p>
+                        <p className="font-medium">{sentSummary || "Transmission sent"}</p>
                         <p className="mt-1 text-muted-foreground">
                           This transmission stays on record. Use{" "}
                           {synthetic ? "Send another test" : "Create new transmission"} for a new
