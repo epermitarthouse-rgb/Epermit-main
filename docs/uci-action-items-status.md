@@ -70,9 +70,9 @@ Allowed status values:
 | Stage 4 | Stage 4 → Stage 5 handoff | Complete (code) | Live transmit reconcile endpoint `POST /applications/:id/reconcile-stage5` plus legacy confirmed submit both enter Stage 5 `AWAITING_UTILITY` and start ack SLA; Stage 6 never starts | Yes — unit tests | Apply Stage 5 migration remotely; live utility ack still external | Lifecycle + transmission services | Yes (live proof) | No | P0 | Transmit itself still does not auto-advance; reconcile after `status=sent` |
 | Stage 5 | Communication classification and attention queue | Functional with human review | Eleven-category LLM+keyword classifier (OpenAI primary when Anthropic absent; 0.75), Graph poll + webhook inbound, portal shared model, matcher/unmatched queue, ack acceptance, Flag/Confirm/Reject/Rematch, SLA start/stop/2×, Needs Attention | Yes — Stage 5 unit + ≥85% synthetic harness | Live Graph Mail.Read, OpenAI key for live LLM path (Anthropic optional), client-labeled accuracy set for production certification | Mailbox / OpenAI / labeled samples | Yes | Yes | P0 | Synthetic accuracy ≥85% verified; production certification blocked on labeled samples |
 | Stage 5 | Acknowledgment SLA engine | Complete (code) | Start on Stage 5 entry, stop on valid ack complete, overdue events, 2× escalation → ESCALATED | Yes — unit tests | Provider SLA business-day policy confirmation | Provider directory SLA columns | Yes (policy) | No | P1 | Defaults to 5 business days |
-| Stage 5 | Graph inbound ingestion | Implemented; live-verify pending | Idempotent Graph `/me/messages` poll + attachments metadata + `POST /webhooks/uci/email-inbound` into shared model / unmatched queue | Yes — unmatched path unit tests | Connected mailbox Mail.Read + webhook secret | Microsoft Graph / mailbox consent | Yes | Yes | P0 | Reuses per-user mailbox OAuth |
+| Stage 5 | Graph inbound ingestion | Implemented + automatic poller | Background `startUciGraphInboundPoller` (~45s) on scraper process + idempotent Graph `/me/messages` poll + attachment persist + webhook path; Inbox UI light refetch | Yes — unmatched + poller unit tests | Connected mailbox Mail.Read; scraper process running | Microsoft Graph / mailbox consent | Yes | Yes | P0 | Do not rely on manual `graph-poll` |
 | Stage 5 | Ack auto-complete + Stage 6 guard | Complete (code) | High-confidence matched acknowledgment completes Stage 5 only with ticket/account + ack date + **real named PM** (placeholders rejected); PM-less acks persist evidence, stay AWAITING_UTILITY, Needs Attention, SLA active; human Confirm uses same gates; Stage 6 only after Stage 5 COMPLETED + ack date | Yes — unit tests | Live utility acknowledgment samples | Utility inbound messages | Yes | No | P0 | Does not start Stage 6 product |
-| Stage 6 | Class-of-service/design review | Partial | Structural analysis and discrepancy inventory can be persisted | Yes — foundation tests | Parse actual COS/design documents and compare engineering values | Utility-issued COS/design documents | Yes | Yes | P2 | Human engineering review remains required |
+| Stage 6 | Design Review / Class of Service | Complete (code) + Graph + Cos upload UAT + accepted-value redesign + **clean-match auto-complete (A6.10)** | Full Agent 6 + auto-analyze on email/upload + multi-doc conflict surfacing + editable Accepted layer (immutable utility source) + frozen approval snapshot + version history; **clean high-confidence match auto-completes Stage 6 (no Approve COS)**; discrepancies stay `IN_PROGRESS` | Yes — unit + Highland live approve | Production OCR + real utility COS samples | Utility letters / Graph / project-documents | Yes | Yes | P0 | Apply accepted-values migration; Stage 7 product not started |
 | Stage 7 | CIAC and cost tracking | Partial | Manual cost create/update, estimate/actual, and variance work | Yes — service tests | Invoice parsing, approvals, payment workflow, and QuickBooks bridge | Utility invoices / client billing rules | Yes | Yes | P2 | Existing platform QuickBooks should be extended, not duplicated |
 | Stage 8 | Long-lead equipment tracking | Partial | Equipment rows, ETA history, check-in, and slip calculation work | Yes — service tests | Scheduled worker, durable alerts, and utility follow-up integration | Utility ETA communications | Yes | Yes | P2 | Current check-ins are manual |
 | Stage 9 | Meter-set preparation | Partial | Idempotent milestone/checklist preparation works | Yes — foundation tests | Inspection release, utility scheduling, notifications, and completion handling | Client/utility scheduling inputs | Yes | Yes | P2 | Agent 10 inspection release remains deferred |
@@ -917,6 +917,98 @@ Aligned auto-complete and human Confirm with §5.3 / roadmap §17: real PM requi
 
 ### Stale PM/contact reopen fix (2026-08-19)
 Root cause: after Stage 5 COMPLETED, `utility_contact_name` / `utility_project_manager` remained on the coordination record and `resolveCompletionFields` treated them as PM evidence for a later incomplete/reopened acknowledgment. Fix: completion PM must come from **current** communication extracted/reviewer fields only; `reopenStage5Acknowledgment` archives prior PM/contact/ack into `metadata.stage_5_acknowledgment_history` and clears operational PM/contact before returning to `AWAITING_UTILITY` + SLA restart.
+
+## Stage 6 Design Review / Class of Service — 2026-08-19
+
+**Status:** Full Agent 6 product implemented in code with synthetic tests. Live utility COS/design PDF samples and production OCR remain external verification dependencies. Stage 7 product not started (`can_enter_stage_7` guard only).
+
+### Implemented
+- Stage 5 COMPLETED + ack date → `canEnterStage6`; high-confidence `class_of_service` / `design_review_response` auto-enters Stage 6 and runs analysis
+- COS SLA from `sla_class_of_service_business_days` (start/stop/overdue/2× escalation + Needs Attention signal)
+- Durable `coordination_cos_design_records` with versioning; `ADVISORY` ≠ `UTILITY_ISSUED` ≠ `DISCREPANCY`; predictions never write `class_of_service_issued_at`
+- PDF/HTML parse + OCR fallback hook; electric + gas/water extraction; uncertain → Needs Attention
+- Baseline compare vs verified Load Profile + Application Builder package only
+- Field-level discrepancy engine + comparison table; material deviations never silently accepted
+- **A6.10 clean-match auto-complete (2026-08-20 correction):** clean / high-confidence utility-issued match with empty discrepancy list → Stage 6 `COMPLETED` automatically (sets `class_of_service_issued_at`, stops COS SLA, `can_enter_stage_7=true`). Client requirement does **not** require manual Approve COS for a clean match. Operator may still Flag / Reopen / Correct afterward.
+- Discrepancies / OCR uncertainty / unrecognized docs / revision-required → Stage 6 `IN_PROGRESS` (or `BLOCKED`) + human attention; manual Approve retained for deviation acceptance
+- `discrepancy_report` linked to triggering communication (`source_communication_id` + `agent_processed_metadata.stage_6_cos.discrepancy_report`), not only coordination metadata
+- Human review: Approve (deviation path), accept material deviation (reason required), revision → BLOCKED, flag, reject wrong doc, supersede versions; overrides preserve immutable submitted + utility-issued source + accepted + reason/user/timestamp
+- CIAC implication creates idempotent `coordination_costs` row with evidence link
+- UI: existing Cos workspace labeled **Design Review / Class of Service**; workflow shows **COS matched** when auto-completed
+- Migration `20260819140000_uci_stage6_cos_design.sql`; tests `uci-stage6-cos-design.test.js`
+
+### External / live-verification dependencies
+- Real utility-issued COS / design-review PDF and HTML samples (PEPCO/Dominion/etc.)
+- Production OCR engine wiring (`deps.ocrExtract` / document-fallback OCR) for scanned letters
+- Apply Stage 6 migration on remote Supabase
+- Client acceptance of material-deviation authority / roles
+
+### Graph inbound attachment → Stage 6 (2026-08-19/20)
+**Status:** Wired end-to-end; Highland Springs live UAT with synthetic self-send only (`dzahid@commun-et.com`).
+
+Implemented:
+- `uci-graph-attachment-persist.service.js` — Graph attachment list/download (`contentBytes` + `/$value` fallback), supported-type gate, dedupe by `graph_attachment_id` + `content_hash`, persist via existing `project-documents` bucket + `project_documents` rows, link on `coordination_communications.raw_attachments`
+- Ingest path downloads before classify; high-conf COS/design still auto-enters Stage 6; attachment recovery on later poll can re-trigger Stage 6 without re-inserting the message
+- MIME forced from filename when Graph returns `application/octet-stream` (bucket rejects octet-stream)
+- Analysis idempotent on same `source_communication_id` + attachment fingerprint; revised COS versions supersede
+- Fixtures: `scraper-service/fixtures/stage6-cos/01_Synthetic_COS_Matching.pdf`, `02_…_Discrepant.pdf`, `03_…_Design_Review_Revision_Request.pdf` (+ `.txt` sidecars). UAT script: `scraper-service/scripts/uat-stage6-graph-attachments.js`
+- Tests: `uci-graph-attachment-persist.test.js` + existing `uci-stage6-cos-design.test.js`
+
+Highland live UAT (coordination `1a2b4b06-…`, package `6314b620-…`) — historical run before A6.10 auto-complete correction:
+1. **01 Matching** — self-send PDF → ingest once → `class_of_service` 0.95 → Stage 6 → PDF parse → comparison match → `UTILITY_ISSUED` / `ready_for_approval`; second poll `inserted=false`; document linked; Stage 7 still ineligible until Approve
+2. **02 Discrepant** — matched with LC 451497 in subject/body → `DISCREPANCY` / `needs_attention` (undersized 400A vs 1000A); supersedes prior version; no silent COMPLETED; `class_of_service_issued_at` remains null
+3. **03 Design revision** — `design_review_response` 0.95 → `revision_required` → Stage 6 `BLOCKED`; `can_enter_stage_7=false`
+
+### Clean-match auto-complete correction (2026-08-20)
+**Status:** Implemented in code + unit tests. Aligns with client Agent 6 / checklist A6.10.
+
+- Clean high-confidence matching COS → auto-complete Stage 6 (`COMPLETED`), set `class_of_service_issued_at` from utility evidence, stop COS SLA, Stage 7 eligible — **no manual Approve COS**
+- Discrepancy / uncertain / revision → remain `IN_PROGRESS` (or `BLOCKED`) with human resolution; Approve retained for accepted deviations
+- `discrepancy_report.source_communication_id` + communication `agent_processed_metadata.stage_6_cos.discrepancy_report` linkage
+- Operator Flag / Reopen / Correct still available after auto-complete; overrides do not destructively mutate source evidence
+
+Notes / remaining gaps:
+- Matcher needs LC/ticket/address signal (≥25 score); subject “Highland Springs” alone is insufficient
+- Graph `$select=@odata.type` / `contentBytes` can 400 — list omits `@odata.type`; binary uses `/$value` fallback
+- Intermittent first-pass storage failures recovered by MIME+filename fix
+- Edge UAT (no attachment / unsupported zip / multi / low-confidence / manual reclassify) covered by unit paths; not all re-run live in this pass
+
+### Cos workspace upload / select-existing + matching approve (2026-08-20)
+**Status:** Closed for Stage 6 product wiring.
+
+- Cos tab: **Upload COS / Design document** and **Select existing document** → `executeProjectDocumentUpload` / project_documents → `POST …/cos/analyze` with `project_document_ids` (force new version; clean match auto-completes Stage 6 per A6.10)
+- Analyst resolves project-document buffers from storage; document-only evidence can be `UTILITY_ISSUED` (not forced ADVISORY)
+- Highland matching approve UAT (historical, pre-A6.10): select-existing `01` PDF + matching communication → `ready_for_approval` → Approve COS → Stage 6 `COMPLETED`. **Current rule:** clean match auto-completes without Approve COS; Approve retained for discrepancy / deviation acceptance.
+- Guided workflow badges: Documents received → Analysis complete → Resolve differences → COS matched (auto) / Approve COS (discrepancy path)
+- Final actions: Approve COS (deviation path) | Request revision | Flag for review | Reject document; Analyze becomes **Re-analyze** once evidence exists
+
+### Editable accepted values + multi-doc redesign (2026-08-20)
+**Status:** Implemented in code (uncommitted). Migration `20260820060000_uci_stage6_accepted_values.sql`.
+
+**Three layers per comparison row:** Submitted | Utility-issued (immutable) | Accepted (editable, defaults to utility-issued).
+
+**Document handling:**
+- Auto-analysis is the normal path: Graph/email `class_of_service` / `design_review_response` → Stage 6 analysis; manual multi-upload persists each file then auto-analyzes
+- Select existing → Re-analyze is fallback/reprocessing only
+- Multi-document upload: each file independent in project-documents; per-doc extract + merge; conflicting values surface as `document_conflict` (no silent pick); revised COS supersedes without overwriting prior approved snapshots/overrides
+- Guided workflow badges: Documents received → Analysis complete → Resolve differences → COS matched (auto) / Approve COS (discrepancy path)
+- Review summary headline (e.g. `2 documents analyzed · 5 matches · 2 new utility conditions · 1 discrepancy`) + next recommended action
+- Final actions: Approve COS (deviation path) | Request revision | Flag for review | Reject document; Analyze becomes **Re-analyze** once evidence exists
+
+**Persistence / audit:**
+- `accepted_fields`, `field_overrides` (append-only), `approved_snapshot`, `review_version` on `coordination_cos_design_records`
+- Override audit: field, submitted, utility-issued, previous/current accepted, source document/evidence, changed_by, timestamp, required reason when accepted ≠ utility, review_version
+- Approve freezes reviewed/accepted snapshot; never mutates `extracted_fields`
+- `POST /coordination/:id/cos/accepted-fields` for edit/reset
+
+**Tests:** `uci-stage6-cos-design.test.js` (accepted edit, reset, approve snapshot integrity, multi-doc conflict, review summary, revised COS history)
+
+### Automatic Graph inbound poller (2026-08-20)
+**Root cause:** Ingest worked only when something invoked `pollGraphInboundForUser` (manual `POST …/graph-poll` or Cursor). Scraper started Arlington + UCI portal durable workers, but no Graph mailbox poller. UCI durable jobs are portal-sync only and often disabled.
+
+**Fix:** `uci-graph-inbound-poller.service.js` started from `registerExecutionRoutes` with the scraper process (local `npm run dev` / parallel scraper and Railway). Default cadence 45s (`UCI_GRAPH_INBOUND_POLL_MS`); disable with `UCI_GRAPH_INBOUND_POLLER_ENABLED=false`. Polls all `microsoft_mailbox_connections` with `status=connected`; reuses existing idempotent ingest + attachment persist + Stage 6 path. Inbox operational snapshot refetches every 30s on `/uci/inbox`.
+
+**Live verify (no manual graph-poll):** self-send SYNTHETIC `01` to `dzahid@commun-et.com` at `21:27:42Z` → background cycle ingested comm `4575c6fe-…` at `21:27:49Z` (~7s), attachment persisted (content-hash dedupe), classified `class_of_service` 0.95, Stage 6 `ready_for_approval` / `UTILITY_ISSUED`.
 
 ### Highland Stage 5 live UAT (2026-08-19)
 - Reconcile JSONB mirror now accepts `latest_transmission` / history when `submission_transmission_attempts` table is absent remotely.

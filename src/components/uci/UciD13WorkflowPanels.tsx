@@ -31,8 +31,10 @@ import type {
   CoordinationEquipment,
   CoordinationRecord,
   LifecycleState,
+  UCI_COST_TYPES,
   UciLifecycleProposalRow,
   UciLifecycleProposalsPayload,
+  UciLifecycleStatus,
   UciPortalSyncRun,
   UciPortfolioViewResponse,
   UciProviderMappingMetadata,
@@ -567,53 +569,682 @@ export function CommunicationOperatorCard({
 
 export function CosAnalysisPanel({
   coordinationId,
+  projectId = null,
   metadata,
+  cosDesignRecords = [],
+  projectDocuments = [],
+  canEnterStage7 = false,
+  classOfServiceIssuedAt = null,
   busy,
   error,
   onAnalyze,
+  onUploadDocuments,
+  onSelectExistingDocuments,
+  onUpdateAcceptedFields,
+  onApprove,
+  onAcceptDeviation,
+  onRequestRevision,
+  onFlag,
+  onReject,
   mutedClass,
   sectionTitleClass,
   toolbarOutlineButtonClass,
 }: PanelCommonProps & {
   coordinationId: string;
+  projectId?: string | null;
   metadata: Record<string, unknown>;
+  cosDesignRecords?: Array<Record<string, unknown>>;
+  projectDocuments?: Array<{
+    id: string;
+    file_name: string;
+    file_type?: string | null;
+    description?: string | null;
+    created_at?: string | null;
+  }>;
+  canEnterStage7?: boolean;
+  classOfServiceIssuedAt?: string | null;
   busy: boolean;
   error: string | null;
   onAnalyze: () => void;
+  onUploadDocuments?: (files: File[]) => void | Promise<void>;
+  onSelectExistingDocuments?: (documentIds: string[]) => void | Promise<void>;
+  onUpdateAcceptedFields?: (payload: {
+    updates?: Array<{ field: string; accepted_value: unknown; reason?: string | null }>;
+    reset_fields?: string[];
+  }) => void | Promise<void>;
+  onApprove?: () => void;
+  onAcceptDeviation?: (notes: string) => void;
+  onRequestRevision?: (notes: string) => void;
+  onFlag?: () => void;
+  onReject?: (reason: string) => void;
 }) {
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedExistingIds, setSelectedExistingIds] = useState<string[]>([]);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const analysis = metadata.uci_cos_analysis as Record<string, unknown> | undefined;
+  const current =
+    cosDesignRecords.find((r) => r.is_current === true) ||
+    cosDesignRecords[0] ||
+    null;
+  const comparisonRows = (Array.isArray(current?.comparison_rows)
+    ? current?.comparison_rows
+    : Array.isArray(analysis?.comparison_rows)
+      ? analysis?.comparison_rows
+      : []) as Array<Record<string, unknown>>;
+  const evidenceStatus = String(current?.evidence_status || analysis?.evidence_status || "—");
+  const reviewStatus = String(current?.review_status || analysis?.review_status || "—");
+  const hasMaterial =
+    evidenceStatus === "DISCREPANCY" ||
+    reviewStatus === "needs_attention" ||
+    reviewStatus === "revision_required";
+  const versionLabel =
+    current?.version != null ? `v${String(current.version)}` : null;
+  const hasEvidence =
+    comparisonRows.length > 0 ||
+    Boolean(current?.id) ||
+    Boolean(analysis?.cos_design_record_id);
+  const isApproved = reviewStatus === "approved";
+  const canEditAccepted =
+    Boolean(onUpdateAcceptedFields) &&
+    !isApproved &&
+    evidenceStatus !== "ADVISORY" &&
+    reviewStatus !== "rejected" &&
+    reviewStatus !== "superseded";
+
+  const reviewSummary =
+    (current?.discrepancy_report &&
+    typeof current.discrepancy_report === "object" &&
+    !Array.isArray(current.discrepancy_report) &&
+    (current.discrepancy_report as Record<string, unknown>).review_summary) ||
+    (current?.agent_metadata &&
+    typeof current.agent_metadata === "object" &&
+    !Array.isArray(current.agent_metadata) &&
+    (current.agent_metadata as Record<string, unknown>).review_summary) ||
+    analysis?.review_summary ||
+    null;
+
+  const summaryHeadline =
+    reviewSummary && typeof reviewSummary === "object"
+      ? String((reviewSummary as Record<string, unknown>).headline || "")
+      : "";
+  const nextAction =
+    reviewSummary && typeof reviewSummary === "object"
+      ? String((reviewSummary as Record<string, unknown>).next_action || "")
+      : "";
+  const workflowStep =
+    reviewSummary && typeof reviewSummary === "object"
+      ? String((reviewSummary as Record<string, unknown>).workflow_step || "")
+      : hasEvidence
+        ? "review_values"
+        : "awaiting_documents";
+
+  const overrideRows = comparisonRows.filter((r) => r.operator_override === true);
+  const historyVersions = cosDesignRecords
+    .filter((r) => r.is_current !== true)
+    .slice(0, 5);
+
+  const selectableDocs = projectDocuments.filter((d) => {
+    const name = String(d.file_name || "").toLowerCase();
+    const type = String(d.file_type || "").toLowerCase();
+    return (
+      type.includes("pdf") ||
+      type.includes("html") ||
+      type.includes("text") ||
+      type.includes("image") ||
+      /\.(pdf|docx?|html?|txt|png|jpe?g)$/i.test(name)
+    );
+  });
+
+  const workflowSteps = [
+    { id: "awaiting_documents", label: "Documents received" },
+    { id: "review_values", label: "Analysis complete" },
+    { id: "resolve_differences", label: "Resolve differences" },
+    {
+      id: "approved",
+      label:
+        isApproved &&
+        (Boolean((current?.agent_metadata as Record<string, unknown> | undefined)?.auto_completed) ||
+          Boolean((analysis as Record<string, unknown> | undefined)?.auto_completed) ||
+          Boolean(
+            reviewSummary &&
+              typeof reviewSummary === "object" &&
+              (reviewSummary as Record<string, unknown>).auto_completed,
+          ))
+          ? "COS matched"
+          : "Approve COS",
+    },
+  ];
+
+  const activeWorkflowIndex = (() => {
+    if (isApproved || workflowStep === "approved") return 3;
+    if (workflowStep === "resolve_differences") return 2;
+    if (hasEvidence || workflowStep === "review_values") return 1;
+    return 0;
+  })();
+
+  const formatCell = (value: unknown) => (value != null && value !== "" ? String(value) : "—");
+
+  const statusLabel = (row: Record<string, unknown>) => {
+    if (row.utility_conflict === true || row.result === "document_conflict") return "Conflict";
+    if (row.operator_override === true) return "Override";
+    if (row.result === "match") return "Match";
+    if (row.result === "baseline_missing") return "New condition";
+    if (row.result === "undersized" || row.result === "oversized" || row.result === "mismatch") {
+      return "Discrepancy";
+    }
+    return String(row.result || "—");
+  };
+
+  const saveAccepted = async (field: string, acceptedValue: unknown, requireReason: boolean) => {
+    if (!onUpdateAcceptedFields) return;
+    let reason: string | null = null;
+    if (requireReason) {
+      reason = window.prompt("Reason for changing accepted value from utility-issued");
+      if (!reason || !reason.trim()) return;
+    }
+    await onUpdateAcceptedFields({
+      updates: [{ field, accepted_value: acceptedValue, reason: reason?.trim() || null }],
+    });
+    setEditingField(null);
+    setEditDraft("");
+  };
+
+  const handleApproveClick = () => {
+    if (!onApprove) return;
+    if (overrideRows.length > 0) {
+      const lines = overrideRows
+        .map(
+          (r) =>
+            `• ${String(r.label || r.field)}: utility ${formatCell(r.utility_issued)} → accepted ${formatCell(r.accepted)}${r.override_reason ? ` (${String(r.override_reason)})` : ""}`,
+        )
+        .join("\n");
+      const ok = window.confirm(
+        `Approve COS with ${overrideRows.length} operator override(s)?\n\n${lines}\n\nUtility-issued evidence stays immutable.`,
+      );
+      if (!ok) return;
+    }
+    onApprove();
+  };
+
   return (
     <Card className="border-border/60">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className={sectionTitleClass}>COS / design review</CardTitle>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={toolbarOutlineButtonClass}
-            disabled={busy}
-            onClick={onAnalyze}
-          >
-            {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            Analyze
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className={sectionTitleClass}>Design Review / Class of Service</CardTitle>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={busy}
+              onClick={onAnalyze}
+              title={
+                hasEvidence
+                  ? "Re-run analysis against current evidence (diagnostic / reprocess)"
+                  : "Run analysis"
+              }
+            >
+              {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              {hasEvidence ? "Re-analyze" : "Analyze"}
+            </Button>
+            {onApprove ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || evidenceStatus === "ADVISORY" || isApproved}
+                onClick={handleApproveClick}
+              >
+                Approve COS
+              </Button>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="text-xs">
+      <CardContent className="space-y-3 text-xs">
         {error ? <p className="text-destructive">{error}</p> : null}
-        {analysis ? (
-          <pre className="max-h-40 overflow-auto rounded bg-muted/20 p-2 text-[10px]">
-            {JSON.stringify(analysis, null, 2)}
-          </pre>
+
+        <div className="flex flex-wrap gap-1.5">
+          {workflowSteps.map((step, idx) => (
+            <Badge
+              key={step.id}
+              variant={idx <= activeWorkflowIndex ? "default" : "outline"}
+              className="text-[10px] font-normal"
+            >
+              {idx + 1}. {step.label}
+            </Badge>
+          ))}
+        </div>
+
+        {summaryHeadline ? (
+          <div className="rounded border border-border/40 bg-muted/20 px-2.5 py-2">
+            <p className="font-medium text-foreground">{summaryHeadline}</p>
+            {nextAction ? <p className={`${mutedClass} mt-0.5`}>Next: {nextAction}</p> : null}
+          </div>
+        ) : null}
+
+        <div className="grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+          <p>
+            Evidence: <span className="font-medium text-foreground">{evidenceStatus}</span>
+            {evidenceStatus === "ADVISORY" ? " (not utility-issued)" : ""}
+            {versionLabel ? ` · ${versionLabel}` : ""}
+            {current?.review_version != null ? ` · review r${String(current.review_version)}` : ""}
+          </p>
+          <p>
+            Review: <span className="font-medium text-foreground">{reviewStatus}</span>
+          </p>
+          <p>
+            Issued at:{" "}
+            <span className="font-medium text-foreground">
+              {classOfServiceIssuedAt || "not evidenced"}
+            </span>
+          </p>
+          <p>
+            Stage 7 eligible:{" "}
+            <span className="font-medium text-foreground">{canEnterStage7 ? "yes" : "no"}</span>
+          </p>
+        </div>
+
+        {(onUploadDocuments || onSelectExistingDocuments) && projectId ? (
+          <div className="space-y-2 rounded border border-border/40 p-2">
+            <p className="text-[11px] font-medium text-foreground">
+              Upload COS / Design documents
+            </p>
+            <p className={mutedClass}>
+              Multi-select uploads persist each file independently, then auto-analyze. Utility
+              evidence is never overwritten — a revised set creates a new version. Select existing
+              is for reprocessing only.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {onUploadDocuments ? (
+                <>
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.html,.htm,.txt,.png,.jpg,.jpeg,application/pdf,text/html,text/plain,image/*"
+                    className="hidden"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      e.target.value = "";
+                      if (files.length) void onUploadDocuments(files);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className={toolbarOutlineButtonClass}
+                    disabled={busy}
+                    onClick={() => uploadInputRef.current?.click()}
+                  >
+                    {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                    Upload COS / Design documents
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            {onSelectExistingDocuments ? (
+              <div className="space-y-2 pt-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  Select existing (reprocess fallback)
+                </Label>
+                <div className="max-h-28 space-y-1 overflow-y-auto rounded border border-border/30 p-1.5">
+                  {selectableDocs.length === 0 ? (
+                    <p className={mutedClass}>No eligible project documents</p>
+                  ) : (
+                    selectableDocs.map((doc) => {
+                      const checked = selectedExistingIds.includes(doc.id);
+                      return (
+                        <label
+                          key={doc.id}
+                          className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-muted/40"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={checked}
+                            disabled={busy}
+                            onChange={() => {
+                              setSelectedExistingIds((prev) =>
+                                checked ? prev.filter((id) => id !== doc.id) : [...prev, doc.id],
+                              );
+                            }}
+                          />
+                          <span className="text-[11px] leading-snug">{doc.file_name}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className={toolbarOutlineButtonClass}
+                  disabled={busy || selectedExistingIds.length === 0}
+                  onClick={() => {
+                    if (selectedExistingIds.length) {
+                      void onSelectExistingDocuments(selectedExistingIds);
+                    }
+                  }}
+                >
+                  Re-analyze selected
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {comparisonRows.length > 0 ? (
+          <div className="overflow-x-auto rounded border border-border/40">
+            <table className="w-full min-w-[720px] text-left text-[11px]">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="px-2 py-1.5 font-medium">Submitted</th>
+                  <th className="px-2 py-1.5 font-medium">Utility-issued</th>
+                  <th className="px-2 py-1.5 font-medium">Accepted value</th>
+                  <th className="px-2 py-1.5 font-medium">Status</th>
+                  <th className="px-2 py-1.5 font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map((row) => {
+                  const field = String(row.field || "");
+                  const utilityDisplay =
+                    row.utility_issued_display != null
+                      ? String(row.utility_issued_display)
+                      : formatCell(row.utility_issued);
+                  const acceptedDisplay = formatCell(
+                    row.accepted != null ? row.accepted : row.utility_issued,
+                  );
+                  const isEditing = editingField === field;
+                  const candidates = Array.isArray(row.utility_candidates)
+                    ? (row.utility_candidates as Array<Record<string, unknown>>)
+                    : [];
+                  return (
+                    <tr key={field} className="border-t border-border/30">
+                      <td className="px-2 py-1.5 align-top">
+                        <div className="font-medium text-foreground">
+                          {String(row.label || row.field)}
+                        </div>
+                        <div className={mutedClass}>{formatCell(row.submitted)}</div>
+                      </td>
+                      <td className="px-2 py-1.5 align-top">
+                        <div className="text-foreground">{utilityDisplay}</div>
+                        <div className={`${mutedClass} text-[10px]`}>immutable source</div>
+                      </td>
+                      <td className="px-2 py-1.5 align-top">
+                        {isEditing ? (
+                          <div className="space-y-1">
+                            {candidates.length > 0 ? (
+                              <Select
+                                value={editDraft || undefined}
+                                onValueChange={setEditDraft}
+                              >
+                                <SelectTrigger className="h-7 text-[11px]">
+                                  <SelectValue placeholder="Pick candidate" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {candidates.map((c, i) => (
+                                    <SelectItem
+                                      key={`${String(c.value)}-${i}`}
+                                      value={String(c.value)}
+                                      className="text-xs"
+                                    >
+                                      {String(c.value)} ({String(c.document_name || "doc")})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                className="h-7 text-[11px]"
+                                value={editDraft}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                              />
+                            )}
+                            <div className="flex flex-wrap gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-6 px-2 text-[10px]"
+                                disabled={busy || !editDraft.trim()}
+                                onClick={() => {
+                                  const utility = row.utility_issued;
+                                  const next = editDraft.trim();
+                                  const differs =
+                                    String(next) !== String(utility ?? "") &&
+                                    !(utility == null && !next);
+                                  void saveAccepted(
+                                    field,
+                                    /^\d+(\.\d+)?$/.test(next) ? Number(next) : next,
+                                    differs || row.utility_conflict === true,
+                                  );
+                                }}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-[10px]"
+                                onClick={() => {
+                                  setEditingField(null);
+                                  setEditDraft("");
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-medium text-foreground">{acceptedDisplay}</div>
+                            {row.operator_override === true ? (
+                              <Badge variant="outline" className="mt-0.5 text-[9px] font-normal">
+                                Operator override
+                              </Badge>
+                            ) : null}
+                            {row.override_reason ? (
+                              <div className={`${mutedClass} mt-0.5 text-[10px]`}>
+                                {String(row.override_reason)}
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 align-top">{statusLabel(row)}</td>
+                      <td className="px-2 py-1.5 align-top">
+                        <div className="space-y-1">
+                          <div className={mutedClass}>{String(row.required_action || "—")}</div>
+                          {canEditAccepted && !isEditing ? (
+                            <div className="flex flex-wrap gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className={`h-6 px-2 text-[10px] ${toolbarOutlineButtonClass}`}
+                                disabled={busy}
+                                onClick={() => {
+                                  setEditingField(field);
+                                  setEditDraft(
+                                    row.accepted != null
+                                      ? String(row.accepted)
+                                      : row.utility_issued != null
+                                        ? String(row.utility_issued)
+                                        : "",
+                                  );
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              {row.operator_override === true || row.utility_conflict === true ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-[10px]"
+                                  disabled={busy || row.utility_issued == null}
+                                  onClick={() => {
+                                    if (!onUpdateAcceptedFields) return;
+                                    void onUpdateAcceptedFields({ reset_fields: [field] });
+                                  }}
+                                >
+                                  Reset to utility
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className={mutedClass}>
-            Run discrepancy analysis against load profile and classified COS communications.
+            Upload utility COS / design documents (auto-analyzes after save), or wait for a
+            classified email/portal attachment. Select existing → Re-analyze is fallback only.
           </p>
         )}
+
+        {overrideRows.length > 0 && !isApproved ? (
+          <div className="rounded border border-amber-500/30 bg-amber-500/5 px-2.5 py-2">
+            <p className="font-medium text-foreground">
+              Overrides before approval ({overrideRows.length})
+            </p>
+            <ul className={`${mutedClass} mt-1 list-inside list-disc`}>
+              {overrideRows.map((r) => (
+                <li key={String(r.field)}>
+                  {String(r.label || r.field)}: {formatCell(r.utility_issued)} →{" "}
+                  {formatCell(r.accepted)}
+                  {r.override_reason ? ` — ${String(r.override_reason)}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {historyVersions.length > 0 ? (
+          <div className={`${mutedClass} text-[10px]`}>
+            Prior COS versions preserved:{" "}
+            {historyVersions
+              .map((r) => `v${String(r.version)}${r.review_status === "approved" ? " (approved)" : ""}`)
+              .join(", ")}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-1">
+          {hasMaterial && onAcceptDeviation ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={busy || isApproved}
+              onClick={() => {
+                const notes = window.prompt("Reason for accepting material deviation");
+                if (notes && notes.trim()) onAcceptDeviation(notes.trim());
+              }}
+            >
+              Accept deviation
+            </Button>
+          ) : null}
+          {onRequestRevision ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={busy || isApproved}
+              onClick={() => {
+                const notes = window.prompt("Revision request notes");
+                if (notes && notes.trim()) onRequestRevision(notes.trim());
+              }}
+            >
+              Request revision
+            </Button>
+          ) : null}
+          {onFlag ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={busy}
+              onClick={onFlag}
+            >
+              Flag for review
+            </Button>
+          ) : null}
+          {onReject ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={busy || isApproved}
+              onClick={() => {
+                const reason = window.prompt("Why is this the wrong document?");
+                if (reason && reason.trim()) onReject(reason.trim());
+              }}
+            >
+              Reject document
+            </Button>
+          ) : null}
+        </div>
+
+        {coordinationId ? (
+          <p className={`${mutedClass} text-[10px]`}>Record {coordinationId.slice(0, 8)}…</p>
+        ) : null}
       </CardContent>
     </Card>
   );
+}
+
+function qbStatusLabel(status: string | null | undefined): string {
+  switch (String(status || "not_ready")) {
+    case "not_ready":
+      return "Not ready to bill";
+    case "ready":
+      return "Ready to bill";
+    case "pending":
+      return "Creating client invoice";
+    case "succeeded":
+      return "Client invoice created";
+    case "retry":
+      return "Retrying client invoice";
+    case "failed":
+      return "Client invoice failed";
+    case "uncertain":
+      return "Checking for an existing invoice";
+    default:
+      return String(status);
+  }
+}
+
+function varianceTone(pct: string | number | null | undefined): string {
+  const n = Number(pct);
+  if (!Number.isFinite(n)) return "text-muted-foreground";
+  if (n > 20) return "text-destructive";
+  if (n > 15) return "text-amber-700 dark:text-amber-400";
+  if (n > 5) return "text-amber-700 dark:text-amber-400";
+  return "text-foreground";
+}
+
+function etaSourceLabel(entry: Record<string, unknown>): string {
+  const source = String(entry.source || entry.recorded_at ? entry.source || "recorded" : "unknown");
+  if (source === "utility_email") return "Utility email";
+  if (source === "operator") return "Operator";
+  if (source === "portal") return "Portal";
+  if (source === "cos_seed") return "COS seed";
+  return source.replace(/_/g, " ");
 }
 
 export function CostsEquipmentWorkflowPanel({
@@ -621,9 +1252,15 @@ export function CostsEquipmentWorkflowPanel({
   equipment,
   busy,
   error,
+  lifecycleStatus,
   onSaveCost,
   onCreateEquipment,
   onCheckInEquipment,
+  onApproveCost,
+  onRecordPayment,
+  onOverrideBill,
+  onCompleteStage7,
+  onCompleteStage8,
   mutedClass,
   sectionTitleClass,
   toolbarOutlineButtonClass,
@@ -633,100 +1270,237 @@ export function CostsEquipmentWorkflowPanel({
   equipment: CoordinationEquipment[];
   busy: boolean;
   error: string | null;
+  lifecycleStatus?: UciLifecycleStatus | null;
   onSaveCost: (payload: { cost_type: string; estimated_amount?: string; actual_amount?: string }) => void;
   onCreateEquipment: (payload: { equipment_type: string; initial_eta?: string }) => void;
-  onCheckInEquipment: (equipmentId: string, payload: { current_eta?: string }) => void;
+  onCheckInEquipment: (equipmentId: string, payload: { current_eta?: string; status?: string }) => void;
+  onApproveCost?: (costId: string) => void;
+  onRecordPayment?: (costId: string, paymentMethod: string) => void;
+  onOverrideBill?: (costId: string) => void;
+  onCompleteStage7?: () => void;
+  onCompleteStage8?: () => void;
 }) {
-  const [costType, setCostType] = useState("ciac_estimate");
+  const [costType, setCostType] = useState<(typeof UCI_COST_TYPES)[number]>("CIAC");
   const [estimated, setEstimated] = useState("");
   const [actual, setActual] = useState("");
   const [equipmentType, setEquipmentType] = useState("transformer");
   const [equipmentEta, setEquipmentEta] = useState("");
+  const [checkInEta, setCheckInEta] = useState<Record<string, string>>({});
 
   return (
     <div className="space-y-3">
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {lifecycleStatus?.record_attention?.length ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs">
+          {lifecycleStatus.record_attention.map((item) => (
+            <p key={item.code}>{item.label}</p>
+          ))}
+        </div>
+      ) : null}
+
       <Card className="border-border/60">
         <CardHeader className="pb-2">
           <CardTitle className={sectionTitleClass}>Costs</CardTitle>
+          <CardDescription className="text-xs">
+            Estimate vs actual, client approval, payment, then client invoice. Zero markup.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2 text-xs">
+        <CardContent className="space-y-3 text-xs">
           {costs.length === 0 ? (
-            <p className={mutedClass}>No cost rows yet.</p>
+            <p className={mutedClass}>No cost rows yet. COS may seed a CIAC estimate; that does not finish Stage 7.</p>
           ) : (
-            costs.map((cost) => (
-              <div key={cost.id} className="rounded border border-border/40 px-2 py-1.5">
-                <p className="font-medium">{cost.cost_type}</p>
-                <p className={mutedClass}>
-                  Est {cost.estimated_amount ?? "—"} · Actual {cost.actual_amount ?? "—"}
-                  {cost.variance_pct != null ? ` · Var ${cost.variance_pct}%` : ""}
-                </p>
-              </div>
-            ))
+            costs.map((cost) => {
+              const approval = String(cost.client_approval_status || "pending");
+              return (
+                <div key={cost.id} className="space-y-1.5 rounded border border-border/40 px-2 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{cost.cost_type}</p>
+                    {cost.variance_pct != null ? (
+                      <Badge variant="secondary" className={cn("text-[10px]", varianceTone(cost.variance_pct))}>
+                        Variance {cost.variance_pct}%
+                      </Badge>
+                    ) : null}
+                    {cost.billing_hold ? (
+                      <Badge variant="destructive" className="text-[10px]">
+                        Billing hold
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className={mutedClass}>
+                    Estimate {cost.estimated_amount ?? "—"} · Actual {cost.actual_amount ?? "—"}
+                  </p>
+                  <p className={mutedClass}>
+                    Approval: {approval}
+                    {cost.paid_at ? ` · Paid ${formatWhen(cost.paid_at)}` : " · Not paid"}
+                    {cost.client_billed_at ? ` · Client billed ${formatWhen(cost.client_billed_at)}` : ""}
+                  </p>
+                  <p className={mutedClass}>{qbStatusLabel(cost.qb_sync_status)}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {approval !== "approved" && onApproveCost ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={toolbarOutlineButtonClass}
+                        disabled={busy}
+                        onClick={() => onApproveCost(cost.id)}
+                      >
+                        Approve (zero markup)
+                      </Button>
+                    ) : null}
+                    {!cost.paid_at && onRecordPayment ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={toolbarOutlineButtonClass}
+                        disabled={busy}
+                        onClick={() => onRecordPayment(cost.id, "utility")}
+                      >
+                        Record utility paid
+                      </Button>
+                    ) : null}
+                    {cost.billing_hold && onOverrideBill ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={toolbarOutlineButtonClass}
+                        disabled={busy}
+                        onClick={() => onOverrideBill(cost.id)}
+                      >
+                        Override billing hold
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
           )}
           <div className="grid gap-2 sm:grid-cols-3">
-            <Input value={costType} onChange={(e) => setCostType(e.target.value)} placeholder="cost_type" />
-            <Input value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="estimated" />
-            <Input value={actual} onChange={(e) => setActual(e.target.value)} placeholder="actual" />
+            <Select value={costType} onValueChange={(value) => setCostType(value as (typeof UCI_COST_TYPES)[number])}>
+              <SelectTrigger className="h-8" aria-label="Cost type">
+                <SelectValue placeholder="Cost type" />
+              </SelectTrigger>
+              <SelectContent>
+                {UCI_COST_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type === "CIAC" ? "CIAC" : type.replace(/_/g, " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="Estimate" />
+            <Input value={actual} onChange={(e) => setActual(e.target.value)} placeholder="Actual" />
           </div>
           <Button
             type="button"
             size="sm"
             variant="outline"
             className={toolbarOutlineButtonClass}
-            disabled={busy || !costType.trim()}
+            disabled={busy}
             onClick={() =>
               onSaveCost({
-                cost_type: costType.trim(),
+                cost_type: costType,
                 estimated_amount: estimated || undefined,
                 actual_amount: actual || undefined,
               })
             }
           >
-            Save cost
+            Add cost
           </Button>
+          {lifecycleStatus?.guards?.can_complete_stage_7 && onCompleteStage7 ? (
+            <Button type="button" size="sm" disabled={busy} onClick={onCompleteStage7}>
+              Mark Stage 7 complete
+            </Button>
+          ) : (
+            <p className={mutedClass}>
+              Stage 7 completes when every known cost is approved, paid, and billed to the client.
+            </p>
+          )}
         </CardContent>
       </Card>
 
       <Card className="border-border/60">
         <CardHeader className="pb-2">
-          <CardTitle className={sectionTitleClass}>Equipment</CardTitle>
+          <CardTitle className={sectionTitleClass}>Long-lead equipment</CardTitle>
+          <CardDescription className="text-xs">
+            Stage 8 is complete when the procurement queue has current ETAs. Installed is not required.
+            Manual check-in is recovery when the daily job did not get a reply.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2 text-xs">
+        <CardContent className="space-y-3 text-xs">
           {equipment.length === 0 ? (
-            <p className={mutedClass}>No equipment rows yet.</p>
+            <p className={mutedClass}>No equipment rows yet. COS may seed type and size only.</p>
           ) : (
-            equipment.map((item) => (
-              <div key={item.id} className="rounded border border-border/40 px-2 py-1.5">
-                <p className="font-medium">
-                  {item.equipment_type} · {item.status}
-                </p>
-                <p className={mutedClass}>
-                  ETA {formatWhen(item.current_eta)} · Last check-in {formatWhen(item.last_check_in_at)}
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="mt-1 h-7 px-2"
-                  disabled={busy}
-                  onClick={() => onCheckInEquipment(item.id, { current_eta: item.current_eta ?? undefined })}
-                >
-                  Record check-in
-                </Button>
-              </div>
-            ))
+            equipment.map((item) => {
+              const history = Array.isArray(item.eta_history)
+                ? (item.eta_history as Array<Record<string, unknown>>)
+                : [];
+              return (
+                <div key={item.id} className="space-y-1.5 rounded border border-border/40 px-2 py-2">
+                  <p className="font-medium">
+                    {item.equipment_type}
+                    {item.equipment_size ? ` · ${item.equipment_size}` : ""} · {item.status}
+                  </p>
+                  <p className={mutedClass}>
+                    Current ETA {formatWhen(item.current_eta)} · Next automatic check-in{" "}
+                    {formatWhen(item.next_check_in_at)}
+                  </p>
+                  {history.length ? (
+                    <ol className="space-y-0.5">
+                      {history.slice(-5).map((entry, idx) => (
+                        <li key={`${item.id}-eta-${idx}`} className={mutedClass}>
+                          {String(entry.eta || "—")} · {etaSourceLabel(entry)} ·{" "}
+                          {formatWhen(String(entry.observed_at || entry.recorded_at || ""))}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className={mutedClass}>No ETA timeline yet.</p>
+                  )}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Input
+                      className="h-8 w-40"
+                      type="date"
+                      value={checkInEta[item.id] || ""}
+                      onChange={(e) => setCheckInEta((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      aria-label={`Recovery ETA for ${item.equipment_type}`}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2"
+                      disabled={busy}
+                      onClick={() =>
+                        onCheckInEquipment(item.id, {
+                          current_eta: checkInEta[item.id] || item.current_eta || undefined,
+                        })
+                      }
+                    >
+                      Recovery check-in
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
           )}
           <div className="grid gap-2 sm:grid-cols-2">
             <Input
               value={equipmentType}
               onChange={(e) => setEquipmentType(e.target.value)}
-              placeholder="equipment_type"
+              placeholder="Equipment type"
             />
             <Input
+              type="date"
               value={equipmentEta}
               onChange={(e) => setEquipmentEta(e.target.value)}
-              placeholder="initial_eta (ISO)"
+              aria-label="Initial ETA"
             />
           </div>
           <Button
@@ -744,92 +1518,312 @@ export function CostsEquipmentWorkflowPanel({
           >
             Add equipment
           </Button>
+          {lifecycleStatus?.guards?.can_complete_stage_8 && onCompleteStage8 ? (
+            <Button type="button" size="sm" disabled={busy} onClick={onCompleteStage8}>
+              Mark Stage 8 complete
+            </Button>
+          ) : (
+            <p className={mutedClass}>Stage 8 completes when every in-scope item has a current ETA.</p>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
+function meterStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case "waiting_on_inspection_release":
+      return "Waiting for inspection release";
+    case "not_in_stage_9":
+      return "Meter-set work starts at Stage 9";
+    case "request_or_confirm_date":
+      return "Request or confirm a meter-set date";
+    case "awaiting_site_readiness":
+      return "48-hour site checklist pending";
+    case "ready_to_complete_stage_9":
+      return "Ready to mark Stage 9 complete";
+    case "meter_set_scheduled":
+      return "Meter set scheduled";
+    default:
+      return status ? status.replace(/_/g, " ") : "Not started";
+  }
+}
+
 export function MeterSetCloseoutPanel({
-  recordMetadata,
+  record,
+  lifecycleStatus,
   meterBusy,
   closeoutBusy,
   error,
-  onPrepareMeterSet,
-  onPrepareCloseout,
+  onRecordInspectionRelease,
+  onSaveSiteContact,
+  onRequestMeterSet,
+  onConfirmMeterSetDate,
+  onConfirmSiteReadiness,
+  onRecordOutcome,
+  onCompleteStage9,
+  onAttachArtifact,
+  onMarkEnergized,
+  onResolveDateConflict,
+  onGenerateCloseout,
+  onCompleteStage10,
   mutedClass,
   sectionTitleClass,
   toolbarOutlineButtonClass,
+  formatWhen,
 }: PanelCommonProps & {
-  recordMetadata: Record<string, unknown>;
+  record?: CoordinationRecord | null;
+  lifecycleStatus?: UciLifecycleStatus | null;
   meterBusy: boolean;
   closeoutBusy: boolean;
   error: string | null;
-  onPrepareMeterSet: (scheduledDate?: string) => void;
-  onPrepareCloseout: () => void;
+  onRecordInspectionRelease: () => void;
+  onSaveSiteContact: (payload: {
+    site_contact_name?: string;
+    site_contact_email?: string;
+    site_contact_phone?: string;
+  }) => void;
+  onRequestMeterSet: () => void;
+  onConfirmMeterSetDate: (scheduledDate: string) => void;
+  onConfirmSiteReadiness: () => void;
+  onRecordOutcome: (payload: { outcome: string; actual_date?: string; reschedule_date?: string }) => void;
+  onCompleteStage9: () => void;
+  onAttachArtifact: (kind: string) => void;
+  onMarkEnergized: (actualDate: string) => void;
+  onResolveDateConflict: () => void;
+  onGenerateCloseout: () => void;
+  onCompleteStage10: () => void;
 }) {
-  const meterSet = recordMetadata.uci_meter_set_checklist as Record<string, unknown> | undefined;
-  const closeout = recordMetadata.uci_closeout_package as Record<string, unknown> | undefined;
   const [scheduledDate, setScheduledDate] = useState("");
+  const [energizeDate, setEnergizeDate] = useState("");
+  const [siteName, setSiteName] = useState(record?.site_contact_name || "");
+  const [siteEmail, setSiteEmail] = useState(record?.site_contact_email || "");
+  const [sitePhone, setSitePhone] = useState(record?.site_contact_phone || "");
+  const artifacts = (record?.metadata?.closeout_artifacts || {}) as Record<string, unknown>;
+  const meter = lifecycleStatus?.meter_set;
+  const closeout = lifecycleStatus?.closeout;
+  const rollup = lifecycleStatus?.project_rollup;
 
   return (
     <div className="space-y-3">
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {rollup?.banner ? (
+        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs">
+          <p className="font-medium">{rollup.banner}</p>
+          <p className={mutedClass}>
+            Project utility coordination completes only when every utility record is Stage 10 completed.
+          </p>
+        </div>
+      ) : null}
+
       <Card className="border-border/60">
         <CardHeader className="pb-2">
-          <CardTitle className={sectionTitleClass}>Meter set preparation</CardTitle>
+          <CardTitle className={sectionTitleClass}>Inspection release & meter set</CardTitle>
+          <CardDescription className="text-xs">{meterStatusLabel(meter?.status)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-xs">
-          {meterSet ? (
-            <pre className="max-h-32 overflow-auto rounded bg-muted/20 p-2 text-[10px]">
-              {JSON.stringify(meterSet, null, 2)}
-            </pre>
-          ) : (
-            <p className={mutedClass}>Generate 48h pre-meter-set checklist and milestone row.</p>
-          )}
-          <Input
-            type="date"
-            value={scheduledDate}
-            onChange={(e) => setScheduledDate(e.target.value)}
-            className="h-8"
-          />
+          <p className={mutedClass}>
+            Inspection release {record?.inspection_release_received_at ? formatWhen(record.inspection_release_received_at) : "not recorded"}
+            . Meter set {record?.meter_set_scheduled_at ? formatWhen(record.meter_set_scheduled_at) : "not scheduled"}
+            . Site readiness {record?.site_readiness_confirmed_at ? formatWhen(record.site_readiness_confirmed_at) : "not confirmed"}.
+          </p>
+          {!record?.inspection_release_received_at ? (
+            <Button
+              type="button"
+              size="sm"
+              className={toolbarOutlineButtonClass}
+              variant="outline"
+              disabled={meterBusy}
+              onClick={onRecordInspectionRelease}
+            >
+              {meterBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Record inspection release
+            </Button>
+          ) : null}
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="Site contact name" />
+            <Input value={siteEmail} onChange={(e) => setSiteEmail(e.target.value)} placeholder="Site contact email" />
+            <Input value={sitePhone} onChange={(e) => setSitePhone(e.target.value)} placeholder="Site contact phone" />
+          </div>
           <Button
             type="button"
             size="sm"
             variant="outline"
             className={toolbarOutlineButtonClass}
             disabled={meterBusy}
-            onClick={() => onPrepareMeterSet(scheduledDate || undefined)}
+            onClick={() =>
+              onSaveSiteContact({
+                site_contact_name: siteName || undefined,
+                site_contact_email: siteEmail || undefined,
+                site_contact_phone: sitePhone || undefined,
+              })
+            }
           >
-            {meterBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            Prepare meter set
+            Save site contact
           </Button>
+
+          {record?.inspection_release_received_at ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy}
+                onClick={onRequestMeterSet}
+              >
+                Request meter set
+              </Button>
+              <Input
+                type="date"
+                className="h-8 w-40"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                aria-label="Confirmed meter-set date"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy || !scheduledDate}
+                onClick={() => onConfirmMeterSetDate(scheduledDate)}
+              >
+                Confirm date
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy}
+                onClick={onConfirmSiteReadiness}
+              >
+                Confirm site readiness
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy}
+                onClick={() => onRecordOutcome({ outcome: "completed", actual_date: scheduledDate || undefined })}
+              >
+                Crew completed
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy}
+                onClick={() => onRecordOutcome({ outcome: "no_show" })}
+              >
+                Record no-show
+              </Button>
+            </div>
+          ) : (
+            <p className={mutedClass}>Choreography does not start until inspection release is recorded in this record.</p>
+          )}
+
+          {lifecycleStatus?.guards?.can_complete_stage_9 ? (
+            <Button type="button" size="sm" disabled={meterBusy} onClick={onCompleteStage9}>
+              Mark Stage 9 complete
+            </Button>
+          ) : (
+            <p className={mutedClass}>
+              Stage 9 is marked complete only after release, scheduled meter set, milestone, and site readiness.
+            </p>
+          )}
         </CardContent>
       </Card>
 
       <Card className="border-border/60">
         <CardHeader className="pb-2">
-          <CardTitle className={sectionTitleClass}>Closeout preparation</CardTitle>
+          <CardTitle className={sectionTitleClass}>Energization & closeout</CardTitle>
+          <CardDescription className="text-xs">
+            Hard-block without utility confirmation, final meter reading, commissioning sign-off, and the five-section PDF.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-xs">
-          {closeout ? (
-            <pre className="max-h-32 overflow-auto rounded bg-muted/20 p-2 text-[10px]">
-              {JSON.stringify(closeout, null, 2)}
-            </pre>
-          ) : (
-            <p className={mutedClass}>Generate energization closeout checklist metadata.</p>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={toolbarOutlineButtonClass}
-            disabled={closeoutBusy}
-            onClick={onPrepareCloseout}
-          >
-            {closeoutBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            Prepare closeout
-          </Button>
+          {record?.energization_date_conflict ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1.5">
+              <p>Energization date conflicts with the target date.</p>
+              <Button type="button" size="sm" variant="outline" disabled={closeoutBusy} onClick={onResolveDateConflict}>
+                Keep actual date
+              </Button>
+            </div>
+          ) : null}
+          <ul className="space-y-1">
+            {[
+              ["utility_confirmation", "Utility confirmation"],
+              ["final_meter_reading", "Final meter reading"],
+              ["commissioning_signoff", "Commissioning sign-off"],
+            ].map(([key, label]) => (
+              <li key={key} className="flex items-center justify-between gap-2">
+                <span>
+                  {label}: {artifacts[key] ? "on file" : "missing"}
+                </span>
+                {!artifacts[key] ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7"
+                    disabled={closeoutBusy}
+                    onClick={() => onAttachArtifact(key)}
+                  >
+                    Record received
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+            <li>Closeout PDF: {record?.closeout_package_doc_id ? "archived" : "not generated"}</li>
+          </ul>
+          <div className="flex flex-wrap items-end gap-2">
+            <Input
+              type="date"
+              className="h-8 w-40"
+              value={energizeDate}
+              onChange={(e) => setEnergizeDate(e.target.value)}
+              aria-label="Energization date"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={closeoutBusy || !energizeDate}
+              onClick={() => onMarkEnergized(energizeDate)}
+            >
+              Mark energized
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={closeoutBusy}
+              onClick={onGenerateCloseout}
+            >
+              {closeoutBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Generate closeout PDF
+            </Button>
+            {lifecycleStatus?.guards?.can_complete_stage_10 ? (
+              <Button type="button" size="sm" disabled={closeoutBusy} onClick={onCompleteStage10}>
+                Mark Stage 10 complete
+              </Button>
+            ) : null}
+          </div>
+          {closeout?.missing?.length ? (
+            <p className={mutedClass}>Still needed: {closeout.missing.join(", ").replace(/_/g, " ")}</p>
+          ) : null}
         </CardContent>
       </Card>
     </div>

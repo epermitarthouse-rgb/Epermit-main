@@ -9,7 +9,13 @@ export type LifecycleState =
   | "ESCALATED"
   | "COMPLETED";
 
-export type DraftStatus = "draft" | "reviewed" | "needs_changes" | "submitted" | "failed";
+export type DraftStatus =
+  | "draft"
+  | "reviewed"
+  | "approved_for_submission"
+  | "needs_changes"
+  | "submitted"
+  | "failed";
 
 export interface UtilityProvider {
   id: string;
@@ -34,7 +40,7 @@ export interface CoordinationRecord {
   project_id: string;
   user_id: string | null;
   tenant_id: string | null;
-  utility_provider_id: string;
+  utility_provider_id: string | null;
   utility_type: UciUtilityType | null;
   scope_description: string;
   current_stage: number;
@@ -50,6 +56,24 @@ export interface CoordinationRecord {
   energization_actual_date: string | null;
   predicted_p50_date: string | null;
   predicted_p90_date: string | null;
+  predicted_p50_previous?: string | null;
+  predicted_p50_computed_at?: string | null;
+  prediction_baseline_source?:
+    | "historical"
+    | "seed_fallback"
+    | "code_fallback"
+    | "operator_override"
+    | null;
+  prediction_sample_size?: number | null;
+  prediction_reason?: Record<string, unknown> | null;
+  inspection_release_received_at?: string | null;
+  meter_set_scheduled_at?: string | null;
+  site_readiness_confirmed_at?: string | null;
+  site_contact_name?: string | null;
+  site_contact_email?: string | null;
+  site_contact_phone?: string | null;
+  energization_date_conflict?: boolean | null;
+  closeout_package_doc_id?: string | null;
   agent_monitored: boolean;
   last_error: string | null;
   metadata: Record<string, unknown>;
@@ -107,6 +131,27 @@ export interface CoordinationApplication {
   updated_at: string;
 }
 
+export const UCI_COST_TYPES = [
+  "CIAC",
+  "application_fee",
+  "design_review",
+  "meter",
+  "recording",
+  "courier",
+] as const;
+
+export type UciCostType = (typeof UCI_COST_TYPES)[number];
+
+export type ClientApprovalStatus = "pending" | "approved" | "rejected";
+export type QbSyncStatus =
+  | "not_ready"
+  | "ready"
+  | "pending"
+  | "succeeded"
+  | "retry"
+  | "failed"
+  | "uncertain";
+
 export interface CoordinationCost {
   id: string;
   coordination_record_id: string;
@@ -123,6 +168,16 @@ export interface CoordinationCost {
   client_billed_at: string | null;
   quickbooks_invoice_id: string | null;
   notes: string | null;
+  client_approval_status?: ClientApprovalStatus | null;
+  client_approved_at?: string | null;
+  client_approved_by?: string | null;
+  billing_hold?: boolean | null;
+  human_override_bill_at?: string | null;
+  qb_sync_status?: QbSyncStatus | null;
+  qb_last_error?: string | null;
+  qb_attempt_count?: number | null;
+  actual_source?: string | null;
+  estimated_source?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -140,8 +195,40 @@ export interface CoordinationEquipment {
   last_check_in_at: string | null;
   next_check_in_at: string | null;
   weeks_of_slip: string | null;
+  check_in_method?: string | null;
+  last_response_at?: string | null;
+  last_weeks_of_slip?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UciLifecycleStatus {
+  guards?: {
+    can_enter_stage_7?: boolean;
+    can_complete_stage_7?: boolean;
+    can_enter_stage_8?: boolean;
+    can_complete_stage_8?: boolean;
+    can_enter_stage_9?: boolean;
+    can_complete_stage_9?: boolean;
+    can_enter_stage_10?: boolean;
+    can_complete_stage_10?: boolean;
+    choreography_may_start?: boolean;
+    inspection_release_received?: boolean;
+    stage_7_reasons?: string[];
+    stage_8_reasons?: string[];
+    stage_9_reasons?: string[];
+    stage_10_reasons?: string[];
+  };
+  meter_set?: { status?: string; reason?: string | null; actions?: string[] };
+  closeout?: { status?: string; missing?: string[]; actions?: string[] };
+  project_rollup?: { completed_count?: number; total?: number; banner?: string; complete?: boolean };
+  predicted?: {
+    typical_label?: string;
+    conservative_label?: string;
+    predicted_p50_date?: string | null;
+    predicted_p90_date?: string | null;
+  };
+  record_attention?: Array<{ code: string; label: string }>;
 }
 
 export interface CoordinationMilestone {
@@ -931,7 +1018,70 @@ export interface UciCosAnalysisResponse {
   coordination_record_id: string;
   project_id: string;
   analysis: Record<string, unknown>;
+  comparison_rows?: UciCosComparisonRow[];
+  discrepancies?: Array<Record<string, unknown>>;
+  cos_design_record?: CoordinationCosDesignRecord | null;
+  can_enter_stage_7?: boolean;
   stage_unchanged: boolean;
+}
+
+export interface UciCosComparisonRow {
+  field: string;
+  label: string;
+  submitted: unknown;
+  utility_issued: unknown;
+  /** Display when documents disagree (immutable candidates kept separately) */
+  utility_issued_display?: string | null;
+  utility_conflict?: boolean;
+  utility_candidates?: Array<Record<string, unknown>>;
+  /** Operator accepted value — editable; defaults to utility_issued */
+  accepted?: unknown;
+  operator_override?: boolean;
+  override_reason?: string | null;
+  result: string;
+  required_action: string;
+  material?: boolean;
+  utility_provenance?: unknown;
+  baseline_provenance?: unknown;
+}
+
+export interface UciCosFieldOverrideAudit {
+  field: string;
+  label?: string;
+  submitted_value?: unknown;
+  utility_issued_value?: unknown;
+  previous_accepted_value?: unknown;
+  accepted_value?: unknown;
+  source_document?: Record<string, unknown> | null;
+  evidence_page?: unknown;
+  reason?: string | null;
+  changed_by?: string;
+  changed_at?: string;
+  review_version?: number;
+  action?: string;
+}
+
+export interface CoordinationCosDesignRecord {
+  id: string;
+  coordination_record_id: string;
+  project_id: string;
+  version: number;
+  is_current: boolean;
+  evidence_status: UciCosEvidenceStatus;
+  review_status: string;
+  comparison_rows?: UciCosComparisonRow[];
+  discrepancy_report?: Record<string, unknown>;
+  extracted_fields?: Record<string, unknown>;
+  baseline_fields?: Record<string, unknown>;
+  accepted_fields?: Record<string, unknown>;
+  field_overrides?: UciCosFieldOverrideAudit[];
+  approved_snapshot?: Record<string, unknown> | null;
+  review_version?: number;
+  needs_human_attention?: boolean;
+  attention_reasons?: string[];
+  utility_evidence_issued_at?: string | null;
+  approved_at?: string | null;
+  approval_notes?: string | null;
 }
 
 export interface UciMeterSetPrepareResponse {

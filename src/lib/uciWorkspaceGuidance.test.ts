@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  UCI_LIFECYCLE_STAGE_TITLES,
+  UCI_STAGE_RECOMMENDED_TAB,
   buildNextStepNotice,
   describeCoordinationStatus,
   getWorkflowGroupProgress,
@@ -42,5 +44,16 @@ describe("uciWorkspaceGuidance", () => {
     });
     assert.equal(notice.recommendedTab, "communications");
     assert.match(notice.title, /Stage completed/i);
+  });
+
+  it("labels Stages 7–10 per CET-2026 and recommends the costs tab for Stage 8", () => {
+    assert.equal(UCI_LIFECYCLE_STAGE_TITLES[7], "CIAC");
+    assert.equal(UCI_LIFECYCLE_STAGE_TITLES[8], "Long-lead");
+    assert.equal(UCI_LIFECYCLE_STAGE_TITLES[9], "Pre-energization");
+    assert.equal(UCI_LIFECYCLE_STAGE_TITLES[10], "Energization & closeout");
+    assert.equal(UCI_STAGE_RECOMMENDED_TAB[7], "costs");
+    assert.equal(UCI_STAGE_RECOMMENDED_TAB[8], "costs");
+    assert.equal(UCI_STAGE_RECOMMENDED_TAB[9], "energization-closeout");
+    assert.equal(UCI_STAGE_RECOMMENDED_TAB[10], "energization-closeout");
   });
 });

@@ -1488,7 +1488,7 @@ export function UciProviderDirectoryPage() {
 export function UciClassOfServicePage() {
   const state = useOperationalRecords("details", false);
   return (
-    <RouteFrame eyebrow="Project operation" title="Class of Service Review" body="Compare advisory analysis with utility-issued COS evidence for the selected project." badge="Real evidence · partial">
+    <RouteFrame eyebrow="Project operation" title="Design Review / Class of Service" body="Compare verified project inputs with utility-issued COS evidence. Advisory predictions are never treated as issued." badge="Real evidence · Stage 6">
       <RouteLoadState {...state} loadingText="Loading class-of-service evidence…" />
       {!state.projectId ? <AlertBanner tone="info" title="Select a project" detail="Choose an active project to review class-of-service evidence." /> : null}
       {!state.loading && !state.error && state.projectId ? (
@@ -1500,14 +1500,14 @@ export function UciClassOfServicePage() {
               <div key={record.id} className="rounded-lg border p-3">
                 <RecordLink record={record} tab="cos" />
                 <p className="text-xs text-muted-foreground">
-                  Advisory: {record.metadata?.uci_cos_analysis ? "available" : "not available"} · Utility issued: {record.class_of_service_issued_at || "not evidenced"}
+                  Advisory: {record.metadata?.uci_cos_analysis ? "available" : "not available"} · Utility issued: {record.class_of_service_issued_at || "not evidenced"} · Stage 7 eligible: {Number(record.current_stage) === 6 && String(record.current_stage_state) === "COMPLETED" && record.class_of_service_issued_at ? "yes" : "no"}
                 </p>
               </div>
             ))}
           </div>
         </Panel>
       ) : null}
-      <AlertBanner tone="default" title="Coming soon" detail="Portfolio-wide predictive COS comparison remains human-reviewed and is not enabled." />
+      <AlertBanner tone="default" title="Predictive COS remains advisory" detail="Portfolio-wide predictive COS comparison is not treated as utility-issued evidence." />
     </RouteFrame>
   );
 }
@@ -1515,7 +1515,7 @@ export function UciClassOfServicePage() {
 export function UciCiacRefundsPage() {
   const state = useOperationalRecords("details", false);
   return (
-    <RouteFrame eyebrow="Project operation" title="CIAC Costs & Refunds" body="Review real coordination cost rows without inferring refund eligibility." badge="Real costs · partial">
+    <RouteFrame eyebrow="Project operation" title="CIAC Costs & Refunds" body="Opens the Costs & long-lead workspace for real CIAC rows. Refund eligibility is not a required product." badge="Deep-link · costs tab">
       <RouteLoadState {...state} loadingText="Loading CIAC and coordination costs…" />
       {!state.projectId ? <AlertBanner tone="info" title="Select a project" detail="Choose an active project to review coordination costs." /> : null}
       {!state.loading && !state.error && state.projectId ? (
@@ -1532,7 +1532,7 @@ export function UciCiacRefundsPage() {
           </div>
         </Panel>
       ) : null}
-      <AlertBanner tone="default" title="Coming soon" detail="Refund eligibility calculations and automatic accounting posting are not enabled." />
+      <AlertBanner tone="default" title="Refunds are not required" detail="Use the Costs & long-lead tab to approve, pay, and bill CIAC. Refund and deposit workflows are out of scope." />
     </RouteFrame>
   );
 }
@@ -1544,7 +1544,7 @@ export function UciEnergizationPage() {
       <RouteLoadState {...state} loadingText="Loading energization records…" />
       {!state.projectId ? <AlertBanner tone="info" title="Select a project" detail="Choose an active project to review energization records." /> : null}
       {!state.loading && !state.error && state.projectId ? (
-        <Panel eyebrow="Stages 8–10" title={`${state.records.length} energization record(s)`}>
+        <Panel eyebrow="Stages 9–10" title={`${state.records.length} energization record(s)`}>
           <div className="space-y-3">
             {state.records.length === 0 ? (
               <p className="text-sm text-muted-foreground">No energization coordination records exist for this project.</p>
@@ -1557,7 +1557,7 @@ export function UciEnergizationPage() {
           </div>
         </Panel>
       ) : null}
-      <AlertBanner tone="default" title="Coming soon" detail="Multi-party energization choreography is not yet modeled." />
+      <AlertBanner tone="default" title="Use the record workspace" detail="Inspection release, meter-set choreography, and closeout PDF live on the Energization & closeout tab." />
     </RouteFrame>
   );
 }

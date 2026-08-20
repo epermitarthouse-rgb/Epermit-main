@@ -105,9 +105,9 @@ export const UCI_DRAWER_TABS: {
   { id: "application-prep", label: "Application package", workspace: "Stages 2–4" },
   { id: "applications", label: "Utility applications", workspace: "Coordination" },
   { id: "communications", label: "Communications", workspace: "Stage 5 · Utility acknowledgment" },
-  { id: "cos", label: "Class of Service", workspace: "Decision & costs" },
-  { id: "costs", label: "Costs & equipment", workspace: "Costs" },
-  { id: "energization-closeout", label: "Energization & closeout", workspace: "Stages 8–10" },
+  { id: "cos", label: "Design Review / Class of Service", workspace: "Decision & costs" },
+  { id: "costs", label: "Costs & long-lead", workspace: "Stages 7–8" },
+  { id: "energization-closeout", label: "Energization & closeout", workspace: "Stages 9–10" },
   { id: "lifecycle", label: "Lifecycle history", workspace: "Record" },
 ];
 
@@ -136,12 +136,12 @@ export const UCI_RECORD_WORKSPACE_GROUPS: Array<{
     tabs: ["applications", "communications", "cos"],
     stageRange: [5, 6],
   },
-  { label: "Costs", shortLabel: "Costs", tabs: ["costs"], stageRange: [7, 7] },
+  { label: "Costs & long-lead", shortLabel: "Costs", tabs: ["costs"], stageRange: [7, 8] },
   {
     label: "Energization & closeout",
     shortLabel: "Energize",
     tabs: ["energization-closeout"],
-    stageRange: [8, 10],
+    stageRange: [9, 10],
   },
   {
     label: "Activity & automation",
@@ -237,7 +237,7 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
   },
   {
     id: "class-of-service",
-    label: "Class of Service",
+    label: "Design Review / Class of Service",
     icon: FileCheck2,
     support: "foundation",
     navGroup: "foundations",
@@ -254,7 +254,7 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     navGroup: "foundations",
     section: "ciac",
     target: { kind: "external", href: "/uci/ciac-refunds" },
-    note: "Manual foundation; refund assessment defaults to NOT_ASSESSED.",
+    note: "Deep-links into the Costs & long-lead workspace. Refund assessment is not a required product.",
     primaryNav: true,
   },
   {
@@ -333,7 +333,7 @@ export const UCI_NAV_SECTIONS: UciNavSection[] = [
     navGroup: "contextual",
     section: "meter-set",
     target: { kind: "drawer-tab", tab: "energization-closeout" },
-    note: "Coming soon — richer meter-set scheduling. The real meter-set and closeout workflow is in Energization & closeout.",
+    note: "Opens the Energization & closeout tab for inspection release, meter-set choreography, and closeout.",
     primaryNav: false,
     hubTile: true,
     hubDescription: "Drawer · meter-set / closeout",

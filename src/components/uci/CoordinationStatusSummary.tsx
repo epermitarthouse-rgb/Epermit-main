@@ -85,6 +85,24 @@ export function CoordinationStatusSummary({
           label: `Energized ${formatDateOnly(record.energization_actual_date)}`,
         }
       : null,
+    record.predicted_p50_date
+      ? {
+          key: "p50",
+          label: `Typical (P50) ${formatDateOnly(record.predicted_p50_date)}${
+            record.prediction_baseline_source && record.prediction_baseline_source !== "historical"
+              ? record.prediction_baseline_source === "operator_override"
+                ? " · operator override"
+                : " · fallback"
+              : ""
+          }`,
+        }
+      : null,
+    record.predicted_p90_date
+      ? {
+          key: "p90",
+          label: `Conservative (P90) ${formatDateOnly(record.predicted_p90_date)}`,
+        }
+      : null,
   ].filter(Boolean) as Array<{ key: string; label: string }>;
 
   return (

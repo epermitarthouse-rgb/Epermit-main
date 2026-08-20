@@ -381,10 +381,10 @@ This checklist is based on the **Utility Coordination Intelligence (UCI) Module 
 | A6.6 | Flags smaller service | human attention |  |
 | A6.7 | Flags transformer/location mismatch | human attention |  |
 | A6.8 | Flags CIAC implications | cost record if needed |  |
-| A6.9 | Creates discrepancy report JSON | stored and linked |  |
-| A6.10 | Completes stage if no discrepancy | transition logged |  |
-| A6.11 | OCR fallback for scanned PDFs | OCR + low confidence flag |  |
-| A6.12 | Unrecognized docs surfaced | raw document stored + human attention |  |
+| A6.9 | Creates discrepancy report JSON | stored and linked | Done — `coordination_cos_design_records.discrepancy_report` + `source_communication_id` + communication `agent_processed_metadata.stage_6_cos.discrepancy_report` |
+| A6.10 | Completes stage if no discrepancy | transition logged | Done — clean/high-confidence match auto-completes Stage 6 (no manual Approve COS); discrepancies stay IN_PROGRESS |
+| A6.11 | OCR fallback for scanned PDFs | OCR + low confidence flag | Done — `applyOcrFallback` + low-confidence → Needs Attention |
+| A6.12 | Unrecognized docs surfaced | raw document stored + human attention | Done — raw evidence retained; uncertain/unrecognized → Needs Attention |
 
 ## Agent 7 — Easement & ROW Coordinator
 

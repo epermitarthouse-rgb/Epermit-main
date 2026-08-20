@@ -58,6 +58,7 @@ import {
 import { isPackageDocumentRemovalLocked } from "@/lib/projectDestructiveSafety";
 import { useProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 import { useSelectedProjectOptional } from "@/contexts/SelectedProjectContext";
 import {
   executeSequentialDocumentReprocess,
@@ -69,6 +70,11 @@ import {
   approveSyntheticApplicationChecklist,
   applyLifecycleProposal,
   analyzeCoordinationCos,
+  approveCoordinationCos,
+  updateCoordinationCosAcceptedFields,
+  requestCoordinationCosRevision,
+  rejectCoordinationCosDocument,
+  flagCoordinationCos,
   buildCoordinationApplicationPackage,
   checkInCoordinationEquipment,
   classifyCoordinationCommunications,
@@ -100,8 +106,21 @@ import {
   postPepcoDashboardDiscovery,
   postPepcoDiscovery,
   postPepcoApplicationDetailDiscovery,
-  prepareCloseout,
-  prepareMeterSet,
+  getCoordinationLifecycleStatus,
+  approveCoordinationCost,
+  recordCoordinationCostPayment,
+  overrideCoordinationCostBilling,
+  completeCoordinationStage,
+  recordInspectionRelease,
+  updateCoordinationSiteContact,
+  requestMeterSetDate,
+  confirmMeterSetDate,
+  confirmMeterSetSiteReadiness,
+  recordMeterSetOutcome,
+  attachCloseoutArtifact,
+  markCoordinationEnergized,
+  resolveEnergizationDateConflict,
+  generateCloseoutPackage,
   rejectLifecycleProposal,
   removeApplicationPackageDocumentMapping,
   reclassifyCommunication,
@@ -174,6 +193,7 @@ import type {
   UciPortfolioViewResponse,
   UciPortalSyncRun,
   UciPortalSyncResponse,
+  UciLifecycleStatus,
   UtilityProvider,
 } from "@/types/uci";
 import {
@@ -246,11 +266,15 @@ import {
   getInitDisabledReasons,
   providerDisplayLabel as workflowProviderDisplayLabel,
 } from "@/lib/uciSetupWorkflow";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   buildCommunicationCardModel,
+  buildInboxAuditHistoryModel,
   buildStage5CommunicationsBanner,
   countCommunicationsNeedingAttention,
+  formatCommunicationSubjectForDisplay,
   getCommunicationsTabLabel,
+  partitionOperatorInboxFeed,
 } from "@/lib/uciCommunicationPresentation";
 
 const LIFECYCLE_OPTIONS: LifecycleState[] = [
@@ -428,6 +452,10 @@ export default function UciDashboard() {
   const isRecordWorkspace = Boolean(routeCoordinationId);
   const { projects, loading: projectsLoading } = useProjects();
   const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const invalidateOperationalCommunicationViews = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["uci-operational-snapshot"] });
+  }, [queryClient]);
   /**
    * The app-wide active-project selection (header ActiveProjectControl,
    * persisted across pages via localStorage/URL). Used only to seed the
@@ -593,10 +621,20 @@ export default function UciDashboard() {
   const [lifecycleProposalBusy, setLifecycleProposalBusy] = useState(false);
   const [cosBusy, setCosBusy] = useState(false);
   const [cosError, setCosError] = useState<string | null>(null);
+  const [cosProjectDocuments, setCosProjectDocuments] = useState<
+    Array<{
+      id: string;
+      file_name: string;
+      file_type?: string | null;
+      description?: string | null;
+      created_at?: string | null;
+    }>
+  >([]);
   const [agentOpsBusy, setAgentOpsBusy] = useState(false);
   const [agentOpsError, setAgentOpsError] = useState<string | null>(null);
   const [meterSetBusy, setMeterSetBusy] = useState(false);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
+  const [lifecycleStatus, setLifecycleStatus] = useState<UciLifecycleStatus | null>(null);
   const [portfolio, setPortfolio] = useState<UciPortfolioViewResponse | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [normalizedSyncBusy, setNormalizedSyncBusy] = useState(false);
@@ -1713,6 +1751,7 @@ export default function UciDashboard() {
       const result = await classifyCoordinationCommunications(detailId);
       const d = await getCoordinationDetail(detailId);
       setDetail(d);
+      invalidateOperationalCommunicationViews();
       toast.success(
         `Classified ${result.classified_count} communication(s) — ${result.skipped_count} skipped`,
       );
@@ -1784,6 +1823,12 @@ export default function UciDashboard() {
     if (!detailId) return;
     const d = await getCoordinationDetail(detailId);
     setDetail(d);
+    try {
+      const status = await getCoordinationLifecycleStatus(detailId);
+      setLifecycleStatus(status);
+    } catch {
+      setLifecycleStatus(null);
+    }
     await refreshCoordination();
   };
 
@@ -1836,10 +1881,213 @@ export default function UciDashboard() {
     setCosError(null);
     try {
       await analyzeCoordinationCos(detailId);
-      toast.success("COS analysis complete");
+      toast.success("Design Review / COS analysis complete");
       await reloadDetail();
     } catch (e: unknown) {
       const msg = formatUciUserError(e, "COS analysis failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const refreshCosProjectDocuments = useCallback(async () => {
+    const uploadProjectId = detail?.record?.project_id ?? projectId;
+    if (!uploadProjectId) {
+      setCosProjectDocuments([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("project_documents")
+      .select("id, file_name, file_type, description, created_at")
+      .eq("project_id", uploadProjectId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.warn("Failed to load project documents for COS", error.message);
+      return;
+    }
+    setCosProjectDocuments(
+      (data || []).map((row) => ({
+        id: String(row.id),
+        file_name: String(row.file_name || "document"),
+        file_type: row.file_type != null ? String(row.file_type) : null,
+        description: row.description != null ? String(row.description) : null,
+        created_at: row.created_at != null ? String(row.created_at) : null,
+      })),
+    );
+  }, [detail?.record?.project_id, projectId]);
+
+  useEffect(() => {
+    void refreshCosProjectDocuments();
+  }, [refreshCosProjectDocuments, detailId]);
+
+  const handleCosUploadDocuments = async (files: File[]) => {
+    const uploadProjectId = detail?.record?.project_id ?? projectId;
+    if (!detailId || !uploadProjectId || !user) {
+      toast.error("Coordination project context is unavailable");
+      return;
+    }
+    if (!files.length) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      const uploadedIds: string[] = [];
+      const failed: string[] = [];
+      for (const file of files) {
+        const upload = await executeProjectDocumentUpload({
+          userId: user.id,
+          projectId: uploadProjectId,
+          file,
+          document_type: "correspondence",
+          description:
+            `UCI Stage 6 COS/design upload · coordination ${detailId}` +
+            ` · evidence_role=class_of_service_or_design_review`,
+        });
+        if (!upload.document?.id) {
+          failed.push(`${file.name}: ${upload.error || "upload failed"}`);
+          continue;
+        }
+        uploadedIds.push(String(upload.document.id));
+      }
+      if (!uploadedIds.length) {
+        throw new Error(failed.join("; ") || "COS document upload failed");
+      }
+      await analyzeCoordinationCos(detailId, {
+        project_document_ids: uploadedIds,
+        triggered_by: "manual_upload",
+        force_new_version: true,
+      });
+      toast.success(
+        `Uploaded and analyzed ${uploadedIds.length} COS/design document${uploadedIds.length === 1 ? "" : "s"} (new version)`,
+      );
+      await refreshCosProjectDocuments();
+      await reloadDetail();
+      if (failed.length) {
+        toast.warning(`${failed.length} upload(s) failed`);
+      }
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS document upload failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosSelectExistingDocument = async (documentIds: string[] | string) => {
+    const ids = (Array.isArray(documentIds) ? documentIds : [documentIds])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+    if (!detailId || !ids.length) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await analyzeCoordinationCos(detailId, {
+        project_document_ids: ids,
+        triggered_by: "select_existing",
+        force_new_version: true,
+      });
+      toast.success(
+        `Re-analyzed ${ids.length} selected document${ids.length === 1 ? "" : "s"} (new COS version)`,
+      );
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS select-existing analysis failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosUpdateAcceptedFields = async (payload: {
+    updates?: Array<{ field: string; accepted_value: unknown; reason?: string | null }>;
+    reset_fields?: string[];
+  }) => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await updateCoordinationCosAcceptedFields(detailId, payload);
+      toast.success(
+        payload.reset_fields?.length ? "Reset to utility-issued" : "Accepted value updated",
+      );
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS accepted-field update failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosApprove = async (opts?: { acceptMaterialDeviation?: boolean; notes?: string }) => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await approveCoordinationCos(detailId, {
+        accept_material_deviation: opts?.acceptMaterialDeviation === true,
+        notes: opts?.notes,
+      });
+      toast.success("COS / design review approved");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS approval failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosRevision = async (notes: string) => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await requestCoordinationCosRevision(detailId, { notes });
+      toast.success("Revision requested");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS revision failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosFlag = async () => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await flagCoordinationCos(detailId);
+      toast.success("Flagged for review");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS flag failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosReject = async (reason: string) => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      await rejectCoordinationCosDocument(detailId, { reason });
+      toast.success("Document rejected");
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS reject failed");
       setCosError(msg);
       toast.error(msg);
     } finally {
@@ -1907,36 +2155,28 @@ export default function UciDashboard() {
     }
   };
 
-  const handlePrepareMeterSet = async (scheduledDate?: string) => {
+  const runLifecycleAction = async (
+    action: () => Promise<unknown>,
+    success: string,
+    failure: string,
+    kind: "costs" | "meter" | "closeout" = "costs",
+  ) => {
     if (!detailId) return;
-    setMeterSetBusy(true);
+    if (kind === "meter") setMeterSetBusy(true);
+    else if (kind === "closeout") setCloseoutBusy(true);
+    else setAgentOpsBusy(true);
     setAgentOpsError(null);
     try {
-      await prepareMeterSet(detailId, scheduledDate ? { scheduled_date: scheduledDate } : undefined);
-      toast.success("Meter set checklist prepared");
+      await action();
+      toast.success(success);
       await reloadDetail();
     } catch (e: unknown) {
-      const msg = formatUciUserError(e, "Meter set preparation failed");
+      const msg = formatUciUserError(e, failure);
       setAgentOpsError(msg);
       toast.error(msg);
     } finally {
+      setAgentOpsBusy(false);
       setMeterSetBusy(false);
-    }
-  };
-
-  const handlePrepareCloseout = async () => {
-    if (!detailId) return;
-    setCloseoutBusy(true);
-    setAgentOpsError(null);
-    try {
-      await prepareCloseout(detailId);
-      toast.success("Closeout checklist prepared");
-      await reloadDetail();
-    } catch (e: unknown) {
-      const msg = formatUciUserError(e, "Closeout preparation failed");
-      setAgentOpsError(msg);
-      toast.error(msg);
-    } finally {
       setCloseoutBusy(false);
     }
   };
@@ -1947,6 +2187,7 @@ export default function UciDashboard() {
       await reclassifyCommunication(communicationId, { classification });
       toast.success("Communication reclassified");
       await reloadDetail();
+      invalidateOperationalCommunicationViews();
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Reclassification failed"));
     } finally {
@@ -1962,6 +2203,7 @@ export default function UciDashboard() {
       });
       toast.success("Flagged for human review — auto-lifecycle blocked");
       await reloadDetail();
+      invalidateOperationalCommunicationViews();
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Flag for review failed"));
     } finally {
@@ -1978,6 +2220,7 @@ export default function UciDashboard() {
       });
       toast.success("Communication confirmed");
       await reloadDetail();
+      invalidateOperationalCommunicationViews();
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Confirm review failed"));
     } finally {
@@ -1993,6 +2236,7 @@ export default function UciDashboard() {
       });
       toast.success("Communication marked irrelevant");
       await reloadDetail();
+      invalidateOperationalCommunicationViews();
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Reject failed"));
     } finally {
@@ -3720,6 +3964,34 @@ export default function UciDashboard() {
                       documents, and application prep.
                     </p>
                   )}
+                  {detailRecord?.predicted_p50_date || detailRecord?.predicted_p90_date ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md border border-border/60 px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Typical (P50)
+                        </p>
+                        <p className="text-sm font-medium">
+                          {formatWhen(detailRecord.predicted_p50_date)}
+                        </p>
+                        {detailRecord.prediction_baseline_source &&
+                        detailRecord.prediction_baseline_source !== "historical" ? (
+                          <p className={cn("mt-0.5 text-[10px]", uciMutedClass)}>
+                            {detailRecord.prediction_baseline_source === "operator_override"
+                              ? "Operator override — not historical provider data"
+                              : "Fallback baseline — not historical provider data"}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="rounded-md border border-border/60 px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Conservative (P90)
+                        </p>
+                        <p className="text-sm font-medium">
+                          {formatWhen(detailRecord.predicted_p90_date)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                   {!isPepcoCoordination && detailId ? (
                     <SyncRunsPanel
                       coordinationId={detailId}
@@ -4019,32 +4291,87 @@ export default function UciDashboard() {
                       </div>
                     </CardHeader>
                     <CardContent className="px-4 py-4">
-                      {(detail.communications_recent ?? []).length === 0 ? (
-                        <p className={uciDrawerChildEmptyClass}>No portal communications yet.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {(detail.communications_recent as CoordinationCommunication[]).map((comm) => (
-                            <CommunicationOperatorCard
-                              key={comm.id}
-                              comm={comm}
-                              providerName={detailProvider?.name ?? detailProvider?.display_name}
-                              record={detailRecord}
-                              busy={reclassifyCommId === comm.id}
-                              onReclassify={(id, classification) =>
-                                void handleReclassifyCommunication(id, classification)
-                              }
-                              onFlagForReview={(id) => void handleFlagCommunicationForReview(id)}
-                              onConfirm={(id, classification) =>
-                                void handleConfirmCommunication(id, classification)
-                              }
-                              onReject={(id) => void handleRejectCommunication(id)}
-                              mutedClass={uciMutedClass}
-                              toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
-                              cardClassName={uciTransitionCardClass}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      {(() => {
+                        const allComms = (detail.communications_recent ??
+                          []) as CoordinationCommunication[];
+                        if (allComms.length === 0) {
+                          return (
+                            <p className={uciDrawerChildEmptyClass}>No portal communications yet.</p>
+                          );
+                        }
+                        const { primary, auditHistory } = partitionOperatorInboxFeed(
+                          allComms.map((message) => ({
+                            record: detailRecord!,
+                            message,
+                          })),
+                        );
+                        return (
+                          <div className="space-y-4">
+                            <div className="space-y-3">
+                              {primary.length === 0 ? (
+                                <p className={uciDrawerChildEmptyClass}>
+                                  No active utility communications in this window.
+                                </p>
+                              ) : (
+                                primary.map(({ message: comm }) => (
+                                  <CommunicationOperatorCard
+                                    key={comm.id}
+                                    comm={comm}
+                                    providerName={
+                                      detailProvider?.name ?? detailProvider?.display_name
+                                    }
+                                    record={detailRecord}
+                                    busy={reclassifyCommId === comm.id}
+                                    onReclassify={(id, classification) =>
+                                      void handleReclassifyCommunication(id, classification)
+                                    }
+                                    onFlagForReview={(id) =>
+                                      void handleFlagCommunicationForReview(id)
+                                    }
+                                    onConfirm={(id, classification) =>
+                                      void handleConfirmCommunication(id, classification)
+                                    }
+                                    onReject={(id) => void handleRejectCommunication(id)}
+                                    mutedClass={uciMutedClass}
+                                    toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
+                                    cardClassName={uciTransitionCardClass}
+                                  />
+                                ))
+                              )}
+                            </div>
+                            {auditHistory.length > 0 ? (
+                              <div className="space-y-2 border-t border-dashed pt-3">
+                                <p className={cn("text-xs font-medium", uciMutedClass)}>
+                                  Test / Audit history · {auditHistory.length} message
+                                  {auditHistory.length === 1 ? "" : "s"} (same classification as
+                                  Inbox)
+                                </p>
+                                {auditHistory.map(({ message: comm }) => {
+                                  const audit = buildInboxAuditHistoryModel(comm, detailRecord);
+                                  return (
+                                    <div
+                                      key={comm.id}
+                                      className="rounded-lg border border-dashed p-3"
+                                    >
+                                      <p className="text-sm font-medium">
+                                        Synthetic UAT ·{" "}
+                                        {formatCommunicationSubjectForDisplay(comm.raw_subject)}
+                                      </p>
+                                      <p className={cn("mt-1 text-xs", uciMutedClass)}>
+                                        {audit.detailLine}
+                                      </p>
+                                      <p className={cn("mt-1 text-[11px]", uciMutedClass)}>
+                                        Kept for audit — not deleted. Classification is stored on
+                                        this row ({comm.classification || "null"}).
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -4200,10 +4527,36 @@ export default function UciDashboard() {
                 <TabsContent value="cos" className="mt-4 space-y-4">
                   <CosAnalysisPanel
                     coordinationId={detailId ?? ""}
+                    projectId={detailRecord?.project_id ?? projectId ?? null}
                     metadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
+                    cosDesignRecords={
+                      ((detail as { cos_design_records?: unknown[] })?.cos_design_records ??
+                        []) as Array<Record<string, unknown>>
+                    }
+                    projectDocuments={cosProjectDocuments}
+                    canEnterStage7={
+                      Number(detailRecord?.current_stage) === 6 &&
+                      String(detailRecord?.current_stage_state) === "COMPLETED" &&
+                      Boolean(detailRecord?.class_of_service_issued_at)
+                    }
+                    classOfServiceIssuedAt={detailRecord?.class_of_service_issued_at ?? null}
                     busy={cosBusy}
                     error={cosError}
                     onAnalyze={() => void handleCosAnalyze()}
+                    onUploadDocuments={(files) => void handleCosUploadDocuments(files)}
+                    onSelectExistingDocuments={(documentIds) =>
+                      void handleCosSelectExistingDocument(documentIds)
+                    }
+                    onUpdateAcceptedFields={(payload) =>
+                      void handleCosUpdateAcceptedFields(payload)
+                    }
+                    onApprove={() => void handleCosApprove()}
+                    onAcceptDeviation={(notes) =>
+                      void handleCosApprove({ acceptMaterialDeviation: true, notes })
+                    }
+                    onRequestRevision={(notes) => void handleCosRevision(notes)}
+                    onFlag={() => void handleCosFlag()}
+                    onReject={(reason) => void handleCosReject(reason)}
                     mutedClass={uciMutedClass}
                     sectionTitleClass={uciSheetSectionTitleClass}
                     toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
@@ -4224,9 +4577,45 @@ export default function UciDashboard() {
                     equipment={(detail.equipment ?? []) as import("@/types/uci").CoordinationEquipment[]}
                     busy={agentOpsBusy}
                     error={agentOpsError}
+                    lifecycleStatus={lifecycleStatus}
                     onSaveCost={(payload) => void handleSaveCost(payload)}
                     onCreateEquipment={(payload) => void handleCreateEquipment(payload)}
                     onCheckInEquipment={(id, payload) => void handleCheckInEquipment(id, payload)}
+                    onApproveCost={(costId) =>
+                      void runLifecycleAction(
+                        () => approveCoordinationCost(detailId!, costId),
+                        "Cost approved",
+                        "Failed to approve cost",
+                      )
+                    }
+                    onRecordPayment={(costId, method) =>
+                      void runLifecycleAction(
+                        () => recordCoordinationCostPayment(detailId!, costId, { payment_method: method }),
+                        "Utility payment recorded",
+                        "Failed to record payment",
+                      )
+                    }
+                    onOverrideBill={(costId) =>
+                      void runLifecycleAction(
+                        () => overrideCoordinationCostBilling(detailId!, costId),
+                        "Billing hold overridden",
+                        "Failed to override billing hold",
+                      )
+                    }
+                    onCompleteStage7={() =>
+                      void runLifecycleAction(
+                        () => completeCoordinationStage(detailId!, 7),
+                        "Stage 7 completed",
+                        "Stage 7 is not ready to complete",
+                      )
+                    }
+                    onCompleteStage8={() =>
+                      void runLifecycleAction(
+                        () => completeCoordinationStage(detailId!, 8),
+                        "Stage 8 completed",
+                        "Stage 8 is not ready to complete",
+                      )
+                    }
                     mutedClass={uciMutedClass}
                     sectionTitleClass={uciSheetSectionTitleClass}
                     toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
@@ -4241,12 +4630,107 @@ export default function UciDashboard() {
                     projectId={detailRecord.project_id}
                   />
                   <MeterSetCloseoutPanel
-                    recordMetadata={(detailRecord?.metadata ?? {}) as Record<string, unknown>}
+                    record={detailRecord}
+                    lifecycleStatus={lifecycleStatus}
                     meterBusy={meterSetBusy}
                     closeoutBusy={closeoutBusy}
                     error={agentOpsError}
-                    onPrepareMeterSet={(date) => void handlePrepareMeterSet(date)}
-                    onPrepareCloseout={() => void handlePrepareCloseout()}
+                    onRecordInspectionRelease={() =>
+                      void runLifecycleAction(
+                        () => recordInspectionRelease(detailId!),
+                        "Inspection release recorded",
+                        "Failed to record inspection release",
+                        "meter",
+                      )
+                    }
+                    onSaveSiteContact={(payload) =>
+                      void runLifecycleAction(
+                        () => updateCoordinationSiteContact(detailId!, payload),
+                        "Site contact saved",
+                        "Failed to save site contact",
+                        "meter",
+                      )
+                    }
+                    onRequestMeterSet={() =>
+                      void runLifecycleAction(
+                        () => requestMeterSetDate(detailId!),
+                        "Meter-set request sent",
+                        "Could not request meter set — check Stage 9 and inspection release",
+                        "meter",
+                      )
+                    }
+                    onConfirmMeterSetDate={(date) =>
+                      void runLifecycleAction(
+                        () => confirmMeterSetDate(detailId!, date),
+                        "Meter-set date confirmed",
+                        "Failed to confirm meter-set date",
+                        "meter",
+                      )
+                    }
+                    onConfirmSiteReadiness={() =>
+                      void runLifecycleAction(
+                        () => confirmMeterSetSiteReadiness(detailId!),
+                        "Site readiness confirmed",
+                        "Failed to confirm site readiness",
+                        "meter",
+                      )
+                    }
+                    onRecordOutcome={(payload) =>
+                      void runLifecycleAction(
+                        () => recordMeterSetOutcome(detailId!, payload),
+                        "Meter-set outcome recorded",
+                        "Failed to record meter-set outcome",
+                        "meter",
+                      )
+                    }
+                    onCompleteStage9={() =>
+                      void runLifecycleAction(
+                        () => completeCoordinationStage(detailId!, 9),
+                        "Stage 9 completed",
+                        "Stage 9 is not ready to complete",
+                        "meter",
+                      )
+                    }
+                    onAttachArtifact={(kind) =>
+                      void runLifecycleAction(
+                        () => attachCloseoutArtifact(detailId!, { kind, label: "Recorded in workspace" }),
+                        "Artifact recorded",
+                        "Failed to record artifact",
+                        "closeout",
+                      )
+                    }
+                    onMarkEnergized={(date) =>
+                      void runLifecycleAction(
+                        () => markCoordinationEnergized(detailId!, date),
+                        "Energization date captured",
+                        "Failed to mark energized",
+                        "closeout",
+                      )
+                    }
+                    onResolveDateConflict={() =>
+                      void runLifecycleAction(
+                        () => resolveEnergizationDateConflict(detailId!, "actual"),
+                        "Date conflict resolved",
+                        "Failed to resolve date conflict",
+                        "closeout",
+                      )
+                    }
+                    onGenerateCloseout={() =>
+                      void runLifecycleAction(
+                        () => generateCloseoutPackage(detailId!),
+                        "Closeout PDF archived",
+                        "Closeout is blocked until required artifacts are on file",
+                        "closeout",
+                      )
+                    }
+                    onCompleteStage10={() =>
+                      void runLifecycleAction(
+                        () => completeCoordinationStage(detailId!, 10),
+                        "Stage 10 completed",
+                        "Stage 10 is not ready to complete",
+                        "closeout",
+                      )
+                    }
                     mutedClass={uciMutedClass}
                     sectionTitleClass={uciSheetSectionTitleClass}
                     toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
@@ -4374,19 +4858,15 @@ function RecordManualMilestoneFoundations({
 }) {
   const storageKey = `uci-record-foundations:v1:${coordinationId}`;
   const [easementRow, setEasementRow] = useState("");
-  const [inspectionRelease, setInspectionRelease] = useState("");
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || "{}") as {
         easement_row?: string;
-        inspection_release?: string;
       };
       setEasementRow(saved.easement_row ?? "");
-      setInspectionRelease(saved.inspection_release ?? "");
     } catch {
       setEasementRow("");
-      setInspectionRelease("");
     }
   }, [storageKey]);
 
@@ -4397,19 +4877,18 @@ function RecordManualMilestoneFoundations({
         project_id: projectId,
         coordination_record_id: coordinationId,
         easement_row: easementRow,
-        inspection_release: inspectionRelease,
         updated_at: new Date().toISOString(),
       }),
     );
-    toast.success("Manual milestone notes saved");
+    toast.success("Easement / ROW notes saved");
   };
 
   return (
     <Card className={uciDrawerChildCardClass}>
       <CardHeader className={uciDrawerChildCardHeaderClass}>
-        <CardTitle className={uciDrawerChildCardTitleClass}>Contextual milestones</CardTitle>
+        <CardTitle className={uciDrawerChildCardTitleClass}>Easement / ROW</CardTitle>
         <CardDescription className="text-[11px]">
-          Manual foundation notes for Easement / ROW and Inspection Release. These notes do not advance lifecycle stages.
+          Optional notes for the deferred Easement / ROW foundation. Inspection release is recorded in the meter-set workflow below and stored on the coordination record.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 px-4 py-4">
@@ -4417,11 +4896,7 @@ function RecordManualMilestoneFoundations({
           <Label htmlFor={`easement-row-${coordinationId}`}>Easement / ROW</Label>
           <Textarea id={`easement-row-${coordinationId}`} value={easementRow} onChange={(event) => setEasementRow(event.target.value)} placeholder="Manual status, owner, evidence, or next step" />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`inspection-release-${coordinationId}`}>Inspection release</Label>
-          <Textarea id={`inspection-release-${coordinationId}`} value={inspectionRelease} onChange={(event) => setInspectionRelease(event.target.value)} placeholder="Manual release status, date, or evidence reference" />
-        </div>
-        <Button type="button" variant="outline" onClick={save}>Save manual milestone notes</Button>
+        <Button type="button" variant="outline" onClick={save}>Save easement notes</Button>
       </CardContent>
     </Card>
   );
