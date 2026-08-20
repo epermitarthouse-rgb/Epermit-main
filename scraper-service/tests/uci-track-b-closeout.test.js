@@ -6,6 +6,7 @@ const { buildCloseoutPdf } = require("../app/services/uci/uci-closeout-pdf.servi
 const {
   missingCloseoutArtifacts,
   maybeMarkProjectComplete,
+  attachCloseoutArtifact,
 } = require("../app/services/uci/uci-energization-closeout.service.js");
 const { createTrackBMockSupabase } = require("./helpers/uci-track-b-mock.js");
 
@@ -41,6 +42,36 @@ describe("Track B Agent 12 closeout", () => {
     ]);
     assert.ok(pdf.buffer.slice(0, 4).toString() === "%PDF");
     assert.ok(pdf.hash.length === 64);
+  });
+
+  it("attachCloseoutArtifact is idempotent when evidence already exists", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          metadata: {
+            closeout_artifacts: {
+              utility_confirmation: {
+                kind: "utility_confirmation",
+                captured_at: "2026-09-01T00:00:00.000Z",
+              },
+            },
+          },
+        },
+      ],
+    };
+    const supabase = createTrackBMockSupabase(tables);
+    const first = await attachCloseoutArtifact(supabase, {
+      coordinationRecordId: "coord-1",
+      kind: "utility_confirmation",
+      label: "repeat click",
+    });
+    assert.equal(first.idempotent, true);
+    assert.equal(
+      first.record.metadata.closeout_artifacts.utility_confirmation.captured_at,
+      "2026-09-01T00:00:00.000Z",
+    );
   });
 
   it("project rollup is 1 of 2 until both records complete", async () => {

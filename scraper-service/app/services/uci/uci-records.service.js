@@ -175,6 +175,11 @@ async function getCoordinationRecordDetailById(supabase, id) {
   }
   if (!data) return null;
 
+  const baseMetadata =
+    data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+      ? { ...data.metadata }
+      : {};
+
   const metadataKeys = [
     "uci_provider_mapping",
     "uci_provider_resolution",
@@ -202,7 +207,7 @@ async function getCoordinationRecordDetailById(supabase, id) {
     "pepco_document_count",
     "pepco_message_count",
   ];
-  const record = { ...data, metadata: {} };
+  const record = { ...data, metadata: baseMetadata };
   for (const key of metadataKeys) {
     if (record[key] != null) record.metadata[key] = record[key];
     delete record[key];

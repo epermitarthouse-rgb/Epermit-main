@@ -180,6 +180,14 @@ async function attachCloseoutArtifact(supabase, params) {
     err.code = "NOT_FOUND";
     throw err;
   }
+  const kindStr = String(kind);
+  const alreadyPresent =
+    (kindStr === "utility_confirmation" && hasUtilityConfirmationEvidence(record)) ||
+    (kindStr === "final_meter_reading" && hasFinalMeterReading(record)) ||
+    (kindStr === "commissioning_signoff" && hasCommissioningSignOff(record));
+  if (alreadyPresent) {
+    return { record, previous: record, idempotent: true };
+  }
   const evidence = buildEvidenceRef({ kind, source, docId, label });
   const nextMeta = mergeCloseoutArtifact(record, kind, evidence);
   return updateCoordinationRecordFields(supabase, {

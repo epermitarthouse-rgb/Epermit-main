@@ -4735,6 +4735,8 @@ export default function UciDashboard() {
                   <MeterSetCloseoutPanel
                     record={detailRecord}
                     lifecycleStatus={lifecycleStatus}
+                    milestones={detail.milestones ?? []}
+                    communications={detail.communications_recent ?? []}
                     meterBusy={meterSetBusy}
                     closeoutBusy={closeoutBusy}
                     error={agentOpsError}

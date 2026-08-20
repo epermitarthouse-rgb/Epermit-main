@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   UCI_COMMUNICATION_CATEGORIES,
@@ -31,6 +31,7 @@ import type {
   CoordinationCommunication,
   CoordinationCost,
   CoordinationEquipment,
+  CoordinationMilestone,
   CoordinationRecord,
   LifecycleState,
   UciLifecycleProposalRow,
@@ -1694,9 +1695,177 @@ function meterStatusLabel(status: string | undefined): string {
   }
 }
 
+const CLOSEOUT_ARTIFACT_KEYS = [
+  "utility_confirmation",
+  "final_meter_reading",
+  "commissioning_signoff",
+] as const;
+
+export type CloseoutArtifactKey = (typeof CLOSEOUT_ARTIFACT_KEYS)[number];
+
+function asMetaRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function readCloseoutArtifacts(record: CoordinationRecord | null | undefined): Record<string, unknown> {
+  return asMetaRecord(asMetaRecord(record?.metadata).closeout_artifacts);
+}
+
+function closeoutChecklistFlag(record: CoordinationRecord | null | undefined, key: string): boolean {
+  const closeout = asMetaRecord(asMetaRecord(record?.metadata).uci_closeout_package);
+  const checklist = Array.isArray(closeout.checklist) ? closeout.checklist : [];
+  return checklist.some((item) => asMetaRecord(item).key === key && asMetaRecord(item).completed === true);
+}
+
+/** Mirrors backend closeout artifact guards so UI status matches persisted state. */
+export function hasCloseoutArtifactOnRecord(
+  record: CoordinationRecord | null | undefined,
+  key: CloseoutArtifactKey,
+): boolean {
+  const artifacts = readCloseoutArtifacts(record);
+  if (key === "utility_confirmation") {
+    return Boolean(
+      artifacts.utility_confirmation ||
+        artifacts.utility_confirmation_doc_id ||
+        closeoutChecklistFlag(record, "utility_energization_confirmed"),
+    );
+  }
+  if (key === "final_meter_reading") {
+    return Boolean(artifacts.final_meter_reading || artifacts.final_meter_reading_doc_id);
+  }
+  return Boolean(artifacts.commissioning_signoff || artifacts.commissioning_signoff_doc_id);
+}
+
+export function getCloseoutArtifactEvidence(
+  record: CoordinationRecord | null | undefined,
+  key: CloseoutArtifactKey,
+): Record<string, unknown> | null {
+  const evidence = readCloseoutArtifacts(record)[key];
+  return evidence && typeof evidence === "object" && !Array.isArray(evidence)
+    ? (evidence as Record<string, unknown>)
+    : null;
+}
+
+export function hasMeterSetRequestSent(
+  recordId: string | null | undefined,
+  communications: CoordinationCommunication[] = [],
+): boolean {
+  if (!recordId) return false;
+  return communications.some((comm) => {
+    if (comm.direction !== "outbound") return false;
+    const meta = asMetaRecord(comm.agent_processed_metadata);
+    if (String(meta.idempotency_key || "") === `meter_set_request:${recordId}`) return true;
+    return String(meta.template_id || comm.classification || "") === "uci.meter_set_request.v1";
+  });
+}
+
+export function meterSetCrewCompleted(milestones: CoordinationMilestone[] = []): boolean {
+  return milestones.some((m) => m.milestone_type === "meter_set" && m.status === "completed");
+}
+
+export function meterSetNoShowRecorded(record: CoordinationRecord | null | undefined): boolean {
+  const meter = asMetaRecord(asMetaRecord(record?.metadata).uci_meter_set);
+  return meter.no_show === true && String(meter.last_outcome || "") === "no_show";
+}
+
+export function deriveMeterSetCloseoutActionState(params: {
+  record: CoordinationRecord | null | undefined;
+  milestones?: CoordinationMilestone[];
+  communications?: CoordinationCommunication[];
+}) {
+  const { record, milestones = [], communications = [] } = params;
+  const completedMilestone = milestones.find(
+    (m) => m.milestone_type === "meter_set" && m.status === "completed",
+  );
+  const closeoutPackage = asMetaRecord(asMetaRecord(record?.metadata).uci_closeout_package);
+
+  return {
+    inspectionRelease: Boolean(record?.inspection_release_received_at),
+    inspectionReleaseAt: record?.inspection_release_received_at ?? null,
+    meterSetRequested: hasMeterSetRequestSent(record?.id, communications),
+    meterSetScheduled: Boolean(record?.meter_set_scheduled_at),
+    meterSetScheduledAt: record?.meter_set_scheduled_at ?? null,
+    siteReadinessConfirmed: Boolean(record?.site_readiness_confirmed_at),
+    siteReadinessConfirmedAt: record?.site_readiness_confirmed_at ?? null,
+    crewCompleted: meterSetCrewCompleted(milestones),
+    crewCompletedAt: completedMilestone?.actual_date ?? completedMilestone?.occurred_at ?? null,
+    noShowRecorded: meterSetNoShowRecorded(record),
+    energizationCaptured: Boolean(record?.energization_actual_date),
+    energizationActualDate: record?.energization_actual_date ?? null,
+    closeoutPdfGenerated: Boolean(record?.closeout_package_doc_id),
+    closeoutPdfGeneratedAt: (closeoutPackage.generated_at as string | null) ?? null,
+    artifacts: Object.fromEntries(
+      CLOSEOUT_ARTIFACT_KEYS.map((key) => [key, hasCloseoutArtifactOnRecord(record, key)]),
+    ) as Record<CloseoutArtifactKey, boolean>,
+  };
+}
+
+function WorkflowCompletedActionButton({
+  completed,
+  completedLabel,
+  pendingLabel,
+  timestamp,
+  busy,
+  disabled,
+  onClick,
+  toolbarOutlineButtonClass,
+  formatWhen,
+  allowRepeat = false,
+}: {
+  completed: boolean;
+  completedLabel: string;
+  pendingLabel: string;
+  timestamp?: string | null;
+  busy?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  toolbarOutlineButtonClass: string;
+  formatWhen: (iso: string | null | undefined) => string;
+  allowRepeat?: boolean;
+}) {
+  if (completed && !allowRepeat) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={cn(toolbarOutlineButtonClass, "pointer-events-none border-teal/40 text-teal opacity-100")}
+          disabled
+        >
+          <CheckCircle2 className="mr-1 h-3 w-3 shrink-0" />
+          {completedLabel}
+        </Button>
+        {timestamp ? (
+          <span className="tabular-nums text-[10px] text-muted-foreground">{formatWhen(timestamp)}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className={toolbarOutlineButtonClass}
+      disabled={busy || disabled}
+      onClick={onClick}
+    >
+      {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+      {pendingLabel}
+    </Button>
+  );
+}
+
 export function MeterSetCloseoutPanel({
   record,
   lifecycleStatus,
+  milestones = [],
+  communications = [],
   meterBusy,
   closeoutBusy,
   error,
@@ -1719,6 +1888,8 @@ export function MeterSetCloseoutPanel({
 }: PanelCommonProps & {
   record?: CoordinationRecord | null;
   lifecycleStatus?: UciLifecycleStatus | null;
+  milestones?: CoordinationMilestone[];
+  communications?: CoordinationCommunication[];
   meterBusy: boolean;
   closeoutBusy: boolean;
   error: string | null;
@@ -1744,10 +1915,35 @@ export function MeterSetCloseoutPanel({
   const [siteName, setSiteName] = useState(record?.site_contact_name || "");
   const [siteEmail, setSiteEmail] = useState(record?.site_contact_email || "");
   const [sitePhone, setSitePhone] = useState(record?.site_contact_phone || "");
-  const artifacts = (record?.metadata?.closeout_artifacts || {}) as Record<string, unknown>;
   const meter = lifecycleStatus?.meter_set;
   const closeout = lifecycleStatus?.closeout;
   const rollup = lifecycleStatus?.project_rollup;
+  const actionState = deriveMeterSetCloseoutActionState({ record, milestones, communications });
+  const allowDateReconfirm = actionState.noShowRecorded;
+
+  useEffect(() => {
+    setSiteName(record?.site_contact_name || "");
+    setSiteEmail(record?.site_contact_email || "");
+    setSitePhone(record?.site_contact_phone || "");
+  }, [record?.site_contact_name, record?.site_contact_email, record?.site_contact_phone]);
+
+  useEffect(() => {
+    if (record?.meter_set_scheduled_at) {
+      setScheduledDate(String(record.meter_set_scheduled_at).slice(0, 10));
+    }
+  }, [record?.meter_set_scheduled_at]);
+
+  useEffect(() => {
+    if (record?.energization_actual_date) {
+      setEnergizeDate(String(record.energization_actual_date).slice(0, 10));
+    }
+  }, [record?.energization_actual_date]);
+
+  const closeoutArtifactRows: Array<{ key: CloseoutArtifactKey; label: string }> = [
+    { key: "utility_confirmation", label: "Utility confirmation" },
+    { key: "final_meter_reading", label: "Final meter reading" },
+    { key: "commissioning_signoff", label: "Commissioning sign-off" },
+  ];
 
   return (
     <div className="space-y-3">
@@ -1776,19 +1972,16 @@ export function MeterSetCloseoutPanel({
             . Meter set {record?.meter_set_scheduled_at ? formatWhen(record.meter_set_scheduled_at) : "not scheduled"}
             . Site readiness {record?.site_readiness_confirmed_at ? formatWhen(record.site_readiness_confirmed_at) : "not confirmed"}.
           </p>
-          {!record?.inspection_release_received_at ? (
-            <Button
-              type="button"
-              size="sm"
-              className={toolbarOutlineButtonClass}
-              variant="outline"
-              disabled={meterBusy}
-              onClick={onRecordInspectionRelease}
-            >
-              {meterBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-              Record inspection release
-            </Button>
-          ) : null}
+          <WorkflowCompletedActionButton
+            completed={actionState.inspectionRelease}
+            completedLabel="Inspection release recorded ✓"
+            pendingLabel="Record inspection release"
+            timestamp={actionState.inspectionReleaseAt}
+            busy={meterBusy}
+            onClick={onRecordInspectionRelease}
+            toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+            formatWhen={formatWhen}
+          />
 
           <div className="grid gap-2 sm:grid-cols-3">
             <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="Site contact name" />
@@ -1813,64 +2006,66 @@ export function MeterSetCloseoutPanel({
           </Button>
 
           {record?.inspection_release_received_at ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={toolbarOutlineButtonClass}
-                disabled={meterBusy}
+            <div className="flex flex-wrap items-end gap-2">
+              <WorkflowCompletedActionButton
+                completed={actionState.meterSetRequested}
+                completedLabel="Requested ✓"
+                pendingLabel="Request meter set"
+                busy={meterBusy}
                 onClick={onRequestMeterSet}
-              >
-                Request meter set
-              </Button>
+                toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+                formatWhen={formatWhen}
+              />
               <Input
                 type="date"
                 className="h-8 w-40"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
                 aria-label="Confirmed meter-set date"
+                disabled={actionState.meterSetScheduled && !allowDateReconfirm}
               />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={toolbarOutlineButtonClass}
-                disabled={meterBusy || !scheduledDate}
+              <WorkflowCompletedActionButton
+                completed={actionState.meterSetScheduled && !allowDateReconfirm}
+                completedLabel="Date confirmed ✓"
+                pendingLabel="Confirm date"
+                timestamp={actionState.meterSetScheduledAt}
+                busy={meterBusy}
+                disabled={!scheduledDate}
+                allowRepeat={allowDateReconfirm}
                 onClick={() => onConfirmMeterSetDate(scheduledDate)}
-              >
-                Confirm date
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={toolbarOutlineButtonClass}
-                disabled={meterBusy}
+                toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+                formatWhen={formatWhen}
+              />
+              <WorkflowCompletedActionButton
+                completed={actionState.siteReadinessConfirmed}
+                completedLabel="Site ready ✓"
+                pendingLabel="Confirm site readiness"
+                timestamp={actionState.siteReadinessConfirmedAt}
+                busy={meterBusy}
                 onClick={onConfirmSiteReadiness}
-              >
-                Confirm site readiness
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={toolbarOutlineButtonClass}
-                disabled={meterBusy}
+                toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+                formatWhen={formatWhen}
+              />
+              <WorkflowCompletedActionButton
+                completed={actionState.crewCompleted}
+                completedLabel="Crew completed ✓"
+                pendingLabel="Crew completed"
+                timestamp={actionState.crewCompletedAt}
+                busy={meterBusy}
+                disabled={!scheduledDate && !actionState.meterSetScheduled}
                 onClick={() => onRecordOutcome({ outcome: "completed", actual_date: scheduledDate || undefined })}
-              >
-                Crew completed
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={toolbarOutlineButtonClass}
-                disabled={meterBusy}
+                toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+                formatWhen={formatWhen}
+              />
+              <WorkflowCompletedActionButton
+                completed={actionState.noShowRecorded}
+                completedLabel="No-show recorded ✓"
+                pendingLabel="Record no-show"
+                busy={meterBusy}
                 onClick={() => onRecordOutcome({ outcome: "no_show" })}
-              >
-                Record no-show
-              </Button>
+                toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+                formatWhen={formatWhen}
+              />
             </div>
           ) : (
             <p className={mutedClass}>Choreography does not start until inspection release is recorded in this record.</p>
@@ -1905,30 +2100,55 @@ export function MeterSetCloseoutPanel({
             </div>
           ) : null}
           <ul className="space-y-1">
-            {[
-              ["utility_confirmation", "Utility confirmation"],
-              ["final_meter_reading", "Final meter reading"],
-              ["commissioning_signoff", "Commissioning sign-off"],
-            ].map(([key, label]) => (
-              <li key={key} className="flex items-center justify-between gap-2">
-                <span>
-                  {label}: {artifacts[key] ? "on file" : "missing"}
-                </span>
-                {!artifacts[key] ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7"
-                    disabled={closeoutBusy}
+            {closeoutArtifactRows.map(({ key, label }) => {
+              const onFile = actionState.artifacts[key];
+              const evidence = getCloseoutArtifactEvidence(record, key);
+              const capturedAt =
+                typeof evidence?.captured_at === "string" ? evidence.captured_at : null;
+              return (
+                <li key={key} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className={cn(onFile && "text-teal")}>
+                    {label}:{" "}
+                    {onFile ? (
+                      <>
+                        Received ✓
+                        {capturedAt ? (
+                          <span className={cn("ml-1 tabular-nums", mutedClass)}>· {formatWhen(capturedAt)}</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      "missing"
+                    )}
+                  </span>
+                  <WorkflowCompletedActionButton
+                    completed={onFile}
+                    completedLabel="Received ✓"
+                    pendingLabel="Record received"
+                    timestamp={capturedAt}
+                    busy={closeoutBusy}
                     onClick={() => onAttachArtifact(key)}
-                  >
-                    Record received
-                  </Button>
+                    toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+                    formatWhen={formatWhen}
+                  />
+                </li>
+              );
+            })}
+            <li className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Closeout PDF: {actionState.closeoutPdfGenerated ? "archived" : "not generated"}
+                {actionState.closeoutPdfGenerated && actionState.closeoutPdfGeneratedAt ? (
+                  <span className={cn("ml-1 tabular-nums", mutedClass)}>
+                    · {formatWhen(actionState.closeoutPdfGeneratedAt)}
+                  </span>
                 ) : null}
-              </li>
-            ))}
-            <li>Closeout PDF: {record?.closeout_package_doc_id ? "archived" : "not generated"}</li>
+              </span>
+              {actionState.closeoutPdfGenerated ? (
+                <Badge variant="secondary" className="text-[10px]">
+                  <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                  Archived ✓
+                </Badge>
+              ) : null}
+            </li>
           </ul>
           <div className="flex flex-wrap items-end gap-2">
             <Input
@@ -1937,28 +2157,29 @@ export function MeterSetCloseoutPanel({
               value={energizeDate}
               onChange={(e) => setEnergizeDate(e.target.value)}
               aria-label="Energization date"
+              disabled={actionState.energizationCaptured}
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className={toolbarOutlineButtonClass}
-              disabled={closeoutBusy || !energizeDate}
+            <WorkflowCompletedActionButton
+              completed={actionState.energizationCaptured}
+              completedLabel="Energized ✓"
+              pendingLabel="Mark energized"
+              timestamp={actionState.energizationActualDate}
+              busy={closeoutBusy}
+              disabled={!energizeDate}
               onClick={() => onMarkEnergized(energizeDate)}
-            >
-              Mark energized
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className={toolbarOutlineButtonClass}
-              disabled={closeoutBusy}
+              toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+              formatWhen={formatWhen}
+            />
+            <WorkflowCompletedActionButton
+              completed={actionState.closeoutPdfGenerated}
+              completedLabel="PDF generated ✓"
+              pendingLabel="Generate closeout PDF"
+              timestamp={actionState.closeoutPdfGeneratedAt}
+              busy={closeoutBusy}
               onClick={onGenerateCloseout}
-            >
-              {closeoutBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-              Generate closeout PDF
-            </Button>
+              toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+              formatWhen={formatWhen}
+            />
             {lifecycleStatus?.guards?.can_complete_stage_10 ? (
               <Button type="button" size="sm" disabled={closeoutBusy} onClick={onCompleteStage10}>
                 Mark Stage 10 complete
