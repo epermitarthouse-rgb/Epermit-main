@@ -92,6 +92,14 @@ type UciSetupWorkflowProps = {
     overrideReason: string;
     notes?: string;
   }) => void;
+  onReassignProviderMapping?: (params: {
+    serviceType: string;
+    providerId: string;
+    reason: string;
+    notes?: string;
+  }) => void;
+  getCoordinationRecordIdForServiceType?: (serviceType: string) => string | null;
+  providerReassignmentLoading?: boolean;
   providerUtilityFilter: string;
   onProviderUtilityFilterChange: (value: string) => void;
   providerCatalogTypes: string[];
@@ -258,6 +266,9 @@ export function UciSetupWorkflow({
   onResolveProviderMapping,
   onConfirmProviderMapping,
   onOverrideProviderMapping,
+  onReassignProviderMapping,
+  getCoordinationRecordIdForServiceType,
+  providerReassignmentLoading = false,
   providerUtilityFilter,
   onProviderUtilityFilterChange,
   providerCatalogTypes,
@@ -497,9 +508,12 @@ export function UciSetupWorkflow({
             resolutionState={providerResolution}
             resolutionLoading={providerResolutionLoading}
             resolutionActionLoading={providerResolutionActionLoading}
+            getCoordinationRecordId={getCoordinationRecordIdForServiceType}
+            reassignmentLoading={providerReassignmentLoading}
             onResolve={onResolveProviderMapping}
             onConfirm={onConfirmProviderMapping}
             onOverride={onOverrideProviderMapping}
+            onReassign={onReassignProviderMapping}
           />
 
           <section className="space-y-4" data-testid="uci-step-providers">

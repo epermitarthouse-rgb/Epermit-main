@@ -10,6 +10,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   filterProvidersForServiceType,
@@ -29,7 +39,7 @@ import type {
   UciProviderSetupAddressSource,
   UtilityProvider,
 } from "@/types/uci";
-import { AlertTriangle, CheckCircle2, Loader2, MapPin, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, MapPin, RefreshCw, Repeat2 } from "lucide-react";
 
 type UciProviderResolutionPanelProps = {
   mutedClass: string;
@@ -41,12 +51,21 @@ type UciProviderResolutionPanelProps = {
   resolutionState: UciProviderResolutionListResponse | null;
   resolutionLoading: boolean;
   resolutionActionLoading: boolean;
+  coordinationRecordId?: string | null;
+  getCoordinationRecordId?: (serviceType: string) => string | null;
+  reassignmentLoading?: boolean;
   onResolve: (serviceType: string) => void;
   onConfirm: (params: { serviceType: string; providerId: string; notes?: string }) => void;
   onOverride: (params: {
     serviceType: string;
     providerId: string;
     overrideReason: string;
+    notes?: string;
+  }) => void;
+  onReassign?: (params: {
+    serviceType: string;
+    providerId: string;
+    reason: string;
     notes?: string;
   }) => void;
 };
@@ -61,9 +80,13 @@ export function UciProviderResolutionPanel({
   resolutionState,
   resolutionLoading,
   resolutionActionLoading,
+  coordinationRecordId,
+  getCoordinationRecordId,
+  reassignmentLoading = false,
   onResolve,
   onConfirm,
   onOverride,
+  onReassign,
 }: UciProviderResolutionPanelProps) {
   const availableServiceTypes = useMemo(() => {
     const fromCatalog = [...new Set(serviceTypes.map((type) => type.trim().toLowerCase()).filter(Boolean))];
@@ -74,6 +97,9 @@ export function UciProviderResolutionPanel({
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [overrideReason, setOverrideReason] = useState("");
   const [notes, setNotes] = useState("");
+  const [reassignmentMode, setReassignmentMode] = useState(false);
+  const [reassignmentReason, setReassignmentReason] = useState("");
+  const [confirmReassignmentOpen, setConfirmReassignmentOpen] = useState(false);
 
   const activeResolution = resolutionState?.resolutions?.[activeServiceType] ?? null;
   const serviceProviders = useMemo(
@@ -90,6 +116,17 @@ export function UciProviderResolutionPanel({
   const confirmed = isResolutionConfirmed(activeResolution);
   const hasAuthoritativeSuggestion = isSuccessfulTerritorySuggestion(activeResolution);
   const confirmationCopy = getProviderConfirmationSectionCopy(activeResolution);
+  const activeCoordinationRecordId =
+    getCoordinationRecordId?.(activeServiceType) ?? coordinationRecordId ?? null;
+  const reassignmentTarget = findProviderById(providers, selectedProviderId);
+  const canReassign =
+    Boolean(onReassign && activeCoordinationRecordId && confirmedProvider && reassignmentMode);
+
+  useEffect(() => {
+    setReassignmentMode(false);
+    setReassignmentReason("");
+    setConfirmReassignmentOpen(false);
+  }, [activeServiceType, activeResolution?.confirmed_provider_id]);
 
   useEffect(() => {
     if (confirmed) return;
@@ -128,6 +165,25 @@ export function UciProviderResolutionPanel({
     });
   };
 
+  const handleReassignRequest = () => {
+    if (!selectedProviderId || !reassignmentReason.trim()) return;
+    setConfirmReassignmentOpen(true);
+  };
+
+  const handleReassignConfirm = () => {
+    if (!selectedProviderId || !reassignmentReason.trim() || !onReassign) return;
+    onReassign({
+      serviceType: activeServiceType,
+      providerId: selectedProviderId,
+      reason: reassignmentReason.trim(),
+      notes: notes.trim() || undefined,
+    });
+    setConfirmReassignmentOpen(false);
+    setReassignmentMode(false);
+    setReassignmentReason("");
+    setNotes("");
+  };
+
   if (!projectId) return null;
 
   return (
@@ -162,7 +218,7 @@ export function UciProviderResolutionPanel({
             type="button"
             variant="outline"
             size="sm"
-            disabled={!addressReady || resolutionActionLoading}
+            disabled={!addressReady || resolutionActionLoading || reassignmentLoading}
             onClick={() => onResolve(activeServiceType)}
             data-testid="uci-resolution-resolve-button"
           >
@@ -241,26 +297,26 @@ export function UciProviderResolutionPanel({
               </div>
             ) : null}
 
-              {suggestedProvider ? (
-                <div
-                  className="rounded-lg border border-teal/30 bg-teal/[0.06] px-3 py-3 text-sm dark:bg-teal/[0.12]"
-                  data-testid="uci-resolution-suggested-provider"
-                >
-                  <p className="font-medium text-ink-primary-light dark:text-foreground">
-                    Suggested electric provider: {suggestedProvider.display_name ?? suggestedProvider.name}
-                  </p>
-                  <p className={cn("mt-1 text-xs", mutedClass)}>
-                    Matched using the EIA electric service-territory map.
-                    {activeResolution?.source?.dataset_vintage
-                      ? ` Data vintage: ${activeResolution.source.dataset_vintage}.`
-                      : ""}
-                  </p>
-                  <p className={cn("mt-1 text-xs", mutedClass)}>
-                    Confidence: {formatConfidenceLabel(activeResolution?.confidence)} · Method:{" "}
-                    {formatResolutionMethodLabel(activeResolution?.resolution_method)}
-                  </p>
-                </div>
-              ) : null}
+            {suggestedProvider ? (
+              <div
+                className="rounded-lg border border-teal/30 bg-teal/[0.06] px-3 py-3 text-sm dark:bg-teal/[0.12]"
+                data-testid="uci-resolution-suggested-provider"
+              >
+                <p className="font-medium text-ink-primary-light dark:text-foreground">
+                  Suggested electric provider: {suggestedProvider.display_name ?? suggestedProvider.name}
+                </p>
+                <p className={cn("mt-1 text-xs", mutedClass)}>
+                  Matched using the EIA electric service-territory map.
+                  {activeResolution?.source?.dataset_vintage
+                    ? ` Data vintage: ${activeResolution.source.dataset_vintage}.`
+                    : ""}
+                </p>
+                <p className={cn("mt-1 text-xs", mutedClass)}>
+                  Confidence: {formatConfidenceLabel(activeResolution?.confidence)} · Method:{" "}
+                  {formatResolutionMethodLabel(activeResolution?.resolution_method)}
+                </p>
+              </div>
+            ) : null}
 
             {activeResolution?.candidates?.length ? (
               <div className="space-y-2" data-testid="uci-resolution-candidates">
@@ -277,21 +333,130 @@ export function UciProviderResolutionPanel({
               </div>
             ) : null}
 
-            {confirmed && confirmedProvider ? (
+            {confirmed && confirmedProvider && !reassignmentMode ? (
               <div
-                className="flex items-start gap-3 rounded-lg border border-teal/30 bg-teal/[0.06] px-3 py-3 text-sm dark:bg-teal/[0.12]"
+                className="space-y-3 rounded-lg border border-teal/30 bg-teal/[0.06] px-3 py-3 text-sm dark:bg-teal/[0.12]"
                 data-testid="uci-resolution-confirmed"
               >
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal" />
-                <div>
-                  <p className="font-medium text-ink-primary-light dark:text-foreground">
-                    Confirmed: {confirmedProvider.display_name ?? confirmedProvider.name}
-                  </p>
-                  {activeResolution?.override_reason ? (
-                    <p className={cn("mt-1 text-xs", mutedClass)}>
-                      Override reason: {activeResolution.override_reason}
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-ink-primary-light dark:text-foreground">
+                      Confirmed: {confirmedProvider.display_name ?? confirmedProvider.name}
                     </p>
-                  ) : null}
+                    {activeResolution?.override_reason ? (
+                      <p className={cn("mt-1 text-xs", mutedClass)}>
+                        Override reason: {activeResolution.override_reason}
+                      </p>
+                    ) : null}
+                    <p className={cn("mt-1 text-xs", mutedClass)}>
+                      Provider mapping status only. Lifecycle stage and state are shown on the coordination
+                      record.
+                    </p>
+                  </div>
+                </div>
+                {onReassign && activeCoordinationRecordId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={reassignmentLoading}
+                    onClick={() => {
+                      setReassignmentMode(true);
+                      setSelectedProviderId("");
+                      setReassignmentReason("");
+                    }}
+                    data-testid="uci-resolution-change-provider-button"
+                  >
+                    <Repeat2 className="mr-2 h-4 w-4" />
+                    Change provider
+                  </Button>
+                ) : null}
+              </div>
+            ) : reassignmentMode && confirmedProvider ? (
+              <div
+                className="space-y-3 rounded-lg border border-dashed border-amber-300/70 bg-amber-50/50 px-3 py-3 dark:border-amber-500/35 dark:bg-amber-950/15"
+                data-testid="uci-resolution-reassign-form"
+              >
+                <p className="text-sm font-medium text-ink-primary-light dark:text-foreground">
+                  Reassign provider
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  Currently assigned to {confirmedProvider.display_name ?? confirmedProvider.name}. Project
+                  documents and Stage 2 engineering data stay intact. Provider-specific application drafts and
+                  portal sync artifacts for the previous provider will be cleared and rebuilt for the new
+                  provider.
+                </p>
+                <div className="grid max-w-md gap-2">
+                  <Label htmlFor="uci-resolution-reassign-provider">New provider</Label>
+                  <Select value={selectedProviderId} onValueChange={setSelectedProviderId}>
+                    <SelectTrigger
+                      id="uci-resolution-reassign-provider"
+                      data-testid="uci-resolution-reassign-provider-select"
+                    >
+                      <SelectValue placeholder="Choose a provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {serviceProviders
+                        .filter((provider) => provider.id !== confirmedProvider.id)
+                        .map((provider) => (
+                          <SelectItem key={provider.id} value={provider.id}>
+                            {provider.display_name ?? provider.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="uci-resolution-reassign-reason">Reason for change (required)</Label>
+                  <Textarea
+                    id="uci-resolution-reassign-reason"
+                    value={reassignmentReason}
+                    onChange={(event) => setReassignmentReason(event.target.value)}
+                    placeholder="Explain why the assigned provider is being changed"
+                    data-testid="uci-resolution-reassign-reason"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="uci-resolution-reassign-notes">Notes (optional)</Label>
+                  <Textarea
+                    id="uci-resolution-reassign-notes"
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="Optional context for the audit trail"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={reassignmentLoading}
+                    onClick={() => {
+                      setReassignmentMode(false);
+                      setSelectedProviderId("");
+                      setReassignmentReason("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-teal hover:bg-teal/90 text-white"
+                    disabled={
+                      !selectedProviderId ||
+                      !reassignmentReason.trim() ||
+                      reassignmentLoading ||
+                      selectedProviderId === confirmedProvider.id
+                    }
+                    onClick={handleReassignRequest}
+                    data-testid="uci-resolution-reassign-submit-button"
+                  >
+                    {reassignmentLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Review reassignment
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -364,6 +529,48 @@ export function UciProviderResolutionPanel({
           </>
         )}
       </div>
+
+      <AlertDialog open={confirmReassignmentOpen} onOpenChange={setConfirmReassignmentOpen}>
+        <AlertDialogContent data-testid="uci-resolution-reassign-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm provider reassignment</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Change {formatUtilityTypeLabel(activeServiceType)} provider from{" "}
+                  <span className="font-medium text-foreground">
+                    {confirmedProvider?.display_name ?? confirmedProvider?.name}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-medium text-foreground">
+                    {reassignmentTarget?.display_name ?? reassignmentTarget?.name ?? "the selected provider"}
+                  </span>
+                  ?
+                </p>
+                <p>
+                  Project documents and generic Stage 2 engineering data will be preserved. Provider-specific
+                  application drafts, portal sync data, and submission state for the previous provider will be
+                  removed and regenerated for the new provider.
+                </p>
+                <p className="font-medium text-foreground">Reason: {reassignmentReason.trim()}</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reassignmentLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canReassign || reassignmentLoading}
+              onClick={(event) => {
+                event.preventDefault();
+                handleReassignConfirm();
+              }}
+              data-testid="uci-resolution-reassign-confirm-button"
+            >
+              {reassignmentLoading ? "Reassigning…" : "Reassign provider"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

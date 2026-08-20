@@ -48,11 +48,19 @@ describe("UciProviderResolutionPanel UI states", () => {
     assert.match(panelSource, /data-testid="uci-resolution-confirm-button"/);
   });
 
-  it("wires dashboard API calls for resolve, confirm, and override", () => {
+  it("wires dashboard API calls for resolve, confirm, override, and reassignment", () => {
     assert.match(dashboardSource, /getProjectProviderResolution/);
     assert.match(dashboardSource, /resolveProjectProviderResolution/);
     assert.match(dashboardSource, /confirmProjectProviderResolution/);
     assert.match(dashboardSource, /overrideProjectProviderResolution/);
+    assert.match(dashboardSource, /reassignCoordinationProvider/);
+    assert.match(dashboardSource, /patchCoordinationRecordInList/);
     assert.match(dashboardSource, /providerResolution=/);
+  });
+
+  it("renders provider reassignment controls in the resolution panel", () => {
+    assert.match(panelSource, /data-testid="uci-resolution-change-provider-button"/);
+    assert.match(panelSource, /data-testid="uci-resolution-reassign-confirm-dialog"/);
+    assert.match(panelSource, /Reassign provider/);
   });
 });

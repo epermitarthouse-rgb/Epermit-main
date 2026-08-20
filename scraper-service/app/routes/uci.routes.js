@@ -28,6 +28,7 @@ const {
   getCoordinationDetailBundle,
   initCoordinationForProviders,
 } = require("../services/uci/uci-records.service.js");
+const { reassignCoordinationProvider } = require("../services/uci/uci-provider-reassignment.service.js");
 const {
   getProviderSetupForProject,
   buildProviderSetupAddressContext,
@@ -710,6 +711,28 @@ function createUciRouter(opts) {
         serviceType,
         providerId,
         overrideReason,
+        notes,
+      });
+      res.json(payload);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/reassign-provider", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationRecordId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const providerId = String(body.provider_id ?? body.providerId ?? "").trim();
+      const reason = String(body.reason ?? body.reassignment_reason ?? body.reassignmentReason ?? "").trim();
+      const notes = body.notes != null ? String(body.notes) : null;
+      const payload = await reassignCoordinationProvider(supabase, {
+        coordinationRecordId,
+        userId: user.id,
+        newProviderId: providerId,
+        reason,
         notes,
       });
       res.json(payload);

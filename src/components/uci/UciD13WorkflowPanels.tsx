@@ -54,14 +54,30 @@ type PanelCommonProps = {
 export function ProviderMappingBanner({
   mapping,
   mutedClass,
+  onChangeProvider,
 }: {
   mapping: UciProviderMappingMetadata | null;
   mutedClass: string;
+  onChangeProvider?: () => void;
 }) {
   if (!mapping) return null;
   return (
     <div className="rounded-md border border-teal/30 bg-cream-raised/40 px-3 py-2 text-xs dark:bg-obsidian/35">
-      <p className="font-medium text-foreground">Human-assisted provider mapping confirmed</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="font-medium text-foreground">Human-assisted provider mapping confirmed</p>
+        {onChangeProvider ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0"
+            onClick={onChangeProvider}
+            data-testid="uci-workspace-change-provider-button"
+          >
+            Change provider
+          </Button>
+        ) : null}
+      </div>
       <p className={cn("mt-0.5", mutedClass)}>
         Address source: {mapping.address_source}
         {mapping.address_snapshot?.formatted ? ` · ${mapping.address_snapshot.formatted}` : ""}

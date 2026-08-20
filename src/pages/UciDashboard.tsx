@@ -98,6 +98,7 @@ import {
   resolveProjectProviderResolution,
   confirmProjectProviderResolution,
   overrideProjectProviderResolution,
+  reassignCoordinationProvider,
   openApplicationPackageDocument,
   initProjectCoordination,
   isUciSessionExpiredError,
@@ -166,9 +167,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  logUciProjectDataEvent,
-  shouldApplyProjectScopedResponse,
-} from "@/lib/uciProjectScopedRequest";
+  findCoordinationRecordForUtilityType,
+  patchCoordinationRecordInList,
+} from "@/lib/uciCoordinationListSync";
 import { PepcoSelectedProjectDetailTabs } from "@/components/uci/PepcoApplicationDetailsPanel";
 import { PepcoProjectList } from "@/components/uci/PepcoProjectList";
 import {
@@ -514,6 +515,7 @@ export default function UciDashboard() {
   );
   const [providerResolutionLoading, setProviderResolutionLoading] = useState(false);
   const [providerResolutionActionLoading, setProviderResolutionActionLoading] = useState(false);
+  const [providerReassignmentLoading, setProviderReassignmentLoading] = useState(false);
   const [providerSetupConfirmed, setProviderSetupConfirmed] = useState(false);
   const [addressSourceAcknowledged, setAddressSourceAcknowledged] =
     useState<UciProviderSetupAddressSource | null>(null);
@@ -1138,6 +1140,83 @@ export default function UciDashboard() {
     }
   }, [authLoading, user?.id, projectId, shouldApplyProjectResponse]);
 
+  const getCoordinationRecordIdForServiceType = useCallback(
+    (serviceType: string) => findCoordinationRecordForUtilityType(records, serviceType)?.id ?? null,
+    [records],
+  );
+
+  const syncCoordinationListRecord = useCallback((updated: CoordinationRecord) => {
+    setRecords((previous) => patchCoordinationRecordInList(previous, updated));
+  }, []);
+
+  const handleReassignProviderMapping = useCallback(
+    async (params: {
+      serviceType: string;
+      providerId: string;
+      reason: string;
+      notes?: string;
+    }) => {
+      const coordinationRecord = findCoordinationRecordForUtilityType(records, params.serviceType);
+      if (!coordinationRecord) {
+        toast.error("No coordination record found for this utility type.");
+        return;
+      }
+      setProviderReassignmentLoading(true);
+      try {
+        const result = await reassignCoordinationProvider(coordinationRecord.id, {
+          providerId: params.providerId,
+          reason: params.reason,
+          notes: params.notes,
+        });
+        if (result.project_id !== projectId) return;
+        setRecords(result.records ?? []);
+        setProviderResolution((prev) => ({
+          project_id: result.project_id,
+          resolver_version: result.resolution.resolver_version ?? prev?.resolver_version ?? "d2.2-v1",
+          territory_data_available: prev?.territory_data_available ?? { electric: false, gas: false },
+          address_context: prev?.address_context ?? {
+            formatted: result.resolution.address?.formatted ?? null,
+            source: result.resolution.address?.source ?? "project",
+            address_mismatch: false,
+          },
+          resolutions: {
+            ...(prev?.resolutions ?? {}),
+            [result.service_type]: result.resolution,
+          },
+          user_messages: prev?.user_messages ?? {
+            territory_unavailable:
+              "Automatic territory matching is not available yet. Select and confirm the utility serving this project.",
+          },
+        }));
+        const reassignedProvider = providers.find((provider) => provider.id === params.providerId);
+        if (reassignedProvider) {
+          setInitPick((previous) => {
+            const next = { ...previous };
+            for (const provider of providers) {
+              if (provider.utility_type === reassignedProvider.utility_type) {
+                next[provider.slug] = provider.id === params.providerId;
+              }
+            }
+            return next;
+          });
+        }
+        if (detailId === coordinationRecord.id) {
+          const d = await getCoordinationDetail(coordinationRecord.id);
+          setDetail(d);
+          syncCoordinationListRecord(d.record);
+        } else {
+          syncCoordinationListRecord(result.coordination_record);
+        }
+        toast.success("Utility provider reassigned. Application Builder state was regenerated.");
+      } catch (e: unknown) {
+        toast.error(formatUciUserError(e, "Failed to reassign provider"));
+      } finally {
+        setProviderReassignmentLoading(false);
+      }
+    },
+    [projectId, providers, records, detailId, syncCoordinationListRecord],
+  );
+
   const handleResolveProviderMapping = useCallback(
     async (serviceType: string) => {
       if (!projectId) return;
@@ -1324,6 +1403,7 @@ export default function UciDashboard() {
     try {
       const d = await getCoordinationDetail(id);
       setDetail(d);
+      syncCoordinationListRecord(d.record);
       setToStage(String(d.record.current_stage ?? 1));
       setToState(d.record.current_stage_state as LifecycleState);
     } catch (e: unknown) {
@@ -1750,6 +1830,7 @@ export default function UciDashboard() {
       setDetail((current) =>
         current ? { ...current, record: result.coordination } : current,
       );
+      syncCoordinationListRecord(result.coordination);
       setToStage("3");
       setToState(result.stage_3_completed ? "COMPLETED" : "IN_PROGRESS");
       void getCoordinationDetail(detailId).then(setDetail).catch(() => {
@@ -3388,6 +3469,11 @@ export default function UciDashboard() {
   }, [coordinationParam, detailId]);
 
   useEffect(() => {
+    if (!detailId || !detail?.record || detail.record.id !== detailId) return;
+    setRecords((previous) => patchCoordinationRecordInList(previous, detail.record));
+  }, [detail?.record, detailId]);
+
+  useEffect(() => {
     if (!detailId || detail?.record.id === detailId) return;
     const persistedRecord = records.find((record) => record.id === detailId);
     if (!persistedRecord) return;
@@ -3918,6 +4004,9 @@ export default function UciDashboard() {
               onResolveProviderMapping={(serviceType) => void handleResolveProviderMapping(serviceType)}
               onConfirmProviderMapping={(params) => void handleConfirmProviderMapping(params)}
               onOverrideProviderMapping={(params) => void handleOverrideProviderMapping(params)}
+              onReassignProviderMapping={(params) => void handleReassignProviderMapping(params)}
+              getCoordinationRecordIdForServiceType={getCoordinationRecordIdForServiceType}
+              providerReassignmentLoading={providerReassignmentLoading}
               providerUtilityFilter={providerUtilityFilter}
               onProviderUtilityFilterChange={setProviderUtilityFilter}
               providerCatalogTypes={providerCatalogTypes}
@@ -4100,7 +4189,11 @@ export default function UciDashboard() {
 
                 <TabsContent value="overview" className="mt-4 space-y-4">
                   {providerMappingMetadata ? (
-                    <ProviderMappingBanner mapping={providerMappingMetadata} mutedClass={uciMutedClass} />
+                    <ProviderMappingBanner
+                      mapping={providerMappingMetadata}
+                      mutedClass={uciMutedClass}
+                      onChangeProvider={openAssignProvider}
+                    />
                   ) : null}
                   {displayLifecycleProposal ? (
                     <div

@@ -767,6 +767,35 @@ export async function overrideProjectProviderResolution(
   );
 }
 
+export async function reassignCoordinationProvider(
+  coordinationRecordId: string,
+  params: {
+    providerId: string;
+    reason: string;
+    notes?: string;
+  },
+): Promise<{
+  coordination_record: import("@/types/uci").CoordinationRecord;
+  project_id: string;
+  service_type: string;
+  removed_application_ids: string[];
+  records: import("@/types/uci").CoordinationRecord[];
+}> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationRecordId)}/reassign-provider`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider_id: params.providerId,
+        reason: params.reason,
+        ...(params.notes ? { notes: params.notes } : {}),
+      }),
+    },
+    "Failed to reassign utility provider",
+  );
+}
+
 export async function initProjectCoordination(
   projectId: string,
   providers: string[],
