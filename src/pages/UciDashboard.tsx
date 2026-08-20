@@ -72,6 +72,7 @@ import {
   analyzeCoordinationCos,
   approveCoordinationCos,
   updateCoordinationCosAcceptedFields,
+  updateCoordinationCosComparisonInclusion,
   requestCoordinationCosRevision,
   rejectCoordinationCosDocument,
   flagCoordinationCos,
@@ -2034,6 +2035,33 @@ export default function UciDashboard() {
       await reloadDetail();
     } catch (e: unknown) {
       const msg = formatUciUserError(e, "COS accepted-field update failed");
+      setCosError(msg);
+      toast.error(msg);
+    } finally {
+      setCosBusy(false);
+    }
+  };
+
+  const handleCosUpdateComparisonInclusion = async (payload: {
+    toggles: Array<{ field: string; included_in_comparison: boolean }>;
+    confirm_core_exclusion?: boolean;
+  }) => {
+    if (!detailId) return;
+    setCosBusy(true);
+    setCosError(null);
+    try {
+      const result = await updateCoordinationCosComparisonInclusion(detailId, payload);
+      const excluded = payload.toggles.some((t) => t.included_in_comparison === false);
+      if (result.auto_completed === true) {
+        toast.success("Included rows matched — Stage 6 completed automatically");
+      } else if (excluded) {
+        toast.success("Row excluded from comparison — no longer blocking Stage 6");
+      } else {
+        toast.success("Row included in comparison again");
+      }
+      await reloadDetail();
+    } catch (e: unknown) {
+      const msg = formatUciUserError(e, "COS comparison inclusion update failed");
       setCosError(msg);
       toast.error(msg);
     } finally {
@@ -4613,6 +4641,9 @@ export default function UciDashboard() {
                     }
                     onUpdateAcceptedFields={(payload) =>
                       void handleCosUpdateAcceptedFields(payload)
+                    }
+                    onUpdateComparisonInclusion={(payload) =>
+                      void handleCosUpdateComparisonInclusion(payload)
                     }
                     onApprove={() => void handleCosApprove()}
                     onAcceptDeviation={(notes) =>

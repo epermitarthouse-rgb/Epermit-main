@@ -177,6 +177,7 @@ const {
 const {
   approveCosDesign,
   updateCosAcceptedFields,
+  updateCosComparisonInclusion,
   requestCosRevision,
   rejectCosDocument,
   flagCosForReview,
@@ -3608,6 +3609,22 @@ function createUciRouter(opts) {
         write: true,
       });
       const body = req.body && typeof req.body === "object" ? req.body : {};
+      const inclusionToggles = Array.isArray(body.inclusion_toggles)
+        ? body.inclusion_toggles
+        : Array.isArray(body.comparison_inclusion_toggles)
+          ? body.comparison_inclusion_toggles
+          : [];
+      if (inclusionToggles.length > 0) {
+        const result = await updateCosComparisonInclusion(supabase, {
+          coordinationRecordId: coordinationId,
+          userId: user.id,
+          cosDesignRecordId: body.cos_design_record_id ? String(body.cos_design_record_id) : null,
+          toggles: inclusionToggles,
+          confirmCoreExclusion: body.confirm_core_exclusion === true,
+        });
+        res.json(result);
+        return;
+      }
       const result = await updateCosAcceptedFields(supabase, {
         coordinationRecordId: coordinationId,
         userId: user.id,
@@ -3618,6 +3635,42 @@ function createUciRouter(opts) {
           : body.reset_field
             ? [String(body.reset_field)]
             : [],
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/comparison-inclusion", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateCosComparisonInclusion(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        cosDesignRecordId: body.cos_design_record_id ? String(body.cos_design_record_id) : null,
+        toggles: Array.isArray(body.toggles)
+          ? body.toggles
+          : Array.isArray(body.inclusion_toggles)
+            ? body.inclusion_toggles
+            : [],
+        confirmCoreExclusion: body.confirm_core_exclusion === true,
       });
       res.json(result);
     } catch (err) {

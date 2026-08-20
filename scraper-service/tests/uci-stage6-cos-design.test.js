@@ -1129,3 +1129,221 @@ describe("Stage 6 accepted values + multi-doc + snapshot", () => {
     );
   });
 });
+
+describe("Stage 6 comparison inclusion toggles", () => {
+  const { updateCosComparisonInclusion } = require("../app/services/uci/uci-cos-review.service.js");
+  const {
+    recomputeCosReviewFromComparisonRows,
+    isCoreCompareField,
+  } = require("../app/services/uci/uci-cos-comparison-inclusion.service.js");
+  const { canEnterStage7 } = require("../app/services/uci/uci-stage6-entry.service.js");
+
+  function coreMatchingRowsWithNoisyCondition() {
+    return [
+      {
+        field: "service_amperage",
+        label: "Service capacity / amperage",
+        submitted: 1000,
+        utility_issued: 1000,
+        accepted: 1000,
+        operator_override: false,
+        included_in_comparison: true,
+        result: "match",
+        material: true,
+        required_action: "None",
+      },
+      {
+        field: "service_voltage",
+        label: "Voltage",
+        submitted: "208Y/120V",
+        utility_issued: "208Y/120V",
+        accepted: "208Y/120V",
+        operator_override: false,
+        included_in_comparison: true,
+        result: "match",
+        material: true,
+        required_action: "None",
+      },
+      {
+        field: "design_conditions",
+        label: "Design conditions",
+        submitted: null,
+        utility_issued:
+          "requirementUtility transformer sizing to support 1000 A service; responsibilities",
+        accepted:
+          "requirementUtility transformer sizing to support 1000 A service; responsibilities",
+        operator_override: false,
+        included_in_comparison: true,
+        result: "baseline_missing",
+        material: true,
+        required_action: "Needs Attention — no verified baseline to compare",
+      },
+    ];
+  }
+
+  function blockedCosTables(comparisonRows) {
+    return {
+      coordination_records: [
+        baseStage5CompletedRecord({
+          current_stage: 6,
+          current_stage_state: "IN_PROGRESS",
+          cos_sla_started_at: new Date().toISOString(),
+          cos_sla_due_at: new Date(Date.now() + 86400000).toISOString(),
+          class_of_service_issued_at: null,
+        }),
+      ],
+      coordination_cos_design_records: [
+        {
+          id: "cos-1",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          is_current: true,
+          version: 1,
+          review_version: 1,
+          evidence_status: "DISCREPANCY",
+          review_status: "needs_attention",
+          needs_human_attention: true,
+          attention_reasons: ["DESIGN_CONDITIONS_BASELINE_MISSING"],
+          utility_evidence_issued_at: "2026-08-01T00:00:00.000Z",
+          extracted_fields: {
+            service_amperage: { value: 1000 },
+            service_voltage: { value: "208Y/120V" },
+            design_conditions: {
+              value:
+                "requirementUtility transformer sizing to support 1000 A service; responsibilities",
+            },
+          },
+          comparison_rows: comparisonRows,
+          accepted_fields: {},
+          field_overrides: [],
+          discrepancy_report: {
+            revision_required: false,
+            clean_match: false,
+            requires_human_review: true,
+            review_summary: { document_count: 1 },
+            discrepancies: [
+              {
+                code: "DESIGN_CONDITIONS_BASELINE_MISSING",
+                field: "design_conditions",
+                severity: "medium",
+              },
+            ],
+          },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+  }
+
+  it("unselecting noisy row removes blocker and keeps row visible", async () => {
+    const rows = coreMatchingRowsWithNoisyCondition();
+    const tables = blockedCosTables(rows);
+    const result = await updateCosComparisonInclusion(createMockSupabase(tables), {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+      toggles: [{ field: "design_conditions", included_in_comparison: false }],
+    });
+
+    const noisy = result.cos_design_record.comparison_rows.find(
+      (r) => r.field === "design_conditions",
+    );
+    assert.equal(noisy.included_in_comparison, false);
+    assert.equal(result.cos_design_record.comparison_rows.length, 3);
+    assert.equal(result.cos_design_record.needs_human_attention, false);
+    assert.ok(
+      !result.cos_design_record.discrepancy_report.discrepancies.some(
+        (d) => String(d.field) === "design_conditions",
+      ),
+    );
+    assert.equal(result.extracted_fields_unchanged, true);
+    assert.ok(["ready_for_approval", "approved"].includes(result.cos_design_record.review_status));
+  });
+
+  it("reselecting excluded row restores blocker", async () => {
+    const rows = coreMatchingRowsWithNoisyCondition().map((r) =>
+      r.field === "design_conditions" ? { ...r, included_in_comparison: false } : r,
+    );
+    const tables = blockedCosTables(rows);
+    tables.coordination_cos_design_records[0].review_status = "ready_for_approval";
+    tables.coordination_cos_design_records[0].evidence_status = "UTILITY_ISSUED";
+    tables.coordination_cos_design_records[0].needs_human_attention = false;
+    tables.coordination_cos_design_records[0].discrepancy_report = {
+      revision_required: false,
+      clean_match: true,
+      requires_human_review: false,
+      review_summary: { document_count: 1 },
+      discrepancies: [],
+    };
+
+    const result = await updateCosComparisonInclusion(createMockSupabase(tables), {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+      toggles: [{ field: "design_conditions", included_in_comparison: true }],
+    });
+
+    assert.equal(
+      result.cos_design_record.comparison_rows.find((r) => r.field === "design_conditions")
+        .included_in_comparison,
+      true,
+    );
+    assert.equal(result.cos_design_record.review_status, "needs_attention");
+    assert.equal(result.cos_design_record.evidence_status, "DISCREPANCY");
+    assert.equal(result.cos_design_record.needs_human_attention, true);
+  });
+
+  it("clean included rows auto-complete Stage 6 and enable Stage 7", async () => {
+    const rows = coreMatchingRowsWithNoisyCondition();
+    const tables = blockedCosTables(rows);
+    const result = await updateCosComparisonInclusion(createMockSupabase(tables), {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+      toggles: [{ field: "design_conditions", included_in_comparison: false }],
+    });
+
+    assert.equal(result.auto_completed, true);
+    assert.equal(result.cos_design_record.review_status, "approved");
+    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.ok(tables.coordination_records[0].class_of_service_issued_at);
+    assert.equal(canEnterStage7(result.coordination_record), true);
+    assert.equal(result.can_enter_stage_7, true);
+  });
+
+  it("core field exclusion requires confirmation", async () => {
+    const rows = coreMatchingRowsWithNoisyCondition();
+    const tables = blockedCosTables(rows);
+    await assert.rejects(
+      () =>
+        updateCosComparisonInclusion(createMockSupabase(tables), {
+          coordinationRecordId: "coord-1",
+          userId: "user-1",
+          toggles: [{ field: "service_amperage", included_in_comparison: false }],
+        }),
+      /requires confirmation before excluding from comparison/,
+    );
+    assert.ok(isCoreCompareField("service_amperage"));
+  });
+
+  it("recomputeCosReviewFromComparisonRows ignores excluded rows for clean match", () => {
+    const state = recomputeCosReviewFromComparisonRows({
+      comparisonRows: coreMatchingRowsWithNoisyCondition(),
+      structuralDiscrepancies: [],
+      revisionRequired: false,
+      documentCount: 1,
+    });
+    assert.equal(state.clean_match, false);
+    assert.equal(state.review_status, "needs_attention");
+
+    const withoutNoisy = coreMatchingRowsWithNoisyCondition().map((r) =>
+      r.field === "design_conditions" ? { ...r, included_in_comparison: false } : r,
+    );
+    const clean = recomputeCosReviewFromComparisonRows({
+      comparisonRows: withoutNoisy,
+      structuralDiscrepancies: [],
+      revisionRequired: false,
+      documentCount: 1,
+    });
+    assert.equal(clean.clean_match, true);
+    assert.equal(clean.review_status, "ready_for_approval");
+    assert.equal(clean.comparison_rows.length, 3);
+  });
+});

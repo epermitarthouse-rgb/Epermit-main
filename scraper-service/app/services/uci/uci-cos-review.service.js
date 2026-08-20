@@ -19,6 +19,17 @@ const {
   seedAcceptedFields,
   applyAcceptedToComparisonRows,
 } = require("./uci-cos-accepted-values.service.js");
+const {
+  applyComparisonInclusionToggles,
+  filterIncludedComparisonRows,
+  recomputeCosReviewFromComparisonRows,
+} = require("./uci-cos-comparison-inclusion.service.js");
+
+async function recomputePredictionsForRecordId(supabase, coordinationRecordId) {
+  const { loadCoordinationRecord, afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+  const refreshed = await loadCoordinationRecord(supabase, coordinationRecordId);
+  return afterCoordinationRecordWrite(supabase, refreshed);
+}
 
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
@@ -239,6 +250,8 @@ async function updateCosAcceptedFields(supabase, params) {
     })
     .eq("id", coordinationRecordId);
 
+  await recomputePredictionsForRecordId(supabase, coordinationRecordId);
+
   emitUciEvent(
     "uci.stage6.accepted_fields_updated",
     {
@@ -256,6 +269,229 @@ async function updateCosAcceptedFields(supabase, params) {
     cos_design_record: updatedCos,
     new_overrides: allNewOverrides,
     override_summary: buildOverrideSummary(updatedCos || working),
+    extracted_fields_unchanged: true,
+  };
+}
+
+/**
+ * Toggle comparison-row inclusion without mutating utility-issued extraction.
+ * Excluded rows stay visible but do not count toward Stage 6 blockers.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function updateCosComparisonInclusion(supabase, params) {
+  const {
+    coordinationRecordId,
+    userId,
+    cosDesignRecordId = null,
+    toggles = [],
+    confirmCoreExclusion = false,
+  } = params;
+
+  const record = await getCoordinationRecordById(supabase, coordinationRecordId);
+  if (!record) {
+    const err = new Error("Coordination record not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  if (Number(record.current_stage) !== 6) {
+    const err = new Error("Stage 6 must be active to edit COS comparison inclusion");
+    err.statusCode = 409;
+    err.code = "STAGE_6_NOT_ACTIVE";
+    throw err;
+  }
+
+  const projectId = String(record.project_id);
+  let cos =
+    (cosDesignRecordId
+      ? await loadCosRecord(supabase, cosDesignRecordId, projectId)
+      : await getCurrentCosDesignRecord(supabase, coordinationRecordId)) || null;
+
+  if (!cos || !cos.is_current) {
+    const err = new Error("No current COS / design record to edit");
+    err.statusCode = 409;
+    err.code = "COS_RECORD_REQUIRED";
+    throw err;
+  }
+
+  if (String(cos.review_status) === "approved") {
+    const err = new Error(
+      "Approved COS snapshot is frozen — upload a revised COS for a new version",
+    );
+    err.statusCode = 409;
+    err.code = "COS_ALREADY_APPROVED";
+    throw err;
+  }
+
+  if (String(cos.evidence_status) === "ADVISORY") {
+    const err = new Error("Cannot edit comparison inclusion on advisory/predicted COS");
+    err.statusCode = 409;
+    err.code = "ADVISORY_NOT_EDITABLE";
+    throw err;
+  }
+
+  cos = ensureAcceptedLayer(cos);
+
+  const normalizedToggles = (Array.isArray(toggles) ? toggles : [])
+    .filter((t) => t && typeof t === "object")
+    .map((t) => ({
+      field: String(/** @type {any} */ (t).field || ""),
+      included_in_comparison: /** @type {any} */ (t).included_in_comparison !== false,
+    }))
+    .filter((t) => t.field);
+
+  if (normalizedToggles.length === 0) {
+    const err = new Error("No comparison inclusion toggles provided");
+    err.statusCode = 400;
+    err.code = "NO_INCLUSION_TOGGLES";
+    throw err;
+  }
+
+  const comparisonRows = applyComparisonInclusionToggles(cos, normalizedToggles, {
+    confirmCoreExclusion: confirmCoreExclusion === true,
+  });
+
+  const priorReport =
+    cos.discrepancy_report && typeof cos.discrepancy_report === "object"
+      ? /** @type {Record<string, unknown>} */ (cos.discrepancy_report)
+      : {};
+  const priorDiscrepancies = Array.isArray(priorReport.discrepancies)
+    ? priorReport.discrepancies
+    : [];
+  const structuralDiscrepancies = priorDiscrepancies.filter((d) => {
+    if (!d || typeof d !== "object") return false;
+    const field = d.field != null ? String(d.field) : null;
+    return !field;
+  });
+  const documentConflicts = Array.isArray(priorReport.document_conflicts)
+    ? priorReport.document_conflicts
+    : [];
+
+  const recomputed = recomputeCosReviewFromComparisonRows({
+    comparisonRows,
+    structuralDiscrepancies,
+    revisionRequired: priorReport.revision_required === true,
+    documentCount: Number(
+      (priorReport.review_summary &&
+      typeof priorReport.review_summary === "object" &&
+      !Array.isArray(priorReport.review_summary) &&
+      /** @type {any} */ (priorReport.review_summary).document_count) ||
+        0,
+    ),
+    documentConflicts,
+  });
+
+  const reviewVersion = Number(cos.review_version || 1) + 1;
+  const sourceExtractionBefore = JSON.stringify(cos.extracted_fields || {});
+
+  const discrepancyReportPayload = {
+    ...priorReport,
+    discrepancies: recomputed.discrepancies,
+    material_discrepancy_count: recomputed.material_discrepancy_count,
+    requires_human_review: recomputed.requires_human_review,
+    clean_match: recomputed.clean_match,
+    review_summary: recomputed.review_summary,
+    analysis_status: recomputed.analysis_status,
+  };
+
+  const { data: updatedCos, error } = await supabase
+    .from("coordination_cos_design_records")
+    .update({
+      comparison_rows: recomputed.comparison_rows,
+      review_status: recomputed.review_status,
+      evidence_status: recomputed.evidence_status,
+      needs_human_attention: recomputed.needs_human_attention,
+      attention_reasons: recomputed.attention_reasons,
+      discrepancy_report: discrepancyReportPayload,
+      review_version: reviewVersion,
+    })
+    .eq("id", cos.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to update comparison inclusion"), {
+      cause: error,
+      statusCode: 500,
+      code: "COS_INCLUSION_UPDATE_FAILED",
+    });
+  }
+
+  if (JSON.stringify(updatedCos?.extracted_fields || {}) !== sourceExtractionBefore) {
+    const err = new Error("Inclusion update mutated utility-issued extraction — aborted");
+    err.statusCode = 500;
+    err.code = "SOURCE_MUTATION_DETECTED";
+    throw err;
+  }
+
+  const prevMeta =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? /** @type {Record<string, unknown>} */ (record.metadata)
+      : {};
+  const priorAnalysis =
+    prevMeta.uci_cos_analysis && typeof prevMeta.uci_cos_analysis === "object"
+      ? /** @type {Record<string, unknown>} */ (prevMeta.uci_cos_analysis)
+      : {};
+
+  await supabase
+    .from("coordination_records")
+    .update({
+      metadata: {
+        ...prevMeta,
+        uci_cos_analysis: {
+          ...priorAnalysis,
+          comparison_rows: recomputed.comparison_rows,
+          review_status: recomputed.review_status,
+          evidence_status: recomputed.evidence_status,
+          review_version: reviewVersion,
+          review_summary: recomputed.review_summary,
+          cos_design_record_id: cos.id,
+        },
+      },
+    })
+    .eq("id", coordinationRecordId);
+
+  await recomputePredictionsForRecordId(supabase, coordinationRecordId);
+
+  emitUciEvent(
+    "uci.stage6.comparison_inclusion_updated",
+    {
+      coordination_record_id: coordinationRecordId,
+      project_id: projectId,
+      cos_design_record_id: cos.id,
+      review_version: reviewVersion,
+      toggles: normalizedToggles,
+    },
+    { supabase },
+  );
+
+  let coordinationRecord = record;
+  let autoCompleteResult = null;
+  if (
+    recomputed.clean_match === true &&
+    recomputed.review_status === "ready_for_approval" &&
+    recomputed.evidence_status === "UTILITY_ISSUED"
+  ) {
+    autoCompleteResult = await autoCompleteCleanCosMatch(supabase, {
+      coordinationRecordId,
+      cosDesignRecordId: cos.id,
+      reason: "Clean included COS comparison — Stage 6 auto-completed",
+    });
+    if (autoCompleteResult?.coordination_record) {
+      coordinationRecord = autoCompleteResult.coordination_record;
+    }
+  }
+
+  return {
+    ok: true,
+    cos_design_record: autoCompleteResult?.cos_design_record || updatedCos,
+    coordination_record: coordinationRecord,
+    can_enter_stage_7: canEnterStage7(coordinationRecord),
+    auto_completed: autoCompleteResult?.auto_completed === true,
+    auto_complete: autoCompleteResult,
+    review_state: recomputed,
     extracted_fields_unchanged: true,
   };
 }
@@ -575,7 +811,10 @@ async function approveCosDesign(supabase, params) {
   cos = ensureAcceptedLayer(cos);
 
   // Document conflicts require an operator-chosen accepted value before approve
-  const unresolvedConflicts = (Array.isArray(cos.comparison_rows) ? cos.comparison_rows : []).filter(
+  const includedRows = filterIncludedComparisonRows(
+    Array.isArray(cos.comparison_rows) ? cos.comparison_rows : [],
+  );
+  const unresolvedConflicts = includedRows.filter(
     (r) =>
       (r.utility_conflict === true || r.result === "document_conflict") &&
       (r.accepted == null || r.accepted === ""),
@@ -592,11 +831,21 @@ async function approveCosDesign(supabase, params) {
   }
 
   const hasMaterial =
-    cos.evidence_status === "DISCREPANCY" ||
     (Array.isArray(cos.discrepancy_report?.discrepancies) &&
       cos.discrepancy_report.discrepancies.some(
-        (d) => d && (d.severity === "high" || d.material === true),
-      ));
+        (d) =>
+          d &&
+          (d.severity === "high" || d.material === true) &&
+          (d.field == null ||
+            includedRows.some((r) => String(r.field) === String(d.field))),
+      )) ||
+    includedRows.some(
+      (r) =>
+        r.material === true &&
+        r.result &&
+        r.result !== "match" &&
+        r.result !== "insufficient_data",
+    );
 
   if (hasMaterial && !acceptMaterialDeviation) {
     const err = new Error(
@@ -934,6 +1183,7 @@ module.exports = {
   approveCosDesign,
   autoCompleteCleanCosMatch,
   updateCosAcceptedFields,
+  updateCosComparisonInclusion,
   requestCosRevision,
   rejectCosDocument,
   flagCosForReview,

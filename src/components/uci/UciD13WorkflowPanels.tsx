@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -598,6 +599,7 @@ export function CosAnalysisPanel({
   onUploadDocuments,
   onSelectExistingDocuments,
   onUpdateAcceptedFields,
+  onUpdateComparisonInclusion,
   onApprove,
   onAcceptDeviation,
   onRequestRevision,
@@ -629,6 +631,10 @@ export function CosAnalysisPanel({
     updates?: Array<{ field: string; accepted_value: unknown; reason?: string | null }>;
     reset_fields?: string[];
   }) => void | Promise<void>;
+  onUpdateComparisonInclusion?: (payload: {
+    toggles: Array<{ field: string; included_in_comparison: boolean }>;
+    confirm_core_exclusion?: boolean;
+  }) => void | Promise<void>;
   onApprove?: () => void;
   onAcceptDeviation?: (notes: string) => void;
   onRequestRevision?: (notes: string) => void;
@@ -651,10 +657,6 @@ export function CosAnalysisPanel({
       : []) as Array<Record<string, unknown>>;
   const evidenceStatus = String(current?.evidence_status || analysis?.evidence_status || "—");
   const reviewStatus = String(current?.review_status || analysis?.review_status || "—");
-  const hasMaterial =
-    evidenceStatus === "DISCREPANCY" ||
-    reviewStatus === "needs_attention" ||
-    reviewStatus === "revision_required";
   const versionLabel =
     current?.version != null ? `v${String(current.version)}` : null;
   const hasEvidence =
@@ -668,6 +670,38 @@ export function CosAnalysisPanel({
     evidenceStatus !== "ADVISORY" &&
     reviewStatus !== "rejected" &&
     reviewStatus !== "superseded";
+  const canEditInclusion =
+    Boolean(onUpdateComparisonInclusion) &&
+    !isApproved &&
+    evidenceStatus !== "ADVISORY" &&
+    reviewStatus !== "rejected" &&
+    reviewStatus !== "superseded";
+
+  const COS_CORE_COMPARE_FIELDS = new Set([
+    "service_amperage",
+    "service_voltage",
+    "phase",
+    "wire_configuration",
+    "meter_count",
+  ]);
+
+  const isRowIncluded = (row: Record<string, unknown>) => row.included_in_comparison !== false;
+  const includedComparisonRows = comparisonRows.filter(isRowIncluded);
+  const hasMaterialIncluded = includedComparisonRows.some(
+    (r) =>
+      r.result &&
+      r.result !== "match" &&
+      r.result !== "insufficient_data" &&
+      (r.material === true ||
+        r.result === "undersized" ||
+        r.result === "oversized" ||
+        r.result === "mismatch" ||
+        r.utility_conflict === true),
+  );
+  const hasMaterial =
+    reviewStatus === "revision_required" ||
+    hasMaterialIncluded ||
+    (evidenceStatus === "DISCREPANCY" && !isApproved && includedComparisonRows.length > 0);
 
   const reviewSummary =
     (current?.discrepancy_report &&
@@ -776,6 +810,24 @@ export function CosAnalysisPanel({
     });
     setEditingField(null);
     setEditDraft("");
+  };
+
+  const toggleComparisonInclusion = async (field: string, nextIncluded: boolean) => {
+    if (!onUpdateComparisonInclusion) return;
+    if (!nextIncluded && COS_CORE_COMPARE_FIELDS.has(field)) {
+      const ok = window.confirm(
+        `Exclude core field "${field}" from comparison?\n\nCore service fields usually must match before Stage 6 can complete. Only exclude if this row is parser noise.`,
+      );
+      if (!ok) return;
+      await onUpdateComparisonInclusion({
+        toggles: [{ field, included_in_comparison: false }],
+        confirm_core_exclusion: true,
+      });
+      return;
+    }
+    await onUpdateComparisonInclusion({
+      toggles: [{ field, included_in_comparison: nextIncluded }],
+    });
   };
 
   const handleApproveClick = () => {
@@ -975,6 +1027,7 @@ export function CosAnalysisPanel({
             <table className="w-full min-w-[720px] text-left text-[11px]">
               <thead className="bg-muted/40">
                 <tr>
+                  <th className="px-2 py-1.5 font-medium">Include in comparison</th>
                   <th className="px-2 py-1.5 font-medium">Submitted</th>
                   <th className="px-2 py-1.5 font-medium">Utility-issued</th>
                   <th className="px-2 py-1.5 font-medium">Accepted value</th>
@@ -985,6 +1038,7 @@ export function CosAnalysisPanel({
               <tbody>
                 {comparisonRows.map((row) => {
                   const field = String(row.field || "");
+                  const included = isRowIncluded(row);
                   const utilityDisplay =
                     row.utility_issued_display != null
                       ? String(row.utility_issued_display)
@@ -997,7 +1051,28 @@ export function CosAnalysisPanel({
                     ? (row.utility_candidates as Array<Record<string, unknown>>)
                     : [];
                   return (
-                    <tr key={field} className="border-t border-border/30">
+                    <tr
+                      key={field}
+                      className={cn(
+                        "border-t border-border/30",
+                        !included && "bg-muted/20 text-muted-foreground",
+                      )}
+                    >
+                      <td className="px-2 py-1.5 align-top">
+                        <label className="flex items-start gap-1.5">
+                          <Checkbox
+                            checked={included}
+                            disabled={busy || !canEditInclusion}
+                            onCheckedChange={(checked) => {
+                              void toggleComparisonInclusion(field, checked === true);
+                            }}
+                            aria-label={`Include ${String(row.label || row.field)} in comparison`}
+                          />
+                          <span className="text-[10px] leading-snug">
+                            {included ? "Included" : "Excluded"}
+                          </span>
+                        </label>
+                      </td>
                       <td className="px-2 py-1.5 align-top">
                         <div className="font-medium text-foreground">
                           {String(row.label || row.field)}

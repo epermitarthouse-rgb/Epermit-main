@@ -10,6 +10,10 @@ const { extractCosDesignFields } = require("./uci-cos-extract.service.js");
 const { COS_COMPARE_FIELDS } = require("./uci-cos-constants.js");
 const { valuesMatch } = require("./uci-cos-discrepancy.service.js");
 
+function isIncludedInComparison(row) {
+  return row == null || row.included_in_comparison !== false;
+}
+
 /**
  * @param {unknown} entry
  */
@@ -192,8 +196,9 @@ function buildCosReviewSummary(params) {
   } = params;
 
   const rows = Array.isArray(comparisonRows) ? comparisonRows : [];
-  const matchCount = rows.filter((r) => r.result === "match").length;
-  const discrepancyCount = rows.filter(
+  const includedRows = rows.filter(isIncludedInComparison);
+  const matchCount = includedRows.filter((r) => r.result === "match").length;
+  const discrepancyCount = includedRows.filter(
     (r) =>
       r.result &&
       r.result !== "match" &&
@@ -204,10 +209,11 @@ function buildCosReviewSummary(params) {
   ).length;
   const conflictCount =
     (Array.isArray(conflicts) ? conflicts.length : 0) ||
-    rows.filter((r) => r.result === "document_conflict" || r.utility_conflict === true).length;
+    includedRows.filter((r) => r.result === "document_conflict" || r.utility_conflict === true)
+      .length;
 
   // New utility conditions: utility issued a value where baseline was missing
-  const newUtilityConditions = rows.filter(
+  const newUtilityConditions = includedRows.filter(
     (r) => r.result === "baseline_missing" || (r.submitted == null && r.utility_issued != null),
   ).length;
 

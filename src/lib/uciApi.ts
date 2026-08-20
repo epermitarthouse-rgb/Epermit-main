@@ -2230,6 +2230,8 @@ export async function updateCoordinationCosAcceptedFields(
     updates?: Array<{ field: string; accepted_value: unknown; reason?: string | null }>;
     reset_fields?: string[];
     reset_field?: string;
+    inclusion_toggles?: Array<{ field: string; included_in_comparison: boolean }>;
+    confirm_core_exclusion?: boolean;
   },
 ): Promise<Record<string, unknown>> {
   return uciFetchJson(
@@ -2240,6 +2242,25 @@ export async function updateCoordinationCosAcceptedFields(
       body: JSON.stringify(body),
     },
     "COS accepted-field update failed",
+  );
+}
+
+export async function updateCoordinationCosComparisonInclusion(
+  coordinationId: string,
+  body: {
+    cos_design_record_id?: string;
+    toggles: Array<{ field: string; included_in_comparison: boolean }>;
+    confirm_core_exclusion?: boolean;
+  },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/comparison-inclusion`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "COS comparison inclusion update failed",
   );
 }
 

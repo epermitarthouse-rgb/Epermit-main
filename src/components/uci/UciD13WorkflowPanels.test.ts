@@ -13,6 +13,12 @@ describe("Stage 6 COS operator copy", () => {
     assert.match(panelsSource, /Re-analyze selected \(recovery\)/);
     assert.match(panelsSource, /Clean matches complete Stage 6 automatically/);
   });
+
+  it("renders Include in comparison toggles for COS rows", () => {
+    assert.match(panelsSource, /Include in comparison/i);
+    assert.match(panelsSource, /toggleComparisonInclusion/);
+    assert.match(panelsSource, /included_in_comparison/);
+  });
 });
 
 describe("PortfolioSummarySection render safety", () => {

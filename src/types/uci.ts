@@ -1092,6 +1092,8 @@ export interface UciCosComparisonRow {
   result: string;
   required_action: string;
   material?: boolean;
+  /** When false, row stays visible but does not count toward Stage 6 blockers. Default true. */
+  included_in_comparison?: boolean;
   utility_provenance?: unknown;
   baseline_provenance?: unknown;
 }

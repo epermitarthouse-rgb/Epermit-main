@@ -152,6 +152,7 @@ function applyAcceptedToComparisonRows(comparisonRows, acceptedFields = {}) {
       utility_issued: row.utility_issued ?? null,
       accepted: acceptedValue,
       operator_override: overridden,
+      included_in_comparison: row.included_in_comparison !== false,
       override_reason:
         acceptedEntry && typeof acceptedEntry === "object"
           ? /** @type {any} */ (acceptedEntry).reason || null

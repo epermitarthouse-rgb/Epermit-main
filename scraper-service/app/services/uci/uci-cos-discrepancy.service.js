@@ -153,6 +153,7 @@ function buildCosDiscrepancyReport(params) {
       accepted: issuedValue,
       operator_override: false,
       override_reason: null,
+      included_in_comparison: true,
       result,
       required_action: requiredAction,
       material: def.material,
