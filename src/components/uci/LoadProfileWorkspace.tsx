@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FileUp, Loader2, RotateCcw } from "lucide-react";
+import { ChevronDown, FileUp, FolderOpen, Loader2, RotateCcw } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
   ConnectedLoadReviewPanel,
@@ -29,13 +29,30 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
   getLoadProfileDraftApplication,
   parseLoadProfileSummary,
   type UciLoadProfileSummary,
 } from "@/lib/uciLoadProfile";
-import { getCoordinationDocumentManifest } from "@/lib/uciApi";
+import {
+  getCoordinationDocumentManifest,
+  getCoordinationLoadProfileDocuments,
+  linkCoordinationLoadProfileDocuments,
+  unlinkCoordinationLoadProfileDocument,
+  setCoordinationLoadProfileDocumentInclusion,
+  runCoordinationDocumentProcessing,
+  importCoordinationDocumentFindings,
+  formatUciUserError,
+} from "@/lib/uciApi";
 import type {
   UciDocumentProcessingManifestResponse,
   UciDocumentReprocessResponse,
@@ -57,10 +74,12 @@ import {
   persistWorkspaceSection,
   readStoredWorkspaceSection,
   validateManualVerifiedInput,
+  formatSelectedForAnalysisLabel,
   type ManualVerifiedInputPayload,
   type WorkspaceSection,
 } from "@/lib/uciLoadProfileWorkspace";
-import type { CoordinationApplication } from "@/types/uci";
+import type { CoordinationApplication, UciLoadProfileDocumentScope } from "@/types/uci";
+import { toast } from "sonner";
 
 const SECTION_LABELS: Record<WorkspaceSection, string> = {
   overview: "Overview",
@@ -168,6 +187,11 @@ export function LoadProfileWorkspace({
   const [manualUploadFiles, setManualUploadFiles] = useState<File[]>([]);
   const [processingManifest, setProcessingManifest] =
     useState<UciDocumentProcessingManifestResponse | null>(null);
+  const [documentScope, setDocumentScope] = useState<UciLoadProfileDocumentScope | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
+  const [pickerUtilityFilter, setPickerUtilityFilter] = useState<string>("all");
+  const [scopeBusy, setScopeBusy] = useState(false);
   const [manifestError, setManifestError] = useState<string | null>(null);
   const [reprocessBusy, setReprocessBusy] = useState<string[] | null>(null);
   const [reprocessProgress, setReprocessProgress] = useState<{
@@ -210,6 +234,16 @@ export function LoadProfileWorkspace({
             "Processing metadata could not be loaded; displayed statuses may be incomplete.",
           );
         }
+      });
+
+    void getCoordinationLoadProfileDocuments(coordinationId, {
+      external_application_id: selectedPepcoApplicationId,
+    })
+      .then((scope) => {
+        if (!cancelled) setDocumentScope(scope);
+      })
+      .catch(() => {
+        if (!cancelled) setDocumentScope(null);
       });
 
     return () => {
@@ -334,6 +368,87 @@ export function LoadProfileWorkspace({
     }
   };
 
+  const refreshDocumentScope = async () => {
+    const scope = await getCoordinationLoadProfileDocuments(coordinationId, {
+      external_application_id: selectedPepcoApplicationId,
+    });
+    setDocumentScope(scope);
+    return scope;
+  };
+
+  const useProjectDocumentsForCoordination = async (projectDocumentIds: string[]) => {
+    if (scopeBusy || projectDocumentIds.length === 0) return;
+    setScopeBusy(true);
+    try {
+      const linked = await linkCoordinationLoadProfileDocuments(coordinationId, {
+        project_document_ids: projectDocumentIds,
+        included_in_analysis: true,
+        external_application_id: selectedPepcoApplicationId,
+      });
+      setDocumentScope(linked);
+      setPickerSelectedIds([]);
+      setPickerOpen(false);
+      try {
+        await runCoordinationDocumentProcessing(coordinationId, {
+          external_application_id: selectedPepcoApplicationId,
+          document_ids: projectDocumentIds,
+        });
+        await importCoordinationDocumentFindings(coordinationId, {
+          external_application_id: selectedPepcoApplicationId,
+        });
+      } catch {
+        // Link succeeded; processing can be retried from Analyze / Import.
+      }
+      await refreshDocumentScope();
+      toast.success("Documents linked for this coordination record");
+    } catch (error) {
+      toast.error(formatUciUserError(error, "Failed to use documents for this coordination record"));
+    } finally {
+      setScopeBusy(false);
+    }
+  };
+
+  const unlinkUsedDocument = async (projectDocumentId: string, removeFromAnalysisOnly = false) => {
+    if (scopeBusy || !projectDocumentId) return;
+    setScopeBusy(true);
+    try {
+      const result = await unlinkCoordinationLoadProfileDocument(coordinationId, projectDocumentId, {
+        remove_from_analysis_only: removeFromAnalysisOnly,
+        external_application_id: selectedPepcoApplicationId,
+      });
+      setDocumentScope(result);
+      toast.success(
+        removeFromAnalysisOnly
+          ? "Removed from this analysis. The project document was kept."
+          : "Unlinked from this coordination. The project document was kept.",
+      );
+    } catch (error) {
+      toast.error(formatUciUserError(error, "Failed to update document scope"));
+    } finally {
+      setScopeBusy(false);
+    }
+  };
+
+  const toggleDocumentIncluded = async (projectDocumentId: string, included: boolean) => {
+    if (scopeBusy || !projectDocumentId) return;
+    setScopeBusy(true);
+    try {
+      const result = await setCoordinationLoadProfileDocumentInclusion(
+        coordinationId,
+        projectDocumentId,
+        {
+          included_in_analysis: included,
+          external_application_id: selectedPepcoApplicationId,
+        },
+      );
+      setDocumentScope(result);
+    } catch (error) {
+      toast.error(formatUciUserError(error, "Failed to update analysis inclusion"));
+    } finally {
+      setScopeBusy(false);
+    }
+  };
+
   return (
     <Card className="border-border/60">
       <CardHeader className="space-y-2 pb-3">
@@ -424,11 +539,104 @@ export function LoadProfileWorkspace({
             </TabsContent>
 
             <TabsContent value="source_documents" className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/10 p-3">
+                <p className="text-sm font-medium">
+                  {documentScope?.selected_for_analysis_label ||
+                    formatSelectedForAnalysisLabel(
+                      documentScope?.selected_for_analysis_count ?? 0,
+                      utilityType ?? summary?.utility_type,
+                    )}
+                </p>
+                <Badge variant="secondary">
+                  {documentScope?.selected_for_analysis_count ?? 0} selected
+                </Badge>
+              </div>
+
+              <section className="space-y-2">
+                <p className="text-sm font-medium">Used for this coordination</p>
+                <p className={cn("text-xs", mutedClass)}>
+                  Analysis uses only these linked and included documents. Cross-utility files stay
+                  labeled with their original source.
+                </p>
+                {(documentScope?.used.length ?? 0) === 0 ? (
+                  <EmptyState
+                    title="No documents selected for this coordination"
+                    description="Upload files here or select existing project documents. Unrelated utility files are not analyzed automatically."
+                    mutedClass={mutedClass}
+                  />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Source utility / type</TableHead>
+                        <TableHead>Document type</TableHead>
+                        <TableHead>Processing</TableHead>
+                        <TableHead>Analysis</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {documentScope?.used.map((row) => (
+                        <TableRow key={row.project_document_id}>
+                          <TableCell>
+                            <p className="text-sm font-medium">{row.file_name}</p>
+                          </TableCell>
+                          <TableCell className={cn("text-xs", mutedClass)}>
+                            {row.provenance_label}
+                          </TableCell>
+                          <TableCell className={cn("text-xs", mutedClass)}>
+                            {row.classified_document_type.replace(/_/g, " ")}
+                          </TableCell>
+                          <TableCell className={cn("text-xs", mutedClass)}>
+                            {row.processing_status_label}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={row.included_in_analysis ? "secondary" : "outline"}>
+                              {row.included_in_analysis ? "Included" : "Excluded"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.portal_document ? null : (
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={scopeBusy}
+                                  onClick={() =>
+                                    void toggleDocumentIncluded(
+                                      row.project_document_id,
+                                      !row.included_in_analysis,
+                                    )
+                                  }
+                                >
+                                  {row.included_in_analysis ? "Remove from this analysis" : "Include in analysis"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={scopeBusy}
+                                  onClick={() => void unlinkUsedDocument(row.project_document_id)}
+                                >
+                                  Unlink from coordination
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </section>
+
               <div className="rounded-md border bg-muted/10 p-3">
-                <p className="text-sm font-medium">Upload supporting document</p>
+                <p className="text-sm font-medium">Upload documents</p>
                 <p className={cn("mt-1 text-xs", mutedClass)}>
-                  Upload to project documents, then classify and extract through the same findings
-                  and candidate pipeline. The source will be labeled Manual upload. No portal
+                  Select multiple files in one upload. Files are stored with the project, linked to
+                  this coordination record, and included in this analysis by default. No portal
                   application is required.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -481,6 +689,26 @@ export function LoadProfileWorkspace({
                   </p>
                 ) : null}
               </div>
+
+              <div className="rounded-md border bg-muted/10 p-3">
+                <p className="text-sm font-medium">Select from project documents</p>
+                <p className={cn("mt-1 text-xs", mutedClass)}>
+                  Choose existing project files, including cross-utility documents, then use them
+                  for this coordination record. They are not analyzed until you opt in.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  disabled={scopeBusy}
+                  onClick={() => setPickerOpen(true)}
+                >
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Select from project documents
+                </Button>
+              </div>
+
               <p className={cn("text-xs", mutedClass)}>
                 Filename and ranking categories suggest document type only — they do not verify
                 engineering content.
@@ -506,32 +734,95 @@ export function LoadProfileWorkspace({
               {manifestError ? (
                 <p className="text-xs text-amber-700 dark:text-amber-300">{manifestError}</p>
               ) : null}
-              {(Object.entries(sourceGroups) as Array<[string, typeof sourceRows]>).map(
-                ([cat, rows]) =>
-                  rows.length === 0 ? null : (
-                    <section key={cat}>
-                      <p className={cn("text-xs font-medium uppercase tracking-wide", mutedClass)}>
-                        {rows[0]?.categoryLabel} ({rows.length})
-                      </p>
-                      <SourceDocumentsTable
-                        rows={rows}
-                        mutedClass={mutedClass}
-                        knownDocumentIds={new Set(
-                          processingManifest?.documents.map((doc) => doc.document_id) ?? [],
-                        )}
-                        reprocessBusy={reprocessBusy}
-                        onReprocess={(documentId) => void reprocessDocuments([documentId])}
-                      />
-                    </section>
-                  ),
-              )}
-              {sourceRows.length === 0 ? (
-                <EmptyState
-                  title="No source documents"
-                  description="Upload project documents or synchronize provider documents, then run extraction."
-                  mutedClass={mutedClass}
-                />
+
+              {(documentScope?.other_project_documents.length ?? 0) > 0 ? (
+                <Collapsible>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm">
+                    Other project documents ({documentScope?.other_project_documents.length})
+                    <ChevronDown className="h-4 w-4" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    {documentScope?.other_project_documents.map((row) => (
+                      <div key={row.project_document_id} className="rounded-md border px-3 py-2 text-sm">
+                        <p className="font-medium">{row.file_name}</p>
+                        <p className={cn("text-xs", mutedClass)}>
+                          {row.provenance_label} · {row.classified_document_type.replace(/_/g, " ")} · not linked
+                        </p>
+                      </div>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
               ) : null}
+
+              <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
+                <SheetContent side="right" className="flex w-full flex-col sm:max-w-lg">
+                  <SheetHeader>
+                    <SheetTitle>Select from project documents</SheetTitle>
+                    <SheetDescription>
+                      Filter by utility type, then use selected files for this coordination record.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="mt-4 space-y-3 overflow-y-auto pr-1">
+                    <Select value={pickerUtilityFilter} onValueChange={setPickerUtilityFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All utility types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All utility types</SelectItem>
+                        <SelectItem value="electric">Electric</SelectItem>
+                        <SelectItem value="gas">Gas</SelectItem>
+                        <SelectItem value="water">Water</SelectItem>
+                        <SelectItem value="project_level">Project-level</SelectItem>
+                        <SelectItem value="unknown">Unknown</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(documentScope?.other_project_documents ?? [])
+                      .filter(
+                        (row) =>
+                          pickerUtilityFilter === "all" ||
+                          row.source_utility_type === pickerUtilityFilter ||
+                          row.relevance === pickerUtilityFilter,
+                      )
+                      .map((row) => {
+                        const checked = pickerSelectedIds.includes(row.project_document_id);
+                        return (
+                          <label
+                            key={row.project_document_id}
+                            className="flex items-start gap-2 rounded-md border p-2 text-sm"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(value) => {
+                                setPickerSelectedIds((current) =>
+                                  value === true
+                                    ? [...current, row.project_document_id]
+                                    : current.filter((id) => id !== row.project_document_id),
+                                );
+                              }}
+                            />
+                            <span>
+                              <span className="block font-medium">{row.file_name}</span>
+                              <span className={cn("block text-xs", mutedClass)}>
+                                {row.provenance_label} · {row.classified_document_type.replace(/_/g, " ")} ·{" "}
+                                {row.linked ? "already linked" : "not linked"}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                  <SheetFooter className="mt-4">
+                    <Button
+                      type="button"
+                      disabled={scopeBusy || pickerSelectedIds.length === 0}
+                      onClick={() => void useProjectDocumentsForCoordination(pickerSelectedIds)}
+                    >
+                      {scopeBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Use for this coordination record
+                    </Button>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
             </TabsContent>
 
             <TabsContent value="verified_inputs" className="mt-4 space-y-4">

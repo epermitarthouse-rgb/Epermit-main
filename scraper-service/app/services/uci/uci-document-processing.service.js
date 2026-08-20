@@ -633,6 +633,13 @@ function discoverAllUciDocuments(record, params) {
   }
 
   const projectDocs = Array.isArray(params.projectDocuments) ? params.projectDocuments : [];
+  const includedProjectDocumentIds =
+    params.includedProjectDocumentIds instanceof Set
+      ? params.includedProjectDocumentIds
+      : params.includedProjectDocumentIds
+        ? new Set([...params.includedProjectDocumentIds].map(String))
+        : null;
+
   for (const doc of projectDocs) {
     if (!doc || typeof doc !== "object") continue;
     if (String(doc.project_id ?? projectId) !== projectId) continue;
@@ -641,8 +648,12 @@ function discoverAllUciDocuments(record, params) {
     if (!fileName || !filePath) continue;
 
     const description = String(doc.description ?? "");
-    const isManualUpload = /\bagent\s*2\s+manual\s+upload\b/i.test(description);
-    if (
+    const isManualUpload =
+      /\bagent\s*2\s+manual\s+upload\b/i.test(description) ||
+      /load profile analyzer upload/i.test(description);
+    if (includedProjectDocumentIds) {
+      if (!includedProjectDocumentIds.has(String(doc.id))) continue;
+    } else if (
       !externalApplicationId &&
       (!isManualUpload || !description.includes(`coordination ${coordinationRecordId}`))
     ) {
@@ -1463,9 +1474,18 @@ async function runDocumentProcessing(supabase, params) {
     projectDocs = Array.isArray(projectDocsData) ? projectDocsData : [];
   }
 
+  const { resolveScopedProjectDocuments } = require("./uci-coordination-document-links.service.js");
+  const scoped = await resolveScopedProjectDocuments(supabase, {
+    record,
+    userId,
+    projectDocuments: projectDocs,
+  });
+  const includedProjectIds = scoped.includedIds;
+
   const discovery = discoverAllUciDocuments(record, {
     externalApplicationId: extAppId,
-    projectDocuments: projectDocs,
+    projectDocuments: scoped.scopedDocuments,
+    includedProjectDocumentIds: includedProjectIds,
   });
 
   if (!Array.isArray(discovery.documents) || discovery.documents.length === 0) {
@@ -1505,9 +1525,10 @@ async function runDocumentProcessing(supabase, params) {
   const targetedRefresh = requestedDocumentIds.size > 0;
   if (targetedRefresh) {
     discovery.documents = discovery.documents.filter((doc) =>
-      requestedDocumentIds.has(buildStableDocumentId(doc)),
+      requestedDocumentIds.has(buildStableDocumentId(doc)) ||
+      requestedDocumentIds.has(String(doc.source_document_id ?? "")),
     );
-    if (discovery.documents.length !== requestedDocumentIds.size) {
+    if (discovery.documents.length === 0) {
       const err = new Error("One or more requested documents were not found in this coordination scope.");
       err.statusCode = 404;
       err.code = "DOCUMENT_NOT_FOUND";

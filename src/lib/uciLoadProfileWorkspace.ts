@@ -1414,3 +1414,24 @@ export function getUtilityTypeContracts(utilityType: string): {
     serviceSizingSupported: false,
   };
 }
+
+export function formatSelectedForAnalysisLabel(count: number, utilityType: string | null | undefined): string {
+  const utility = String(utilityType || "utility").trim().toLowerCase() || "utility";
+  return `${count} document${count === 1 ? "" : "s"} selected for ${utility} analysis`;
+}
+
+export function groupPickerDocumentsByUtility(
+  rows: Array<{
+    source_utility_type?: string | null;
+    provenance_label?: string;
+    relevance?: string;
+  }>,
+): Record<string, typeof rows> {
+  const groups: Record<string, typeof rows> = {};
+  for (const row of rows) {
+    const key = row.provenance_label || row.source_utility_type || "Other";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  }
+  return groups;
+}

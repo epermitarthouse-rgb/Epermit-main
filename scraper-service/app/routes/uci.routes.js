@@ -74,6 +74,12 @@ const {
   reprocessDocument,
 } = require("../services/uci/uci-document-reprocess.service.js");
 const {
+  getLoadProfileDocumentScope,
+  linkProjectDocumentsToCoordination,
+  unlinkProjectDocumentFromCoordination,
+  setDocumentIncludedInAnalysis,
+} = require("../services/uci/uci-coordination-document-links.service.js");
+const {
   runApplicationPackageBuild,
   getApplicationById,
 } = require("../services/uci/uci-application-builder.service.js");
@@ -1118,6 +1124,153 @@ function createUciRouter(opts) {
         userId: user.id,
       });
 
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/load-profile/documents", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const externalApplicationId = String(req.query.external_application_id ?? "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: false,
+      });
+
+      const result = await getLoadProfileDocumentScope(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        externalApplicationId,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/load-profile/documents/link", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const projectDocumentIds = Array.isArray(body.project_document_ids)
+        ? body.project_document_ids.map(String).filter(Boolean)
+        : [];
+      const externalApplicationId = String(body.external_application_id ?? "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const result = await linkProjectDocumentsToCoordination(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        projectDocumentIds,
+        includedInAnalysis: body.included_in_analysis !== false,
+        linkOrigin: "manual",
+        externalApplicationId,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/load-profile/documents/:documentId/unlink", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const projectDocumentId = String(req.params.documentId || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const externalApplicationId = String(body.external_application_id ?? "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const result = await unlinkProjectDocumentFromCoordination(supabase, {
+        coordinationRecordId: coordinationId,
+        projectDocumentId,
+        userId: user.id,
+        removeFromAnalysisOnly: body.remove_from_analysis_only === true,
+        externalApplicationId,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/load-profile/documents/:documentId/inclusion", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const projectDocumentId = String(req.params.documentId || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const externalApplicationId = String(body.external_application_id ?? "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const result = await setDocumentIncludedInAnalysis(supabase, {
+        coordinationRecordId: coordinationId,
+        projectDocumentId,
+        includedInAnalysis: body.included_in_analysis !== false,
+        userId: user.id,
+        externalApplicationId,
+      });
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);

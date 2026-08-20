@@ -1957,7 +1957,17 @@ async function runLoadCandidateExtraction(supabase, params) {
   }
 
   const projectSources = discoverProjectDocumentSources(projectDocs, projectId);
-  const rankedDocs = rankAndSortLoadDocuments([...discovery.documents, ...projectSources]);
+  const { resolveScopedProjectDocuments } = require("./uci-coordination-document-links.service.js");
+  const scoped = await resolveScopedProjectDocuments(supabase, {
+    record,
+    userId,
+    projectDocuments: projectDocs,
+  });
+  const includedIds = scoped.includedIds;
+  const scopedProjectSources = projectSources.filter((doc) =>
+    includedIds.has(String(doc.source_document_id ?? "")),
+  );
+  const rankedDocs = rankAndSortLoadDocuments([...discovery.documents, ...scopedProjectSources]);
 
   const structuredApp = getStructuredApplicationFromRecord(record, extAppId);
   /** @type {Array<Record<string, unknown>>} */

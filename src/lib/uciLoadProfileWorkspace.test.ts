@@ -16,6 +16,7 @@ import {
   persistWorkspaceSection,
   readStoredWorkspaceSection,
   validateManualVerifiedInput,
+  formatSelectedForAnalysisLabel,
   WORKSPACE_SECTION_STORAGE_KEY,
   type WorkspaceSection,
 } from "@/lib/uciLoadProfileWorkspace";
@@ -744,5 +745,12 @@ describe("uciLoadProfileWorkspace", () => {
       expect(storage.get(WORKSPACE_SECTION_STORAGE_KEY)).toBe(section);
       expect(readStoredWorkspaceSection()).toBe(section);
     });
+  });
+
+  it("makes the selected-for-analysis count obvious", () => {
+    expect(formatSelectedForAnalysisLabel(6, "gas")).toBe("6 documents selected for gas analysis");
+    expect(formatSelectedForAnalysisLabel(1, "electric")).toBe(
+      "1 document selected for electric analysis",
+    );
   });
 });
