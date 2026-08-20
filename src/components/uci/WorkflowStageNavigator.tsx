@@ -5,7 +5,13 @@ import {
   UCI_RECORD_WORKSPACE_GROUPS,
   type UciDrawerTab,
 } from "@/lib/uciNavSections";
-import { getWorkflowGroupProgress, type WorkflowGroupProgress } from "@/lib/uciWorkspaceGuidance";
+import {
+  formatWorkflowStageRange,
+  getStageWorkspaceLinksForRange,
+  getWorkflowGroupPrerequisite,
+  getWorkflowGroupProgress,
+  type WorkflowGroupProgress,
+} from "@/lib/uciWorkspaceGuidance";
 import { cn } from "@/lib/utils";
 
 type WorkflowStageNavigatorProps = {
@@ -117,6 +123,11 @@ export function WorkflowStageNavigator({
                       <p className={cn("text-sm font-semibold tracking-tight", styles.label)}>
                         {group.label}
                       </p>
+                      {group.stageRange ? (
+                        <span className="text-[10px] font-medium text-muted-foreground">
+                          {formatWorkflowStageRange(group.stageRange)}
+                        </span>
+                      ) : null}
                       {progress === "current" || groupHasActiveTab ? (
                         <span className="rounded-md bg-teal/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
                           Current
@@ -139,20 +150,24 @@ export function WorkflowStageNavigator({
                       ) : null}
                     </div>
 
-                    <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0">
-                      {tabs.map((tab, tabIndex) => {
-                        const isActive = tab.id === activeTab;
-                        return (
-                          <div key={tab.id} className="flex items-center gap-1">
-                            {tabIndex > 0 ? (
-                              <ChevronRight
-                                className="hidden h-3 w-3 shrink-0 text-muted-foreground/70 sm:block"
-                                aria-hidden
-                              />
-                            ) : null}
+                    {progress === "upcoming" && group.stageRange ? (
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        {getWorkflowGroupPrerequisite({
+                          stageRange: group.stageRange,
+                          currentStage,
+                        }) ?? "Preview downstream workspaces before this milestone is active."}
+                      </p>
+                    ) : null}
+
+                    {progress === "upcoming" && group.stageRange ? (
+                      <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0">
+                        {getStageWorkspaceLinksForRange(group.stageRange).map((link) => {
+                          const isActive = link.tab === activeTab;
+                          return (
                             <TabsTrigger
-                              value={tab.id}
-                              title={`${tab.workspace} workspace`}
+                              key={`stage-${link.stage}`}
+                              value={link.tab}
+                              title={`Open ${link.label} workspace`}
                               className={cn(
                                 "h-auto rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-none transition-all",
                                 "border-border/60 bg-background/80 text-muted-foreground",
@@ -164,12 +179,44 @@ export function WorkflowStageNavigator({
                                 isActive && "font-semibold",
                               )}
                             >
-                              {tab.label}
+                              Open {link.label}
                             </TabsTrigger>
-                          </div>
-                        );
-                      })}
-                    </TabsList>
+                          );
+                        })}
+                      </TabsList>
+                    ) : (
+                      <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0">
+                        {tabs.map((tab, tabIndex) => {
+                          const isActive = tab.id === activeTab;
+                          return (
+                            <div key={tab.id} className="flex items-center gap-1">
+                              {tabIndex > 0 ? (
+                                <ChevronRight
+                                  className="hidden h-3 w-3 shrink-0 text-muted-foreground/70 sm:block"
+                                  aria-hidden
+                                />
+                              ) : null}
+                              <TabsTrigger
+                                value={tab.id}
+                                title={`${tab.workspace} workspace`}
+                                className={cn(
+                                  "h-auto rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-none transition-all",
+                                  "border-border/60 bg-background/80 text-muted-foreground",
+                                  "hover:border-teal/35 hover:bg-teal/5 hover:text-foreground",
+                                  "focus-visible:ring-2 focus-visible:ring-teal/40",
+                                  "data-[state=active]:border-teal/50 data-[state=active]:bg-teal data-[state=active]:text-white data-[state=active]:shadow-sm",
+                                  "dark:border-border/70 dark:bg-card/60",
+                                  "dark:data-[state=active]:bg-teal dark:data-[state=active]:text-white",
+                                  isActive && "font-semibold",
+                                )}
+                              >
+                                {tab.label}
+                              </TabsTrigger>
+                            </div>
+                          );
+                        })}
+                      </TabsList>
+                    )}
                   </div>
                 </div>
               </div>

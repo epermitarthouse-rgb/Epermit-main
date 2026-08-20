@@ -5,6 +5,9 @@ import {
   UCI_STAGE_RECOMMENDED_TAB,
   buildNextStepNotice,
   describeCoordinationStatus,
+  formatWorkflowStageRange,
+  getStageWorkspaceLinksForRange,
+  getWorkflowGroupPrerequisite,
   getWorkflowGroupProgress,
 } from "./uciWorkspaceGuidance.ts";
 
@@ -55,5 +58,21 @@ describe("uciWorkspaceGuidance", () => {
     assert.equal(UCI_STAGE_RECOMMENDED_TAB[8], "costs");
     assert.equal(UCI_STAGE_RECOMMENDED_TAB[9], "energization-closeout");
     assert.equal(UCI_STAGE_RECOMMENDED_TAB[10], "energization-closeout");
+  });
+
+  it("describes downstream prerequisites for Stages 7–10 groups", () => {
+    assert.equal(formatWorkflowStageRange([7, 8]), "Stages 7–8");
+    assert.equal(
+      getWorkflowGroupPrerequisite({ stageRange: [7, 8], currentStage: 6 }),
+      "Blocked until Stage 6 completes",
+    );
+    assert.equal(
+      getWorkflowGroupPrerequisite({ stageRange: [9, 10], currentStage: 6 }),
+      "Blocked until Stage 8 completes",
+    );
+    assert.deepEqual(
+      getStageWorkspaceLinksForRange([7, 8]).map((link) => link.label),
+      ["Stage 7 · CIAC", "Stage 8 · Long-lead"],
+    );
   });
 });

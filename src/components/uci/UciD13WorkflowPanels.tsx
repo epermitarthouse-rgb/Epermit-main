@@ -32,7 +32,6 @@ import type {
   CoordinationEquipment,
   CoordinationRecord,
   LifecycleState,
-  UCI_COST_TYPES,
   UciLifecycleProposalRow,
   UciLifecycleProposalsPayload,
   UciLifecycleStatus,
@@ -40,6 +39,7 @@ import type {
   UciPortfolioViewResponse,
   UciProviderMappingMetadata,
 } from "@/types/uci";
+import { UCI_COST_TYPES } from "@/types/uci";
 
 type PanelCommonProps = {
   mutedClass: string;

@@ -125,6 +125,52 @@ export function getWorkflowGroupProgress(
   return "upcoming";
 }
 
+export function formatWorkflowStageRange(stageRange: [number, number]): string {
+  const [min, max] = stageRange;
+  if (min === max) return `Stage ${min}`;
+  return `Stages ${min}–${max}`;
+}
+
+/** Prerequisite copy for groups the record has not reached yet (display only). */
+export function getWorkflowGroupPrerequisite(opts: {
+  stageRange: [number, number];
+  currentStage: number;
+}): string | null {
+  const [min] = opts.stageRange;
+  if (opts.currentStage >= min) return null;
+  const prerequisiteStage = min - 1;
+  if (prerequisiteStage < 0) return null;
+  return `Blocked until Stage ${prerequisiteStage} completes`;
+}
+
+/** Stage → workspace tab for downstream inspection (Stages 7–10). */
+export const UCI_STAGE_WORKSPACE_NAV: Record<
+  number,
+  { tab: UciDrawerTab; shortLabel: string }
+> = {
+  7: { tab: "costs", shortLabel: "CIAC" },
+  8: { tab: "costs", shortLabel: "Long-lead" },
+  9: { tab: "energization-closeout", shortLabel: "Meter set / pre-energization" },
+  10: { tab: "energization-closeout", shortLabel: "Energization & closeout" },
+};
+
+export function getStageWorkspaceLinksForRange(
+  stageRange: [number, number],
+): Array<{ stage: number; tab: UciDrawerTab; label: string }> {
+  const [min, max] = stageRange;
+  const links: Array<{ stage: number; tab: UciDrawerTab; label: string }> = [];
+  for (let stage = min; stage <= max; stage += 1) {
+    const nav = UCI_STAGE_WORKSPACE_NAV[stage];
+    if (!nav) continue;
+    links.push({
+      stage,
+      tab: nav.tab,
+      label: `Stage ${stage} · ${nav.shortLabel}`,
+    });
+  }
+  return links;
+}
+
 export type NextStepNoticeModel = {
   title: string;
   body: string;
