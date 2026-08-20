@@ -74,6 +74,7 @@ describe("uci outbound email template", () => {
     assert.match(content.body, /Application type: New service/);
     assert.match(content.body, /Attachments: 6/);
     assert.match(content.body, new RegExp(SYNTHETIC_BODY_WARNING));
+    assert.match(content.body, /SYNTHETIC TEST — NO EXTERNAL SUBMISSION/);
     assert.match(content.body, /Regards,\nCommun-ET$/);
     assert.doesNotMatch(content.body, /agent-3-reviewed-package-snapshot-v1/);
     assert.doesNotMatch(content.body, /Sending is not enabled/);

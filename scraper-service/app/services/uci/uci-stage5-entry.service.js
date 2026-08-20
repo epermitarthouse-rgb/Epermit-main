@@ -185,9 +185,9 @@ async function reconcileLiveTransmissionIntoStage5(supabase, params) {
     if (mirror) attempt = /** @type {Record<string, unknown>} */ (mirror);
   }
 
-  if (!attempt || String(attempt.status) !== "sent") {
+  if (!attempt || String(attempt.status) !== "sent" || !attempt.graph_message_id) {
     const err = new Error(
-      "Live transmission must be status=sent before Stage 5 reconciliation",
+      "Live transmission must be status=sent with a reconciled Graph message id before Stage 5",
     );
     err.statusCode = 409;
     err.code = "TRANSMISSION_NOT_RECONCILED";

@@ -26,6 +26,7 @@ export type UciOperationalRecord = CoordinationRecord & {
   communications: CoordinationCommunication[];
   costs: CoordinationCost[];
   attentionCount: number;
+  recordAttention?: Array<{ code: string; label: string; stage?: number }>;
 };
 
 const UCI_OPERATIONAL_SNAPSHOT_KEY = "uci-operational-snapshot";
@@ -80,6 +81,7 @@ export function useUciOperationalSnapshot(route: UciOperationalRoute) {
             : record.communications_recent,
         costs: [],
         attentionCount: record.attention_count,
+        recordAttention: record.record_attention ?? [],
       }),
     );
     return {

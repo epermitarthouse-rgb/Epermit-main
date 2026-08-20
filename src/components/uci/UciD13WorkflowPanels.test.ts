@@ -7,6 +7,14 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const panelsSource = readFileSync(join(__dirname, "UciD13WorkflowPanels.tsx"), "utf8");
 
+describe("Stage 6 COS operator copy", () => {
+  it("treats re-analyze as recovery and auto-completes clean matches", () => {
+    assert.match(panelsSource, /COS matched · Stage 6 completed automatically/);
+    assert.match(panelsSource, /Re-analyze selected \(recovery\)/);
+    assert.match(panelsSource, /Clean matches complete Stage 6 automatically/);
+  });
+});
+
 describe("PortfolioSummarySection render safety", () => {
   it("guards stage_summary when portfolio API omits the field", () => {
     assert.match(

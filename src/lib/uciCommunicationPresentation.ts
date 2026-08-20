@@ -110,12 +110,33 @@ export type InboxFeedItem<TRecord = CoordinationRecord> = {
   message: CoordinationCommunication;
 };
 
+export type ConversationActionState = "action_required" | "waiting" | "resolved";
+
 export type InboxThreadGroup<TRecord = CoordinationRecord> = {
   key: string;
   record: TRecord;
   threadId: string | null;
+  grouping: "thread" | "subject" | "message";
   messages: CoordinationCommunication[];
   latest: CoordinationCommunication;
+};
+
+export type InboxConversationCardModel = {
+  projectName: string;
+  providerName: string;
+  subject: string;
+  category: string;
+  summary: string | null;
+  timestamp: string | null;
+  timestampLabel: string;
+  classification: string | null;
+  actionState: ConversationActionState;
+  actionStateLabel: string;
+  messageCount: number;
+  showMessageCount: boolean;
+  attentionReasons: string[];
+  latest: CoordinationCommunication;
+  chronological: CoordinationCommunication[];
 };
 
 export type InboxAuditHistoryModel = {
@@ -130,6 +151,55 @@ function messageSortTime(comm: CoordinationCommunication): number {
   const raw = comm.message_timestamp || comm.created_at;
   const t = raw ? new Date(raw).getTime() : 0;
   return Number.isFinite(t) ? t : 0;
+}
+
+/** Graph conversation id, stored thread_id, or metadata conversation id. */
+export function resolveInboxThreadId(comm: CoordinationCommunication): string | null {
+  const meta = asMeta(comm);
+  const graph = asRecord(meta.graph);
+  const match = asRecord(meta.match);
+  return (
+    str(comm.thread_id) ||
+    str(meta.conversation_id) ||
+    str(meta.graph_conversation_id) ||
+    str(graph.conversationId) ||
+    str(graph.conversation_id) ||
+    str(match.conversation_id) ||
+    str(match.thread_id) ||
+    null
+  );
+}
+
+function normalizeSubjectForThread(subject: string | null | undefined): string | null {
+  let text = String(subject || "").trim().toLowerCase();
+  while (/^(re|fw|fwd)\s*:/.test(text)) {
+    text = text.replace(/^(re|fw|fwd)\s*:\s*/, "");
+  }
+  text = sanitizeOperatorCommunicationText(text).toLowerCase();
+  return text || null;
+}
+
+export function resolveInboxConversationKey(
+  comm: CoordinationCommunication,
+  recordId: string,
+): { key: string; threadId: string | null; grouping: InboxThreadGroup["grouping"] } {
+  const threadId = resolveInboxThreadId(comm);
+  if (threadId) {
+    return {
+      key: `thread:${recordId}:${threadId}`,
+      threadId,
+      grouping: "thread",
+    };
+  }
+  const subject = normalizeSubjectForThread(comm.raw_subject);
+  if (subject) {
+    return {
+      key: `subj:${recordId}:${subject}`,
+      threadId: null,
+      grouping: "subject",
+    };
+  }
+  return { key: `msg:${comm.id}`, threadId: null, grouping: "message" };
 }
 
 /** Split Inbox rows: primary operator feed vs Test / Audit history (no merges, no deletes). */
@@ -153,8 +223,9 @@ export function partitionOperatorInboxFeed<TRecord extends { id?: string }>(
 }
 
 /**
- * Group production (and actionable) Inbox items by Graph/conversation thread_id.
- * Messages without thread_id stay as single-message groups. Never merges distinct threads.
+ * Group production (and actionable) Inbox items by Graph/conversation thread_id,
+ * then by normalized subject on the same record. Messages without either stay
+ * as single-message groups. Never merges distinct records.
  */
 export function groupInboxItemsByThread<TRecord>(
   items: Array<InboxFeedItem<TRecord>>,
@@ -163,20 +234,19 @@ export function groupInboxItemsByThread<TRecord>(
   const order: string[] = [];
 
   for (const item of items) {
-    const threadId = str(item.message.thread_id);
-    const key = threadId
-      ? `thread:${String((item.record as { id?: string }).id || "")}:${threadId}`
-      : `msg:${item.message.id}`;
-    const existing = groups.get(key);
+    const recordId = String((item.record as { id?: string }).id || "");
+    const resolved = resolveInboxConversationKey(item.message, recordId);
+    const existing = groups.get(resolved.key);
     if (!existing) {
-      groups.set(key, {
-        key,
+      groups.set(resolved.key, {
+        key: resolved.key,
         record: item.record,
-        threadId,
+        threadId: resolved.threadId,
+        grouping: resolved.grouping,
         messages: [item.message],
         latest: item.message,
       });
-      order.push(key);
+      order.push(resolved.key);
       continue;
     }
     existing.messages.push(item.message);
@@ -705,10 +775,12 @@ function isSyntheticHistoryNotActionable(comm: CoordinationCommunication): boole
 /** Explicit Needs Attention reasons for operator UI (never PM-less / nopm). */
 export function getNeedsAttentionReasons(
   comm: CoordinationCommunication,
+  record?: CoordinationRecord | null,
 ): string[] {
   // Outbound transmissions and own package echoes are never operator triage reasons.
   if (isOwnOutboundPackageEcho(comm) || isOutboundDirection(comm)) return [];
   if (isRejected(comm) || isSyntheticHistoryNotActionable(comm)) return [];
+  if (isAutoCompletedAck(comm, record)) return [];
 
   const reasons: string[] = [];
   const meta = asMeta(comm);
@@ -716,6 +788,11 @@ export function getNeedsAttentionReasons(
   const incomplete = incompleteReason(comm);
   const confidence = Number(comm.classification_confidence);
   const classification = String(comm.classification || "").trim() || null;
+  const stage6 = asRecord(meta.stage_6_cos);
+  const stage6Status = String(stage6.review_status || "");
+
+  if (stage6.auto_completed === true || meta.stage_6_auto_completed === true) return [];
+  if (stage6Status === "approved" || stage6Status === "superseded") return [];
 
   if (meta.flagged_for_review === true) {
     reasons.push("Flagged for human review");
@@ -745,6 +822,58 @@ export function getNeedsAttentionReasons(
     reasons.push("Low classification confidence");
   }
 
+  if (classification === "class_of_service" || classification === "design_review_response") {
+    const headline = String(
+      asRecord(stage6.discrepancy_report).headline ||
+        asRecord(asRecord(meta.uci_cos_analysis).discrepancy_report).headline ||
+        "",
+    ).toLowerCase();
+    if (
+      stage6Status === "needs_attention" ||
+      stage6Status === "revision_required" ||
+      headline.includes("undersized") ||
+      headline.includes("capacity") ||
+      headline.includes("mismatch") ||
+      comm.needs_human_attention
+    ) {
+      reasons.push("Service capacity differs from submitted load");
+    }
+  }
+
+  if (classification === "ciac_invoice") {
+    const variance = Number(
+      fields.variance_pct ?? asRecord(meta.ciac).variance_pct ?? asRecord(meta.cost).variance_pct,
+    );
+    if (Number.isFinite(variance) && variance > 20) {
+      reasons.push("CIAC variance exceeds 20% — billing hold");
+    } else if (comm.needs_human_attention) {
+      reasons.push("CIAC invoice needs operator review");
+    }
+  }
+
+  if (classification === "equipment_eta_update" && comm.needs_human_attention) {
+    reasons.push("Equipment ETA slipped versus last recorded date");
+  }
+
+  const meter = asRecord(meta.meter_set);
+  if (
+    classification === "meter_set_scheduling" &&
+    (meta.no_show === true || meter.no_show === true || Number(meter.reschedule_count || 0) >= 2)
+  ) {
+    reasons.push("Meter set needs reschedule");
+  }
+
+  if (classification === "inspection_release_request") {
+    reasons.push("Inspection release requested — record it in the energization workspace");
+  }
+
+  if (classification === "escalation_or_problem") {
+    reasons.push("Utility reported a problem or escalation");
+  }
+  if (classification === "request_for_information") {
+    reasons.push("Utility requested additional information");
+  }
+
   if (
     classificationNeedsAttention(
       classification,
@@ -756,7 +885,7 @@ export function getNeedsAttentionReasons(
     reasons.push(
       meta.classifier_error || meta.parser_failure
         ? "Unresolved classifier/parser failure"
-        : "Needs human review",
+        : "Low classification confidence",
     );
   }
 
@@ -795,10 +924,14 @@ export function formatOverrideLine(comm: CoordinationCommunication): string | nu
   return parts.join(" · ");
 }
 
+export type CommunicationActionSurface = "inbox" | "needs-attention" | "workspace";
+
 export function getCommunicationActionPlan(
   comm: CoordinationCommunication,
   record?: CoordinationRecord | null,
+  opts?: { surface?: CommunicationActionSurface },
 ): CommunicationActionPlan {
+  const hideFlag = opts?.surface === "needs-attention";
   // Outbound transmissions / package echoes are history, not operator attention.
   if (isOwnOutboundPackageEcho(comm) || isOutboundDirection(comm)) {
     return {
@@ -846,6 +979,13 @@ export function getCommunicationActionPlan(
 
   const flagged = asMeta(comm).flagged_for_review === true;
   const autoCompleted = isAutoCompletedAck(comm, record);
+  const stage6 = asRecord(asMeta(comm).stage_6_cos);
+  const stage6Closed =
+    stage6.auto_completed === true ||
+    asMeta(comm).stage_6_auto_completed === true ||
+    String(stage6.review_status || "") === "approved" ||
+    String(stage6.review_status || "") === "superseded";
+  const attentionReasons = getNeedsAttentionReasons(comm, record);
   const classificationAttention = classificationNeedsAttention(
     comm.classification,
     comm.classification_confidence != null ? Number(comm.classification_confidence) : null,
@@ -854,15 +994,17 @@ export function getCommunicationActionPlan(
   const incomplete = Boolean(incompleteReason(comm));
   const unmatched = asRecord(asMeta(comm).match).matched === false;
   const needsAttention =
-    flagged || classificationAttention || incomplete || unmatched;
+    !autoCompleted &&
+    !stage6Closed &&
+    (flagged || attentionReasons.length > 0 || classificationAttention || incomplete || unmatched);
   const manuallyResolved = isManuallyResolved(comm);
-  const resolved = autoCompleted || (manuallyResolved && !needsAttention && !flagged);
+  const resolved = autoCompleted || stage6Closed || (manuallyResolved && !needsAttention && !flagged);
 
-  if (autoCompleted || (resolved && !needsAttention)) {
+  if (autoCompleted || stage6Closed || (resolved && !needsAttention)) {
     return {
       showReclassify: false,
       showConfirm: false,
-      showFlag: true,
+      showFlag: hideFlag ? false : true,
       showReject: false,
       showViewHistory: true,
       showViewMessage: true,
@@ -876,7 +1018,7 @@ export function getCommunicationActionPlan(
     return {
       showReclassify: true,
       showConfirm: true,
-      showFlag: !flagged,
+      showFlag: hideFlag ? false : !flagged,
       showReject: true,
       showViewHistory: Boolean(comm.reviewed_at || asMeta(comm).review_decision),
       showViewMessage: true,
@@ -890,7 +1032,7 @@ export function getCommunicationActionPlan(
     return {
       showReclassify: true,
       showConfirm: false,
-      showFlag: true,
+      showFlag: hideFlag ? false : true,
       showReject: false,
       showViewHistory: true,
       showViewMessage: true,
@@ -904,7 +1046,7 @@ export function getCommunicationActionPlan(
   return {
     showReclassify: true,
     showConfirm: false,
-    showFlag: true,
+    showFlag: hideFlag ? false : true,
     showReject: false,
     showViewHistory: false,
     showViewMessage: true,
@@ -940,7 +1082,7 @@ export function buildCommunicationCardModel(
   const classification = String(comm.classification || "").trim() || null;
   const isAcknowledgment = !ownEcho && classification === "acknowledgment";
   const fields = extractedFields(comm);
-  const attentionReasons = getNeedsAttentionReasons(comm);
+  const attentionReasons = getNeedsAttentionReasons(comm, opts.record);
   const actionPlan = getCommunicationActionPlan(comm, opts.record);
   const needsAttention = actionPlan.needsAttention;
   const missingPm =
@@ -1021,3 +1163,105 @@ export function buildCommunicationCardModel(
     isAcknowledgment,
   };
 }
+
+function truncateOperatorText(value: string, max = 160): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+export function conciseCommunicationSummary(
+  comm: CoordinationCommunication,
+): string | null {
+  const parsed = sanitizeOperatorCommunicationText(comm.parsed_summary);
+  if (parsed && !/^keyword match:/i.test(parsed)) return truncateOperatorText(parsed);
+  const body = sanitizeOperatorCommunicationText(comm.raw_body);
+  if (body) return truncateOperatorText(body);
+  const items = Array.isArray(comm.parsed_action_items) ? comm.parsed_action_items : [];
+  const first = items
+    .map((item) => {
+      if (!item || typeof item !== "object") return "";
+      const row = item as Record<string, unknown>;
+      return sanitizeOperatorCommunicationText(
+        String(row.detail || row.reason || row.type || ""),
+      );
+    })
+    .find(Boolean);
+  return first ? truncateOperatorText(first) : null;
+}
+
+export function listCommunicationAttachmentLabels(
+  comm: CoordinationCommunication,
+): string[] {
+  const raw = comm.raw_attachments;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return sanitizeOperatorCommunicationText(item);
+      if (item && typeof item === "object") {
+        const row = item as Record<string, unknown>;
+        return sanitizeOperatorCommunicationText(
+          String(row.file_name || row.name || row.filename || row.label || ""),
+        );
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+export function formatConversationActionState(state: ConversationActionState): string {
+  if (state === "action_required") return "Action required";
+  if (state === "waiting") return "Waiting";
+  return "Resolved";
+}
+
+export function conversationActionState(
+  messages: CoordinationCommunication[],
+  record?: CoordinationRecord | null,
+): ConversationActionState {
+  if (messages.some((message) => communicationNeedsOperatorAttention(message, record))) {
+    return "action_required";
+  }
+  if (messages.every((message) => getCommunicationActionPlan(message, record).resolved)) {
+    return "resolved";
+  }
+  return "waiting";
+}
+
+export function buildInboxConversationCardModel<TRecord extends { id?: string }>(
+  group: InboxThreadGroup<TRecord>,
+  opts: {
+    projectName?: string | null;
+    providerName?: string | null;
+    record?: CoordinationRecord | null;
+  } = {},
+): InboxConversationCardModel {
+  const latest = group.latest;
+  const record = opts.record ?? (group.record as unknown as CoordinationRecord);
+  const card = buildCommunicationCardModel(latest, {
+    providerName: opts.providerName,
+    record,
+  });
+  const actionState = conversationActionState(group.messages, record);
+  const chronological = [...group.messages].sort(
+    (left, right) => messageSortTime(left) - messageSortTime(right),
+  );
+  return {
+    projectName: String(opts.projectName || "").trim() || "Project",
+    providerName: String(opts.providerName || "").trim() || "Utility",
+    subject: card.displaySubject,
+    category: formatCommunicationClassification(latest.classification),
+    summary: conciseCommunicationSummary(latest),
+    timestamp: latest.message_timestamp || latest.created_at || null,
+    timestampLabel: formatOperatorTimelineWhen(latest.message_timestamp || latest.created_at),
+    classification: latest.classification,
+    actionState,
+    actionStateLabel: formatConversationActionState(actionState),
+    messageCount: group.messages.length,
+    showMessageCount: group.messages.length > 1,
+    attentionReasons: actionState === "action_required" ? card.attentionReasons : [],
+    latest,
+    chronological,
+  };
+}
+

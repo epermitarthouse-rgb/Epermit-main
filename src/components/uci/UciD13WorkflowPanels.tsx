@@ -23,6 +23,7 @@ import {
   buildCommunicationCardModel,
   buildCommunicationReviewTimeline,
   formatOperatorTimelineWhen,
+  getCommunicationActionPlan,
   type CommunicationActionPlan,
 } from "@/lib/uciCommunicationPresentation";
 import type {
@@ -395,6 +396,7 @@ export function CommunicationQuickActions({
   onFlagForReview,
   toolbarOutlineButtonClass,
   workspaceHref,
+  surface = "inbox",
 }: {
   comm: CoordinationCommunication;
   record?: CoordinationRecord | null;
@@ -404,46 +406,50 @@ export function CommunicationQuickActions({
   onFlagForReview?: (communicationId: string) => void;
   toolbarOutlineButtonClass: string;
   workspaceHref?: string;
+  surface?: "inbox" | "needs-attention" | "workspace";
 }) {
-  const model = buildCommunicationCardModel(comm, { providerName, record });
+  const plan = getCommunicationActionPlan(comm, record, { surface });
   const flagged = Boolean(
     (comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review,
   );
-  const showComplexLink =
-    Boolean(workspaceHref) && (model.actions.showReclassify || model.actions.showReject);
+  const needsAttentionQueue = surface === "needs-attention";
+  const showOpenRecord = Boolean(workspaceHref);
+  const showReclassify = Boolean(workspaceHref) && plan.showReclassify;
+  const showConfirm = plan.showConfirm && onConfirm;
+  const showFlag = plan.showFlag && onFlagForReview && !needsAttentionQueue;
 
-  if (!model.actions.showConfirm && !model.actions.showFlag && !showComplexLink) {
+  if (!showConfirm && !showFlag && !showOpenRecord && !showReclassify) {
     return null;
   }
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      {model.actions.showConfirm && onConfirm ? (
+      {showConfirm ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
           className={toolbarOutlineButtonClass}
           disabled={busy}
-          onClick={() => onConfirm(comm.id, comm.classification || "acknowledgment")}
+          onClick={() => onConfirm?.(comm.id, comm.classification || "acknowledgment")}
         >
           {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-          Confirm
+          {needsAttentionQueue ? "Resolve" : "Confirm"}
         </Button>
       ) : null}
-      {model.actions.showFlag && onFlagForReview ? (
+      {showFlag ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
           className={toolbarOutlineButtonClass}
           disabled={busy || flagged}
-          onClick={() => onFlagForReview(comm.id)}
+          onClick={() => onFlagForReview?.(comm.id)}
         >
           {flagged ? "Flagged" : "Flag for review"}
         </Button>
       ) : null}
-      {showComplexLink ? (
+      {showReclassify ? (
         <Button
           type="button"
           size="sm"
@@ -451,7 +457,18 @@ export function CommunicationQuickActions({
           className="h-7 px-2 text-[11px]"
           asChild
         >
-          <Link to={workspaceHref!}>Reclassify or reject in workspace</Link>
+          <Link to={workspaceHref!}>Reclassify</Link>
+        </Button>
+      ) : null}
+      {showOpenRecord ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-[11px]"
+          asChild
+        >
+          <Link to={workspaceHref!}>{needsAttentionQueue ? "Open record" : "Review in workspace"}</Link>
         </Button>
       ) : null}
     </div>
@@ -664,6 +681,16 @@ export function CosAnalysisPanel({
     analysis?.review_summary ||
     null;
 
+  const autoCompleted =
+    Boolean((current?.agent_metadata as Record<string, unknown> | undefined)?.auto_completed) ||
+    Boolean((analysis as Record<string, unknown> | undefined)?.auto_completed) ||
+    Boolean(
+      reviewSummary &&
+        typeof reviewSummary === "object" &&
+        (reviewSummary as Record<string, unknown>).auto_completed,
+    ) ||
+    (isApproved && !hasMaterial && evidenceStatus !== "DISCREPANCY");
+
   const summaryHeadline =
     reviewSummary && typeof reviewSummary === "object"
       ? String((reviewSummary as Record<string, unknown>).headline || "")
@@ -703,14 +730,15 @@ export function CosAnalysisPanel({
     {
       id: "approved",
       label:
-        isApproved &&
-        (Boolean((current?.agent_metadata as Record<string, unknown> | undefined)?.auto_completed) ||
-          Boolean((analysis as Record<string, unknown> | undefined)?.auto_completed) ||
-          Boolean(
-            reviewSummary &&
-              typeof reviewSummary === "object" &&
-              (reviewSummary as Record<string, unknown>).auto_completed,
-          ))
+        autoCompleted ||
+        (isApproved &&
+          (Boolean((current?.agent_metadata as Record<string, unknown> | undefined)?.auto_completed) ||
+            Boolean((analysis as Record<string, unknown> | undefined)?.auto_completed) ||
+            Boolean(
+              reviewSummary &&
+                typeof reviewSummary === "object" &&
+                (reviewSummary as Record<string, unknown>).auto_completed,
+            )))
           ? "COS matched"
           : "Approve COS",
     },
@@ -773,31 +801,34 @@ export function CosAnalysisPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className={sectionTitleClass}>Design Review / Class of Service</CardTitle>
           <div className="flex flex-wrap gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className={toolbarOutlineButtonClass}
-              disabled={busy}
-              onClick={onAnalyze}
-              title={
-                hasEvidence
-                  ? "Re-run analysis against current evidence (diagnostic / reprocess)"
-                  : "Run analysis"
-              }
-            >
-              {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-              {hasEvidence ? "Re-analyze" : "Analyze"}
-            </Button>
-            {onApprove ? (
+            {!hasEvidence ? (
               <Button
                 type="button"
                 size="sm"
-                disabled={busy || evidenceStatus === "ADVISORY" || isApproved}
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={busy}
+                onClick={onAnalyze}
+                title="Run analysis if documents are already on the record"
+              >
+                {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Analyze
+              </Button>
+            ) : null}
+            {onApprove && !autoCompleted && !isApproved ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || evidenceStatus === "ADVISORY"}
                 onClick={handleApproveClick}
               >
                 Approve COS
               </Button>
+            ) : null}
+            {autoCompleted || (isApproved && !hasMaterial) ? (
+              <Badge variant="secondary" className="text-[10px] font-medium">
+                COS matched · Stage 6 completed automatically
+              </Badge>
             ) : null}
           </div>
         </div>
@@ -852,9 +883,10 @@ export function CosAnalysisPanel({
               Upload COS / Design documents
             </p>
             <p className={mutedClass}>
-              Multi-select uploads persist each file independently, then auto-analyze. Utility
-              evidence is never overwritten — a revised set creates a new version. Select existing
-              is for reprocessing only.
+              Multi-select uploads persist each file independently, then auto-analyze. Clean
+              matches complete Stage 6 automatically — Approve is only needed for discrepancies
+              or overrides. Utility evidence is never overwritten. Re-analyze selected is recovery
+              / debug only.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {onUploadDocuments ? (
@@ -931,7 +963,7 @@ export function CosAnalysisPanel({
                     }
                   }}
                 >
-                  Re-analyze selected
+                  Re-analyze selected (recovery)
                 </Button>
               </div>
             ) : null}
@@ -1110,7 +1142,8 @@ export function CosAnalysisPanel({
         ) : (
           <p className={mutedClass}>
             Upload utility COS / design documents (auto-analyzes after save), or wait for a
-            classified email/portal attachment. Select existing → Re-analyze is fallback only.
+            classified email/portal attachment. Clean matches complete Stage 6 automatically.
+            Select existing → Re-analyze is recovery / debug only.
           </p>
         )}
 

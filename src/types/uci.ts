@@ -341,6 +341,16 @@ export interface UciProjectCoordinationResponse {
   records: CoordinationRecord[];
 }
 
+export interface UciRecordAttentionItem {
+  kind: "record";
+  coordination_record_id: string;
+  project_id: string;
+  code: string;
+  label: string;
+  stage: number;
+  state: string;
+}
+
 export interface UciOperationalSnapshotRecord extends CoordinationRecord {
   project_name: string;
   provider_display_name: string | null;
@@ -348,6 +358,7 @@ export interface UciOperationalSnapshotRecord extends CoordinationRecord {
   communications_recent: CoordinationCommunication[];
   attention_communications: CoordinationCommunication[];
   attention_count: number;
+  record_attention?: UciRecordAttentionItem[];
 }
 
 export interface UciOperationalSnapshotResponse {
@@ -1007,6 +1018,7 @@ export interface UciPortfolioViewResponse {
   records: Array<{
     id: string;
     utility_type: string | null;
+    utility_provider_id?: string | null;
     current_stage: number;
     current_stage_state: LifecycleState;
     needs_attention_count: number;

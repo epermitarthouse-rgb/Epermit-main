@@ -194,12 +194,18 @@ function createMockSupabase(tables) {
 
 describe("uci-submission-transmission", () => {
   const originalFlag = process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED;
+  const originalSenders = process.env.UCI_EMAIL_ALLOWED_SENDERS;
+  const originalRecipients = process.env.UCI_EMAIL_ALLOWED_RECIPIENTS;
   const originalGetApp = require("../app/services/uci/uci-application-builder.service.js")
     .getApplicationById;
 
   after(() => {
     if (originalFlag === undefined) delete process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED;
     else process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED = originalFlag;
+    if (originalSenders === undefined) delete process.env.UCI_EMAIL_ALLOWED_SENDERS;
+    else process.env.UCI_EMAIL_ALLOWED_SENDERS = originalSenders;
+    if (originalRecipients === undefined) delete process.env.UCI_EMAIL_ALLOWED_RECIPIENTS;
+    else process.env.UCI_EMAIL_ALLOWED_RECIPIENTS = originalRecipients;
     require("../app/services/uci/uci-application-builder.service.js").getApplicationById =
       originalGetApp;
   });
@@ -234,6 +240,8 @@ describe("uci-submission-transmission", () => {
 
   it("claims before send and refuses duplicate", async () => {
     process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED = "true";
+    process.env.UCI_EMAIL_ALLOWED_SENDERS = "dzahid@commun-et.com";
+    process.env.UCI_EMAIL_ALLOWED_RECIPIENTS = "dzahid@commun-et.com";
     const tables = createTables();
     const supabase = createMockSupabase(tables);
     let sendCalls = 0;
@@ -279,5 +287,37 @@ describe("uci-submission-transmission", () => {
     });
     assert.equal(second.idempotent_replay, true);
     assert.equal(sendCalls, 1);
+  });
+
+  it("rejects a real utility recipient even when live send is on", async () => {
+    process.env.UCI_EMAIL_LIVE_SUBMISSION_ENABLED = "true";
+    process.env.UCI_EMAIL_ALLOWED_SENDERS = "dzahid@commun-et.com";
+    process.env.UCI_EMAIL_ALLOWED_RECIPIENTS = "dzahid@commun-et.com";
+    const tables = createTables();
+    tables.submission_preparations[0].to_recipients = [{ email: "newservice@dominionenergy.com" }];
+    const supabase = createMockSupabase(tables);
+    await assert.rejects(
+      () =>
+        transmitSubmissionPreparation(supabase, {
+          applicationId: APP_ID,
+          preparationId: PREP_ID,
+          userId: USER_ID,
+          deps: {
+            mailSendPermissionConfigured: true,
+            getMailboxStatusForUser: async () => ({
+              connected: true,
+              mailbox_email: "dzahid@commun-et.com",
+              scopes: ["Mail.Send"],
+              mail_send_permission_configured: true,
+            }),
+            getValidAccessTokenForUser: async () => "token",
+            fetchGraphMe: async () => ({ mail: "dzahid@commun-et.com" }),
+            sendMailFn: async () => {
+              throw new Error("Graph must not be called");
+            },
+          },
+        }),
+      (err) => err && err.code === "RECIPIENT_NOT_ALLOWED",
+    );
   });
 });

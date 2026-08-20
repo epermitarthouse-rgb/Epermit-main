@@ -44,13 +44,32 @@ import {
 import {
   buildCommunicationCardModel,
   buildInboxAuditHistoryModel,
+  buildInboxConversationCardModel,
   communicationNeedsOperatorAttention,
+  conciseCommunicationSummary,
   formatCommunicationSubjectForDisplay,
+  formatDirectionLabel,
+  formatOperatorTimelineWhen,
   groupInboxItemsByThread,
   isSyntheticUatCommunication,
+  listCommunicationAttachmentLabels,
   partitionOperatorInboxFeed,
   type InboxThreadGroup,
 } from "@/lib/uciCommunicationPresentation";
+import {
+  formatConservativeP90Chip,
+  formatTypicalP50Chip,
+  formatUciLifecycleStateLabel,
+  getLifecycleStageTitle,
+} from "@/lib/uciWorkspaceGuidance";
+import {
+  furthestStageLabel,
+  groupPortfolioByProject,
+  listRecordOperatorAttentionItems,
+  matchesPortfolioFilter,
+  portfolioFilterLabel,
+  type PortfolioFilter,
+} from "@/lib/uciPortfolioPresentation";
 import { CommunicationQuickActions } from "@/components/uci/UciD13WorkflowPanels";
 import { cn } from "@/lib/utils";
 import {
@@ -114,19 +133,6 @@ function recordBlockers(record: OperationalRecord): string[] {
     ...(record.last_error ? [record.last_error] : []),
     ...record.applications.flatMap(applicationBlockers),
   ];
-}
-
-function latestActivity(record: OperationalRecord): string {
-  const values = [
-    record.updated_at,
-    ...record.applications.flatMap((application) => [application.updated_at, application.last_synced_at]),
-    ...record.communications.flatMap((message) => [message.updated_at, message.message_timestamp, message.created_at]),
-  ].filter((value): value is string => Boolean(value));
-  const latest = values
-    .map((value) => ({ value, time: new Date(value).getTime() }))
-    .filter((item) => Number.isFinite(item.time))
-    .sort((a, b) => b.time - a.time)[0];
-  return latest ? new Date(latest.value).toLocaleString() : "No activity recorded";
 }
 
 async function settleWithConcurrency<T, R>(
@@ -223,11 +229,13 @@ function OperationalCommunicationCard({
   message,
   reload,
   className,
+  surface = "inbox",
 }: {
   record: OperationalRecord;
   message: CoordinationCommunication;
   reload: () => void;
   className?: string;
+  surface?: "inbox" | "needs-attention" | "workspace";
 }) {
   const { busyId, handleConfirm, handleFlag } = useOperationalCommunicationActions(reload);
   const model = buildCommunicationCardModel(message, {
@@ -244,8 +252,15 @@ function OperationalCommunicationCard({
       {model.subtitle ? <p className="text-xs text-muted-foreground">{model.subtitle}</p> : null}
       {reasons.length > 0 ? (
         <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-          Why this needs attention: {reasons[0]}
+          {reasons[0]}
         </p>
+      ) : null}
+      {reasons.length > 1 ? (
+        <ul className="mt-1 list-disc pl-4 text-[11px] text-muted-foreground">
+          {reasons.slice(1).map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
       ) : null}
       {model.detailLine ? (
         <p className="text-xs text-muted-foreground">{model.detailLine}</p>
@@ -267,9 +282,10 @@ function OperationalCommunicationCard({
         providerName={providerName(record)}
         busy={busyId === message.id}
         onConfirm={(id, classification) => void handleConfirm(id, classification)}
-        onFlagForReview={(id) => void handleFlag(id)}
+        onFlagForReview={surface === "needs-attention" ? undefined : (id) => void handleFlag(id)}
         toolbarOutlineButtonClass="h-7 text-[11px]"
         workspaceHref={workspaceHref}
+        surface={surface}
       />
     </div>
   );
@@ -775,13 +791,19 @@ export function UciSubmissionsPage() {
               title="Email sending unavailable"
               detail="Connect or reconnect Outlook in Settings so your mailbox can send email."
             />
-          ) : !liveFlagOn ? (
+          ) : liveFlagOn ? (
+            <AlertBanner
+              tone="warn"
+              title="LIVE EMAIL SEND is enabled"
+              detail="Send submission uses the connected Outlook mailbox. Synthetic test send is limited to the controlled recipient on the preview."
+            />
+          ) : (
             <AlertBanner
               tone="warn"
               title="Email sending is not enabled"
               detail="Your mailbox is connected, but sending is turned off in this environment."
             />
-          ) : null}
+          )}
           {connectOutlookHint ? (
             <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
               <p className="font-medium">Connect Outlook to continue</p>
@@ -1127,10 +1149,18 @@ export function UciSubmissionsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Send this email?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {liveFlagOn ? "LIVE EMAIL SEND" : "Send this email?"}
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>This sends the previewed message and attachments from your connected mailbox.</p>
+                {liveFlagOn ? (
+                  <p className="font-semibold text-amber-800 dark:text-amber-200">
+                    Live email sending is ON in this environment. Confirming sends from the connected Outlook mailbox.
+                  </p>
+                ) : (
+                  <p>This sends the previewed message and attachments from your connected mailbox.</p>
+                )}
                 {pendingTransmit ? (
                   <ul className="list-disc pl-4 text-foreground">
                     <li>From: {pendingTransmit.from || "—"}</li>
@@ -1138,8 +1168,10 @@ export function UciSubmissionsPage() {
                     <li>Subject: {pendingTransmit.subject || "—"}</li>
                     <li>Attachments: {pendingTransmit.attachmentCount}</li>
                     {pendingTransmit.synthetic ? (
-                      <li>SYNTHETIC TEST — self-send only</li>
-                    ) : null}
+                      <li>SYNTHETIC TEST — controlled recipient only</li>
+                    ) : (
+                      <li>Production recipient — not a synthetic test send</li>
+                    )}
                   </ul>
                 ) : null}
               </div>
@@ -1187,44 +1219,114 @@ function InboxThreadCard({
   reload: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const older = group.messages.slice(1);
+  const { busyId, handleConfirm, handleFlag } = useOperationalCommunicationActions(reload);
+  const model = buildInboxConversationCardModel(group, {
+    projectName: group.record.projectName,
+    providerName: providerName(group.record),
+    record: group.record,
+  });
+  const workspaceHref = recordHref(group.record, "communications");
+  const actionTone =
+    model.actionState === "action_required"
+      ? "border-amber-500/40 bg-amber-500/5"
+      : model.actionState === "resolved"
+        ? "border-border/60"
+        : "border-border";
+
   return (
-    <div className="space-y-2">
-      <OperationalCommunicationCard
-        record={group.record}
-        message={group.latest}
-        reload={reload}
-      />
-      {group.messages.length > 1 ? (
-        <div className="pl-3">
-          <button
-            type="button"
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? "Hide" : "Show"} {group.messages.length - 1} earlier message
-            {group.messages.length - 1 === 1 ? "" : "s"} in this conversation
-            {group.threadId ? " (thread)" : ""}
-          </button>
-          {expanded
-            ? older.map((message) => (
-                <div key={message.id} className="mt-2 rounded-md border bg-muted/20 p-2">
-                  <p className="text-xs font-medium">
-                    {formatCommunicationSubjectForDisplay(message.raw_subject)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {message.message_timestamp
-                      ? new Date(message.message_timestamp).toLocaleString()
-                      : new Date(message.created_at).toLocaleString()}
-                    {message.classification
-                      ? ` · ${message.classification.replace(/_/g, " ")}`
-                      : ""}
-                  </p>
-                </div>
-              ))
-            : null}
+    <div className={cn("rounded-lg border p-4", actionTone)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <RecordLink record={group.record} tab="communications">
+              {model.projectName}
+            </RecordLink>
+            <Badge variant="outline" className="text-[10px] font-medium">
+              {model.actionStateLabel}
+            </Badge>
+            {model.showMessageCount ? (
+              <Badge variant="secondary" className="text-[10px] font-normal">
+                {model.messageCount} messages
+              </Badge>
+            ) : null}
+          </div>
+          <p className="text-sm text-muted-foreground">{model.providerName}</p>
+          <p className="font-medium">{model.subject}</p>
+          <p className="text-xs text-muted-foreground">{model.category}</p>
+          {model.summary ? (
+            <p className="text-sm leading-snug text-foreground">{model.summary}</p>
+          ) : null}
+          {model.attentionReasons[0] ? (
+            <p className="text-xs text-amber-800 dark:text-amber-200">{model.attentionReasons[0]}</p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{model.timestampLabel}</p>
         </div>
-      ) : null}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "Hide thread" : "Open thread"}
+        </Button>
+      </div>
+      {expanded ? (
+        <ol className="mt-3 space-y-3 border-t pt-3">
+          {model.chronological.map((message) => {
+            const attachments = listCommunicationAttachmentLabels(message);
+            return (
+              <li key={message.id} className="rounded-md border bg-background/70 p-3">
+                <p className="text-xs font-medium">
+                  {message.sender || "Unknown sender"} ·{" "}
+                  {formatOperatorTimelineWhen(message.message_timestamp || message.created_at)}
+                  {formatDirectionLabel(message.direction)
+                    ? ` · ${formatDirectionLabel(message.direction)}`
+                    : ""}
+                </p>
+                <p className="mt-1 text-sm">
+                  {formatCommunicationSubjectForDisplay(message.raw_subject)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {message.classification
+                    ? message.classification.replace(/_/g, " ")
+                    : "Unclassified"}
+                </p>
+                {conciseCommunicationSummary(message) ? (
+                  <p className="mt-1 text-sm">{conciseCommunicationSummary(message)}</p>
+                ) : null}
+                {attachments.length > 0 ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Attachments: {attachments.join(", ")}
+                  </p>
+                ) : null}
+                <CommunicationQuickActions
+                  comm={message}
+                  record={group.record}
+                  providerName={providerName(group.record)}
+                  busy={busyId === message.id}
+                  onConfirm={(id, classification) => void handleConfirm(id, classification)}
+                  onFlagForReview={(id) => void handleFlag(id)}
+                  toolbarOutlineButtonClass="h-7 text-[11px]"
+                  workspaceHref={workspaceHref}
+                  surface="inbox"
+                />
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <CommunicationQuickActions
+          comm={group.latest}
+          record={group.record}
+          providerName={providerName(group.record)}
+          busy={busyId === group.latest.id}
+          onConfirm={(id, classification) => void handleConfirm(id, classification)}
+          onFlagForReview={(id) => void handleFlag(id)}
+          toolbarOutlineButtonClass="h-7 text-[11px]"
+          workspaceHref={workspaceHref}
+          surface="inbox"
+        />
+      )}
     </div>
   );
 }
@@ -1247,7 +1349,7 @@ export function UciInboxPage() {
     <RouteFrame
       eyebrow="Cross-project operations"
       title="Utility Communications Inbox"
-      body="Live utility messages stay in the primary feed (grouped by conversation thread when available). Resolved synthetic UAT items move to Test / Audit history — records are never deleted."
+      body="One card per conversation. Open a thread for chronological messages, attachments, and classification. Resolved synthetic UAT items move to Test / Audit history — records are never deleted."
       badge="Live communications"
     >
       <RouteLoadState {...state} loadingText="Loading utility communications…" />
@@ -1302,24 +1404,49 @@ export function UciInboxPage() {
 
 export function UciNeedsAttentionPage() {
   const state = useUciOperationalSnapshot("/uci/needs-attention");
-  // Defense-in-depth: backend snapshot should already be actionable-only; re-filter so
-  // cards never show "not operator attention" while remaining in this queue.
   const messages = state.records.flatMap((record) =>
     record.communications
       .filter((message) => communicationNeedsOperatorAttention(message, record))
       .map((message) => ({ record, message })),
   );
+  const recordItems = state.records.flatMap((record) => {
+    const fromSnapshot = (record.recordAttention ?? []).map((item) => ({
+      record,
+      reason: item.label,
+      tab: "overview" as const,
+      id: `${record.id}:${item.code}`,
+    }));
+    const fromMeta = listRecordOperatorAttentionItems(record).map((item) => ({
+      record: item.record,
+      reason: item.reason,
+      tab: item.tab,
+      id: item.id,
+    }));
+    const merged = [...fromSnapshot, ...fromMeta];
+    const seen = new Set<string>();
+    return merged.filter((item) => {
+      const key = `${item.record.id}:${item.reason}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
   const blockers = state.records.flatMap((record) => {
-    const items = recordBlockers(record);
+    if (String(record.current_stage_state) === "COMPLETED") return [];
+    const items = recordBlockers(record).filter((item) => {
+      const lower = item.toLowerCase();
+      if (lower.includes("no recorded") || lower.includes("not operator")) return false;
+      return true;
+    });
     return items.length ? [{ record, items }] : [];
   });
   const blockerCount = blockers.reduce((sum, item) => sum + item.items.length, 0);
-  const total = messages.length + blockerCount;
+  const total = messages.length + recordItems.length + blockerCount;
   return (
     <RouteFrame
       eyebrow="Cross-project operations"
       title="Attention Queue"
-      body="Actionable unresolved utility communications and application readiness items that need operator review."
+      body="Unresolved actionable items only — communications, COS/capacity, CIAC, ETA, and meter-set issues. Resolved synthetic UAT and outbound transmissions stay out of this queue."
       badge="Human review required"
     >
       <RouteLoadState {...state} loadingText="Loading needs-attention communications…" />
@@ -1346,7 +1473,35 @@ export function UciNeedsAttentionPage() {
                     message={message}
                     reload={state.reload}
                     className="border-amber-500/30"
+                    surface="needs-attention"
                   />
+                ))}
+              </div>
+            </Panel>
+          ) : null}
+          {recordItems.length > 0 ? (
+            <Panel
+              eyebrow="Record attention"
+              title={`${recordItems.length} record item(s)`}
+            >
+              <div className="space-y-3">
+                {recordItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-500/30 p-3"
+                  >
+                    <div>
+                      <RecordLink record={item.record} tab={item.tab} />
+                      <p className="mt-1 text-sm font-medium">{item.reason}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {providerName(item.record)} · {lifecycleLabel(item.record)} ·{" "}
+                        {item.record.current_stage_state}
+                      </p>
+                    </div>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={recordHref(item.record, item.tab)}>Open record</Link>
+                    </Button>
+                  </div>
                 ))}
               </div>
             </Panel>
@@ -1382,42 +1537,97 @@ export function UciNeedsAttentionPage() {
 
 export function UciPortfolioPage() {
   const state = useUciOperationalSnapshot("/uci/portfolio");
+  const [filter, setFilter] = useState<PortfolioFilter>("active");
+  const groups = useMemo(() => groupPortfolioByProject(state.records), [state.records]);
+  const visible = groups.filter((group) => matchesPortfolioFilter(group, filter));
+  const uniqueProjects = groups.length;
+  const testCount = groups.filter((group) => group.isTestOrArchive).length;
   return (
     <RouteFrame
       eyebrow="Cross-project operations"
       title="Coordination Portfolio"
-      body="Lifecycle status and attention counts for real utility coordination records."
-      badge="Live record rollup"
+      body="Projects are the primary unit. Nested utilities stay visible — Highland water, gas, sewer, and telecom records are not hidden. Test and archive projects are filtered out of Active."
+      badge="Project rollup"
     >
       <RouteLoadState {...state} loadingText="Loading coordination portfolio…" />
       <CoverageNote failures={state.partialFailures} />
       {!state.loading && !state.error ? (
-        <Panel eyebrow="Accessible UCI records" title={`${state.records.length} coordination record(s)`}>
-          <div className="space-y-3">
-            {state.records.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No coordination records exist in accessible projects.</p>
-            ) : state.records.map((record) => (
-              <div key={record.id} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="space-y-1">
-                  <RecordLink record={record} />
-                  <p className="text-sm">{providerName(record)} · {record.utility_type || "Utility type not recorded"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {lifecycleLabel(record)} · {record.current_stage_state} · {record.attentionCount} flagged communication(s)
-                  </p>
-                  <p className="text-xs text-muted-foreground">Last activity {latestActivity(record)}</p>
-                  {recordBlockers(record).length ? (
-                    <p className="text-xs text-amber-700">Readiness blockers: {recordBlockers(record).join("; ")}</p>
-                  ) : (
-                    <p className="text-xs text-emerald-700">No recorded readiness blockers.</p>
-                  )}
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link to={recordHref(record)}>Open record</Link>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {(["active", "needs_attention", "completed", "archived_test"] as PortfolioFilter[]).map(
+              (value) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={filter === value ? "default" : "outline"}
+                  onClick={() => setFilter(value)}
+                >
+                  {portfolioFilterLabel(value)}
+                  {value === "archived_test" ? ` (${testCount})` : ""}
                 </Button>
-              </div>
-            ))}
+              ),
+            )}
           </div>
-        </Panel>
+          <p className="text-xs text-muted-foreground">
+            {state.records.length} coordination record(s) · {uniqueProjects} project(s) · default
+            view is Active operator projects
+          </p>
+          <Panel
+            eyebrow="Projects"
+            title={`${visible.length} ${portfolioFilterLabel(filter).toLowerCase()} project(s)`}
+          >
+            <div className="space-y-3">
+              {visible.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No projects match this filter.
+                </p>
+              ) : (
+                visible.map((group) => (
+                  <div key={group.projectId} className="space-y-3 rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <Link
+                          className="font-medium text-primary hover:underline"
+                          to={`/uci?projectId=${encodeURIComponent(group.projectId)}`}
+                        >
+                          {group.projectName}
+                        </Link>
+                        <p className="text-sm">
+                          {group.utilityCount} utilit{group.utilityCount === 1 ? "y" : "ies"} ·{" "}
+                          {group.attentionCount} needing attention · {furthestStageLabel(group.furthestStage)} ({group.furthestState})
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Overall progress {group.overallProgress}%
+                          {group.p50Label ? ` · ${group.p50Label}` : " · Typical (P50) not computed yet"}
+                          {group.p90Label ? ` · ${group.p90Label}` : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Next: {group.nextAction}</p>
+                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={`/uci?projectId=${encodeURIComponent(group.projectId)}`}>
+                          Open project
+                        </Link>
+                      </Button>
+                    </div>
+                    <ul className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
+                      {group.records.map((record) => (
+                        <li key={record.id} className="flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            {providerName(record)} · {record.utility_type || "Utility"} ·{" "}
+                            {lifecycleLabel(record)} · {record.current_stage_state}
+                          </span>
+                          <Link className="text-primary hover:underline" to={recordHref(record)}>
+                            Open record
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              )}
+            </div>
+          </Panel>
+        </div>
       ) : null}
     </RouteFrame>
   );
@@ -1488,7 +1698,12 @@ export function UciProviderDirectoryPage() {
 export function UciClassOfServicePage() {
   const state = useOperationalRecords("details", false);
   return (
-    <RouteFrame eyebrow="Project operation" title="Design Review / Class of Service" body="Compare verified project inputs with utility-issued COS evidence. Advisory predictions are never treated as issued." badge="Real evidence · Stage 6">
+    <RouteFrame
+      eyebrow="Stage 6"
+      title="Design Review / Class of Service"
+      body="Live Track A COS evidence. Clean matches complete Stage 6 automatically. Discrepancies stay in progress until an operator override or revision."
+      badge="Live Stage 6"
+    >
       <RouteLoadState {...state} loadingText="Loading class-of-service evidence…" />
       {!state.projectId ? <AlertBanner tone="info" title="Select a project" detail="Choose an active project to review class-of-service evidence." /> : null}
       {!state.loading && !state.error && state.projectId ? (
@@ -1496,18 +1711,31 @@ export function UciClassOfServicePage() {
           <div className="space-y-3">
             {state.records.length === 0 ? (
               <p className="text-sm text-muted-foreground">No class-of-service evidence exists for this project.</p>
-            ) : state.records.map((record) => (
-              <div key={record.id} className="rounded-lg border p-3">
-                <RecordLink record={record} tab="cos" />
-                <p className="text-xs text-muted-foreground">
-                  Advisory: {record.metadata?.uci_cos_analysis ? "available" : "not available"} · Utility issued: {record.class_of_service_issued_at || "not evidenced"} · Stage 7 eligible: {Number(record.current_stage) === 6 && String(record.current_stage_state) === "COMPLETED" && record.class_of_service_issued_at ? "yes" : "no"}
-                </p>
-              </div>
-            ))}
+            ) : state.records.map((record) => {
+              const analysis = record.metadata?.uci_cos_analysis as Record<string, unknown> | undefined;
+              const reviewStatus = String(analysis?.review_status || "not analyzed");
+              const autoCompleted = analysis?.auto_completed === true || (Number(record.current_stage) >= 6 && String(record.current_stage_state) === "COMPLETED" && Boolean(record.class_of_service_issued_at));
+              return (
+                <div key={record.id} className="rounded-lg border p-3">
+                  <RecordLink record={record} tab="cos" />
+                  <p className="text-xs text-muted-foreground">
+                    Stage {record.current_stage} · {formatUciLifecycleStateLabel(record.current_stage_state)} · Review {reviewStatus.replace(/_/g, " ")}
+                    {autoCompleted ? " · COS matched (auto-completed)" : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Utility issued: {record.class_of_service_issued_at || "not evidenced"} · Stage 7 eligible: {Number(record.current_stage) === 6 && String(record.current_stage_state) === "COMPLETED" && record.class_of_service_issued_at ? "yes" : "no"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatTypicalP50Chip(record, (iso) => iso ? new Date(iso).toLocaleDateString() : "—") || "Typical (P50) not computed yet"}
+                    {formatConservativeP90Chip(record, (iso) => iso ? new Date(iso).toLocaleDateString() : "—") ? ` · ${formatConservativeP90Chip(record, (iso) => iso ? new Date(iso).toLocaleDateString() : "—")}` : ""}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </Panel>
       ) : null}
-      <AlertBanner tone="default" title="Predictive COS remains advisory" detail="Portfolio-wide predictive COS comparison is not treated as utility-issued evidence." />
+      <AlertBanner tone="default" title="Predictive COS remains advisory" detail="Portfolio-wide predictive COS comparison is not treated as utility-issued evidence. Open a record to edit accepted values or request revision." />
     </RouteFrame>
   );
 }
@@ -1515,7 +1743,12 @@ export function UciClassOfServicePage() {
 export function UciCiacRefundsPage() {
   const state = useOperationalRecords("details", false);
   return (
-    <RouteFrame eyebrow="Project operation" title="CIAC Costs & Refunds" body="Opens the Costs & long-lead workspace for real CIAC rows. Refund eligibility is not a required product." badge="Deep-link · costs tab">
+    <RouteFrame
+      eyebrow="Stage 7"
+      title="CIAC Costs & Refunds"
+      body="Live CIAC and utility cost rows from Track B. Open a record to approve, record payment, or override a billing hold. Refund eligibility is not a required product."
+      badge="Live Stage 7"
+    >
       <RouteLoadState {...state} loadingText="Loading CIAC and coordination costs…" />
       {!state.projectId ? <AlertBanner tone="info" title="Select a project" detail="Choose an active project to review coordination costs." /> : null}
       {!state.loading && !state.error && state.projectId ? (
@@ -1526,7 +1759,26 @@ export function UciCiacRefundsPage() {
             ) : state.records.map((record) => (
               <div key={record.id} className="rounded-lg border p-3">
                 <RecordLink record={record} tab="costs" />
-                <p className="text-xs text-muted-foreground">{record.costs.length} cost row(s): {record.costs.map((cost) => cost.cost_type || "untyped").join(", ") || "none recorded"}</p>
+                <p className="text-xs text-muted-foreground">
+                  Stage {record.current_stage} · {formatUciLifecycleStateLabel(record.current_stage_state)}
+                </p>
+                {record.costs.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">No cost rows yet — Stage 7 can complete with a no-cost path.</p>
+                ) : (
+                  <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                    {record.costs.map((cost) => {
+                      const variance = Number(cost.variance_pct);
+                      return (
+                        <li key={cost.id}>
+                          {cost.cost_type || "untyped"} · est {cost.estimated_amount ?? "—"} · actual {cost.actual_amount ?? "—"}
+                          {Number.isFinite(variance) ? ` · variance ${variance}%` : ""}
+                          {cost.billing_hold ? " · billing hold" : ""}
+                          {cost.qb_sync_status ? ` · QB ${String(cost.qb_sync_status).replace(/_/g, " ")}` : ""}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
@@ -1540,7 +1792,12 @@ export function UciCiacRefundsPage() {
 export function UciEnergizationPage() {
   const state = useOperationalRecords("records", false);
   return (
-    <RouteFrame eyebrow="Project operation" title="Energization & Meter Set" body="Track real energization targets and open meter-set and closeout workspaces." badge="Lifecycle data · partial">
+    <RouteFrame
+      eyebrow="Stages 9–10"
+      title="Energization & Meter Set"
+      body="Live inspection-release, meter-set, and closeout state from Track B. Agent 10 inspection-release automation is not enabled — record release in the workspace."
+      badge="Live Stages 9–10"
+    >
       <RouteLoadState {...state} loadingText="Loading energization records…" />
       {!state.projectId ? <AlertBanner tone="info" title="Select a project" detail="Choose an active project to review energization records." /> : null}
       {!state.loading && !state.error && state.projectId ? (
@@ -1551,13 +1808,25 @@ export function UciEnergizationPage() {
             ) : state.records.map((record) => (
               <div key={record.id} className="rounded-lg border p-3">
                 <RecordLink record={record} tab="energization-closeout" />
-                <p className="text-xs text-muted-foreground">Stage {record.current_stage} · target {record.energization_target_date || "not set"} · actual {record.energization_actual_date || "not recorded"}</p>
+                <p className="text-xs text-muted-foreground">
+                  Stage {record.current_stage} · {formatUciLifecycleStateLabel(record.current_stage_state)} · {getLifecycleStageTitle(record.current_stage)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Inspection release {record.inspection_release_received_at || "not recorded"} · Meter set {record.meter_set_scheduled_at || "not scheduled"} · Site readiness {record.site_readiness_confirmed_at || "not confirmed"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Target {record.energization_target_date || "not set"} · Actual {record.energization_actual_date || "not recorded"}
+                  {record.closeout_package_doc_id ? " · Closeout PDF archived" : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatTypicalP50Chip(record, (iso) => iso ? new Date(iso).toLocaleDateString() : "—") || "Typical (P50) not computed yet"}
+                </p>
               </div>
             ))}
           </div>
         </Panel>
       ) : null}
-      <AlertBanner tone="default" title="Use the record workspace" detail="Inspection release, meter-set choreography, and closeout PDF live on the Energization & closeout tab." />
+      <AlertBanner tone="default" title="Use the record workspace" detail="Inspection release, meter-set choreography, and closeout PDF live on the Energization & closeout tab. Miss Utility 811 automation is not enabled." />
     </RouteFrame>
   );
 }

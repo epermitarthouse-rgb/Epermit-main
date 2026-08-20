@@ -160,5 +160,18 @@ describe("uci-needs-attention.util", () => {
       }),
       true,
     );
+    assert.equal(
+      isActionableNeedsAttentionCommunication({
+        direction: "inbound",
+        classification: "class_of_service",
+        classification_confidence: 0.95,
+        needs_human_attention: true,
+        agent_processed_metadata: {
+          stage_6_auto_completed: true,
+          stage_6_cos: { auto_completed: true, review_status: "approved" },
+        },
+      }),
+      false,
+    );
   });
 });

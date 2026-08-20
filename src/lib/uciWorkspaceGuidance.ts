@@ -89,6 +89,31 @@ export function describeCoordinationStatus(opts: {
   return `This project is currently in Stage ${stage}: ${title}.`;
 }
 
+/** Operator chip for persisted P50 — never invents a date. */
+export function formatTypicalP50Chip(
+  record: {
+    predicted_p50_date?: string | null;
+    prediction_baseline_source?: string | null;
+  },
+  formatDateOnly: (iso: string | null | undefined) => string,
+): string | null {
+  if (!record.predicted_p50_date) return null;
+  const date = formatDateOnly(record.predicted_p50_date);
+  const source = String(record.prediction_baseline_source || "");
+  if (source === "operator_override") return `Typical (P50) ${date} · operator override`;
+  if (source && source !== "historical") return `Typical (P50) ${date} · fallback`;
+  return `Typical (P50) ${date}`;
+}
+
+/** Operator chip for persisted P90. */
+export function formatConservativeP90Chip(
+  record: { predicted_p90_date?: string | null },
+  formatDateOnly: (iso: string | null | undefined) => string,
+): string | null {
+  if (!record.predicted_p90_date) return null;
+  return `Conservative (P90) ${formatDateOnly(record.predicted_p90_date)}`;
+}
+
 export function getWorkflowGroupProgress(
   stageRange: [number, number] | null | undefined,
   currentStage: number,

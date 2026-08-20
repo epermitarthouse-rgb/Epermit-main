@@ -44,9 +44,21 @@ describe("UCI D5 keyword classifier", () => {
     assert.equal(result.needs_human_attention, true);
   });
 
-  it("does not invent categories outside the enum", () => {
-    const result = classifyCommunicationText("meter set scheduled", "please confirm date");
-    assert.ok(UCI_COMMUNICATION_CATEGORIES.includes(result.classification));
+  it("classifies Highland Springs acknowledgment fixture as acknowledgment", () => {
+    const { readFileSync } = require("node:fs");
+    const { join } = require("node:path");
+    const eml = readFileSync(
+      join(__dirname, "../fixtures/track-b/emails/highland-springs-acknowledgment.eml"),
+      "utf8",
+    );
+    const subject = eml.match(/^Subject: (.*)$/m)?.[1] || "";
+    const body = eml.split(/\n\n/).slice(1).join("\n\n");
+    const result = classifyCommunicationText(subject, body);
+    assert.equal(result.classification, "acknowledgment");
+    assert.ok(result.classification_confidence >= 0.75);
+    assert.equal(result.needs_human_attention, false);
+    assert.match(String(result.extracted_fields.utility_project_manager || ""), /Jordan Hale/);
+    assert.match(String(result.extracted_fields.utility_ticket_number || ""), /DE-VA-451497|LC[- ]?451497/);
   });
 });
 
