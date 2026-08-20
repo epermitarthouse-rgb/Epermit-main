@@ -643,6 +643,12 @@ export default function UciDashboard() {
   const [agentOpsError, setAgentOpsError] = useState<string | null>(null);
   const [meterSetBusy, setMeterSetBusy] = useState(false);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
+  const [closeoutPdfOpenBusy, setCloseoutPdfOpenBusy] = useState(false);
+  const [closeoutPdfDocument, setCloseoutPdfDocument] = useState<{
+    id: string;
+    file_name: string;
+    file_path: string;
+  } | null>(null);
   const [lifecycleStatus, setLifecycleStatus] = useState<UciLifecycleStatus | null>(null);
   const [portfolio, setPortfolio] = useState<UciPortfolioViewResponse | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
@@ -1849,6 +1855,25 @@ export default function UciDashboard() {
       setLifecycleStatus(null);
     }
     await refreshCoordination();
+    const closeoutDocId = d.record?.closeout_package_doc_id;
+    if (closeoutDocId) {
+      const { data, error } = await supabase
+        .from("project_documents")
+        .select("id, file_name, file_path")
+        .eq("id", closeoutDocId)
+        .maybeSingle();
+      if (!error && data?.file_path) {
+        setCloseoutPdfDocument({
+          id: String(data.id),
+          file_name: String(data.file_name || "uci-closeout-package.pdf"),
+          file_path: String(data.file_path),
+        });
+      } else {
+        setCloseoutPdfDocument(null);
+      }
+    } else {
+      setCloseoutPdfDocument(null);
+    }
   };
 
   const handleApplyLifecycleProposal = async () => {
@@ -1908,6 +1933,78 @@ export default function UciDashboard() {
       toast.error(msg);
     } finally {
       setCosBusy(false);
+    }
+  };
+
+  const refreshCloseoutPdfDocument = useCallback(async () => {
+    const docId = detail?.record?.closeout_package_doc_id;
+    if (!docId) {
+      setCloseoutPdfDocument(null);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("project_documents")
+      .select("id, file_name, file_path")
+      .eq("id", docId)
+      .maybeSingle();
+    if (error) {
+      console.warn("Failed to load closeout PDF document", error.message);
+      setCloseoutPdfDocument(null);
+      return;
+    }
+    if (!data?.file_path) {
+      setCloseoutPdfDocument(null);
+      return;
+    }
+    setCloseoutPdfDocument({
+      id: String(data.id),
+      file_name: String(data.file_name || "uci-closeout-package.pdf"),
+      file_path: String(data.file_path),
+    });
+  }, [detail?.record?.closeout_package_doc_id]);
+
+  useEffect(() => {
+    void refreshCloseoutPdfDocument();
+  }, [refreshCloseoutPdfDocument, detailId]);
+
+  const handleOpenCloseoutPdf = async () => {
+    const docId = detail?.record?.closeout_package_doc_id;
+    if (!docId) {
+      toast.error("Closeout PDF is not available yet");
+      return;
+    }
+    setCloseoutPdfOpenBusy(true);
+    try {
+      let filePath = closeoutPdfDocument?.file_path;
+      let fileName = closeoutPdfDocument?.file_name;
+      if (!filePath) {
+        const { data, error } = await supabase
+          .from("project_documents")
+          .select("id, file_name, file_path")
+          .eq("id", docId)
+          .maybeSingle();
+        if (error || !data?.file_path) {
+          throw new Error(error?.message || "Closeout PDF document record not found");
+        }
+        filePath = String(data.file_path);
+        fileName = String(data.file_name || "uci-closeout-package.pdf");
+        setCloseoutPdfDocument({
+          id: String(data.id),
+          file_name: fileName,
+          file_path: filePath,
+        });
+      }
+      const { data: signed, error: signedError } = await supabase.storage
+        .from("project-documents")
+        .createSignedUrl(filePath, 3600);
+      if (signedError || !signed?.signedUrl) {
+        throw new Error(signedError?.message || "Failed to create download link");
+      }
+      window.open(signed.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Failed to open closeout PDF"));
+    } finally {
+      setCloseoutPdfOpenBusy(false);
     }
   };
 
@@ -4828,6 +4925,9 @@ export default function UciDashboard() {
                         "closeout",
                       )
                     }
+                    onOpenCloseoutPdf={() => void handleOpenCloseoutPdf()}
+                    closeoutPdfOpenBusy={closeoutPdfOpenBusy}
+                    closeoutPdfFileName={closeoutPdfDocument?.file_name ?? null}
                     onCompleteStage10={() =>
                       void runLifecycleAction(
                         () => completeCoordinationStage(detailId!, 10),

@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { CoordinationCommunication, CoordinationMilestone, CoordinationRecord } from "@/types/uci";
 import {
+  deriveCloseoutPdfInfo,
   deriveMeterSetCloseoutActionState,
   getCloseoutArtifactEvidence,
   hasCloseoutArtifactOnRecord,
@@ -44,6 +45,16 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.match(panelSource, /utility_confirmation_doc_id/);
     assert.match(panelSource, /Received ✓/);
     assert.doesNotMatch(panelSource, /artifacts\[key\] \? "on file"/);
+  });
+
+  it("exposes a visible closeout PDF open action beside archived status", () => {
+    assert.match(panelSource, /View closeout PDF/);
+    assert.match(panelSource, /onOpenCloseoutPdf/);
+    assert.match(panelSource, /closeoutPdfFileName/);
+    assert.match(dashboardSource, /onOpenCloseoutPdf=\{\(\) => void handleOpenCloseoutPdf\(\)\}/);
+    assert.match(dashboardSource, /closeout_package_doc_id/);
+    assert.match(dashboardSource, /project_documents/);
+    assert.match(dashboardSource, /createSignedUrl/);
   });
 });
 
@@ -112,5 +123,32 @@ describe("deriveMeterSetCloseoutActionState", () => {
     assert.equal(state.artifacts.utility_confirmation, true);
     assert.equal(state.artifacts.final_meter_reading, true);
     assert.equal(state.artifacts.commissioning_signoff, false);
+  });
+
+  it("derives closeout PDF document id and archived filename from record metadata", () => {
+    const record = {
+      ...baseRecord,
+      closeout_package_doc_id: "doc-closeout-1",
+      metadata: {
+        uci_closeout_package: {
+          document_id: "doc-closeout-1",
+          generated_at: "2026-09-04T10:00:00.000Z",
+        },
+      },
+    } as CoordinationRecord;
+
+    const info = deriveCloseoutPdfInfo(record, "uci-closeout-rec-1.pdf");
+    assert.equal(info.documentId, "doc-closeout-1");
+    assert.equal(info.generatedAt, "2026-09-04T10:00:00.000Z");
+    assert.equal(info.fileName, "uci-closeout-rec-1.pdf");
+    assert.equal(info.isArchived, true);
+
+    const state = deriveMeterSetCloseoutActionState({
+      record,
+      closeoutPdfFileName: "uci-closeout-rec-1.pdf",
+    });
+    assert.equal(state.closeoutPdfGenerated, true);
+    assert.equal(state.closeoutPdfDocumentId, "doc-closeout-1");
+    assert.equal(state.closeoutPdfFileName, "uci-closeout-rec-1.pdf");
   });
 });

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, Eye, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   UCI_COMMUNICATION_CATEGORIES,
@@ -1771,16 +1771,37 @@ export function meterSetNoShowRecorded(record: CoordinationRecord | null | undef
   return meter.no_show === true && String(meter.last_outcome || "") === "no_show";
 }
 
+export function deriveCloseoutPdfInfo(
+  record: CoordinationRecord | null | undefined,
+  archivedFileName?: string | null,
+) {
+  const closeoutPackage = asMetaRecord(asMetaRecord(record?.metadata).uci_closeout_package);
+  const documentId =
+    record?.closeout_package_doc_id ||
+    (typeof closeoutPackage.document_id === "string" ? closeoutPackage.document_id : null);
+  const generatedAt =
+    typeof closeoutPackage.generated_at === "string" ? closeoutPackage.generated_at : null;
+  const fallbackFileName = record?.id ? `uci-closeout-${String(record.id).slice(0, 8)}.pdf` : null;
+
+  return {
+    documentId,
+    generatedAt,
+    fileName: archivedFileName || fallbackFileName,
+    isArchived: Boolean(documentId),
+  };
+}
+
 export function deriveMeterSetCloseoutActionState(params: {
   record: CoordinationRecord | null | undefined;
   milestones?: CoordinationMilestone[];
   communications?: CoordinationCommunication[];
+  closeoutPdfFileName?: string | null;
 }) {
-  const { record, milestones = [], communications = [] } = params;
+  const { record, milestones = [], communications = [], closeoutPdfFileName = null } = params;
   const completedMilestone = milestones.find(
     (m) => m.milestone_type === "meter_set" && m.status === "completed",
   );
-  const closeoutPackage = asMetaRecord(asMetaRecord(record?.metadata).uci_closeout_package);
+  const closeoutPdf = deriveCloseoutPdfInfo(record, closeoutPdfFileName);
 
   return {
     inspectionRelease: Boolean(record?.inspection_release_received_at),
@@ -1795,8 +1816,10 @@ export function deriveMeterSetCloseoutActionState(params: {
     noShowRecorded: meterSetNoShowRecorded(record),
     energizationCaptured: Boolean(record?.energization_actual_date),
     energizationActualDate: record?.energization_actual_date ?? null,
-    closeoutPdfGenerated: Boolean(record?.closeout_package_doc_id),
-    closeoutPdfGeneratedAt: (closeoutPackage.generated_at as string | null) ?? null,
+    closeoutPdfGenerated: closeoutPdf.isArchived,
+    closeoutPdfDocumentId: closeoutPdf.documentId,
+    closeoutPdfFileName: closeoutPdf.fileName,
+    closeoutPdfGeneratedAt: closeoutPdf.generatedAt,
     artifacts: Object.fromEntries(
       CLOSEOUT_ARTIFACT_KEYS.map((key) => [key, hasCloseoutArtifactOnRecord(record, key)]),
     ) as Record<CloseoutArtifactKey, boolean>,
@@ -1880,7 +1903,10 @@ export function MeterSetCloseoutPanel({
   onMarkEnergized,
   onResolveDateConflict,
   onGenerateCloseout,
+  onOpenCloseoutPdf,
   onCompleteStage10,
+  closeoutPdfOpenBusy = false,
+  closeoutPdfFileName = null,
   mutedClass,
   sectionTitleClass,
   toolbarOutlineButtonClass,
@@ -1908,7 +1934,10 @@ export function MeterSetCloseoutPanel({
   onMarkEnergized: (actualDate: string) => void;
   onResolveDateConflict: () => void;
   onGenerateCloseout: () => void;
+  onOpenCloseoutPdf?: () => void;
   onCompleteStage10: () => void;
+  closeoutPdfOpenBusy?: boolean;
+  closeoutPdfFileName?: string | null;
 }) {
   const [scheduledDate, setScheduledDate] = useState("");
   const [energizeDate, setEnergizeDate] = useState("");
@@ -1918,7 +1947,12 @@ export function MeterSetCloseoutPanel({
   const meter = lifecycleStatus?.meter_set;
   const closeout = lifecycleStatus?.closeout;
   const rollup = lifecycleStatus?.project_rollup;
-  const actionState = deriveMeterSetCloseoutActionState({ record, milestones, communications });
+  const actionState = deriveMeterSetCloseoutActionState({
+    record,
+    milestones,
+    communications,
+    closeoutPdfFileName,
+  });
   const allowDateReconfirm = actionState.noShowRecorded;
 
   useEffect(() => {
@@ -2141,13 +2175,35 @@ export function MeterSetCloseoutPanel({
                     · {formatWhen(actionState.closeoutPdfGeneratedAt)}
                   </span>
                 ) : null}
+                {actionState.closeoutPdfGenerated && actionState.closeoutPdfFileName ? (
+                  <span className={cn("ml-1", mutedClass)}>· {actionState.closeoutPdfFileName}</span>
+                ) : null}
               </span>
-              {actionState.closeoutPdfGenerated ? (
-                <Badge variant="secondary" className="text-[10px]">
-                  <CheckCircle2 className="mr-1 inline h-3 w-3" />
-                  Archived ✓
-                </Badge>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {actionState.closeoutPdfGenerated && onOpenCloseoutPdf ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className={toolbarOutlineButtonClass}
+                    disabled={closeoutPdfOpenBusy}
+                    onClick={onOpenCloseoutPdf}
+                  >
+                    {closeoutPdfOpenBusy ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Eye className="mr-1 h-3 w-3 shrink-0" />
+                    )}
+                    View closeout PDF
+                  </Button>
+                ) : null}
+                {actionState.closeoutPdfGenerated ? (
+                  <Badge variant="secondary" className="text-[10px]">
+                    <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                    Archived ✓
+                  </Badge>
+                ) : null}
+              </div>
             </li>
           </ul>
           <div className="flex flex-wrap items-end gap-2">
