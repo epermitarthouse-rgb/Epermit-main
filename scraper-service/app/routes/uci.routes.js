@@ -218,7 +218,9 @@ const {
   completeStage10IfReady,
   maybeMarkProjectComplete,
   closeoutStatus,
+  resolveCloseoutPdfForOpen,
 } = require("../services/uci/uci-energization-closeout.service.js");
+const { rejectMeterSetSoftFailure } = require("../services/uci/uci-meter-set-persistence.service.js");
 const { evaluateLifecycleGuards } = require("../services/uci/uci-lifecycle-guards.service.js");
 const { listRecordNeedsAttention } = require("../services/uci/uci-needs-attention.util.js");
 const { runOpsLifecycleSweep } = require("../services/uci/uci-lifecycle-scheduler.service.js");
@@ -4268,6 +4270,7 @@ function createUciRouter(opts) {
         write: true,
       });
       const result = await requestMeterSet(supabase, { coordinationRecordId: coordinationId });
+      rejectMeterSetSoftFailure(result, "Meter-set request");
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -4298,6 +4301,7 @@ function createUciRouter(opts) {
         scheduledDate: body.scheduled_date,
         userId: user.id,
       });
+      rejectMeterSetSoftFailure(result, "Meter-set date confirmation");
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -4326,6 +4330,7 @@ function createUciRouter(opts) {
         coordinationRecordId: coordinationId,
         userId: user.id,
       });
+      rejectMeterSetSoftFailure(result, "Site readiness confirmation");
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -4358,6 +4363,7 @@ function createUciRouter(opts) {
         rescheduleDate: body.reschedule_date,
         userId: user.id,
       });
+      rejectMeterSetSoftFailure(result, "Meter-set outcome");
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -4514,11 +4520,44 @@ function createUciRouter(opts) {
         hash: result.pdf.hash,
         sections: result.sections,
         reused: result.archived.reused === true,
+        file_path: result.archived.file_path ?? null,
+        file_name: result.archived.file_name ?? null,
         record: result.record,
       });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/closeout/pdf/open", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+      });
+      const opened = await resolveCloseoutPdfForOpen(supabase, {
+        coordinationRecordId: coordinationId,
+      });
+      const safeName = opened.fileName.replace(/["\r\n]/g, "_");
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Type", opened.contentType || "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      return res.send(opened.buffer);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      return res.status(s.httpStatus).json(s.body);
     }
   });
 

@@ -6,6 +6,10 @@
  */
 
 const { BLOCKED_REASON_CODES } = require("./uci-lifecycle-constants.js");
+const {
+  resolveMeterSetScheduledAt,
+  resolveSiteReadinessConfirmedAt,
+} = require("./uci-meter-set-persistence.service.js");
 
 /**
  * Stage 7 eligibility — Stage 6 COMPLETED + utility-issued COS evidence date.
@@ -141,8 +145,8 @@ function hasMeterSetMilestone(milestones) {
 function canCompleteStage9(record, milestones = []) {
   return Boolean(
     record?.inspection_release_received_at &&
-      record?.meter_set_scheduled_at &&
-      record?.site_readiness_confirmed_at &&
+      resolveMeterSetScheduledAt(record, milestones) &&
+      resolveSiteReadinessConfirmedAt(record) &&
       hasMeterSetMilestone(milestones),
   );
 }

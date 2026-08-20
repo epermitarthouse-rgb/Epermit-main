@@ -7,6 +7,7 @@ const {
   missingCloseoutArtifacts,
   maybeMarkProjectComplete,
   attachCloseoutArtifact,
+  resolveCloseoutPdfStoragePath,
 } = require("../app/services/uci/uci-energization-closeout.service.js");
 const { createTrackBMockSupabase } = require("./helpers/uci-track-b-mock.js");
 
@@ -71,6 +72,26 @@ describe("Track B Agent 12 closeout", () => {
     assert.equal(
       first.record.metadata.closeout_artifacts.utility_confirmation.captured_at,
       "2026-09-01T00:00:00.000Z",
+    );
+  });
+
+  it("prefers project document storage path and falls back to metadata canonical path", () => {
+    const record = {
+      metadata: {
+        uci_closeout_package: {
+          storage_path: "uci/unconfigured/proj-1/coord-1/uci/closeout-coord-1/uci-closeout-abc.pdf",
+        },
+      },
+    };
+    assert.equal(
+      resolveCloseoutPdfStoragePath(record, {
+        file_path: "uci/unconfigured/proj-1/coord-1/uci/closeout-coord-1/stored.pdf",
+      }),
+      "uci/unconfigured/proj-1/coord-1/uci/closeout-coord-1/stored.pdf",
+    );
+    assert.equal(
+      resolveCloseoutPdfStoragePath(record, null),
+      "uci/unconfigured/proj-1/coord-1/uci/closeout-coord-1/uci-closeout-abc.pdf",
     );
   });
 

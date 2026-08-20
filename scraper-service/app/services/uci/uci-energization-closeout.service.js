@@ -21,6 +21,7 @@ const {
   hasCommissioningSignOff,
 } = require("./uci-lifecycle-guards.service.js");
 const { BLOCKED_REASON_CODES, UCI_LIFECYCLE_EVENTS } = require("./uci-lifecycle-constants.js");
+const { UCI_DOCUMENTS_STORAGE_BUCKET } = require("./uci-document-storage.service.js");
 
 function asMeta(record) {
   if (record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)) {
@@ -205,6 +206,25 @@ async function attachCloseoutArtifact(supabase, params) {
   });
 }
 
+function resolveStoredCloseoutStoragePath(stored) {
+  const entry = stored?.fileEntry;
+  if (!entry || typeof entry !== "object") return null;
+  if (String(entry.storageStatus || "") !== "stored") return null;
+  const storagePath = String(entry.storagePath || "").trim();
+  return storagePath || null;
+}
+
+function resolveCloseoutPdfStoragePath(record, projectDocument = null) {
+  const docPath = projectDocument?.file_path ? String(projectDocument.file_path).trim() : "";
+  if (docPath) return docPath;
+  const closeout = asMeta(record).uci_closeout_package;
+  const packagePath =
+    closeout && typeof closeout === "object" && !Array.isArray(closeout)
+      ? String(/** @type {Record<string, unknown>} */ (closeout).storage_path || "").trim()
+      : "";
+  return packagePath || null;
+}
+
 async function archiveCloseoutPdf(supabase, params) {
   const { record, project, buffer, hash, userId = null } = params;
   let stored = { fileEntry: {}, storageAction: "skipped" };
@@ -222,15 +242,29 @@ async function archiveCloseoutPdf(supabase, params) {
     });
   } catch (err) {
     stored = {
-      fileEntry: { storagePath: `uci/closeout/${record.id}/${hash}.pdf` },
+      fileEntry: { storageStatus: "failed", storageError: err instanceof Error ? err.message : String(err) },
       storageAction: "failed",
       error: err instanceof Error ? err.message : String(err),
     };
   }
 
+  const storagePath = resolveStoredCloseoutStoragePath(stored);
+  const archivedFileName = String(
+    stored.fileEntry?.fileName || `uci-closeout-${hash.slice(0, 12)}.pdf`,
+  );
+  if (!storagePath) {
+    return {
+      document_id: null,
+      reused: false,
+      storage: stored,
+      error: stored.error || "closeout_storage_failed",
+      hash,
+    };
+  }
+
   const { data: existingDoc } = await supabase
     .from("project_documents")
-    .select("id, description")
+    .select("id, description, file_path, file_name")
     .eq("project_id", record.project_id)
     .eq("document_type", "uci_closeout_package")
     .limit(20);
@@ -239,7 +273,34 @@ async function archiveCloseoutPdf(supabase, params) {
     (row) => String(row.description || "").includes(hash),
   );
   if (already?.id) {
-    return { document_id: already.id, reused: true, storage: stored };
+    const { error: updateError } = await supabase
+      .from("project_documents")
+      .update({
+        file_path: storagePath,
+        file_name: archivedFileName,
+        file_size: buffer.length,
+        file_type: "application/pdf",
+      })
+      .eq("id", already.id);
+    if (updateError) {
+      return {
+        document_id: already.id,
+        reused: true,
+        storage: stored,
+        error: updateError.message,
+        hash,
+        file_path: storagePath,
+        file_name: archivedFileName,
+      };
+    }
+    return {
+      document_id: already.id,
+      reused: true,
+      storage: stored,
+      hash,
+      file_path: storagePath,
+      file_name: archivedFileName,
+    };
   }
 
   const { data: inserted, error } = await supabase
@@ -247,8 +308,8 @@ async function archiveCloseoutPdf(supabase, params) {
     .insert({
       project_id: record.project_id,
       user_id: userId || record.user_id || project.user_id,
-      file_name: `uci-closeout-${String(record.id).slice(0, 8)}.pdf`,
-      file_path: stored.fileEntry?.storagePath || `uci/closeout/${record.id}/${hash}.pdf`,
+      file_name: archivedFileName,
+      file_path: storagePath,
       file_size: buffer.length,
       file_type: "application/pdf",
       document_type: "uci_closeout_package",
@@ -258,9 +319,24 @@ async function archiveCloseoutPdf(supabase, params) {
     .single();
 
   if (error) {
-    return { document_id: null, reused: false, storage: stored, error: error.message, hash };
+    return {
+      document_id: null,
+      reused: false,
+      storage: stored,
+      error: error.message,
+      hash,
+      file_path: storagePath,
+      file_name: archivedFileName,
+    };
   }
-  return { document_id: inserted.id, reused: false, storage: stored, hash };
+  return {
+    document_id: inserted.id,
+    reused: false,
+    storage: stored,
+    hash,
+    file_path: storagePath,
+    file_name: archivedFileName,
+  };
 }
 
 /**
@@ -313,14 +389,27 @@ async function generateAndArchiveCloseout(supabase, params) {
     userId,
   });
 
+  if (!archived.document_id || !archived.file_path) {
+    const err = new Error(
+      archived.error
+        ? `Closeout PDF storage failed: ${archived.error}`
+        : "Closeout PDF could not be archived to project storage",
+    );
+    err.statusCode = 500;
+    err.code = "CLOSEOUT_STORAGE_FAILED";
+    throw err;
+  }
+
   const { record: updated } = await updateCoordinationRecordFields(supabase, {
     coordinationRecordId,
-    fields: archived.document_id ? { closeout_package_doc_id: archived.document_id } : {},
+    fields: { closeout_package_doc_id: archived.document_id },
     metadataPatch: {
       uci_closeout_package: {
         hash: pdf.hash,
         sections: pdf.sections,
         document_id: archived.document_id,
+        storage_path: archived.file_path,
+        file_name: archived.file_name,
         generated_at: new Date().toISOString(),
       },
     },
@@ -412,6 +501,73 @@ function closeoutStatus(record, costs = []) {
   return { status: "ready_to_complete_stage_10", missing: [], actions: ["complete_stage_10"] };
 }
 
+/**
+ * Resolve the stored closeout PDF for authorized inline viewing.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function resolveCloseoutPdfForOpen(supabase, params) {
+  const { coordinationRecordId } = params;
+  const record = await loadRecord(supabase, coordinationRecordId);
+  if (!record) {
+    const err = new Error("Coordination record not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  const docId = record.closeout_package_doc_id;
+  if (!docId) {
+    const err = new Error("Closeout PDF is not archived for this record");
+    err.statusCode = 404;
+    err.code = "CLOSEOUT_PDF_NOT_FOUND";
+    throw err;
+  }
+  const { data: projectDocument, error } = await supabase
+    .from("project_documents")
+    .select("id, project_id, file_name, file_path, file_type, document_type")
+    .eq("id", docId)
+    .eq("project_id", record.project_id)
+    .maybeSingle();
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to load closeout PDF document"), {
+      statusCode: 500,
+      code: "CLOSEOUT_DOCUMENT_LOOKUP_FAILED",
+    });
+  }
+  if (!projectDocument) {
+    const err = new Error("Closeout PDF document record not found");
+    err.statusCode = 404;
+    err.code = "CLOSEOUT_PDF_NOT_FOUND";
+    throw err;
+  }
+  const storagePath = resolveCloseoutPdfStoragePath(record, projectDocument);
+  if (!storagePath) {
+    const err = new Error("Closeout PDF storage path is missing");
+    err.statusCode = 404;
+    err.code = "CLOSEOUT_PDF_PATH_MISSING";
+    throw err;
+  }
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from(UCI_DOCUMENTS_STORAGE_BUCKET)
+    .download(storagePath);
+  if (downloadError || !blob) {
+    const err = new Error(downloadError?.message || "Closeout PDF object not found in storage");
+    err.statusCode = 404;
+    err.code = "CLOSEOUT_PDF_OBJECT_NOT_FOUND";
+    throw err;
+  }
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const fileName = String(projectDocument.file_name || "uci-closeout-package.pdf").replace(/["\r\n]/g, "_");
+  return {
+    buffer,
+    fileName,
+    contentType: String(projectDocument.file_type || "application/pdf"),
+    storagePath,
+    documentId: String(projectDocument.id),
+  };
+}
+
 module.exports = {
   captureEnergizationDate,
   resolveEnergizationDateConflict,
@@ -422,4 +578,6 @@ module.exports = {
   missingCloseoutArtifacts,
   closeoutStatus,
   loadBundle,
+  resolveCloseoutPdfForOpen,
+  resolveCloseoutPdfStoragePath,
 };

@@ -124,6 +124,7 @@ import {
   markCoordinationEnergized,
   resolveEnergizationDateConflict,
   generateCloseoutPackage,
+  openCloseoutPdf,
   rejectLifecycleProposal,
   removeApplicationPackageDocumentMapping,
   reclassifyCommunication,
@@ -1968,39 +1969,21 @@ export default function UciDashboard() {
   }, [refreshCloseoutPdfDocument, detailId]);
 
   const handleOpenCloseoutPdf = async () => {
-    const docId = detail?.record?.closeout_package_doc_id;
-    if (!docId) {
+    if (!detailId) {
       toast.error("Closeout PDF is not available yet");
       return;
     }
     setCloseoutPdfOpenBusy(true);
     try {
-      let filePath = closeoutPdfDocument?.file_path;
-      let fileName = closeoutPdfDocument?.file_name;
-      if (!filePath) {
-        const { data, error } = await supabase
-          .from("project_documents")
-          .select("id, file_name, file_path")
-          .eq("id", docId)
-          .maybeSingle();
-        if (error || !data?.file_path) {
-          throw new Error(error?.message || "Closeout PDF document record not found");
-        }
-        filePath = String(data.file_path);
-        fileName = String(data.file_name || "uci-closeout-package.pdf");
-        setCloseoutPdfDocument({
-          id: String(data.id),
-          file_name: fileName,
-          file_path: filePath,
-        });
-      }
-      const { data: signed, error: signedError } = await supabase.storage
-        .from("project-documents")
-        .createSignedUrl(filePath, 3600);
-      if (signedError || !signed?.signedUrl) {
-        throw new Error(signedError?.message || "Failed to create download link");
-      }
-      window.open(signed.signedUrl, "_blank", "noopener,noreferrer");
+      const { blob, fileName } = await openCloseoutPdf(detailId);
+      const objectUrl = URL.createObjectURL(blob);
+      setCloseoutPdfDocument((current) => ({
+        id: current?.id || detail?.record?.closeout_package_doc_id || detailId,
+        file_name: fileName,
+        file_path: current?.file_path || "",
+      }));
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Failed to open closeout PDF"));
     } finally {

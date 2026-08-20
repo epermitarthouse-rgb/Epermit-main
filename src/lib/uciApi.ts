@@ -2619,6 +2619,31 @@ export async function generateCloseoutPackage(
   );
 }
 
+export async function openCloseoutPdf(
+  coordinationId: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const path = `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/pdf/open`;
+  const res = await uciAuthenticatedFetch(
+    path,
+    {},
+    { retryOnTransportFailure: false, timeoutMs: 30_000 },
+  );
+  if (!res.ok) {
+    const err = await parseJsonSafe(res);
+    throw mapUciHttpError(
+      res.status,
+      err,
+      "Failed to open closeout PDF",
+      res.headers.get(UCI_REQUEST_ID_HEADER),
+    );
+  }
+  const disposition = res.headers.get("content-disposition") ?? "";
+  return {
+    blob: await res.blob(),
+    fileName: disposition.match(/filename="([^"]+)"/i)?.[1] || "uci-closeout-package.pdf",
+  };
+}
+
 export async function getProjectPortfolioView(
   projectId: string,
 ): Promise<UciPortfolioViewResponse> {

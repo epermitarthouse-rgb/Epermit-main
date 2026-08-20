@@ -14,6 +14,8 @@ import {
   meterSetCrewCompleted,
   meterSetNoShowRecorded,
   resolveCloseoutArtifactEvidence,
+  resolveMeterSetScheduledAt,
+  resolveSiteReadinessConfirmedAt,
 } from "./UciD13WorkflowPanels.tsx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,14 +59,13 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.doesNotMatch(panelSource, /pendingLabel="Record received"/);
   });
 
-  it("exposes a visible closeout PDF open action beside archived status", () => {
+  it("opens closeout PDF through the authenticated UCI API", () => {
     assert.match(panelSource, /View closeout PDF/);
     assert.match(panelSource, /onOpenCloseoutPdf/);
     assert.match(panelSource, /closeoutPdfFileName/);
     assert.match(dashboardSource, /onOpenCloseoutPdf=\{\(\) => void handleOpenCloseoutPdf\(\)\}/);
-    assert.match(dashboardSource, /closeout_package_doc_id/);
-    assert.match(dashboardSource, /project_documents/);
-    assert.match(dashboardSource, /createSignedUrl/);
+    assert.match(dashboardSource, /openCloseoutPdf/);
+    assert.doesNotMatch(dashboardSource, /createSignedUrl\(filePath/);
   });
 });
 
@@ -143,6 +144,8 @@ describe("deriveMeterSetCloseoutActionState", () => {
         uci_closeout_package: {
           document_id: "doc-closeout-1",
           generated_at: "2026-09-04T10:00:00.000Z",
+          file_name: "uci-closeout-abc123.pdf",
+          storage_path: "uci/unconfigured/proj-1/coord-1/uci/closeout-rec-1/uci-closeout-abc123.pdf",
         },
       },
     } as CoordinationRecord;
@@ -153,6 +156,12 @@ describe("deriveMeterSetCloseoutActionState", () => {
     assert.equal(info.fileName, "uci-closeout-rec-1.pdf");
     assert.equal(info.isArchived, true);
 
+    const metadataOnly = deriveCloseoutPdfInfo({
+      ...record,
+      closeout_package_doc_id: "doc-closeout-1",
+    });
+    assert.equal(metadataOnly.fileName, "uci-closeout-abc123.pdf");
+
     const state = deriveMeterSetCloseoutActionState({
       record,
       closeoutPdfFileName: "uci-closeout-rec-1.pdf",
@@ -160,6 +169,25 @@ describe("deriveMeterSetCloseoutActionState", () => {
     assert.equal(state.closeoutPdfGenerated, true);
     assert.equal(state.closeoutPdfDocumentId, "doc-closeout-1");
     assert.equal(state.closeoutPdfFileName, "uci-closeout-rec-1.pdf");
+  });
+
+  it("resolves Stage 9 scheduled/readiness from metadata when columns are absent", () => {
+    const record = {
+      ...baseRecord,
+      metadata: {
+        uci_meter_set: { scheduled_date: "2026-09-12" },
+        site_readiness: { confirmed_at: "2026-09-11T10:00:00.000Z" },
+      },
+    } as CoordinationRecord;
+    const milestones = [
+      { milestone_type: "meter_set", status: "scheduled", target_date: "2026-09-12" },
+    ] as CoordinationMilestone[];
+
+    assert.ok(resolveMeterSetScheduledAt(record, milestones));
+    assert.ok(resolveSiteReadinessConfirmedAt(record));
+    const state = deriveMeterSetCloseoutActionState({ record, milestones });
+    assert.equal(state.meterSetScheduled, true);
+    assert.equal(state.siteReadinessConfirmed, true);
   });
 });
 

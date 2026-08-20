@@ -2224,6 +2224,39 @@ export function meterSetNoShowRecorded(record: CoordinationRecord | null | undef
   return meter.no_show === true && String(meter.last_outcome || "") === "no_show";
 }
 
+function toIsoOrNull(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+export function resolveMeterSetScheduledAt(
+  record: CoordinationRecord | null | undefined,
+  milestones: CoordinationMilestone[] = [],
+): string | null {
+  const column = toIsoOrNull(record?.meter_set_scheduled_at);
+  if (column) return column;
+  const meter = asMetaRecord(asMetaRecord(record?.metadata).uci_meter_set);
+  const fromMeta = toIsoOrNull(meter.scheduled_at) || toIsoOrNull(meter.scheduled_date);
+  if (fromMeta) return fromMeta;
+  const milestone = milestones.find(
+    (m) =>
+      m.milestone_type === "meter_set" &&
+      (m.status === "scheduled" || m.status === "completed"),
+  );
+  return toIsoOrNull(milestone?.target_date);
+}
+
+export function resolveSiteReadinessConfirmedAt(
+  record: CoordinationRecord | null | undefined,
+): string | null {
+  const column = toIsoOrNull(record?.site_readiness_confirmed_at);
+  if (column) return column;
+  const site = asMetaRecord(asMetaRecord(record?.metadata).site_readiness);
+  return toIsoOrNull(site.confirmed_at);
+}
+
 export function deriveCloseoutPdfInfo(
   record: CoordinationRecord | null | undefined,
   archivedFileName?: string | null,
@@ -2234,12 +2267,14 @@ export function deriveCloseoutPdfInfo(
     (typeof closeoutPackage.document_id === "string" ? closeoutPackage.document_id : null);
   const generatedAt =
     typeof closeoutPackage.generated_at === "string" ? closeoutPackage.generated_at : null;
+  const metadataFileName =
+    typeof closeoutPackage.file_name === "string" ? closeoutPackage.file_name : null;
   const fallbackFileName = record?.id ? `uci-closeout-${String(record.id).slice(0, 8)}.pdf` : null;
 
   return {
     documentId,
     generatedAt,
-    fileName: archivedFileName || fallbackFileName,
+    fileName: archivedFileName || metadataFileName || fallbackFileName,
     isArchived: Boolean(documentId),
   };
 }
@@ -2255,15 +2290,17 @@ export function deriveMeterSetCloseoutActionState(params: {
     (m) => m.milestone_type === "meter_set" && m.status === "completed",
   );
   const closeoutPdf = deriveCloseoutPdfInfo(record, closeoutPdfFileName);
+  const meterSetScheduledAt = resolveMeterSetScheduledAt(record, milestones);
+  const siteReadinessConfirmedAt = resolveSiteReadinessConfirmedAt(record);
 
   return {
     inspectionRelease: Boolean(record?.inspection_release_received_at),
     inspectionReleaseAt: record?.inspection_release_received_at ?? null,
     meterSetRequested: hasMeterSetRequestSent(record?.id, communications),
-    meterSetScheduled: Boolean(record?.meter_set_scheduled_at),
-    meterSetScheduledAt: record?.meter_set_scheduled_at ?? null,
-    siteReadinessConfirmed: Boolean(record?.site_readiness_confirmed_at),
-    siteReadinessConfirmedAt: record?.site_readiness_confirmed_at ?? null,
+    meterSetScheduled: Boolean(meterSetScheduledAt),
+    meterSetScheduledAt,
+    siteReadinessConfirmed: Boolean(siteReadinessConfirmedAt),
+    siteReadinessConfirmedAt,
     crewCompleted: meterSetCrewCompleted(milestones),
     crewCompletedAt: completedMilestone?.actual_date ?? completedMilestone?.occurred_at ?? null,
     noShowRecorded: meterSetNoShowRecorded(record),
@@ -2413,6 +2450,8 @@ export function MeterSetCloseoutPanel({
     closeoutPdfFileName,
   });
   const allowDateReconfirm = actionState.noShowRecorded;
+  const meterSetScheduledAt = actionState.meterSetScheduledAt;
+  const siteReadinessConfirmedAt = actionState.siteReadinessConfirmedAt;
 
   useEffect(() => {
     setSiteName(record?.site_contact_name || "");
@@ -2421,10 +2460,10 @@ export function MeterSetCloseoutPanel({
   }, [record?.site_contact_name, record?.site_contact_email, record?.site_contact_phone]);
 
   useEffect(() => {
-    if (record?.meter_set_scheduled_at) {
-      setScheduledDate(String(record.meter_set_scheduled_at).slice(0, 10));
+    if (meterSetScheduledAt) {
+      setScheduledDate(String(meterSetScheduledAt).slice(0, 10));
     }
-  }, [record?.meter_set_scheduled_at]);
+  }, [meterSetScheduledAt]);
 
   useEffect(() => {
     if (record?.energization_actual_date) {
@@ -2462,8 +2501,8 @@ export function MeterSetCloseoutPanel({
         <CardContent className="space-y-2 text-xs">
           <p className={mutedClass}>
             Inspection release {record?.inspection_release_received_at ? formatWhen(record.inspection_release_received_at) : "not recorded"}
-            . Meter set {record?.meter_set_scheduled_at ? formatWhen(record.meter_set_scheduled_at) : "not scheduled"}
-            . Site readiness {record?.site_readiness_confirmed_at ? formatWhen(record.site_readiness_confirmed_at) : "not confirmed"}.
+            . Meter set {meterSetScheduledAt ? formatWhen(meterSetScheduledAt) : "not scheduled"}
+            . Site readiness {siteReadinessConfirmedAt ? formatWhen(siteReadinessConfirmedAt) : "not confirmed"}.
           </p>
           <WorkflowCompletedActionButton
             completed={actionState.inspectionRelease}

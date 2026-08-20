@@ -13,6 +13,10 @@ const { raiseUciAlert } = require("./uci-alerts.service.js");
 const { sendUciOutboundEmail } = require("./uci-outbound-email.service.js");
 const { canCompleteStage9 } = require("./uci-lifecycle-guards.service.js");
 const {
+  resolveMeterSetScheduledAt,
+  resolveSiteReadinessConfirmedAt,
+} = require("./uci-meter-set-persistence.service.js");
+const {
   BLOCKED_REASON_CODES,
   UCI_LIFECYCLE_EVENTS,
   EMAIL_TEMPLATES,
@@ -220,9 +224,20 @@ async function confirmMeterSetDate(supabase, params) {
     throw err;
   }
 
+  const scheduledIso = new Date(scheduledDate).toISOString();
+  const meta = asMeta(record);
+  const priorMeter =
+    meta.uci_meter_set && typeof meta.uci_meter_set === "object" ? meta.uci_meter_set : {};
   const { record: updated } = await updateCoordinationRecordFields(supabase, {
     coordinationRecordId,
-    fields: { meter_set_scheduled_at: new Date(scheduledDate).toISOString() },
+    fields: { meter_set_scheduled_at: scheduledIso },
+    metadataPatch: {
+      uci_meter_set: {
+        ...priorMeter,
+        scheduled_at: scheduledIso,
+        scheduled_date: scheduledDate,
+      },
+    },
     eventName: UCI_LIFECYCLE_EVENTS.METER_SET_SCHEDULED,
     eventPayload: { scheduled_date: scheduledDate },
   });
@@ -317,11 +332,13 @@ async function confirmSiteReadiness(supabase, params) {
   }
   const gate = choreographyBlocked(record);
   if (gate.blocked) return { confirmed: false, ...gate };
-  return updateCoordinationRecordFields(supabase, {
+  const confirmedIso = new Date().toISOString();
+  const { record: updated } = await updateCoordinationRecordFields(supabase, {
     coordinationRecordId,
-    fields: { site_readiness_confirmed_at: new Date().toISOString() },
-    metadataPatch: { site_readiness: { confirmed_at: new Date().toISOString(), confirmed_by: userId } },
+    fields: { site_readiness_confirmed_at: confirmedIso },
+    metadataPatch: { site_readiness: { confirmed_at: confirmedIso, confirmed_by: userId } },
   });
+  return { confirmed: true, record: updated };
 }
 
 /**
@@ -452,14 +469,14 @@ function meterSetStatus(record, milestones = []) {
       actions: gate.reason === "inspection_release_missing" ? ["record_inspection_release"] : [],
     };
   }
-  if (!record.meter_set_scheduled_at) {
+  if (!resolveMeterSetScheduledAt(record, milestones)) {
     return {
       status: "request_or_confirm_date",
       reason: "meter_set_unscheduled",
       actions: record.utility_contact_email ? ["request_meter_set", "confirm_date"] : ["add_utility_pm"],
     };
   }
-  if (!record.site_readiness_confirmed_at) {
+  if (!resolveSiteReadinessConfirmedAt(record)) {
     return {
       status: "awaiting_site_readiness",
       reason: "checklist_pending",
