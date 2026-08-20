@@ -69,8 +69,8 @@ const FIELD_INFO = {
   expeditor_cost: "Any fees paid to expediting services or consultants to help process the permit.",
   description: "A brief summary of the work to be performed (e.g., 'Kitchen remodel with new electrical and plumbing').",
   notes: "Internal notes or reminders about this project. Not shared with the jurisdiction.",
-  client_name: "Billing contact or organization name shown on invoices.",
-  client_email: "Email for the billed client (used for QuickBooks customer matching).",
+  client_name: "Billing contact or organization name shown on invoices and Stage 7 QuickBooks customer matching.",
+  client_email: "Email for the billed client (required for Stage 7 QuickBooks invoice retry when no client name is set).",
   service_type: "Short label for the service line (e.g. Permit management).",
   contract_value: "Total contract amount for billing milestones (separate from estimated construction value).",
   reimbursement_amount: "Expected reimbursable expenses passed through (e.g. agency fees).",
@@ -406,7 +406,7 @@ export function ProjectFormDialog({
       data.total_cost = (permitFee || 0) + (expeditorCost || 0);
     }
 
-    // Billing fields — include only when set on create; allow null clears on edit.
+    // Client + billing fields — include only when set on create; allow null clears on edit.
     const clientName = formData.client_name.trim();
     const clientEmail = formData.client_email.trim();
     const serviceType = formData.service_type.trim();
@@ -817,12 +817,12 @@ export function ProjectFormDialog({
             </div>
           </div>
 
-          {/* Billing (optional) */}
+          {/* Client details (QuickBooks / Stage 7) */}
           <div className="space-y-4 rounded-lg border border-border bg-muted/25 p-4">
             <div>
-              <h3 className="font-tight text-sm font-semibold text-foreground">Billing</h3>
+              <h3 className="font-tight text-sm font-semibold text-foreground">Client details</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Optional fields for invoicing and QuickBooks. Leave blank if not applicable.
+                Used for QuickBooks customer resolution on Stage 7 client invoices. Provide at least one field.
               </p>
             </div>
 
@@ -839,6 +839,7 @@ export function ProjectFormDialog({
                   onBlur={() => handleBlur('client_name')}
                   placeholder="Organization or billed party"
                   className={`bg-background ${errors.client_name ? 'border-destructive' : ''}`}
+                  data-testid="input-client-name"
                 />
                 <FieldError error={errors.client_name} />
               </div>
@@ -857,10 +858,23 @@ export function ProjectFormDialog({
                   onBlur={() => handleBlur('client_email')}
                   placeholder="billing@example.com"
                   className={`bg-background ${errors.client_email ? 'border-destructive' : ''}`}
+                  data-testid="input-client-email"
                 />
                 <FieldError error={errors.client_email} />
               </div>
+            </div>
+          </div>
 
+          {/* Billing (optional) */}
+          <div className="space-y-4 rounded-lg border border-border bg-muted/25 p-4">
+            <div>
+              <h3 className="font-tight text-sm font-semibold text-foreground">Billing</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional contract and reimbursement fields for milestone invoicing. Leave blank if not applicable.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <Label htmlFor="service_type" className="flex items-center">
                   Service type
