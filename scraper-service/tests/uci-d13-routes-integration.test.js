@@ -148,6 +148,9 @@ function makeSupabase(opts = {}) {
           chain._filters[col] = val;
           return chain;
         },
+        limit() {
+          return chain;
+        },
         in() {
           return chain;
         },
@@ -155,10 +158,7 @@ function makeSupabase(opts = {}) {
           return chain;
         },
         order() {
-          const filtered = rows.filter((r) =>
-            Object.entries(chain._filters).every(([k, v]) => r[k] === v),
-          );
-          return Promise.resolve({ data: filtered, error: null });
+          return chain;
         },
         then(resolve, reject) {
           const filtered = rows.filter((r) =>
