@@ -21,6 +21,7 @@ const {
   extractPdfPagesWithAnalysis,
   processDocumentPagesFromAnalysis,
   classifyPdfPage,
+  LOW_TEXT_THRESHOLD,
 } = require("./uci-pdf-page-analysis.service.js");
 const { fallbackProviderStatus, getDocumentFallbackConfig } = require("./uci-document-fallback-config.service.js");
 const { buildRoleClassificationHaystack } = require("./uci-document-classification.service.js");
@@ -68,6 +69,7 @@ const UCI_DOCUMENT_ROLES = [
   "load_calculation",
   "equipment_schedule",
   "equipment_cut_sheet",
+  "construction_schedule",
   "site_plan",
   "civil_plan",
   "electrical_plan",
@@ -94,7 +96,8 @@ const ROLE_CLASSIFICATION_RULES = [
   { role: "meter_or_service_evidence", confidence: "high", test: /\bMETER[\s-]*REGULATOR\b/i },
   { role: "meter_or_service_evidence", confidence: "high", test: /\bPIPING[\s-]*AND[\s-]*SERVICE[\s-]*PLAN\b/i },
   { role: "equipment_schedule", confidence: "high", test: /\bEQUIPMENT[\s-]*(UTILITY[\s-]*)?SCHEDULE\b/i },
-  { role: "equipment_cut_sheet", confidence: "high", test: /\b(CUT[\s-]*SHEET|CUTSHEET)\b/i },
+  { role: "equipment_cut_sheet", confidence: "high", test: /\b(CUT[\s-]*SHEETS?|CUTSHEET|APPLIANCE[\s-]*CUT)\b/i },
+  { role: "construction_schedule", confidence: "high", test: /\bCONSTRUCTION[\s-]*(SERVICE[\s-]*)?SCHEDULE\b/i },
   { role: "site_plan", confidence: "high", test: /\bSITE[\s-]*PLAN\b/i },
   { role: "civil_plan", confidence: "high", test: /\bCIVIL[\s-]*PLAN\b/i },
   { role: "electrical_plan", confidence: "high", test: /\b(ELECTRICAL|POWER)[\s-]*PLAN\b/i },
@@ -122,6 +125,7 @@ const ROLE_TO_UCI_STAGES = {
   load_calculation: ["agent_2_load_profile"],
   equipment_schedule: ["agent_2_load_profile", "equipment_workflow"],
   equipment_cut_sheet: ["agent_3_application_package", "equipment_workflow"],
+  construction_schedule: ["agent_2_load_profile"],
   site_plan: ["agent_3_application_package"],
   civil_plan: ["agent_3_application_package"],
   electrical_plan: ["agent_2_load_profile", "agent_3_application_package"],
@@ -359,8 +363,6 @@ const FIELD_KEY_LABELS = {
   comcheck_compliance_status: "Compliance status",
   package_document_present: "Package document",
 };
-
-const LOW_TEXT_THRESHOLD = 50;
 
 /** Field keys that may be package-eligible after human review. */
 const PACKAGE_ELIGIBLE_FIELD_KEYS = new Set([
@@ -942,6 +944,9 @@ function buildPackageDocumentPresenceFinding(documentRoles, source, documentId) 
  */
 function evaluateDocumentFindingsExtraction(pages, documentRoles, findings, opts = {}) {
   const hasNativeText = pages.some((p) => String(p.text ?? "").trim().length > 0);
+  const hasSufficientNativeText = pages.some(
+    (p) => String(p.text ?? "").trim().length >= LOW_TEXT_THRESHOLD,
+  );
   const highValue = documentRoles.some((r) => HIGH_VALUE_FINDINGS_ROLES.has(r));
   const engineeringFindings = findings.filter(
     (f) => f.field_key !== "package_document_present",
@@ -967,7 +972,7 @@ function evaluateDocumentFindingsExtraction(pages, documentRoles, findings, opts
       ["vision_required", "ocr_required"].includes(String(p.analysis.status ?? "")),
   );
 
-  if (visionPending && highValue) {
+  if (visionPending && highValue && !hasSufficientNativeText) {
     return {
       status: "vision_required_for_structured_findings",
       warnings: [
@@ -1949,7 +1954,11 @@ async function runDocumentProcessing(supabase, params) {
     let docFindings = [];
     let docExtractionMeta = {};
     try {
-      pageResult = processDocumentPages(pages);
+      pageResult = processDocumentPages(pages, {
+        preferNativeTextRoles: roles.filter((role) =>
+          ["equipment_cut_sheet", "construction_schedule", "cut_sheet"].includes(role),
+        ),
+      });
       const source = {
         source_type: doc.source_type,
         source_document_name: docName,

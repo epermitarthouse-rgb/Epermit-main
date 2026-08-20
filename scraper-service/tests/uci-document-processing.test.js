@@ -330,6 +330,17 @@ describe("uci-document-processing.service", () => {
     assert.equal(result.processing_status, "partial");
   });
 
+  it("accepts native text for cut sheets without vision fallback", () => {
+    const longNativeText =
+      "Appliance cut sheet reference for rooftop unit RTU-1 with model serial and BTU input summary ".repeat(2);
+    const result = processDocumentPages(
+      [{ pageNumber: 1, text: longNativeText }],
+      { preferNativeTextRoles: ["equipment_cut_sheet"] },
+    );
+    assert.equal(result.page_coverage.pages_sent_to_vision, 0);
+    assert.equal(result.processing_status, "complete");
+  });
+
   it("builds manifest entries for every discovered document", () => {
     const discovery = discoverAllUciDocuments(baseRecord(), {
       externalApplicationId: EXT_APP_A,

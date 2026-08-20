@@ -59,6 +59,17 @@ const DOCUMENT_TYPE_RULES = [
 ];
 
 /**
+ * @param {string} haystack
+ * @returns {string | null}
+ */
+function matchDocumentTypeFromHaystack(haystack) {
+  for (const rule of DOCUMENT_TYPE_RULES) {
+    if (rule.test.test(haystack)) return rule.type;
+  }
+  return null;
+}
+
+/**
  * Classify a document's type from filename/content. Does not use generic
  * stored `document_type = other` as the answer.
  *
@@ -69,17 +80,33 @@ function classifyDocumentType(doc) {
   const storedType = String(doc.document_type || doc.documentType || "")
     .trim()
     .toLowerCase();
+  const fileName = String(doc.file_name || doc.fileName || "");
+  const portalDocumentName = String(doc.portal_document_name || doc.portalDocumentName || "");
+  const portalDocumentType = String(doc.portal_document_type || doc.pepco_document_type || "");
+  const description = String(doc.description || "");
+
+  // Filename/metadata first — a shared stored `load_profile` type must not
+  // override distinct synthetic gas filenames such as EQUIPMENT_SCHEDULE.
+  const filenameHaystack = buildRoleClassificationHaystack({
+    fileName,
+    portalDocumentName,
+    portalDocumentType,
+    description,
+  });
+  const fromFilename = matchDocumentTypeFromHaystack(filenameHaystack);
+  if (fromFilename) return fromFilename;
+
   const haystack = buildRoleClassificationHaystack({
-    fileName: String(doc.file_name || doc.fileName || ""),
-    portalDocumentName: String(doc.portal_document_name || doc.portalDocumentName || ""),
-    portalDocumentType: String(doc.portal_document_type || doc.pepco_document_type || ""),
+    fileName,
+    portalDocumentName,
+    portalDocumentType,
     documentType: storedType && storedType !== "other" ? storedType : "",
-    description: String(doc.description || ""),
+    description,
     text: String(doc.text || "").slice(0, 4000),
   });
-  for (const rule of DOCUMENT_TYPE_RULES) {
-    if (rule.test.test(haystack)) return rule.type;
-  }
+  const fromContent = matchDocumentTypeFromHaystack(haystack);
+  if (fromContent) return fromContent;
+
   if (storedType && storedType !== "other" && storedType !== "unknown") return storedType;
   return "supporting_document";
 }
@@ -92,6 +119,7 @@ module.exports = {
   normalizeRoleClassificationText,
   buildRoleClassificationHaystack,
   DOCUMENT_TYPE_RULES,
+  matchDocumentTypeFromHaystack,
   classifyDocumentType,
   isConstructionScheduleDocument,
 };

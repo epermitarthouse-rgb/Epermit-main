@@ -126,6 +126,14 @@ const EXTRACTABLE_FIELD_KEYS = new Set([
   "construction_start_date",
   "construction_completion_date",
   "requested_in_service_date",
+  "connected_load_btuh",
+  "connected_gas_equipment",
+  "requested_load_btuh",
+  "btu_demand",
+  "pressure_requirements",
+  "requested_service_line",
+  "gas_regulator",
+  "meter_location",
 ]);
 
 const PHASE_EQUIPMENT_REJECT_PATTERNS = [
@@ -196,6 +204,20 @@ const LOAD_DOCUMENT_RANK_RULES = [
   { score: 75, pattern: /\bSERVICE[\s-]*APPLICATION\b/i, reason: "service application" },
   { score: 70, pattern: /\bCOM[\s-]*CHECK\b/i, reason: "COMcheck" },
   { score: 60, pattern: /\bELECTRICAL[\s-]*PLAN\b/i, reason: "electrical plan" },
+  { score: 88, pattern: /\bGAS[\s-]*LOAD[\s-]*PROFILE\b/i, reason: "gas load profile" },
+  { score: 86, pattern: /\bGAS[\s-]*EQUIPMENT[\s-]*SCHEDULE\b/i, reason: "gas equipment schedule" },
+  {
+    score: 84,
+    pattern: /\b(?:GAS[\s-]*)?PIPING[\s-]*AND[\s-]*SERVICE[\s-]*PLAN\b/i,
+    reason: "gas piping and service plan",
+  },
+  { score: 82, pattern: /\bMETER[\s-]*REGULATOR\b/i, reason: "meter regulator data sheet" },
+  { score: 78, pattern: /\b(?:GAS[\s-]*)?(?:APPLIANCE[\s-]*)?CUT[\s-]*SHEETS?\b/i, reason: "appliance cut sheet" },
+  {
+    score: 76,
+    pattern: /\bCONSTRUCTION[\s-]*SERVICE[\s-]*SCHEDULE\b/i,
+    reason: "construction service schedule",
+  },
 ];
 
 const PDF_TEXT_FIELD_PATTERNS = [

@@ -163,10 +163,17 @@ function classifyPdfPage(params) {
     reason = "Tabular native text detected";
     status = "table_extracted";
   } else if (layout.level === "high" && (drawingSignal || tableLike)) {
-    page_type = "drawing";
-    recommended_method = "vision";
-    reason = "Native text present but spatial layout matters";
-    status = "vision_required";
+    if (textLen >= LOW_TEXT_THRESHOLD) {
+      page_type = tableLike ? "table" : "text";
+      recommended_method = tableLike ? "table" : "native_text";
+      reason = "Sufficient native PDF text despite layout signals";
+      status = tableLike ? "table_extracted" : "text_extracted";
+    } else {
+      page_type = "drawing";
+      recommended_method = "vision";
+      reason = "Native text present but spatial layout matters";
+      status = "vision_required";
+    }
   } else {
     page_type = "text";
     recommended_method = "native_text";
@@ -287,9 +294,13 @@ async function extractPdfPagesWithAnalysis(buffer, deps = {}) {
 function processDocumentPagesFromAnalysis(pages, opts = {}) {
   /** @type {Array<Record<string, unknown>>} */
   const pageRecords = [];
+  const preferNativeTextRoles = new Set(
+    Array.isArray(opts.preferNativeTextRoles) ? opts.preferNativeTextRoles : [],
+  );
+  const preferNativeText = preferNativeTextRoles.size > 0;
 
   for (const page of pages) {
-    const analysis =
+    let analysis =
       page.analysis && typeof page.analysis === "object"
         ? page.analysis
         : classifyPdfPage({
@@ -297,6 +308,20 @@ function processDocumentPagesFromAnalysis(pages, opts = {}) {
             native_text: String(page.text ?? ""),
             native_text_length: String(page.text ?? "").trim().length,
           });
+
+    if (
+      preferNativeText &&
+      Number(analysis.native_text_length ?? String(page.text ?? "").trim().length) >=
+        LOW_TEXT_THRESHOLD &&
+      (analysis.status === "vision_required" || analysis.status === "ocr_required")
+    ) {
+      analysis = {
+        ...analysis,
+        status: "text_extracted",
+        recommended_method: "native_text",
+        reason: "Sufficient native text for reference document — semantic parsing is optional",
+      };
+    }
 
     pageRecords.push({
       page_number: page.pageNumber,

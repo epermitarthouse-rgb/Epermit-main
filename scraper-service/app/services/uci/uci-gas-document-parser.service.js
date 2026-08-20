@@ -4,7 +4,52 @@ const { buildCandidateRecord } = require("./uci-load-candidate.service.js");
 const {
   classifyDocumentType,
   isConstructionScheduleDocument,
+  normalizeRoleClassificationText,
 } = require("./uci-document-classification.service.js");
+
+/**
+ * @param {string} raw
+ * @returns {string | null}
+ */
+function normalizeGasPressureValue(raw) {
+  const text = String(raw ?? "").trim();
+  const numMatch =
+    text.match(/^(?:0*(\d+(?:\.\d+)?))(?:\s*in\.?\s*w\.?\s*c\.?\s*)*$/i) ||
+    text.match(/(\d+(?:\.\d+)?)/);
+  if (!numMatch) return null;
+  const num = Number(numMatch[1]);
+  if (!Number.isFinite(num)) return null;
+  return `${num} in. w.c.`;
+}
+
+/**
+ * Collapse PDF extraction noise so label/value pairs stay on one logical line.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function normalizeGasPageText(text) {
+  return String(text ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/([A-Za-z])\s*\n\s*([A-Za-z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Prefer filename for construction schedules — shared PDF headers often
+ * mention "GAS LOAD PROFILE" and would otherwise mis-route date extraction.
+ *
+ * @param {string} name
+ * @param {string} text
+ */
+function isGasConstructionScheduleDocument(name, text) {
+  const filenameHaystack = normalizeRoleClassificationText(name);
+  if (/\bCONSTRUCTION[\s-]*(SERVICE[\s-]*)?SCHEDULE\b/i.test(filenameHaystack)) {
+    return true;
+  }
+  return isConstructionScheduleDocument({ file_name: name, text });
+}
 
 /**
  * @param {string} name
@@ -32,11 +77,10 @@ function shouldParseAsGasDocument(name, text) {
  * @param {Record<string, unknown>} source
  */
 function extractGasDocumentFindingsFromText(text, pageNumber, source) {
-  const pageText = String(text ?? "");
+  const pageText = normalizeGasPageText(text);
   const name = String(source.source_document_name ?? "");
-  const docType = classifyDocumentType({ file_name: name, text: pageText });
 
-  if (docType === "construction_schedule" || isConstructionScheduleDocument({ file_name: name, text: pageText })) {
+  if (isGasConstructionScheduleDocument(name, pageText)) {
     return extractGasConstructionScheduleDates(pageText, pageNumber, source);
   }
 
@@ -66,9 +110,19 @@ function extractGasDocumentFindingsFromText(text, pageNumber, source) {
     );
   };
 
-  const connected = pageText.match(
-    /\bConnected\s+Load\b[^:\n]*[:\s]+([\d,]+)\s*BTU\s*\/?\s*H?\b/i,
-  );
+  const btuUnitPattern = String.raw`(?:BTU\s*\/?\s*H|BTUH|BTU\s*(?:PER|\/)\s*H(?:OUR)?)`;
+  const syntheticPrefix = String.raw`(?:\bSynthetic\s+requested\s+value\s+)?`;
+
+  const connected =
+    pageText.match(
+      new RegExp(
+        `${syntheticPrefix}\\bConnected\\s+(?:Gas\\s+)?Load\\b\\s*[:.]?\\s*([\\d,]+)\\s*${btuUnitPattern}\\b`,
+        "i",
+      ),
+    ) ||
+    pageText.match(
+      new RegExp(`\\bConnected\\s+(?:Gas\\s+)?Load\\b\\s*[:.]?\\s*([\\d,]+)\\s*${btuUnitPattern}\\b`, "i"),
+    );
   if (connected) {
     const n = Number(String(connected[1]).replace(/,/g, ""));
     push("connected_load_btuh", connected[1], n, "BTU/h", connected[0]);
@@ -77,9 +131,17 @@ function extractGasDocumentFindingsFromText(text, pageNumber, source) {
 
   const design =
     pageText.match(
-      /\b(?:Design|Requested(?:\/Design)?|Requested)\s+Load\b[^:\n]*[:\s]+([\d,]+)\s*BTU\s*\/?\s*H?\b/i,
+      new RegExp(
+        `${syntheticPrefix}\\b(?:Design|Requested(?:\\s*\\/\\s*Design)?)\\s+(?:Gas\\s+)?Load\\b\\s*[:.]?\\s*([\\d,]+)\\s*${btuUnitPattern}\\b`,
+        "i",
+      ),
     ) ||
-    pageText.match(/\bRequested\s+Load\b[^:\n]*[:\s]+([\d,]+)\s*BTU\s*\/?\s*H?\b/i);
+    pageText.match(
+      new RegExp(
+        `\\b(?:Design|Requested(?:\\s*\\/\\s*Design)?|Requested)\\s+(?:Gas\\s+)?Load\\b\\s*[:.]?\\s*([\\d,]+)\\s*${btuUnitPattern}\\b`,
+        "i",
+      ),
+    );
   if (design) {
     const n = Number(String(design[1]).replace(/,/g, ""));
     push("requested_load_btuh", design[1], n, "BTU/h", design[0]);
@@ -88,42 +150,72 @@ function extractGasDocumentFindingsFromText(text, pageNumber, source) {
 
   const pressure =
     pageText.match(
-      /\b(?:Required\s+)?(?:Delivery\s+)?Pressure\b[^:\n]*[:\s]+([\d.]+)\s*in\.?\s*w\.?\s*c\.?\b/i,
+      new RegExp(
+        `${syntheticPrefix}\\b(?:Required\\s+)?(?:Delivery\\s+)?Pressure\\b\\s*[:.]?\\s*(0*\\d+(?:\\.\\d+)?)(?:\\s*in\\.?\\s*w\\.?\\s*c\\.?\\s*)+`,
+        "i",
+      ),
     ) ||
-    pageText.match(/\b([\d.]+)\s*in\.?\s*w\.?\s*c\.?\b/i);
+    pageText.match(/(?:^|[^\w])(0*\d+(?:\.\d+)?)\s*in\.?\s*w\.?\s*c\.?\b/i);
   if (pressure) {
-    push("pressure_requirements", pressure[0], `${pressure[1]} in w.c.`, "in w.c.", pressure[0]);
+    const normalizedPressure = normalizeGasPressureValue(pressure[1]);
+    if (normalizedPressure) {
+      push("pressure_requirements", pressure[0], normalizedPressure, "in. w.c.", pressure[0]);
+    }
   }
 
   const meter =
-    pageText.match(/\bMeter\s+(?:Quantity|Count)\b[^:\n]*[:\s]+(\d+)\b/i) ||
-    pageText.match(/\bMeter\s+Count\b[^:\n]*[:\s]+(\d+)\b/i);
+    pageText.match(
+      new RegExp(`${syntheticPrefix}\\bMeter\\s+(?:Quantity|Count)\\b\\s*[:.]?\\s*(\\d+)\\b`, "i"),
+    ) ||
+    pageText.match(/\bMeter\s+Count\b\s*[:.]?\s*(\d+)\b/i);
   if (meter) {
     push("meter_count", meter[1], Number(meter[1]), "count", meter[0]);
   }
 
-  const serviceLine = pageText.match(
-    /\b(?:Requested\s+)?Service\s+Line\b[^:\n]*[:\s]+([\d\-\/]+(?:[\s-]*[\d\/]+)?)\s*(?:\"|in\.?)?\b/i,
-  );
+  const serviceLine =
+    pageText.match(
+      new RegExp(
+        `${syntheticPrefix}\\b(?:Requested\\s+)?Service\\s+Line(?:\\s+Size)?\\b\\s*[:.]?\\s*([\\d\\-]+(?:\\s*[\\d\\/]+)?)\\s*(?:\"|in\\.?)?\\b`,
+        "i",
+      ),
+    ) ||
+    pageText.match(
+      /\bService\s+Line\s+Size\b\s*[:.]?\s*([\d\-]+(?:\s*[\d\/]+)?)\s*(?:\"|in\.?)?\b/i,
+    );
   if (serviceLine) {
-    push("requested_service_line", serviceLine[1], serviceLine[1], "in", serviceLine[0]);
+    push("requested_service_line", serviceLine[1], serviceLine[1].trim(), "in", serviceLine[0]);
   }
 
   const regulator =
-    pageText.match(/\b(?:Gas\s+)?Regulator\b[^:\n]*[:\s]+(Required|Yes|Needed)\b/i) ||
-    pageText.match(/\bGas\s+Regulator\b[^:\n]*[:\s]+([A-Za-z][A-Za-z\s-]{0,40})/i);
+    pageText.match(
+      new RegExp(
+        `${syntheticPrefix}\\b(?:Gas\\s+)?Regulator\\b\\s*[:.]?\\s*(Required|Yes|Needed)\\b`,
+        "i",
+      ),
+    ) ||
+    pageText.match(/\b(?:Gas\s+)?Regulator\b\s*[:.]?\s*(Required|Yes|Needed)\b/i) ||
+    pageText.match(/\bGas\s+Regulator\b\s*[:.]?\s*([A-Za-z][A-Za-z\s-]{0,40})/i);
   if (regulator) {
     push("gas_regulator", regulator[1], String(regulator[1]).trim(), null, regulator[0]);
   }
 
-  const location = pageText.match(/\bMeter\s+Location\b\s*[:\-]?\s*(.+)/i);
+  const location =
+    pageText.match(
+      new RegExp(`${syntheticPrefix}\\bMeter\\s+Location\\b\\s*[:\\-]?\\s*(.+?)(?:\\s+Synthetic\\s+requested\\s+value\\b|$)`, "i"),
+    ) || pageText.match(/\bMeter\s+Location\b\s*[:\-]?\s*(.+)/i);
   if (location) {
     const value = String(location[1]).trim().split(/\r?\n/)[0].trim();
     if (value) push("meter_location", value, value, null, `Meter Location ${value}`);
   }
 
+  const docType = classifyDocumentType({ file_name: name, text: pageText });
   if (docType === "equipment_schedule" || /\bEQUIPMENT\s+SCHEDULE\b/i.test(name)) {
-    const totalBtu = pageText.match(/\bTotal\s+(?:Connected\s+)?(?:Gas\s+)?Load\b[^:\n]*[:\s]+([\d,]+)\s*BTU/i);
+    const totalBtu = pageText.match(
+      new RegExp(
+        `\\bTotal\\s+(?:Connected\\s+)?(?:Gas\\s+)?Load\\b\\s*[:.]?\\s*([\\d,]+)\\s*${btuUnitPattern}\\b`,
+        "i",
+      ),
+    );
     if (totalBtu) {
       const n = Number(String(totalBtu[1]).replace(/,/g, ""));
       push("connected_gas_equipment", totalBtu[1], n, "BTU/h", totalBtu[0]);
@@ -141,6 +233,7 @@ function extractGasDocumentFindingsFromText(text, pageNumber, source) {
  * @param {Record<string, unknown>} source
  */
 function extractGasConstructionScheduleDates(text, pageNumber, source) {
+  const pageText = normalizeGasPageText(text);
   /** @type {Array<Record<string, unknown>>} */
   const out = [];
   const push = (field_key, raw_value) => {
@@ -168,20 +261,41 @@ function extractGasConstructionScheduleDates(text, pageNumber, source) {
     );
   };
 
+  const datePattern = String.raw`(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})`;
+  const syntheticPrefix = String.raw`(?:Synthetic\s+requested\s+value\s+)?`;
+
   const start =
-    text.match(/\bConstruction\s+Start(?:\s+Date)?\b[^:\n]*[:\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i) ||
-    text.match(/\b(?:Ground\s*break|Groundbreak)\b[^:\n]*[:\s]+(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{2}-\d{2})/i);
+    pageText.match(
+      new RegExp(`${syntheticPrefix}\\bConstruction\\s+Start(?:\\s+Date)?\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i"),
+    ) ||
+    pageText.match(new RegExp(`\\bConstruction\\s+Start(?:\\s+Date)?\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i")) ||
+    pageText.match(
+      new RegExp(`${syntheticPrefix}\\b(?:Ground\\s*break|Groundbreak)\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i"),
+    ) ||
+    pageText.match(new RegExp(`\\b(?:Ground\\s*break|Groundbreak)\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i"));
   if (start) push("construction_start_date", start[1]);
 
   const completion =
-    text.match(
-      /\bConstruction\s+Completion(?:\s+Date)?\b[^:\n]*[:\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i,
+    pageText.match(
+      new RegExp(
+        `${syntheticPrefix}\\bConstruction\\s+Completion(?:\\s+Date)?\\b[^:\\n]{0,20}[:\\s]+${datePattern}`,
+        "i",
+      ),
     ) ||
-    text.match(/\bCompletion\b[^:\n]*[:\s]+(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{2}-\d{2})/i);
+    pageText.match(
+      new RegExp(`\\bConstruction\\s+Completion(?:\\s+Date)?\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i"),
+    ) ||
+    pageText.match(
+      new RegExp(`${syntheticPrefix}\\bCompletion\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i"),
+    ) ||
+    pageText.match(new RegExp(`\\bCompletion\\b[^:\\n]{0,20}[:\\s]+${datePattern}`, "i"));
   if (completion) push("construction_completion_date", completion[1]);
 
-  const inService = text.match(
-    /\b(?:Requested\s+)?In[\s-]*Service(?:\s+Date)?\b[^:\n]*[:\s]+(\d{4}-\d{2}-\d{2})/i,
+  const inService = pageText.match(
+    new RegExp(
+      `${syntheticPrefix}\\b(?:Requested\\s+)?In[\\s-]*Service(?:\\s+Date)?\\b[^:\\n]{0,20}[:\\s]+(\\d{4}-\\d{2}-\\d{2})`,
+      "i",
+    ),
   );
   if (inService) push("requested_in_service_date", inService[1]);
 
@@ -203,6 +317,9 @@ function extractConstructionScheduleDatesFromText(text, pageNumber, source) {
 module.exports = {
   shouldParseAsGasDocument,
   detectGasLoadDocumentText,
+  normalizeGasPageText,
+  normalizeGasPressureValue,
+  isGasConstructionScheduleDocument,
   extractGasDocumentFindingsFromText,
   extractGasConstructionScheduleDates,
   extractConstructionScheduleDatesFromText,

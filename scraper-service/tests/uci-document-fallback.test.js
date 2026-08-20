@@ -27,6 +27,8 @@ const {
 } = require("../app/services/uci/uci-document-fallback.service.js");
 const {
   candidateRecordToFinding,
+  classifyDocumentRoles,
+  evaluateDocumentFindingsExtraction,
 } = require("../app/services/uci/uci-document-processing.service.js");
 const { DOCUMENT_PROCESSING_SCHEMA_VERSION } = require("../app/services/uci/uci-document-processing.service.js");
 const { extractCandidatesFromPdfText } = require("../app/services/uci/uci-load-candidate.service.js");
@@ -179,6 +181,49 @@ describe("uci-document-fallback layer", () => {
     });
     assert.equal(analysis.recommended_method, "native_text");
     assert.equal(analysis.status, "text_extracted");
+  });
+
+  it("keeps text-based cut sheets on native extraction despite SHEET layout signals", () => {
+    const items = [
+      { str: "SHEET", transform: [1, 0, 0, 1, 50, 700], width: 40 },
+      { str: "1 of 1", transform: [1, 0, 0, 1, 300, 700], width: 40 },
+      { str: "Manufacturer", transform: [1, 0, 0, 1, 50, 650], width: 80 },
+      { str: "Example HVAC", transform: [1, 0, 0, 1, 300, 650], width: 90 },
+      { str: "APPLIANCE CUT SHEETS", transform: [1, 0, 0, 1, 200, 750], width: 150 },
+      { str: "GAS LOAD PROFILE REF", transform: [1, 0, 0, 1, 200, 730], width: 120 },
+    ];
+    const native_text = items.map((item) => item.str).join(" ");
+    const analysis = classifyPdfPage({
+      page_number: 1,
+      native_text,
+      native_text_length: native_text.length,
+      text_items: items,
+      viewport: { width: 612, height: 792 },
+    });
+    assert.equal(analysis.recommended_method, "native_text");
+    assert.equal(analysis.status, "text_extracted");
+  });
+
+  it("does not mark structured findings as vision-required when native text succeeded", () => {
+    const text =
+      "GAS LOAD PROFILE\nAPPLIANCE CUT SHEETS\nManufacturer Example\nModel RTU-100\nInput BTU/h 250000";
+    const pages = [
+      {
+        pageNumber: 1,
+        text,
+        analysis: classifyPdfPage({
+          page_number: 1,
+          native_text: text,
+          native_text_length: text.length,
+        }),
+      },
+    ];
+    const roles = classifyDocumentRoles({
+      fileName: "05_Synthetic_Gas_Appliance_Cut_Sheets.pdf",
+    }).map((entry) => entry.role);
+    const result = evaluateDocumentFindingsExtraction(pages, roles, []);
+    assert.equal(result.status, "no_supported_findings");
+    assert.notEqual(result.status, "vision_required_for_structured_findings");
   });
 
   it("defaults vision and OCR to disabled", () => {
