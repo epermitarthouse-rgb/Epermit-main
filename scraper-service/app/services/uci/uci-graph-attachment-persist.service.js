@@ -603,6 +603,37 @@ async function persistGraphAttachmentsForCommunication(supabase, params) {
       uploadBufferFn: deps.uploadBufferFn,
     });
 
+    if (persist.project_document?.id && coordinationRecordId) {
+      try {
+        const {
+          classifyDocumentUtilityScope,
+          shouldAutoIncludeDocument,
+          linkProjectDocumentsToCoordination,
+        } = require("./uci-coordination-document-links.service.js");
+        const { getCoordinationRecordById } = require("./uci-records.service.js");
+        const record = await getCoordinationRecordById(supabase, coordinationRecordId);
+        if (record) {
+          const classification = classifyDocumentUtilityScope(persist.project_document);
+          const included = shouldAutoIncludeDocument({
+            classification,
+            recordUtilityType: record.utility_type,
+            uploadedToRecord: false,
+            inboundMatched: true,
+          });
+          await linkProjectDocumentsToCoordination(supabase, {
+            coordinationRecordId,
+            userId: mailboxUserId || null,
+            projectDocumentIds: [String(persist.project_document.id)],
+            includedInAnalysis: included,
+            linkOrigin: "inbound",
+            inbound: true,
+          });
+        }
+      } catch {
+        // Inbound persistence must not fail the Graph attachment write.
+      }
+    }
+
     const projectDoc = persist.project_document;
     const row = {
       id: attachmentId,

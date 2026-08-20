@@ -522,7 +522,7 @@ async function runLoadProfileAnalysis(supabase, params) {
   const [documentsResult, equipmentResult] = await Promise.all([
     supabase
       .from("project_documents")
-      .select("id, document_type, file_name, file_type, created_at")
+      .select("id, document_type, file_name, file_type, description, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false }),
     supabase
@@ -547,7 +547,14 @@ async function runLoadProfileAnalysis(supabase, params) {
     );
   }
 
-  const documents = Array.isArray(documentsResult.data) ? documentsResult.data : [];
+  const allProjectDocuments = Array.isArray(documentsResult.data) ? documentsResult.data : [];
+  const { resolveScopedProjectDocuments } = require("./uci-coordination-document-links.service.js");
+  const scoped = await resolveScopedProjectDocuments(supabase, {
+    record,
+    userId,
+    projectDocuments: allProjectDocuments,
+  });
+  const documents = scoped.scopedDocuments;
   const equipment = Array.isArray(equipmentResult.data) ? equipmentResult.data : [];
   const needsVerification = collectNeedsVerification(record, mapping);
 

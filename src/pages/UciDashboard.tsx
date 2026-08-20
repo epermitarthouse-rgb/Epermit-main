@@ -87,6 +87,7 @@ import {
   importCoordinationDocumentFindings,
   reprocessCoordinationDocument,
   runCoordinationDocumentProcessing,
+  linkCoordinationLoadProfileDocuments,
   formatLoadCandidateExtractionError,
   formatUciUserError,
   getCoordinationDetail,
@@ -1484,6 +1485,7 @@ export default function UciDashboard() {
     });
     try {
       let uploadedCount = 0;
+      const uploadedIds: string[] = [];
       const failedUploads: string[] = [];
       for (const [index, file] of files.entries()) {
         setManualUploadProgress({
@@ -1506,9 +1508,18 @@ export default function UciDashboard() {
           continue;
         }
         uploadedCount += 1;
+        uploadedIds.push(upload.document.id);
       }
       if (uploadedCount === 0) {
         throw new Error(failedUploads.join("; ") || "Manual document upload failed");
+      }
+
+      if (uploadedIds.length > 0) {
+        await linkCoordinationLoadProfileDocuments(detailId, {
+          project_document_ids: uploadedIds,
+          included_in_analysis: true,
+          external_application_id: externalApplicationId,
+        });
       }
 
       setManualUploadProgress({

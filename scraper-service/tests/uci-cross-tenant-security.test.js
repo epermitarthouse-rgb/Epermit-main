@@ -594,6 +594,12 @@ describe("Row 4 — cross-tenant UCI route denial (User A → Tenant B)", () => 
     ],
     ["load profile", "POST", `/coordination/${COORD_B}/load-profile/analyze`, {}],
     [
+      "load profile document link",
+      "POST",
+      `/coordination/${COORD_B}/load-profile/documents/link`,
+      { project_document_ids: ["doc-1"] },
+    ],
+    [
       "load candidate extract",
       "POST",
       `/coordination/${COORD_B}/load-profile/extract-candidates`,

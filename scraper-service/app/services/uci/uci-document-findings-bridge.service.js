@@ -48,6 +48,7 @@ const EXPECTED_SKIP_REASONS = new Set([
   "specification_reference_review_only",
   "non_electric_thermal_load",
   "stale_or_rejected_finding",
+  "out_of_coordination_scope",
 ]);
 
 const THERMAL_EVIDENCE_PATTERN = /\b(BTU\s*\/?\s*H?|BTUH|CFM|TONS?\s+OF\s+COOL|THERMAL)\b/i;
@@ -473,6 +474,13 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
     };
   }
 
+  const { resolveScopedProjectDocuments, classifyDocumentUtilityScope, isBlockedCrossUtilityAutoInclude } = require("./uci-coordination-document-links.service.js");
+  const scoped = await resolveScopedProjectDocuments(supabase, {
+    record,
+    userId,
+  });
+  const includedProjectIds = scoped.includedIds;
+
   if (String(processingState.external_application_id ?? "") !== extAppId) {
     const err = new Error("Document processing state scope mismatch");
     err.statusCode = 400;
@@ -562,8 +570,63 @@ async function importDocumentFindingsToLoadProfile(supabase, params) {
   for (const finding of allFindings) {
     if (
       targetDocumentIds.size > 0 &&
-      !targetDocumentIds.has(String(finding?.document_id ?? ""))
+      !targetDocumentIds.has(String(finding?.document_id ?? "")) &&
+      !targetDocumentIds.has(String(finding?.source_document_id ?? ""))
     ) {
+      continue;
+    }
+    const processingDoc = docById.get(String(finding.document_id ?? ""));
+    const sourceType = String(processingDoc?.source_type || finding.source_type || "");
+    const projectDocId = String(
+      processingDoc?.source_document_id ||
+        finding.source_document_id ||
+        finding.project_document_id ||
+        "",
+    );
+    const isPortalSource =
+      sourceType === "pepco_portal_document" || sourceType === "provider_application";
+    const processingScopedIds = new Set(
+      (Array.isArray(processingState.documents) ? processingState.documents : [])
+        .map((doc) => String(doc.source_document_id || doc.document_id || ""))
+        .filter(Boolean),
+    );
+    const unlinkedIds = new Set(
+      scoped.links
+        .filter((row) => row.unlinked_at)
+        .map((row) => String(row.project_document_id)),
+    );
+    const blockedCrossUtility = isBlockedCrossUtilityAutoInclude(
+      classifyDocumentUtilityScope({
+        file_name: finding.source_document_name || processingDoc?.original_filename,
+      }),
+      record.utility_type,
+    );
+    const explicitlyIncluded = projectDocId && includedProjectIds.has(projectDocId);
+    const explicitlyUnlinked = projectDocId && unlinkedIds.has(projectDocId);
+    if (explicitlyUnlinked || (blockedCrossUtility && !explicitlyIncluded && !isPortalSource)) {
+      bumpSkip("out_of_coordination_scope");
+      findingsConsidered += 1;
+      continue;
+    }
+    if (
+      !isPortalSource &&
+      projectDocId &&
+      includedProjectIds.size > 0 &&
+      !includedProjectIds.has(projectDocId)
+    ) {
+      bumpSkip("out_of_coordination_scope");
+      findingsConsidered += 1;
+      continue;
+    }
+    if (
+      !isPortalSource &&
+      includedProjectIds.size === 0 &&
+      projectDocId &&
+      !processingScopedIds.has(projectDocId) &&
+      !processingScopedIds.has(String(finding.document_id ?? ""))
+    ) {
+      bumpSkip("out_of_coordination_scope");
+      findingsConsidered += 1;
       continue;
     }
     findingsConsidered += 1;

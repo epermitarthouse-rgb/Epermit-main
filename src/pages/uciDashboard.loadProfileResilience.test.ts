@@ -80,13 +80,17 @@ describe("UCI Load Profile action resilience", () => {
       "the workspace tabs must not be gated on an analyzed load-profile summary",
     );
     assert.match(workspaceSource, /<TabsContent value="source_documents"/);
-    assert.match(workspaceSource, />Upload supporting document</);
+    assert.match(workspaceSource, />Upload documents</);
+    assert.match(workspaceSource, /Used for this coordination/);
+    assert.match(workspaceSource, /Select from project documents/);
+    assert.match(workspaceSource, /formatSelectedForAnalysisLabel/);
+    assert.match(workspaceSource, /documents selected for/);
     assert.match(workspaceSource, /onManualUpload\(\s*manualUploadFiles,/);
   });
 
   it("enables batch upload only after one or more files are selected", () => {
-    const uploadStart = workspaceSource.indexOf("Upload supporting document");
-    const uploadEnd = workspaceSource.indexOf("Filename and ranking categories", uploadStart);
+    const uploadStart = workspaceSource.indexOf("Upload documents");
+    const uploadEnd = workspaceSource.indexOf("Select from project documents", uploadStart);
     assert.ok(uploadStart >= 0 && uploadEnd > uploadStart);
     const uploadBlock = workspaceSource.slice(uploadStart, uploadEnd);
 

@@ -567,6 +567,44 @@ export interface UciLoadProfileAnalyzeResponse {
   current_stage_state: LifecycleState;
 }
 
+export interface UciLoadProfileDocumentScopeRow {
+  project_document_id: string;
+  file_name: string;
+  document_type: string;
+  classified_document_type: string;
+  source_utility_type: string | null;
+  source_provider_slug: string | null;
+  source_provider_name: string | null;
+  provenance_label: string;
+  relevance: "same_utility" | "cross_utility" | "project_level" | "unknown";
+  included_in_analysis: boolean;
+  link_origin: "automatic" | "manual" | "inbound";
+  link_role: string;
+  linked_by: string | null;
+  linked_at: string | null;
+  processing_status: string;
+  processing_status_label: string;
+  findings_count: number;
+  linked: boolean;
+  unlinked_at: string | null;
+  portal_document?: boolean;
+}
+
+export interface UciLoadProfileDocumentScope {
+  coordination_record_id: string;
+  project_id: string;
+  utility_type: string;
+  provider_name: string | null;
+  provider_slug: string | null;
+  selected_for_analysis_count: number;
+  selected_for_analysis_label: string;
+  used: UciLoadProfileDocumentScopeRow[];
+  other_project_documents: UciLoadProfileDocumentScopeRow[];
+  linked_document_ids?: string[];
+  project_document_deleted?: boolean;
+  project_document_present?: boolean;
+}
+
 export interface UciApplicationPackageBuildResponse {
   coordination_record_id: string;
   project_id: string;

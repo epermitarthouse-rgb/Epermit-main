@@ -900,6 +900,79 @@ export async function getCoordinationDocumentManifest(
   );
 }
 
+export async function getCoordinationLoadProfileDocuments(
+  coordinationId: string,
+  params: { external_application_id?: string | null } = {},
+): Promise<import("@/types/uci").UciLoadProfileDocumentScope> {
+  const qs = new URLSearchParams();
+  if (params.external_application_id) {
+    qs.set("external_application_id", params.external_application_id);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/documents${suffix}`,
+    { method: "GET" },
+    "Failed to load Load Profile source documents",
+  );
+}
+
+export async function linkCoordinationLoadProfileDocuments(
+  coordinationId: string,
+  params: {
+    project_document_ids: string[];
+    included_in_analysis?: boolean;
+    external_application_id?: string | null;
+  },
+): Promise<import("@/types/uci").UciLoadProfileDocumentScope> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/documents/link`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Failed to link documents to this coordination record",
+  );
+}
+
+export async function unlinkCoordinationLoadProfileDocument(
+  coordinationId: string,
+  projectDocumentId: string,
+  params: {
+    remove_from_analysis_only?: boolean;
+    external_application_id?: string | null;
+  } = {},
+): Promise<import("@/types/uci").UciLoadProfileDocumentScope> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/documents/${encodeURIComponent(projectDocumentId)}/unlink`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Failed to unlink document from this coordination record",
+  );
+}
+
+export async function setCoordinationLoadProfileDocumentInclusion(
+  coordinationId: string,
+  projectDocumentId: string,
+  params: {
+    included_in_analysis: boolean;
+    external_application_id?: string | null;
+  },
+): Promise<import("@/types/uci").UciLoadProfileDocumentScope> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/load-profile/documents/${encodeURIComponent(projectDocumentId)}/inclusion`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    },
+    "Failed to update document analysis inclusion",
+  );
+}
+
 export async function getCoordinationDocumentFallbackEstimate(
   coordinationId: string,
   params: { external_application_id: string; mode?: "all" | "vision" | "ocr" },

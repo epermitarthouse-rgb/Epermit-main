@@ -118,6 +118,12 @@ function createMockSupabase(tables) {
           filters.push({ column, value });
           return api;
         },
+        insert(row) {
+          const copy = { id: row.id || `${table}-${store.length + 1}`, ...row };
+          store.push(copy);
+          state.insertRow = copy;
+          return api;
+        },
         order() {
           return api;
         },
@@ -126,6 +132,12 @@ function createMockSupabase(tables) {
             filters.every((f) => String(row[f.column]) === String(f.value)),
           );
           return Promise.resolve({ data: rows[0] ?? null, error: null });
+        },
+        single() {
+          const rows = store.filter((row) =>
+            filters.every((f) => String(row[f.column]) === String(f.value)),
+          );
+          return Promise.resolve({ data: state.insertRow || rows[0] || null, error: null });
         },
         update(patch) {
           state.mode = "update";
