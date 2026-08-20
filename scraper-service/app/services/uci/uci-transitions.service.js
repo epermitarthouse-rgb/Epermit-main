@@ -230,10 +230,11 @@ async function completeStage2EngineeringReview(supabase, p) {
     err.code = "NOT_FOUND";
     throw err;
   }
-  if (
-    Number(current.current_stage) !== 2 ||
-    String(current.current_stage_state) !== "IN_PROGRESS"
-  ) {
+  const stage = Number(current.current_stage);
+  const stageState = String(current.current_stage_state ?? "");
+  const stage2HandoffEligible =
+    stage === 2 && (stageState === "IN_PROGRESS" || stageState === "COMPLETED");
+  if (!stage2HandoffEligible) {
     const err = new Error("Stage 2 must be active before engineering review can be completed");
     err.statusCode = 409;
     err.code = "STAGE_2_NOT_ACTIVE";

@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import {
+  canShowCompleteStage2ReviewButton,
+  canShowEnterStage3HandoffButton,
+  canShowStage3StatusPanel,
+  getStage3HandoffButtonLabel,
+  isStage2CompletedAwaitingStage3Handoff,
+  isStage2EngineeringReviewActive,
+} from "./uciStageHandoff";
+
+describe("uciStageHandoff", () => {
+  it("treats active Stage 2 engineering review as in-progress only", () => {
+    assert.equal(isStage2EngineeringReviewActive(2, "IN_PROGRESS"), true);
+    assert.equal(isStage2EngineeringReviewActive(2, "COMPLETED"), false);
+    assert.equal(isStage2EngineeringReviewActive(3, "IN_PROGRESS"), false);
+  });
+
+  it("detects completed Stage 2 awaiting Stage 3 handoff", () => {
+    assert.equal(isStage2CompletedAwaitingStage3Handoff(2, "COMPLETED"), true);
+    assert.equal(isStage2CompletedAwaitingStage3Handoff(2, "IN_PROGRESS"), false);
+    assert.equal(isStage2CompletedAwaitingStage3Handoff(3, "COMPLETED"), false);
+  });
+
+  it("shows Complete Stage 2 review only while Stage 2 is in progress", () => {
+    assert.equal(canShowCompleteStage2ReviewButton(2, "IN_PROGRESS"), true);
+    assert.equal(canShowCompleteStage2ReviewButton(2, "COMPLETED"), false);
+    assert.equal(canShowCompleteStage2ReviewButton(3, "IN_PROGRESS"), false);
+  });
+
+  it("shows Stage 3 handoff CTA when Stage 2 is completed on stage 2", () => {
+    assert.equal(canShowEnterStage3HandoffButton(2, "COMPLETED"), true);
+    assert.equal(canShowEnterStage3HandoffButton(2, "IN_PROGRESS"), false);
+  });
+
+  it("shows Stage 3 status panel once lifecycle has entered Stage 3", () => {
+    assert.equal(canShowStage3StatusPanel(2), false);
+    assert.equal(canShowStage3StatusPanel(3), true);
+    assert.equal(canShowStage3StatusPanel(4), true);
+  });
+
+  it("labels Stage 3 handoff based on package readiness", () => {
+    assert.equal(
+      getStage3HandoffButtonLabel({ packageReady: false, packageReviewed: false }),
+      "Enter Stage 3",
+    );
+    assert.equal(
+      getStage3HandoffButtonLabel({ packageReady: true, packageReviewed: false }),
+      "Start Stage 3",
+    );
+    assert.equal(
+      getStage3HandoffButtonLabel({ packageReady: true, packageReviewed: true }),
+      "Complete Stage 3",
+    );
+  });
+});

@@ -274,6 +274,12 @@ import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator"
 import { NextStepNotice } from "@/components/uci/NextStepNotice";
 import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
+  canShowCompleteStage2ReviewButton,
+  canShowEnterStage3HandoffButton,
+  canShowStage3StatusPanel,
+  getStage3HandoffButtonLabel,
+} from "@/lib/uciStageHandoff";
+import {
   buildStageStateMatrix,
   isUnassignedRequiredProvider,
   providerNeedsConfirmationReason,
@@ -1158,6 +1164,16 @@ export default function UciDashboard() {
     setRecords((previous) => patchCoordinationRecordInList(previous, updated));
   }, []);
 
+  const applyCoordinationDetail = useCallback(
+    (nextDetail: UciRecordDetailResponse) => {
+      setDetail(nextDetail);
+      syncCoordinationListRecord(nextDetail.record);
+      setToStage(String(nextDetail.record.current_stage ?? 1));
+      setToState(nextDetail.record.current_stage_state as LifecycleState);
+    },
+    [syncCoordinationListRecord],
+  );
+
   const handleReassignProviderMapping = useCallback(
     async (params: {
       serviceType: string;
@@ -1411,10 +1427,7 @@ export default function UciDashboard() {
     setPepcoLastNormalizedSync(null);
     try {
       const d = await getCoordinationDetail(id);
-      setDetail(d);
-      syncCoordinationListRecord(d.record);
-      setToStage(String(d.record.current_stage ?? 1));
-      setToState(d.record.current_stage_state as LifecycleState);
+      applyCoordinationDetail(d);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to load detail";
       toast.error(message);
@@ -1431,7 +1444,7 @@ export default function UciDashboard() {
     try {
       await analyzeCoordinationLoadProfile(detailId);
       const d = await getCoordinationDetail(detailId);
-      setDetail(d);
+      applyCoordinationDetail(d);
       toast.success("Load profile analysis saved — review missing inputs before relying on any values");
     } catch (e: unknown) {
       toast.error(formatUciUserError(e, "Load profile analysis failed"));
@@ -1791,7 +1804,7 @@ export default function UciDashboard() {
             }
           : current,
       );
-      void getCoordinationDetail(detailId!).then(setDetail).catch(() => {
+      void getCoordinationDetail(detailId!).then(applyCoordinationDetail).catch(() => {
         // The successful review response is authoritative; refresh can retry independently.
       });
       toast.success(status === "reviewed" ? "Application marked reviewed" : "Changes requested");
@@ -1846,7 +1859,7 @@ export default function UciDashboard() {
       syncCoordinationListRecord(result.coordination);
       setToStage("3");
       setToState(result.stage_3_completed ? "COMPLETED" : "IN_PROGRESS");
-      void getCoordinationDetail(detailId).then(setDetail).catch(() => {
+      void getCoordinationDetail(detailId).then(applyCoordinationDetail).catch(() => {
         // Completion persisted; background refresh failure is non-fatal.
       });
       void refreshCoordination().catch(() => {
@@ -4765,7 +4778,7 @@ export default function UciDashboard() {
                     onRefreshDetail={async () => {
                       if (!detailId) return;
                       const d = await getCoordinationDetail(detailId);
-                      setDetail(d);
+                      applyCoordinationDetail(d);
                     }}
                     initialEditingDocumentSlot={
                       searchParams.get("mode") === "change" &&
@@ -6097,7 +6110,7 @@ export function ApplicationPrepSection({
               </div>
             ) : null}
 
-            {currentStage === 2 ? (
+            {canShowCompleteStage2ReviewButton(currentStage, currentStageState) ? (
               <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
                 <p className="text-sm font-medium text-foreground">
                   Stage 2 engineering review is {formatLifecycleState(currentStageState).toLowerCase()}.
@@ -6117,6 +6130,49 @@ export function ApplicationPrepSection({
                   ) : null}
                   Complete Stage 2 review
                 </Button>
+              </div>
+            ) : null}
+
+            {canShowEnterStage3HandoffButton(currentStage, currentStageState) ? (
+              <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Stage 2 engineering review is completed.
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  {effectiveAllConfirmed
+                    ? "Application package is ready. Enter Stage 3 to begin application preparation or complete Stage 3 when the package is already reviewed."
+                    : "Engineering review is complete. Enter Stage 3 to begin application preparation."}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={stage2CompletionBusy}
+                  onClick={onCompleteStage2}
+                >
+                  {stage2CompletionBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {getStage3HandoffButtonLabel({
+                    packageReady: effectiveAllConfirmed,
+                    packageReviewed: isReviewed,
+                  })}
+                </Button>
+              </div>
+            ) : null}
+
+            {canShowStage3StatusPanel(currentStage) ? (
+              <div className="space-y-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Stage 3 application preparation is{" "}
+                  {formatLifecycleState(currentStageState).toLowerCase()}.
+                </p>
+                <p className={cn("text-xs", mutedClass)}>
+                  {currentStageState === "COMPLETED"
+                    ? "Stage 3 is complete — this coordination is ready for Stage 4 submission."
+                    : effectiveAllConfirmed
+                      ? "All required items are confirmed. Mark the package reviewed to complete Stage 3."
+                      : "Confirm every required field and document, then mark the package reviewed."}
+                </p>
               </div>
             ) : null}
 

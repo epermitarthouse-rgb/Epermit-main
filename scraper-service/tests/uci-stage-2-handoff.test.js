@@ -227,4 +227,29 @@ describe("UCI Stage 2 human handoff", () => {
       (error) => error.code === "STAGE_2_NOT_ACTIVE",
     );
   });
+
+  it("accepts Stage 2 handoff when engineering review is already completed", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "project-1",
+          current_stage: 2,
+          current_stage_state: "COMPLETED",
+        },
+      ],
+      coordination_applications: [],
+      coordination_stage_transitions: [],
+    };
+
+    const result = await completeStage2EngineeringReview(createMockSupabase(tables), {
+      coordinationRecordId: "coord-1",
+      userId: "user-1",
+      reason: "System-completed Stage 2 handoff after package review",
+    });
+
+    assert.equal(result.record.current_stage, 3);
+    assert.equal(result.record.current_stage_state, "IN_PROGRESS");
+    assert.equal(result.stage3Completed, false);
+  });
 });
