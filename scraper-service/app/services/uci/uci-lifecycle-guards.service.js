@@ -339,7 +339,14 @@ function stage7BlockReasons(costs = []) {
   for (const cost of rows) {
     if (costHasOpenBillingHold(cost)) reasons.push(BLOCKED_REASON_CODES.COST_VARIANCE_BLOCK_BILL);
     if (!cost.paid_at) reasons.push(BLOCKED_REASON_CODES.COST_UNPAID_INVOICE);
-    if (String(cost.qb_sync_status || "") === "failed") reasons.push(BLOCKED_REASON_CODES.COST_QB_FAILED);
+    const qbStatus = String(cost.qb_sync_status || "");
+    if (
+      cost.paid_at &&
+      !cost.quickbooks_invoice_id &&
+      ["retry", "failed", "uncertain"].includes(qbStatus)
+    ) {
+      reasons.push(BLOCKED_REASON_CODES.COST_QB_FAILED);
+    }
     if (String(cost.client_approval_status || "") !== "approved") {
       reasons.push(BLOCKED_REASON_CODES.COST_APPROVAL_PENDING);
     }

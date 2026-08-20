@@ -188,10 +188,21 @@ function isActionableCosDesignAttention(cosRow) {
  *   milestones?: Array<Record<string, unknown>>,
  * }} [ctx]
  */
+function filterStaleStage7AttentionCodes(codes, costs) {
+  const rows = Array.isArray(costs) ? costs.filter((c) => c && c.id) : [];
+  if (rows.length < 1) return codes;
+  const allApproved = rows.every((cost) => String(cost.client_approval_status || "") === "approved");
+  if (!allApproved) return codes;
+  return codes.filter((code) => code !== BLOCKED_REASON_CODES.COST_APPROVAL_PENDING);
+}
+
 function listRecordNeedsAttention(record, ctx = {}) {
   if (!record || typeof record !== "object") return [];
   const { evaluateLifecycleGuards } = require("./uci-lifecycle-guards.service.js");
-  const guards = evaluateLifecycleGuards(record, ctx);
+  const costs = Array.isArray(ctx.costs) ? ctx.costs : [];
+  const equipment = Array.isArray(ctx.equipment) ? ctx.equipment : [];
+  const milestones = Array.isArray(ctx.milestones) ? ctx.milestones : [];
+  const guards = evaluateLifecycleGuards(record, { costs, equipment, milestones });
   const stage = Number(record.current_stage);
   /** @type {string[]} */
   let codes = [];
@@ -208,9 +219,11 @@ function listRecordNeedsAttention(record, ctx = {}) {
     }
   }
 
-  const costRows = Array.isArray(ctx.costs) ? ctx.costs : [];
-  if (stage === 7 && costRows.length < 1) {
+  if (stage === 7 && costs.length < 1) {
     codes = codes.filter((code) => code !== BLOCKED_REASON_CODES.COST_APPROVAL_PENDING);
+  }
+  if (stage === 7) {
+    codes = filterStaleStage7AttentionCodes(codes, costs);
   }
 
   const unique = [...new Set(codes.filter(Boolean))];
@@ -272,6 +285,7 @@ module.exports = {
   isSyntheticHistoryNotActionable,
   isActionableNeedsAttentionCommunication,
   isActionableCosDesignAttention,
+  filterStaleStage7AttentionCodes,
   listRecordNeedsAttention,
   isLifecycleCommunicationAttention,
 };

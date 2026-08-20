@@ -51,6 +51,26 @@ describe("Track B guards", () => {
       canCompleteStage7({}, [{ ...settledCost, billing_hold: true, human_override_bill_at: null, client_billed_at: null }]),
       false,
     );
+    assert.equal(
+      canCompleteStage7({}, [{ ...settledCost, quickbooks_invoice_id: null, client_billed_at: null, qb_sync_status: "retry" }]),
+      false,
+    );
+  });
+
+  it("stage7BlockReasons surfaces QB failure for retry status", () => {
+    const { stage7BlockReasons } = require("../app/services/uci/uci-lifecycle-guards.service.js");
+    const { BLOCKED_REASON_CODES } = require("../app/services/uci/uci-lifecycle-constants.js");
+    const reasons = stage7BlockReasons([
+      {
+        id: "c1",
+        actual_amount: 1150,
+        client_approval_status: "approved",
+        paid_at: "2026-08-10T00:00:00.000Z",
+        qb_sync_status: "retry",
+      },
+    ]);
+    assert.ok(reasons.includes(BLOCKED_REASON_CODES.COST_QB_FAILED));
+    assert.ok(!reasons.includes(BLOCKED_REASON_CODES.COST_APPROVAL_PENDING));
   });
 
   it("canEnterStage8 requires Stage 7 COMPLETED and settled costs", () => {

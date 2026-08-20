@@ -6,9 +6,48 @@ const {
   isActionableNeedsAttentionCommunication,
   isOutboundTransmission,
   isOwnOutboundPackageEcho,
+  filterStaleStage7AttentionCodes,
+  listRecordNeedsAttention,
 } = require("../app/services/uci/uci-needs-attention.util.js");
+const { BLOCKED_REASON_CODES } = require("../app/services/uci/uci-lifecycle-constants.js");
 
 describe("uci-needs-attention.util", () => {
+  it("drops stale client approval attention when every cost is approved", () => {
+    const filtered = filterStaleStage7AttentionCodes(
+      [BLOCKED_REASON_CODES.COST_APPROVAL_PENDING, BLOCKED_REASON_CODES.COST_QB_FAILED],
+      [{ id: "c1", client_approval_status: "approved" }],
+    );
+    assert.deepEqual(filtered, [BLOCKED_REASON_CODES.COST_QB_FAILED]);
+
+    const record = {
+      id: "coord-1",
+      project_id: "proj-1",
+      current_stage: 7,
+      current_stage_state: "IN_PROGRESS",
+      metadata: {
+        uci_alerts: [
+          {
+            code: BLOCKED_REASON_CODES.COST_APPROVAL_PENDING,
+            resolved_at: null,
+          },
+        ],
+      },
+    };
+    const items = listRecordNeedsAttention(record, {
+      costs: [
+        {
+          id: "c1",
+          actual_amount: 1150,
+          client_approval_status: "approved",
+          paid_at: "2026-08-10T00:00:00.000Z",
+          qb_sync_status: "failed",
+        },
+      ],
+    });
+    assert.ok(!items.some((item) => item.code === BLOCKED_REASON_CODES.COST_APPROVAL_PENDING));
+    assert.ok(items.some((item) => item.code === BLOCKED_REASON_CODES.COST_QB_FAILED));
+  });
+
   it("excludes Stage 4 outbound package transmissions (null classification)", () => {
     const row = {
       direction: "outbound",

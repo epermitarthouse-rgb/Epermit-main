@@ -196,6 +196,7 @@ const {
   approveCoordinationCost,
   recordCostPayment,
   overrideCostBillingHold,
+  retryCoordinationCostInvoice,
   maybeCompleteStage7,
 } = require("../services/uci/uci-cost-tracker.service.js");
 const { maybeCompleteStage8 } = require("../services/uci/uci-equipment-tracker.service.js");
@@ -4095,6 +4096,35 @@ function createUciRouter(opts) {
         write: true,
       });
       const result = await overrideCostBillingHold(supabase, { costId, userId: user.id });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/costs/:costId/retry-invoice", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const costId = String(req.params.costId || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await retryCoordinationCostInvoice(supabase, {
+        costId,
+        userId: user.id,
+      });
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);

@@ -2452,6 +2452,17 @@ export async function overrideCoordinationCostBilling(
   );
 }
 
+export async function retryCoordinationCostInvoice(
+  coordinationId: string,
+  costId: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/costs/${encodeURIComponent(costId)}/retry-invoice`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Failed to retry client invoice",
+  );
+}
+
 export async function completeCoordinationStage(
   coordinationId: string,
   stage: 7 | 8 | 9 | 10,

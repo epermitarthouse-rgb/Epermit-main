@@ -9,7 +9,11 @@ const { emitUciEvent } = require("./uci-events.service.js");
 const { recordSystemTransition } = require("./uci-transitions.service.js");
 const { canEnterStage7, canCompleteStage7 } = require("./uci-lifecycle-guards.service.js");
 const { raiseUciAlert } = require("./uci-alerts.service.js");
-const { createUciPassthroughInvoice } = require("./uci-qb-passthrough.service.js");
+const {
+  createUciPassthroughInvoice,
+  retryUciPassthroughInvoice,
+} = require("./uci-qb-passthrough.service.js");
+const { resolveUciAlert } = require("./uci-alerts.service.js");
 const { addBusinessDays } = require("./uci-ack-sla.service.js");
 const {
   VARIANCE_REVIEW_PCT,
@@ -211,15 +215,24 @@ async function handleCostLifecycleEvent(supabase, params) {
       cost: nextCost,
       createInvoiceFn: deps.createInvoiceFn,
       queryFn: deps.queryFn,
+      getValidConnectionFn: deps.getValidConnectionFn,
+      getOrCreateCustomerFn: deps.getOrCreateCustomerFn,
+      qbCustomerId: deps.qbCustomerId,
+      qbItemId: deps.qbItemId,
     });
     if (billed.cost) nextCost = billed.cost;
-    if (billed.reason === "failed" && record) {
+    if ((billed.reason === "failed" || billed.reason === "uncertain") && record) {
+      const errCode = billed.error_code ? `[${billed.error_code}] ` : "";
       await raiseUciAlert(supabase, {
         record,
-        severity: "P1",
+        severity: billed.retryable === false ? "P1" : "P2",
         code: BLOCKED_REASON_CODES.COST_QB_FAILED,
-        message: billed.error || "QuickBooks invoice failed",
-        details: { cost_id: nextCost.id },
+        message: `${errCode}${billed.error || "QuickBooks invoice failed"}`.slice(0, 500),
+        details: {
+          cost_id: nextCost.id,
+          qb_sync_status: billed.billing?.qb_sync_status || nextCost.qb_sync_status,
+          retryable: billed.retryable !== false,
+        },
       });
     }
   } else if (nextCost.paid_at && variance.gates.billing_hold && !nextCost.human_override_bill_at) {
@@ -271,6 +284,29 @@ async function approveCoordinationCost(supabase, params) {
     },
     { supabase },
   );
+
+  const record = await loadRecord(supabase, String(updated.coordination_record_id));
+  if (record && allowed === "approved") {
+    await resolveUciAlert(supabase, {
+      record,
+      code: BLOCKED_REASON_CODES.COST_APPROVAL_PENDING,
+    }).catch(() => null);
+  }
+
+  if (
+    allowed === "approved" &&
+    updated.paid_at &&
+    !updated.quickbooks_invoice_id &&
+    !updated.billing_hold
+  ) {
+    const lifecycle = await handleCostLifecycleEvent(supabase, {
+      cost: updated,
+      previous: cost,
+      created: false,
+    });
+    return { cost: lifecycle.cost || updated };
+  }
+
   return { cost: updated };
 }
 
@@ -346,6 +382,10 @@ async function overrideCostBillingHold(supabase, params) {
       cost: updated,
       createInvoiceFn: deps.createInvoiceFn,
       queryFn: deps.queryFn,
+      getValidConnectionFn: deps.getValidConnectionFn,
+      getOrCreateCustomerFn: deps.getOrCreateCustomerFn,
+      qbCustomerId: deps.qbCustomerId,
+      qbItemId: deps.qbItemId,
       userId,
     });
   }
@@ -412,6 +452,41 @@ async function maybeCompleteStage7(supabase, params) {
   });
 }
 
+async function retryCoordinationCostInvoice(supabase, params) {
+  const { costId, userId = null, deps = {} } = params;
+  const { data: existing } = await supabase.from("coordination_costs").select("*").eq("id", costId).maybeSingle();
+  if (!existing) {
+    const err = new Error("Cost not found");
+    err.statusCode = 404;
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  const result = await retryUciPassthroughInvoice(supabase, {
+    costId,
+    userId,
+    deps,
+  });
+  if ((result.reason === "failed" || result.reason === "uncertain") && !result.created) {
+    const record = await loadRecord(supabase, String(existing.coordination_record_id));
+    if (record) {
+      const errCode = result.error_code ? `[${result.error_code}] ` : "";
+      await raiseUciAlert(supabase, {
+        record,
+        severity: result.retryable === false ? "P1" : "P2",
+        code: BLOCKED_REASON_CODES.COST_QB_FAILED,
+        message: `${errCode}${result.error || "QuickBooks invoice failed"}`.slice(0, 500),
+        details: {
+          cost_id: existing.id,
+          qb_sync_status: result.billing?.qb_sync_status,
+          retryable: result.retryable !== false,
+          manual_retry: true,
+        },
+      });
+    }
+  }
+  return result;
+}
+
 module.exports = {
   variancePct,
   varianceGates,
@@ -419,6 +494,7 @@ module.exports = {
   approveCoordinationCost,
   recordCostPayment,
   overrideCostBillingHold,
+  retryCoordinationCostInvoice,
   evaluateCiacSla,
   maybeCompleteStage7,
   maybeEnterStage7OnEstimate,

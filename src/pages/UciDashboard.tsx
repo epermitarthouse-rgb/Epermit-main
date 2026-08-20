@@ -112,6 +112,7 @@ import {
   approveCoordinationCost,
   recordCoordinationCostPayment,
   overrideCoordinationCostBilling,
+  retryCoordinationCostInvoice,
   completeCoordinationStage,
   recordInspectionRelease,
   updateCoordinationSiteContact,
@@ -4695,6 +4696,13 @@ export default function UciDashboard() {
                         () => overrideCoordinationCostBilling(detailId!, costId),
                         "Billing hold overridden",
                         "Failed to override billing hold",
+                      )
+                    }
+                    onRetryInvoice={(costId) =>
+                      void runLifecycleAction(
+                        () => retryCoordinationCostInvoice(detailId!, costId),
+                        "Client invoice retry submitted",
+                        "Failed to retry client invoice",
                       )
                     }
                     onCompleteStage7={() =>

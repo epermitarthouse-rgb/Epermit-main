@@ -1316,7 +1316,7 @@ export function CosAnalysisPanel({
   );
 }
 
-function qbStatusLabel(status: string | null | undefined): string {
+function qbStatusLabel(status: string | null | undefined, lastError?: string | null): string {
   switch (String(status || "not_ready")) {
     case "not_ready":
       return "Not ready to bill";
@@ -1327,14 +1327,20 @@ function qbStatusLabel(status: string | null | undefined): string {
     case "succeeded":
       return "Client invoice created";
     case "retry":
-      return "Retrying client invoice";
+      return "Client invoice failed — auto-retry scheduled";
     case "failed":
-      return "Client invoice failed";
+      return lastError ? `Client invoice failed — ${lastError.replace(/^\[[^\]]+\]\s*/, "")}` : "Client invoice failed — retry or review";
     case "uncertain":
       return "Checking for an existing invoice";
     default:
       return String(status);
   }
+}
+
+function canRetryClientInvoice(cost: CoordinationCost): boolean {
+  if (!cost.paid_at || cost.quickbooks_invoice_id) return false;
+  const status = String(cost.qb_sync_status || "");
+  return status === "failed" || status === "retry" || status === "uncertain";
 }
 
 function varianceTone(pct: string | number | null | undefined): string {
@@ -1367,6 +1373,7 @@ export function CostsEquipmentWorkflowPanel({
   onApproveCost,
   onRecordPayment,
   onOverrideBill,
+  onRetryInvoice,
   onCompleteStage7,
   onCompleteStage8,
   mutedClass,
@@ -1385,6 +1392,7 @@ export function CostsEquipmentWorkflowPanel({
   onApproveCost?: (costId: string) => void;
   onRecordPayment?: (costId: string, paymentMethod: string) => void;
   onOverrideBill?: (costId: string) => void;
+  onRetryInvoice?: (costId: string) => void;
   onCompleteStage7?: () => void;
   onCompleteStage8?: () => void;
 }) {
@@ -1446,7 +1454,13 @@ export function CostsEquipmentWorkflowPanel({
                     {cost.paid_at ? ` · Paid ${formatWhen(cost.paid_at)}` : " · Not paid"}
                     {cost.client_billed_at ? ` · Client billed ${formatWhen(cost.client_billed_at)}` : ""}
                   </p>
-                  <p className={mutedClass}>{qbStatusLabel(cost.qb_sync_status)}</p>
+                  <p className={mutedClass}>{qbStatusLabel(cost.qb_sync_status, cost.qb_last_error)}</p>
+                  {cost.qb_last_error && cost.qb_sync_status !== "succeeded" ? (
+                    <p className="text-[10px] text-destructive">{cost.qb_last_error}</p>
+                  ) : null}
+                  {cost.qb_attempt_count != null && cost.qb_attempt_count > 0 ? (
+                    <p className={`${mutedClass} text-[10px]`}>Invoice attempts: {cost.qb_attempt_count}</p>
+                  ) : null}
                   <div className="flex flex-wrap gap-1.5">
                     {approval !== "approved" && onApproveCost ? (
                       <Button
@@ -1482,6 +1496,18 @@ export function CostsEquipmentWorkflowPanel({
                         onClick={() => onOverrideBill(cost.id)}
                       >
                         Override billing hold
+                      </Button>
+                    ) : null}
+                    {canRetryClientInvoice(cost) && onRetryInvoice ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={toolbarOutlineButtonClass}
+                        disabled={busy}
+                        onClick={() => onRetryInvoice(cost.id)}
+                      >
+                        Retry client invoice
                       </Button>
                     ) : null}
                   </div>
