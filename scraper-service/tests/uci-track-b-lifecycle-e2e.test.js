@@ -24,6 +24,7 @@ const {
   completeStage10IfReady,
 } = require("../app/services/uci/uci-energization-closeout.service.js");
 const { maybeCreateCiacImplicationCost } = require("../app/services/uci/uci-cos-analyst.service.js");
+const { enterStage9 } = require("../app/services/uci/uci-stage9-entry.service.js");
 const { recordUserTransition } = require("../app/services/uci/uci-transitions.service.js");
 const { createTrackBMockSupabase, stage6CompletedRecord } = require("./helpers/uci-track-b-mock.js");
 
@@ -109,12 +110,9 @@ describe("Track B full lifecycle 6→10", () => {
     assert.equal(stage8.record.current_stage, 8);
     assert.equal(stage8.record.current_stage_state, "COMPLETED");
 
-    const entered9 = await recordUserTransition(supabase, {
+    const entered9 = await enterStage9(supabase, {
       coordinationRecordId: "coord-1",
       userId: "user-1",
-      toStage: 9,
-      toState: "IN_PROGRESS",
-      reason: "Stage 8 complete — enter pre-energization",
     });
     assert.equal(entered9.record.current_stage, 9);
     assert.equal(entered9.record.current_stage_state, "BLOCKED");
@@ -162,7 +160,7 @@ describe("Track B full lifecycle 6→10", () => {
       coordinationRecordId: "coord-1",
       userId: "user-1",
     });
-    assert.equal(pdf.sections.length, 5);
+    assert.equal(pdf.sections.length, 6);
     if (!tables.coordination_records[0].closeout_package_doc_id) {
       tables.coordination_records[0].closeout_package_doc_id = pdf.archived.document_id || "doc-1";
     }

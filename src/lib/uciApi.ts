@@ -2474,6 +2474,21 @@ export async function completeCoordinationStage(
   );
 }
 
+export async function enterCoordinationStage9(
+  coordinationId: string,
+  payload?: { reason?: string },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/enter-stage-9`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to start Stage 9",
+  );
+}
+
 export async function recordInspectionRelease(
   coordinationId: string,
   payload?: { received_at?: string; notes?: string },

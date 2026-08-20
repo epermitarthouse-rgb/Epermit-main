@@ -200,6 +200,7 @@ const {
   maybeCompleteStage7,
 } = require("../services/uci/uci-cost-tracker.service.js");
 const { maybeCompleteStage8 } = require("../services/uci/uci-equipment-tracker.service.js");
+const { enterStage9 } = require("../services/uci/uci-stage9-entry.service.js");
 const {
   recordInspectionRelease,
   updateSiteContact,
@@ -4182,6 +4183,36 @@ function createUciRouter(opts) {
       const result = await maybeCompleteStage8(supabase, {
         coordinationRecordId: coordinationId,
         userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/enter-stage-9", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await enterStage9(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        reason: body.reason,
       });
       res.json(result);
     } catch (err) {

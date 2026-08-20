@@ -67,6 +67,21 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.match(dashboardSource, /openCloseoutPdf/);
     assert.doesNotMatch(dashboardSource, /createSignedUrl\(filePath/);
   });
+
+  it("requires explicit Start Stage 9 before meter-set mutations", () => {
+    assert.match(panelSource, /Start Stage 9/);
+    assert.match(panelSource, /onStartStage9/);
+    assert.match(panelSource, /needsStage9Entry/);
+    assert.match(panelSource, /disabled=\{!stage9Active\}/);
+    assert.match(dashboardSource, /enterCoordinationStage9/);
+    assert.match(dashboardSource, /onStartStage9/);
+  });
+
+  it("blocks closeout actions until Stage 9 completes", () => {
+    assert.match(panelSource, /closeoutUnlocked/);
+    assert.match(panelSource, /disabled=\{!closeoutUnlocked\}/);
+    assert.match(panelSource, /Finish meter-set coordination first/);
+  });
 });
 
 describe("deriveMeterSetCloseoutActionState", () => {

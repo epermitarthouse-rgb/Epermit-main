@@ -7,6 +7,21 @@
  */
 function createTrackBMockSupabase(tables) {
   return {
+    storage: {
+      listBuckets: async () => ({
+        data: [{ id: "project-documents", name: "project-documents" }],
+        error: null,
+      }),
+      from() {
+        return {
+          upload: async (_path, _buffer, _opts) => ({ data: { path: _path }, error: null }),
+          download: async (_path) => ({
+            data: { arrayBuffer: async () => Buffer.from("%PDF-1.4\n").buffer },
+            error: null,
+          }),
+        };
+      },
+    },
     from(table) {
       const store = tables[table] || (tables[table] = []);
       const filters = [];

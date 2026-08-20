@@ -212,6 +212,8 @@ export interface UciLifecycleStatus {
     can_complete_stage_9?: boolean;
     can_enter_stage_10?: boolean;
     can_complete_stage_10?: boolean;
+    can_generate_closeout_pdf?: boolean;
+    stage_9_completed_for_closeout?: boolean;
     choreography_may_start?: boolean;
     inspection_release_received?: boolean;
     stage_7_reasons?: string[];

@@ -13,6 +13,8 @@ const {
   canCompleteStage10,
   isProjectUtilityCoordinationComplete,
   assertStage7to10Transition,
+  stage9CompletedForCloseout,
+  canGenerateCloseoutPdf,
 } = require("../app/services/uci/uci-lifecycle-guards.service.js");
 
 const settledCost = {
@@ -151,6 +153,25 @@ describe("Track B guards", () => {
     };
     assert.equal(
       canEnterStage10(record, [{ milestone_type: "meter_set", status: "completed" }]),
+      true,
+    );
+  });
+
+  it("closeout PDF requires Stage 9 COMPLETED or Stage 10+", () => {
+    assert.equal(
+      stage9CompletedForCloseout({ current_stage: 8, current_stage_state: "COMPLETED" }),
+      false,
+    );
+    assert.equal(
+      stage9CompletedForCloseout({ current_stage: 9, current_stage_state: "IN_PROGRESS" }),
+      false,
+    );
+    assert.equal(
+      stage9CompletedForCloseout({ current_stage: 9, current_stage_state: "COMPLETED" }),
+      true,
+    );
+    assert.equal(
+      canGenerateCloseoutPdf({ current_stage: 10, current_stage_state: "IN_PROGRESS" }),
       true,
     );
   });

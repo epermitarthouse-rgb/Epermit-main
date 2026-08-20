@@ -162,6 +162,18 @@ function canEnterStage10(record, milestones = []) {
   return stageOf(record) === 9 && isCompleted(record) && canCompleteStage9(record, milestones);
 }
 
+/** Closeout PDF and Stage 10 energization work require Stage 9 COMPLETED (or Stage 10+). */
+function stage9CompletedForCloseout(record) {
+  const stage = stageOf(record);
+  if (stage < 9) return false;
+  if (stage === 9) return isCompleted(record);
+  return stage >= 10;
+}
+
+function canGenerateCloseoutPdf(record) {
+  return stage9CompletedForCloseout(record);
+}
+
 function closeoutArtifacts(record) {
   const meta = asRecord(record?.metadata);
   const artifacts = asRecord(meta.closeout_artifacts);
@@ -427,6 +439,8 @@ function evaluateLifecycleGuards(record, ctx = {}) {
     can_complete_stage_9: canCompleteStage9(record, milestones),
     can_enter_stage_10: canEnterStage10(record, milestones),
     can_complete_stage_10: canCompleteStage10(record, costs),
+    can_generate_closeout_pdf: canGenerateCloseoutPdf(record),
+    stage_9_completed_for_closeout: stage9CompletedForCloseout(record),
     stage_7_reasons: stage7BlockReasons(costs),
     stage_8_reasons: stage8BlockReasons(equipment),
     stage_9_reasons: stage9BlockReasons(record, milestones),
@@ -442,6 +456,8 @@ module.exports = {
   canEnterStage8,
   canEnterStage9,
   canEnterStage10,
+  stage9CompletedForCloseout,
+  canGenerateCloseoutPdf,
   canCompleteStage7,
   canCompleteStage8,
   canCompleteStage9,

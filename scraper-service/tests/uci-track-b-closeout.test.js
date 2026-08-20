@@ -8,7 +8,12 @@ const {
   maybeMarkProjectComplete,
   attachCloseoutArtifact,
   resolveCloseoutPdfStoragePath,
+  generateAndArchiveCloseout,
 } = require("../app/services/uci/uci-energization-closeout.service.js");
+const {
+  stage9CompletedForCloseout,
+  canGenerateCloseoutPdf,
+} = require("../app/services/uci/uci-lifecycle-guards.service.js");
 const { createTrackBMockSupabase } = require("./helpers/uci-track-b-mock.js");
 
 describe("Track B Agent 12 closeout", () => {
@@ -25,14 +30,50 @@ describe("Track B Agent 12 closeout", () => {
     assert.ok(missing.includes("commissioning_signoff"));
   });
 
-  it("builds a five-section PDF", async () => {
+  it("builds a professional closeout PDF without serialized JSON", async () => {
     const pdf = await buildCloseoutPdf({
       project: { name: "Site A" },
-      record: { id: "coord-1", project_id: "proj-1", current_stage: 10 },
-      transitions: [{ created_at: "2026-08-01", from_stage: 6, to_stage: 7, to_state: "IN_PROGRESS" }],
-      communications: [{ raw_subject: "Energized", direction: "inbound", classification: "energization_confirmation" }],
-      costs: [{ cost_type: "CIAC", estimated_amount: 1000, actual_amount: 1000, paid_at: "2026-08-10" }],
-      energization: { actual_date: "2026-09-01" },
+      provider: { name: "Demo Utility" },
+      record: {
+        id: "coord-1",
+        project_id: "proj-1",
+        current_stage: 10,
+        current_stage_state: "IN_PROGRESS",
+        utility_type: "electric",
+        energization_actual_date: "2026-09-01",
+        predicted_p50_date: "2026-08-15",
+      },
+      transitions: [
+        {
+          created_at: "2026-08-01T12:00:00.000Z",
+          from_stage: 8,
+          from_state: "COMPLETED",
+          to_stage: 9,
+          to_state: "BLOCKED",
+          reason: "Operator started Stage 9",
+        },
+      ],
+      communications: [
+        {
+          raw_subject: "Energized",
+          direction: "inbound",
+          classification: "energization_confirmation",
+          created_at: "2026-09-01T10:00:00.000Z",
+        },
+      ],
+      costs: [
+        {
+          cost_type: "CIAC",
+          estimated_amount: 1000,
+          actual_amount: 1100,
+          paid_at: "2026-08-10",
+          client_billed_at: "2026-08-11",
+        },
+      ],
+      energization: {
+        actual_date: "2026-09-01",
+        utility_confirmation: { label: "Utility letter" },
+      },
     });
     assert.deepEqual(pdf.sections, [
       "project_summary",
@@ -40,9 +81,51 @@ describe("Track B Agent 12 closeout", () => {
       "communications",
       "costs_with_paid_receipts",
       "energization_confirmation",
+      "appendix_transition_audit",
     ]);
     assert.ok(pdf.buffer.slice(0, 4).toString() === "%PDF");
     assert.ok(pdf.hash.length === 64);
+    assert.ok(pdf.buffer.length > 500);
+    const { PDFDocument } = require("pdf-lib");
+    const parsed = await PDFDocument.load(pdf.buffer);
+    assert.ok(parsed.getPageCount() >= 1);
+  });
+
+  it("blocks closeout PDF generation while Stage 9 is incomplete", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 8,
+          current_stage_state: "COMPLETED",
+          energization_actual_date: "2026-09-01",
+          metadata: {
+            closeout_artifacts: {
+              utility_confirmation: { label: "letter" },
+              final_meter_reading: { label: "meter" },
+              commissioning_signoff: { label: "signoff" },
+            },
+          },
+        },
+      ],
+      coordination_costs: [{ id: "c1", paid_at: "2026-08-10" }],
+      coordination_stage_transitions: [],
+      coordination_communications: [],
+      projects: [{ id: "proj-1", name: "Site A", user_id: "user-1" }],
+      project_documents: [],
+    };
+    const supabase = createTrackBMockSupabase(tables);
+    assert.equal(stage9CompletedForCloseout(tables.coordination_records[0]), false);
+    assert.equal(canGenerateCloseoutPdf(tables.coordination_records[0]), false);
+    await assert.rejects(
+      () =>
+        generateAndArchiveCloseout(supabase, {
+          coordinationRecordId: "coord-1",
+          userId: "user-1",
+        }),
+      /Stage 9 is completed/,
+    );
   });
 
   it("attachCloseoutArtifact is idempotent when evidence already exists", async () => {

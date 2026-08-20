@@ -114,6 +114,7 @@ import {
   overrideCoordinationCostBilling,
   retryCoordinationCostInvoice,
   completeCoordinationStage,
+  enterCoordinationStage9,
   recordInspectionRelease,
   updateCoordinationSiteContact,
   requestMeterSetDate,
@@ -4825,6 +4826,14 @@ export default function UciDashboard() {
                         () => recordInspectionRelease(detailId!),
                         "Inspection release recorded",
                         "Failed to record inspection release",
+                        "meter",
+                      )
+                    }
+                    onStartStage9={() =>
+                      void runLifecycleAction(
+                        () => enterCoordinationStage9(detailId!),
+                        "Stage 9 started",
+                        "Stage 9 cannot start until Stage 8 is complete",
                         "meter",
                       )
                     }

@@ -2036,6 +2036,7 @@ function CloseoutArtifactEvidenceRow({
   label,
   resolution,
   closeoutBusy,
+  disabled = false,
   onConfirm,
   mutedClass,
   formatWhen,
@@ -2044,6 +2045,7 @@ function CloseoutArtifactEvidenceRow({
   label: string;
   resolution: CloseoutEvidenceResolution;
   closeoutBusy: boolean;
+  disabled?: boolean;
   onConfirm: (payload: {
     kind: CloseoutArtifactKey;
     label?: string;
@@ -2168,7 +2170,7 @@ function CloseoutArtifactEvidenceRow({
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled={closeoutBusy || (resolution.status === "missing" && !note.trim())}
+                  disabled={closeoutBusy || disabled || (resolution.status === "missing" && !note.trim())}
                   onClick={submitConfirmation}
                 >
                   {closeoutBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
@@ -2178,7 +2180,7 @@ function CloseoutArtifactEvidenceRow({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  disabled={closeoutBusy}
+                  disabled={closeoutBusy || disabled}
                   onClick={() => setShowConfirmForm(false)}
                 >
                   Cancel
@@ -2190,7 +2192,7 @@ function CloseoutArtifactEvidenceRow({
               type="button"
               size="sm"
               variant="outline"
-              disabled={closeoutBusy}
+              disabled={closeoutBusy || disabled}
               onClick={() => setShowConfirmForm(true)}
             >
               {resolution.status === "inherited" ? "Confirm from UCI record" : "Confirm manually"}
@@ -2383,6 +2385,7 @@ export function MeterSetCloseoutPanel({
   closeoutBusy,
   error,
   onRecordInspectionRelease,
+  onStartStage9,
   onSaveSiteContact,
   onRequestMeterSet,
   onConfirmMeterSetDate,
@@ -2410,6 +2413,7 @@ export function MeterSetCloseoutPanel({
   closeoutBusy: boolean;
   error: string | null;
   onRecordInspectionRelease: () => void;
+  onStartStage9: () => void;
   onSaveSiteContact: (payload: {
     site_contact_name?: string;
     site_contact_email?: string;
@@ -2476,6 +2480,15 @@ export function MeterSetCloseoutPanel({
     { key: "final_meter_reading", label: "Final meter reading" },
     { key: "commissioning_signoff", label: "Commissioning sign-off" },
   ];
+  const currentStage = Number(record?.current_stage ?? 0);
+  const stage9Active = currentStage === 9;
+  const needsStage9Entry =
+    currentStage === 8 &&
+    String(record?.current_stage_state) === "COMPLETED" &&
+    lifecycleStatus?.guards?.can_enter_stage_9 === true;
+  const closeoutUnlocked =
+    lifecycleStatus?.guards?.stage_9_completed_for_closeout === true ||
+    lifecycleStatus?.guards?.can_generate_closeout_pdf === true;
 
   return (
     <div className="space-y-3">
@@ -2499,6 +2512,27 @@ export function MeterSetCloseoutPanel({
           <CardDescription className="text-xs">{meterStatusLabel(meter?.status)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-xs">
+          {needsStage9Entry ? (
+            <div className="rounded-md border border-teal/35 bg-teal/5 px-3 py-2">
+              <p className="font-medium text-foreground">Stage 8 is complete — start Stage 9 before meter-set work</p>
+              <p className={cn("mt-1", mutedClass)}>
+                Meter-set actions stay disabled until this record transitions into Stage 9 through the normal lifecycle service.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-2"
+                disabled={meterBusy}
+                onClick={onStartStage9}
+              >
+                {meterBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Start Stage 9
+              </Button>
+            </div>
+          ) : null}
+          {!stage9Active && !needsStage9Entry ? (
+            <p className={mutedClass}>Meter-set coordination runs at Stage 9. Current stage: {currentStage || "-"}.</p>
+          ) : null}
           <p className={mutedClass}>
             Inspection release {record?.inspection_release_received_at ? formatWhen(record.inspection_release_received_at) : "not recorded"}
             . Meter set {meterSetScheduledAt ? formatWhen(meterSetScheduledAt) : "not scheduled"}
@@ -2510,6 +2544,7 @@ export function MeterSetCloseoutPanel({
             pendingLabel="Record inspection release"
             timestamp={actionState.inspectionReleaseAt}
             busy={meterBusy}
+            disabled={!stage9Active}
             onClick={onRecordInspectionRelease}
             toolbarOutlineButtonClass={toolbarOutlineButtonClass}
             formatWhen={formatWhen}
@@ -2525,7 +2560,7 @@ export function MeterSetCloseoutPanel({
             size="sm"
             variant="outline"
             className={toolbarOutlineButtonClass}
-            disabled={meterBusy}
+            disabled={meterBusy || !stage9Active}
             onClick={() =>
               onSaveSiteContact({
                 site_contact_name: siteName || undefined,
@@ -2537,7 +2572,7 @@ export function MeterSetCloseoutPanel({
             Save site contact
           </Button>
 
-          {record?.inspection_release_received_at ? (
+          {stage9Active && record?.inspection_release_received_at ? (
             <div className="flex flex-wrap items-end gap-2">
               <WorkflowCompletedActionButton
                 completed={actionState.meterSetRequested}
@@ -2599,12 +2634,12 @@ export function MeterSetCloseoutPanel({
                 formatWhen={formatWhen}
               />
             </div>
-          ) : (
+          ) : stage9Active ? (
             <p className={mutedClass}>Choreography does not start until inspection release is recorded in this record.</p>
-          )}
+          ) : null}
 
           {lifecycleStatus?.guards?.can_complete_stage_9 ? (
-            <Button type="button" size="sm" disabled={meterBusy} onClick={onCompleteStage9}>
+            <Button type="button" size="sm" disabled={meterBusy || !stage9Active} onClick={onCompleteStage9}>
               Mark Stage 9 complete
             </Button>
           ) : (
@@ -2623,6 +2658,11 @@ export function MeterSetCloseoutPanel({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-xs">
+          {!closeoutUnlocked ? (
+            <p className={mutedClass}>
+              Closeout and energization work unlock after Stage 9 completes. Finish meter-set coordination first.
+            </p>
+          ) : null}
           {record?.energization_date_conflict ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1.5">
               <p>Energization date conflicts with the target date.</p>
@@ -2646,6 +2686,7 @@ export function MeterSetCloseoutPanel({
                   label={label}
                   resolution={resolution}
                   closeoutBusy={closeoutBusy}
+                  disabled={!closeoutUnlocked}
                   onConfirm={onAttachArtifact}
                   mutedClass={mutedClass}
                   formatWhen={formatWhen}
@@ -2698,7 +2739,7 @@ export function MeterSetCloseoutPanel({
               value={energizeDate}
               onChange={(e) => setEnergizeDate(e.target.value)}
               aria-label="Energization date"
-              disabled={actionState.energizationCaptured}
+              disabled={actionState.energizationCaptured || !closeoutUnlocked}
             />
             <WorkflowCompletedActionButton
               completed={actionState.energizationCaptured}
@@ -2706,7 +2747,7 @@ export function MeterSetCloseoutPanel({
               pendingLabel="Mark energized"
               timestamp={actionState.energizationActualDate}
               busy={closeoutBusy}
-              disabled={!energizeDate}
+              disabled={!energizeDate || !closeoutUnlocked}
               onClick={() => onMarkEnergized(energizeDate)}
               toolbarOutlineButtonClass={toolbarOutlineButtonClass}
               formatWhen={formatWhen}
@@ -2717,6 +2758,7 @@ export function MeterSetCloseoutPanel({
               pendingLabel="Generate closeout PDF"
               timestamp={actionState.closeoutPdfGeneratedAt}
               busy={closeoutBusy}
+              disabled={!closeoutUnlocked}
               onClick={onGenerateCloseout}
               toolbarOutlineButtonClass={toolbarOutlineButtonClass}
               formatWhen={formatWhen}

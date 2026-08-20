@@ -19,6 +19,7 @@ const {
   hasUtilityConfirmationEvidence,
   hasFinalMeterReading,
   hasCommissioningSignOff,
+  stage9CompletedForCloseout,
 } = require("./uci-lifecycle-guards.service.js");
 const { BLOCKED_REASON_CODES, UCI_LIFECYCLE_EVENTS } = require("./uci-lifecycle-constants.js");
 const { UCI_DOCUMENTS_STORAGE_BUCKET } = require("./uci-document-storage.service.js");
@@ -37,6 +38,16 @@ async function loadRecord(supabase, id) {
 
 async function loadProject(supabase, projectId) {
   const { data } = await supabase.from("projects").select("*").eq("id", projectId).maybeSingle();
+  return data || {};
+}
+
+async function loadUtilityProvider(supabase, providerId) {
+  if (!providerId) return {};
+  const { data } = await supabase
+    .from("utility_providers")
+    .select("id, name, slug, ownership_type")
+    .eq("id", providerId)
+    .maybeSingle();
   return data || {};
 }
 
@@ -352,7 +363,18 @@ async function generateAndArchiveCloseout(supabase, params) {
     throw err;
   }
   const project = await loadProject(supabase, String(record.project_id));
+  const provider = await loadUtilityProvider(supabase, record.utility_provider_id);
   const bundle = await loadBundle(supabase, record);
+
+  if (!stage9CompletedForCloseout(record)) {
+    const err = new Error(
+      "Closeout PDF cannot be generated until Stage 9 is completed. Start Stage 9 and finish meter-set coordination first.",
+    );
+    err.statusCode = 409;
+    err.code = "STAGE_9_INCOMPLETE_FOR_CLOSEOUT";
+    throw err;
+  }
+
   const missing = missingCloseoutArtifacts(
     { ...record, closeout_package_doc_id: record.closeout_package_doc_id || "pending" },
     bundle.costs,
@@ -374,6 +396,7 @@ async function generateAndArchiveCloseout(supabase, params) {
 
   const pdf = await buildCloseoutPdf({
     project,
+    provider,
     record,
     transitions: bundle.transitions,
     communications: bundle.communications,
@@ -486,6 +509,13 @@ async function completeStage10IfReady(supabase, params) {
 
 function closeoutStatus(record, costs = []) {
   const missing = missingCloseoutArtifacts(record, costs);
+  if (!stage9CompletedForCloseout(record)) {
+    return {
+      status: "stage_9_incomplete",
+      missing: ["stage_9_completed", ...missing.filter((m) => m !== "closeout_pdf")],
+      actions: ["enter_stage_9", "complete_stage_9"],
+    };
+  }
   if (record.energization_date_conflict === true) {
     return { status: "date_conflict", missing, actions: ["resolve_date_conflict"] };
   }
