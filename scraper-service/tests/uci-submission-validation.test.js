@@ -20,7 +20,7 @@ const REVIEWED_SNAPSHOT = {
       status: "attached",
       file_name: "site.pdf",
       source: null,
-      project_document_id: null,
+      project_document_id: "550e8400-e29b-41d4-a716-446655440000",
       external_application_id: null,
       storage_path: null,
       content_hash: null,
@@ -63,6 +63,7 @@ function buildReviewedSynthetic(overrides = {}) {
         label: "Site plan",
         status: "attached",
         file_name: "site.pdf",
+        project_document_id: "550e8400-e29b-41d4-a716-446655440000",
       },
     ],
     agent_draft_metadata: {

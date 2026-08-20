@@ -279,5 +279,10 @@ describe("UCI load calculation worksheet", () => {
     assert.equal(slot.key, "load_calculation_worksheet");
     assert.equal(slot.status, "attached");
     assert.equal(slot.source, "generated_worksheet");
+    assert.ok(slot.project_document_id);
+    assert.match(String(slot.project_document_id), /^[0-9a-f-]{36}$/i);
+    assert.equal(tables.project_documents.length, 1);
+    assert.equal(tables.project_documents[0].document_type, "load_calculation_worksheet");
+    assert.equal(tables.project_documents[0].user_id, "user-1");
   });
 });

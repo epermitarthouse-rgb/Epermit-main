@@ -1,5 +1,7 @@
 "use strict";
 
+const crypto = require("crypto");
+
 /**
  * In-memory Supabase stand-in for Track B unit/integration tests.
  *
@@ -82,7 +84,10 @@ function createTrackBMockSupabase(tables) {
         },
         single() {
           if (state.mode === "insert" && state.insertRow) {
-            const copy = { id: state.insertRow.id || `${table}-${store.length + 1}`, ...state.insertRow };
+            const copy = {
+              id: state.insertRow.id || crypto.randomUUID(),
+              ...state.insertRow,
+            };
             store.push(copy);
             return Promise.resolve({ data: copy, error: null });
           }

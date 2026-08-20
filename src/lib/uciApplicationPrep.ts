@@ -150,6 +150,24 @@ export function parseCanonicalPackageReviewSummary(
   return summary as UciCanonicalPackageReviewSummary;
 }
 
+export const PERSISTED_PROJECT_DOCUMENT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isPersistedProjectDocumentId(value: unknown): boolean {
+  const id = value != null ? String(value).trim() : "";
+  if (!id) return false;
+  if (/^generated-/i.test(id)) return false;
+  return PERSISTED_PROJECT_DOCUMENT_ID.test(id);
+}
+
+export function isDocumentMappingReady(document: UciApplicationPackageDocument): boolean {
+  return (
+    document.status === "attached" &&
+    isPersistedProjectDocumentId(document.project_document_id) &&
+    (!document.signature_required || document.signature_status === "signed_manual_verified")
+  );
+}
+
 export interface UciApplicationPackageDocument {
   key: string;
   label?: string;
@@ -357,6 +375,7 @@ export function getPackageReviewItemStatus(
     ((kind === "field" && currentSnapshot.status === "present") ||
       (kind === "document" &&
         currentSnapshot.status === "attached" &&
+        isPersistedProjectDocumentId(currentSnapshot.project_document_id) &&
         (!currentSnapshot.signature_required ||
           currentSnapshot.signature_status === "signed_manual_verified")))
   ) {
@@ -405,10 +424,7 @@ export function summarizePackageReview(
     metadata?.package_status === "ready_for_review" &&
     fields.every((item) => item.status === "present" && item.reviewStatus === "confirmed") &&
     reviewedDocuments.every(
-      (item) =>
-        item.status === "attached" &&
-        (!item.signature_required || item.signature_status === "signed_manual_verified") &&
-        item.reviewStatus === "confirmed",
+      (item) => isDocumentMappingReady(item) && item.reviewStatus === "confirmed",
     );
   const activeCorrectionCount = items.filter(
     (item) =>

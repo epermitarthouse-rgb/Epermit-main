@@ -11,6 +11,8 @@ const APP_ID = "app-tx-1";
 const PREP_ID = "prep-tx-1";
 const USER_ID = "user-tx-1";
 
+const DOC_ID = "550e8400-e29b-41d4-a716-446655440001";
+
 function buildApp() {
   return {
     id: APP_ID,
@@ -29,7 +31,7 @@ function buildApp() {
         status: "attached",
         file_name: "01_Synthetic_Load_Letter.pdf",
         source: "project_documents",
-        project_document_id: "doc-1",
+        project_document_id: DOC_ID,
       },
     ],
     agent_draft_metadata: {
@@ -43,7 +45,7 @@ function buildApp() {
               {
                 key: "load_letter",
                 file_name: "01_Synthetic_Load_Letter.pdf",
-                project_document_id: "doc-1",
+                project_document_id: DOC_ID,
                 status: "attached",
               },
             ],
@@ -61,7 +63,7 @@ function createTables() {
     projects: [{ id: "proj-1", name: "Highland" }],
     project_documents: [
       {
-        id: "doc-1",
+        id: DOC_ID,
         project_id: "proj-1",
         file_name: "01_Synthetic_Load_Letter.pdf",
         file_path: "path/load.pdf",
@@ -83,7 +85,7 @@ function createTables() {
           {
             key: "load_letter",
             file_name: "01_Synthetic_Load_Letter.pdf",
-            project_document_id: "doc-1",
+            project_document_id: DOC_ID,
             status: "attached",
           },
         ],

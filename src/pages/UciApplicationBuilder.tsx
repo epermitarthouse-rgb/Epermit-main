@@ -46,6 +46,7 @@ import {
   formatSuggestionConfidence,
   getPackageValidationStatus,
   getPackageFieldSourceHref,
+  isDocumentMappingReady,
   parseCanonicalPackageReviewSummary,
   summarizePackageReview,
 } from "@/lib/uciApplicationPrep";
@@ -1212,9 +1213,7 @@ export default function UciApplicationBuilder() {
                                       type="button"
                                       className="pilot-button-primary"
                                       disabled={
-                                        document.status !== "attached" ||
-                                        (document.signature_required &&
-                                          document.signature_status !== "signed_manual_verified") ||
+                                        !isDocumentMappingReady(document) ||
                                         builder.mappingBusySlot === document.key ||
                                         builder.reviewItemBusy === `document:${document.key}`
                                       }

@@ -15,6 +15,8 @@ const {
   collectAttachments,
   isDominionSyntheticPackage,
   NO_SIDE_EFFECTS,
+  validateAttachmentDocumentReferences,
+  assertAttachmentDocumentReferences,
 } = require("./uci-submission-validation.service.js");
 const {
   getMailboxStatusForUser,
@@ -493,6 +495,7 @@ async function prepareSubmission(supabase, params) {
   const readiness = await emailProductionReadiness(supabase, userId, deps);
   const reviewSummary = eligibility.review_summary;
   const bindings = snapshotBindings(reviewSummary, application);
+  assertAttachmentDocumentReferences(bindings.attachments);
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
@@ -844,6 +847,9 @@ async function confirmSubmissionPreparation(supabase, params) {
     err.details = { blockers: eligibility.blockers };
     throw err;
   }
+
+  const confirmAttachments = collectAttachments(application, eligibility.review_summary);
+  assertAttachmentDocumentReferences(confirmAttachments);
 
   const loaded = await getPreparationOrThrow(supabase, preparationId, applicationId);
   const row = loaded.row;

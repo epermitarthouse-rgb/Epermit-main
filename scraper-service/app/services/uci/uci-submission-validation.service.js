@@ -10,7 +10,7 @@ const {
   getApplicationById,
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
 } = require("./uci-application-builder.service.js");
-const { summarizePackageReview } = require("./uci-package-review.service.js");
+const { summarizePackageReview, isPersistedProjectDocumentId } = require("./uci-package-review.service.js");
 
 const VALIDATION_VERSION = "stage4-validation-p0-v1";
 const GENERATED_BY = "agent_4_submission_confirmation_tracker";
@@ -138,9 +138,11 @@ function validateSubmissionValidationEligibility(application) {
  * @param {ReturnType<typeof summarizePackageReview>} reviewSummary
  */
 function collectAttachments(application, reviewSummary) {
-  const snapshotDocs = Array.isArray(reviewSummary.reviewed_snapshot?.documents)
-    ? reviewSummary.reviewed_snapshot.documents
-    : null;
+  const snapshotDocs = Array.isArray(reviewSummary.reviewed_snapshot?.package_documents)
+    ? reviewSummary.reviewed_snapshot.package_documents
+    : Array.isArray(reviewSummary.reviewed_snapshot?.documents)
+      ? reviewSummary.reviewed_snapshot.documents
+      : null;
   const liveDocs = Array.isArray(application.package_documents)
     ? application.package_documents
     : [];
@@ -159,6 +161,47 @@ function collectAttachments(application, reviewSummary) {
       signature_status:
         row.signature_status != null ? String(row.signature_status) : null,
     };
+  });
+}
+
+/**
+ * Ensure every attached required document has a persisted project_documents UUID.
+ * @param {Array<Record<string, unknown>>} attachments
+ */
+function validateAttachmentDocumentReferences(attachments) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  /** @type {Array<{ code: string; key: string | null; message: string }>} */
+  const errors = [];
+  for (const raw of list) {
+    const row = asObject(raw);
+    const key = row.key != null ? String(row.key) : null;
+    if (String(row.status ?? "") !== "attached") {
+      errors.push({
+        code: "ATTACHMENT_NOT_ATTACHED",
+        key,
+        message: `Required attachment is not attached: ${key || row.label || "unknown"}`,
+      });
+      continue;
+    }
+    if (!isPersistedProjectDocumentId(row.project_document_id)) {
+      errors.push({
+        code: "ATTACHMENT_DOCUMENT_ID_MISSING",
+        key,
+        message: `Attachment missing persisted project_document_id: ${key || row.label || row.file_name || "unknown"}`,
+      });
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+function assertAttachmentDocumentReferences(attachments) {
+  const result = validateAttachmentDocumentReferences(attachments);
+  if (result.ok) return result;
+  const first = result.errors[0];
+  throw Object.assign(new Error(first.message), {
+    statusCode: 409,
+    code: first.code === "ATTACHMENT_NOT_ATTACHED" ? "ATTACHMENT_NOT_ATTACHED" : "ATTACHMENT_RESOLVE_FAILED",
+    details: { attachment_errors: result.errors },
   });
 }
 
@@ -266,16 +309,22 @@ async function validateSubmissionPackage(supabase, params) {
     ? collectAttachments(application, reviewSummary)
     : [];
 
+  const attachmentReferenceCheck = eligibility.ok
+    ? validateAttachmentDocumentReferences(attachments)
+    : { ok: true, errors: [] };
+
   const packageValidationErrors = eligibility.ok
     ? [
         ...(Array.isArray(pkg.missing_fields) ? pkg.missing_fields : []),
         ...(Array.isArray(pkg.missing_documents) ? pkg.missing_documents : []),
+        ...attachmentReferenceCheck.errors.map((entry) => entry.key || entry.code),
       ]
     : [];
 
   const readinessOk =
     eligibility.ok &&
     packageValidationErrors.length === 0 &&
+    attachmentReferenceCheck.ok &&
     String(pkg.package_status ?? "") === "ready_for_review";
 
   const warnings = [];
@@ -312,6 +361,7 @@ async function validateSubmissionPackage(supabase, params) {
       attached_document_count: attachments.filter((doc) => doc.status === "attached").length,
       signature_requirements: pkg.signature_requirements ?? [],
       validation_errors: packageValidationErrors,
+      attachment_reference_errors: attachmentReferenceCheck.errors,
       review_status: reviewSummary.status,
       active_correction_count: reviewSummary.active_correction_count,
     },
@@ -514,4 +564,6 @@ module.exports = {
   validateSubmissionPackage,
   listSubmissionValidationAttempts,
   collectAttachments,
+  validateAttachmentDocumentReferences,
+  assertAttachmentDocumentReferences,
 };

@@ -60,7 +60,7 @@ function readyApplication() {
         status: "attached",
         file_name: "load-letter.pdf",
         source: "project_documents",
-        project_document_id: "doc-1",
+        project_document_id: "550e8400-e29b-41d4-a716-446655440002",
       },
     ],
     agent_draft_metadata: {
@@ -154,6 +154,30 @@ describe("Agent 3 package mapping review", () => {
           note: "Must reopen first",
         }),
       (error) => error.code === "PACKAGE_REVIEW_LOCKED",
+    );
+  });
+
+  it("blocks document confirm without persisted project_document_id", async () => {
+    const application = readyApplication();
+    application.package_documents.push({
+      key: "load_calculation_worksheet",
+      label: "Load calculation worksheet",
+      status: "attached",
+      file_name: "worksheet.pdf",
+      source: "generated_worksheet",
+      project_document_id: null,
+    });
+    const supabase = mockSupabase(application);
+    await assert.rejects(
+      () =>
+        updatePackageReviewItem(supabase, {
+          applicationId: application.id,
+          userId: "operator-1",
+          kind: "document",
+          key: "load_calculation_worksheet",
+          status: "confirmed",
+        }),
+      (error) => error.code === "PACKAGE_REVIEW_ITEM_NOT_READY",
     );
   });
 

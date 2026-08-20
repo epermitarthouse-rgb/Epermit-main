@@ -78,12 +78,27 @@ function currentItems(application) {
   return { fields, documents };
 }
 
-function itemReady(kind, snapshot) {
-  if (kind === "field") return snapshot.status === "present";
+const PERSISTED_PROJECT_DOCUMENT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isPersistedProjectDocumentId(value) {
+  const id = value != null ? String(value).trim() : "";
+  if (!id) return false;
+  if (/^generated-/i.test(id)) return false;
+  return PERSISTED_PROJECT_DOCUMENT_ID.test(id);
+}
+
+function documentMappingReady(snapshot) {
   return (
     snapshot.status === "attached" &&
+    isPersistedProjectDocumentId(snapshot.project_document_id) &&
     (!snapshot.signature_required || snapshot.signature_status === "signed_manual_verified")
   );
+}
+
+function itemReady(kind, snapshot) {
+  if (kind === "field") return snapshot.status === "present";
+  return documentMappingReady(snapshot);
 }
 
 function canonicalize(value) {
@@ -281,7 +296,13 @@ async function updatePackageReviewItem(supabase, params) {
     });
   }
   if (status === "confirmed" && !itemReady(kind, snapshot)) {
-    throw Object.assign(new Error("The current mapping is not ready to confirm"), {
+    const message =
+      kind === "document" &&
+      snapshot.status === "attached" &&
+      !isPersistedProjectDocumentId(snapshot.project_document_id)
+        ? `Document mapping is not ready to confirm — missing persisted project_document_id (${key})`
+        : "The current mapping is not ready to confirm";
+    throw Object.assign(new Error(message), {
       statusCode: 400,
       code: "PACKAGE_REVIEW_ITEM_NOT_READY",
     });
@@ -543,6 +564,9 @@ module.exports = {
   REVIEW_VERSION,
   PACKAGE_REVIEW_APPLICATION_SELECT,
   currentItems,
+  isPersistedProjectDocumentId,
+  documentMappingReady,
+  itemReady,
   summarizePackageReview,
   withPackageReviewSummary,
   getPackageReviewApplicationById,

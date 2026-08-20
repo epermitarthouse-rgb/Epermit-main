@@ -74,34 +74,62 @@ async function buildLoadWorksheetPdf(params) {
   return Buffer.from(bytes);
 }
 
+function worksheetPersistError(message, code, extra = {}) {
+  return Object.assign(new Error(message), {
+    statusCode: extra.statusCode ?? 500,
+    code,
+    cause: extra.cause,
+  });
+}
+
 /**
- * Generate the worksheet PDF, store it, and return a package slot entry.
- * Best-effort: storage/document insert failures still return an attached in-memory slot
- * so Agent 3 is not blocked on storage availability.
+ * Generate the worksheet PDF, store it, persist project_documents row, and return a package slot.
+ * Idempotent per project + document_type. Fails loudly when the document row cannot be persisted.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
  */
 async function attachLoadWorksheetToPackage(supabase, params) {
   const { record, project, loadSummary, userId = null } = params;
+  const recordId = String(record?.id || "record");
+  const projectId = record?.project_id != null ? String(record.project_id) : "";
+  if (!projectId) {
+    throw worksheetPersistError("project_id is required to attach load calculation worksheet", "WORKSHEET_PROJECT_REQUIRED", {
+      statusCode: 400,
+    });
+  }
+
+  const resolvedUserId =
+    userId != null && String(userId).trim()
+      ? String(userId).trim()
+      : record?.user_id != null && String(record.user_id).trim()
+        ? String(record.user_id).trim()
+        : project?.user_id != null && String(project.user_id).trim()
+          ? String(project.user_id).trim()
+          : null;
+  if (!resolvedUserId) {
+    throw worksheetPersistError(
+      "user_id is required to persist load calculation worksheet in project_documents",
+      "WORKSHEET_USER_REQUIRED",
+      { statusCode: 400 },
+    );
+  }
+
   const buffer = await buildLoadWorksheetPdf({
     record,
     project,
     application: { load_summary: loadSummary || {} },
   });
-  const recordId = String(record?.id || "record");
   const fileName = `uci-load-worksheet-${recordId.slice(0, 8)}.pdf`;
   /** @type {string | null} */
   let storagePath = null;
-  /** @type {string | null} */
-  let projectDocumentId = null;
 
   try {
     const { storeUciPortalDocument } = require("./uci-document-storage.service.js");
     const stored = await storeUciPortalDocument({
       supabase,
       buffer,
-      projectId: String(record.project_id),
+      projectId,
       coordinationRecordId: recordId,
       providerSlug: String(record.provider_slug || "uci"),
       externalApplicationId: `load-worksheet-${recordId}`,
@@ -113,39 +141,68 @@ async function attachLoadWorksheetToPackage(supabase, params) {
       stored?.fileEntry && typeof stored.fileEntry.storagePath === "string"
         ? stored.fileEntry.storagePath
         : null;
-  } catch {
-    storagePath = `uci/load-worksheet/${recordId}/${fileName}`;
+  } catch (storageErr) {
+    throw worksheetPersistError(
+      storageErr instanceof Error ? storageErr.message : "Failed to store load calculation worksheet",
+      "WORKSHEET_STORAGE_FAILED",
+      { cause: storageErr, statusCode: 500 },
+    );
+  }
+  if (!storagePath) {
+    throw worksheetPersistError(
+      "Load calculation worksheet storage path missing after upload",
+      "WORKSHEET_STORAGE_PATH_MISSING",
+    );
   }
 
-  try {
-    const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
+    .from("project_documents")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("document_type", "load_calculation_worksheet")
+    .limit(5);
+  if (existingError) {
+    throw worksheetPersistError(
+      existingError.message || "Failed to look up existing load calculation worksheet",
+      "WORKSHEET_DOCUMENT_LOOKUP_FAILED",
+      { cause: existingError },
+    );
+  }
+
+  const prior = Array.isArray(existing) ? existing[0] : null;
+  /** @type {string | null} */
+  let projectDocumentId = prior?.id ? String(prior.id) : null;
+
+  if (!projectDocumentId) {
+    const { data: inserted, error: insertError } = await supabase
       .from("project_documents")
+      .insert({
+        project_id: projectId,
+        user_id: resolvedUserId,
+        file_name: fileName,
+        file_path: storagePath,
+        file_size: buffer.length,
+        file_type: "application/pdf",
+        document_type: "load_calculation_worksheet",
+        description: "Generated UCI load calculation worksheet",
+      })
       .select("id")
-      .eq("project_id", record.project_id)
-      .eq("document_type", "load_calculation_worksheet")
-      .limit(5);
-    const prior = Array.isArray(existing) ? existing[0] : null;
-    if (prior?.id) {
-      projectDocumentId = String(prior.id);
-    } else {
-      const { data: inserted } = await supabase
-        .from("project_documents")
-        .insert({
-          project_id: record.project_id,
-          user_id: userId || record.user_id || project?.user_id || null,
-          file_name: fileName,
-          file_path: storagePath || fileName,
-          file_size: buffer.length,
-          file_type: "application/pdf",
-          document_type: "load_calculation_worksheet",
-          description: "Generated UCI load calculation worksheet",
-        })
-        .select("id")
-        .single();
-      if (inserted?.id) projectDocumentId = String(inserted.id);
+      .single();
+    if (insertError || !inserted?.id) {
+      throw worksheetPersistError(
+        insertError?.message || "Failed to persist load calculation worksheet in project_documents",
+        "WORKSHEET_DOCUMENT_PERSIST_FAILED",
+        { cause: insertError },
+      );
     }
-  } catch {
-    /* package slot still attaches below */
+    projectDocumentId = String(inserted.id);
+  }
+
+  if (!projectDocumentId) {
+    throw worksheetPersistError(
+      "Load calculation worksheet missing project_document_id after persist",
+      "WORKSHEET_DOCUMENT_ID_MISSING",
+    );
   }
 
   return {
@@ -158,17 +215,11 @@ async function attachLoadWorksheetToPackage(supabase, params) {
     file_name: fileName,
     storage_path: storagePath,
     project_document_id: projectDocumentId,
-    project_document: projectDocumentId
-      ? {
-          id: projectDocumentId,
-          document_type: "load_calculation_worksheet",
-          file_name: fileName,
-        }
-      : {
-          id: `generated-worksheet-${recordId}`,
-          document_type: "load_calculation_worksheet",
-          file_name: fileName,
-        },
+    project_document: {
+      id: projectDocumentId,
+      document_type: "load_calculation_worksheet",
+      file_name: fileName,
+    },
   };
 }
 

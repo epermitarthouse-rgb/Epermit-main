@@ -645,14 +645,17 @@ async function runApplicationPackageBuild(supabase, params) {
       loadSummary,
       userId,
     });
-    if (worksheet) {
+    if (worksheet?.project_document_id) {
       const idx = packageDocuments.findIndex((d) => String(d.key) === "load_calculation_worksheet");
       if (idx >= 0) packageDocuments[idx] = { ...packageDocuments[idx], ...worksheet, status: "attached" };
       else packageDocuments.push(worksheet);
       missingDocuments = missingDocuments.filter((key) => key !== "load_calculation_worksheet");
     }
-  } catch {
-    // Worksheet is generated when possible; package build still proceeds without it.
+  } catch (worksheetErr) {
+    console.warn(
+      "[uci-application-builder] load worksheet attach failed:",
+      worksheetErr instanceof Error ? worksheetErr.message : worksheetErr,
+    );
   }
   const fieldEval = evaluateRequiredFields(project, loadSummary, requiredFields, record, {
     externalApplicationId,

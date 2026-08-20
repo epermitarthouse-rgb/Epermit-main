@@ -9,6 +9,8 @@ const {
   CONFIRMATION_MESSAGE,
 } = require("../app/services/uci/uci-submission-prepare.service.js");
 
+const DOC_ID = "550e8400-e29b-41d4-a716-446655440000";
+
 const REVIEWED_SNAPSHOT = {
   snapshot_version: "agent-3-reviewed-package-snapshot-v1",
   captured_at: "2026-08-18T12:00:00.000Z",
@@ -19,7 +21,7 @@ const REVIEWED_SNAPSHOT = {
       status: "attached",
       file_name: "site.pdf",
       source: null,
-      project_document_id: null,
+      project_document_id: DOC_ID,
       external_application_id: null,
       storage_path: null,
       content_hash: null,
@@ -56,7 +58,13 @@ function buildApp(overrides = {}) {
     submission_method: null,
     utility_ticket_number: null,
     package_documents: [
-      { key: "site_plan", label: "Site plan", status: "attached", file_name: "site.pdf" },
+      {
+        key: "site_plan",
+        label: "Site plan",
+        status: "attached",
+        file_name: "site.pdf",
+        project_document_id: DOC_ID,
+      },
     ],
     agent_draft_metadata: {
       application_package: {

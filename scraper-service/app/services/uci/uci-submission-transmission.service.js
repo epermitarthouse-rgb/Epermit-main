@@ -13,6 +13,7 @@ const {
 } = require("./uci-application-builder.service.js");
 const {
   isDominionSyntheticPackage,
+  assertAttachmentDocumentReferences,
 } = require("./uci-submission-validation.service.js");
 const {
   resolveConnectedSenderMailbox,
@@ -360,6 +361,10 @@ async function transmitSubmissionPreparation(supabase, params) {
     sender: sender.sender_mailbox,
     recipients: [...toRecipients, ...ccRecipients],
   });
+
+  assertAttachmentDocumentReferences(
+    Array.isArray(preview.attachments) ? preview.attachments : [],
+  );
 
   const binaries = await resolveTransmissionAttachments(
     supabase,
