@@ -33,6 +33,10 @@ export function logUciProjectDataEvent(
     message?: string;
   },
 ): void {
-  if (!import.meta.env.DEV) return;
-  console.debug("[uci-project-data]", { event, ...details });
+  try {
+    if (!import.meta.env.DEV) return;
+    console.debug("[uci-project-data]", { event, ...details });
+  } catch {
+    // Debug logging must never crash the coordination workspace.
+  }
 }

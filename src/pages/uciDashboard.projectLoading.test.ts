@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { logUciProjectDataEvent } from "../lib/uciProjectScopedRequest.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dashboardSource = readFileSync(join(__dirname, "UciDashboard.tsx"), "utf8");
@@ -81,5 +82,30 @@ describe("UciDashboard project loading generation regression", () => {
       1,
       "generation must increment once per project change effect only",
     );
+  });
+
+  it("imports project data helpers so /uci renders when project data loads", () => {
+    assert.match(
+      dashboardSource,
+      /import\s*\{[\s\S]*?logUciProjectDataEvent[\s\S]*?shouldApplyProjectScopedResponse[\s\S]*?\}\s*from\s*"@\/lib\/uciProjectScopedRequest"/,
+      "missing import for project-scoped logging/guards — causes ReferenceError on /uci",
+    );
+  });
+
+  it("never throws when project data debug logging fails", () => {
+    const originalDebug = console.debug;
+    console.debug = () => {
+      throw new Error("debug sink unavailable");
+    };
+    try {
+      assert.doesNotThrow(() =>
+        logUciProjectDataEvent("project_selected", {
+          projectId: "project-a",
+          generation: 1,
+        }),
+      );
+    } finally {
+      console.debug = originalDebug;
+    }
   });
 });

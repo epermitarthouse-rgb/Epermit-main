@@ -170,6 +170,10 @@ import {
   findCoordinationRecordForUtilityType,
   patchCoordinationRecordInList,
 } from "@/lib/uciCoordinationListSync";
+import {
+  logUciProjectDataEvent,
+  shouldApplyProjectScopedResponse,
+} from "@/lib/uciProjectScopedRequest";
 import { PepcoSelectedProjectDetailTabs } from "@/components/uci/PepcoApplicationDetailsPanel";
 import { PepcoProjectList } from "@/components/uci/PepcoProjectList";
 import {
