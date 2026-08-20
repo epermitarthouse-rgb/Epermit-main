@@ -333,15 +333,24 @@ function assertStage7to10Transition(current, toStage, toState, ctx = {}) {
 }
 
 /**
- * Entering Stage 9 without inspection release is allowed but BLOCKED.
+ * Entering Stage 9 without inspection release is allowed.
+ * Explicit operator entry (enter_stage_9) stays IN_PROGRESS; other paths may BLOCK.
  *
  * @param {Record<string, unknown>} record
  * @param {number} toStage
  * @param {string} requestedState
+ * @param {Record<string, unknown>} [metadata]
  */
-function resolveEntryState(record, toStage, requestedState) {
+function resolveEntryState(record, toStage, requestedState, metadata = {}) {
   if (Number(toStage) === 9 && !record.inspection_release_received_at) {
     if (requestedState === "COMPLETED") return requestedState;
+    if (
+      metadata?.action === "enter_stage_9" &&
+      metadata?.human_gated === true &&
+      requestedState === "IN_PROGRESS"
+    ) {
+      return "IN_PROGRESS";
+    }
     return "BLOCKED";
   }
   return requestedState;

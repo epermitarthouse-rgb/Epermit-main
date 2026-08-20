@@ -121,7 +121,7 @@ describe("Track B guards", () => {
     assert.equal(canCompleteStage8({}, [{ status: "pending", current_eta: "2026-09-01" }]), false);
   });
 
-  it("canEnterStage9 allows entry without inspection release (BLOCKED later)", () => {
+  it("canEnterStage9 allows entry without inspection release (explicit entry stays IN_PROGRESS)", () => {
     const record = { current_stage: 8, current_stage_state: "COMPLETED" };
     const equipment = [{ status: "on_order", current_eta: "2026-09-01" }];
     assert.equal(canEnterStage9(record, equipment), true);

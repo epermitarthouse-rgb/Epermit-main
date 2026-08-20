@@ -115,7 +115,7 @@ describe("Track B full lifecycle 6→10", () => {
       userId: "user-1",
     });
     assert.equal(entered9.record.current_stage, 9);
-    assert.equal(entered9.record.current_stage_state, "BLOCKED");
+    assert.equal(entered9.record.current_stage_state, "IN_PROGRESS");
     await recordInspectionRelease(supabase, { coordinationRecordId: "coord-1", userId: "user-1" });
     await confirmMeterSetDate(supabase, {
       coordinationRecordId: "coord-1",

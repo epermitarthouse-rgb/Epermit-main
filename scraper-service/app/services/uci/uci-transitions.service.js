@@ -133,7 +133,7 @@ async function recordUserTransition(supabase, p) {
 
   const ctx = await loadStage7to10Context(supabase, current, toStage);
   assertStage7to10Transition(current, toStage, stateStr, ctx);
-  const resolvedState = resolveEntryState(current, toStage, stateStr);
+  const resolvedState = resolveEntryState(current, toStage, stateStr, metadata);
 
   const transitionRow = {
     coordination_record_id: coordinationRecordId,
@@ -368,7 +368,7 @@ async function recordSystemTransition(supabase, p) {
 
   const ctx = await loadStage7to10Context(supabase, current, toStage);
   assertStage7to10Transition(current, toStage, stateStr, ctx);
-  const resolvedState = resolveEntryState(current, toStage, stateStr);
+  const resolvedState = resolveEntryState(current, toStage, stateStr, metadata);
 
   const transitionRow = {
     coordination_record_id: coordinationRecordId,

@@ -2,7 +2,7 @@
 
 /**
  * Stage 9 lifecycle entry — explicit operator gate after Stage 8 COMPLETED.
- * Uses recordUserTransition; resolveEntryState may set BLOCKED without inspection release.
+ * Uses recordUserTransition; explicit operator entry persists Stage 9 / IN_PROGRESS.
  */
 
 const { canEnterStage9 } = require("./uci-lifecycle-guards.service.js");
@@ -83,6 +83,17 @@ async function enterStage9(supabase, params) {
       human_gated: true,
     },
   });
+
+  const updatedStage = Number(transition.record?.current_stage);
+  const updatedState = String(transition.record?.current_stage_state || "");
+  if (updatedStage !== 9 || updatedState !== "IN_PROGRESS") {
+    const err = new Error(
+      `Stage 9 entry did not persist (stage=${updatedStage}, state=${updatedState || "unknown"})`,
+    );
+    err.statusCode = 500;
+    err.code = "STAGE_9_ENTRY_NOT_PERSISTED";
+    throw err;
+  }
 
   return {
     entered: true,

@@ -4831,7 +4831,21 @@ export default function UciDashboard() {
                     }
                     onStartStage9={() =>
                       void runLifecycleAction(
-                        () => enterCoordinationStage9(detailId!),
+                        async () => {
+                          const result = await enterCoordinationStage9(detailId!);
+                          const updatedRecord =
+                            result.record &&
+                            typeof result.record === "object" &&
+                            !Array.isArray(result.record)
+                              ? (result.record as CoordinationRecord)
+                              : null;
+                          if (updatedRecord) {
+                            setDetail((current) =>
+                              current ? { ...current, record: updatedRecord } : current,
+                            );
+                          }
+                          return result;
+                        },
                         "Stage 9 started",
                         "Stage 9 cannot start until Stage 8 is complete",
                         "meter",

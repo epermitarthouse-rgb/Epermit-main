@@ -2478,7 +2478,7 @@ export async function enterCoordinationStage9(
   coordinationId: string,
   payload?: { reason?: string },
 ): Promise<Record<string, unknown>> {
-  return uciFetchJson(
+  const result = await uciFetchJson<Record<string, unknown>>(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/enter-stage-9`,
     {
       method: "POST",
@@ -2487,6 +2487,38 @@ export async function enterCoordinationStage9(
     },
     "Failed to start Stage 9",
   );
+
+  const record =
+    result.record && typeof result.record === "object" && !Array.isArray(result.record)
+      ? (result.record as { current_stage?: unknown; current_stage_state?: unknown })
+      : null;
+  const stage = Number(record?.current_stage);
+
+  if (result.already_in_stage_9 === true) {
+    if (stage !== 9) {
+      throw new UciApiError("Stage 9 entry reported idempotent but record is not in Stage 9", {
+        code: "STAGE_9_ENTRY_NOT_PERSISTED",
+        httpStatus: 500,
+      });
+    }
+    return result;
+  }
+
+  if (result.entered !== true) {
+    throw new UciApiError("Stage 9 entry did not complete", {
+      code: "STAGE_9_ENTRY_FAILED",
+      httpStatus: 500,
+    });
+  }
+
+  if (stage !== 9 || String(record?.current_stage_state) !== "IN_PROGRESS") {
+    throw new UciApiError("Stage 9 transition did not persist as Stage 9 / IN_PROGRESS", {
+      code: "STAGE_9_ENTRY_NOT_PERSISTED",
+      httpStatus: 500,
+    });
+  }
+
+  return result;
 }
 
 export async function recordInspectionRelease(
