@@ -108,7 +108,7 @@ describe("UCI operational snapshot", () => {
     );
     assert.equal(result.records[0].applications.find((app) => app.id === "application-package")?.submitted_at, null);
     assert.equal(result.records[0].applications.find((app) => app.id === "application-package")?.provider_slug, "dominion");
-    assert.equal(result.records[0].communications_recent.length, 5);
+    assert.equal(result.records[0].communications_recent.length, 7);
     assert.equal(result.records[0].attention_communications.length, 3);
     assert.equal(result.records[0].attention_count, 3);
   });

@@ -122,10 +122,10 @@ function suggestPackageSlotForCandidate(input) {
       test: /\b(CUT[\s-]*SHEET|CUTSHEET|EQUIPMENT[\s-]*CUT[\s-]*SHEET)\b/,
     },
     {
-      slot: "letter_of_authorization",
+      slot: "load_calculation_worksheet",
       confidence: "high",
-      reason: "Filename or metadata indicates a letter of authorization",
-      test: /\b(LETTER[\s-]*OF[\s-]*AUTHORIZATION|AUTHORIZATION[\s-]*LETTER)\b/,
+      reason: "Filename or metadata indicates a load calculation worksheet",
+      test: /\b(LOAD[\s-]*CALC|LOAD[\s-]*WORKSHEET|LOAD[\s-]*LETTER)\b/,
     },
     {
       slot: "letter_of_authorization",
@@ -492,6 +492,15 @@ function resolvePackageDocumentSlots(params) {
           packageDocuments.push(buildAttachedPepcoPackageEntry(confirmed, file, label));
           continue;
         }
+      } else if (source === "generated_worksheet") {
+        packageDocuments.push({
+          ...confirmed,
+          key,
+          label,
+          status: "attached",
+          source: "generated_worksheet",
+        });
+        continue;
       } else if (source === "project_documents") {
         const docId =
           confirmed.project_document_id != null ? String(confirmed.project_document_id) : "";

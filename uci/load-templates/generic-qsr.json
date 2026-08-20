@@ -1,0 +1,33 @@
+{
+  "id": "generic_qsr_v1",
+  "version": "1.0",
+  "provenance": "generic_qsr_fallback",
+  "not_historical_provider_data": true,
+  "not_mcdonalds_official": true,
+  "needs_verification": true,
+  "description": "Generic quick-service restaurant fallback used when a client-supplied prototype is not seeded. Values are engineering defaults for sizing, not measured site data.",
+  "electric": {
+    "connected_load_kw": 80,
+    "voltage": "208/120",
+    "phase": 3,
+    "power_factor": 0.9,
+    "demand_factor": 0.8,
+    "notes": "NEC 220.56-style kitchen demand factor applied to connected load when equipment list is missing."
+  },
+  "gas": {
+    "connected_btu_h": 350000,
+    "delivery_pressure": "7 in wc",
+    "notes": "Aggregate cooking-line BTU/h default; verify cut sheets."
+  },
+  "water": {
+    "fixture_dfu": 40,
+    "notes": "Typical QSR restroom + kitchen fixture units; verify fixture schedule."
+  },
+  "sewer": {
+    "fixture_dfu": 40
+  },
+  "telecom": {
+    "drops": 2,
+    "service_type": "fiber"
+  }
+}

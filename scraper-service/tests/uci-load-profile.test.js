@@ -392,7 +392,12 @@ describe("UCI D2.1 runLoadProfileAnalysis integration", () => {
         coordinationRecordId: "coord-1",
         userId: "user-1",
       });
-      assert.equal(tables.coordination_applications.length, 1);
+      assert.equal(
+        tables.coordination_applications.filter(
+          (a) => a.idempotency_key === LOAD_PROFILE_IDEMPOTENCY_KEY,
+        ).length,
+        1,
+      );
       assert.equal(first.application.idempotency_key, LOAD_PROFILE_IDEMPOTENCY_KEY);
       assert.equal(first.application.record_source, "agent_draft");
 
@@ -400,7 +405,12 @@ describe("UCI D2.1 runLoadProfileAnalysis integration", () => {
         coordinationRecordId: "coord-1",
         userId: "user-1",
       });
-      assert.equal(tables.coordination_applications.length, 1);
+      assert.equal(
+        tables.coordination_applications.filter(
+          (a) => a.idempotency_key === LOAD_PROFILE_IDEMPOTENCY_KEY,
+        ).length,
+        1,
+      );
       assert.equal(second.application.id, first.application.id);
       assert.ok(second.load_summary.generated_at);
     } finally {
@@ -441,7 +451,10 @@ describe("UCI D2.1 runLoadProfileAnalysis integration", () => {
         coordinationRecordId: "coord-1",
         userId: "user-1",
       });
-      assert.equal(tables.coordination_applications.length, 2);
+      const loadDrafts = tables.coordination_applications.filter(
+        (a) => a.idempotency_key === LOAD_PROFILE_IDEMPOTENCY_KEY,
+      );
+      assert.equal(loadDrafts.length, 1);
       const portal = tables.coordination_applications.find((a) => a.id === "portal-app-1");
       assert.equal(portal.record_source, "portal_sync");
       assert.equal(portal.portal_status, "Submitted");
@@ -476,9 +489,9 @@ describe("UCI D2.1 runLoadProfileAnalysis integration", () => {
       });
       assert.equal(result.stage_unchanged, false);
       assert.equal(result.current_stage, 2);
-      assert.equal(result.current_stage_state, "IN_PROGRESS");
+      assert.equal(result.current_stage_state, "COMPLETED");
       assert.equal(tables.coordination_records[0].current_stage, 2);
-      assert.equal(tables.coordination_records[0].current_stage_state, "IN_PROGRESS");
+      assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
       assert.equal(tables.coordination_stage_transitions.length, 1);
       assert.equal(tables.coordination_stage_transitions[0].from_stage, 1);
       assert.equal(tables.coordination_stage_transitions[0].to_stage, 2);

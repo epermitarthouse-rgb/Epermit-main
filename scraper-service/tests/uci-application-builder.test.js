@@ -75,7 +75,9 @@ describe("UCI D3 application builder service", () => {
   });
 
   it("loads Dominion synthetic checklist only when explicitly requested", () => {
-    assert.equal(loadTemplateManifest("dominion", "electric"), null);
+    const generic = loadTemplateManifest("dominion", "electric");
+    assert.ok(generic);
+    assert.equal(generic.template_gap, true);
     const template = loadTemplateManifest("dominion", "electric", {
       checklistMode: "synthetic_test",
     });

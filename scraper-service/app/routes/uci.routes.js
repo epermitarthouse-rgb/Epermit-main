@@ -148,15 +148,34 @@ const {
   canEnterStage6,
 } = require("../services/uci/uci-stage5-entry.service.js");
 const {
+  canEnterStage7,
+  enterStage6,
+} = require("../services/uci/uci-stage6-entry.service.js");
+const {
   sweepAcknowledgmentSlas,
   evaluateAcknowledgmentSla,
 } = require("../services/uci/uci-ack-sla.service.js");
+const {
+  sweepCosSlas,
+  evaluateCosSla,
+} = require("../services/uci/uci-cos-sla.service.js");
 const {
   pollGraphInboundForUser,
   ingestEmailInboundWebhook,
 } = require("../services/uci/uci-graph-inbound.service.js");
 
-const { runCosDiscrepancyAnalysis } = require("../services/uci/uci-cos-analyst.service.js");
+const {
+  runCosDiscrepancyAnalysis,
+  getCurrentCosDesignRecord,
+} = require("../services/uci/uci-cos-analyst.service.js");
+const {
+  approveCosDesign,
+  updateCosAcceptedFields,
+  requestCosRevision,
+  rejectCosDocument,
+  flagCosForReview,
+  listCosDesignRecords,
+} = require("../services/uci/uci-cos-review.service.js");
 const { listCostsByCoordination, upsertCostRecord } = require("../services/uci/uci-costs.service.js");
 const {
   listEquipmentByCoordination,
@@ -166,6 +185,36 @@ const {
 const { prepareMeterSetChecklist } = require("../services/uci/uci-meter-set.service.js");
 const { prepareCloseoutPackage } = require("../services/uci/uci-closeout.service.js");
 const { getProjectPortfolioView } = require("../services/uci/uci-portfolio.service.js");
+const {
+  approveCoordinationCost,
+  recordCostPayment,
+  overrideCostBillingHold,
+  maybeCompleteStage7,
+} = require("../services/uci/uci-cost-tracker.service.js");
+const { maybeCompleteStage8 } = require("../services/uci/uci-equipment-tracker.service.js");
+const {
+  recordInspectionRelease,
+  updateSiteContact,
+  requestMeterSet,
+  confirmMeterSetDate,
+  confirmSiteReadiness,
+  recordMeterSetOutcome,
+  completeStage9IfReady,
+  meterSetStatus,
+} = require("../services/uci/uci-meter-set-choreographer.service.js");
+const {
+  captureEnergizationDate,
+  resolveEnergizationDateConflict,
+  attachCloseoutArtifact,
+  generateAndArchiveCloseout,
+  completeStage10IfReady,
+  maybeMarkProjectComplete,
+  closeoutStatus,
+} = require("../services/uci/uci-energization-closeout.service.js");
+const { evaluateLifecycleGuards } = require("../services/uci/uci-lifecycle-guards.service.js");
+const { listRecordNeedsAttention } = require("../services/uci/uci-needs-attention.util.js");
+const { runOpsLifecycleSweep } = require("../services/uci/uci-lifecycle-scheduler.service.js");
+const { UCI_COST_TYPES } = require("../services/uci/uci-lifecycle-constants.js");
 const { listRecentUciEventsForProject } = require("../services/uci/uci-events.service.js");
 const {
   applyLifecycleProposal,
@@ -527,6 +576,12 @@ function createUciRouter(opts) {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.params.projectId || "").trim();
       await requireProjectAccess({ supabase, userId: user.id, projectId });
+      try {
+        const { mapProjectUtilities } = require("../services/uci/uci-provider-intake.service.js");
+        await mapProjectUtilities(supabase, { projectId, userId: user.id });
+      } catch {
+        /* mapping is best-effort; list still returns whatever exists */
+      }
       const records = await listCoordinationRecordsByProject(supabase, projectId);
       res.json({ records });
     } catch (err) {
@@ -539,6 +594,12 @@ function createUciRouter(opts) {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.params.projectId || "").trim();
+      try {
+        const { mapProjectUtilities } = require("../services/uci/uci-provider-intake.service.js");
+        await mapProjectUtilities(supabase, { projectId, userId: user.id });
+      } catch {
+        /* coverage rows are best-effort */
+      }
       const setup = await getProviderSetupForProject(supabase, {
         projectId,
         userId: user.id,
@@ -3247,11 +3308,296 @@ function createUciRouter(opts) {
         projectId: String(record.project_id),
         write: true,
       });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const projectDocumentIds = Array.isArray(body.project_document_ids)
+        ? body.project_document_ids.map((id) => String(id)).filter(Boolean)
+        : body.project_document_id
+          ? [String(body.project_document_id)]
+          : [];
       const result = await runCosDiscrepancyAnalysis(supabase, {
         coordinationRecordId: coordinationId,
         userId: user.id,
+        communicationId: body.communication_id ? String(body.communication_id) : null,
+        attachments: Array.isArray(body.attachments) ? body.attachments : [],
+        projectDocumentIds,
+        triggeredBy: body.triggered_by
+          ? String(body.triggered_by)
+          : projectDocumentIds.length
+            ? "select_existing"
+            : "manual",
+        advisoryOnly: body.advisory_only === true,
+        deps: {
+          forceNewVersion: body.force_new_version === true || projectDocumentIds.length > 0,
+        },
       });
       res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/cos/records", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: false,
+      });
+      const records = await listCosDesignRecords(
+        supabase,
+        coordinationId,
+        String(record.project_id),
+      );
+      const current = records.find((r) => r.is_current) || (await getCurrentCosDesignRecord(supabase, coordinationId));
+      res.json({
+        records,
+        current,
+        can_enter_stage_6: canEnterStage6(record),
+        can_enter_stage_7: canEnterStage7(record),
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/enter", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await enterStage6(supabase, {
+        coordinationRecordId: coordinationId,
+        reason: "Manual Stage 6 entry",
+        triggeredByType: "user",
+        triggeredById: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/approve", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await approveCosDesign(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        cosDesignRecordId: body.cos_design_record_id ? String(body.cos_design_record_id) : null,
+        notes: body.notes != null ? String(body.notes) : null,
+        acceptMaterialDeviation: body.accept_material_deviation === true,
+        acceptedDeviations: Array.isArray(body.accepted_deviations)
+          ? body.accepted_deviations
+          : [],
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/accepted-fields", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateCosAcceptedFields(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        cosDesignRecordId: body.cos_design_record_id ? String(body.cos_design_record_id) : null,
+        updates: Array.isArray(body.updates) ? body.updates : [],
+        resetFields: Array.isArray(body.reset_fields)
+          ? body.reset_fields
+          : body.reset_field
+            ? [String(body.reset_field)]
+            : [],
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/revision", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await requestCosRevision(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        notes: body.notes != null ? String(body.notes) : "Revision requested",
+        requiredDocuments: Array.isArray(body.required_documents)
+          ? body.required_documents
+          : [],
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/reject", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await rejectCosDocument(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        reason: body.reason != null ? String(body.reason) : "",
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/flag", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await flagCosForReview(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        reason: body.reason != null ? String(body.reason) : "Flagged for engineering review",
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/cos/sla/evaluate", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      res.json(await evaluateCosSla(supabase, coordinationId));
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/cos/sla/sweep", async (req, res) => {
+    try {
+      await requireAuthenticatedUser(req, supabase);
+      res.json(
+        await sweepCosSlas(supabase, {
+          limit: Number(req.body?.limit) || 50,
+        }),
+      );
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
@@ -3411,6 +3757,576 @@ function createUciRouter(opts) {
         scheduledDate: body.scheduled_date,
       });
       res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/lifecycle-status", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({ supabase, userId: user.id, projectId: String(record.project_id) });
+      const [costs, equipment, milestones] = await Promise.all([
+        listCostsByCoordination(supabase, coordinationId, String(record.project_id)),
+        listEquipmentByCoordination(supabase, coordinationId, String(record.project_id)),
+        supabase
+          .from("coordination_milestones")
+          .select("*")
+          .eq("coordination_record_id", coordinationId)
+          .eq("project_id", record.project_id)
+          .then((r) => (Array.isArray(r.data) ? r.data : [])),
+      ]);
+      const guards = evaluateLifecycleGuards(record, { costs, equipment, milestones });
+      const rollup = await maybeMarkProjectComplete(supabase, String(record.project_id));
+      res.json({
+        coordination_record_id: coordinationId,
+        guards,
+        meter_set: meterSetStatus(record, milestones),
+        closeout: closeoutStatus(record, costs),
+        record_attention: listRecordNeedsAttention(record, { costs, equipment, milestones }),
+        project_rollup: rollup,
+        cost_types: UCI_COST_TYPES,
+        predicted: {
+          typical_label: "Typical (P50)",
+          conservative_label: "Conservative (P90)",
+          predicted_p50_date: record.predicted_p50_date ?? null,
+          predicted_p90_date: record.predicted_p90_date ?? null,
+        },
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/costs/:costId/approve", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const costId = String(req.params.costId || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await approveCoordinationCost(supabase, {
+        costId,
+        userId: user.id,
+        status: body.status,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/costs/:costId/record-payment", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const costId = String(req.params.costId || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await recordCostPayment(supabase, {
+        costId,
+        paidAt: body.paid_at,
+        paymentMethod: body.payment_method,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/costs/:costId/override-bill", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const costId = String(req.params.costId || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await overrideCostBillingHold(supabase, { costId, userId: user.id });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/complete-stage-7", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await maybeCompleteStage7(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/complete-stage-8", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await maybeCompleteStage8(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/inspection-release", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await recordInspectionRelease(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+        receivedAt: body.received_at,
+        notes: body.notes,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/site-contact", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateSiteContact(supabase, {
+        coordinationRecordId: coordinationId,
+        siteContactName: body.site_contact_name,
+        siteContactEmail: body.site_contact_email,
+        siteContactPhone: body.site_contact_phone,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/meter-set/request", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await requestMeterSet(supabase, { coordinationRecordId: coordinationId });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/meter-set/confirm-date", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await confirmMeterSetDate(supabase, {
+        coordinationRecordId: coordinationId,
+        scheduledDate: body.scheduled_date,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/meter-set/confirm-site-readiness", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await confirmSiteReadiness(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/meter-set/outcome", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await recordMeterSetOutcome(supabase, {
+        coordinationRecordId: coordinationId,
+        outcome: body.outcome,
+        actualDate: body.actual_date,
+        rescheduleDate: body.reschedule_date,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/complete-stage-9", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await completeStage9IfReady(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/closeout/artifacts", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await attachCloseoutArtifact(supabase, {
+        coordinationRecordId: coordinationId,
+        kind: body.kind,
+        docId: body.doc_id,
+        label: body.label,
+        source: body.source || "operator",
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/closeout/mark-energized", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await captureEnergizationDate(supabase, {
+        coordinationRecordId: coordinationId,
+        actualDate: body.actual_date,
+        source: "operator",
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/closeout/resolve-date-conflict", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await resolveEnergizationDateConflict(supabase, {
+        coordinationRecordId: coordinationId,
+        keep: body.keep,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/closeout/generate", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await generateAndArchiveCloseout(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json({
+        coordination_record_id: coordinationId,
+        document_id: result.archived.document_id,
+        hash: result.pdf.hash,
+        sections: result.sections,
+        reused: result.archived.reused === true,
+        record: result.record,
+      });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/complete-stage-10", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await completeStage10IfReady(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/ops/lifecycle/sweep", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      void user;
+      const opsToken = process.env.UCI_OPS_SWEEP_TOKEN;
+      const provided = String(req.headers["x-uci-ops-token"] || "").trim();
+      if (opsToken && provided !== opsToken) {
+        const err = new Error("Ops sweep token required");
+        err.statusCode = 403;
+        err.code = "OPS_ONLY";
+        throw err;
+      }
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await runOpsLifecycleSweep(supabase, { limit: body.limit });
+      res.json({ ops_only: true, happy_path: false, ...result });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

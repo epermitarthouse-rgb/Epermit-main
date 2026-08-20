@@ -231,12 +231,39 @@ async function graphSendMail(accessToken, message) {
     return { ok: false, status: r.status, error: detail, uncertain: false };
   }
 
-  // Graph sendMail typically returns 202 with empty body — no durable Graph message id.
+  const sentAfter = new Date(Date.now() - 15 * 1000);
+  const to = (message.toRecipients || []).map((item) =>
+    typeof item === "string" ? item : item?.email || item?.address || "",
+  );
+  let reconciled = { ok: true, reconciled: false, message_id: null, internet_message_id: null };
+  try {
+    const { reconcileSentItemsMessage } = require("./uci-graph-sent-items.service.js");
+    reconciled = await reconcileSentItemsMessage(accessToken, {
+      subject: message.subject,
+      to,
+      sentAfter,
+      fetchFn: message.fetchFn,
+      attempts: message.reconcileAttempts,
+      delayMs: message.reconcileDelayMs,
+    });
+  } catch (err) {
+    reconciled = {
+      ok: true,
+      reconciled: false,
+      message_id: null,
+      internet_message_id: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
   return {
     ok: true,
     status: r.status,
-    message_id: `graph-send-${Date.now()}`,
-    uncertain: false,
+    message_id: reconciled.message_id || null,
+    internet_message_id: reconciled.internet_message_id || null,
+    reconciled: reconciled.reconciled === true,
+    unreconciled: reconciled.reconciled !== true,
+    uncertain: reconciled.reconciled !== true,
   };
 }
 
@@ -348,6 +375,9 @@ async function sendUtilitySubmissionEmail(supabase, params) {
     status: "confirmed",
     version: EMAIL_SUBMIT_VERSION,
     message_id: sendResult.message_id ?? null,
+    internet_message_id: sendResult.internet_message_id ?? null,
+    reconciled: sendResult.reconciled === true,
+    unreconciled: sendResult.unreconciled === true,
     subject: emailContent.subject,
     attachment_count: binaryAttachments.length,
     referenced_documents: emailContent.attachedDocs.map((d) => ({

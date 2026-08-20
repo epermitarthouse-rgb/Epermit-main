@@ -297,12 +297,16 @@ describe("UCI D1C lifecycle mapping after sync", () => {
         {
           id: "coord-1",
           project_id: "proj-1",
-          current_stage: 5,
-          current_stage_state: "AWAITING_UTILITY",
+          current_stage: 6,
+          current_stage_state: "COMPLETED",
+          class_of_service_issued_at: "2026-08-01T00:00:00.000Z",
           metadata: {},
         },
       ],
       coordination_stage_transitions: [],
+      coordination_costs: [],
+      coordination_equipment: [],
+      coordination_milestones: [],
     };
     const supabase = createLifecycleMockSupabase(tables);
     const normalized = pepcoAdapter.normalizeApplication(SAMPLE_APP, CONTEXT);

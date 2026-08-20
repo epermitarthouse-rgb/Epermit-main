@@ -148,6 +148,21 @@ function makeSupabase(opts = {}) {
           chain._filters[col] = val;
           return chain;
         },
+        limit() {
+          return chain;
+        },
+        not() {
+          return chain;
+        },
+        is() {
+          return chain;
+        },
+        lte() {
+          return chain;
+        },
+        gte() {
+          return chain;
+        },
         in() {
           return chain;
         },
@@ -155,10 +170,7 @@ function makeSupabase(opts = {}) {
           return chain;
         },
         order() {
-          const filtered = rows.filter((r) =>
-            Object.entries(chain._filters).every(([k, v]) => r[k] === v),
-          );
-          return Promise.resolve({ data: filtered, error: null });
+          return chain;
         },
         then(resolve, reject) {
           const filtered = rows.filter((r) =>
@@ -256,11 +268,11 @@ describe("UCI D13 route integration", () => {
     const res = await fetch(`${server.baseUrl}/api/uci/coordination/${COORD_A}/costs`, {
       method: "POST",
       headers: { Authorization: "Bearer ok", "Content-Type": "application/json" },
-      body: JSON.stringify({ cost_type: "ciac_estimate", estimated_amount: 1200 }),
+      body: JSON.stringify({ cost_type: "CIAC", estimated_amount: 1200 }),
     });
     assert.equal(res.status, 200);
     const body = await res.json();
-    assert.equal(body.cost.cost_type, "ciac_estimate");
+    assert.equal(body.cost.cost_type, "CIAC");
   });
 
   it("rejects stale lifecycle proposal checksum", async () => {

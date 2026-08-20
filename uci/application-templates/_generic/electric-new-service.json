@@ -1,0 +1,49 @@
+{
+  "version": "d3-generic-electric-v1",
+  "provider_slug": "_generic",
+  "utility_type": "electric",
+  "application_type": "new_service",
+  "effective_date": "2026-08-20",
+  "description": "Generic electric new-service package when a utility-specific template is not yet built. Template gap must be logged.",
+  "template_gap": true,
+  "required_documents": [
+    {
+      "key": "load_calculation_worksheet",
+      "label": "Load calculation worksheet",
+      "aliases": ["load_worksheet", "load_calc", "load_calculation"]
+    },
+    {
+      "key": "site_plan",
+      "label": "Site plan",
+      "aliases": ["site_plan", "civil_plan", "site", "plot_plan"]
+    },
+    {
+      "key": "single_line_diagram",
+      "label": "Single-line diagram",
+      "aliases": ["single_line", "single_line_diagram", "electrical_single_line", "one_line"]
+    },
+    {
+      "key": "equipment_cut_sheets",
+      "label": "Equipment cut sheets",
+      "aliases": ["cut_sheet", "equipment_cut_sheet", "equipment_spec", "equipment_specs"]
+    }
+  ],
+  "required_fields": [
+    {
+      "key": "project_address",
+      "label": "Project address",
+      "source": "project.address",
+      "required": true
+    },
+    {
+      "key": "connected_load_data",
+      "label": "Connected load data",
+      "source": "load_summary.calculated_values",
+      "required": true
+    }
+  ],
+  "notes": [
+    "Generic fallback — not a utility-issued form",
+    "Letter of authorization not required unless the assigned utility later requires it"
+  ]
+}

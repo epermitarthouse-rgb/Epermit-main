@@ -364,6 +364,22 @@ describe("Row 5 — provider init API hardening", () => {
     const body = await res.json();
     assert.equal(body.error, "UNSUPPORTED_UTILITY_TYPE");
   });
+});
+
+describe("Row 5 — confirmed PEPCO init on a fresh project", () => {
+  /** @type {{ baseUrl: string, close: () => Promise<void> } | null} */
+  let httpServer = null;
+
+  before(async () => {
+    httpServer = await startServer(makeInitSupabase());
+  });
+
+  after(async () => {
+    if (httpServer) await httpServer.close();
+    httpServer = null;
+  });
+
+  const auth = { Authorization: "Bearer userA", "Content-Type": "application/json" };
 
   it("accepts valid confirmed init and persists mapping metadata", async () => {
     const res = await fetch(`${httpServer.baseUrl}/projects/${PROJECT_A}/coordination/init`, {

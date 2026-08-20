@@ -1,5 +1,12 @@
 "use strict";
 
+const {
+  assertStage7to10Transition,
+  resolveEntryState,
+} = require("./uci-lifecycle-guards.service.js");
+const { recomputePredictedDates } = require("./uci-prediction.service.js");
+const { emitUciEvent } = require("./uci-events.service.js");
+
 const APPLICATION_PACKAGE_IDEMPOTENCY_KEY = "agent_3_application_package:d3-v1";
 const VALID_STATES = new Set([
   "NOT_STARTED",
@@ -17,6 +24,59 @@ const VALID_STATES = new Set([
 function isValidStage(n) {
   const x = Number(n);
   return Number.isInteger(x) && x >= 1 && x <= 10;
+}
+
+/**
+ * Load costs / equipment / milestones only when Stage 7–10 guards apply.
+ * Stages 1–6 are unchanged and do not wait on this context.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} current
+ * @param {number} toStage
+ */
+async function loadStage7to10Context(supabase, current, toStage) {
+  const target = Number(toStage);
+  const from = current.current_stage != null ? Number(current.current_stage) : 0;
+  if (target < 7 && from < 7) return { costs: [], equipment: [], milestones: [] };
+
+  const coordinationRecordId = String(current.id);
+  const projectId = String(current.project_id);
+  const [costsRes, equipmentRes, milestonesRes] = await Promise.all([
+    supabase
+      .from("coordination_costs")
+      .select("*")
+      .eq("coordination_record_id", coordinationRecordId)
+      .eq("project_id", projectId),
+    supabase
+      .from("coordination_equipment")
+      .select("*")
+      .eq("coordination_record_id", coordinationRecordId)
+      .eq("project_id", projectId),
+    supabase
+      .from("coordination_milestones")
+      .select("*")
+      .eq("coordination_record_id", coordinationRecordId)
+      .eq("project_id", projectId),
+  ]);
+
+  return {
+    costs: Array.isArray(costsRes.data) ? costsRes.data : [],
+    equipment: Array.isArray(equipmentRes.data) ? equipmentRes.data : [],
+    milestones: Array.isArray(milestonesRes.data) ? milestonesRes.data : [],
+  };
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} record
+ */
+async function afterRecordWrite(supabase, record) {
+  try {
+    const predicted = await recomputePredictedDates(supabase, { record });
+    return predicted.record || record;
+  } catch {
+    return record;
+  }
 }
 
 /**
@@ -84,13 +144,17 @@ async function recordUserTransition(supabase, p) {
       ? String(current.current_stage_state)
       : null;
 
+  const ctx = await loadStage7to10Context(supabase, current, toStage);
+  assertStage7to10Transition(current, toStage, stateStr, ctx);
+  const resolvedState = resolveEntryState(current, toStage, stateStr);
+
   const transitionRow = {
     coordination_record_id: coordinationRecordId,
     project_id: projectId,
     from_stage: Number.isFinite(fromStage) ? fromStage : null,
     to_stage: toStage,
     from_state: VALID_STATES.has(fromState) ? fromState : null,
-    to_state: stateStr,
+    to_state: resolvedState,
     triggered_by_type: "user",
     triggered_by_id: userId,
     reason: typeof reason === "string" && reason.trim() ? reason.trim() : null,
@@ -115,7 +179,8 @@ async function recordUserTransition(supabase, p) {
     .from("coordination_records")
     .update({
       current_stage: toStage,
-      current_stage_state: stateStr,
+      current_stage_state: resolvedState,
+      current_stage_entered_at: new Date().toISOString(),
     })
     .eq("id", coordinationRecordId)
     .eq("project_id", projectId)
@@ -130,7 +195,20 @@ async function recordUserTransition(supabase, p) {
     });
   }
 
-  return { record: updated, transition };
+  const record = await afterRecordWrite(supabase, updated);
+  emitUciEvent(
+    "uci.stage.transitioned",
+    {
+      coordination_record_id: coordinationRecordId,
+      project_id: projectId,
+      from_stage: fromStage,
+      to_stage: toStage,
+      to_state: resolvedState,
+      triggered_by_type: "user",
+    },
+    { supabase },
+  );
+  return { record, transition };
 }
 
 /**
@@ -301,13 +379,17 @@ async function recordSystemTransition(supabase, p) {
       ? String(current.current_stage_state)
       : null;
 
+  const ctx = await loadStage7to10Context(supabase, current, toStage);
+  assertStage7to10Transition(current, toStage, stateStr, ctx);
+  const resolvedState = resolveEntryState(current, toStage, stateStr);
+
   const transitionRow = {
     coordination_record_id: coordinationRecordId,
     project_id: projectId,
     from_stage: Number.isFinite(fromStage) ? fromStage : null,
     to_stage: toStage,
     from_state: VALID_STATES.has(fromState) ? fromState : null,
-    to_state: stateStr,
+    to_state: resolvedState,
     triggered_by_type: triggeredByType,
     triggered_by_id: triggeredById,
     reason: typeof reason === "string" && reason.trim() ? reason.trim() : null,
@@ -332,7 +414,8 @@ async function recordSystemTransition(supabase, p) {
     .from("coordination_records")
     .update({
       current_stage: toStage,
-      current_stage_state: stateStr,
+      current_stage_state: resolvedState,
+      current_stage_entered_at: new Date().toISOString(),
     })
     .eq("id", coordinationRecordId)
     .eq("project_id", projectId)
@@ -347,7 +430,20 @@ async function recordSystemTransition(supabase, p) {
     });
   }
 
-  return { record: updated, transition };
+  const record = await afterRecordWrite(supabase, updated);
+  emitUciEvent(
+    "uci.stage.transitioned",
+    {
+      coordination_record_id: coordinationRecordId,
+      project_id: projectId,
+      from_stage: fromStage,
+      to_stage: toStage,
+      to_state: resolvedState,
+      triggered_by_type: triggeredByType,
+    },
+    { supabase },
+  );
+  return { record, transition };
 }
 
 module.exports = {

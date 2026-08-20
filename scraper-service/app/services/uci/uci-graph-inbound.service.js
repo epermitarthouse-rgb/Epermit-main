@@ -15,6 +15,9 @@ const {
 const { matchInboundToCoordination } = require("./uci-communication-matcher.service.js");
 const { classifySingleCommunication } = require("./uci-communication-classifier.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
+const {
+  persistGraphAttachmentsForCommunication,
+} = require("./uci-graph-attachment-persist.service.js");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
@@ -398,6 +401,7 @@ async function ingestInboundEmailMessage(supabase, params) {
     projectId = null,
     tenantId = null,
     providerSlug = null,
+    accessToken = null,
     deps = {},
   } = params;
 
@@ -504,22 +508,119 @@ async function ingestInboundEmailMessage(supabase, params) {
     match,
   });
 
-  let classification = null;
-  if (upserted.inserted || !upserted.communication?.classification) {
-    classification = await classifySingleCommunication(supabase, {
-      communicationId: String(upserted.communication.id),
+  /** @type {Record<string, unknown> | null} */
+  let attachmentResult = null;
+  let communication = upserted.communication;
+
+  const existingAtts = Array.isArray(communication?.raw_attachments)
+    ? communication.raw_attachments
+    : [];
+  const alreadyPersisted =
+    existingAtts.length > 0 &&
+    existingAtts.every(
+      (a) =>
+        a &&
+        typeof a === "object" &&
+        (a.project_document_id || a.unsupported === true || a.persisted === true),
+    );
+
+  if (
+    accessToken &&
+    communication &&
+    (upserted.inserted || !alreadyPersisted) &&
+    deps.skipAttachmentPersist !== true
+  ) {
+    attachmentResult = await persistGraphAttachmentsForCommunication(supabase, {
+      accessToken,
+      communication,
+      coordinationRecordId: String(match.coordination_record_id),
+      projectId: String(match.project_id || projectId),
+      mailboxUserId,
+      normalized,
+      fetchFn: deps.fetchFn || fetch,
       deps,
     });
+    if (attachmentResult?.communication) {
+      communication = attachmentResult.communication;
+    }
+  }
+
+  let classification = null;
+  try {
+    const { isBounceMessage, applyEmailBounce } = require("./uci-email-bounce.service.js");
+    if (isBounceMessage(normalized) || isBounceMessage(communication)) {
+      const bounce = await applyEmailBounce(supabase, {
+        projectId: String(match.project_id || projectId),
+        internetMessageId: normalized.internet_message_id,
+        graphMessageId: normalized.id,
+        communication,
+      });
+      if (bounce.bounced) {
+        await supabase
+          .from("coordination_communications")
+          .update({
+            needs_human_attention: true,
+            classification: "escalation_or_problem",
+            parsed_summary: "Outbound utility submission email bounced",
+          })
+          .eq("id", communication.id);
+        const { raiseUciAlert } = require("./uci-alerts.service.js");
+        const { data: rec } = await supabase
+          .from("coordination_records")
+          .select("*")
+          .eq("id", bounce.coordination_record_id)
+          .maybeSingle();
+        if (rec) {
+          await raiseUciAlert(supabase, {
+            record: rec,
+            severity: "P1",
+            code: "EMAIL_BOUNCE",
+            message: "Utility submission email bounced",
+          }).catch(() => null);
+        }
+      }
+    }
+  } catch {
+    /* bounce handling is best-effort */
+  }
+
+  if (upserted.inserted || !communication?.classification) {
+    classification = await classifySingleCommunication(supabase, {
+      communicationId: String(communication.id),
+      deps: {
+        ...deps,
+        stage6Attachments: attachmentResult?.parser_buffers || [],
+      },
+    });
+  } else if (
+    attachmentResult?.parser_buffers?.length &&
+    deps.skipStage6Retry !== true
+  ) {
+    // Attachments recovered on a later poll after classification already ran —
+    // still forward into Stage 6 when eligible.
+    const { maybeEnterStage6FromCommunication } = require("./uci-stage6-entry.service.js");
+    classification = {
+      communication,
+      skipped: true,
+      stage_6: await maybeEnterStage6FromCommunication(supabase, {
+        communication,
+        deps: {
+          ...deps,
+          stage6Attachments: attachmentResult.parser_buffers,
+        },
+      }),
+    };
   }
 
   emitUciEvent(
     "uci.communication.ingested",
     {
-      communication_id: upserted.communication?.id,
+      communication_id: communication?.id,
       coordination_record_id: match.coordination_record_id,
       project_id: match.project_id,
       source: "graph_inbound",
       inserted: upserted.inserted,
+      attachment_count: attachmentResult?.attachments?.length ?? existingAtts.length,
     },
     { supabase },
   );
@@ -529,8 +630,9 @@ async function ingestInboundEmailMessage(supabase, params) {
     unmatched: null,
     inserted: upserted.inserted,
     match,
-    communication: classification?.communication || upserted.communication,
+    communication: classification?.communication || communication,
     classification,
+    attachments: attachmentResult,
   };
 }
 
@@ -622,6 +724,7 @@ async function pollGraphInboundForUser(supabase, params) {
       projectId,
       tenantId,
       providerSlug,
+      accessToken,
       deps,
     });
     results.push(result);

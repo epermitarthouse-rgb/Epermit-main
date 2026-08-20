@@ -68,27 +68,26 @@ function makeSupabase(opts = {}) {
           };
         },
         update(patch) {
-          return {
+          const inner = {
             eq(col, val) {
               chain._filters[col] = val;
-              return {
-                select() {
-                  return {
-                    single: async () => {
-                      const idx = rows.findIndex((r) =>
-                        Object.entries(chain._filters).every(([k, v]) => r[k] === v),
-                      );
-                      if (idx >= 0) rows[idx] = { ...rows[idx], ...patch };
-                      return { data: rows[idx] ?? null, error: null };
-                    },
-                  };
-                },
-                then(resolve) {
-                  resolve({ error: null });
-                },
-              };
+              return inner;
+            },
+            select() {
+              return inner;
+            },
+            single: async () => {
+              const idx = rows.findIndex((r) =>
+                Object.entries(chain._filters).every(([k, v]) => r[k] === v),
+              );
+              if (idx >= 0) rows[idx] = { ...rows[idx], ...patch };
+              return { data: rows[idx] ?? null, error: null };
+            },
+            then(resolve) {
+              resolve({ error: null });
             },
           };
+          return inner;
         },
         eq(col, val) {
           chain._filters[col] = val;
