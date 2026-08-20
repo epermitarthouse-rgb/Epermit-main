@@ -8,6 +8,10 @@ const {
 } = require("./uci-provider-resolution-persistence.js");
 const { requireSupportedUtilityType } = require("./uci-utility-types.js");
 
+function lazyEnsurePredictions() {
+  return require("./uci-record-write.service.js").ensureCoordinationRecordPredictions;
+}
+
 const RECORD_WITH_PROVIDER_SELECT = `
   *,
   utility_providers (
@@ -118,7 +122,9 @@ async function listCoordinationRecordsByProject(supabase, projectId) {
     });
   }
 
-  return Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? data : [];
+  const ensurePredictions = lazyEnsurePredictions();
+  return Promise.all(rows.map((row) => ensurePredictions(supabase, row)));
 }
 
 /**
@@ -141,7 +147,8 @@ async function getCoordinationRecordById(supabase, id) {
     });
   }
 
-  return data ?? null;
+  if (!data) return null;
+  return lazyEnsurePredictions()(supabase, data);
 }
 
 /**
@@ -200,7 +207,7 @@ async function getCoordinationRecordDetailById(supabase, id) {
     if (record[key] != null) record.metadata[key] = record[key];
     delete record[key];
   }
-  return record;
+  return lazyEnsurePredictions()(supabase, record);
 }
 
 /**

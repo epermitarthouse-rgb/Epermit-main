@@ -244,7 +244,13 @@ async function recomputePredictedDates(supabase, params) {
       .eq("id", String(record.id))
       .select("*")
       .single();
-    if (!error && data) updated = data;
+    if (error) {
+      throw Object.assign(new Error(error.message || "Failed to persist predicted dates"), {
+        cause: error,
+        code: "PREDICTION_PERSIST_FAILED",
+      });
+    }
+    if (data) updated = data;
   }
 
   emitUciEvent(

@@ -76,6 +76,10 @@ async function persistLifecycleProposalsPayload(supabase, params) {
       code: "LIFECYCLE_PROPOSAL_PERSIST_FAILED",
     });
   }
+
+  const { loadCoordinationRecord, afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+  const refreshed = await loadCoordinationRecord(supabase, coordinationRecordId);
+  await afterCoordinationRecordWrite(supabase, refreshed);
 }
 
 /**

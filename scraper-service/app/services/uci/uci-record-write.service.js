@@ -110,7 +110,40 @@ async function updateCoordinationRecordFields(supabase, params) {
   return { record, previous: current };
 }
 
+/**
+ * Recompute P50/P90 after any coordination_records mutation.
+ * Safe no-op when record is missing; never throws to callers.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown> | null | undefined} record
+ * @returns {Promise<Record<string, unknown> | null | undefined>}
+ */
+async function afterCoordinationRecordWrite(supabase, record) {
+  if (!record?.id) return record;
+  try {
+    const predicted = await recomputePredictedDates(supabase, { record });
+    if (predicted.computed && predicted.record) return predicted.record;
+    return record;
+  } catch {
+    return record;
+  }
+}
+
+/**
+ * Backfill P50/P90 when a record was written before prediction hooks existed.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown> | null | undefined} record
+ * @returns {Promise<Record<string, unknown> | null | undefined>}
+ */
+async function ensureCoordinationRecordPredictions(supabase, record) {
+  if (!record?.id || record.predicted_p50_date) return record;
+  return afterCoordinationRecordWrite(supabase, record);
+}
+
 module.exports = {
   loadCoordinationRecord,
   updateCoordinationRecordFields,
+  afterCoordinationRecordWrite,
+  ensureCoordinationRecordPredictions,
 };

@@ -12,6 +12,11 @@ const { canEnterStage6 } = require("./uci-stage5-entry.service.js");
 const { LOW_CONFIDENCE_THRESHOLD } = require("./uci-communication-categories.js");
 const { emitUciEvent } = require("./uci-events.service.js");
 
+async function withPredictionRecompute(supabase, record) {
+  const { afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+  return afterCoordinationRecordWrite(supabase, record);
+}
+
 /** Values that must never satisfy the PM/coordinator assignment gate. */
 const PM_PLACEHOLDER_PATTERNS = Object.freeze([
   /^pending(\s+utility)?(\s+contact)?$/i,
@@ -230,6 +235,8 @@ async function persistPartialAcknowledgmentEvidence(supabase, params) {
     return { persisted: false, reason: upErr.message || "evidence_update_failed" };
   }
 
+  const withPredictions = await withPredictionRecompute(supabase, updated);
+
   if (fields.ticket) {
     await supabase
       .from("coordination_applications")
@@ -251,7 +258,7 @@ async function persistPartialAcknowledgmentEvidence(supabase, params) {
 
   return {
     persisted: true,
-    coordination_record: updated,
+    coordination_record: withPredictions,
     incomplete_reason: reason,
     stage_state: "AWAITING_UTILITY",
     sla_stopped: false,

@@ -234,6 +234,10 @@ async function processLifecycleMappingAfterSync(supabase, opts) {
       })
       .eq("id", opts.coordinationRecordId)
       .eq("project_id", opts.projectId);
+
+    const { loadCoordinationRecord, afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+    const refreshed = await loadCoordinationRecord(supabase, opts.coordinationRecordId);
+    await afterCoordinationRecordWrite(supabase, refreshed);
   } catch (metaErr) {
     return {
       status: proposalRows.length ? "partial" : "not_run",

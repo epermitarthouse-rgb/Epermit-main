@@ -771,7 +771,8 @@ async function runCosDesignAnalysis(supabase, params) {
       code: "COS_UPDATE_FAILED",
     });
   }
-  record = updatedRecord || record;
+  const { afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+  record = await afterCoordinationRecordWrite(supabase, updatedRecord || record);
 
   // Always link discrepancy_report to the triggering communication (A6.9)
   if (primary?.id) {

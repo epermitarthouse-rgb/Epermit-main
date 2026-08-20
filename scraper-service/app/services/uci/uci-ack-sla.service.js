@@ -7,6 +7,11 @@
 
 const { emitUciEvent } = require("./uci-events.service.js");
 
+async function withPredictionRecompute(supabase, record) {
+  const { afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+  return afterCoordinationRecordWrite(supabase, record);
+}
+
 const DEFAULT_ACK_SLA_BUSINESS_DAYS = 5;
 
 /**
@@ -151,10 +156,12 @@ async function startAcknowledgmentSla(supabase, params) {
     { supabase },
   );
 
+  const withPredictions = await withPredictionRecompute(supabase, updated);
+
   return {
     started: true,
     already_active: false,
-    coordination_record: updated,
+    coordination_record: withPredictions,
     sla_business_days: slaDays,
     due_at: dueIso,
   };
@@ -240,7 +247,9 @@ async function stopAcknowledgmentSla(supabase, params) {
     { supabase },
   );
 
-  return { stopped: true, already_stopped: false, coordination_record: updated };
+  const withPredictions = await withPredictionRecompute(supabase, updated);
+
+  return { stopped: true, already_stopped: false, coordination_record: withPredictions };
 }
 
 /**
@@ -314,7 +323,7 @@ async function evaluateAcknowledgmentSla(supabase, coordinationRecordId, now = n
       .single();
 
     if (!upErr && data) {
-      updated = data;
+      updated = await withPredictionRecompute(supabase, data);
       emitUciEvent(
         "uci.stage5.ack_sla.escalated_2x",
         {

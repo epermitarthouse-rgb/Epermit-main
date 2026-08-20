@@ -4,7 +4,7 @@ const {
   assertStage7to10Transition,
   resolveEntryState,
 } = require("./uci-lifecycle-guards.service.js");
-const { recomputePredictedDates } = require("./uci-prediction.service.js");
+const { afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
 
 const APPLICATION_PACKAGE_IDEMPOTENCY_KEY = "agent_3_application_package:d3-v1";
@@ -64,19 +64,6 @@ async function loadStage7to10Context(supabase, current, toStage) {
     equipment: Array.isArray(equipmentRes.data) ? equipmentRes.data : [],
     milestones: Array.isArray(milestonesRes.data) ? milestonesRes.data : [],
   };
-}
-
-/**
- * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- * @param {Record<string, unknown>} record
- */
-async function afterRecordWrite(supabase, record) {
-  try {
-    const predicted = await recomputePredictedDates(supabase, { record });
-    return predicted.record || record;
-  } catch {
-    return record;
-  }
 }
 
 /**
@@ -195,7 +182,7 @@ async function recordUserTransition(supabase, p) {
     });
   }
 
-  const record = await afterRecordWrite(supabase, updated);
+  const record = await afterCoordinationRecordWrite(supabase, updated);
   emitUciEvent(
     "uci.stage.transitioned",
     {
@@ -430,7 +417,7 @@ async function recordSystemTransition(supabase, p) {
     });
   }
 
-  const record = await afterRecordWrite(supabase, updated);
+  const record = await afterCoordinationRecordWrite(supabase, updated);
   emitUciEvent(
     "uci.stage.transitioned",
     {

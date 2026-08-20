@@ -8,6 +8,11 @@
 const { emitUciEvent } = require("./uci-events.service.js");
 const { addBusinessDays, slaMultiplierElapsed } = require("./uci-ack-sla.service.js");
 
+async function withPredictionRecompute(supabase, record) {
+  const { afterCoordinationRecordWrite } = require("./uci-record-write.service.js");
+  return afterCoordinationRecordWrite(supabase, record);
+}
+
 const DEFAULT_COS_SLA_BUSINESS_DAYS = 30;
 
 /**
@@ -116,10 +121,12 @@ async function startCosSla(supabase, params) {
     { supabase },
   );
 
+  const withPredictions = await withPredictionRecompute(supabase, updated);
+
   return {
     started: true,
     already_active: false,
-    coordination_record: updated,
+    coordination_record: withPredictions,
     sla_business_days: slaDays,
     due_at: dueIso,
   };
@@ -201,7 +208,9 @@ async function stopCosSla(supabase, params) {
     { supabase },
   );
 
-  return { stopped: true, already_stopped: false, coordination_record: updated };
+  const withPredictions = await withPredictionRecompute(supabase, updated);
+
+  return { stopped: true, already_stopped: false, coordination_record: withPredictions };
 }
 
 /**
@@ -275,7 +284,7 @@ async function evaluateCosSla(supabase, coordinationRecordId, now = new Date()) 
       .single();
 
     if (!upErr && data) {
-      updated = data;
+      updated = await withPredictionRecompute(supabase, data);
       emitUciEvent(
         "uci.stage6.cos_sla.escalated_2x",
         {
