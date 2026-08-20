@@ -15,11 +15,11 @@ export const UCI_LIFECYCLE_STAGE_TITLES: Record<number, string> = {
   3: "Application package",
   4: "Submission",
   5: "Utility communications",
-  6: "Class of Service",
-  7: "Costs and equipment",
-  8: "Meter-set preparation",
-  9: "Energization",
-  10: "Closeout",
+  6: "Design Review / Class of Service",
+  7: "CIAC",
+  8: "Long-lead",
+  9: "Pre-energization",
+  10: "Energization & closeout",
 };
 
 /** Primary workspace tab recommended for a lifecycle stage (display guidance only). */
@@ -32,7 +32,7 @@ export const UCI_STAGE_RECOMMENDED_TAB: Record<number, UciDrawerTab> = {
   5: "communications",
   6: "cos",
   7: "costs",
-  8: "energization-closeout",
+  8: "costs",
   9: "energization-closeout",
   10: "energization-closeout",
 };
@@ -133,16 +133,16 @@ const TAB_CONTEXT: Partial<Record<UciDrawerTab, { title: string; body: string }>
     body: "Review utility messages, classify inbound items, and confirm acknowledgment when received.",
   },
   cos: {
-    title: "On Class of Service",
-    body: "Review utility-issued Class of Service decisions and related follow-ups.",
+    title: "On Design Review / Class of Service",
+    body: "Compare utility-issued COS or design responses to verified Load Profile and Application Builder values. Predictions stay advisory only.",
   },
   costs: {
     title: "On Costs & equipment",
-    body: "Record CIAC, equipment, and cost items tied to the utility decision.",
+    body: "Track CIAC and long-lead equipment: approve costs, record payment, and keep ETAs current.",
   },
   "energization-closeout": {
     title: "On Energization & closeout",
-    body: "Plan meter-set, energization, and closeout milestones for Stages 8–10.",
+    body: "Record inspection release, run meter-set choreography, and close out energization for Stages 9–10.",
   },
   lifecycle: {
     title: "On Lifecycle history",
@@ -162,7 +162,7 @@ const TAB_LABELS: Record<UciDrawerTab, string> = {
   "application-prep": "Application package",
   applications: "Utility applications",
   communications: "Communications",
-  cos: "Class of Service",
+  cos: "Design Review / Class of Service",
   costs: "Costs & equipment",
   "energization-closeout": "Energization & closeout",
   lifecycle: "Lifecycle history",

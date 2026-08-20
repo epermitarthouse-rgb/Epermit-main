@@ -39,6 +39,7 @@ import type {
   UciTransitionResponse,
   CoordinationCost,
   CoordinationEquipment,
+  UciLifecycleStatus,
 } from "@/types/uci";
 
 export const UCI_SESSION_EXPIRED_MESSAGE =
@@ -2102,11 +2103,115 @@ export async function pollGraphInboundCommunications(
 
 export async function analyzeCoordinationCos(
   coordinationId: string,
+  body: Record<string, unknown> = {},
 ): Promise<UciCosAnalysisResponse> {
   return uciFetchJson(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/analyze`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
     "COS analysis failed",
+  );
+}
+
+export async function listCoordinationCosRecords(
+  coordinationId: string,
+): Promise<{
+  records: import("@/types/uci").CoordinationCosDesignRecord[];
+  current: import("@/types/uci").CoordinationCosDesignRecord | null;
+  can_enter_stage_6: boolean;
+  can_enter_stage_7: boolean;
+}> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/records`,
+    {},
+    "Failed to load COS records",
+  );
+}
+
+export async function approveCoordinationCos(
+  coordinationId: string,
+  body: {
+    cos_design_record_id?: string;
+    notes?: string;
+    accept_material_deviation?: boolean;
+  } = {},
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "COS approval failed",
+  );
+}
+
+export async function updateCoordinationCosAcceptedFields(
+  coordinationId: string,
+  body: {
+    cos_design_record_id?: string;
+    updates?: Array<{ field: string; accepted_value: unknown; reason?: string | null }>;
+    reset_fields?: string[];
+    reset_field?: string;
+  },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/accepted-fields`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "COS accepted-field update failed",
+  );
+}
+
+export async function requestCoordinationCosRevision(
+  coordinationId: string,
+  body: { notes?: string; required_documents?: string[] } = {},
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/revision`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "COS revision request failed",
+  );
+}
+
+export async function rejectCoordinationCosDocument(
+  coordinationId: string,
+  body: { reason: string },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/reject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "COS reject failed",
+  );
+}
+
+export async function flagCoordinationCos(
+  coordinationId: string,
+  body: { reason?: string } = {},
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/cos/flag`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "COS flag failed",
   );
 }
 
@@ -2197,6 +2302,209 @@ export async function prepareCloseout(
     `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/prepare`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
     "Closeout preparation failed",
+  );
+}
+
+export async function getCoordinationLifecycleStatus(
+  coordinationId: string,
+): Promise<UciLifecycleStatus> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/lifecycle-status`,
+    {},
+    "Failed to load lifecycle status",
+  );
+}
+
+export async function approveCoordinationCost(
+  coordinationId: string,
+  costId: string,
+  status: "approved" | "rejected" = "approved",
+): Promise<{ cost: CoordinationCost }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/costs/${encodeURIComponent(costId)}/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+    "Failed to approve cost",
+  );
+}
+
+export async function recordCoordinationCostPayment(
+  coordinationId: string,
+  costId: string,
+  payload: { paid_at?: string; payment_method?: string },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/costs/${encodeURIComponent(costId)}/record-payment`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to record payment",
+  );
+}
+
+export async function overrideCoordinationCostBilling(
+  coordinationId: string,
+  costId: string,
+): Promise<{ cost: CoordinationCost }> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/costs/${encodeURIComponent(costId)}/override-bill`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Failed to override billing hold",
+  );
+}
+
+export async function completeCoordinationStage(
+  coordinationId: string,
+  stage: 7 | 8 | 9 | 10,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/complete-stage-${stage}`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    `Failed to complete Stage ${stage}`,
+  );
+}
+
+export async function recordInspectionRelease(
+  coordinationId: string,
+  payload?: { received_at?: string; notes?: string },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/inspection-release`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    },
+    "Failed to record inspection release",
+  );
+}
+
+export async function updateCoordinationSiteContact(
+  coordinationId: string,
+  payload: {
+    site_contact_name?: string;
+    site_contact_email?: string;
+    site_contact_phone?: string;
+  },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/site-contact`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to save site contact",
+  );
+}
+
+export async function requestMeterSetDate(
+  coordinationId: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/meter-set/request`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Failed to request meter set",
+  );
+}
+
+export async function confirmMeterSetDate(
+  coordinationId: string,
+  scheduledDate: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/meter-set/confirm-date`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduled_date: scheduledDate }),
+    },
+    "Failed to confirm meter-set date",
+  );
+}
+
+export async function confirmMeterSetSiteReadiness(
+  coordinationId: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/meter-set/confirm-site-readiness`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Failed to confirm site readiness",
+  );
+}
+
+export async function recordMeterSetOutcome(
+  coordinationId: string,
+  payload: { outcome: string; actual_date?: string; reschedule_date?: string },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/meter-set/outcome`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to record meter-set outcome",
+  );
+}
+
+export async function attachCloseoutArtifact(
+  coordinationId: string,
+  payload: { kind: string; doc_id?: string; label?: string },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/artifacts`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to attach closeout artifact",
+  );
+}
+
+export async function markCoordinationEnergized(
+  coordinationId: string,
+  actualDate: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/mark-energized`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actual_date: actualDate }),
+    },
+    "Failed to mark energization",
+  );
+}
+
+export async function resolveEnergizationDateConflict(
+  coordinationId: string,
+  keep: "actual" | "target" = "actual",
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/resolve-date-conflict`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keep }),
+    },
+    "Failed to resolve date conflict",
+  );
+}
+
+export async function generateCloseoutPackage(
+  coordinationId: string,
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/closeout/generate`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    "Failed to generate closeout package",
   );
 }
 

@@ -40,25 +40,48 @@ export function isOwnOutboundPackageEcho(comm: CoordinationCommunication): boole
   return false;
 }
 
-const SYNTHETIC_SUBJECT_RE = /\[UCI SYNTHETIC TEST\]/i;
+const SYNTHETIC_SUBJECT_RE = /\[(?:UCI\s+)?SYNTHETIC\s+TEST\]/i;
+const SYNTHETIC_SUBJECT_PLAIN_RE = /^synthetic\s+test\b/i;
+const SYNTHETIC_PACKAGE_SUBJECT_RE =
+  /^\[TEST\].*utility\s+coordination\s+application\s+package/i;
 const SYNTHETIC_BODY_RE =
-  /SYNTHETIC\s*\/\s*TEST\s+ONLY|SYNTHETIC\s+TEST\s+ONLY|NOT\s+a\s+real\s+Dominion/i;
+  /SYNTHETIC\s*\/\s*TEST\s+ONLY|SYNTHETIC\s+TEST\s+ONLY|NOT\s+a\s+real\s+Dominion|NOT\s+A\s+REAL\s+DOMINION/i;
 const UAT_RUN_ID_RE = /\b(?:s5uat|s5neg)-[a-z0-9-]+\b/i;
 
 /**
- * Controlled Stage 5 / synthetic UAT communications (Graph self-send tests).
+ * Controlled Stage 5 / Stage 6 / synthetic UAT communications (Graph self-send tests).
  * Detection is presentation-only — never deletes or mutates backend rows.
  */
 export function isSyntheticUatCommunication(comm: CoordinationCommunication): boolean {
   const meta = asMeta(comm);
-  if (meta.uat === true) return true;
+  if (meta.uat === true || meta.synthetic_test === true || meta.synthetic_history === true) {
+    return true;
+  }
   const runId = str(meta.run_id) || str(asRecord(meta.uat).run_id);
   if (runId && UAT_RUN_ID_RE.test(runId)) return true;
   const subject = String(comm.raw_subject || "");
   const body = String(comm.raw_body || "");
   if (SYNTHETIC_SUBJECT_RE.test(subject)) return true;
+  if (SYNTHETIC_SUBJECT_PLAIN_RE.test(subject)) return true;
+  if (SYNTHETIC_PACKAGE_SUBJECT_RE.test(subject)) return true;
   if (UAT_RUN_ID_RE.test(subject) || UAT_RUN_ID_RE.test(body)) return true;
   if (SYNTHETIC_BODY_RE.test(body)) return true;
+  return false;
+}
+
+/**
+ * Crude / residual synthetic tests that should not inflate operator queues
+ * (e.g. "Synthetic test -…" with trivial body, or [TEST] package-send echoes).
+ */
+function isInertSyntheticTestArtifact(comm: CoordinationCommunication): boolean {
+  const meta = asMeta(comm);
+  if (meta.no_longer_actionable === true || meta.synthetic_history === true) return true;
+  if (meta.synthetic_test === true && meta.actionable === false) return true;
+  const subject = String(comm.raw_subject || "");
+  const body = String(comm.raw_body || "").trim();
+  if (SYNTHETIC_PACKAGE_SUBJECT_RE.test(subject)) return true;
+  // Vague Gmail self-tests: subject says Synthetic test, body is essentially empty/"test".
+  if (SYNTHETIC_SUBJECT_PLAIN_RE.test(subject) && body.length < 40) return true;
   return false;
 }
 
@@ -328,6 +351,9 @@ function isAutoCompletedAck(comm: CoordinationCommunication, record?: Coordinati
   const meta = asMeta(comm);
   if (meta.stage_5_auto_completed === true || meta.stage_5_completed === true) return true;
   if (asRecord(meta.stage_5_completion).completed === true) return true;
+  if (meta.stage_6_auto_completed === true) return true;
+  if (asRecord(meta.stage_6_completion).auto_completed === true) return true;
+  if (asRecord(meta.stage_6_cos).auto_completed === true) return true;
   if (
     String(comm.classification || "") === "acknowledgment" &&
     !comm.needs_human_attention &&
@@ -652,7 +678,7 @@ function isOutboundDirection(comm: CoordinationCommunication): boolean {
 /** Synthetic/test history that is no longer an actionable triage item. */
 function isSyntheticHistoryNotActionable(comm: CoordinationCommunication): boolean {
   const meta = asMeta(comm);
-  if (meta.no_longer_actionable === true || meta.synthetic_history === true) return true;
+  if (isInertSyntheticTestArtifact(comm)) return true;
   if (meta.synthetic_test === true && meta.actionable !== true) {
     if (isOutboundDirection(comm) || isOwnOutboundPackageEcho(comm)) return true;
   }

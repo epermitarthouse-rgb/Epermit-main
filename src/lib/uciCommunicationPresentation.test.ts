@@ -343,4 +343,63 @@ describe("uciCommunicationPresentation", () => {
     expect(audit.detailLine).toMatch(/Received/);
     expect(audit.detailLine).toMatch(/UAT-HS-S5-87372337/);
   });
+
+  it("demotes inert unclassified synthetic test artifacts to Inbox audit history", () => {
+    const crudeCosSelfTest = baseComm({
+      id: "u1",
+      classification: "unclassified",
+      classification_confidence: 0.6,
+      needs_human_attention: true,
+      raw_subject: "Synthetic test -Highland Springs LC 451497",
+      raw_body: "test\r\n",
+      agent_processed_metadata: {},
+    });
+    const packageEcho = baseComm({
+      id: "u2",
+      classification: "unclassified",
+      classification_confidence: 0.6,
+      needs_human_attention: true,
+      raw_subject:
+        "[TEST] Utility Coordination Application Package — McDonald's Highland Springs, VA - LC 451497",
+      raw_body: "Please find attached the utility coordination application package.",
+      agent_processed_metadata: {},
+    });
+    const matchingCos = baseComm({
+      id: "u3",
+      classification: "class_of_service",
+      classification_confidence: 0.95,
+      needs_human_attention: false,
+      raw_subject:
+        "[SYNTHETIC TEST] Class of Service — matching COS (auto-poller UAT)",
+      raw_body: "SYNTHETIC TEST — NOT A REAL DOMINION / UTILITY DOCUMENT",
+      agent_processed_metadata: {
+        stage_6_auto_completed: true,
+        stage_6_cos: {
+          review_status: "approved",
+          auto_completed: true,
+          discrepancy_report: { source_communication_id: "u3", clean_match: true },
+        },
+      },
+    });
+
+    expect(isSyntheticUatCommunication(crudeCosSelfTest)).toBe(true);
+    expect(isSyntheticUatCommunication(packageEcho)).toBe(true);
+    expect(isSyntheticUatCommunication(matchingCos)).toBe(true);
+    expect(shouldDemoteSyntheticToInboxHistory(crudeCosSelfTest)).toBe(true);
+    expect(shouldDemoteSyntheticToInboxHistory(packageEcho)).toBe(true);
+    // Clean-match auto-completed Stage 6 COS is resolved — demote synthetic to audit history.
+    expect(isCommunicationActionableForInbox(matchingCos)).toBe(false);
+    expect(shouldDemoteSyntheticToInboxHistory(matchingCos)).toBe(true);
+    expect(getNeedsAttentionReasons(crudeCosSelfTest)).toEqual([]);
+    expect(getCommunicationActionPlan(crudeCosSelfTest).needsAttention).toBe(false);
+
+    const record = { id: "r1" } as never;
+    const { primary, auditHistory } = partitionOperatorInboxFeed([
+      { record, message: crudeCosSelfTest },
+      { record, message: packageEcho },
+      { record, message: matchingCos },
+    ]);
+    expect(auditHistory.map((item) => item.message.id).sort()).toEqual(["u1", "u2", "u3"]);
+    expect(primary.map((item) => item.message.id)).toEqual([]);
+  });
 });

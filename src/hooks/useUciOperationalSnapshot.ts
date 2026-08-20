@@ -51,14 +51,18 @@ export function useUciOperationalSnapshot(route: UciOperationalRoute) {
     timingLogged.current = false;
   }
 
+  // Inbox needs a light poll so Graph-ingested mail appears without a hard reload.
+  // Other operational routes keep the longer stale window.
+  const inboxLiveRefresh = route === "/uci/inbox";
   const query = useQuery({
     queryKey,
     queryFn: getUciOperationalSnapshot,
     enabled: Boolean(user),
-    staleTime: 60_000,
+    staleTime: inboxLiveRefresh ? 15_000 : 60_000,
     gcTime: 5 * 60_000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchInterval: inboxLiveRefresh ? 30_000 : false,
+    refetchOnMount: inboxLiveRefresh,
+    refetchOnWindowFocus: inboxLiveRefresh,
     retry: false,
   });
 

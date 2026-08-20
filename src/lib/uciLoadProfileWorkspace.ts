@@ -189,7 +189,7 @@ export interface ServiceSizingField {
 }
 
 export interface ServiceSizingRecommendation {
-  status: "approved" | "requires_human_input" | "missing_inputs";
+  status: "approved" | "requires_human_input" | "missing_inputs" | "needs_review";
   message: string;
   missingInputs: string[];
 }
@@ -1127,6 +1127,28 @@ export function buildServiceSizingFields(
 export function getServiceSizingRecommendation(
   summary: UciLoadProfileSummary | null,
 ): ServiceSizingRecommendation {
+  const calculated = summary?.calculated_values as
+    | Record<string, { value?: unknown; source?: string } | unknown>
+    | undefined;
+  const calcSize =
+    calculated && typeof calculated === "object"
+      ? calculated.service_size && typeof calculated.service_size === "object"
+        ? (calculated.service_size as { value?: unknown }).value
+        : calculated.service_size
+      : null;
+
+  if (calcSize) {
+    const needs = Array.isArray(summary?.needs_verification) ? summary.needs_verification : [];
+    const oversized = summary && (summary as { oversized?: boolean }).oversized === true;
+    return {
+      status: needs.length || oversized ? "needs_review" : "approved",
+      message: oversized
+        ? `Calculated service ${String(calcSize)} exceeds 800A — human review required.`
+        : `Calculated service size: ${String(calcSize)}${needs.includes("generic_qsr_fallback") ? " (generic QSR fallback — verify)" : ""}.`,
+      missingInputs: [],
+    };
+  }
+
   if (!summary?.verified_values) {
     return {
       status: "missing_inputs",
@@ -1366,7 +1388,7 @@ export function getUtilityTypeContracts(utilityType: string): {
       utilityType: t,
       supportedUnits: ["BTU/h", "CFH", "psi"],
       scheduleSupported: false,
-      serviceSizingSupported: false,
+      serviceSizingSupported: true,
     };
   }
   if (t === "water" || t === "sewer" || t === "water_sewer") {
@@ -1374,7 +1396,7 @@ export function getUtilityTypeContracts(utilityType: string): {
       utilityType: t,
       supportedUnits: ["DFU", "GPM"],
       scheduleSupported: false,
-      serviceSizingSupported: false,
+      serviceSizingSupported: true,
     };
   }
   if (t === "telecom") {

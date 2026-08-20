@@ -137,6 +137,7 @@ Full route → page inventory: see `docs/current-page-architecture.md`.
 
 - `startArlingtonDurableWorkerLoop()` — claims Arlington `scrape_jobs` via RPC
 - `startUciDurableWorkerLoop()` — claims `job_type=uci_portal_sync` when `UCI_DURABLE_JOBS_ENABLED=true`
+- `startUciGraphInboundPoller()` — polls connected Microsoft mailboxes (~45s default; disable with `UCI_GRAPH_INBOUND_POLLER_ENABLED=false`) and runs the existing Graph inbound ingest pipeline
 
 **Auth models:**
 

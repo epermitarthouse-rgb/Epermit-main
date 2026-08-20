@@ -35,10 +35,10 @@ describe("UCI Lovable-shaped primary nav", () => {
 
   it("uses domain-correct labels for primary children", () => {
     const labels = UCI_PRIMARY_NAV_SECTIONS.map((s) => s.label);
-    assert.ok(labels.includes("Submissions"));
+    assert.ok(labels.includes("Submission Tracker") || labels.includes("Submissions"));
     assert.ok(labels.includes("Inbox"));
     assert.ok(labels.includes("Portal Harvest"));
-    assert.ok(labels.includes("Class of Service"));
+    assert.ok(labels.includes("Design Review / Class of Service") || labels.includes("Class of Service"));
     assert.ok(labels.includes("CIAC & Refunds"));
     assert.ok(labels.includes("Utility Territory Map"));
     assert.ok(!labels.includes("UCI Builder"));

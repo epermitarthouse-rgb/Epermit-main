@@ -580,8 +580,8 @@ export function LoadProfileWorkspace({
             <TabsContent value="load_schedule" className="mt-4 space-y-3">
               {!utilityContract.scheduleSupported ? (
                 <EmptyState
-                  title="Load schedule not supported"
-                  description={`${utilityContract.utilityType} schedules are not implemented in this workspace yet.`}
+                  title="Panel schedule not applicable"
+                  description={`${utilityContract.utilityType} uses connected BTU/DFU aggregation in Service sizing rather than an electric panel schedule.`}
                   mutedClass={mutedClass}
                 />
               ) : (
