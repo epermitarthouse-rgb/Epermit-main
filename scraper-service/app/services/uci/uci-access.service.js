@@ -427,6 +427,20 @@ function sanitizeUciError(error) {
     body.details = /** @type {{ details?: unknown }} */ (err).details;
   }
 
+  if (typeof /** @type {{ action?: unknown }} */ (err).action === "string") {
+    body.action = /** @type {{ action?: unknown }} */ (err).action;
+  }
+
+  if (
+    /** @type {{ template_resolution?: unknown }} */ (err).template_resolution &&
+    typeof /** @type {{ template_resolution?: unknown }} */ (err).template_resolution ===
+      "object"
+  ) {
+    body.template_resolution = /** @type {{ template_resolution?: unknown }} */ (
+      err
+    ).template_resolution;
+  }
+
   return {
     httpStatus: status,
     body,

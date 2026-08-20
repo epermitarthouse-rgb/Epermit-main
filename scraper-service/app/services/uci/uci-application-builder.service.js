@@ -461,14 +461,31 @@ async function runApplicationPackageBuild(supabase, params) {
 
   const providerSlug = providerCheck.providerSlug;
   const utilityType = normalizeUtilityType(record.utility_type);
-  const template = loadTemplateManifest(providerSlug, utilityType, { checklistMode });
+  const { resolveApplicationTemplateManifest } = require("./uci-provider-application-template.service.js");
+  const templateResolution = await resolveApplicationTemplateManifest(supabase, {
+    providerSlug,
+    providerId: record.utility_provider_id,
+    utilityType,
+    checklistMode,
+  });
+  const template = templateResolution.template;
+  const resolutionMeta =
+    templateResolution.resolution &&
+    typeof templateResolution.resolution === "object" &&
+    !Array.isArray(templateResolution.resolution)
+      ? /** @type {Record<string, unknown>} */ (templateResolution.resolution)
+      : {};
   if (!template) {
     const err = new Error(`No application template available for provider ${providerSlug}`);
     err.statusCode = 404;
     err.code = "TEMPLATE_NOT_FOUND";
+    err.details = {
+      template_resolution: resolutionMeta,
+      action: "upload_manual_template",
+    };
     throw err;
   }
-  const usedGenericFallback = template.template_gap === true || String(template.provider_slug) === "_generic";
+  const usedGenericFallback = false;
   if (usedGenericFallback) {
     const { emitUciEvent } = require("./uci-events.service.js");
     emitUciEvent(
@@ -729,6 +746,12 @@ async function runApplicationPackageBuild(supabase, params) {
           : []),
       ],
       template_gap: usedGenericFallback,
+      template_resolution: {
+        source: resolutionMeta.source ?? null,
+        version: resolutionMeta.version ?? templateVersion,
+        is_manual: resolutionMeta.is_manual === true,
+        active_template: resolutionMeta.active_template ?? null,
+      },
     },
   };
 

@@ -18,6 +18,9 @@ import {
   updateApplicationPackageReviewItem,
 } from "@/lib/uciApi";
 import {
+  isApplicationTemplateMissingError,
+} from "@/components/uci/UciApplicationTemplatePanel";
+import {
   getApplicationPackageDraftApplication,
   parseApplicationPackageMetadata,
   parsePackageDocuments,
@@ -60,6 +63,7 @@ export function useUciApplicationBuilder() {
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [buildBusy, setBuildBusy] = useState(false);
+  const [applicationTemplateForceVisible, setApplicationTemplateForceVisible] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [mappingBusySlot, setMappingBusySlot] = useState<string | null>(null);
@@ -249,6 +253,7 @@ export function useUciApplicationBuilder() {
           packageMeta?.checklist_mode === "synthetic_test" ? "synthetic_test" : undefined,
       });
       applyApplicationMutation(result.application);
+      setApplicationTemplateForceVisible(false);
       void refreshDetail(coordinationId).catch(() => {
         // The build response is authoritative; a read refresh can retry independently.
       });
@@ -257,6 +262,9 @@ export function useUciApplicationBuilder() {
         text: "Application package draft saved — review missing documents before submission",
       });
     } catch (e: unknown) {
+      if (isApplicationTemplateMissingError(e)) {
+        setApplicationTemplateForceVisible(true);
+      }
       setActionMessage({
         tone: "bad",
         text: formatUciUserError(e, "Application package build failed"),
@@ -650,5 +658,7 @@ export function useUciApplicationBuilder() {
     providerSlug,
     isPepco,
     isDominionSynthetic,
+    applicationTemplateForceVisible,
+    saveDraftAfterTemplateSaved: saveDraft,
   };
 }

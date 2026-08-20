@@ -642,3 +642,62 @@ export function formatDraftStatus(status: DraftStatus | undefined): string {
       return status || "Unknown";
   }
 }
+
+/** Starter manifest operators can edit before saving a manual provider template. */
+export function buildManualApplicationTemplateStarter(params: {
+  providerSlug: string;
+  utilityType: string;
+  applicationType?: string;
+}): Record<string, unknown> {
+  const providerSlug = String(params.providerSlug || "utility").trim().toLowerCase();
+  const utilityType = String(params.utilityType || "electric").trim().toLowerCase();
+  const applicationType = String(params.applicationType || "new_service").trim().toLowerCase();
+  return {
+    version: `manual-${providerSlug}-${utilityType}-v1`,
+    provider_slug: providerSlug,
+    utility_type: utilityType,
+    application_type: applicationType,
+    description: `Manual ${providerSlug} ${utilityType} application package template`,
+    required_documents: [
+      {
+        key: "site_plan",
+        label: "Site plan",
+        aliases: ["site_plan", "civil_plan", "site", "plot_plan"],
+      },
+      {
+        key: "single_line_diagram",
+        label: "Single-line diagram",
+        aliases: ["single_line", "single_line_diagram", "electrical_single_line", "one_line"],
+      },
+    ],
+    required_fields: [
+      {
+        key: "project_address",
+        label: "Project address",
+        source: "project.address",
+        required: true,
+      },
+      {
+        key: "connected_load_data",
+        label: "Connected load data",
+        source: "load_summary.verified_values",
+        required: true,
+      },
+    ],
+  };
+}
+
+export function formatApplicationTemplateSource(source: string | null | undefined): string {
+  switch (String(source || "").trim().toLowerCase()) {
+    case "builtin":
+      return "Built-in provider template";
+    case "builtin_synthetic":
+      return "Built-in synthetic checklist";
+    case "manual_upload":
+      return "Manual provider template";
+    case "missing":
+      return "No template configured";
+    default:
+      return source ? String(source) : "Unknown";
+  }
+}

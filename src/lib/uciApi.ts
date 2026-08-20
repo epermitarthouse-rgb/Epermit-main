@@ -1179,6 +1179,63 @@ export async function buildCoordinationApplicationPackage(
   );
 }
 
+export type UciApplicationTemplateActiveInfo = {
+  source: string;
+  version: string | null;
+  label: string;
+  provider_slug: string;
+  uploaded_at?: string | null;
+  uploaded_by_user_id?: string | null;
+};
+
+export type UciApplicationTemplateStatus = {
+  provider_id: string | null;
+  provider_slug: string | null;
+  utility_type: string;
+  application_type: string;
+  source: string;
+  status: "ready" | "missing" | string;
+  is_manual: boolean;
+  template_gap: boolean;
+  version: string | null;
+  template_available: boolean;
+  generic_fallback_available?: boolean;
+  active_template: UciApplicationTemplateActiveInfo | null;
+};
+
+export async function getCoordinationApplicationTemplateStatus(
+  coordinationId: string,
+  params?: { checklist_mode?: string; application_type?: string },
+): Promise<UciApplicationTemplateStatus> {
+  const qs = new URLSearchParams();
+  if (params?.checklist_mode) qs.set("checklist_mode", params.checklist_mode);
+  if (params?.application_type) qs.set("application_type", params.application_type);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/application-template${suffix}`,
+    {},
+    "Failed to load application template status",
+  );
+}
+
+export async function saveCoordinationApplicationTemplate(
+  coordinationId: string,
+  payload: { manifest: Record<string, unknown>; application_type?: string },
+): Promise<{
+  manifest: Record<string, unknown>;
+  resolution: UciApplicationTemplateStatus;
+}> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/application-template`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to save application template",
+  );
+}
+
 export async function listApplicationPackageDocumentCandidates(
   coordinationId: string,
   params?: { external_application_id?: string },

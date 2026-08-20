@@ -14,6 +14,7 @@ const {
   inferSignatureStatus,
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
 } = require("../app/services/uci/uci-application-builder.service.js");
+const { saveProviderApplicationTemplate } = require("../app/services/uci/uci-provider-application-template.service.js");
 const { LOAD_PROFILE_IDEMPOTENCY_KEY } = require("../app/services/uci/uci-load-profile.service.js");
 const { PROVIDER_SETUP_METHOD } = require("../app/services/uci/uci-provider-setup.service.js");
 
@@ -74,7 +75,7 @@ describe("UCI D3 application builder service", () => {
     assert.ok(Array.isArray(template.required_fields));
   });
 
-  it("loads Dominion synthetic checklist only when explicitly requested", () => {
+  it("does not auto-use generic template for dominion production workflows", () => {
     const generic = loadTemplateManifest("dominion", "electric");
     assert.ok(generic);
     assert.equal(generic.template_gap, true);
@@ -548,21 +549,85 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
 
     const supabase = createApplicationBuilderMockSupabase(tables);
 
-    try {
-      await assert.rejects(
-        () =>
-          runApplicationPackageBuild(supabase, {
-            coordinationRecordId: "coord-1",
-            userId: "user-1",
-          }),
-        (err) => {
-          assert.equal(/** @type {{ code?: string }} */ (err).code, "LOAD_PROFILE_REQUIRED");
-          return true;
+    await assert.rejects(
+      () =>
+        runApplicationPackageBuild(supabase, {
+          coordinationRecordId: "coord-1",
+          userId: "user-1",
+        }),
+      (err) => {
+        assert.equal(/** @type {{ code?: string }} */ (err).code, "LOAD_PROFILE_REQUIRED");
+        return true;
+      },
+    );
+  });
+
+  it("blocks dominion production build until manual template is saved", async () => {
+    const dominionRecord = {
+      id: "coord-dominion",
+      project_id: "proj-1",
+      utility_provider_id: "prov-dominion",
+      utility_type: "electric",
+      metadata: {
+        uci_provider_mapping: {
+          method: "human_assisted",
+          provider_slug: "dominion",
         },
-      );
-    } finally {
-      // no module patches
-    }
+      },
+      utility_providers: { slug: "dominion", name: "Dominion Energy Virginia" },
+    };
+    const tables = {
+      coordination_records: [dominionRecord],
+      projects: [{ ...BASE_PROJECT, id: "proj-1" }],
+      project_documents: [
+        { id: "doc-1", project_id: "proj-1", document_type: "site_plan", file_name: "site.pdf" },
+      ],
+      coordination_applications: [
+        { ...LOAD_PROFILE_DRAFT, coordination_record_id: "coord-dominion", project_id: "proj-1" },
+      ],
+      utility_providers: [
+        { id: "prov-dominion", slug: "dominion", uci_application_templates: {} },
+      ],
+    };
+    const supabase = createApplicationBuilderMockSupabase(tables);
+
+    await assert.rejects(
+      () =>
+        runApplicationPackageBuild(supabase, {
+          coordinationRecordId: "coord-dominion",
+          userId: "user-1",
+        }),
+      (err) => {
+        assert.equal(/** @type {{ code?: string }} */ (err).code, "TEMPLATE_NOT_FOUND");
+        return true;
+      },
+    );
+
+    await saveProviderApplicationTemplate(supabase, {
+      providerId: "prov-dominion",
+      utilityType: "electric",
+      userId: "user-1",
+      manifest: {
+        version: "manual-dominion-electric-v1",
+        provider_slug: "dominion",
+        utility_type: "electric",
+        application_type: "new_service",
+        required_documents: [{ key: "site_plan", label: "Site plan", aliases: ["site_plan"] }],
+        required_fields: [
+          { key: "project_address", label: "Project address", source: "project.address", required: true },
+        ],
+      },
+    });
+
+    const result = await runApplicationPackageBuild(supabase, {
+      coordinationRecordId: "coord-dominion",
+      userId: "user-1",
+    });
+    assert.equal(result.application.provider_slug, "dominion");
+    assert.equal(
+      result.application.agent_draft_metadata.application_package.template_resolution.source,
+      "manual_upload",
+    );
   });
 
   it("does not modify portal_sync or load_profile rows", async () => {

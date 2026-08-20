@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useUciApplicationBuilder } from "@/hooks/useUciApplicationBuilder";
+import { UciApplicationTemplatePanel } from "@/components/uci/UciApplicationTemplatePanel";
 import { formatUciPackageVersionLabel } from "@/lib/uciCapabilityLabels";
 import {
   canSubmitApplication,
@@ -303,6 +304,21 @@ export default function UciApplicationBuilder() {
               <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                 {builder.error}
               </div>
+            ) : null}
+
+            {builder.coordinationId && builder.loadDraft ? (
+              <UciApplicationTemplatePanel
+                coordinationId={builder.coordinationId}
+                providerSlug={builder.providerSlug}
+                utilityType={String(
+                  builder.loadSummary?.utility_type || builder.record?.utility_type || "electric",
+                )}
+                checklistMode={
+                  (builder.packageMeta as { checklist_mode?: string } | null)?.checklist_mode ?? null
+                }
+                forceVisible={builder.applicationTemplateForceVisible}
+                onTemplateSaved={() => void builder.saveDraftAfterTemplateSaved()}
+              />
             ) : null}
 
             {builder.actionMessage ? (

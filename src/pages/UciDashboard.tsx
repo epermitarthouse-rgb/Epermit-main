@@ -259,6 +259,10 @@ import {
   type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
 import { UciSetupWorkflow } from "@/components/uci/UciSetupWorkflow";
+import {
+  isApplicationTemplateMissingError,
+  UciApplicationTemplatePanel,
+} from "@/components/uci/UciApplicationTemplatePanel";
 import { UciProjectContextBar } from "@/components/uci/UciProjectContextBar";
 import { ProjectSummaryHeader } from "@/components/uci/ProjectSummaryHeader";
 import { CoordinationStatusSummary } from "@/components/uci/CoordinationStatusSummary";
@@ -625,6 +629,7 @@ export default function UciDashboard() {
     useState<Agent2ManualUploadProgress | null>(null);
   const manualUploadInFlightRef = useRef(false);
   const [applicationPrepBusy, setApplicationPrepBusy] = useState(false);
+  const [applicationTemplateForceVisible, setApplicationTemplateForceVisible] = useState(false);
   const [applicationReviewBusy, setApplicationReviewBusy] = useState(false);
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
   const [applicationSubmitBusy, setApplicationSubmitBusy] = useState(false);
@@ -1734,6 +1739,7 @@ export default function UciDashboard() {
             ? "synthetic_test"
             : undefined,
       });
+      setApplicationTemplateForceVisible(false);
       setDetail((current) =>
         current
           ? {
@@ -1753,6 +1759,9 @@ export default function UciDashboard() {
       });
       toast.success("Application package draft saved — review missing fields and documents");
     } catch (e: unknown) {
+      if (isApplicationTemplateMissingError(e)) {
+        setApplicationTemplateForceVisible(true);
+      }
       toast.error(formatUciUserError(e, "Application package build failed"));
     } finally {
       setApplicationPrepBusy(false);
@@ -4728,6 +4737,10 @@ export default function UciDashboard() {
                     onBuild={(externalApplicationId) =>
                       void handleApplicationPackageBuild(externalApplicationId)
                     }
+                    applicationTemplateForceVisible={applicationTemplateForceVisible}
+                    onApplicationTemplateSaved={() =>
+                      handleApplicationPackageBuild(selectedPepcoProject?.applicationId ?? null)
+                    }
                     onReview={(status) => void handleApplicationReview(status)}
                     onSubmit={() => void handleApplicationSubmit()}
                     onCompleteStage2={() => void handleStage2Completion()}
@@ -5541,6 +5554,8 @@ export function ApplicationPrepSection({
   onCompleteStage2,
   onApplicationMutation,
   onRefreshDetail,
+  applicationTemplateForceVisible = false,
+  onApplicationTemplateSaved,
   initialEditingDocumentSlot = null,
   initialDocumentCandidates = null,
   initialFocusItem = null,
@@ -5568,6 +5583,8 @@ export function ApplicationPrepSection({
   onCompleteStage2: () => void;
   onApplicationMutation: (application: CoordinationApplication) => void;
   onRefreshDetail: () => Promise<void>;
+  applicationTemplateForceVisible?: boolean;
+  onApplicationTemplateSaved?: () => void | Promise<void>;
   initialEditingDocumentSlot?: string | null;
   initialDocumentCandidates?: UciPackageDocumentCandidatesResponse | null;
   initialFocusItem?: string | null;
@@ -5591,6 +5608,11 @@ export function ApplicationPrepSection({
   const submitReady = canSubmitApplication(packageApp?.draft_status);
   const providerSlug = String(
     packageApp?.provider_slug || loadProfileDraft?.provider_slug || "",
+  ).toLowerCase();
+  const utilityType = String(
+    packageApp?.utility_type ||
+      loadProfileDraft?.load_summary?.utility_type ||
+      "electric",
   ).toLowerCase();
   const isPepco = providerSlug === "pepco";
   const isDominionSynthetic =
@@ -6021,6 +6043,17 @@ export function ApplicationPrepSection({
         </div>
       </CardHeader>
       <CardContent className="px-4 py-4 space-y-3">
+        {loadProfileDraft ? (
+          <UciApplicationTemplatePanel
+            coordinationId={coordinationId}
+            providerSlug={providerSlug}
+            utilityType={utilityType}
+            checklistMode={packageMeta?.checklist_mode ?? null}
+            mutedClass={mutedClass}
+            forceVisible={applicationTemplateForceVisible}
+            onTemplateSaved={onApplicationTemplateSaved}
+          />
+        ) : null}
         {!loadProfileDraft ? (
           <p className={uciDrawerChildEmptyClass}>
             Run load profile analysis first — D3 depends on the D2.1 load_summary draft.

@@ -4,7 +4,6 @@ const { getCoordinationRecordById } = require("./uci-records.service.js");
 const {
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
   findApplicationPackageDraft,
-  loadTemplateManifest,
   normalizeUtilityType,
   validateProviderContext,
   evaluateRequiredFields,
@@ -14,6 +13,7 @@ const {
   applyDocumentSignatureRequirements,
   isSyntheticTestTemplate,
 } = require("./uci-application-builder.service.js");
+const { resolveApplicationTemplateManifest } = require("./uci-provider-application-template.service.js");
 const {
   UCI_DOCUMENTS_STORAGE_BUCKET,
   UCI_TENANT_NAMESPACE_UNCONFIGURED,
@@ -28,6 +28,39 @@ const PACKAGE_SLOT_KEYS = [
   "equipment_cut_sheets",
   "letter_of_authorization",
 ];
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} record
+ * @param {object} [options]
+ */
+async function resolveTemplateForRecord(supabase, record, options = {}) {
+  const providerCheck = validateProviderContext(record);
+  if (!providerCheck.ok) {
+    const err = new Error(providerCheck.message);
+    err.statusCode = 400;
+    err.code = providerCheck.code;
+    throw err;
+  }
+  const utilityType = normalizeUtilityType(record.utility_type);
+  const resolved = await resolveApplicationTemplateManifest(supabase, {
+    providerSlug: providerCheck.providerSlug,
+    providerId: record.utility_provider_id,
+    utilityType,
+    checklistMode: options.checklistMode,
+  });
+  if (!resolved.template) {
+    const err = new Error("Application template not found");
+    err.statusCode = 404;
+    err.code = "TEMPLATE_NOT_FOUND";
+    err.details = {
+      template_resolution: resolved.resolution,
+      action: "upload_manual_template",
+    };
+    throw err;
+  }
+  return resolved.template;
+}
 
 /** Patterns that block automatic slot suggestions (filename/metadata only). */
 const SUGGESTION_BLOCK_PATTERNS = [
@@ -609,8 +642,8 @@ async function listPackageDocumentCandidates(supabase, params) {
     packageDraft?.agent_draft_metadata?.application_package?.checklist_mode != null
       ? String(packageDraft.agent_draft_metadata.application_package.checklist_mode)
       : undefined;
-  const template = loadTemplateManifest(providerCheck.providerSlug, utilityType, { checklistMode });
-  const requiredDocuments = Array.isArray(template?.required_documents)
+  const template = await resolveTemplateForRecord(supabase, record, { checklistMode });
+  const requiredDocuments = Array.isArray(template.required_documents)
     ? /** @type {Array<Record<string, unknown>>} */ (template.required_documents)
     : [];
 
@@ -945,17 +978,13 @@ async function confirmPackageDocumentMapping(supabase, params) {
       err.code = providerCheck.code;
       throw err;
     }
-    const template = loadTemplateManifest(
-      providerCheck.providerSlug,
-      normalizeUtilityType(record.utility_type),
-      {
-        checklistMode:
-          packageMetadata?.checklist_mode != null
-            ? String(packageMetadata.checklist_mode)
-            : undefined,
-      },
-    );
-    required = Array.isArray(template?.required_documents)
+    const template = await resolveTemplateForRecord(supabase, record, {
+      checklistMode:
+        packageMetadata?.checklist_mode != null
+          ? String(packageMetadata.checklist_mode)
+          : undefined,
+    });
+    required = Array.isArray(template.required_documents)
       ? /** @type {Array<Record<string, unknown>>} */ (template.required_documents)
       : [];
     slotDef = required.find((entry) => String(entry.key) === slotKey);
@@ -1310,18 +1339,11 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
     throw err;
   }
 
-  const utilityType = normalizeUtilityType(record.utility_type);
   const checklistMode =
     application.agent_draft_metadata?.application_package?.checklist_mode != null
       ? String(application.agent_draft_metadata.application_package.checklist_mode)
       : undefined;
-  const template = loadTemplateManifest(providerCheck.providerSlug, utilityType, { checklistMode });
-  if (!template) {
-    const err = new Error("Application template not found");
-    err.statusCode = 404;
-    err.code = "TEMPLATE_NOT_FOUND";
-    throw err;
-  }
+  const template = await resolveTemplateForRecord(supabase, record, { checklistMode });
 
   const [projectResult, documentsResult, applicationsResult] = await Promise.all([
     supabase.from("projects").select("*").eq("id", projectId).maybeSingle(),

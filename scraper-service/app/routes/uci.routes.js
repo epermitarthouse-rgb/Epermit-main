@@ -85,6 +85,10 @@ const {
   getApplicationById,
 } = require("../services/uci/uci-application-builder.service.js");
 const {
+  getCoordinationApplicationTemplateStatus,
+  saveProviderApplicationTemplate,
+} = require("../services/uci/uci-provider-application-template.service.js");
+const {
   reviewApplicationPackage,
   updatePackageReviewItem,
   confirmAllVerifiedFields,
@@ -1779,6 +1783,92 @@ function createUciRouter(opts) {
       });
 
       res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/application-template", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+      });
+
+      const checklistMode =
+        req.query.checklist_mode != null ? String(req.query.checklist_mode).trim() : undefined;
+      const applicationType =
+        req.query.application_type != null
+          ? String(req.query.application_type).trim()
+          : "new_service";
+
+      const status = await getCoordinationApplicationTemplateStatus(supabase, {
+        record,
+        checklistMode,
+        applicationType,
+      });
+
+      res.json(status);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.put("/coordination/:id/application-template", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const manifest = body.manifest;
+      const applicationType =
+        body.application_type != null ? String(body.application_type).trim() : "new_service";
+
+      if (!record.utility_provider_id) {
+        const err = new Error("Coordination record has no utility provider assigned");
+        err.statusCode = 400;
+        err.code = "PROVIDER_CONTEXT_REQUIRED";
+        throw err;
+      }
+
+      const saved = await saveProviderApplicationTemplate(supabase, {
+        providerId: String(record.utility_provider_id),
+        utilityType: String(record.utility_type ?? ""),
+        applicationType,
+        manifest,
+        userId: user.id,
+      });
+
+      res.json(saved);
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);
