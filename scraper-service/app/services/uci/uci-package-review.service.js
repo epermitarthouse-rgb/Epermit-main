@@ -2,8 +2,10 @@
 
 const {
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
+  findLoadProfileDraftApplication,
   getApplicationById,
 } = require("./uci-application-builder.service.js");
+const { getCoordinationRecordById } = require("./uci-records.service.js");
 
 const ITEM_STATUSES = new Set(["confirmed", "needs_correction"]);
 const REVIEW_VERSION = "agent-3-package-review-v2";
@@ -94,6 +96,32 @@ function documentMappingReady(snapshot) {
     isPersistedProjectDocumentId(snapshot.project_document_id) &&
     (!snapshot.signature_required || snapshot.signature_status === "signed_manual_verified")
   );
+}
+
+function findUnresolvedPackageDocumentReferences(documents) {
+  const list = Array.isArray(documents) ? documents : [];
+  /** @type {Array<{ key: string; code: string; label: string | null }>} */
+  const unresolved = [];
+  for (const raw of list) {
+    const doc = asObject(raw);
+    const key = doc.key != null ? String(doc.key) : "";
+    if (!key || String(doc.status ?? "") !== "attached") continue;
+    if (!isPersistedProjectDocumentId(doc.project_document_id)) {
+      unresolved.push({
+        key,
+        code: "ATTACHMENT_DOCUMENT_ID_MISSING",
+        label: doc.label != null ? String(doc.label) : key,
+      });
+    }
+  }
+  return unresolved;
+}
+
+function packageDocumentsNeedRepair(application) {
+  const documents = Array.isArray(application?.package_documents)
+    ? application.package_documents
+    : [];
+  return findUnresolvedPackageDocumentReferences(documents);
 }
 
 function itemReady(kind, snapshot) {
@@ -433,6 +461,175 @@ async function confirmAllVerifiedFields(supabase, params) {
   };
 }
 
+async function repairReviewedPackageDocuments(supabase, params) {
+  const application =
+    params.application ?? (await getPackageReviewApplicationById(supabase, params.applicationId));
+  if (!application) {
+    throw Object.assign(new Error("Application not found"), { statusCode: 404, code: "NOT_FOUND" });
+  }
+  if (String(application.draft_status) !== "reviewed") {
+    throw Object.assign(
+      new Error("Only reviewed application packages with unresolved document references can be repaired"),
+      { statusCode: 409, code: "PACKAGE_NOT_REVIEWED" },
+    );
+  }
+  if (String(application.draft_status) === "submitted") {
+    throw Object.assign(new Error("Submitted applications cannot be repaired"), {
+      statusCode: 400,
+      code: "ALREADY_SUBMITTED",
+    });
+  }
+
+  const unresolved = packageDocumentsNeedRepair(application);
+  if (unresolved.length === 0) {
+    throw Object.assign(new Error("No unresolved required document references found to repair"), {
+      statusCode: 409,
+      code: "PACKAGE_NOT_REPAIRABLE",
+    });
+  }
+
+  const unsupported = unresolved.filter((entry) => entry.key !== "load_calculation_worksheet");
+  if (unsupported.length > 0) {
+    throw Object.assign(
+      new Error(
+        `Automatic repair is not available for: ${unsupported.map((entry) => entry.key).join(", ")}`,
+      ),
+      {
+        statusCode: 409,
+        code: "PACKAGE_REPAIR_UNSUPPORTED_SLOT",
+        details: { unsupported_keys: unsupported.map((entry) => entry.key) },
+      },
+    );
+  }
+
+  const record = await getCoordinationRecordById(supabase, String(application.coordination_record_id));
+  if (!record) {
+    throw Object.assign(new Error("Coordination record not found"), {
+      statusCode: 404,
+      code: "NOT_FOUND",
+    });
+  }
+
+  const [projectResult, applicationsResult] = await Promise.all([
+    supabase.from("projects").select("*").eq("id", String(record.project_id)).maybeSingle(),
+    supabase
+      .from("coordination_applications")
+      .select("id, record_source, idempotency_key, load_summary")
+      .eq("coordination_record_id", String(record.id))
+      .eq("project_id", String(record.project_id)),
+  ]);
+  if (projectResult.error || !projectResult.data) {
+    throw Object.assign(new Error(projectResult.error?.message || "Failed to load project"), {
+      statusCode: 500,
+      code: "PROJECT_FETCH_FAILED",
+    });
+  }
+  if (applicationsResult.error) {
+    throw Object.assign(
+      new Error(applicationsResult.error.message || "Failed to load coordination applications"),
+      { statusCode: 500, code: "APPLICATIONS_FETCH_FAILED" },
+    );
+  }
+
+  const loadProfileDraft = findLoadProfileDraftApplication(applicationsResult.data ?? []);
+  const loadSummary =
+    loadProfileDraft?.load_summary && typeof loadProfileDraft.load_summary === "object"
+      ? loadProfileDraft.load_summary
+      : application.load_summary && typeof application.load_summary === "object"
+        ? application.load_summary
+        : {};
+
+  const { attachLoadWorksheetToPackage } = require("./uci-load-worksheet.service.js");
+  const worksheet = await attachLoadWorksheetToPackage(supabase, {
+    record,
+    project: projectResult.data,
+    loadSummary,
+    userId: params.userId,
+  });
+
+  const packageDocuments = Array.isArray(application.package_documents)
+    ? application.package_documents.map((doc) => ({ ...asObject(doc) }))
+    : [];
+  const worksheetIndex = packageDocuments.findIndex(
+    (doc) => String(doc.key) === "load_calculation_worksheet",
+  );
+  if (worksheetIndex >= 0) {
+    packageDocuments[worksheetIndex] = { ...packageDocuments[worksheetIndex], ...worksheet, status: "attached" };
+  } else {
+    packageDocuments.push({ ...worksheet, status: "attached" });
+  }
+
+  const remainingUnresolved = findUnresolvedPackageDocumentReferences(packageDocuments);
+  if (remainingUnresolved.length > 0) {
+    throw Object.assign(new Error("Package repair did not resolve all required document references"), {
+      statusCode: 500,
+      code: "PACKAGE_REPAIR_INCOMPLETE",
+      details: { unresolved: remainingUnresolved },
+    });
+  }
+
+  const { review } = packageContext(application);
+  const now = new Date().toISOString();
+  const repairedKeys = unresolved.map((entry) => entry.key);
+  const nextItems = { ...asObject(review.items) };
+  for (const key of repairedKeys) {
+    delete nextItems[reviewItemKey("document", key)];
+  }
+
+  const priorHistory = Array.isArray(review.review_history) ? review.review_history : [];
+  const staleSnapshot = review.reviewed_snapshot ?? null;
+  const repairEvent = {
+    action: "repair_unresolved_document_references",
+    actor_user_id: params.userId,
+    at: now,
+    repaired_keys: repairedKeys,
+    prior_reviewed_snapshot_captured_at: staleSnapshot?.captured_at ?? null,
+  };
+  const nextReview = {
+    ...review,
+    version: REVIEW_VERSION,
+    status: "ready_for_review",
+    items: nextItems,
+    reviewed_snapshot: null,
+    review_history: staleSnapshot ? [...priorHistory, staleSnapshot] : priorHistory,
+    correction_history: [
+      ...(Array.isArray(review.correction_history) ? review.correction_history : []),
+      repairEvent,
+    ],
+    package_correction: {
+      ...asObject(review.package_correction),
+      active: false,
+      cleared_at: now,
+      cleared_by_user_id: params.userId,
+    },
+    repair: {
+      last_repaired_at: now,
+      last_repaired_by_user_id: params.userId,
+      repaired_keys: repairedKeys,
+      worksheet_project_document_id: worksheet.project_document_id ?? null,
+    },
+    updated_at: now,
+    updated_by_user_id: params.userId,
+  };
+
+  const updated = await persistReviewMetadata(supabase, application, nextReview, {
+    package_documents: packageDocuments,
+    draft_status: "draft",
+    reviewed_by: null,
+    reviewed_at: null,
+  });
+
+  const summary = summarizePackageReview(updated);
+  return {
+    application: withPackageReviewSummary(updated),
+    package_review: summary,
+    repaired_keys: repairedKeys,
+    worksheet_project_document_id: worksheet.project_document_id ?? null,
+    requires_reconfirm_keys: repairedKeys,
+    requires_final_review: true,
+  };
+}
+
 async function reviewApplicationPackage(supabase, params) {
   const application =
     params.application ?? (await getApplicationById(supabase, params.applicationId));
@@ -566,11 +763,14 @@ module.exports = {
   currentItems,
   isPersistedProjectDocumentId,
   documentMappingReady,
+  findUnresolvedPackageDocumentReferences,
+  packageDocumentsNeedRepair,
   itemReady,
   summarizePackageReview,
   withPackageReviewSummary,
   getPackageReviewApplicationById,
   updatePackageReviewItem,
   confirmAllVerifiedFields,
+  repairReviewedPackageDocuments,
   reviewApplicationPackage,
 };

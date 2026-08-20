@@ -260,6 +260,21 @@ export default function UciApplicationBuilder() {
                 )}
                 Save draft
               </button>
+            ) : builder.repairEligibility.ok ? (
+              <button
+                type="button"
+                className="pilot-button-ghost"
+                disabled={builder.repairBusy}
+                title="Repair unresolved document references on this reviewed package"
+                onClick={() => void builder.repairPackageDocuments()}
+              >
+                {builder.repairBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Repair package
+              </button>
             ) : null}
             {isReviewed && builder.coordinationId ? (
             <Link
@@ -1045,6 +1060,14 @@ export default function UciApplicationBuilder() {
                                 : ""}
                               . Mappings are read-only until review is reopened.
                             </p>
+                            {builder.repairEligibility.ok ? (
+                              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                                Required attachment references are unresolved (
+                                {builder.repairEligibility.unresolvedKeys.join(", ")}). Use Repair
+                                package to persist real document IDs, then re-confirm affected slots
+                                and mark reviewed again.
+                              </p>
+                            ) : null}
                           </div>
                         ) : null}
 

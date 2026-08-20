@@ -6,8 +6,11 @@ const {
   updatePackageReviewItem,
   confirmAllVerifiedFields,
   reviewApplicationPackage,
+  repairReviewedPackageDocuments,
   summarizePackageReview,
+  isPersistedProjectDocumentId,
 } = require("../app/services/uci/uci-package-review.service.js");
+const { createTrackBMockSupabase } = require("./helpers/uci-track-b-mock.js");
 
 function mockSupabase(application) {
   return {
@@ -355,5 +358,160 @@ describe("Agent 3 package mapping review", () => {
     assert.deepEqual(summary.active_corrections, []);
     assert.equal(summary.status, "ready_for_review");
     assert.equal(summary.ready_for_final_review, true);
+  });
+
+  it("repairs a reviewed package with null worksheet ID and requires re-confirm/re-review", async () => {
+    const application = readyApplication();
+    application.draft_status = "reviewed";
+    application.reviewed_by = "operator-1";
+    application.reviewed_at = "2026-08-20T12:00:00.000Z";
+    application.coordination_record_id = "coord-portsmouth";
+    application.package_documents.push({
+      key: "load_calculation_worksheet",
+      label: "Load calculation worksheet",
+      status: "attached",
+      file_name: "worksheet.pdf",
+      source: "generated_worksheet",
+      project_document_id: null,
+    });
+    application.agent_draft_metadata.application_package.package_review = {
+      version: "agent-3-package-review-v2",
+      status: "reviewed",
+      reviewed_by_user_id: "operator-1",
+      reviewed_at: "2026-08-20T12:00:00.000Z",
+      items: {
+        "field:connected_load_kva": {
+          kind: "field",
+          key: "connected_load_kva",
+          status: "confirmed",
+          mapping_snapshot: {
+            key: "connected_load_kva",
+            label: "Connected load",
+            status: "present",
+            value: { value: 410, unit: "kVA", verified_by: "agent-2-reviewer" },
+            source: "load_summary.verified_values.connected_load_kva",
+            address_source: null,
+          },
+        },
+        "document:load_letter": {
+          kind: "document",
+          key: "load_letter",
+          status: "confirmed",
+          mapping_snapshot: {
+            key: "load_letter",
+            label: "Load letter",
+            status: "attached",
+            file_name: "load-letter.pdf",
+            source: "project_documents",
+            project_document_id: "550e8400-e29b-41d4-a716-446655440002",
+            external_application_id: null,
+            storage_path: null,
+            content_hash: null,
+            signature_required: false,
+            signature_status: null,
+            signature_verified_at: null,
+          },
+        },
+        "document:load_calculation_worksheet": {
+          kind: "document",
+          key: "load_calculation_worksheet",
+          status: "confirmed",
+          mapping_snapshot: {
+            key: "load_calculation_worksheet",
+            label: "Load calculation worksheet",
+            status: "attached",
+            file_name: "worksheet.pdf",
+            project_document_id: null,
+          },
+        },
+      },
+      reviewed_snapshot: {
+        snapshot_version: "agent-3-reviewed-package-snapshot-v1",
+        captured_at: "2026-08-20T12:00:00.000Z",
+        package_documents: application.package_documents,
+      },
+      review_history: [],
+    };
+
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-portsmouth",
+          project_id: "project-1",
+          utility_type: "electric",
+          user_id: "user-1",
+          provider_slug: "dominion",
+        },
+      ],
+      projects: [{ id: "project-1", name: "Portsmouth", user_id: "user-1" }],
+      coordination_applications: [
+        application,
+        {
+          id: "load-profile-1",
+          coordination_record_id: "coord-portsmouth",
+          project_id: "project-1",
+          record_source: "agent_draft",
+          idempotency_key: "agent_2_load_profile:d2-v1",
+          load_summary: {
+            calculated_values: { service_size: { value: "400A" } },
+          },
+        },
+      ],
+      project_documents: [],
+    };
+
+    const supabase = createTrackBMockSupabase(tables);
+    const result = await repairReviewedPackageDocuments(supabase, {
+      applicationId: application.id,
+      application,
+      userId: "operator-2",
+    });
+
+    assert.equal(result.repaired_keys.join(","), "load_calculation_worksheet");
+    assert.ok(isPersistedProjectDocumentId(result.worksheet_project_document_id));
+    assert.equal(application.draft_status, "draft");
+    assert.equal(application.reviewed_by, null);
+    assert.equal(
+      application.agent_draft_metadata.application_package.package_review.reviewed_snapshot,
+      null,
+    );
+    assert.equal(
+      application.agent_draft_metadata.application_package.package_review.review_history.length,
+      1,
+    );
+
+    const summary = summarizePackageReview(application);
+    assert.equal(summary.status, "ready_for_review");
+    assert.equal(
+      summary.items.find((item) => item.id === "document:load_letter").status,
+      "confirmed",
+    );
+    assert.equal(
+      summary.items.find((item) => item.id === "document:load_calculation_worksheet").status,
+      "not_reviewed",
+    );
+    assert.equal(summary.ready_for_final_review, false);
+
+    await updatePackageReviewItem(supabase, {
+      application,
+      userId: "operator-2",
+      kind: "document",
+      key: "load_calculation_worksheet",
+      status: "confirmed",
+    });
+    assert.equal(summarizePackageReview(application).ready_for_final_review, true);
+
+    await reviewApplicationPackage(supabase, {
+      application,
+      userId: "operator-2",
+      review: { status: "reviewed" },
+    });
+    assert.equal(application.draft_status, "reviewed");
+    assert.ok(
+      isPersistedProjectDocumentId(
+        application.package_documents.find((doc) => doc.key === "load_calculation_worksheet")
+          .project_document_id,
+      ),
+    );
   });
 });

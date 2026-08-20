@@ -1472,6 +1472,28 @@ export async function confirmAllApplicationPackageVerifiedFields(
   );
 }
 
+export async function repairApplicationPackageDocuments(
+  applicationId: string,
+): Promise<{
+  application: CoordinationApplication;
+  package_review: Record<string, unknown>;
+  repaired_keys: string[];
+  worksheet_project_document_id: string | null;
+  requires_reconfirm_keys: string[];
+  requires_final_review: boolean;
+}> {
+  return uciFetchJson(
+    `/api/uci/applications/${encodeURIComponent(applicationId)}/repair-package-documents`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    },
+    "Failed to repair application package documents",
+    UCI_REVIEW_MUTATION_OPTIONS,
+  );
+}
+
 export async function reviewCoordinationApplication(
   applicationId: string,
   payload: { status: "reviewed" | "needs_changes"; notes?: string },

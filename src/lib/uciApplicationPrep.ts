@@ -168,6 +168,66 @@ export function isDocumentMappingReady(document: UciApplicationPackageDocument):
   );
 }
 
+export interface UciUnresolvedPackageDocumentReference {
+  key: string;
+  code: string;
+  label: string | null;
+}
+
+export function findUnresolvedPackageDocumentReferences(
+  documents: UciApplicationPackageDocument[],
+): UciUnresolvedPackageDocumentReference[] {
+  const unresolved: UciUnresolvedPackageDocumentReference[] = [];
+  for (const document of documents) {
+    if (document.status !== "attached") continue;
+    if (!isPersistedProjectDocumentId(document.project_document_id)) {
+      unresolved.push({
+        key: document.key,
+        code: "ATTACHMENT_DOCUMENT_ID_MISSING",
+        label: document.label ?? document.key,
+      });
+    }
+  }
+  return unresolved;
+}
+
+export function canRepairReviewedPackageDocuments(
+  packageApp: CoordinationApplication | null | undefined,
+  documents: UciApplicationPackageDocument[],
+): { ok: boolean; reason: string | null; unresolvedKeys: string[] } {
+  if (!packageApp) {
+    return { ok: false, reason: "No application package exists", unresolvedKeys: [] };
+  }
+  if (packageApp.draft_status !== "reviewed") {
+    return {
+      ok: false,
+      reason: "Repair is only available for reviewed packages with unresolved document references",
+      unresolvedKeys: [],
+    };
+  }
+  const unresolved = findUnresolvedPackageDocumentReferences(documents);
+  if (unresolved.length === 0) {
+    return {
+      ok: false,
+      reason: "All required document references are already resolved",
+      unresolvedKeys: [],
+    };
+  }
+  const unsupported = unresolved.filter((entry) => entry.key !== "load_calculation_worksheet");
+  if (unsupported.length > 0) {
+    return {
+      ok: false,
+      reason: `Automatic repair is unavailable for: ${unsupported.map((entry) => entry.key).join(", ")}`,
+      unresolvedKeys: unresolved.map((entry) => entry.key),
+    };
+  }
+  return {
+    ok: true,
+    reason: null,
+    unresolvedKeys: unresolved.map((entry) => entry.key),
+  };
+}
+
 export interface UciApplicationPackageDocument {
   key: string;
   label?: string;

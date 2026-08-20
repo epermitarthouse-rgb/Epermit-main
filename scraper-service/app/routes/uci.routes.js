@@ -94,6 +94,7 @@ const {
   updatePackageReviewItem,
   confirmAllVerifiedFields,
   getPackageReviewApplicationById,
+  repairReviewedPackageDocuments,
 } = require("../services/uci/uci-package-review.service.js");
 const {
   listPackageDocumentCandidates,
@@ -2357,6 +2358,35 @@ function createUciRouter(opts) {
         write: true,
       });
       const result = await confirmAllVerifiedFields(supabase, {
+        applicationId,
+        application: appRow,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/applications/:id/repair-package-documents", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const result = await repairReviewedPackageDocuments(supabase, {
         applicationId,
         application: appRow,
         userId: user.id,

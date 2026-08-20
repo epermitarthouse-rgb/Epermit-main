@@ -12,6 +12,7 @@ import {
   listProjectCoordination,
   openApplicationPackageDocument,
   removeApplicationPackageDocumentMapping,
+  repairApplicationPackageDocuments,
   reviewCoordinationApplication,
   setSyntheticApplicationSignatureStatus,
   validateSubmissionPackage,
@@ -24,6 +25,7 @@ import {
   getApplicationPackageDraftApplication,
   parseApplicationPackageMetadata,
   parsePackageDocuments,
+  canRepairReviewedPackageDocuments,
   type UciPackageDocumentCandidatesResponse,
 } from "@/lib/uciApplicationPrep";
 import {
@@ -63,6 +65,7 @@ export function useUciApplicationBuilder() {
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [buildBusy, setBuildBusy] = useState(false);
+  const [repairBusy, setRepairBusy] = useState(false);
   const [applicationTemplateForceVisible, setApplicationTemplateForceVisible] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
@@ -235,6 +238,7 @@ export function useUciApplicationBuilder() {
     coordinationId,
     applications,
   });
+  const repairEligibility = canRepairReviewedPackageDocuments(packageApp, packageDocs);
 
   const saveDraft = async () => {
     if (!coordinationId || !buildEligibility.ok) {
@@ -271,6 +275,46 @@ export function useUciApplicationBuilder() {
       });
     } finally {
       setBuildBusy(false);
+    }
+  };
+
+  const repairPackageDocuments = async () => {
+    if (!packageApp || !coordinationId || !repairEligibility.ok) {
+      setActionMessage({
+        tone: "warn",
+        text: repairEligibility.reason || "Package repair is not available",
+      });
+      return;
+    }
+    if (
+      !window.confirm(
+        "Repair unresolved document references on this reviewed package? Affected slots will need re-confirmation and the package must be marked reviewed again before Stage 4 validation.",
+      )
+    ) {
+      return;
+    }
+    setRepairBusy(true);
+    setActionMessage(null);
+    try {
+      const result = await repairApplicationPackageDocuments(packageApp.id);
+      applyApplicationMutation(result.application);
+      void refreshDetail(coordinationId).catch(() => {
+        // Repair response is authoritative.
+      });
+      setActionMessage({
+        tone: "ok",
+        text:
+          result.worksheet_project_document_id != null
+            ? `Package repaired — worksheet document ${result.worksheet_project_document_id}. Re-confirm repaired slots and mark reviewed again.`
+            : "Package repaired — re-confirm repaired slots and mark reviewed again.",
+      });
+    } catch (e: unknown) {
+      setActionMessage({
+        tone: "bad",
+        text: formatUciUserError(e, "Package repair failed"),
+      });
+    } finally {
+      setRepairBusy(false);
     }
   };
 
@@ -626,6 +670,7 @@ export function useUciApplicationBuilder() {
     selectedCandidateBySlot,
     setSelectedCandidateBySlot,
     buildBusy,
+    repairBusy,
     reviewBusy,
     submitBusy,
     mappingBusySlot,
@@ -639,7 +684,9 @@ export function useUciApplicationBuilder() {
     lastSubmitResult,
     actionMessage,
     buildEligibility,
+    repairEligibility,
     saveDraft,
+    repairPackageDocuments,
     approveSyntheticChecklist,
     setSignatureStatus,
     markReviewed,

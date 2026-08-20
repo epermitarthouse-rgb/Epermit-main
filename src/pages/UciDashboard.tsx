@@ -129,6 +129,7 @@ import {
   generateCloseoutPackage,
   openCloseoutPdf,
   rejectLifecycleProposal,
+  repairApplicationPackageDocuments,
   removeApplicationPackageDocumentMapping,
   reclassifyCommunication,
   flagCommunicationForReview,
@@ -254,6 +255,7 @@ import {
   formatSuggestionConfidence,
   getPackageValidationStatus,
   getPackageFieldSourceHref,
+  canRepairReviewedPackageDocuments,
   getApplicationPackageDraftApplication,
   isPackageDocumentCandidateAlreadyMapped,
   parseCanonicalPackageReviewSummary,
@@ -643,6 +645,7 @@ export default function UciDashboard() {
   const manualUploadInFlightRef = useRef(false);
   const [applicationPrepBusy, setApplicationPrepBusy] = useState(false);
   const [applicationTemplateForceVisible, setApplicationTemplateForceVisible] = useState(false);
+  const [applicationRepairBusy, setApplicationRepairBusy] = useState(false);
   const [applicationReviewBusy, setApplicationReviewBusy] = useState(false);
   const [applicationReviewNotes, setApplicationReviewNotes] = useState("");
   const [applicationSubmitBusy, setApplicationSubmitBusy] = useState(false);
@@ -1786,6 +1789,50 @@ export default function UciDashboard() {
       toast.error(formatUciUserError(e, "Application package build failed"));
     } finally {
       setApplicationPrepBusy(false);
+    }
+  };
+
+  const handleApplicationPackageRepair = async () => {
+    const packageApp = getApplicationPackageDraftApplication(detail?.applications);
+    if (!packageApp || !detailId) return;
+    const packageDocs = parsePackageDocuments(packageApp.package_documents);
+    const repairEligibility = canRepairReviewedPackageDocuments(packageApp, packageDocs);
+    if (!repairEligibility.ok) {
+      toast.warning(repairEligibility.reason || "Package repair is not available");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Repair unresolved document references on this reviewed package? Affected slots will need re-confirmation and the package must be marked reviewed again before Stage 4 validation.",
+      )
+    ) {
+      return;
+    }
+    setApplicationRepairBusy(true);
+    try {
+      const result = await repairApplicationPackageDocuments(packageApp.id);
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              applications: (current.applications ?? []).map((application) =>
+                application.id === result.application.id ? result.application : application,
+              ),
+            }
+          : current,
+      );
+      void getCoordinationDetail(detailId).then(setDetail).catch(() => {
+        // Repair response is authoritative.
+      });
+      toast.success(
+        result.worksheet_project_document_id
+          ? `Package repaired — worksheet ${result.worksheet_project_document_id}. Re-confirm repaired slots and mark reviewed again.`
+          : "Package repaired — re-confirm repaired slots and mark reviewed again.",
+      );
+    } catch (e: unknown) {
+      toast.error(formatUciUserError(e, "Application package repair failed"));
+    } finally {
+      setApplicationRepairBusy(false);
     }
   };
 
@@ -4779,6 +4826,7 @@ export default function UciDashboard() {
                     sectionTitleClass={uciSheetSectionTitleClass}
                     toolbarOutlineButtonClass={uciToolbarOutlineButtonClass}
                     prepBusy={applicationPrepBusy}
+                    repairBusy={applicationRepairBusy}
                     reviewBusy={applicationReviewBusy}
                     submitBusy={applicationSubmitBusy}
                     stage2CompletionBusy={stage2CompletionBusy}
@@ -4790,6 +4838,7 @@ export default function UciDashboard() {
                     onBuild={(externalApplicationId) =>
                       void handleApplicationPackageBuild(externalApplicationId)
                     }
+                    onRepair={() => void handleApplicationPackageRepair()}
                     applicationTemplateForceVisible={applicationTemplateForceVisible}
                     onApplicationTemplateSaved={() =>
                       handleApplicationPackageBuild(selectedPepcoProject?.applicationId ?? null)
@@ -5595,6 +5644,7 @@ export function ApplicationPrepSection({
   sectionTitleClass,
   toolbarOutlineButtonClass,
   prepBusy,
+  repairBusy,
   reviewBusy,
   submitBusy,
   stage2CompletionBusy,
@@ -5604,6 +5654,7 @@ export function ApplicationPrepSection({
   reviewNotes,
   onReviewNotesChange,
   onBuild,
+  onRepair,
   onReview,
   onSubmit,
   onCompleteStage2,
@@ -5626,6 +5677,7 @@ export function ApplicationPrepSection({
   sectionTitleClass: string;
   toolbarOutlineButtonClass: string;
   prepBusy: boolean;
+  repairBusy: boolean;
   reviewBusy: boolean;
   submitBusy: boolean;
   stage2CompletionBusy: boolean;
@@ -5635,6 +5687,7 @@ export function ApplicationPrepSection({
   reviewNotes: string;
   onReviewNotesChange: (value: string) => void;
   onBuild: (externalApplicationId?: string | null) => void;
+  onRepair: () => void;
   onReview: (status: "reviewed" | "needs_changes") => void;
   onSubmit: () => void;
   onCompleteStage2: () => void;
@@ -5652,6 +5705,7 @@ export function ApplicationPrepSection({
   const packageApp = getApplicationPackageDraftApplication(applications);
   const packageMeta = parseApplicationPackageMetadata(packageApp);
   const packageDocs = parsePackageDocuments(packageApp?.package_documents);
+  const repairEligibility = canRepairReviewedPackageDocuments(packageApp, packageDocs);
   const packageReview = summarizePackageReview(
     packageMeta,
     packageDocs,
@@ -6097,6 +6151,18 @@ export function ApplicationPrepSection({
               {prepBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {packageApp ? "Rebuild package" : "Prepare application draft"}
             </Button>
+          ) : repairEligibility.ok ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={toolbarOutlineButtonClass}
+              disabled={repairBusy}
+              onClick={() => onRepair()}
+            >
+              {repairBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Repair package
+            </Button>
           ) : null}
         </div>
       </CardHeader>
@@ -6148,6 +6214,12 @@ export function ApplicationPrepSection({
                     : ""}
                   . Mappings are read-only until review is reopened.
                 </p>
+                {repairEligibility.ok ? (
+                  <p className={cn("mt-2 text-xs text-amber-700 dark:text-amber-300")}>
+                    Required attachment references are unresolved ({repairEligibility.unresolvedKeys.join(", ")}).
+                    Use Repair package to persist real document IDs, then re-confirm affected slots and mark reviewed again.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
