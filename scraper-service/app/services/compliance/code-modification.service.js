@@ -210,13 +210,27 @@ function extractProposedMeasures(text) {
   );
   const block = (section && section[0]) || text;
   const measures = [];
-  for (const line of block.split(/\n+/)) {
-    const item = line.match(/^\s*(?:\d+[.)]|[-*•])\s+(.+)$/);
-    const description = usableFieldValue(item && item[1]);
-    if (!description) continue;
-    if (/proposed alternative|compensating measures|flood hazard/i.test(description)) continue;
+
+  const pushMeasure = (raw) => {
+    const description = usableFieldValue(raw);
+    if (!description) return;
+    if (/proposed alternative|compensating measures|flood hazard/i.test(description)) return;
     measures.push({ id: `measure-${measures.length + 1}`, description });
+  };
+
+  for (const line of block.split(/\n+/)) {
+    const item = line.match(/^\s*(?:\d+\s*[.)]|[-*•])\s+(.+)$/);
+    pushMeasure(item && item[1]);
   }
+  if (measures.length > 0) return measures;
+
+  // pdf.js joins text items with spaces; numbered lists often appear inline.
+  for (const match of block.matchAll(
+    /\b(\d+)\s*[.)]\s+(.+?)(?=\s\d+\s*[.)]\s|\sFlood Hazard|\sSupporting narrative|\sFOR OFFICIAL USE|$)/gi,
+  )) {
+    pushMeasure(match[2]);
+  }
+
   return measures;
 }
 

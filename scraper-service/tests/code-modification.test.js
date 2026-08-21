@@ -78,6 +78,24 @@ describe("code-modification.service extract", () => {
     assert.equal(JSON.stringify(extracted).includes("DOB Reviewer Name"), false);
     assert.equal(pagesAreSparse(SAMPLE_PAGES), false);
   });
+
+  it("extracts numbered measures from pdf.js-flattened single-line page text", () => {
+    const pages = [
+      SAMPLE_PAGES[0],
+      {
+        pageNumber: 2,
+        text:
+          "PROPOSED ALTERNATIVE / COMPENSATING MEASURES: 1. Automatic sprinkler system designed and installed in accordance with NFPA 13 2. 2-hour fire-rated stair enclosure 3. Fire alarm system throughout the building 4. Occupant load signage at assembly spaces 5. Egress lighting and exit signage Flood Hazard Applicable: No",
+      },
+      SAMPLE_PAGES[2],
+    ];
+    const extracted = heuristicExtractModificationRequest(pages);
+    assert.equal(extracted.proposedMeasures.length, 5);
+    assert.equal(
+      extracted.extractionWarnings.some((w) => /No proposed alternative measures/i.test(w)),
+      false,
+    );
+  });
 });
 
 describe("code-modification.service grounding", () => {
