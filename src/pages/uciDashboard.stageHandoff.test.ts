@@ -19,10 +19,7 @@ describe("UciDashboard Stage 2 → Stage 3 handoff regression", () => {
     assert.match(actionPresentationSource, /export function deriveStage2HandoffAction/);
     assert.match(actionPresentationSource, /export function deriveStage3ReviewAction/);
     assert.match(actionPresentationSource, /Complete Stage 2 review/);
-    assert.doesNotMatch(
-      dashboardSource,
-      /\{currentStage === 2 \? \([\s\S]*Complete Stage 2 review/,
-    );
+    assert.doesNotMatch(dashboardSource, /Enter Stage 4 submission/);
   });
 
   it("refreshes lifecycle state after package review and detail refresh", () => {
@@ -31,10 +28,9 @@ describe("UciDashboard Stage 2 → Stage 3 handoff regression", () => {
     assert.match(dashboardSource, /applyCoordinationDetail\(refreshed\)/);
   });
 
-  it("wires Stage 3 reviewed package to Stage 4 submission handoff", () => {
-    assert.match(dashboardSource, /completeStage3PackageReviewHandoff/);
+  it("wires Stage 3 reviewed package to Stage 4 via package review handoff only", () => {
     assert.match(dashboardSource, /stage_4_entered/);
-    assert.match(dashboardSource, /Enter Stage 4 submission/);
     assert.match(dashboardSource, /Open Submission Tracker/);
+    assert.match(actionPresentationSource, /canShowEnterStage4HandoffButton/);
   });
 });

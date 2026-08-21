@@ -43,6 +43,83 @@ export function isBlockingCosComparisonRow(row: Record<string, unknown>): boolea
   return true;
 }
 
+export type CosApprovalActionState =
+  | { status: "hidden" }
+  | { status: "actionable"; label: string; disabled: boolean }
+  | { status: "approved"; label: string; autoCompleted: boolean };
+
+export type CosComparisonRowActionState = {
+  canEditAccepted: boolean;
+  canEditInclusion: boolean;
+  showEdit: boolean;
+  showResetToUtility: boolean;
+  readOnly: boolean;
+};
+
+/** Stage 6 COS approve button from persisted review_status / evidence. */
+export function deriveCosApprovalAction(input: {
+  reviewStatus: string;
+  evidenceStatus: string;
+  autoCompleted: boolean;
+  hasMaterial: boolean;
+  busy: boolean;
+  hasEvidence: boolean;
+}): CosApprovalActionState {
+  const isApproved = input.reviewStatus === "approved";
+
+  if (input.autoCompleted || (isApproved && !input.hasMaterial)) {
+    return {
+      status: "approved",
+      label: "COS matched · Stage 6 completed automatically",
+      autoCompleted: true,
+    };
+  }
+
+  if (isApproved) {
+    return {
+      status: "approved",
+      label: "COS approved",
+      autoCompleted: false,
+    };
+  }
+
+  if (!input.hasEvidence) {
+    return { status: "hidden" };
+  }
+
+  return {
+    status: "actionable",
+    label: "Approve COS",
+    disabled: input.busy || input.evidenceStatus === "ADVISORY",
+  };
+}
+
+/** Per-row accept/edit controls — read-only after approval or terminal review states. */
+export function deriveCosComparisonRowAction(input: {
+  row: Record<string, unknown>;
+  reviewStatus: string;
+  evidenceStatus: string;
+  busy: boolean;
+  hasUpdateHandlers: boolean;
+}): CosComparisonRowActionState {
+  const isClosed =
+    input.reviewStatus === "approved" ||
+    input.evidenceStatus === "ADVISORY" ||
+    input.reviewStatus === "rejected" ||
+    input.reviewStatus === "superseded";
+  const canEdit = input.hasUpdateHandlers && !isClosed;
+
+  return {
+    canEditAccepted: canEdit,
+    canEditInclusion: canEdit,
+    showEdit: canEdit,
+    showResetToUtility:
+      canEdit &&
+      (input.row.operator_override === true || input.row.utility_conflict === true),
+    readOnly: isClosed,
+  };
+}
+
 function formatScalarWithUnit(value: unknown, unit?: unknown): string {
   const unitStr =
     unit != null && String(unit).trim() !== "" ? ` ${String(unit).trim()}` : "";

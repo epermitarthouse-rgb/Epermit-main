@@ -6306,28 +6306,6 @@ export function ApplicationPrepSection({
               </div>
             ) : null}
 
-            {stage3Review.stage4Handoff.status === "actionable" ? (
-              <div className="space-y-2 rounded-md border border-teal-500/30 bg-teal-500/5 p-3">
-                <p className="text-sm font-medium text-foreground">
-                  Stage 3 is complete and the package is reviewed.
-                </p>
-                <p className={cn("text-xs", mutedClass)}>
-                  {stage3Review.stage4Handoff.description}
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={stage3CompletionBusy}
-                  onClick={onCompleteStage3}
-                >
-                  {stage3CompletionBusy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  {stage3Review.stage4Handoff.label}
-                </Button>
-              </div>
-            ) : null}
-
             {stage3Review.showStage4StatusPanel ? (
               <div className="space-y-2 rounded-md border border-teal-500/30 bg-teal-500/5 p-3">
                 <p className="text-sm font-medium text-foreground">

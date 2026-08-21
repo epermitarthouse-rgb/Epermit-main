@@ -47,9 +47,11 @@ import {
   getPackageValidationStatus,
   getPackageFieldSourceHref,
   isDocumentMappingReady,
+  applicationReviewPersisted,
   parseCanonicalPackageReviewSummary,
   summarizePackageReview,
 } from "@/lib/uciApplicationPrep";
+import { derivePackageReviewAction } from "@/lib/uciActionPresentation";
 import {
   LOVABLE_EXHIBIT_PLACEHOLDERS,
   OWNER_BILLING_FIELDS,
@@ -126,6 +128,11 @@ export default function UciApplicationBuilder() {
         document.reviewStatus,
     })),
   };
+  const packageReviewAction = derivePackageReviewAction({
+    reviewPersisted: applicationReviewPersisted(builder.packageApp),
+    readyForFinalReview: packageReview.readyForFinalReview,
+    reviewBusy: builder.reviewBusy,
+  });
   const latestValidation =
     builder.packageApp?.agent_draft_metadata?.latest_validation &&
     typeof builder.packageApp.agent_draft_metadata.latest_validation === "object" &&
@@ -1484,23 +1491,24 @@ export default function UciApplicationBuilder() {
                           </>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                          {!isReviewed ? (
+                          {packageReviewAction.status === "actionable" ||
+                          packageReviewAction.status === "blocked" ? (
                             <button
                               type="button"
                               className="pilot-button-primary"
                               disabled={
-                                builder.reviewBusy ||
-                                !packageReview.readyForFinalReview
+                                packageReviewAction.status === "blocked" ||
+                                packageReviewAction.disabled
                               }
                               onClick={() => void builder.markReviewed("reviewed")}
                             >
                               {builder.reviewBusy ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : null}
-                              Mark package reviewed
+                              {packageReviewAction.label}
                             </button>
                           ) : null}
-                          {isReviewed ? (
+                          {packageReviewAction.status === "reviewed" ? (
                             <button
                               type="button"
                               className="pilot-button-ghost"
@@ -1547,9 +1555,11 @@ export default function UciApplicationBuilder() {
                             </>
                           ) : submitReady
                               ? "Reviewed — open Submission and Confirmation Tracker to Prepare → Preview → Send."
-                            : packageReview.readyForFinalReview
+                            : packageReviewAction.status === "actionable"
                               ? "Every required mapping is confirmed. Mark the package reviewed to lock the snapshot."
-                              : "Confirm every required field and document before final review."}
+                              : packageReviewAction.status === "blocked"
+                                ? packageReviewAction.hint
+                                : "Confirm every required field and document before final review."}
                         </p>
                         {builder.lastSubmitResult || latestValidation ? (
                           <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">

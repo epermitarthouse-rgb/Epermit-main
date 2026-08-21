@@ -4,6 +4,7 @@
  */
 
 import {
+  canShowEnterStage4HandoffButton,
   getStage3HandoffButtonLabel,
   isStage2CompletedAwaitingStage3Handoff,
   isStage2EngineeringReviewActive,
@@ -260,7 +261,7 @@ export function deriveStage3ReviewAction(
   }
 
   let stage4Handoff: Stage4HandoffActionState = { status: "hidden" };
-  if (stage === 3 && state === "COMPLETED" && input.packageReviewed) {
+  if (canShowEnterStage4HandoffButton(stage, state, input.packageReviewed)) {
     stage4Handoff = {
       status: "actionable",
       label: "Enter Stage 4 submission",

@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  deriveCosApprovalAction,
+  deriveCosComparisonRowAction,
   formatCosComparisonCellValue,
   isBlockingCosComparisonRow,
   isRequiredForCosAcceptance,
@@ -73,5 +75,83 @@ describe("Stage 6 partial COS comparison predicates", () => {
       }),
       true,
     );
+  });
+});
+
+describe("deriveCosApprovalAction", () => {
+  it("shows actionable approve when evidence exists and review is open", () => {
+    const action = deriveCosApprovalAction({
+      reviewStatus: "pending",
+      evidenceStatus: "MATCH",
+      autoCompleted: false,
+      hasMaterial: true,
+      busy: false,
+      hasEvidence: true,
+    });
+    assert.equal(action.status, "actionable");
+    assert.equal(action.label, "Approve COS");
+    assert.equal(action.disabled, false);
+  });
+
+  it("shows approved badge after persisted approval", () => {
+    const action = deriveCosApprovalAction({
+      reviewStatus: "approved",
+      evidenceStatus: "MATCH",
+      autoCompleted: false,
+      hasMaterial: false,
+      busy: false,
+      hasEvidence: true,
+    });
+    assert.equal(action.status, "approved");
+    assert.match(action.label, /COS matched/);
+  });
+
+  it("disables approve for advisory evidence and hides when no evidence", () => {
+    const advisory = deriveCosApprovalAction({
+      reviewStatus: "pending",
+      evidenceStatus: "ADVISORY",
+      autoCompleted: false,
+      hasMaterial: false,
+      busy: false,
+      hasEvidence: true,
+    });
+    assert.equal(advisory.status, "actionable");
+    if (advisory.status === "actionable") {
+      assert.equal(advisory.disabled, true);
+    }
+
+    const hidden = deriveCosApprovalAction({
+      reviewStatus: "pending",
+      evidenceStatus: "MATCH",
+      autoCompleted: false,
+      hasMaterial: false,
+      busy: false,
+      hasEvidence: false,
+    });
+    assert.equal(hidden.status, "hidden");
+  });
+});
+
+describe("deriveCosComparisonRowAction", () => {
+  it("locks row edits after approval", () => {
+    const open = deriveCosComparisonRowAction({
+      row: { field: "service_amperage", operator_override: true },
+      reviewStatus: "pending",
+      evidenceStatus: "DISCREPANCY",
+      busy: false,
+      hasUpdateHandlers: true,
+    });
+    assert.equal(open.showEdit, true);
+    assert.equal(open.showResetToUtility, true);
+
+    const closed = deriveCosComparisonRowAction({
+      row: { field: "service_amperage" },
+      reviewStatus: "approved",
+      evidenceStatus: "MATCH",
+      busy: false,
+      hasUpdateHandlers: true,
+    });
+    assert.equal(closed.readOnly, true);
+    assert.equal(closed.showEdit, false);
   });
 });

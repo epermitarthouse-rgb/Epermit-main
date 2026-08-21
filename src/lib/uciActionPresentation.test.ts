@@ -88,7 +88,7 @@ describe("deriveStage2HandoffAction", () => {
     assert.equal(action.status, "actionable");
     if (action.status === "actionable") {
       assert.equal(action.kind, "enter_stage3");
-      assert.equal(action.label, "Complete Stage 3");
+      assert.equal(action.label, "Open application preparation");
     }
   });
 
@@ -104,7 +104,7 @@ describe("deriveStage2HandoffAction", () => {
 });
 
 describe("deriveStage3ReviewAction", () => {
-  it("shows Stage 4 handoff when Stage 3 is completed with reviewed package", () => {
+  it("does not show redundant Stage 4 handoff when review auto-advances lifecycle", () => {
     const presentation = deriveStage3ReviewAction(
       record({ current_stage: 3, current_stage_state: "COMPLETED" }),
       {
@@ -114,7 +114,7 @@ describe("deriveStage3ReviewAction", () => {
         readyForFinalReview: true,
       },
     );
-    assert.equal(presentation.stage4Handoff.status, "actionable");
+    assert.equal(presentation.stage4Handoff.status, "hidden");
     assert.equal(presentation.showStage4StatusPanel, false);
   });
 
