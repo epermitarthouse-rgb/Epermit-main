@@ -3,7 +3,11 @@ import {
   buildDesignCheckSummary,
   type DesignCheckProjectSummary,
 } from "@/lib/designcheck/designCheckSummary";
-import { filterAnnotationsForActiveAnalysis } from "@/lib/codeAnalyzer/model";
+import {
+  filterAnnotationsForActiveAnalysis,
+  isStandardComplianceRun,
+  pickCurrentRun,
+} from "@/lib/codeAnalyzer/model";
 
 export type LoadDesignCheckSummaryResult = {
   summary: DesignCheckProjectSummary | null;
@@ -19,9 +23,11 @@ export async function loadDesignCheckSummary(
   projectId: string,
 ): Promise<LoadDesignCheckSummaryResult> {
   try {
+    // Phase 2 decision: modification findings live on code_modification_reviews
+    // and must not enter DesignCheck KPIs. Only standard_compliance runs count.
     const { data: runs, error: runsError } = await supabase
       .from("code_analyzer_runs")
-      .select("id, status")
+      .select("id, status, analysis_type")
       .eq("project_id", projectId);
 
     if (runsError) {
@@ -29,8 +35,9 @@ export async function loadDesignCheckSummary(
     }
 
     const runRows = runs ?? [];
-    const currentRun = runRows.find((r) => r.status === "current") ?? null;
-    const hasAnalyzerRuns = runRows.length > 0;
+    const standardRuns = runRows.filter(isStandardComplianceRun);
+    const currentRun = pickCurrentRun(standardRuns);
+    const hasAnalyzerRuns = standardRuns.length > 0;
 
     const { data: annotations, error } = await supabase
       .from("document_annotations")

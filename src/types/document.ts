@@ -8,6 +8,7 @@ export type DocumentType =
   | 'specification'
   | 'inspection_report'
   | 'correspondence'
+  | 'code_modification_application'
   | 'other';
 
 export type DocumentDiscipline = 
@@ -132,6 +133,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   specification: 'Specification',
   inspection_report: 'Inspection Report',
   correspondence: 'Correspondence',
+  code_modification_application: 'Code Modification Application',
   other: 'Other',
 };
 
@@ -145,6 +147,7 @@ export const DOCUMENT_TYPE_OPTIONS: { value: DocumentType; label: string }[] = [
   { value: 'specification', label: 'Specification' },
   { value: 'inspection_report', label: 'Inspection Report' },
   { value: 'correspondence', label: 'Correspondence' },
+  { value: 'code_modification_application', label: 'Code Modification Application' },
   { value: 'other', label: 'Other' },
 ];
 

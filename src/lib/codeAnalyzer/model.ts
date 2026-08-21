@@ -13,6 +13,13 @@ export const CODE_ANALYZER_RUN_STATUSES = [
 
 export type CodeAnalyzerRunStatus = (typeof CODE_ANALYZER_RUN_STATUSES)[number];
 
+export const ANALYSIS_TYPE_STANDARD = "standard_compliance";
+export const ANALYSIS_TYPE_DC_MODIFICATION = "dc_code_modification";
+
+export type CodeAnalyzerAnalysisType =
+  | typeof ANALYSIS_TYPE_STANDARD
+  | typeof ANALYSIS_TYPE_DC_MODIFICATION;
+
 export interface CodeAnalyzerRun {
   id: string;
   project_id: string;
@@ -22,10 +29,22 @@ export interface CodeAnalyzerRun {
   project_type: string | null;
   code_year: string | null;
   analysis_mode: string | null;
+  analysis_type?: string | null;
+  form_document_id?: string | null;
   source_fingerprint: string;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+/** Missing / blank analysis_type is treated as a Phase 1 standard compliance run. */
+export function runAnalysisType(run: { analysis_type?: string | null }): string {
+  const raw = typeof run.analysis_type === "string" ? run.analysis_type.trim() : "";
+  return raw || ANALYSIS_TYPE_STANDARD;
+}
+
+export function isStandardComplianceRun(run: { analysis_type?: string | null }): boolean {
+  return runAnalysisType(run) === ANALYSIS_TYPE_STANDARD;
 }
 
 export interface CodeAnalyzerSheet {
@@ -128,22 +147,37 @@ export function shouldMarkAnalysisStale(input: {
   return false;
 }
 
+type RunPickFields = {
+  status: string;
+  analysis_type?: string | null;
+  completed_at?: string | null;
+  updated_at?: string;
+  created_at?: string;
+};
+
 /** Prefer the current run; otherwise the most recently completed stale run (last results). */
-export function pickDisplayRun(runs: CodeAnalyzerRun[]): CodeAnalyzerRun | null {
-  const current = runs.find((r) => r.status === "current");
+export function pickDisplayRun<T extends RunPickFields>(
+  runs: T[],
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): T | null {
+  const scoped = runs.filter((r) => runAnalysisType(r) === analysisType);
+  const current = scoped.find((r) => r.status === "current");
   if (current) return current;
-  const stale = runs
+  const stale = scoped
     .filter((r) => r.status === "stale")
     .sort((a, b) => {
-      const aTime = a.completed_at || a.updated_at || a.created_at;
-      const bTime = b.completed_at || b.updated_at || b.created_at;
+      const aTime = a.completed_at || a.updated_at || a.created_at || "";
+      const bTime = b.completed_at || b.updated_at || b.created_at || "";
       return bTime.localeCompare(aTime);
     });
   return stale[0] ?? null;
 }
 
-export function pickCurrentRun(runs: CodeAnalyzerRun[]): CodeAnalyzerRun | null {
-  return runs.find((r) => r.status === "current") ?? null;
+export function pickCurrentRun<T extends { status: string; analysis_type?: string | null }>(
+  runs: T[],
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): T | null {
+  return runs.find((r) => r.status === "current" && runAnalysisType(r) === analysisType) ?? null;
 }
 
 export interface AnalyzerAnnotationRef {
