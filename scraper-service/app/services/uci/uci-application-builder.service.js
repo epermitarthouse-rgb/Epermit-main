@@ -61,6 +61,152 @@ function resolveVerifiedFieldEntry(verified, fieldKey) {
   return { entry: exact ?? null, resolvedKey: fieldKey };
 }
 
+function asVerifiedMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? /** @type {Record<string, unknown>} */ (value)
+    : {};
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} pkg
+ * @param {Record<string, unknown> | null | undefined} loadSummary
+ */
+function collectVerifiedValuesForPackage(pkg, loadSummary) {
+  return {
+    ...asVerifiedMap(pkg?.verified_load_snapshot),
+    ...asVerifiedMap(loadSummary?.verified_values),
+  };
+}
+
+function resolvedVerifiedSource(resolvedKey) {
+  return `load_summary.verified_values.${resolvedKey}`;
+}
+
+/**
+ * Re-apply alias resolution to persisted field_results without rebuilding documents.
+ * @param {Record<string, unknown>} pkg
+ * @param {Record<string, unknown>} verifiedValues
+ */
+function hydratePersistedVerifiedFieldResults(pkg, verifiedValues) {
+  const fields = Array.isArray(pkg.field_results) ? pkg.field_results : [];
+  let changed = false;
+  const nextFields = fields.map((raw) => {
+    const field = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const source = String(field.source ?? "");
+    if (!source.startsWith("load_summary.verified_values.")) return field;
+    if (verifiedEntryIsPresent(field.value) && String(field.status ?? "") === "present") {
+      return field;
+    }
+    const templateKey =
+      source.slice("load_summary.verified_values.".length) || String(field.key ?? "");
+    const resolved = resolveVerifiedFieldEntry(verifiedValues, templateKey);
+    const picked =
+      verifiedEntryIsPresent(resolved.entry) || String(field.key ?? "") === templateKey
+        ? resolved
+        : resolveVerifiedFieldEntry(verifiedValues, String(field.key ?? ""));
+    if (!verifiedEntryIsPresent(picked.entry)) return field;
+    changed = true;
+    return {
+      ...field,
+      value: picked.entry,
+      status: "present",
+      source: resolvedVerifiedSource(picked.resolvedKey),
+    };
+  });
+
+  const priorMissing = Array.isArray(pkg.missing_fields)
+    ? pkg.missing_fields.map((key) => String(key))
+    : [];
+  const nextMissing = priorMissing.filter((key) => {
+    const field = nextFields.find((entry) => String(entry.key ?? "") === key);
+    return !field || String(field.status ?? "") !== "present";
+  });
+  if (nextMissing.length !== priorMissing.length) changed = true;
+
+  if (!changed) return { pkg, changed: false };
+  return {
+    pkg: {
+      ...pkg,
+      field_results: nextFields,
+      missing_fields: nextMissing,
+    },
+    changed: true,
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} application
+ * @param {Record<string, unknown> | null | undefined} [loadSummary]
+ */
+function hydrateApplicationVerifiedFields(application, loadSummary) {
+  const metadata = asVerifiedMap(application?.agent_draft_metadata);
+  const pkg = asVerifiedMap(metadata.application_package);
+  if (!metadata.application_package || !Array.isArray(pkg.field_results)) {
+    return { application, changed: false };
+  }
+  const verified = collectVerifiedValuesForPackage(pkg, loadSummary ?? application.load_summary);
+  const result = hydratePersistedVerifiedFieldResults(pkg, verified);
+  if (!result.changed) return { application, changed: false };
+  return {
+    application: {
+      ...application,
+      agent_draft_metadata: {
+        ...metadata,
+        application_package: result.pkg,
+      },
+    },
+    changed: true,
+  };
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} application
+ * @param {Record<string, unknown> | null | undefined} [loadSummary]
+ */
+async function loadLiveLoadSummaryForPackage(supabase, application, loadSummary) {
+  if (loadSummary) return loadSummary;
+  const coordinationRecordId = application.coordination_record_id;
+  const projectId = application.project_id;
+  if (!coordinationRecordId || !projectId) return null;
+  const { data, error } = await supabase
+    .from("coordination_applications")
+    .select("load_summary")
+    .eq("coordination_record_id", coordinationRecordId)
+    .eq("project_id", projectId)
+    .like("idempotency_key", "agent_2_load_profile:%")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("[uci-application-builder] load profile fetch for hydrate failed:", error.message);
+    return null;
+  }
+  return data?.load_summary ?? null;
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} application
+ * @param {Record<string, unknown> | null | undefined} [loadSummary]
+ */
+async function persistHydratedVerifiedFields(supabase, application, loadSummary) {
+  const liveSummary = await loadLiveLoadSummaryForPackage(supabase, application, loadSummary);
+  const hydrated = hydrateApplicationVerifiedFields(application, liveSummary);
+  if (!hydrated.changed) return hydrated.application;
+  const { error } = await supabase
+    .from("coordination_applications")
+    .update({ agent_draft_metadata: hydrated.application.agent_draft_metadata })
+    .eq("id", application.id);
+  if (error) {
+    console.warn(
+      "[uci-application-builder] verified-field hydrate persist failed:",
+      error.message || error,
+    );
+  }
+  return hydrated.application;
+}
+
 const TEMPLATES_ROOT = path.resolve(__dirname, "../../../../uci/application-templates");
 
 /**
@@ -901,7 +1047,14 @@ async function getApplicationById(supabase, applicationId) {
     });
   }
 
-  return data ?? null;
+  if (!data) return null;
+  if (
+    String(data.record_source ?? "") === "agent_draft" &&
+    String(data.idempotency_key ?? "") === APPLICATION_PACKAGE_IDEMPOTENCY_KEY
+  ) {
+    return persistHydratedVerifiedFields(supabase, data);
+  }
+  return data;
 }
 
 /**
@@ -1037,6 +1190,10 @@ module.exports = {
   matchRequiredDocuments,
   evaluateRequiredFields,
   resolvePackageStatus,
+  hydratePersistedVerifiedFieldResults,
+  hydrateApplicationVerifiedFields,
+  persistHydratedVerifiedFields,
+  loadLiveLoadSummaryForPackage,
   runApplicationPackageBuild,
   getApplicationById,
   reviewApplicationPackage,

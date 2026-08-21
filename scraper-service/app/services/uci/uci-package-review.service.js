@@ -31,10 +31,12 @@ function packageContext(application) {
       code: "NOT_APPLICATION_PACKAGE",
     });
   }
-  const metadata = asObject(application.agent_draft_metadata);
+  const { hydrateApplicationVerifiedFields } = require("./uci-application-builder.service.js");
+  const hydrated = hydrateApplicationVerifiedFields(application).application;
+  const metadata = asObject(hydrated.agent_draft_metadata);
   const pkg = asObject(metadata.application_package);
   const review = asObject(pkg.package_review);
-  return { metadata, pkg, review };
+  return { metadata, pkg, review, application: hydrated };
 }
 
 function fieldSnapshot(field) {
@@ -264,15 +266,27 @@ function summarizePackageReview(application) {
   };
 }
 
-function withPackageReviewSummary(application) {
+function withPackageReviewSummary(application, loadSummary = null) {
+  const {
+    hydrateApplicationVerifiedFields,
+    loadLiveLoadSummaryForPackage,
+  } = require("./uci-application-builder.service.js");
+  const hydratedSync = hydrateApplicationVerifiedFields(application, loadSummary).application;
   return {
-    ...application,
-    load_summary: application.load_summary ?? {},
-    package_review_summary: summarizePackageReview(application),
+    ...hydratedSync,
+    load_summary: loadSummary ?? application.load_summary ?? {},
+    package_review_summary: summarizePackageReview(hydratedSync),
   };
 }
 
+async function withPackageReviewSummaryAsync(supabase, application) {
+  const { loadLiveLoadSummaryForPackage } = require("./uci-application-builder.service.js");
+  const liveSummary = await loadLiveLoadSummaryForPackage(supabase, application);
+  return withPackageReviewSummary(application, liveSummary);
+}
+
 async function getPackageReviewApplicationById(supabase, applicationId) {
+  const { persistHydratedVerifiedFields } = require("./uci-application-builder.service.js");
   const { data, error } = await supabase
     .from("coordination_applications")
     .select(PACKAGE_REVIEW_APPLICATION_SELECT)
@@ -284,6 +298,13 @@ async function getPackageReviewApplicationById(supabase, applicationId) {
       statusCode: 500,
       code: "APPLICATION_FETCH_FAILED",
     });
+  }
+  if (!data) return null;
+  if (
+    String(data.record_source ?? "") === "agent_draft" &&
+    String(data.idempotency_key ?? "") === APPLICATION_PACKAGE_IDEMPOTENCY_KEY
+  ) {
+    return persistHydratedVerifiedFields(supabase, data);
   }
   return data;
 }
