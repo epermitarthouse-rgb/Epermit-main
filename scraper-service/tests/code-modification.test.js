@@ -210,6 +210,11 @@ describe("analyzeCodeModification", () => {
     assert.match(pages[2].text, /FOR OFFICIAL USE ONLY/);
     const extracted = heuristicExtractModificationRequest(pages);
     assert.match(extracted.requestedModification, /1021\.2/);
+    assert.equal(extracted.proposedMeasures.length, 5);
+    assert.equal(
+      extracted.extractionWarnings.some((w) => /No proposed alternative measures/i.test(w)),
+      false,
+    );
   });
 });
 
