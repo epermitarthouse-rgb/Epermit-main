@@ -1,0 +1,48 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "NAME": "BALTIMORE GAS & ELECTRIC CO",
+        "STATE": "MD",
+        "TYPE": "INVESTOR OWNED",
+        "CUSTOMERS": 1000000
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-76.75, 39.15],
+            [-76.45, 39.15],
+            [-76.45, 39.45],
+            [-76.75, 39.45],
+            [-76.75, 39.15]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "NAME": "POTOMAC ELECTRIC POWER CO",
+        "STATE": "DC",
+        "TYPE": "INVESTOR OWNED",
+        "CUSTOMERS": 900000,
+        "_supplement_reason": "pepco_dc_serves_md_suburbs"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-77.15, 38.85],
+            [-76.85, 38.85],
+            [-76.85, 39.15],
+            [-77.15, 39.15],
+            [-77.15, 38.85]
+          ]
+        ]
+      }
+    }
+  ]
+}

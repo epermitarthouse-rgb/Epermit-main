@@ -1,0 +1,18 @@
+{
+  "schema_version": "d2.2-territory-v1",
+  "ingestion_script_version": "2.0.0-test",
+  "dataset_version": "fixture-v1",
+  "generated_at": "2026-07-17T00:00:00.000Z",
+  "source_name": "EIA Energy Atlas",
+  "source_url": "https://services3.arcgis.com/OYP7N6mAJJCyH6hd/ArcGIS/rest/services/Electric_Retail_Service_Territories_HIFLD/FeatureServer/0",
+  "layer_id": "0",
+  "source_vintage": "2026-07-17",
+  "fallback_used": false,
+  "states": {
+    "MD": {
+      "feature_count": 2,
+      "utility_count": 2,
+      "file": "territories_MD.geojson"
+    }
+  }
+}
