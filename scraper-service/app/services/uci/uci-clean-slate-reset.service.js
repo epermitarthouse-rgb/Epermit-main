@@ -5,6 +5,10 @@ const {
   stampCleanSlateMetadata,
   readCleanSlateBoundary,
 } = require("./uci-clean-slate-run-boundary.util.js");
+const {
+  ACTIVE_APPLICATION_TEMPLATE_META_KEY,
+  readCoordinationActiveTemplate,
+} = require("./uci-provider-application-template.service.js");
 
 const STORAGE_BUCKET = "project-documents";
 const UCI_PORTAL_SYNC_JOB_TYPE = "uci_portal_sync";
@@ -160,7 +164,7 @@ const RESET_SCOPE = Object.freeze([
     table: "utility_providers",
     scope: "global",
     action: "preserve",
-    reason: "Provider directory and uci_application_templates",
+    reason: "Provider directory; global uci_application_templates library preserved (coordination-scoped activation cleared on reset)",
   },
   {
     table: "microsoft_mailbox_connections",
@@ -417,6 +421,15 @@ async function auditCleanSlateReset(supabase, params) {
     tableAudit,
   });
 
+  const coordinationMeta =
+    coordination.metadata && typeof coordination.metadata === "object"
+      ? /** @type {Record<string, unknown>} */ (coordination.metadata)
+      : {};
+  const activeTemplate = readCoordinationActiveTemplate(
+    coordinationMeta,
+    String(coordination.utility_type ?? "electric"),
+  );
+
   return {
     at: new Date().toISOString(),
     dry_run: params.dryRun !== false,
@@ -431,6 +444,14 @@ async function auditCleanSlateReset(supabase, params) {
       current_stage: coordination.current_stage,
       current_stage_state: coordination.current_stage_state,
       prior_clean_slate: priorBoundary,
+      active_application_template: activeTemplate
+        ? {
+            version: activeTemplate.stored_version || activeTemplate.manifest?.version || null,
+            required_documents_count: Array.isArray(activeTemplate.manifest?.required_documents)
+              ? activeTemplate.manifest.required_documents.length
+              : 0,
+          }
+        : null,
     },
     table_audit: tableAudit,
     storage_audit: storageAudit,
@@ -440,9 +461,13 @@ async function auditCleanSlateReset(supabase, params) {
     },
     post_reset_expectations: {
       project_documents: 0,
+      document_registry_entries: 0,
       coordination_communications: 0,
       coordination_current_stage: 1,
       coordination_current_stage_state: "NOT_STARTED",
+      provider_requirements_total: 0,
+      active_application_template: null,
+      [`metadata.${ACTIVE_APPLICATION_TEMPLATE_META_KEY}`]: null,
     },
     contamination_risk: contamination,
     scope_mapping: RESET_SCOPE,
@@ -460,10 +485,17 @@ async function assessContaminationRisk(supabase, params) {
       ? coordination.metadata
       : {};
   const lcInMeta = Boolean(meta.lc_number || meta.load_control_number || meta.LC);
+  const activeTemplate = readCoordinationActiveTemplate(
+    meta,
+    String(coordination.utility_type ?? "electric"),
+  );
   const { count: unmatchedCount } = await countRows(supabase, "uci_unmatched_inbound_messages", (q) =>
     q.eq("project_id", String(coordination.project_id)),
   );
   const { count: commCount } = await countRows(supabase, "coordination_communications", (q) =>
+    q.eq("coordination_record_id", String(coordination.id)),
+  );
+  const { count: registryCount } = await countRows(supabase, "uci_document_registry_entries", (q) =>
     q.eq("coordination_record_id", String(coordination.id)),
   );
 
@@ -471,6 +503,11 @@ async function assessContaminationRisk(supabase, params) {
   const risks = [];
   if (lcInMeta) {
     risks.push("LC number still in coordination metadata would allow stale DOM-DEMO matching");
+  }
+  if (activeTemplate) {
+    risks.push(
+      "Coordination has active_application_template — will be cleared on reset so operator must re-upload for demo",
+    );
   }
   if ((unmatchedCount ?? 0) > 0) {
     risks.push("Unmatched inbound queue rows could be manually reprocessed into a new run");
@@ -481,13 +518,20 @@ async function assessContaminationRisk(supabase, params) {
 
   return {
     lc_in_metadata: lcInMeta,
+    active_application_template: Boolean(activeTemplate),
+    active_template_required_documents:
+      activeTemplate && Array.isArray(activeTemplate.manifest?.required_documents)
+        ? activeTemplate.manifest.required_documents.length
+        : 0,
+    document_registry_count: registryCount,
     unmatched_inbound_count: unmatchedCount,
     coordination_communications_count: commCount,
     pre_reset_risks: risks,
     mitigations: [
       "Delete all coordination_communications and project-scoped uci_unmatched_inbound_messages",
-      "Scrub LC/ticket keys from coordination metadata and stamp clean_slate_at boundary",
+      "Scrub LC/ticket keys and active_application_template from coordination metadata; stamp clean_slate_at boundary",
       "Preserve microsoft_mailbox_connections (Graph idempotency prevents re-ingest of old mail)",
+      "Preserve utility_providers global template library; coordination-scoped activation drives requirements",
       "Matcher skips records when inbound message_timestamp < clean_slate_at",
     ],
     safe_after_reset: true,

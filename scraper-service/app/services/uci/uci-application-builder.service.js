@@ -467,6 +467,10 @@ async function runApplicationPackageBuild(supabase, params) {
     providerId: record.utility_provider_id,
     utilityType,
     checklistMode,
+    coordinationMetadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? /** @type {Record<string, unknown>} */ (record.metadata)
+        : {},
   });
   const template = templateResolution.template;
   const resolutionMeta =

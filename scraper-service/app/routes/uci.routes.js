@@ -87,7 +87,7 @@ const {
 } = require("../services/uci/uci-application-builder.service.js");
 const {
   getCoordinationApplicationTemplateStatus,
-  saveProviderApplicationTemplate,
+  saveCoordinationApplicationTemplate,
 } = require("../services/uci/uci-provider-application-template.service.js");
 const {
   reviewApplicationPackage,
@@ -2080,8 +2080,9 @@ function createUciRouter(opts) {
         throw err;
       }
 
-      const saved = await saveProviderApplicationTemplate(supabase, {
-        providerId: String(record.utility_provider_id),
+      const saved = await saveCoordinationApplicationTemplate(supabase, {
+        coordinationId,
+        record,
         utilityType: String(record.utility_type ?? ""),
         applicationType,
         manifest,

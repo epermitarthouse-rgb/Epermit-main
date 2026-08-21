@@ -821,6 +821,8 @@ export function formatApplicationTemplateSource(source: string | null | undefine
       return "Built-in synthetic checklist";
     case "manual_upload":
       return "Manual provider template";
+    case "coordination_manual":
+      return "Coordination template (this run)";
     case "missing":
       return "No template configured";
     default:

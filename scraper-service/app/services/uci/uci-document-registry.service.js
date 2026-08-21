@@ -80,6 +80,10 @@ async function resolveTemplateRequiredDocuments(supabase, record) {
     providerId: record.utility_provider_id,
     utilityType: normalizeUtilityType(record.utility_type),
     checklistMode,
+    coordinationMetadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? /** @type {Record<string, unknown>} */ (record.metadata)
+        : {},
   });
   return Array.isArray(resolved.template?.required_documents)
     ? resolved.template.required_documents

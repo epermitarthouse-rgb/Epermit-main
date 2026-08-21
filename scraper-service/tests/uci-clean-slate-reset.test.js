@@ -153,10 +153,15 @@ describe("UCI clean-slate reset", () => {
 
   it("stamps and reads clean_slate run boundary metadata", () => {
     const meta = stampCleanSlateMetadata(
-      { lc_number: "451554", uci_provider_resolution: { status: "confirmed" } },
+      {
+        lc_number: "451554",
+        uci_provider_resolution: { status: "confirmed" },
+        active_application_template: { "electric:new_service": { manifest: { version: "v2" } } },
+      },
       { runId: "run-1", at: "2026-08-21T00:00:00.000Z" },
     );
     assert.equal(meta.lc_number, undefined);
+    assert.equal(meta.active_application_template, undefined);
     assert.equal(meta.uci_provider_resolution.status, "confirmed");
     const boundary = readCleanSlateBoundary(meta);
     assert.equal(boundary?.run_id, "run-1");
@@ -289,7 +294,15 @@ describe("UCI clean-slate reset", () => {
           utility_type: "electric",
           current_stage: 6,
           current_stage_state: "IN_PROGRESS",
-          metadata: { lc_number: "451554", uci_provider_resolution: { status: "confirmed" } },
+          metadata: {
+            lc_number: "451554",
+            uci_provider_resolution: { status: "confirmed" },
+            active_application_template: {
+              "electric:new_service": {
+                manifest: { version: "dominion-electric-full-demo-v2", required_documents: [{}, {}, {}, {}, {}, {}, {}, {}] },
+              },
+            },
+          },
         },
       ],
       coordination_communications: [
@@ -336,6 +349,7 @@ describe("UCI clean-slate reset", () => {
     assert.equal(tables.coordination_records[0].current_stage, 1);
     assert.equal(tables.coordination_records[0].current_stage_state, "NOT_STARTED");
     assert.equal(tables.coordination_records[0].metadata.lc_number, undefined);
+    assert.equal(tables.coordination_records[0].metadata.active_application_template, undefined);
     assert.equal(tables.coordination_records[0].metadata.uci_provider_resolution.status, "confirmed");
     assert.equal(tables.projects[0].utility_coordination_completed_at, null);
     assert.equal(tables.microsoft_mailbox_connections.length, 1);

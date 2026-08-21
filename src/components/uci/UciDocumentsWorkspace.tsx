@@ -35,6 +35,7 @@ import {
   type UciProviderRequirementsResponse,
 } from "@/lib/uciDocumentRegistry";
 import { UciDocumentCoveragePanel } from "@/components/uci/UciDocumentCoveragePanel";
+import { UciDocumentsApplicationTemplateSection } from "@/components/uci/UciDocumentsApplicationTemplateSection";
 import { toast } from "sonner";
 
 export function UciDocumentsWorkspace({
@@ -168,6 +169,14 @@ export function UciDocumentsWorkspace({
 
   return (
     <div className="space-y-4">
+      <UciDocumentsApplicationTemplateSection
+        coordinationId={coordinationId}
+        mutedClass={mutedClass}
+        toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+        activeRequiredSlotCount={providerRequirements?.readiness.total_count ?? null}
+        onTemplateSaved={loadAll}
+      />
+
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
           <div>

@@ -170,8 +170,8 @@ export function UciApplicationTemplatePanel({
         </div>
         <p className={cn("text-xs", mutedClass)}>
           {templateMissing
-            ? `No built-in application template exists for ${effectiveProviderSlug}. Upload or paste a manual template to continue Application Builder. Saved templates apply to future projects for this provider.`
-            : "Update the provider template manifest below. Required documents and fields drive package assembly and document mapping."}
+            ? `No built-in application template exists for ${effectiveProviderSlug}. Upload or paste a manual template to continue Application Builder. Templates apply to this coordination run only.`
+            : "Update the coordination template manifest below. Required documents and fields drive package assembly and document mapping."}
         </p>
       </div>
 

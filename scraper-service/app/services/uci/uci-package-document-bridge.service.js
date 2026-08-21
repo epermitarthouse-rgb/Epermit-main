@@ -52,6 +52,10 @@ async function resolveTemplateForRecord(supabase, record, options = {}) {
     providerId: record.utility_provider_id,
     utilityType,
     checklistMode: options.checklistMode,
+    coordinationMetadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? /** @type {Record<string, unknown>} */ (record.metadata)
+        : {},
   });
   if (!resolved.template) {
     const err = new Error("Application template not found");

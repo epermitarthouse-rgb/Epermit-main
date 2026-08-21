@@ -9,6 +9,9 @@ const {
   SYNTHETIC_TEST_CHECKLIST_MODE,
 } = require("./uci-application-builder.service.js");
 
+/** Coordination metadata key for run-scoped manual template activation. */
+const ACTIVE_APPLICATION_TEMPLATE_META_KEY = "active_application_template";
+
 /**
  * @param {string} utilityType
  * @param {string} [applicationType]
@@ -216,7 +219,7 @@ function buildResolutionResult(params) {
     };
   }
 
-  const isManual = source === "manual_upload";
+  const isManual = source === "manual_upload" || source === "coordination_manual";
   const isSynthetic = String(template.checklist_mode ?? "") === SYNTHETIC_TEST_CHECKLIST_MODE;
   const version = String(template.version ?? extra.version ?? "").trim() || null;
 
@@ -254,8 +257,49 @@ function buildResolutionResult(params) {
 }
 
 /**
+ * @param {Record<string, unknown> | null | undefined} metadata
+ * @param {string} utilityType
+ * @param {string} [applicationType]
+ * @returns {{ manifest: Record<string, unknown>, uploaded_at: string | null, uploaded_by_user_id: string | null, stored_version: string | null } | null}
+ */
+function readCoordinationActiveTemplate(metadata, utilityType, applicationType = "new_service") {
+  const meta =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? /** @type {Record<string, unknown>} */ (metadata)
+      : {};
+  const block = meta[ACTIVE_APPLICATION_TEMPLATE_META_KEY];
+  if (!block || typeof block !== "object" || Array.isArray(block)) {
+    return null;
+  }
+  const record = /** @type {Record<string, unknown>} */ (block);
+  const key = buildTemplateStorageKey(utilityType, applicationType);
+  const entryRaw =
+    record[key] && typeof record[key] === "object" && !Array.isArray(record[key])
+      ? record[key]
+      : record.manifest && typeof record.manifest === "object"
+        ? record
+        : null;
+  if (!entryRaw || typeof entryRaw !== "object" || Array.isArray(entryRaw)) {
+    return null;
+  }
+  const entry = /** @type {Record<string, unknown>} */ (entryRaw);
+  const validated = validateApplicationTemplateManifest(entry.manifest ?? entry);
+  if (!validated.ok) {
+    return null;
+  }
+  return {
+    manifest: validated.manifest,
+    uploaded_at: entry.uploaded_at != null ? String(entry.uploaded_at) : null,
+    uploaded_by_user_id:
+      entry.uploaded_by_user_id != null ? String(entry.uploaded_by_user_id) : null,
+    stored_version: entry.stored_version != null ? String(entry.stored_version) : null,
+  };
+}
+
+/**
  * Resolve the application template for a provider/workflow.
- * Priority: built-in provider-specific filesystem → manual provider store → missing (no silent generic).
+ * Priority: built-in provider-specific filesystem → coordination-scoped activation (when metadata
+ * provided) → global manual provider store (only without coordination context) → missing.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
@@ -266,6 +310,13 @@ async function resolveApplicationTemplateManifest(supabase, params) {
   const applicationType = String(params.applicationType ?? "new_service").trim().toLowerCase();
   const checklistMode = String(params.checklistMode ?? "").trim().toLowerCase();
   const providerId = params.providerId != null ? String(params.providerId).trim() : "";
+  const coordinationMetadata =
+    params.coordinationMetadata &&
+    typeof params.coordinationMetadata === "object" &&
+    !Array.isArray(params.coordinationMetadata)
+      ? /** @type {Record<string, unknown>} */ (params.coordinationMetadata)
+      : null;
+  const hasCoordinationContext = coordinationMetadata !== null;
 
   const builtin = loadProviderSpecificFilesystemTemplate(providerSlug, utilityType, {
     checklistMode,
@@ -280,6 +331,49 @@ async function resolveApplicationTemplateManifest(supabase, params) {
       providerSlug,
       utilityType,
       applicationType,
+    });
+  }
+
+  if (hasCoordinationContext) {
+    const coordinationManual = readCoordinationActiveTemplate(
+      coordinationMetadata,
+      utilityType,
+      applicationType,
+    );
+    if (coordinationManual) {
+      const manifest = {
+        ...coordinationManual.manifest,
+        provider_slug: normalizeProviderSlug(
+          String(coordinationManual.manifest.provider_slug ?? providerSlug),
+        ),
+        utility_type: utilityType,
+        application_type: applicationType,
+        source: "coordination_manual",
+      };
+      return buildResolutionResult({
+        template: manifest,
+        source: "coordination_manual",
+        providerSlug,
+        utilityType,
+        applicationType,
+        extra: {
+          uploaded_at: coordinationManual.uploaded_at,
+          uploaded_by_user_id: coordinationManual.uploaded_by_user_id,
+          version:
+            coordinationManual.stored_version || String(manifest.version ?? ""),
+        },
+      });
+    }
+    return buildResolutionResult({
+      template: null,
+      source: "missing",
+      providerSlug,
+      utilityType,
+      applicationType,
+      extra: {
+        coordination_scoped: true,
+        global_template_ignored: Boolean(providerId),
+      },
     });
   }
 
@@ -398,6 +492,124 @@ async function saveProviderApplicationTemplate(supabase, params) {
 }
 
 /**
+ * Activate a manual application template for a single coordination run (not global provider library).
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function saveCoordinationApplicationTemplate(supabase, params) {
+  const coordinationId = String(params.coordinationId || "").trim();
+  const record = params.record;
+  const userId = String(params.userId || "").trim();
+  const utilityType = normalizeUtilityType(params.utilityType ?? record?.utility_type);
+  const applicationType = String(params.applicationType ?? "new_service").trim().toLowerCase();
+  const validated = validateApplicationTemplateManifest(params.manifest);
+  if (!validated.ok) {
+    const err = new Error(validated.message);
+    err.statusCode = 400;
+    err.code = "INVALID_TEMPLATE_MANIFEST";
+    throw err;
+  }
+
+  const embedded = record?.utility_providers;
+  const providerSlugFromJoin = Array.isArray(embedded)
+    ? embedded[0] && typeof embedded[0] === "object"
+      ? normalizeProviderSlug(/** @type {{ slug?: unknown }} */ (embedded[0]).slug)
+      : ""
+    : embedded && typeof embedded === "object"
+      ? normalizeProviderSlug(/** @type {{ slug?: unknown }} */ (embedded).slug)
+      : "";
+
+  const metadata =
+    record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? /** @type {Record<string, unknown>} */ (record.metadata)
+      : {};
+  const mappingRaw = metadata.uci_provider_mapping;
+  const mapping =
+    mappingRaw && typeof mappingRaw === "object" && !Array.isArray(mappingRaw)
+      ? /** @type {Record<string, unknown>} */ (mappingRaw)
+      : null;
+  const providerSlug = providerSlugFromJoin || normalizeProviderSlug(mapping?.provider_slug);
+  const manifestProviderSlug = normalizeProviderSlug(
+    String(validated.manifest.provider_slug ?? providerSlug),
+  );
+
+  if (providerSlug && manifestProviderSlug && providerSlug !== manifestProviderSlug) {
+    const err = new Error(
+      `Template provider_slug "${manifestProviderSlug}" does not match coordination provider "${providerSlug}"`,
+    );
+    err.statusCode = 409;
+    err.code = "TEMPLATE_PROVIDER_MISMATCH";
+    throw err;
+  }
+
+  const manifest = {
+    ...validated.manifest,
+    provider_slug: manifestProviderSlug || providerSlug,
+    utility_type: utilityType,
+    application_type: applicationType,
+    source: "coordination_manual",
+  };
+  const storedVersion = String(manifest.version ?? `manual-${Date.now()}`);
+  const uploadedAt = new Date().toISOString();
+  const key = buildTemplateStorageKey(utilityType, applicationType);
+
+  const existingBlock =
+    metadata[ACTIVE_APPLICATION_TEMPLATE_META_KEY] &&
+    typeof metadata[ACTIVE_APPLICATION_TEMPLATE_META_KEY] === "object" &&
+    !Array.isArray(metadata[ACTIVE_APPLICATION_TEMPLATE_META_KEY])
+      ? /** @type {Record<string, unknown>} */ (metadata[ACTIVE_APPLICATION_TEMPLATE_META_KEY])
+      : {};
+
+  const nextMeta = {
+    ...metadata,
+    [ACTIVE_APPLICATION_TEMPLATE_META_KEY]: {
+      ...existingBlock,
+      [key]: {
+        manifest,
+        stored_version: storedVersion,
+        uploaded_at: uploadedAt,
+        uploaded_by_user_id: userId || null,
+      },
+    },
+  };
+
+  const { data, error } = await supabase
+    .from("coordination_records")
+    .update({ metadata: nextMeta, updated_at: uploadedAt })
+    .eq("id", coordinationId)
+    .select("id, metadata, utility_type, utility_provider_id")
+    .single();
+
+  if (error) {
+    throw Object.assign(new Error(error.message || "Failed to save coordination application template"), {
+      cause: error,
+      statusCode: 500,
+      code: "TEMPLATE_SAVE_FAILED",
+    });
+  }
+
+  const resolution = buildResolutionResult({
+    template: manifest,
+    source: "coordination_manual",
+    providerSlug: manifestProviderSlug || providerSlug,
+    utilityType,
+    applicationType,
+    extra: {
+      uploaded_at: uploadedAt,
+      uploaded_by_user_id: userId || null,
+      version: storedVersion,
+    },
+  });
+
+  return {
+    coordination: data,
+    manifest,
+    resolution: resolution.resolution,
+  };
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
  */
@@ -437,6 +649,10 @@ async function getCoordinationApplicationTemplateStatus(supabase, params) {
     utilityType,
     applicationType,
     checklistMode,
+    coordinationMetadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? /** @type {Record<string, unknown>} */ (record.metadata)
+        : {},
   });
 
   return {
@@ -450,12 +666,15 @@ async function getCoordinationApplicationTemplateStatus(supabase, params) {
 }
 
 module.exports = {
+  ACTIVE_APPLICATION_TEMPLATE_META_KEY,
   buildTemplateStorageKey,
   validateApplicationTemplateManifest,
   loadProviderSpecificFilesystemTemplate,
   loadGenericFilesystemTemplate,
   getStoredProviderApplicationTemplate,
+  readCoordinationActiveTemplate,
   resolveApplicationTemplateManifest,
   saveProviderApplicationTemplate,
+  saveCoordinationApplicationTemplate,
   getCoordinationApplicationTemplateStatus,
 };

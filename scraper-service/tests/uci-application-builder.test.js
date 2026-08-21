@@ -14,7 +14,7 @@ const {
   inferSignatureStatus,
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
 } = require("../app/services/uci/uci-application-builder.service.js");
-const { saveProviderApplicationTemplate } = require("../app/services/uci/uci-provider-application-template.service.js");
+const { saveCoordinationApplicationTemplate } = require("../app/services/uci/uci-provider-application-template.service.js");
 const { LOAD_PROFILE_IDEMPOTENCY_KEY } = require("../app/services/uci/uci-load-profile.service.js");
 const { PROVIDER_SETUP_METHOD } = require("../app/services/uci/uci-provider-setup.service.js");
 
@@ -603,8 +603,9 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
       },
     );
 
-    await saveProviderApplicationTemplate(supabase, {
-      providerId: "prov-dominion",
+    await saveCoordinationApplicationTemplate(supabase, {
+      coordinationId: "coord-dominion",
+      record: dominionRecord,
       utilityType: "electric",
       userId: "user-1",
       manifest: {
@@ -626,7 +627,7 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
     assert.equal(result.application.provider_slug, "dominion");
     assert.equal(
       result.application.agent_draft_metadata.application_package.template_resolution.source,
-      "manual_upload",
+      "coordination_manual",
     );
   });
 

@@ -59,6 +59,7 @@ function scrubCoordinationMetadataForCleanSlate(metadata) {
     "package_review_reset_at",
     "uci_legacy_type_scope_duplicate",
     "original_scope_description",
+    "active_application_template",
   ];
   for (const key of keysToRemove) {
     delete next[key];
