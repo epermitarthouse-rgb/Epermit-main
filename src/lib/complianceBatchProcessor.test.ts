@@ -261,11 +261,10 @@ describe("complianceBatchProcessor", () => {
     assert.equal(batchProgressPercent({ total: 2, completed: 1, currentIndex: 2 }), 50);
   });
 
-  it("converts PDFs through pdfFirstPageToImageFile before upload", async () => {
+  it("refuses to silently analyze only page 1 of an unexpanded PDF", async () => {
     const files = [makeBatchFile("plan.pdf", { file: makeFile("plan.pdf", "application/pdf") })];
-    let converted = false;
 
-    await processComplianceBatch({
+    const result = await processComplianceBatch({
       files,
       analysisMode: "ibc",
       hasLocalAmendments: false,
@@ -274,19 +273,12 @@ describe("complianceBatchProcessor", () => {
       codeYear: "2021",
       projectId: "proj",
       canPersist: true,
-      uploadDocument: async ({ file }) => {
-        assert.equal(file.name, "plan-page1.png");
-        return { id: "doc-pdf" };
+      uploadDocument: async () => {
+        throw new Error("should not upload an unexpanded PDF");
       },
-      pdfFirstPageToImageFile: async (file) => {
-        converted = true;
-        return makeFile("plan-page1.png", "image/png");
+      requestAnalysis: async () => {
+        throw new Error("should not analyze an unexpanded PDF");
       },
-      requestAnalysis: async () => ({
-        issues: [],
-        summary: { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 },
-        jurisdictionNotes: "",
-      }),
       readFileAsBase64: mockBase64(),
       saveAnalysisToDb: async () => {},
       onFileUpdate: (id, patch) => {
@@ -296,8 +288,70 @@ describe("complianceBatchProcessor", () => {
       onProgress: () => {},
     });
 
-    assert.equal(converted, true);
-    assert.equal(files[0].status, "completed");
+    assert.equal(result.failed, 1);
+    assert.equal(files[0].status, "failed");
+    assert.match(files[0].error ?? "", /expanded into individual page images/i);
+  });
+
+  it("analyzes each prepared PDF page image and keeps page numbers associated", async () => {
+    const files = [
+      makeBatchFile("plan-page1.png", {
+        file: makeFile("plan-page1.png"),
+        preparedImageFile: makeFile("plan-page1.png"),
+        documentId: "img-1",
+        sourceDocumentId: "pdf-1",
+        pageNumber: 1,
+        sheetId: "sheet-1",
+      }),
+      makeBatchFile("plan-page2.png", {
+        file: makeFile("plan-page2.png"),
+        preparedImageFile: makeFile("plan-page2.png"),
+        documentId: "img-2",
+        sourceDocumentId: "pdf-1",
+        pageNumber: 2,
+        sheetId: "sheet-2",
+      }),
+    ];
+    const analyzedPages: number[] = [];
+    const savedPages: number[] = [];
+
+    const result = await processComplianceBatch({
+      files,
+      analysisMode: "ibc",
+      hasLocalAmendments: false,
+      jurisdiction: "general",
+      projectType: "commercial",
+      codeYear: "2021",
+      projectId: "proj",
+      canPersist: true,
+      uploadDocument: async () => {
+        throw new Error("page images are already persisted");
+      },
+      requestAnalysis: async () => {
+        return {
+          issues: [],
+          summary: { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 },
+          jurisdictionNotes: "",
+        };
+      },
+      readFileAsBase64: mockBase64(),
+      saveAnalysisToDb: async (_result, documentId, _projectId, sheet) => {
+        savedPages.push(sheet?.pageNumber ?? 0);
+        analyzedPages.push(Number(documentId.replace("img-", "")));
+      },
+      onFileUpdate: (id, patch) => {
+        const file = files.find((f) => f.id === id);
+        if (file) Object.assign(file, patch);
+      },
+      onProgress: () => {},
+    });
+
+    assert.equal(result.succeeded, 2);
+    assert.deepEqual(savedPages, [1, 2]);
+    assert.equal(files[0].pageNumber, 1);
+    assert.equal(files[1].pageNumber, 2);
+    assert.equal(files[0].sourceDocumentId, "pdf-1");
+    assert.equal(files[1].sourceDocumentId, "pdf-1");
   });
 
   it("tracks completed and failed counts", () => {
