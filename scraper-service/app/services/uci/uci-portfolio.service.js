@@ -50,6 +50,7 @@ async function getProjectPortfolioView(supabase, projectId) {
   }
 
   const stageSummary = {};
+  /** Current-position counts only — not lifecycle completion history. */
   for (let stage = 1; stage <= 10; stage += 1) {
     stageSummary[stage] = 0;
   }

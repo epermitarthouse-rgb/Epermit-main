@@ -43,6 +43,7 @@ import {
   isRequiredForCosAcceptance,
 } from "@/lib/uciCosComparisonPresentation";
 import { deriveStageCompletionAction } from "@/lib/uciActionPresentation";
+import { CURRENT_STAGE_DISTRIBUTION_HELPER } from "@/lib/uciLifecycleMatrix";
 import type {
   CoordinationCommunication,
   CoordinationCost,
@@ -152,7 +153,8 @@ export function PortfolioSummarySection({
                   .map(([stage, count]) => `S${stage}:${count}`)
                   .join(" · ") || "—"}
               </p>
-              <p className={mutedClass}>Stage distribution</p>
+              <p className={mutedClass}>Current stage distribution</p>
+              <p className={cn("mt-0.5 text-[10px]", mutedClass)}>{CURRENT_STAGE_DISTRIBUTION_HELPER}</p>
             </div>
           </div>
         ) : null}

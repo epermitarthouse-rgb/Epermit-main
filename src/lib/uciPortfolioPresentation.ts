@@ -194,7 +194,7 @@ export function portfolioFilterLabel(filter: PortfolioFilter): string {
 }
 
 export function furthestStageLabel(stage: number): string {
-  return `Stage ${stage} · ${getLifecycleStageTitle(stage)}`;
+  return `Current furthest · Stage ${stage} · ${getLifecycleStageTitle(stage)}`;
 }
 
 export type RecordAttentionItem = {

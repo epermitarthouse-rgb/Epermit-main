@@ -276,6 +276,7 @@ import { UciProjectContextBar } from "@/components/uci/UciProjectContextBar";
 import { ProjectSummaryHeader } from "@/components/uci/ProjectSummaryHeader";
 import { CoordinationStatusSummary } from "@/components/uci/CoordinationStatusSummary";
 import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator";
+import { RecordLifecycleProgressRail } from "@/components/uci/RecordLifecycleProgressRail";
 import { NextStepNotice } from "@/components/uci/NextStepNotice";
 import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
@@ -286,6 +287,7 @@ import {
 } from "@/lib/uciActionPresentation";
 import {
   buildStageStateMatrix,
+  CURRENT_STAGE_DISTRIBUTION_HELPER,
   isUnassignedRequiredProvider,
   providerNeedsConfirmationReason,
   stageStateEntries,
@@ -3759,10 +3761,10 @@ export default function UciDashboard() {
               detail="Unique utility providers coordinated"
             />
             <MetricCard
-              label="Completion & risk"
-              value={!projectId ? "—" : `${uciCompletedRecordCount} complete`}
+              label="State & risk"
+              value={!projectId ? "—" : `${uciCompletedRecordCount} at COMPLETED state`}
               icon={Zap}
-              detail={`${uciRiskRecordCount} blocked or escalated record(s)`}
+              detail={`${uciRiskRecordCount} blocked or escalated record(s) — current state, not lifecycle history`}
             />
           </div>
 
@@ -3783,8 +3785,8 @@ export default function UciDashboard() {
               >
                 <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle stages</div>
-                  <div className="text-[11px] text-muted-foreground">Review required-record stage distribution</div>
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Current stage distribution</div>
+                  <div className="text-[11px] text-muted-foreground">Where records sit today — not completion history</div>
                 </div>
               </button>
               <button
@@ -3857,8 +3859,9 @@ export default function UciDashboard() {
             </div>
           </Panel>
 
-          {/* Stage/state matrix — presentational, driven only by current records. */}
-          <Panel eyebrow="Lifecycle" title="Stage + state matrix" id="uci-stage-rail">
+          {/* Current-stage distribution — presentational, driven only by current records. */}
+          <Panel eyebrow="Lifecycle" title="Current stage distribution" id="uci-stage-rail">
+            <p className="mb-3 text-[11px] text-muted-foreground">{CURRENT_STAGE_DISTRIBUTION_HELPER}</p>
             {portfolioLoading ? (
               <div className="flex justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-teal" />
@@ -3892,6 +3895,54 @@ export default function UciDashboard() {
                   );
                 })}
               </div>
+            )}
+          </Panel>
+
+          <Panel eyebrow="Lifecycle" title="Lifecycle progress" id="uci-lifecycle-progress">
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              Per-utility progress inferred from each record&apos;s current stage. Stages before the
+              current one are shown as completed; later stages remain locked.
+            </p>
+            {!projectId ? (
+              <p className={cn("py-4 text-center text-sm", uciMutedClass)}>Select a project to view lifecycle progress.</p>
+            ) : recordsLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-teal" />
+              </div>
+            ) : records.length === 0 ? (
+              <p className={cn("py-4 text-center text-sm", uciMutedClass)}>No coordination records yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {records.map((r) => {
+                  const prov = getEmbeddedProvider(r);
+                  const label = isUnassignedRequiredProvider(r)
+                    ? "Not assigned"
+                    : prov
+                      ? providerDisplayLabel(prov)
+                      : r.utility_type ?? "Utility";
+                  return (
+                    <li
+                      key={r.id}
+                      className="space-y-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2.5"
+                      data-testid={`uci-lifecycle-progress-${r.id}`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-foreground">
+                          {label}
+                          {r.utility_type ? ` · ${r.utility_type}` : ""}
+                        </span>
+                        <span className={cn("font-medium", uciMutedClass)}>
+                          Stage {r.current_stage} · {formatLifecycleState(r.current_stage_state)}
+                        </span>
+                      </div>
+                      <RecordLifecycleProgressRail
+                        currentStage={Number(r.current_stage)}
+                        currentStageState={r.current_stage_state}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </Panel>
 
@@ -4077,10 +4128,11 @@ export default function UciDashboard() {
                 )}
               </Panel>
 
-              <Panel eyebrow="Rollup" title="Stage distribution">
+              <Panel eyebrow="Rollup" title="Current stage distribution">
+                <p className="mb-2 text-[10px] text-muted-foreground">{CURRENT_STAGE_DISTRIBUTION_HELPER}</p>
                 <ul className="space-y-1.5 text-xs">
                   {STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).length === 0 ? (
-                    <li className={uciMutedClass}>No stage activity recorded yet.</li>
+                    <li className={uciMutedClass}>No records positioned at a lifecycle stage yet.</li>
                   ) : (
                     STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).map((stage) => (
                       <li key={stage} className="flex items-center justify-between">

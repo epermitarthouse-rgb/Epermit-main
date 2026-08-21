@@ -1,8 +1,13 @@
 /**
- * Project-workspace Stage + state matrix.
+ * Project-workspace current-stage distribution.
  * Counts come only from coordination_records.current_stage + current_stage_state.
  * Never mix project-wide state totals into a stage column.
+ * This is a snapshot of where records sit today — not lifecycle completion history.
  */
+
+/** Shared helper copy for current-position rollups (hub, portfolio, sidebar). */
+export const CURRENT_STAGE_DISTRIBUTION_HELPER =
+  "Shows where coordination records are currently positioned — not which stages were previously completed.";
 
 import type { LifecycleState } from "@/types/uci";
 

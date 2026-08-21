@@ -33,6 +33,11 @@ describe("PortfolioSummarySection render safety", () => {
       "stage_summary must default to {} so Object.entries does not throw on older portfolio payloads",
     );
   });
+
+  it("labels stage_summary as current-position distribution", () => {
+    assert.match(panelsSource, /Current stage distribution/);
+    assert.match(panelsSource, /CURRENT_STAGE_DISTRIBUTION_HELPER/);
+  });
 });
 
 describe("useSyncRunPolling storm prevention", () => {
