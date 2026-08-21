@@ -44,6 +44,7 @@ import {
 } from "@/lib/uciCosComparisonPresentation";
 import { deriveStageCompletionAction } from "@/lib/uciActionPresentation";
 import { CURRENT_STAGE_DISTRIBUTION_HELPER } from "@/lib/uciLifecycleMatrix";
+import { cn } from "@/lib/utils";
 import type {
   CoordinationCommunication,
   CoordinationCost,
