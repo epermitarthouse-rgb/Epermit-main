@@ -125,6 +125,7 @@ export interface UciCanonicalPackageReviewItem {
 
 export interface UciCanonicalPackageReviewSummary {
   status: UciPackageReviewStatus;
+  package_status?: UciApplicationPackageStatus;
   all_confirmed: boolean;
   ready_for_final_review: boolean;
   active_correction_count: number;
@@ -424,6 +425,19 @@ function stableReviewSnapshot(value: unknown): string {
   return JSON.stringify(canonicalReviewSnapshot(value));
 }
 
+function effectivePackageStatusForReview(
+  metadata: UciApplicationPackageMetadata | null | undefined,
+): UciApplicationPackageStatus {
+  if (!metadata) return "incomplete";
+  if (metadata.address_review_required) return "incomplete";
+  const missingFields = metadata.missing_fields ?? [];
+  const missingDocuments = metadata.missing_documents ?? [];
+  if (missingFields.length > 0 || missingDocuments.length > 0) return "incomplete";
+  const fields = metadata.field_results ?? [];
+  if (fields.some((field) => field.status !== "present")) return "incomplete";
+  return "ready_for_review";
+}
+
 function fieldMappingSnapshot(field: UciPackageFieldResult): Record<string, unknown> {
   return {
     key: field.key,
@@ -514,9 +528,10 @@ export function summarizePackageReview(
     };
   });
   const items = [...fields, ...reviewedDocuments];
+  const effectivePackageStatus = effectivePackageStatusForReview(metadata);
   const allConfirmed =
     items.length > 0 &&
-    metadata?.package_status === "ready_for_review" &&
+    effectivePackageStatus === "ready_for_review" &&
     fields.every((item) => item.status === "present" && item.reviewStatus === "confirmed") &&
     reviewedDocuments.every(
       (item) => isDocumentMappingReady(item) && item.reviewStatus === "confirmed",
@@ -531,7 +546,7 @@ export function summarizePackageReview(
       ? "reviewed"
       : activeCorrectionCount > 0
         ? "needs_changes"
-        : metadata?.package_status === "ready_for_review"
+        : effectivePackageStatus === "ready_for_review"
           ? "ready_for_review"
           : "draft";
   return {

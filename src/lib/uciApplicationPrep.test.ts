@@ -170,7 +170,7 @@ describe("uciApplicationPrep helpers", () => {
       status: "attached",
       file_name: "load.pdf",
       source: "project_documents",
-      project_document_id: "doc-1",
+      project_document_id: "550e8400-e29b-41d4-a716-446655440002",
       external_application_id: null,
       storage_path: null,
       content_hash: null,
@@ -213,7 +213,7 @@ describe("uciApplicationPrep helpers", () => {
         status: "attached",
         file_name: "load.pdf",
         source: "project_documents",
-        project_document_id: "doc-1",
+        project_document_id: "550e8400-e29b-41d4-a716-446655440002",
       },
     ]);
     const readySummary = summarizePackageReview(metadata, documents, "draft");
@@ -232,5 +232,71 @@ describe("uciApplicationPrep helpers", () => {
     assert.equal(changedSummary.status, "needs_changes");
     assert.equal(changedSummary.readyForFinalReview, false);
     assert.equal(changedSummary.documents[0].reviewStatus, "ready_for_re_review");
+  });
+
+  it("recomputes readyForFinalReview when persisted package_status is stale incomplete", () => {
+    const metadata = {
+      package_status: "incomplete" as const,
+      missing_fields: [] as string[],
+      missing_documents: [] as string[],
+      field_results: [
+        {
+          key: "connected_load_kva",
+          label: "Connected load",
+          status: "present",
+          value: { value: 410, unit: "kVA" },
+          source: "load_summary.verified_values.connected_load_kva",
+        },
+      ],
+      package_review: {
+        items: {
+          "field:connected_load_kva": {
+            kind: "field",
+            key: "connected_load_kva",
+            status: "confirmed",
+            mapping_snapshot: {
+              key: "connected_load_kva",
+              label: "Connected load",
+              status: "present",
+              value: { value: 410, unit: "kVA" },
+              source: "load_summary.verified_values.connected_load_kva",
+              address_source: null,
+            },
+          },
+          "document:load_letter": {
+            kind: "document",
+            key: "load_letter",
+            status: "confirmed",
+            mapping_snapshot: {
+              key: "load_letter",
+              label: "Load letter",
+              status: "attached",
+              file_name: "load.pdf",
+              source: "project_documents",
+              project_document_id: "550e8400-e29b-41d4-a716-446655440002",
+              external_application_id: null,
+              storage_path: null,
+              content_hash: null,
+              signature_required: false,
+              signature_status: null,
+              signature_verified_at: null,
+            },
+          },
+        },
+      },
+    };
+    const documents = parsePackageDocuments([
+      {
+        key: "load_letter",
+        label: "Load letter",
+        status: "attached",
+        file_name: "load.pdf",
+        source: "project_documents",
+        project_document_id: "550e8400-e29b-41d4-a716-446655440002",
+      },
+    ]);
+    const summary = summarizePackageReview(metadata, documents, "draft");
+    assert.equal(summary.readyForFinalReview, true);
+    assert.equal(summary.status, "ready_for_review");
   });
 });

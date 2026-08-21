@@ -405,6 +405,34 @@ describe("Agent 3 package mapping review", () => {
     assert.equal(summary.ready_for_final_review, true);
   });
 
+  it("recomputes ready_for_final_review when persisted package_status is stale incomplete", async () => {
+    const application = readyApplication();
+    const supabase = mockSupabase(application);
+    await confirmAllVerifiedFields(supabase, {
+      applicationId: application.id,
+      userId: "operator-1",
+    });
+    await updatePackageReviewItem(supabase, {
+      applicationId: application.id,
+      userId: "operator-1",
+      kind: "document",
+      key: "load_letter",
+      status: "confirmed",
+    });
+    application.agent_draft_metadata.application_package.package_status = "incomplete";
+    application.agent_draft_metadata.application_package.missing_fields = [];
+    application.agent_draft_metadata.application_package.missing_documents = [];
+
+    const summary = summarizePackageReview(application);
+    assert.equal(summary.package_status, "ready_for_review");
+    assert.equal(summary.confirmed_count, 2);
+    assert.equal(summary.ready_for_final_review, true);
+    assert.deepEqual(
+      summary.items.filter((item) => item.status !== "confirmed").map((item) => item.id),
+      [],
+    );
+  });
+
   it("repairs a reviewed package with null worksheet ID and requires re-confirm/re-review", async () => {
     const application = readyApplication();
     application.draft_status = "reviewed";

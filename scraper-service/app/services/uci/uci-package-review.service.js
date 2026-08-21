@@ -180,8 +180,29 @@ function reviewItemKey(kind, key) {
   return `${kind}:${key}`;
 }
 
+function effectivePackageStatusForReview(application, pkg) {
+  const { resolvePackageStatus } = require("./uci-application-builder.service.js");
+  const missingFields = Array.isArray(pkg.missing_fields)
+    ? pkg.missing_fields.map((key) => String(key))
+    : [];
+  const missingDocuments = Array.isArray(pkg.missing_documents)
+    ? pkg.missing_documents.map((key) => String(key))
+    : [];
+  return resolvePackageStatus({
+    missingDocuments,
+    missingFields,
+    loadSummary:
+      application.load_summary && typeof application.load_summary === "object"
+        ? application.load_summary
+        : null,
+    hasLoadProfileDraft: true,
+    addressReviewRequired: pkg.address_review_required === true,
+  });
+}
+
 function summarizePackageReview(application) {
   const { pkg, review } = packageContext(application);
+  const effectivePackageStatus = effectivePackageStatusForReview(application, pkg);
   const { fields, documents } = currentItems(application);
   const storedItems = asObject(review.items);
   const items = [...fields.map((snapshot) => ({ kind: "field", snapshot })), ...documents.map((snapshot) => ({ kind: "document", snapshot }))].map(
@@ -222,7 +243,7 @@ function summarizePackageReview(application) {
   const allConfirmed =
     items.length > 0 &&
     items.every((item) => item.ready && item.status === "confirmed") &&
-    String(pkg.package_status ?? "") === "ready_for_review";
+    effectivePackageStatus === "ready_for_review";
   const packageCorrection = asObject(review.package_correction);
   const activeCorrections = items.filter(
     (item) => item.status === "needs_correction" || item.status === "ready_for_re_review",
@@ -233,12 +254,13 @@ function summarizePackageReview(application) {
     status = "reviewed";
   } else if (activeCorrectionCount > 0) {
     status = "needs_changes";
-  } else if (String(pkg.package_status ?? "") === "ready_for_review") {
+  } else if (effectivePackageStatus === "ready_for_review") {
     status = "ready_for_review";
   }
   return {
     version: REVIEW_VERSION,
     status,
+    package_status: effectivePackageStatus,
     all_confirmed: allConfirmed,
     ready_for_final_review: allConfirmed && activeCorrectionCount === 0,
     active_correction_count: activeCorrectionCount,
@@ -762,13 +784,14 @@ async function reviewApplicationPackage(supabase, params) {
     });
   }
   const summary = summarizePackageReview(application);
+  const effectivePackageStatus = summary.package_status ?? effectivePackageStatusForReview(application, pkg);
   if (status === "reviewed" && !summary.ready_for_final_review) {
     throw Object.assign(
       new Error("Confirm every required package field and document before final review"),
       { statusCode: 400, code: "PACKAGE_REVIEW_ITEMS_INCOMPLETE" },
     );
   }
-  if (status === "reviewed" && String(pkg.package_status ?? "") !== "ready_for_review") {
+  if (status === "reviewed" && effectivePackageStatus !== "ready_for_review") {
     throw Object.assign(new Error("Application package is not complete"), {
       statusCode: 400,
       code: "PACKAGE_NOT_READY",
@@ -901,6 +924,7 @@ module.exports = {
   mergedPackageDocumentsForRepair,
   packageDocumentsNeedRepair,
   itemReady,
+  effectivePackageStatusForReview,
   summarizePackageReview,
   withPackageReviewSummary,
   getPackageReviewApplicationById,
