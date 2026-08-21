@@ -987,6 +987,82 @@ app.post("/api/analyze-drawing", async (req, res) => {
   }
 });
 
+// ─── Analyze Code Modification (DC evidence review) ────────────────────────
+const { analyzeCodeModification, isDcJurisdiction } = require("./services/compliance/code-modification.service.js");
+
+app.post("/api/analyze-code-modification", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const token = authHeader.split(" ")[1];
+    if (supabase) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return res.status(401).json({ error: "Invalid or expired authentication token" });
+      }
+    }
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key not configured. Add OPENAI_API_KEY to your environment secrets." });
+    }
+
+    const OpenAI = require("openai").default || require("openai");
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    const {
+      formPages,
+      formPdfBase64,
+      formImages,
+      sheets,
+      formDocument,
+      jurisdiction,
+      projectType,
+      codeYear,
+    } = req.body || {};
+
+    if (!isDcJurisdiction(jurisdiction)) {
+      return res.status(400).json({
+        error: "DC Code Modification Review is only available for District of Columbia projects.",
+      });
+    }
+
+    if (!formPages && !formPdfBase64 && !(formImages && formImages.length)) {
+      return res.status(400).json({
+        error: "A Code Modification application (form pages, PDF, or images) is required",
+      });
+    }
+
+    const outcome = await analyzeCodeModification({
+      openai,
+      formPages,
+      formPdfBase64,
+      formImages,
+      sheets: sheets || [],
+      formDocument,
+      jurisdiction,
+      projectType,
+      codeYear,
+      logInfo: console.log,
+      logError: console.error,
+    });
+
+    if (!outcome.ok) {
+      return res.status(outcome.status).json({ error: outcome.error });
+    }
+
+    res.status(outcome.status).json(outcome.result);
+  } catch (err) {
+    console.error("[analyze-code-modification] Error:", err.message);
+    const safeMessage = err.message?.includes("API") || err.message?.includes("key") || err.message?.includes("token")
+      ? "Analysis service error. Please try again."
+      : (err.message || "Code modification review failed");
+    res.status(500).json({ error: safeMessage });
+  }
+});
+
 // ─── Login endpoint ──────────────────────────────────────────────────────────
 app.post("/api/login", async (req, res) => {
   let { username, password, portalUrl } = req.body || {};
