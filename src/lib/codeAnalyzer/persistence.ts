@@ -5,6 +5,7 @@
 import { supabase } from "@/lib/supabase";
 import type { ProjectDocument } from "@/types/document";
 import {
+  ANALYSIS_TYPE_STANDARD,
   computeSheetFingerprint,
   pickCurrentRun,
   pickDisplayRun,
@@ -69,20 +70,29 @@ export async function deleteAnalyzerSheetRow(sheetId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function markCurrentRunStale(projectId: string): Promise<void> {
-  const { error } = await supabase
+/** If analysisType is omitted, mark every current run stale (drawing-set changes). */
+export async function markCurrentRunStale(projectId: string, analysisType?: string): Promise<void> {
+  let query = supabase
     .from("code_analyzer_runs")
     .update({ status: "stale" })
     .eq("project_id", projectId)
     .eq("status", "current");
+  if (analysisType) {
+    query = query.eq("analysis_type", analysisType);
+  }
+  const { error } = await query;
   if (error) throw error;
 }
 
-export async function supersedeOpenRuns(projectId: string): Promise<void> {
+export async function supersedeOpenRuns(
+  projectId: string,
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): Promise<void> {
   const { error } = await supabase
     .from("code_analyzer_runs")
     .update({ status: "superseded" })
     .eq("project_id", projectId)
+    .eq("analysis_type", analysisType)
     .in("status", ["current", "stale", "running", "failed"]);
   if (error) throw error;
 }
@@ -95,20 +105,28 @@ export async function createAnalyzerRun(params: {
   codeYear: string;
   analysisMode: string;
   sourceFingerprint: string;
+  analysisType?: string;
+  formDocumentId?: string | null;
 }): Promise<CodeAnalyzerRun> {
-  await supersedeOpenRuns(params.projectId);
+  const analysisType = params.analysisType || ANALYSIS_TYPE_STANDARD;
+  await supersedeOpenRuns(params.projectId, analysisType);
+  const insert: Record<string, unknown> = {
+    project_id: params.projectId,
+    user_id: params.userId,
+    status: "running",
+    jurisdiction: params.jurisdiction,
+    project_type: params.projectType,
+    code_year: params.codeYear,
+    analysis_mode: params.analysisMode,
+    analysis_type: analysisType,
+    source_fingerprint: params.sourceFingerprint,
+  };
+  if (params.formDocumentId) {
+    insert.form_document_id = params.formDocumentId;
+  }
   const { data, error } = await supabase
     .from("code_analyzer_runs")
-    .insert({
-      project_id: params.projectId,
-      user_id: params.userId,
-      status: "running",
-      jurisdiction: params.jurisdiction,
-      project_type: params.projectType,
-      code_year: params.codeYear,
-      analysis_mode: params.analysisMode,
-      source_fingerprint: params.sourceFingerprint,
-    })
+    .insert(insert)
     .select("*")
     .single();
   if (error) throw error;
@@ -133,12 +151,18 @@ export function fingerprintFromSheets(sheets: CodeAnalyzerSheet[]): string {
   return computeSheetFingerprint(sheets);
 }
 
-export function displayRunFromList(runs: CodeAnalyzerRun[]): CodeAnalyzerRun | null {
-  return pickDisplayRun(runs);
+export function displayRunFromList(
+  runs: CodeAnalyzerRun[],
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): CodeAnalyzerRun | null {
+  return pickDisplayRun(runs, analysisType);
 }
 
-export function currentRunFromList(runs: CodeAnalyzerRun[]): CodeAnalyzerRun | null {
-  return pickCurrentRun(runs);
+export function currentRunFromList(
+  runs: CodeAnalyzerRun[],
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): CodeAnalyzerRun | null {
+  return pickCurrentRun(runs, analysisType);
 }
 
 export async function fetchDocumentsByIds(ids: string[]): Promise<ProjectDocument[]> {

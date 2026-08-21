@@ -1,13 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  ANALYSIS_TYPE_DC_MODIFICATION,
+  ANALYSIS_TYPE_STANDARD,
   allocateIncludedSheetKeys,
   computeSheetFingerprint,
   filterAnnotationsForActiveAnalysis,
+  isStandardComplianceRun,
   pickCurrentRun,
   pickDisplayRun,
   planPdfPageNumbers,
   planSourceFilePages,
+  runAnalysisType,
   shouldMarkAnalysisStale,
   sheetDisplayName,
   type CodeAnalyzerRun,
@@ -129,6 +133,30 @@ describe("pickDisplayRun / pickCurrentRun", () => {
     ];
     assert.equal(pickCurrentRun(runs), null);
     assert.equal(pickDisplayRun(runs)?.id, "new");
+  });
+
+  it("scopes current/display runs by analysis type and treats missing type as standard", () => {
+    const runs = [
+      run({
+        id: "mod",
+        status: "current",
+        analysis_type: ANALYSIS_TYPE_DC_MODIFICATION,
+        completed_at: "2026-08-05T00:00:00Z",
+      }),
+      run({
+        id: "std-stale",
+        status: "stale",
+        analysis_type: ANALYSIS_TYPE_STANDARD,
+        completed_at: "2026-08-04T00:00:00Z",
+      }),
+      run({ id: "legacy", status: "current" }),
+    ];
+    assert.equal(runAnalysisType(runs[2]), ANALYSIS_TYPE_STANDARD);
+    assert.equal(isStandardComplianceRun(runs[0]), false);
+    assert.equal(pickCurrentRun(runs)?.id, "legacy");
+    assert.equal(pickDisplayRun(runs)?.id, "legacy");
+    assert.equal(pickCurrentRun(runs, ANALYSIS_TYPE_DC_MODIFICATION)?.id, "mod");
+    assert.equal(pickDisplayRun(runs, ANALYSIS_TYPE_STANDARD)?.id, "legacy");
   });
 });
 
