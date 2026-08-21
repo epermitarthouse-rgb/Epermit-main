@@ -315,6 +315,19 @@ async function attachLoadWorksheetToPackage(supabase, params) {
     );
   }
 
+  try {
+    const { registerProjectDocument } = require("./uci-document-registry.service.js");
+    await registerProjectDocument(supabase, {
+      coordinationRecordId: recordId,
+      projectDocumentId,
+      provenance: "uci_generated",
+      hintRole: "load_calculation_worksheet",
+      userId: resolvedUserId,
+    });
+  } catch (registryErr) {
+    console.warn("[uci-load-worksheet] registry registration failed", registryErr);
+  }
+
   return buildWorksheetPackageSlot(
     {
       id: projectDocumentId,

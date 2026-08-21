@@ -235,7 +235,7 @@ import {
   type Agent2ManualUploadProgress,
 } from "@/components/uci/LoadProfileWorkspace";
 import type { CandidateResolutionState } from "@/components/uci/ConnectedLoadReviewPanel";
-import { UciDocumentCoveragePanel } from "@/components/uci/UciDocumentCoveragePanel";
+import { UciDocumentsWorkspace } from "@/components/uci/UciDocumentsWorkspace";
 import { UciComingSoonPanel } from "@/components/uci/UciComingSoonPanel";
 import {
   getUciNavSection,
@@ -4817,8 +4817,10 @@ export default function UciDashboard() {
                 </TabsContent>
 
                 <TabsContent value="documents" className="mt-4 space-y-4">
-                  <UciDocumentCoveragePanel
+                  <UciDocumentsWorkspace
                     coordinationId={detailId ?? ""}
+                    projectId={projectId ?? detailRecord.project_id ?? ""}
+                    userId={user?.id ?? ""}
                     externalApplicationId={selectedPepcoProject?.applicationId ?? null}
                     externalApplicationTitle={selectedPepcoProject?.title ?? null}
                     mutedClass={uciMutedClass}

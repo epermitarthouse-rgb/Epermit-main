@@ -21,6 +21,10 @@ const {
   parseUciStoragePathTenant,
 } = require("./uci-document-storage.service.js");
 const { withPackageReviewSummary } = require("./uci-package-review.service.js");
+const {
+  findRegistryMatchForSlot,
+  loadRegistryDocumentsForPackage,
+} = require("./uci-document-registry.service.js");
 
 const PACKAGE_SLOT_KEYS = [
   "site_plan",
@@ -475,6 +479,7 @@ function buildAttachedPepcoPackageEntry(confirmed, file, label) {
  * @param {Array<Record<string, unknown>>} params.projectDocuments
  * @param {Array<Record<string, unknown>>} [params.existingPackageDocuments]
  * @param {Array<Record<string, unknown>>} [params.pepcoPortalFiles]
+ * @param {Array<Record<string, unknown>>} [params.registryDocuments]
  * @param {{ projectId: string, coordinationRecordId: string, tenantId?: string | null }} params.accessContext
  */
 function resolvePackageDocumentSlots(params) {
@@ -483,6 +488,7 @@ function resolvePackageDocumentSlots(params) {
     projectDocuments,
     existingPackageDocuments = [],
     pepcoPortalFiles = [],
+    registryDocuments = [],
     accessContext,
   } = params;
 
@@ -569,6 +575,47 @@ function resolvePackageDocumentSlots(params) {
           });
           continue;
         }
+      }
+    }
+
+    const registryMatch = findRegistryMatchForSlot(
+      registryDocuments,
+      key,
+      Array.isArray(req.aliases) ? req.aliases.map((a) => String(a)) : [],
+    );
+    if (registryMatch?.project_document_id) {
+      const registryDocId = String(registryMatch.project_document_id);
+      const matched =
+        projectDocuments.find((doc) => String(doc.id) === registryDocId) ??
+        registryMatch.project_document ??
+        null;
+      if (matched) {
+        packageDocuments.push({
+          key,
+          label,
+          status: "attached",
+          project_document_id: registryDocId,
+          document_type:
+            matched.document_type != null
+              ? String(matched.document_type)
+              : registryMatch.effective_role != null
+                ? String(registryMatch.effective_role)
+                : null,
+          file_name: matched.file_name != null ? String(matched.file_name) : null,
+          source: "project_documents",
+          registry_role:
+            registryMatch.effective_role != null ? String(registryMatch.effective_role) : null,
+          registry_confidence:
+            registryMatch.role_confidence != null ? String(registryMatch.role_confidence) : null,
+          signature_required: req.signature_required === true,
+          signature_status:
+            registryMatch.signature_status != null
+              ? String(registryMatch.signature_status)
+              : req.signature_required === true
+                ? "unknown"
+                : undefined,
+        });
+        continue;
       }
     }
 
@@ -1426,11 +1473,18 @@ async function refreshApplicationPackageDocumentSlots(supabase, params) {
         ? String(mappedDoc.external_application_id)
         : undefined;
 
+  const registryDocuments = await loadRegistryDocumentsForPackage(
+    supabase,
+    coordinationRecordId,
+    projectId,
+  );
+
   const docMatch = resolvePackageDocumentSlots({
     requiredDocuments,
     projectDocuments: Array.isArray(documentsResult.data) ? documentsResult.data : [],
     existingPackageDocuments: /** @type {Array<Record<string, unknown>>} */ (seed),
     pepcoPortalFiles: extractPepcoPortalFiles(record),
+    registryDocuments,
     accessContext,
   });
   const signatureEval = applyDocumentSignatureRequirements(

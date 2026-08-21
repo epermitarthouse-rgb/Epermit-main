@@ -18,6 +18,7 @@ import {
   validateSubmissionPackage,
   updateApplicationPackageReviewItem,
 } from "@/lib/uciApi";
+import { setApplicationPackageSignatureStatus } from "@/lib/uciDocumentRegistry";
 import {
   isApplicationTemplateMissingError,
 } from "@/components/uci/UciApplicationTemplatePanel";
@@ -346,18 +347,27 @@ export function useUciApplicationBuilder() {
     documentKey: string,
     status: "unknown" | "unsigned" | "signed_manual_verified",
   ) => {
-    if (!packageApp || !coordinationId || !isDominionSynthetic) return;
+    if (!packageApp || !coordinationId) return;
     setSignatureBusyAction(`${documentKey}:${status}`);
     setActionMessage(null);
     try {
-      const result = await setSyntheticApplicationSignatureStatus(packageApp.id, {
-        document_key: documentKey,
-        signature_status: status,
-        review_note:
-          status === "signed_manual_verified"
-            ? signatureReviewNote.trim()
-            : undefined,
-      });
+      const result = isDominionSynthetic
+        ? await setSyntheticApplicationSignatureStatus(packageApp.id, {
+            document_key: documentKey,
+            signature_status: status,
+            review_note:
+              status === "signed_manual_verified"
+                ? signatureReviewNote.trim()
+                : undefined,
+          })
+        : await setApplicationPackageSignatureStatus(packageApp.id, {
+            document_key: documentKey,
+            signature_status: status,
+            review_note:
+              status === "signed_manual_verified"
+                ? signatureReviewNote.trim()
+                : undefined,
+          });
       applyApplicationMutation(result.application);
       setSignatureReviewNote("");
       setActionMessage({
@@ -365,7 +375,7 @@ export function useUciApplicationBuilder() {
         text:
           status === "signed_manual_verified"
             ? "Signature marked signed"
-            : `Synthetic signature status set to ${status}`,
+            : `Signature status set to ${status}`,
       });
       void refreshDetail(coordinationId).catch((refreshError: unknown) => {
         setActionMessage({
@@ -379,7 +389,7 @@ export function useUciApplicationBuilder() {
     } catch (e: unknown) {
       setActionMessage({
         tone: "bad",
-        text: formatUciUserError(e, "Synthetic signature update failed"),
+        text: formatUciUserError(e, "Signature update failed"),
       });
     } finally {
       setSignatureBusyAction(null);

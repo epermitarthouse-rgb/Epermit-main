@@ -887,6 +887,20 @@ async function linkProjectDocumentsToCoordination(supabase, params) {
     }
   }
 
+  try {
+    const { registerProjectDocument } = require("./uci-document-registry.service.js");
+    for (const row of linked) {
+      await registerProjectDocument(supabase, {
+        coordinationRecordId: String(record.id),
+        projectDocumentId: String(row.project_document_id),
+        provenance: inbound ? "email_inbound" : linkOrigin === "automatic" ? "portal_harvest" : "load_profile",
+        userId,
+      });
+    }
+  } catch (registryErr) {
+    console.warn("[uci-coordination-document-links] registry registration failed", registryErr);
+  }
+
   return getLoadProfileDocumentScope(supabase, {
     coordinationRecordId,
     userId,

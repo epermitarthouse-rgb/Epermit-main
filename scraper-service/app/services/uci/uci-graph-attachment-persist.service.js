@@ -430,6 +430,18 @@ async function persistAttachmentBuffer(supabase, params) {
     };
   }
 
+  try {
+    const { registerProjectDocument } = require("./uci-document-registry.service.js");
+    await registerProjectDocument(supabase, {
+      coordinationRecordId,
+      projectDocumentId: String(doc.id),
+      provenance: "email_inbound",
+      userId: mailboxUserId,
+    });
+  } catch (registryErr) {
+    console.warn("[uci-graph-attachment-persist] registry registration failed", registryErr);
+  }
+
   return {
     persisted: true,
     deduped: false,

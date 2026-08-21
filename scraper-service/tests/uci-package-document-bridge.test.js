@@ -820,6 +820,44 @@ describe("UCI package document bridge service", () => {
     assert.equal(site?.user_confirmed, undefined);
   });
 
+  it("attaches package slots from registry role matches before document_type fallback", () => {
+    const templateRequired = [
+      { key: "single_line_diagram", label: "Single-line diagram", aliases: ["single_line", "one_line"] },
+    ];
+
+    const result = resolvePackageDocumentSlots({
+      requiredDocuments: templateRequired,
+      projectDocuments: [
+        { id: "doc-sld", document_type: "other", file_name: "E601 - ELECTRICAL ONE-LINE DIAGRAMS.pdf" },
+      ],
+      existingPackageDocuments: [],
+      pepcoPortalFiles: [],
+      registryDocuments: [
+        {
+          project_document_id: "doc-sld",
+          effective_role: "single_line_diagram",
+          provider_slot_keys: ["single_line_diagram"],
+          role_confidence: "high",
+          project_document: {
+            id: "doc-sld",
+            document_type: "other",
+            file_name: "E601 - ELECTRICAL ONE-LINE DIAGRAMS.pdf",
+          },
+        },
+      ],
+      accessContext: {
+        projectId: PROJECT_ID,
+        coordinationRecordId: COORD_ID,
+        tenantId: TENANT_A,
+      },
+    });
+
+    const sld = result.packageDocuments.find((d) => d.key === "single_line_diagram");
+    assert.equal(sld?.status, "attached");
+    assert.equal(sld?.project_document_id, "doc-sld");
+    assert.equal(sld?.registry_role, "single_line_diagram");
+  });
+
   it("rejects cross-tenant storage namespace on portal file validation", () => {
     const wrongTenant = validatePepcoStoragePathForRecord(E601_FILE.storagePath, {
       projectId: PROJECT_ID,
