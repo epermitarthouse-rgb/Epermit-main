@@ -382,10 +382,12 @@ function assertReviewPersistenceMatches(application, packageReview, extraPatch =
 
 async function persistReviewMetadata(supabase, application, packageReview, extraPatch = {}) {
   const { metadata, pkg } = packageContext(application);
+  const effectivePackageStatus = effectivePackageStatusForReview(application, pkg);
   const nextMetadata = {
     ...metadata,
     application_package: {
       ...pkg,
+      package_status: effectivePackageStatus,
       package_review: packageReview,
     },
   };

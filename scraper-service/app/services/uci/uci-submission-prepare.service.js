@@ -480,11 +480,11 @@ async function prepareSubmission(supabase, params) {
     err.details = { validation_errors: prepValidationErrors };
     throw err;
   }
-  if (String(prepPkg.package_status ?? "") !== "ready_for_review") {
+  const { effectivePackageStatusForReview } = require("./uci-package-review.service.js");
+  const effectivePackageStatus = effectivePackageStatusForReview(application, prepPkg);
+  if (effectivePackageStatus !== "ready_for_review") {
     const err = new Error(
-      `Package status must be ready_for_review before preparation (current: ${
-        prepPkg.package_status ?? "unknown"
-      })`,
+      `Package status must be ready_for_review before preparation (current: ${effectivePackageStatus})`,
     );
     err.statusCode = 400;
     err.code = "PREPARE_BLOCKED";

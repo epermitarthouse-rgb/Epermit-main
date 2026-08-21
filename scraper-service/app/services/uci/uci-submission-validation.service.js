@@ -10,7 +10,11 @@ const {
   getApplicationById,
   APPLICATION_PACKAGE_IDEMPOTENCY_KEY,
 } = require("./uci-application-builder.service.js");
-const { summarizePackageReview, isPersistedProjectDocumentId } = require("./uci-package-review.service.js");
+const {
+  summarizePackageReview,
+  isPersistedProjectDocumentId,
+  effectivePackageStatusForReview,
+} = require("./uci-package-review.service.js");
 
 const VALIDATION_VERSION = "stage4-validation-p0-v1";
 const GENERATED_BY = "agent_4_submission_confirmation_tracker";
@@ -325,7 +329,7 @@ async function validateSubmissionPackage(supabase, params) {
     eligibility.ok &&
     packageValidationErrors.length === 0 &&
     attachmentReferenceCheck.ok &&
-    String(pkg.package_status ?? "") === "ready_for_review";
+    effectivePackageStatusForReview(application, pkg) === "ready_for_review";
 
   const warnings = [];
   if (synthetic) {
