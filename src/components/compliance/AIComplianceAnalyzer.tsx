@@ -9,10 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableCombobox, ComboboxOption } from "@/components/ui/searchable-combobox";
-import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
@@ -34,7 +43,7 @@ import {
   Edit,
   FileDown,
   X,
-  File,
+  File as FileIcon,
   Scale,
   ToggleLeft,
   FolderKanban,
@@ -46,7 +55,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
 import { exportComplianceReportPDF } from "@/lib/complianceReportPDF";
-import { pdfFirstPageToImageFile } from "@/utils/pdfToImage";
+import { pdfPagesToImageFiles } from "@/lib/pdfToImage";
 import {
   COMPLIANCE_MAX_BATCH_FILES,
   mergeComplianceFiles,
@@ -54,7 +63,6 @@ import {
 import {
   batchProgressPercent,
   computeComplianceOverallScore,
-  countCompletedBatchFiles,
   countFailedBatchFiles,
   canRemoveBatchFile,
   createComplianceBatchFileId,
@@ -92,8 +100,31 @@ import { useProjects } from "@/hooks/useProjects";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import { useAuth } from "@/hooks/useAuth";
-import { DocumentDiscipline, DISCIPLINE_OPTIONS, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from "@/types/document";
+import { DocumentDiscipline, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from "@/types/document";
 import type { ProjectDocument } from "@/types/document";
+import {
+  computeSheetFingerprint,
+  filterAnnotationsForActiveAnalysis,
+  shouldMarkAnalysisStale,
+  type CodeAnalyzerRun,
+  type CodeAnalyzerSheet,
+} from "@/lib/codeAnalyzer/model";
+import {
+  completeAnalyzerRun,
+  createAnalyzerRun,
+  deleteAnalyzerSheetRow,
+  fetchAnalyzerRuns,
+  fetchAnalyzerSheets,
+  fetchDocumentsByIds,
+  insertAnalyzerSheet,
+  markCurrentRunStale,
+  displayRunFromList,
+  currentRunFromList,
+} from "@/lib/codeAnalyzer/persistence";
+import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
+import { replaceComplianceFindingsForSheet } from "@/lib/codeAnalyzer/findings";
+import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnalyzer/deleteDrawings";
+import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
 
 interface ComplianceIssue {
   id: string;
@@ -222,7 +253,7 @@ export function AIComplianceAnalyzer() {
   const [showNewProjectInput, setShowNewProjectInput] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
-  const { documents, uploadDocument, fetchDocuments } = useProjectDocuments(selectedProjectId);
+  const { documents, uploadDocument, fetchDocuments, deleteDocument, getDownloadUrl } = useProjectDocuments(selectedProjectId);
   /** Results view filter: `all` shows every analyzed file; a document id filters to that file. */
   const [resultsDocumentFilter, setResultsDocumentFilter] = useState<string>(
     COMPLIANCE_RESULTS_FILTER_ALL,
@@ -236,6 +267,19 @@ export function AIComplianceAnalyzer() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<ComplianceBatchProgress | null>(null);
+  const [persistedSheets, setPersistedSheets] = useState<CodeAnalyzerSheet[]>([]);
+  const [displayRun, setDisplayRun] = useState<CodeAnalyzerRun | null>(null);
+  const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  const [hasAnalyzerRuns, setHasAnalyzerRuns] = useState(false);
+  const [sheetDocuments, setSheetDocuments] = useState<ProjectDocument[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    kind: "source" | "sheet";
+    sourceDocumentId: string;
+    sheet?: CodeAnalyzerSheet;
+    label: string;
+  } | null>(null);
+  const [deletingDrawing, setDeletingDrawing] = useState(false);
+  const analysisRunIdRef = useRef<string | null>(null);
   type LoadedExistingAnalysis = {
     documentId: string;
     fileName: string;
@@ -303,6 +347,31 @@ export function AIComplianceAnalyzer() {
   const selectedProjectIdRef = useRef(selectedProjectId);
   selectedProjectIdRef.current = selectedProjectId;
 
+  const analysisStale = shouldMarkAnalysisStale({
+    runStatus: displayRun?.status ?? currentRun?.status,
+    runFingerprint: displayRun?.source_fingerprint ?? currentRun?.source_fingerprint,
+    currentFingerprint: computeSheetFingerprint(persistedSheets),
+    pendingSourceCount: files.filter((f) => f.status === "pending").length,
+  });
+
+  const reloadAnalyzerDataset = useCallback(async (projectId: string) => {
+    const runs = await fetchAnalyzerRuns(projectId);
+    const sheets = await fetchAnalyzerSheets(projectId);
+    const display = displayRunFromList(runs);
+    const current = currentRunFromList(runs);
+    setHasAnalyzerRuns(runs.length > 0);
+    setDisplayRun(display);
+    setCurrentRun(current);
+    setPersistedSheets(sheets);
+    const ids = [
+      ...new Set(
+        sheets.flatMap((s) => [s.source_document_id, s.image_document_id].filter(Boolean) as string[]),
+      ),
+    ];
+    setSheetDocuments(await fetchDocumentsByIds(ids));
+    return { runs, sheets, display, current };
+  }, []);
+
   // Fetch documents that have compliance annotations when project changes or after save
   useEffect(() => {
     if (!selectedProjectId || !user) {
@@ -316,9 +385,13 @@ export function AIComplianceAnalyzer() {
     const fetchDocsWithAnalysis = async () => {
       setLoadingDocsWithAnalysis(true);
       try {
+        const dataset = await reloadAnalyzerDataset(projectId);
+        if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
+        if (selectedProjectIdRef.current !== projectId) return;
+
         const { data: annotations, error } = await supabase
           .from("document_annotations")
-          .select("document_id, data")
+          .select("document_id, data, analysis_run_id")
           .eq("project_id", projectId)
           .not("document_id", "is", null);
 
@@ -326,12 +399,18 @@ export function AIComplianceAnalyzer() {
         if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
         if (selectedProjectIdRef.current !== projectId) return;
 
+        const activeAnnotations = filterAnnotationsForActiveAnalysis(annotations ?? [], {
+          currentRunId: dataset.display?.id ?? null,
+          hasAnalyzerRuns: dataset.runs.length > 0,
+        });
+
         const complianceDocIds = new Set<string>();
-        for (const a of annotations ?? []) {
-          const d = (a?.data ?? {}) as ComplianceAnnotationData;
-          if (d?.compliance_issue || d?.compliance_metadata) {
-            if (a?.document_id) complianceDocIds.add(a.document_id);
-          }
+        for (const a of activeAnnotations) {
+          if (a?.document_id) complianceDocIds.add(a.document_id);
+        }
+        for (const sheet of dataset.sheets) {
+          if (sheet.image_document_id) complianceDocIds.add(sheet.image_document_id);
+          complianceDocIds.add(sheet.source_document_id);
         }
         const docIds = Array.from(complianceDocIds);
         if (docIds.length === 0) {
@@ -362,7 +441,7 @@ export function AIComplianceAnalyzer() {
       }
     };
     void fetchDocsWithAnalysis();
-  }, [selectedProjectId, user, analysisSavedAt]);
+  }, [selectedProjectId, user, analysisSavedAt, reloadAnalyzerDataset]);
 
   const buildResultsFromAnnotations = useCallback(
     (complianceAnnotations: Array<{ id: string; data: unknown }>) => {
@@ -496,14 +575,27 @@ export function AIComplianceAnalyzer() {
         if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
         if (selectedProjectIdRef.current !== projectId) return false;
 
+        const displayRunId = displayRun?.id ?? null;
+        const filtered = filterAnnotationsForActiveAnalysis(
+          (annotations || []).map((ann) => ({
+            id: ann.id,
+            analysis_run_id: (ann as { analysis_run_id?: string | null }).analysis_run_id ?? null,
+            data: ann.data,
+            document_id: ann.document_id,
+          })),
+          {
+            currentRunId: displayRunId,
+            hasAnalyzerRuns,
+          },
+        );
+
         const byDoc = new Map<string, Array<{ id: string; data: unknown }>>();
-        for (const ann of annotations || []) {
-          if (!ann.document_id) continue;
-          const d = ann.data as ComplianceAnnotationData;
-          if (!d?.compliance_issue && !d?.compliance_metadata) continue;
-          const list = byDoc.get(ann.document_id) || [];
-          list.push(ann);
-          byDoc.set(ann.document_id, list);
+        for (const ann of filtered) {
+          const documentId = (ann as { document_id?: string | null }).document_id;
+          if (!documentId) continue;
+          const list = byDoc.get(documentId) || [];
+          list.push({ id: ann.id ?? documentId, data: ann.data });
+          byDoc.set(documentId, list);
         }
 
         const loaded: LoadedExistingAnalysis[] = [];
@@ -567,7 +659,7 @@ export function AIComplianceAnalyzer() {
         }
       }
     },
-    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations],
+    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations, displayRun?.id, hasAnalyzerRuns],
   );
 
   // When landing on / switching to All, hydrate every saved analysis for the project.
@@ -591,6 +683,12 @@ export function AIComplianceAnalyzer() {
     setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
     setLoadedExistingResults([]);
     setDocumentsWithAnalysis([]);
+    setPersistedSheets([]);
+    setSheetDocuments([]);
+    setDisplayRun(null);
+    setCurrentRun(null);
+    setHasAnalyzerRuns(false);
+    setFiles([]);
     setHydrateLoadFailed(false);
     lastAllHydrateKeyRef.current = "";
     setActiveResultFileId(null);
@@ -1014,7 +1112,13 @@ export function AIComplianceAnalyzer() {
         status: "pending",
       },
     ]);
-  }, []);
+    if (selectedProjectId && (currentRun || displayRun || persistedSheets.length > 0)) {
+      void markCurrentRunStale(selectedProjectId).then(() => {
+        setDisplayRun((prev) => (prev && prev.status === "current" ? { ...prev, status: "stale" } : prev));
+        setCurrentRun(null);
+      });
+    }
+  }, [selectedProjectId, currentRun, displayRun, persistedSheets.length]);
 
   const processFiles = useCallback(
     (fileList: FileList | File[]) => {
@@ -1085,58 +1189,34 @@ export function AIComplianceAnalyzer() {
     });
   };
 
-  const updateFileDiscipline = (id: string, discipline: DocumentDiscipline) => {
-    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, discipline } : f)));
-  };
-
-  /** Save AI analysis results to document_annotations */
+  /** Save AI analysis results to document_annotations for the active run (replace, don't append). */
   const saveAnalysisToDb = useCallback(
-    async (result: AnalysisResult, docId: string, projId: string) => {
+    async (
+      result: AnalysisResult,
+      docId: string,
+      projId: string,
+      sheet?: { sheetId?: string; pageNumber?: number; sourceDocumentId?: string },
+    ) => {
       if (!user) return;
+      const runId = analysisRunIdRef.current;
+      if (!runId) {
+        toast.error("Analysis run is missing; results were not saved");
+        return;
+      }
       try {
-        const layerOrder = result.codeType === "ibc" ? 0 : 1000;
-        const metadataData: ComplianceAnnotationData = {
-          compliance_metadata: true,
-          codeType: result.codeType as "ibc" | "local",
-          summary: result.summary,
-          jurisdictionNotes: result.jurisdictionNotes,
+        await replaceComplianceFindingsForSheet({
+          userId: user.id,
+          projectId: projId,
+          documentId: docId,
+          runId,
+          result,
           jurisdiction,
           projectType,
-          codeYear_meta: codeYear,
-        };
-        await supabase.from("document_annotations").insert({
-          project_id: projId,
-          document_id: docId,
-          user_id: user.id,
-          annotation_type: "text",
-          data: metadataData as unknown as Record<string, unknown>,
-          layer_order: layerOrder,
+          codeYear,
+          sheetId: sheet?.sheetId,
+          pageNumber: sheet?.pageNumber,
+          sourceDocumentId: sheet?.sourceDocumentId,
         });
-
-        for (let i = 0; i < result.issues.length; i++) {
-          const issue = result.issues[i];
-          const issueData: ComplianceAnnotationData = {
-            compliance_issue: true,
-            codeType: result.codeType as "ibc" | "local",
-            id: issue.id,
-            category: issue.category,
-            title: issue.title,
-            description: issue.description,
-            severity: issue.severity,
-            codeReference: issue.codeReference,
-            codeYear: issue.codeYear,
-            location: issue.location,
-            suggestedFix: issue.suggestedFix,
-          };
-          await supabase.from("document_annotations").insert({
-            project_id: projId,
-            document_id: docId,
-            user_id: user.id,
-            annotation_type: "text",
-            data: issueData as unknown as Record<string, unknown>,
-            layer_order: layerOrder + i + 1,
-          });
-        }
       } catch (err) {
         console.error("Error saving analysis to DB:", err);
         toast.error("Analysis saved to UI but failed to persist to database");
@@ -1196,25 +1276,29 @@ export function AIComplianceAnalyzer() {
 
   const runBatchAnalysis = useCallback(
     async (onlyFailed = false) => {
-      const pendingOrFailed = onlyFailed
-        ? files.filter((f) => f.status === "failed")
-        : files.filter((f) => f.status === "pending");
-
-      if (pendingOrFailed.length === 0) {
-        toast.info(onlyFailed ? "No failed files to retry" : "No files ready to analyze");
-        return;
-      }
-
       if (selectedProjectId && !user) {
         toast.error("You must be logged in to save analysis to a project");
         return;
       }
 
+      const pendingFiles = files.filter((f) => f.status === "pending");
+      const failedFiles = files.filter((f) => f.status === "failed");
+      if (onlyFailed && failedFiles.length === 0) {
+        toast.info("No failed files to retry");
+        return;
+      }
+      if (
+        !onlyFailed &&
+        pendingFiles.length === 0 &&
+        persistedSheets.filter((s) => !s.excluded).length === 0 &&
+        documentsWithAnalysis.length === 0
+      ) {
+        toast.info("No files ready to analyze");
+        return;
+      }
+
       setAnalyzing(true);
-      setBatchProgress({ total: pendingOrFailed.length, completed: 0, currentIndex: 1 });
       if (!onlyFailed) {
-        // Keep hydrated prior analyses so All continues to show the full project history
-        // while the new batch completes; session files merge into resultGroups separately.
         setResponses({});
         setActiveResultFileId(null);
         setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
@@ -1222,29 +1306,170 @@ export function AIComplianceAnalyzer() {
       }
 
       try {
-        const latestFiles = await new Promise<UploadedFile[]>((resolve) => {
-          setFiles((current) => {
-            resolve(current);
-            return current;
+        let sheets = persistedSheets;
+
+        if (!onlyFailed && selectedProjectId && user && pendingFiles.length > 0) {
+          if (sheets.length === 0 && documentsWithAnalysis.length > 0) {
+            for (const doc of documentsWithAnalysis) {
+              const already = sheets.some((s) => s.source_document_id === doc.id);
+              if (already) continue;
+              await insertAnalyzerSheet({
+                project_id: selectedProjectId,
+                source_document_id: doc.id,
+                image_document_id: doc.id,
+                page_number: 1,
+                file_name: doc.file_name,
+                excluded: false,
+              });
+            }
+            sheets = await fetchAnalyzerSheets(selectedProjectId);
+          }
+
+          const persistUpload = async (opts: {
+            file: File;
+            document_type: string;
+            description: string;
+            parent_document_id?: string;
+          }) => {
+            const doc = await uploadDocument({
+              file: opts.file,
+              document_type: opts.document_type as ProjectDocument["document_type"],
+              description: opts.description,
+              parent_document_id: opts.parent_document_id,
+            });
+            if (doc) await fetchDocuments();
+            return doc;
+          };
+
+          const persisted = await persistPendingAnalyzerSources({
+            projectId: selectedProjectId,
+            pendingFiles,
+            existingSheets: sheets,
+            uploadDocument: persistUpload,
+            renderPdfPages: pdfPagesToImageFiles,
           });
-        });
+          for (const warning of persisted.warnings) toast.warning(warning);
+          sheets = [...sheets, ...persisted.sheets];
+          setPersistedSheets(sheets);
+          setFiles((prev) => prev.filter((f) => f.status === "failed"));
+        }
+
+        const included = sheets.filter((s) => !s.excluded);
+        const canPersist = Boolean(selectedProjectId && user);
+
+        let batchFiles: UploadedFile[] = [];
+        if (onlyFailed) {
+          batchFiles = failedFiles;
+        } else if (canPersist && included.length > 0) {
+          const docsById = new Map(sheetDocuments.map((d) => [d.id, d]));
+          const missingIds = included
+            .flatMap((s) => [s.image_document_id, s.source_document_id])
+            .filter((id): id is string => Boolean(id) && !docsById.has(id));
+          if (missingIds.length > 0) {
+            const fetched = await fetchDocumentsByIds(missingIds);
+            for (const doc of fetched) docsById.set(doc.id, doc);
+            setSheetDocuments((prev) => {
+              const next = new Map(prev.map((d) => [d.id, d]));
+              for (const doc of fetched) next.set(doc.id, doc);
+              return Array.from(next.values());
+            });
+          }
+
+          batchFiles = [];
+          for (const sheet of included) {
+            const imageDoc =
+              (sheet.image_document_id && docsById.get(sheet.image_document_id)) ||
+              docsById.get(sheet.source_document_id);
+            if (!imageDoc) {
+              throw new Error(`Missing image for ${sheet.file_name ?? "drawing"} p.${sheet.page_number}`);
+            }
+            const url = await getDownloadUrl(imageDoc);
+            if (!url) throw new Error(`Could not download ${imageDoc.file_name}`);
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const imageFile = new File([blob], imageDoc.file_name, {
+              type: imageDoc.file_type || blob.type || "image/png",
+            });
+            batchFiles.push({
+              id: sheet.id,
+              file: imageFile,
+              preview: null,
+              discipline: "general",
+              status: "pending",
+              documentId: imageDoc.id,
+              preparedImageFile: imageFile,
+              sheetId: sheet.id,
+              pageNumber: sheet.page_number,
+              sourceDocumentId: sheet.source_document_id,
+            });
+          }
+        } else {
+          // No project: expand PDFs in memory so we still do not drop pages 2+.
+          const expanded: UploadedFile[] = [];
+          for (const pending of pendingFiles) {
+            const isPdf =
+              pending.file.type === "application/pdf" || pending.file.name.toLowerCase().endsWith(".pdf");
+            if (isPdf) {
+              const rendered = await pdfPagesToImageFiles(pending.file);
+              if (rendered.truncated) {
+                toast.warning(
+                  `${pending.file.name} has ${rendered.totalPages} pages; analyzing the first ${rendered.pages.length}.`,
+                );
+              }
+              for (const page of rendered.pages) {
+                expanded.push({
+                  id: `${pending.id}-p${page.pageNumber}`,
+                  file: page.file,
+                  preview: null,
+                  discipline: pending.discipline,
+                  status: "pending",
+                  preparedImageFile: page.file,
+                  pageNumber: page.pageNumber,
+                });
+              }
+            } else {
+              expanded.push({ ...pending, preparedImageFile: pending.file });
+            }
+          }
+          batchFiles = expanded;
+        }
+
+        if (batchFiles.length === 0) {
+          toast.info("No included sheets to analyze");
+          return;
+        }
+
+        if (canPersist && selectedProjectId && user && !onlyFailed) {
+          const run = await createAnalyzerRun({
+            projectId: selectedProjectId,
+            userId: user.id,
+            jurisdiction,
+            projectType,
+            codeYear,
+            analysisMode,
+            sourceFingerprint: computeSheetFingerprint(sheets),
+          });
+          analysisRunIdRef.current = run.id;
+          setDisplayRun(run);
+          setCurrentRun(null);
+        } else if (onlyFailed && !analysisRunIdRef.current && displayRun?.id) {
+          analysisRunIdRef.current = displayRun.id;
+        }
+
+        setBatchProgress({ total: batchFiles.length, completed: 0, currentIndex: 1 });
+        setFiles(batchFiles);
 
         const { succeeded, failed } = await processComplianceBatch({
-          files: latestFiles,
-          onlyFailed,
+          files: batchFiles,
+          onlyFailed: false,
           analysisMode,
           hasLocalAmendments,
           jurisdiction,
           projectType,
           codeYear,
           projectId: selectedProjectId,
-          canPersist: Boolean(selectedProjectId && user),
-          uploadDocument: async (opts) => {
-            const doc = await uploadDocument(opts);
-            if (doc) await fetchDocuments();
-            return doc;
-          },
-          pdfFirstPageToImageFile,
+          canPersist,
+          uploadDocument: async () => null,
           requestAnalysis: requestDrawingAnalysis,
           saveAnalysisToDb: saveAnalysisToDb,
           onFileUpdate: (id, patch) => {
@@ -1253,30 +1478,29 @@ export function AIComplianceAnalyzer() {
           onProgress: setBatchProgress,
         });
 
-        const completed = countCompletedBatchFiles(
-          await new Promise<UploadedFile[]>((resolve) => {
-            setFiles((current) => {
-              resolve(current);
-              return current;
-            });
-          }),
-        );
+        if (canPersist && analysisRunIdRef.current) {
+          await completeAnalyzerRun(analysisRunIdRef.current, succeeded > 0 ? "current" : "failed");
+        }
 
-        if (completed > 0) {
-          setActiveResultFileId((prev) => prev ?? pendingOrFailed[0]?.id ?? null);
-          setAnalysisSavedAt(Date.now());
+        setFiles((prev) => prev.filter((f) => f.status === "failed"));
+        setAnalysisSavedAt(Date.now());
+        if (selectedProjectId) {
+          await reloadAnalyzerDataset(selectedProjectId);
         }
 
         if (failed === 0) {
-          toast.success(`Batch complete: ${succeeded} file(s) analyzed`);
+          toast.success(`Analysis complete: ${succeeded} sheet(s)`);
         } else if (succeeded > 0) {
-          toast.warning(`Batch finished: ${succeeded} succeeded, ${failed} failed`);
+          toast.warning(`Analysis finished: ${succeeded} succeeded, ${failed} failed`);
         } else {
-          toast.error(`Batch failed: all ${failed} file(s) failed`);
+          toast.error(`Analysis failed: all ${failed} sheet(s) failed`);
         }
       } catch (err) {
         console.error("Batch analysis error:", err);
         toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
+        if (analysisRunIdRef.current && selectedProjectId) {
+          await completeAnalyzerRun(analysisRunIdRef.current, "failed").catch(() => undefined);
+        }
       } finally {
         setAnalyzing(false);
       }
@@ -1284,14 +1508,20 @@ export function AIComplianceAnalyzer() {
     [
       analysisMode,
       codeYear,
+      displayRun?.id,
+      documentsWithAnalysis,
       fetchDocuments,
       files,
+      getDownloadUrl,
       hasLocalAmendments,
       jurisdiction,
+      persistedSheets,
       projectType,
+      reloadAnalyzerDataset,
       requestDrawingAnalysis,
       saveAnalysisToDb,
       selectedProjectId,
+      sheetDocuments,
       uploadDocument,
       user,
     ],
@@ -1746,7 +1976,7 @@ export function AIComplianceAnalyzer() {
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Source file</p>
               <CardTitle className="flex items-center gap-2 text-lg text-foreground dark:text-foreground">
-                <File className="h-4 w-4 text-teal shrink-0" />
+                <FileIcon className="h-4 w-4 text-teal shrink-0" />
                 <span className="truncate">{fileName}</span>
               </CardTitle>
               <CardDescription className="mt-1 text-muted-foreground dark:text-muted-foreground">
@@ -2228,93 +2458,49 @@ export function AIComplianceAnalyzer() {
               onChange={handleFileChange}
             />
 
-            {files.length > 0 ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {files.map((f) => (
-                    <div key={f.id} className="relative rounded-lg border border-border bg-card p-3 shadow-inner">
-                      {f.status === "pending" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground"
-                          onClick={() => removeFile(f.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-
-                      {f.preview ? (
-                        <img src={f.preview} alt={f.file.name} className="h-20 w-full object-cover rounded mb-2" />
-                      ) : (
-                        <div className="h-20 flex items-center justify-center bg-muted rounded mb-2">
-                          <FileText className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      )}
-
-                      <p className="text-xs font-medium truncate">{f.file.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatFileSize(f.file.size)}</p>
-
-                      <Badge className={cn("mt-2 text-[10px]", batchStatusColors[f.status])}>
-                        {f.status === "analyzing" && <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />}
-                        {batchStatusLabels[f.status]}
-                      </Badge>
-
-                      {f.error && (
-                        <p className="text-[10px] text-destructive mt-1 line-clamp-2">{f.error}</p>
-                      )}
-
-                      <Select
-                        value={f.discipline}
-                        onValueChange={(v) => updateFileDiscipline(f.id, v as DocumentDiscipline)}
-                        disabled={f.status !== "pending"}
-                      >
-                        <SelectTrigger className="h-7 mt-2 text-xs">
-                          <SelectValue placeholder="Discipline" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DISCIPLINE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    {files.length} of {COMPLIANCE_MAX_BATCH_FILES} drawing{files.length === 1 ? "" : "s"} selected
-                  </p>
-                  {files.length < COMPLIANCE_MAX_BATCH_FILES && (
-                    <Button
-                      variant="outlineGold"
-                      size="sm"
-                      onClick={() => document.getElementById("drawing-upload")?.click()}
-                      disabled={analyzing}
-                    >
-                      Add More Drawings
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearBatchForNewRound}
-                    disabled={analyzing}
-                    data-testid="button-clear-batch-selection"
-                  >
-                    Clear selection / Analyze another batch
-                  </Button>
-                </div>
-                {files.length >= COMPLIANCE_MAX_BATCH_FILES && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Batch limit is {COMPLIANCE_MAX_BATCH_FILES} files. Clear selection to upload another batch —
-                    prior analyses stay available in the dropdown above.
-                  </p>
-                )}
-              </div>
+            {persistedSheets.length > 0 || files.length > 0 || documentsWithAnalysis.length > 0 ? (
+              <AnalyzerDrawingSet
+                sheets={
+                  persistedSheets.length > 0
+                    ? persistedSheets
+                    : documentsWithAnalysis.map((d) => ({
+                        id: d.id,
+                        project_id: d.project_id,
+                        source_document_id: d.id,
+                        image_document_id: d.id,
+                        page_number: 1,
+                        file_name: d.file_name,
+                        excluded: false,
+                        created_at: d.created_at,
+                      }))
+                }
+                pendingFiles={files.map((f) => ({
+                  id: f.id,
+                  name: f.file.name,
+                  sizeLabel: formatFileSize(f.file.size),
+                  preview: f.preview,
+                  status: f.status,
+                  error: f.error,
+                }))}
+                displayRun={displayRun}
+                analysisStale={analysisStale}
+                analyzing={analyzing}
+                isLegacy={hasAnalyzerRuns === false && persistedSheets.length === 0 && documentsWithAnalysis.length > 0}
+                onAddClick={() => document.getElementById("drawing-upload")?.click()}
+                onRemovePending={removeFile}
+                onRequestRemoveSource={(sourceDocumentId, label) =>
+                  setDeleteTarget({ kind: "source", sourceDocumentId, label })
+                }
+                onRequestRemoveSheet={(sheet, label) =>
+                  setDeleteTarget({
+                    kind: "sheet",
+                    sourceDocumentId: sheet.source_document_id,
+                    sheet,
+                    label,
+                  })
+                }
+                canAddMore={files.filter((f) => f.status === "pending" || f.status === "failed").length < COMPLIANCE_MAX_BATCH_FILES}
+              />
             ) : (
               <label htmlFor="drawing-upload" className="cursor-pointer">
                 <div className="space-y-2">
@@ -2324,8 +2510,8 @@ export function AIComplianceAnalyzer() {
                   </div>
                   <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
                   <p className="text-sm text-muted-foreground">
-                    Up to {COMPLIANCE_MAX_BATCH_FILES} drawings per batch. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
-                    PDFs currently analyze page 1 only.
+                    Up to {COMPLIANCE_MAX_BATCH_FILES} drawings per upload. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
+                    Multi-page PDFs are expanded into individual sheets.
                   </p>
                 </div>
               </label>
@@ -2338,7 +2524,14 @@ export function AIComplianceAnalyzer() {
               variant="gold"
               size="lg"
               onClick={analyzeDrawings}
-              disabled={files.filter((f) => f.status === "pending").length === 0 || analyzing}
+              disabled={
+                analyzing ||
+                (
+                  files.filter((f) => f.status === "pending").length === 0 &&
+                  persistedSheets.filter((s) => !s.excluded).length === 0 &&
+                  files.filter((f) => f.status === "failed").length === 0
+                )
+              }
               className="px-8"
             >
               {analyzing ? (
@@ -2349,13 +2542,15 @@ export function AIComplianceAnalyzer() {
               ) : (
                 <>
                   <Shield className="h-4 w-4 mr-2" />
-                  Analyze for Compliance
+                  {persistedSheets.length > 0 || displayRun
+                    ? "Update Analysis"
+                    : "Analyze for Compliance"}
                 </>
               )}
             </Button>
             {failedFileCount > 0 && !analyzing && (
               <Button variant="outlineGold" size="lg" onClick={retryFailedFiles}>
-                Retry failed files ({failedFileCount})
+                Retry failed sheets ({failedFileCount})
               </Button>
             )}
           </div>
@@ -2522,6 +2717,82 @@ export function AIComplianceAnalyzer() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.kind === "sheet" ? "Remove sheet from analysis" : "Remove drawing"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.kind === "sheet"
+                ? `Remove "${deleteTarget?.label}" from this project's Code Analyzer drawing set? Related findings for that sheet will be removed or invalidated. The original PDF is kept unless you remove the whole drawing.`
+                : `Delete "${deleteTarget?.label}" from this project? This cannot be undone. Related Code Analyzer findings for this drawing will also be removed.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDrawing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletingDrawing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (event) => {
+                event.preventDefault();
+                if (!deleteTarget || !selectedProjectId) return;
+                setDeletingDrawing(true);
+                try {
+                  if (deleteTarget.kind === "sheet" && deleteTarget.sheet) {
+                    const sheet = deleteTarget.sheet;
+                    const source = sheetDocuments.find((d) => d.id === sheet.source_document_id) ?? null;
+                    const image = sheet.image_document_id
+                      ? sheetDocuments.find((d) => d.id === sheet.image_document_id) ?? null
+                      : source;
+                    const ok = await deleteAnalyzerSheet({
+                      sheet,
+                      sourceDocument: source,
+                      imageDocument: image,
+                      deleteDocument,
+                      deleteSheetRow: deleteAnalyzerSheetRow,
+                    });
+                    if (!ok) return;
+                  } else {
+                    const source =
+                      sheetDocuments.find((d) => d.id === deleteTarget.sourceDocumentId) ??
+                      documentsWithAnalysis.find((d) => d.id === deleteTarget.sourceDocumentId);
+                    if (!source) {
+                      toast.error("Could not find that drawing to delete");
+                      return;
+                    }
+                    const relatedSheets = persistedSheets.filter(
+                      (s) => s.source_document_id === source.id,
+                    );
+                    const imageDocs = sheetDocuments.filter((d) =>
+                      relatedSheets.some((s) => s.image_document_id === d.id),
+                    );
+                    const ok = await deleteAnalyzerSourceDrawing({
+                      sourceDocument: source,
+                      sheets: relatedSheets,
+                      imageDocuments: imageDocs,
+                      deleteDocument,
+                    });
+                    if (!ok) return;
+                  }
+                  await markCurrentRunStale(selectedProjectId);
+                  setAnalysisSavedAt(Date.now());
+                  toast.success("Drawing set updated — run Update Analysis to refresh findings");
+                  setDeleteTarget(null);
+                } catch (err) {
+                  console.error(err);
+                  toast.error(err instanceof Error ? err.message : "Failed to remove drawing");
+                } finally {
+                  setDeletingDrawing(false);
+                }
+              }}
+            >
+              {deletingDrawing ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
