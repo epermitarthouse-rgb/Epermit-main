@@ -28,7 +28,11 @@ import {
   getCommunicationActionPlan,
   type CommunicationActionPlan,
 } from "@/lib/uciCommunicationPresentation";
-import { formatCosComparisonCellValue } from "@/lib/uciCosComparisonPresentation";
+import {
+  formatCosComparisonCellValue,
+  isBlockingCosComparisonRow,
+  isRequiredForCosAcceptance,
+} from "@/lib/uciCosComparisonPresentation";
 import type {
   CoordinationCommunication,
   CoordinationCost,
@@ -233,6 +237,8 @@ export function CommunicationReclassifyRow({
   mutedClass,
   toolbarOutlineButtonClass,
   actions,
+  record,
+  allCommunications,
 }: {
   comm: CoordinationCommunication;
   busy: boolean;
@@ -244,13 +250,17 @@ export function CommunicationReclassifyRow({
   mutedClass: string;
   toolbarOutlineButtonClass: string;
   actions?: CommunicationActionPlan;
+  record?: CoordinationRecord | null;
+  allCommunications?: CoordinationCommunication[];
 }) {
   const [category, setCategory] = useState(comm.classification || "unclassified");
-  const plan = actions ?? buildCommunicationCardModel(comm).actions;
+  const plan =
+    actions ??
+    buildCommunicationCardModel(comm, { record, allCommunications }).actions;
   const flagged = Boolean(
     (comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review,
   );
-  const overrideLine = buildCommunicationCardModel(comm).overrideLine;
+  const overrideLine = buildCommunicationCardModel(comm, { record, allCommunications }).overrideLine;
 
   return (
     <div className="mt-2 space-y-1.5">
@@ -428,6 +438,7 @@ export function CommunicationQuickActions({
   toolbarOutlineButtonClass,
   workspaceHref,
   surface = "inbox",
+  allCommunications,
 }: {
   comm: CoordinationCommunication;
   record?: CoordinationRecord | null;
@@ -438,8 +449,9 @@ export function CommunicationQuickActions({
   toolbarOutlineButtonClass: string;
   workspaceHref?: string;
   surface?: "inbox" | "needs-attention" | "workspace";
+  allCommunications?: CoordinationCommunication[];
 }) {
-  const plan = getCommunicationActionPlan(comm, record, { surface });
+  const plan = getCommunicationActionPlan(comm, record, { surface, allCommunications });
   const flagged = Boolean(
     (comm.agent_processed_metadata as Record<string, unknown> | undefined)?.flagged_for_review,
   );
@@ -447,9 +459,10 @@ export function CommunicationQuickActions({
   const showOpenRecord = Boolean(workspaceHref);
   const showReclassify = Boolean(workspaceHref) && plan.showReclassify;
   const showConfirm = plan.showConfirm && onConfirm;
+  const showConfirmed = plan.showConfirmed;
   const showFlag = plan.showFlag && onFlagForReview && !needsAttentionQueue;
 
-  if (!showConfirm && !showFlag && !showOpenRecord && !showReclassify) {
+  if (!showConfirm && !showFlag && !showOpenRecord && !showReclassify && !showConfirmed) {
     return null;
   }
 
@@ -529,6 +542,7 @@ export function CommunicationOperatorCard({
   mutedClass,
   toolbarOutlineButtonClass,
   cardClassName,
+  allCommunications,
 }: {
   comm: CoordinationCommunication;
   providerName?: string | null;
@@ -541,10 +555,15 @@ export function CommunicationOperatorCard({
   mutedClass: string;
   toolbarOutlineButtonClass: string;
   cardClassName?: string;
+  allCommunications?: CoordinationCommunication[];
 }) {
   const [messageOpen, setMessageOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const model = buildCommunicationCardModel(comm, { providerName, record });
+  const model = buildCommunicationCardModel(comm, {
+    providerName,
+    record,
+    allCommunications,
+  });
 
   return (
     <div className={cardClassName}>
@@ -614,6 +633,8 @@ export function CommunicationOperatorCard({
           comm={comm}
           busy={busy}
           actions={model.actions}
+          record={record}
+          allCommunications={allCommunications}
           onReclassify={onReclassify}
           onFlagForReview={onFlagForReview}
           onConfirm={onConfirm}
@@ -723,22 +744,11 @@ export function CosAnalysisPanel({
     "service_voltage",
     "phase",
     "wire_configuration",
-    "meter_count",
   ]);
 
   const isRowIncluded = (row: Record<string, unknown>) => row.included_in_comparison !== false;
   const includedComparisonRows = comparisonRows.filter(isRowIncluded);
-  const hasMaterialIncluded = includedComparisonRows.some(
-    (r) =>
-      r.result &&
-      r.result !== "match" &&
-      r.result !== "insufficient_data" &&
-      (r.material === true ||
-        r.result === "undersized" ||
-        r.result === "oversized" ||
-        r.result === "mismatch" ||
-        r.utility_conflict === true),
-  );
+  const hasMaterialIncluded = includedComparisonRows.some((r) => isBlockingCosComparisonRow(r));
   const hasMaterial =
     reviewStatus === "revision_required" ||
     hasMaterialIncluded ||
@@ -832,6 +842,12 @@ export function CosAnalysisPanel({
     if (row.utility_conflict === true || row.result === "document_conflict") return "Conflict";
     if (row.operator_override === true) return "Override";
     if (row.result === "match") return "Match";
+    if (row.result === "utility_not_provided") return "Not provided by utility";
+    if (row.result === "utility_value_missing") {
+      return isRequiredForCosAcceptance(String(row.field || ""))
+        ? "Blocking missing requirement"
+        : "Not provided by utility";
+    }
     if (row.result === "baseline_missing") return "New condition";
     if (row.result === "undersized" || row.result === "oversized" || row.result === "mismatch") {
       return "Discrepancy";

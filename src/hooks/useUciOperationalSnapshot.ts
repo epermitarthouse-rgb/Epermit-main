@@ -128,6 +128,6 @@ export function useUciOperationalSnapshot(route: UciOperationalRoute) {
       ? formatUciUserError(query.error, "Unable to load operational UCI data.")
       : null,
     partialFailures: query.data?.snapshot.diagnostics.partial_failures.length ?? 0,
-    reload: () => void query.refetch(),
+    reload: () => query.refetch(),
   };
 }

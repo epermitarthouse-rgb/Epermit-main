@@ -92,8 +92,9 @@ function isInertSyntheticTestArtifact(comm: CoordinationCommunication): boolean 
 export function isCommunicationActionableForInbox(
   comm: CoordinationCommunication,
   record?: CoordinationRecord | null,
+  allCommunications?: CoordinationCommunication[],
 ): boolean {
-  const plan = getCommunicationActionPlan(comm, record);
+  const plan = getCommunicationActionPlan(comm, record, { allCommunications });
   return plan.needsAttention === true && plan.resolved !== true && plan.rejected !== true;
 }
 
@@ -406,6 +407,93 @@ function extractedFields(comm: CoordinationCommunication): Record<string, unknow
   return { ...original, ...reviewer };
 }
 
+export type CommunicationPresentationContext = {
+  record?: CoordinationRecord | null;
+  /** Same-record messages used to resolve supplemental thread PM/ticket evidence. */
+  allCommunications?: CoordinationCommunication[];
+};
+
+/** PM/ticket/account from later inbound messages on the same record or Graph thread. */
+export function resolveSupplementalThreadFields(
+  comm: CoordinationCommunication,
+  allCommunications: CoordinationCommunication[] = [],
+): Record<string, unknown> {
+  const anchorMs = messageSortTime(comm);
+  const threadId = resolveInboxThreadId(comm);
+  const supplemental: Record<string, unknown> = {};
+
+  for (const row of allCommunications) {
+    if (row.id === comm.id) continue;
+    if (isOutboundDirection(row) || isRejected(row)) continue;
+
+    const rowThread = resolveInboxThreadId(row);
+    const sameThread = Boolean(threadId && rowThread && threadId === rowThread);
+    const rowMs = messageSortTime(row);
+    const isLater = !anchorMs || !Number.isFinite(rowMs) || rowMs >= anchorMs - 60_000;
+    if (!sameThread && anchorMs && Number.isFinite(rowMs) && rowMs < anchorMs - 60_000) {
+      continue;
+    }
+    if (!sameThread && !isLater) continue;
+
+    const extracted = extractedFields(row);
+    if (!supplemental.utility_project_manager && hasRealPm(extracted.utility_project_manager)) {
+      supplemental.utility_project_manager = str(extracted.utility_project_manager);
+    }
+    if (!supplemental.utility_ticket_number && str(extracted.utility_ticket_number)) {
+      supplemental.utility_ticket_number = str(extracted.utility_ticket_number);
+    }
+    if (!supplemental.utility_account_number && str(extracted.utility_account_number)) {
+      supplemental.utility_account_number = str(extracted.utility_account_number);
+    }
+  }
+
+  return supplemental;
+}
+
+function resolveEffectiveExtractedFields(
+  comm: CoordinationCommunication,
+  ctx: CommunicationPresentationContext = {},
+): Record<string, unknown> {
+  const own = extractedFields(comm);
+  const supplemental = resolveSupplementalThreadFields(comm, ctx.allCommunications ?? []);
+  return { ...supplemental, ...own };
+}
+
+function resolveEffectivePm(
+  comm: CoordinationCommunication,
+  ctx: CommunicationPresentationContext = {},
+): string | null {
+  const fields = resolveEffectiveExtractedFields(comm, ctx);
+  if (hasRealPm(fields.utility_project_manager)) return str(fields.utility_project_manager);
+  if (hasRealPm(ctx.record?.utility_contact_name)) return str(ctx.record!.utility_contact_name);
+  return null;
+}
+
+function designReviewNeedsOperatorAction(comm: CoordinationCommunication): boolean {
+  const meta = asMeta(comm);
+  const stage6 = asRecord(meta.stage_6_cos);
+  const stage6Status = String(stage6.review_status || "");
+  if (stage6.auto_completed === true || meta.stage_6_auto_completed === true) return false;
+  if (stage6Status === "approved" || stage6Status === "superseded") return false;
+
+  if (isHumanConfirmed(comm)) {
+    return stage6Status === "needs_attention" || stage6Status === "revision_required";
+  }
+
+  const headline = String(
+    asRecord(stage6.discrepancy_report).headline ||
+      asRecord(asRecord(meta.uci_cos_analysis).discrepancy_report).headline ||
+      "",
+  ).toLowerCase();
+  return (
+    stage6Status === "needs_attention" ||
+    stage6Status === "revision_required" ||
+    headline.includes("undersized") ||
+    headline.includes("capacity") ||
+    headline.includes("mismatch")
+  );
+}
+
 function incompleteReason(comm: CoordinationCommunication): string | null {
   const incomplete = asRecord(asMeta(comm).stage_5_incomplete);
   return str(incomplete.reason);
@@ -431,9 +519,20 @@ function needsStage5CosAcceptance(
   return Number.isFinite(conf) && conf >= LOW_CONFIDENCE_THRESHOLD;
 }
 
-function isAckPendingThreadPm(comm: CoordinationCommunication): boolean {
+function isStage5PresentationResolved(comm: CoordinationCommunication): boolean {
+  const resolved = asMeta(comm).stage_5_resolved;
+  if (resolved === true) return true;
+  return Boolean(resolved && typeof resolved === "object");
+}
+
+function isAckPendingThreadPm(
+  comm: CoordinationCommunication,
+  ctx: CommunicationPresentationContext = {},
+): boolean {
   if (String(comm.classification || "") !== "acknowledgment") return false;
   if (!isHumanConfirmed(comm)) return false;
+  if (resolveEffectivePm(comm, ctx)) return false;
+  if (isStage5PresentationResolved(comm)) return false;
   return incompleteReason(comm) === "missing_utility_pm";
 }
 
@@ -522,15 +621,18 @@ export function getCommunicationsTabLabel(record?: CoordinationRecord | null): s
 export function communicationNeedsOperatorAttention(
   comm: CoordinationCommunication,
   record?: CoordinationRecord | null,
+  allCommunications?: CoordinationCommunication[],
 ): boolean {
-  return buildCommunicationCardModel(comm, { record }).actions.needsAttention;
+  return buildCommunicationCardModel(comm, { record, allCommunications }).actions.needsAttention;
 }
 
 export function countCommunicationsNeedingAttention(
   communications: CoordinationCommunication[],
   record?: CoordinationRecord | null,
 ): number {
-  return communications.filter((comm) => communicationNeedsOperatorAttention(comm, record)).length;
+  return communications.filter((comm) =>
+    communicationNeedsOperatorAttention(comm, record, communications),
+  ).length;
 }
 
 /** Stage 5 context banner for the record Communications workspace. */
@@ -803,15 +905,19 @@ function isSyntheticHistoryNotActionable(comm: CoordinationCommunication): boole
 export function getNeedsAttentionReasons(
   comm: CoordinationCommunication,
   record?: CoordinationRecord | null,
+  allCommunications?: CoordinationCommunication[],
 ): string[] {
+  const ctx: CommunicationPresentationContext = { record, allCommunications };
   // Outbound transmissions and own package echoes are never operator triage reasons.
   if (isOwnOutboundPackageEcho(comm) || isOutboundDirection(comm)) return [];
   if (isRejected(comm) || isSyntheticHistoryNotActionable(comm)) return [];
   if (isAutoCompletedAck(comm, record)) return [];
+  if (isHumanConfirmed(comm) && isStage5PresentationResolved(comm)) return [];
 
   const reasons: string[] = [];
   const meta = asMeta(comm);
-  const fields = extractedFields(comm);
+  const fields = resolveEffectiveExtractedFields(comm, ctx);
+  const effectivePm = resolveEffectivePm(comm, ctx);
   const incomplete = incompleteReason(comm);
   const confidence = Number(comm.classification_confidence);
   const classification = String(comm.classification || "").trim() || null;
@@ -825,13 +931,12 @@ export function getNeedsAttentionReasons(
     reasons.push("Flagged for human review");
   }
 
-  if (incomplete === "missing_utility_pm" || (classification === "acknowledgment" && !hasRealPm(fields.utility_project_manager))) {
-    if (
-      (classification === "acknowledgment" || incomplete === "missing_utility_pm") &&
-      !(isHumanConfirmed(comm) && incomplete === "missing_utility_pm")
-    ) {
-      reasons.push("Utility project manager/coordinator not assigned");
-    }
+  const missingPm =
+    !effectivePm &&
+    (incomplete === "missing_utility_pm" ||
+      (classification === "acknowledgment" && !hasRealPm(fields.utility_project_manager)));
+  if (missingPm && !(isHumanConfirmed(comm) && incomplete === "missing_utility_pm")) {
+    reasons.push("Utility project manager/coordinator not assigned");
   }
 
   if (incomplete === "missing_ticket_or_account") {
@@ -853,19 +958,7 @@ export function getNeedsAttentionReasons(
   }
 
   if (classification === "class_of_service" || classification === "design_review_response") {
-    const headline = String(
-      asRecord(stage6.discrepancy_report).headline ||
-        asRecord(asRecord(meta.uci_cos_analysis).discrepancy_report).headline ||
-        "",
-    ).toLowerCase();
-    if (
-      stage6Status === "needs_attention" ||
-      stage6Status === "revision_required" ||
-      headline.includes("undersized") ||
-      headline.includes("capacity") ||
-      headline.includes("mismatch") ||
-      comm.needs_human_attention
-    ) {
+    if (designReviewNeedsOperatorAction(comm)) {
       reasons.push("Service capacity differs from submitted load");
     }
   }
@@ -904,11 +997,16 @@ export function getNeedsAttentionReasons(
     reasons.push("Utility requested additional information");
   }
 
+  const staleAttentionFlag =
+    comm.needs_human_attention === true &&
+    !isHumanConfirmed(comm) &&
+    !isStage5PresentationResolved(comm);
   if (
+    !isHumanConfirmed(comm) &&
     classificationNeedsAttention(
       classification,
       Number.isFinite(confidence) ? confidence : null,
-      comm.needs_human_attention,
+      staleAttentionFlag,
     ) &&
     reasons.length === 0
   ) {
@@ -959,7 +1057,7 @@ export type CommunicationActionSurface = "inbox" | "needs-attention" | "workspac
 export function getCommunicationActionPlan(
   comm: CoordinationCommunication,
   record?: CoordinationRecord | null,
-  opts?: { surface?: CommunicationActionSurface },
+  opts?: CommunicationPresentationContext & { surface?: CommunicationActionSurface },
 ): CommunicationActionPlan {
   const hideFlag = opts?.surface === "needs-attention";
   const emptyActions = (overrides: Partial<CommunicationActionPlan>): CommunicationActionPlan => ({
@@ -995,10 +1093,15 @@ export function getCommunicationActionPlan(
     return emptyActions({ resolved: true });
   }
 
+  const ctx: CommunicationPresentationContext = {
+    record,
+    allCommunications: opts?.allCommunications,
+  };
+  const humanConfirmed = isHumanConfirmed(comm);
   const cosAcceptance = needsStage5CosAcceptance(comm, record);
-  const ackPendingThreadPm = isAckPendingThreadPm(comm);
+  const ackPendingThreadPm = isAckPendingThreadPm(comm, ctx);
 
-  if (cosAcceptance) {
+  if (cosAcceptance && !humanConfirmed) {
     return emptyActions({
       showReclassify: true,
       showConfirm: true,
@@ -1028,26 +1131,31 @@ export function getCommunicationActionPlan(
     asMeta(comm).stage_6_auto_completed === true ||
     String(stage6.review_status || "") === "approved" ||
     String(stage6.review_status || "") === "superseded";
-  const attentionReasons = getNeedsAttentionReasons(comm, record);
-  const classificationAttention = classificationNeedsAttention(
-    comm.classification,
-    comm.classification_confidence != null ? Number(comm.classification_confidence) : null,
-    comm.needs_human_attention,
-  );
-  const incomplete = Boolean(incompleteReason(comm));
-  const unmatched = asRecord(asMeta(comm).match).matched === false;
+  const attentionReasons = getNeedsAttentionReasons(comm, record, opts?.allCommunications);
   const needsAttention =
-    !autoCompleted &&
-    !stage6Closed &&
-    (flagged || attentionReasons.length > 0 || classificationAttention || incomplete || unmatched);
+    !autoCompleted && !stage6Closed && (flagged || attentionReasons.length > 0);
   const manuallyResolved = isManuallyResolved(comm);
-  const resolved = autoCompleted || stage6Closed || (manuallyResolved && !needsAttention && !flagged);
-  const humanConfirmed = isHumanConfirmed(comm);
+  const resolved =
+    autoCompleted ||
+    stage6Closed ||
+    isStage5PresentationResolved(comm) ||
+    (manuallyResolved && !needsAttention && !flagged);
+
+  if (humanConfirmed && !needsAttention && !flagged) {
+    return emptyActions({
+      showReclassify: true,
+      showConfirmed: true,
+      showFlag: hideFlag ? false : true,
+      showViewHistory: Boolean(comm.reviewed_at || asMeta(comm).review_decision),
+      resolved: true,
+    });
+  }
 
   if (autoCompleted || stage6Closed || (resolved && !needsAttention)) {
     return emptyActions({
       showFlag: hideFlag ? false : true,
       resolved: true,
+      showConfirmed: humanConfirmed,
     });
   }
 
@@ -1060,7 +1168,7 @@ export function getCommunicationActionPlan(
       showReject: !humanConfirmed,
       showViewHistory: Boolean(comm.reviewed_at || asMeta(comm).review_decision),
       resolved: false,
-      needsAttention: true,
+      needsAttention,
     });
   }
 
@@ -1100,19 +1208,27 @@ export function buildCommunicationCardModel(
   opts: {
     providerName?: string | null;
     record?: CoordinationRecord | null;
+    allCommunications?: CoordinationCommunication[];
   } = {},
 ): CommunicationCardModel {
   const provider = str(opts.providerName) || "Utility";
   const ownEcho = isOwnOutboundPackageEcho(comm);
   const classification = String(comm.classification || "").trim() || null;
   const isAcknowledgment = !ownEcho && classification === "acknowledgment";
-  const fields = extractedFields(comm);
-  const attentionReasons = getNeedsAttentionReasons(comm, opts.record);
-  const actionPlan = getCommunicationActionPlan(comm, opts.record);
+  const ctx = { record: opts.record, allCommunications: opts.allCommunications };
+  const attentionReasons = getNeedsAttentionReasons(
+    comm,
+    opts.record,
+    opts.allCommunications,
+  );
+  const actionPlan = getCommunicationActionPlan(comm, opts.record, {
+    allCommunications: opts.allCommunications,
+  });
   const needsAttention = actionPlan.needsAttention;
   const missingPm =
     attentionReasons.includes("Utility project manager/coordinator not assigned") ||
-    incompleteReason(comm) === "missing_utility_pm";
+    (incompleteReason(comm) === "missing_utility_pm" && !resolveEffectivePm(comm, ctx));
+  const fields = resolveEffectiveExtractedFields(comm, ctx);
 
   const classLabel = ownEcho
     ? "Outbound transmission"
@@ -1244,10 +1360,14 @@ export function conversationActionState(
   messages: CoordinationCommunication[],
   record?: CoordinationRecord | null,
 ): ConversationActionState {
-  if (messages.some((message) => communicationNeedsOperatorAttention(message, record))) {
+  if (messages.some((message) => communicationNeedsOperatorAttention(message, record, messages))) {
     return "action_required";
   }
-  if (messages.every((message) => getCommunicationActionPlan(message, record).resolved)) {
+  if (
+    messages.every((message) =>
+      getCommunicationActionPlan(message, record, { allCommunications: messages }).resolved,
+    )
+  ) {
     return "resolved";
   }
   return "waiting";
@@ -1266,6 +1386,7 @@ export function buildInboxConversationCardModel<TRecord extends { id?: string }>
   const card = buildCommunicationCardModel(latest, {
     providerName: opts.providerName,
     record,
+    allCommunications: group.messages,
   });
   const actionState = conversationActionState(group.messages, record);
   const chronological = [...group.messages].sort(

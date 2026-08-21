@@ -4700,6 +4700,7 @@ export default function UciDashboard() {
                                       detailProvider?.name ?? detailProvider?.display_name
                                     }
                                     record={detailRecord}
+                                    allCommunications={allComms}
                                     busy={reclassifyCommId === comm.id}
                                     onReclassify={(id, classification) =>
                                       void handleReclassifyCommunication(id, classification)

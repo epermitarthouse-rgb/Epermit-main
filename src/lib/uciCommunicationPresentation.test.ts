@@ -125,6 +125,9 @@ describe("needs attention reasons", () => {
           id: "cos",
           classification: "class_of_service",
           needs_human_attention: true,
+          agent_processed_metadata: {
+            stage_6_cos: { review_status: "needs_attention" },
+          },
         }),
         record,
       ).includes("Service capacity differs from submitted load"),
@@ -218,5 +221,79 @@ describe("communication action plan", () => {
     );
     assert.equal(plan.showConfirm, true);
     assert.equal(plan.needsAttention, true);
+  });
+
+  it("shows Confirmed (not Confirm) for human-confirmed design review", () => {
+    const plan = getCommunicationActionPlan(
+      comm({
+        id: "design-confirmed",
+        classification: "design_review_response",
+        classification_confidence: 0.95,
+        needs_human_attention: true,
+        reviewed_at: "2026-08-21T00:34:37.238Z",
+        agent_processed_metadata: {
+          human_confirmed: true,
+          review_decision: { action: "confirm" },
+          extracted_fields: {
+            utility_project_manager: "Alex Morgan",
+          },
+        },
+      }),
+      { ...record, current_stage_state: "AWAITING_UTILITY" } as CoordinationRecord,
+    );
+    assert.equal(plan.showConfirm, false);
+    assert.equal(plan.showConfirmed, true);
+    assert.equal(plan.needsAttention, false);
+  });
+
+  it("clears ack attention when PM arrives from supplemental thread message", () => {
+    const ack = comm({
+      id: "727e3cad-e267-4b85-94e4-6e37f340ee66",
+      classification: "acknowledgment",
+      needs_human_attention: true,
+      reviewed_at: "2026-08-21T00:34:37.238Z",
+      thread_id: "conv-portsmouth",
+      agent_processed_metadata: {
+        human_confirmed: true,
+        stage_5_incomplete: { reason: "missing_utility_pm" },
+        review_decision: { action: "confirm" },
+      },
+    });
+    const designReview = comm({
+      id: "2f2b3ffe-9b8b-457b-b329-0d374ce769c9",
+      classification: "design_review_response",
+      thread_id: "conv-portsmouth",
+      message_timestamp: "2026-08-21T01:00:00.000Z",
+      agent_processed_metadata: {
+        extracted_fields: {
+          utility_project_manager: "Alex Morgan",
+        },
+      },
+    });
+    const siblings = [ack, designReview];
+    const reasons = getNeedsAttentionReasons(ack, record, siblings);
+    assert.equal(reasons.includes("Utility project manager/coordinator not assigned"), false);
+    const plan = getCommunicationActionPlan(ack, record, { allCommunications: siblings });
+    assert.equal(plan.showConfirm, false);
+    assert.equal(plan.showConfirmed, true);
+    assert.equal(plan.needsAttention, false);
+  });
+
+  it("does not flag confirmed design review when only stale needs_human_attention remains", () => {
+    const reasons = getNeedsAttentionReasons(
+      comm({
+        id: "design-stale-flag",
+        classification: "design_review_response",
+        classification_confidence: 0.95,
+        needs_human_attention: true,
+        reviewed_at: "2026-08-21T00:34:37.238Z",
+        agent_processed_metadata: {
+          human_confirmed: true,
+          review_decision: { action: "confirm" },
+        },
+      }),
+      record,
+    );
+    assert.equal(reasons.includes("Service capacity differs from submitted load"), false);
   });
 });

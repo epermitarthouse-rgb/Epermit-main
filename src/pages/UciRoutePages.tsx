@@ -188,7 +188,7 @@ function recordHref(record: CoordinationRecord, tab?: string): string {
   return tab ? `${base}?tab=${encodeURIComponent(tab)}` : base;
 }
 
-function useOperationalCommunicationActions(reload: () => void) {
+function useOperationalCommunicationActions(reload: () => void | Promise<unknown>) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const handleConfirm = async (communicationId: string, classification: string) => {
@@ -199,7 +199,7 @@ function useOperationalCommunicationActions(reload: () => void) {
         apply_lifecycle: true,
       });
       toast.success("Communication confirmed");
-      reload();
+      await reload();
     } catch (error: unknown) {
       toast.error(formatUciUserError(error, "Confirm review failed"));
     } finally {
@@ -214,7 +214,7 @@ function useOperationalCommunicationActions(reload: () => void) {
         note: "Flagged for human review from operational queue",
       });
       toast.success("Flagged for human review — auto-lifecycle blocked");
-      reload();
+      await reload();
     } catch (error: unknown) {
       toast.error(formatUciUserError(error, "Flag for review failed"));
     } finally {
@@ -234,7 +234,7 @@ function OperationalCommunicationCard({
 }: {
   record: OperationalRecord;
   message: CoordinationCommunication;
-  reload: () => void;
+  reload: () => void | Promise<unknown>;
   className?: string;
   surface?: "inbox" | "needs-attention" | "workspace";
 }) {
@@ -242,6 +242,7 @@ function OperationalCommunicationCard({
   const model = buildCommunicationCardModel(message, {
     providerName: providerName(record),
     record,
+    allCommunications: record.communications,
   });
   const reasons = model.attentionReasons;
   const workspaceHref = recordHref(record, "communications");
@@ -281,6 +282,7 @@ function OperationalCommunicationCard({
         comm={message}
         record={record}
         providerName={providerName(record)}
+        allCommunications={record.communications}
         busy={busyId === message.id}
         onConfirm={(id, classification) => void handleConfirm(id, classification)}
         onFlagForReview={surface === "needs-attention" ? undefined : (id) => void handleFlag(id)}
@@ -1272,7 +1274,7 @@ function InboxThreadCard({
   reload,
 }: {
   group: InboxThreadGroup<OperationalRecord>;
-  reload: () => void;
+  reload: () => void | Promise<unknown>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { busyId, handleConfirm, handleFlag } = useOperationalCommunicationActions(reload);
@@ -1359,6 +1361,7 @@ function InboxThreadCard({
                   comm={message}
                   record={group.record}
                   providerName={providerName(group.record)}
+                  allCommunications={group.messages}
                   busy={busyId === message.id}
                   onConfirm={(id, classification) => void handleConfirm(id, classification)}
                   onFlagForReview={(id) => void handleFlag(id)}
@@ -1375,6 +1378,7 @@ function InboxThreadCard({
           comm={group.latest}
           record={group.record}
           providerName={providerName(group.record)}
+          allCommunications={group.messages}
           busy={busyId === group.latest.id}
           onConfirm={(id, classification) => void handleConfirm(id, classification)}
           onFlagForReview={(id) => void handleFlag(id)}
@@ -1462,7 +1466,9 @@ export function UciNeedsAttentionPage() {
   const state = useUciOperationalSnapshot("/uci/needs-attention");
   const messages = state.records.flatMap((record) =>
     record.communications
-      .filter((message) => communicationNeedsOperatorAttention(message, record))
+      .filter((message) =>
+        communicationNeedsOperatorAttention(message, record, record.communications),
+      )
       .map((message) => ({ record, message })),
   );
   const recordItems = state.records.flatMap((record) => {
