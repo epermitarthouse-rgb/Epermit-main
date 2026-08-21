@@ -83,6 +83,24 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.match(panelSource, /Finish meter-set coordination first/);
   });
 
+  it("imports cn so Stage 9 contact styling cannot crash the energization tab", () => {
+    assert.match(panelSource, /import \{ cn \} from "@\/lib\/utils"/);
+  });
+
+  it("always renders Utility PM contact section shell without stage or lifecycle gates", () => {
+    const utilitySectionStart = panelSource.indexOf('id={UTILITY_PM_CONTACT_SECTION_ID}');
+    const siteSectionStart = panelSource.indexOf('<p className="font-semibold text-foreground">Site contact</p>');
+    assert.ok(utilitySectionStart > 0, "Utility PM section anchor missing");
+    assert.ok(siteSectionStart > utilitySectionStart, "Site contact section missing after Utility PM");
+    const beforeUtilitySection = panelSource.slice(
+      Math.max(0, utilitySectionStart - 120),
+      utilitySectionStart,
+    );
+    assert.doesNotMatch(beforeUtilitySection, /stage9Active\s*&&/);
+    assert.doesNotMatch(beforeUtilitySection, /lifecycleStatus\?/);
+    assert.doesNotMatch(beforeUtilitySection, /utilityBlocker\s*&&/);
+  });
+
   it("visually separates Utility PM contact from Site contact with distinct styling", () => {
     assert.match(panelSource, /UTILITY_PM_CONTACT_SECTION_ID/);
     assert.match(panelSource, /border-2 border-teal\/40 bg-teal\/5/);
