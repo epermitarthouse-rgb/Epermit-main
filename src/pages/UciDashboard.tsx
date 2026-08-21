@@ -5070,7 +5070,7 @@ export default function UciDashboard() {
                       )
                     }
                     onSaveSiteContact={(payload) =>
-                      void runLifecycleAction(
+                      runLifecycleAction(
                         () => updateCoordinationSiteContact(detailId!, payload),
                         "Site contact saved",
                         "Failed to save site contact",

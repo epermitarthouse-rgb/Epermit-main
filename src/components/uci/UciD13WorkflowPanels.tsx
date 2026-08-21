@@ -2550,7 +2550,7 @@ export function MeterSetCloseoutPanel({
     site_contact_name?: string;
     site_contact_email?: string;
     site_contact_phone?: string;
-  }) => void;
+  }) => void | Promise<boolean>;
   onRequestMeterSet: () => void;
   onConfirmMeterSetDate: (scheduledDate: string) => void;
   onConfirmSiteReadiness: () => void;
@@ -2581,6 +2581,15 @@ export function MeterSetCloseoutPanel({
   const [sitePhone, setSitePhone] = useState(record?.site_contact_phone || "");
   const [utilityContactSaved, setUtilityContactSaved] = useState(false);
   const [utilityContactSaving, setUtilityContactSaving] = useState(false);
+  const [siteContactSaved, setSiteContactSaved] = useState(false);
+  const [siteContactSaving, setSiteContactSaving] = useState(false);
+  const persistedUtilityName =
+    String(record?.utility_project_manager || record?.utility_contact_name || "").trim() || null;
+  const persistedUtilityEmail = String(record?.utility_contact_email || "").trim() || null;
+  const persistedUtilityPhone = String(record?.utility_contact_phone || "").trim() || null;
+  const persistedSiteName = String(record?.site_contact_name || "").trim() || null;
+  const persistedSiteEmail = String(record?.site_contact_email || "").trim() || null;
+  const persistedSitePhone = String(record?.site_contact_phone || "").trim() || null;
   const meter = lifecycleStatus?.meter_set;
   const closeout = lifecycleStatus?.closeout;
   const rollup = lifecycleStatus?.project_rollup;
@@ -2630,6 +2639,10 @@ export function MeterSetCloseoutPanel({
     setSiteName(record?.site_contact_name || "");
     setSiteEmail(record?.site_contact_email || "");
     setSitePhone(record?.site_contact_phone || "");
+  }, [record?.site_contact_name, record?.site_contact_email, record?.site_contact_phone]);
+
+  useEffect(() => {
+    setSiteContactSaved(false);
   }, [record?.site_contact_name, record?.site_contact_email, record?.site_contact_phone]);
 
   useEffect(() => {
@@ -2732,11 +2745,12 @@ export function MeterSetCloseoutPanel({
             </div>
             <div className="rounded-md border border-border/60 bg-background/70 px-2.5 py-2">
               <p className={mutedClass}>
-                PM assigned:{" "}
-                <span className="text-foreground">{resolvedUtilityContact.name || "Missing"}</span>
+                Saved on record:{" "}
+                <span className="text-foreground">{persistedUtilityName || "—"}</span>
                 {" · "}
-                Email:{" "}
-                <span className="text-foreground">{resolvedUtilityContact.email || "Missing"}</span>
+                <span className="text-foreground">{persistedUtilityEmail || "—"}</span>
+                {" · "}
+                <span className="text-foreground">{persistedUtilityPhone || "—"}</span>
               </p>
               {utilityBlocker === "missing_utility_contact_email" ? (
                 <button
@@ -2852,6 +2866,16 @@ export function MeterSetCloseoutPanel({
                 email — enter that in the Utility PM contact section above.
               </p>
             </div>
+            <div className="rounded-md border border-border/60 bg-background/70 px-2.5 py-2">
+              <p className={mutedClass}>
+                Saved on record:{" "}
+                <span className="text-foreground">{persistedSiteName || "—"}</span>
+                {" · "}
+                <span className="text-foreground">{persistedSiteEmail || "—"}</span>
+                {" · "}
+                <span className="text-foreground">{persistedSitePhone || "—"}</span>
+              </p>
+            </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label htmlFor="site-contact-name" className="text-[10px] text-muted-foreground">
@@ -2887,22 +2911,45 @@ export function MeterSetCloseoutPanel({
                 />
               </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className={toolbarOutlineButtonClass}
-              disabled={meterBusy || !stage9Active}
-              onClick={() =>
-                onSaveSiteContact({
-                  site_contact_name: siteName || undefined,
-                  site_contact_email: siteEmail || undefined,
-                  site_contact_phone: sitePhone || undefined,
-                })
-              }
-            >
-              Save site contact
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy || siteContactSaving || !stage9Active}
+                onClick={() => {
+                  void (async () => {
+                    setSiteContactSaved(false);
+                    setSiteContactSaving(true);
+                    try {
+                      const result = await onSaveSiteContact({
+                        site_contact_name: siteName || undefined,
+                        site_contact_email: siteEmail || undefined,
+                        site_contact_phone: sitePhone || undefined,
+                      });
+                      if (result !== false) {
+                        setSiteContactSaved(true);
+                      }
+                    } finally {
+                      setSiteContactSaving(false);
+                    }
+                  })();
+                }}
+              >
+                {siteContactSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Save site contact
+              </Button>
+              {siteContactSaved ? (
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-medium text-teal-800 dark:text-teal-200"
+                  role="status"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                  Site contact saved
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {stage9Active && record?.inspection_release_received_at ? (

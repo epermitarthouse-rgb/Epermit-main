@@ -101,6 +101,23 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.match(panelSource, /Save utility PM contact/);
     assert.match(dashboardSource, /Utility PM contact saved/);
   });
+
+  it("renders distinct Utility PM and Site contact email fields with persisted record values", () => {
+    assert.match(panelSource, /id="utility-pm-email"/);
+    assert.match(panelSource, /data-utility-pm-email-input="true"/);
+    assert.match(panelSource, /Utility PM email/);
+    assert.match(panelSource, /id="site-contact-email"/);
+    assert.match(panelSource, /Site contact email/);
+    assert.match(panelSource, /persistedUtilityEmail/);
+    assert.match(panelSource, /record\?\.utility_contact_email/);
+    assert.match(panelSource, /persistedSiteEmail/);
+    assert.match(panelSource, /record\?\.site_contact_email/);
+    assert.match(panelSource, /Saved on record:/);
+    assert.match(panelSource, /Site contact saved/);
+    assert.match(dashboardSource, /updateCoordinationUtilityContact/);
+    assert.match(dashboardSource, /updateCoordinationSiteContact/);
+    assert.match(dashboardSource, /Site contact saved/);
+  });
 });
 
 describe("deriveMeterSetCloseoutActionState", () => {
