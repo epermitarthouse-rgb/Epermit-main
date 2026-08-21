@@ -28,6 +28,7 @@ import {
   buildInitializedSlugSet,
   countSelectedProviders,
   deriveAddressPresentation,
+  deriveSelectedProvidersForInit,
   filterProvidersForPicker,
   formatAddressSourceLabel,
   formatProjectAddressLine,
@@ -36,6 +37,7 @@ import {
   groupProvidersByUtilityType,
   getSupportedUtilityTypes,
   hasConfirmableAddress,
+  isProviderConfirmationSatisfied,
   providerDisplayLabel,
   sortProvidersForPicker,
 } from "@/lib/uciSetupWorkflow";
@@ -330,10 +332,13 @@ export function UciSetupWorkflow({
 
   const selectedProviders = useMemo(
     () =>
-      sortProvidersForPicker(
-        providers.filter((provider) => initPick[provider.slug] && !initializedSlugs.has(provider.slug)),
-      ),
-    [providers, initPick, initializedSlugs],
+      deriveSelectedProvidersForInit({
+        providers,
+        initPick,
+        initializedSlugs,
+        resolutions: providerResolution?.resolutions,
+      }),
+    [providers, initPick, initializedSlugs, providerResolution?.resolutions],
   );
 
   const selectedGroups = useMemo(

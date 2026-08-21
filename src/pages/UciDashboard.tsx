@@ -296,9 +296,12 @@ import {
   buildInitializedSlugSet,
   countSelectedProviders,
   deriveAddressPresentation,
+  deriveSelectedProvidersForInit,
   getInitDisabledReasons,
+  isProviderConfirmationSatisfied,
   providerDisplayLabel as workflowProviderDisplayLabel,
 } from "@/lib/uciSetupWorkflow";
+import { resolveProviderFromResolution } from "@/lib/uciProviderResolution";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   buildCommunicationCardModel,
@@ -586,23 +589,36 @@ export default function UciDashboard() {
     [providerSetup],
   );
 
-  const providerConfirmationSatisfied = useMemo(() => {
-    const selected = providers.filter(
-      (provider) => initPick[provider.slug] && !initializedProviderSlugs.has(provider.slug),
-    );
-    return (
-      selected.length > 0 &&
-      (providerSetupConfirmed || selected.every((provider) => confirmedProviderIds.has(provider.id)))
-    );
-  }, [providers, initPick, initializedProviderSlugs, providerSetupConfirmed, confirmedProviderIds]);
+  const selectedProvidersForInit = useMemo(
+    () =>
+      deriveSelectedProvidersForInit({
+        providers,
+        initPick,
+        initializedSlugs: initializedProviderSlugs,
+        resolutions: providerResolution?.resolutions,
+      }),
+    [providers, initPick, initializedProviderSlugs, providerResolution?.resolutions],
+  );
+
+  const providerConfirmationSatisfied = useMemo(
+    () =>
+      isProviderConfirmationSatisfied({
+        selectedProviders: selectedProvidersForInit,
+        confirmedProviderIds,
+        providerSetupConfirmed,
+      }),
+    [selectedProvidersForInit, confirmedProviderIds, providerSetupConfirmed],
+  );
 
   useEffect(() => {
     if (confirmedProviderIds.size === 0 || providers.length === 0) return;
     setInitPick((previous) => {
       const next = { ...previous };
       let changed = false;
-      for (const provider of providers) {
+      for (const resolution of Object.values(providerResolution?.resolutions ?? {})) {
+        const provider = resolveProviderFromResolution(providers, resolution);
         if (
+          provider &&
           confirmedProviderIds.has(provider.id) &&
           !initializedProviderSlugs.has(provider.slug) &&
           next[provider.slug] !== true
@@ -613,7 +629,12 @@ export default function UciDashboard() {
       }
       return changed ? next : previous;
     });
-  }, [confirmedProviderIds, initializedProviderSlugs, providers]);
+  }, [
+    confirmedProviderIds,
+    initializedProviderSlugs,
+    providers,
+    providerResolution?.resolutions,
+  ]);
 
   const providerDisplayLabel = useCallback(
     (provider: UtilityProvider) => workflowProviderDisplayLabel(provider),
@@ -969,7 +990,7 @@ export default function UciDashboard() {
         addressPresentation,
         addressSourceAcknowledged,
         providerSetupConfirmed: providerConfirmationSatisfied,
-        selectedProviderCount: countSelectedProviders(initPick),
+        selectedProviderCount: selectedProvidersForInit.length,
       }),
     [
       projectId,
@@ -979,7 +1000,7 @@ export default function UciDashboard() {
       addressPresentation,
       addressSourceAcknowledged,
       providerConfirmationSatisfied,
-      initPick,
+      selectedProvidersForInit.length,
     ],
   );
 
@@ -2585,10 +2606,7 @@ export default function UciDashboard() {
       toast.error("Acknowledge the project address source before initializing");
       return;
     }
-    const initializedSlugs = buildInitializedSlugSet(providerSetup);
-    const slugs = providers
-      .filter((p) => initPick[p.slug] && !initializedSlugs.has(p.slug))
-      .map((p) => p.slug);
+    const slugs = selectedProvidersForInit.map((provider) => provider.slug);
     if (slugs.length === 0) {
       toast.error("Select at least one provider to initialize");
       return;
@@ -2650,16 +2668,14 @@ export default function UciDashboard() {
   };
 
   const uncoveredUtilityTypes = useMemo(() => {
-    const initializedSlugs = buildInitializedSlugSet(providerSetup);
     const selectedTypes = new Set(
-      providers
-        .filter((provider) => initPick[provider.slug] && !initializedSlugs.has(provider.slug))
+      selectedProvidersForInit
         .map((provider) => provider.utility_type?.trim().toLowerCase() ?? "")
         .filter(Boolean),
     );
     const catalogTypes = providerSetup?.utility_types_in_catalog ?? [];
     return catalogTypes.filter((utilityType) => !selectedTypes.has(utilityType));
-  }, [providers, initPick, providerSetup?.utility_types_in_catalog, providerSetup]);
+  }, [selectedProvidersForInit, providerSetup?.utility_types_in_catalog]);
 
   const detailRecord = detail?.record;
   const detailHydrationErrors = detail?.hydration?.errors ?? {};

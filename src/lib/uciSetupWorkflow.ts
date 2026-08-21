@@ -1,4 +1,9 @@
+import {
+  isResolutionConfirmed,
+  resolveProviderFromResolution,
+} from "@/lib/uciProviderResolution";
 import type {
+  UciProviderResolutionResult,
   UciProviderSetupAddressSource,
   UciProviderSetupResponse,
   UtilityProvider,
@@ -195,6 +200,56 @@ export function hasConfirmableAddress(presentation: AddressPresentation): boolea
 
 export function countSelectedProviders(initPick: Record<string, boolean>): number {
   return Object.values(initPick).filter(Boolean).length;
+}
+
+/** Selected providers for init = confirmed Step 2b mappings plus manual Step 3 picks. */
+export function deriveSelectedProvidersForInit(params: {
+  providers: UtilityProvider[];
+  initPick: Record<string, boolean>;
+  initializedSlugs: ReadonlySet<string>;
+  resolutions: Record<string, UciProviderResolutionResult> | null | undefined;
+}): UtilityProvider[] {
+  const selectedBySlug = new Map<string, UtilityProvider>();
+
+  for (const resolution of Object.values(params.resolutions ?? {})) {
+    if (!isResolutionConfirmed(resolution)) continue;
+    const provider = resolveProviderFromResolution(params.providers, resolution);
+    if (provider && !params.initializedSlugs.has(provider.slug)) {
+      selectedBySlug.set(provider.slug, provider);
+    }
+  }
+
+  for (const provider of params.providers) {
+    if (
+      params.initPick[provider.slug] &&
+      !params.initializedSlugs.has(provider.slug)
+    ) {
+      selectedBySlug.set(provider.slug, provider);
+    }
+  }
+
+  return sortProvidersForPicker([...selectedBySlug.values()]);
+}
+
+export function isProviderConfirmationSatisfied(params: {
+  selectedProviders: UtilityProvider[];
+  confirmedProviderIds: ReadonlySet<string>;
+  providerSetupConfirmed: boolean;
+}): boolean {
+  if (params.selectedProviders.length === 0) return false;
+  const allCarriedForward = params.selectedProviders.every((provider) =>
+    params.confirmedProviderIds.has(provider.id),
+  );
+  return allCarriedForward || params.providerSetupConfirmed;
+}
+
+export function hasAdditionalManualProviderSelections(params: {
+  selectedProviders: UtilityProvider[];
+  confirmedProviderIds: ReadonlySet<string>;
+}): boolean {
+  return params.selectedProviders.some(
+    (provider) => !params.confirmedProviderIds.has(provider.id),
+  );
 }
 
 export function getInitDisabledReasons(params: {

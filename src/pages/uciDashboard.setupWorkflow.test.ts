@@ -66,7 +66,8 @@ describe("UciDashboard guided setup workflow regression", () => {
 
   it("carries a confirmed provider into initialization without a second confirmation", () => {
     assert.match(dashboardSource, /confirmedProviderIds/);
-    assert.match(dashboardSource, /setInitPick/);
+    assert.match(dashboardSource, /deriveSelectedProvidersForInit/);
+    assert.match(dashboardSource, /resolveProviderFromResolution/);
     assert.match(workflowSource, /uci-provider-confirmation-carried-forward/);
     assert.match(workflowSource, /Provider confirmation carried forward/);
   });

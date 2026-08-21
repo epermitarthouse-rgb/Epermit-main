@@ -79,6 +79,29 @@ export function findProviderById(
   return providers.find((provider) => provider.id === providerId) ?? null;
 }
 
+export function findProviderBySlug(
+  providers: UtilityProvider[],
+  providerSlug: string | null | undefined,
+): UtilityProvider | null {
+  const normalized = String(providerSlug ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  return (
+    providers.find((provider) => String(provider.slug ?? "").trim().toLowerCase() === normalized) ??
+    null
+  );
+}
+
+export function resolveProviderFromResolution(
+  providers: UtilityProvider[],
+  resolution: UciProviderResolutionResult | null | undefined,
+): UtilityProvider | null {
+  if (!resolution) return null;
+  return (
+    findProviderById(providers, resolution.confirmed_provider_id) ??
+    findProviderBySlug(providers, resolution.confirmed_provider_slug)
+  );
+}
+
 export function isResolutionConfirmed(resolution: UciProviderResolutionResult | null): boolean {
   return resolution?.status === "confirmed" || resolution?.status === "overridden";
 }

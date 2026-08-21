@@ -4,12 +4,15 @@ import {
   buildInitializedSlugSet,
   countSelectedProviders,
   deriveAddressPresentation,
+  deriveSelectedProvidersForInit,
   filterProvidersForPicker,
   getSupportedUtilityTypes,
   getInitDisabledReasons,
+  hasAdditionalManualProviderSelections,
+  isProviderConfirmationSatisfied,
   sortProvidersForPicker,
 } from "./uciSetupWorkflow.ts";
-import type { UciProviderSetupResponse, UtilityProvider } from "@/types/uci";
+import type { UciProviderResolutionResult, UciProviderSetupResponse, UtilityProvider } from "@/types/uci";
 
 function provider(partial: Partial<UtilityProvider> & Pick<UtilityProvider, "slug">): UtilityProvider {
   return {
@@ -162,5 +165,276 @@ describe("uciSetupWorkflow helpers", () => {
     assert.ok(
       reasons.some((reason) => reason.includes("Add or confirm the project address")),
     );
+  });
+
+  it("hydrates Step 3 selection from confirmed territory provider resolution", () => {
+    const catalog = [
+      provider({ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }),
+      provider({ id: "gas-id", slug: "washington-gas", utility_type: "gas" }),
+    ];
+    const resolutions: Record<string, UciProviderResolutionResult> = {
+      electric: {
+        service_type: "electric",
+        status: "confirmed",
+        resolution_tier: 1,
+        resolution_method: "point_in_polygon",
+        confidence: "high",
+        address: {
+          formatted: "123 Main St",
+          source: "project",
+          latitude: null,
+          longitude: null,
+          geocode_provider: null,
+          geocoded_at: null,
+        },
+        source: { name: "eia", dataset_vintage: "2024", layer_id: null, source_url: null, generated_at: null },
+        candidates: [],
+        suggested_provider_id: "dom-id",
+        boundary_risk: false,
+        boundary_distance_miles: null,
+        requires_human_confirmation: false,
+        confirmed_provider_id: "dom-id",
+        confirmed_provider_slug: "dominion-energy-virginia",
+        confirmed_by: "user-1",
+        confirmed_at: "2026-01-01T00:00:00.000Z",
+        override_reason: null,
+        notes: null,
+      },
+    };
+
+    const selected = deriveSelectedProvidersForInit({
+      providers: catalog,
+      initPick: {},
+      initializedSlugs: new Set(),
+      resolutions,
+    });
+
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0].slug, "dominion-energy-virginia");
+    assert.equal(
+      isProviderConfirmationSatisfied({
+        selectedProviders: selected,
+        confirmedProviderIds: new Set(["dom-id"]),
+        providerSetupConfirmed: false,
+      }),
+      true,
+    );
+    assert.equal(
+      hasAdditionalManualProviderSelections({
+        selectedProviders: selected,
+        confirmedProviderIds: new Set(["dom-id"]),
+      }),
+      false,
+    );
+  });
+
+  it("unblocks initialization when only confirmed providers are selected", () => {
+    const selected = [
+      provider({ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }),
+    ];
+    const reasons = getInitDisabledReasons({
+      projectSelected: true,
+      providerSetupLoading: false,
+      providersLoading: false,
+      initting: false,
+      addressPresentation: {
+        mode: "single",
+        structuredFormatted: "123 Main St",
+        scrapedFormatted: null,
+        activeFormatted: "123 Main St",
+        activeSourceLabel: "Structured project address",
+        mismatchWarning: null,
+      },
+      addressSourceAcknowledged: "structured",
+      providerSetupConfirmed: isProviderConfirmationSatisfied({
+        selectedProviders: selected,
+        confirmedProviderIds: new Set(["dom-id"]),
+        providerSetupConfirmed: false,
+      }),
+      selectedProviderCount: selected.length,
+    });
+
+    assert.deepEqual(reasons, []);
+  });
+
+  it("requires manual acknowledgment for additional providers beyond Step 2b", () => {
+    const selected = [
+      provider({ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }),
+      provider({ id: "gas-id", slug: "washington-gas", utility_type: "gas" }),
+    ];
+
+    assert.equal(
+      hasAdditionalManualProviderSelections({
+        selectedProviders: selected,
+        confirmedProviderIds: new Set(["dom-id"]),
+      }),
+      true,
+    );
+    assert.equal(
+      isProviderConfirmationSatisfied({
+        selectedProviders: selected,
+        confirmedProviderIds: new Set(["dom-id"]),
+        providerSetupConfirmed: false,
+      }),
+      false,
+    );
+    assert.equal(
+      isProviderConfirmationSatisfied({
+        selectedProviders: selected,
+        confirmedProviderIds: new Set(["dom-id"]),
+        providerSetupConfirmed: true,
+      }),
+      true,
+    );
+  });
+
+  it("retains confirmed provider selection after reload-style hydration", () => {
+    const catalog = [
+      provider({ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }),
+    ];
+    const resolutions: Record<string, UciProviderResolutionResult> = {
+      electric: {
+        service_type: "electric",
+        status: "confirmed",
+        resolution_tier: null,
+        resolution_method: "manual_selection",
+        confidence: "none",
+        address: {
+          formatted: "123 Main St",
+          source: "project",
+          latitude: null,
+          longitude: null,
+          geocode_provider: null,
+          geocoded_at: null,
+        },
+        source: { name: "manual", dataset_vintage: null, layer_id: null, source_url: null, generated_at: null },
+        candidates: [],
+        suggested_provider_id: null,
+        boundary_risk: false,
+        boundary_distance_miles: null,
+        requires_human_confirmation: false,
+        confirmed_provider_id: "dom-id",
+        confirmed_provider_slug: "dominion-energy-virginia",
+        confirmed_by: "user-1",
+        confirmed_at: "2026-01-01T00:00:00.000Z",
+        override_reason: null,
+        notes: null,
+      },
+    };
+
+    const selected = deriveSelectedProvidersForInit({
+      providers: catalog,
+      initPick: {},
+      initializedSlugs: new Set(),
+      resolutions,
+    });
+
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0].id, "dom-id");
+  });
+
+  it("updates Step 3 selection when provider mapping changes", () => {
+    const catalog = [
+      provider({ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }),
+      provider({ id: "old-dom-id", slug: "dominion-old", utility_type: "electric" }),
+    ];
+    const baseResolution = {
+      service_type: "electric",
+      resolution_tier: null,
+      resolution_method: "manual_selection" as const,
+      confidence: "none" as const,
+      address: {
+        formatted: "123 Main St",
+        source: "project" as const,
+        latitude: null,
+        longitude: null,
+        geocode_provider: null,
+        geocoded_at: null,
+      },
+      source: { name: "manual", dataset_vintage: null, layer_id: null, source_url: null, generated_at: null },
+      candidates: [],
+      suggested_provider_id: null,
+      boundary_risk: false,
+      boundary_distance_miles: null,
+      requires_human_confirmation: false,
+      confirmed_by: "user-1",
+      override_reason: null,
+      notes: null,
+    };
+    const initial = deriveSelectedProvidersForInit({
+      providers: catalog,
+      initPick: {},
+      initializedSlugs: new Set(),
+      resolutions: {
+        electric: {
+          ...baseResolution,
+          status: "confirmed",
+          confirmed_provider_id: "old-dom-id",
+          confirmed_provider_slug: "dominion-old",
+          confirmed_at: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+    const updated = deriveSelectedProvidersForInit({
+      providers: catalog,
+      initPick: {},
+      initializedSlugs: new Set(),
+      resolutions: {
+        electric: {
+          ...baseResolution,
+          status: "overridden",
+          suggested_provider_id: "old-dom-id",
+          confirmed_provider_id: "dom-id",
+          confirmed_provider_slug: "dominion-energy-virginia",
+          confirmed_at: "2026-01-02T00:00:00.000Z",
+          override_reason: "Corrected serving utility",
+        },
+      },
+    });
+
+    assert.equal(initial[0]?.slug, "dominion-old");
+    assert.equal(updated[0]?.slug, "dominion-energy-virginia");
+  });
+
+  it("excludes already initialized providers from derived selection", () => {
+    const catalog = [
+      provider({ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }),
+    ];
+    const selected = deriveSelectedProvidersForInit({
+      providers: catalog,
+      initPick: { "dominion-energy-virginia": true },
+      initializedSlugs: new Set(["dominion-energy-virginia"]),
+      resolutions: {
+        electric: {
+          service_type: "electric",
+          status: "confirmed",
+          resolution_tier: null,
+          resolution_method: "manual_selection",
+          confidence: "none",
+          address: {
+            formatted: "123 Main St",
+            source: "project",
+            latitude: null,
+            longitude: null,
+            geocode_provider: null,
+            geocoded_at: null,
+          },
+          source: { name: "manual", dataset_vintage: null, layer_id: null, source_url: null, generated_at: null },
+          candidates: [],
+          suggested_provider_id: null,
+          boundary_risk: false,
+          boundary_distance_miles: null,
+          requires_human_confirmation: false,
+          confirmed_provider_id: "dom-id",
+          confirmed_provider_slug: "dominion-energy-virginia",
+          confirmed_by: "user-1",
+          confirmed_at: "2026-01-01T00:00:00.000Z",
+          override_reason: null,
+          notes: null,
+        },
+      },
+    });
+
+    assert.equal(selected.length, 0);
   });
 });
