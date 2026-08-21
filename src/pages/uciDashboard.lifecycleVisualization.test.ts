@@ -25,7 +25,7 @@ describe("UciDashboard lifecycle visualization split", () => {
   it("adds a separate Lifecycle progress panel reusing getWorkflowGroupProgress", () => {
     assert.match(dashboardSource, /title="Lifecycle progress"/);
     assert.match(dashboardSource, /RecordLifecycleProgressRail/);
-    assert.match(railSource, /getWorkflowGroupProgress\(\[s, s\], stage\)/);
+    assert.match(railSource, /getWorkflowGroupProgress\(\[s, s\], stage, currentStageState\)/);
     assert.match(dashboardSource, /id="uci-lifecycle-progress"/);
   });
 

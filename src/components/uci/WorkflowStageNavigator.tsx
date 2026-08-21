@@ -46,17 +46,17 @@ function milestoneStatusBadge(
 }
 
 function progressStyles(progress: WorkflowGroupProgress, groupHasActiveTab: boolean) {
-  if (groupHasActiveTab || progress === "current") {
-    return {
-      shell: "border-teal/45 bg-teal/5 shadow-sm dark:border-teal/40 dark:bg-teal/10",
-      index: "bg-teal text-white",
-      label: "text-foreground",
-    };
-  }
   if (progress === "completed") {
     return {
       shell: "border-success/25 bg-success/5 dark:border-success/30 dark:bg-success/10",
       index: "bg-success text-success-foreground",
+      label: "text-foreground",
+    };
+  }
+  if (groupHasActiveTab || progress === "current") {
+    return {
+      shell: "border-teal/45 bg-teal/5 shadow-sm dark:border-teal/40 dark:bg-teal/10",
+      index: "bg-teal text-white",
       label: "text-foreground",
     };
   }
@@ -105,11 +105,15 @@ export function WorkflowStageNavigator({
 
       <ol className="flex flex-col gap-0">
         {visibleGroups.map(({ group, tabs }, groupIndex) => {
-          const progress = getWorkflowGroupProgress(group.stageRange, currentStage);
+          const progress = getWorkflowGroupProgress(
+            group.stageRange,
+            currentStage,
+            currentStageState,
+          );
           const groupHasActiveTab = tabs.some((tab) => tab.id === activeTab);
           const styles = progressStyles(progress, groupHasActiveTab);
           const statusBadge =
-            progress === "current" || groupHasActiveTab
+            progress === "current"
               ? milestoneStatusBadge(progress, groupHasActiveTab, currentStageState)
               : null;
           const isLast = groupIndex === visibleGroups.length - 1;
@@ -130,7 +134,7 @@ export function WorkflowStageNavigator({
                 className={cn(
                   "relative mb-2 rounded-xl border p-3 transition-colors last:mb-0",
                   styles.shell,
-                  groupHasActiveTab && "ring-1 ring-teal/30",
+                  progress === "current" && groupHasActiveTab && "ring-1 ring-teal/30",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -141,7 +145,7 @@ export function WorkflowStageNavigator({
                     )}
                     aria-hidden
                   >
-                    {progress === "completed" && !groupHasActiveTab ? (
+                    {progress === "completed" ? (
                       <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
                     ) : (
                       groupIndex + 1
@@ -157,7 +161,7 @@ export function WorkflowStageNavigator({
                           {formatWorkflowStageRange(group.stageRange)}
                         </span>
                       ) : null}
-                      {progress === "current" || groupHasActiveTab ? (
+                      {progress === "current" ? (
                         <span className="rounded-md bg-teal/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
                           Active
                         </span>
@@ -165,7 +169,7 @@ export function WorkflowStageNavigator({
                       {statusBadge ? (
                         <span className={statusBadge.className}>{statusBadge.label}</span>
                       ) : null}
-                      {progress === "completed" && !groupHasActiveTab ? (
+                      {progress === "completed" ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-success">
                           Completed
                         </span>

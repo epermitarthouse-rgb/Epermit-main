@@ -117,10 +117,14 @@ export function formatConservativeP90Chip(
 export function getWorkflowGroupProgress(
   stageRange: [number, number] | null | undefined,
   currentStage: number,
+  currentStageState?: string,
 ): WorkflowGroupProgress {
   if (!stageRange) return "support";
   const [min, max] = stageRange;
+  const state = String(currentStageState || "").toUpperCase();
   if (currentStage > max) return "completed";
+  // Terminal (or range-max) stage stays at current_stage when COMPLETED — treat group as done.
+  if (currentStage === max && state === "COMPLETED") return "completed";
   if (currentStage >= min && currentStage <= max) return "current";
   return "upcoming";
 }

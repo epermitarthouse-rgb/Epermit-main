@@ -31,7 +31,7 @@ export function RecordLifecycleProgressRail({
       aria-label={`Lifecycle progress: currently at stage ${stage}`}
     >
       {UCI_LIFECYCLE_STAGES.map((s) => {
-        const progress = getWorkflowGroupProgress([s, s], stage);
+        const progress = getWorkflowGroupProgress([s, s], stage, currentStageState);
         const isCurrent = progress === "current";
         const isCompleted = progress === "completed";
         const isLocked = progress === "upcoming";

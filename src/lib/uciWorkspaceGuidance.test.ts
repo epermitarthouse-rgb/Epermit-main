@@ -29,6 +29,22 @@ describe("uciWorkspaceGuidance", () => {
     assert.equal(getWorkflowGroupProgress(null, 5), "support");
   });
 
+  it("marks energization group completed when stage 10 is COMPLETED (terminal stage)", () => {
+    assert.equal(getWorkflowGroupProgress([9, 10], 10, "COMPLETED"), "completed");
+  });
+
+  it("marks any grouped milestone completed when at range max with COMPLETED state", () => {
+    assert.equal(getWorkflowGroupProgress([0, 1], 1, "COMPLETED"), "completed");
+    assert.equal(getWorkflowGroupProgress([2, 4], 4, "COMPLETED"), "completed");
+    assert.equal(getWorkflowGroupProgress([5, 6], 6, "COMPLETED"), "completed");
+    assert.equal(getWorkflowGroupProgress([7, 8], 8, "COMPLETED"), "completed");
+  });
+
+  it("keeps in-range groups current when not completed at range max", () => {
+    assert.equal(getWorkflowGroupProgress([9, 10], 9, "COMPLETED"), "current");
+    assert.equal(getWorkflowGroupProgress([9, 10], 10, "IN_PROGRESS"), "current");
+  });
+
   it("recommends Communications when awaiting utility", () => {
     const notice = buildNextStepNotice({
       stage: 5,
