@@ -267,6 +267,49 @@ describe("UCI D3 application builder service", () => {
     assert.equal(result.addressResolution.address_review_required, false);
   });
 
+  it("maps service_entrance_amperage from verified service_amperage alias", () => {
+    const result = evaluateRequiredFields(
+      BASE_PROJECT,
+      {
+        verified_values: {
+          service_amperage: { value: 1000, unit: "A" },
+          requested_service_amperage: { value: 1000, unit: "A" },
+        },
+      },
+      [
+        {
+          key: "service_entrance_amperage",
+          label: "Service amperage",
+          source: "load_summary.verified_values.service_entrance_amperage",
+          required: true,
+        },
+      ],
+    );
+    const amp = result.fieldResults.find((f) => f.key === "service_entrance_amperage");
+    assert.equal(amp?.status, "present");
+    assert.equal(/** @type {{ value?: unknown }} */ (amp?.value).value, 1000);
+    assert.equal(amp?.source, "load_summary.verified_values.service_amperage");
+    assert.equal(result.missingFields.includes("service_entrance_amperage"), false);
+  });
+
+  it("keeps service_entrance_amperage missing when no amperage alias is verified", () => {
+    const result = evaluateRequiredFields(
+      BASE_PROJECT,
+      { verified_values: { meter_count: { value: 1, unit: "count" } } },
+      [
+        {
+          key: "service_entrance_amperage",
+          label: "Service amperage",
+          source: "load_summary.verified_values.service_entrance_amperage",
+          required: true,
+        },
+      ],
+    );
+    const amp = result.fieldResults.find((f) => f.key === "service_entrance_amperage");
+    assert.equal(amp?.status, "missing");
+    assert.ok(result.missingFields.includes("service_entrance_amperage"));
+  });
+
   it("resolves incomplete package when documents or load inputs missing", () => {
     assert.equal(
       resolvePackageStatus({

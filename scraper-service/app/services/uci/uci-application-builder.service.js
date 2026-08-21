@@ -17,6 +17,50 @@ const SYNTHETIC_TEST_CHECKLIST_MODE = "synthetic_test";
 const SYNTHETIC_TEST_CHECKLIST_LABEL = "SYNTHETIC TEST CHECKLIST — NOT DOMINION PROVIDED";
 const SIGNATURE_STATUSES = new Set(["unknown", "unsigned", "signed_manual_verified"]);
 
+/** Template field keys often differ from the verified-value key operators actually entered. */
+const VERIFIED_VALUE_ALIASES = Object.freeze({
+  service_entrance_amperage: [
+    "service_amperage",
+    "requested_service_amperage",
+    "amperage",
+    "amps",
+  ],
+  service_amperage: [
+    "service_entrance_amperage",
+    "requested_service_amperage",
+    "amperage",
+    "amps",
+  ],
+  requested_service_amperage: ["service_amperage", "service_entrance_amperage"],
+});
+
+function verifiedEntryIsPresent(entry) {
+  if (entry == null) return false;
+  if (typeof entry !== "object" || Array.isArray(entry)) return entry !== "";
+  const value = /** @type {{ value?: unknown }} */ (entry).value;
+  return value != null && value !== "";
+}
+
+/**
+ * @param {Record<string, unknown>} verified
+ * @param {string} fieldKey
+ * @returns {{ entry: unknown, resolvedKey: string }}
+ */
+function resolveVerifiedFieldEntry(verified, fieldKey) {
+  const exact = verified[fieldKey];
+  if (verifiedEntryIsPresent(exact)) {
+    return { entry: exact, resolvedKey: fieldKey };
+  }
+  const aliases = VERIFIED_VALUE_ALIASES[fieldKey] ?? [];
+  for (const alias of aliases) {
+    const candidate = verified[alias];
+    if (verifiedEntryIsPresent(candidate)) {
+      return { entry: candidate, resolvedKey: alias };
+    }
+  }
+  return { entry: exact ?? null, resolvedKey: fieldKey };
+}
+
 const TEMPLATES_ROOT = path.resolve(__dirname, "../../../../uci/application-templates");
 
 /**
@@ -278,7 +322,7 @@ function evaluateRequiredFields(project, loadSummary, requiredFields, coordinati
   for (const field of requiredFields) {
     const key = String(field.key ?? "");
     const label = String(field.label ?? key);
-    const source = String(field.source ?? "");
+    let source = String(field.source ?? "");
     const required = field.required !== false;
     const note = field.note != null ? String(field.note) : undefined;
 
@@ -333,14 +377,12 @@ function evaluateRequiredFields(project, loadSummary, requiredFields, coordinati
         !Array.isArray(loadSummary.verified_values)
           ? /** @type {Record<string, unknown>} */ (loadSummary.verified_values)
           : {};
-      const verifiedValue = verified[fieldKey];
-      value = verifiedValue ?? null;
-      present =
-        verifiedValue != null &&
-        (typeof verifiedValue !== "object" ||
-          !Array.isArray(verifiedValue) &&
-            /** @type {{ value?: unknown }} */ (verifiedValue).value != null &&
-            /** @type {{ value?: unknown }} */ (verifiedValue).value !== "");
+      const resolved = resolveVerifiedFieldEntry(verified, fieldKey);
+      value = resolved.entry ?? null;
+      present = verifiedEntryIsPresent(resolved.entry);
+      if (present && resolved.resolvedKey !== fieldKey) {
+        source = `load_summary.verified_values.${resolved.resolvedKey}`;
+      }
     } else {
       value = null;
       present = false;

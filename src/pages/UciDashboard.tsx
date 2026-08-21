@@ -150,6 +150,7 @@ import {
   UCI_SESSION_EXPIRED_MESSAGE,
   UCI_SYNC_RUN_STORAGE_PREFIX,
 } from "@/lib/uciApi";
+import { setApplicationPackageSignatureStatus } from "@/lib/uciDocumentRegistry";
 import { UCI_SUPPORTED_UTILITY_TYPES, type UciUtilityType } from "@/lib/uciUtilityTypes";
 import { executeProjectDocumentUpload } from "@/lib/projectDocumentUpload";
 import { getMicrosoftMailboxStatus } from "@/lib/microsoftMailboxApi";
@@ -6241,18 +6242,27 @@ export function ApplicationPrepSection({
     documentKey: string,
     signatureStatus: "unsigned" | "signed_manual_verified",
   ) => {
-    if (!packageApp || !isDominionSynthetic) return;
+    if (!packageApp) return;
     const actionKey = `${documentKey}:${signatureStatus}`;
     setSignatureBusyAction(actionKey);
     try {
-      const result = await setSyntheticApplicationSignatureStatus(packageApp.id, {
-        document_key: documentKey,
-        signature_status: signatureStatus,
-        review_note:
-          signatureStatus === "signed_manual_verified"
-            ? signatureReviewNote.trim()
-            : undefined,
-      });
+      const result = isDominionSynthetic
+        ? await setSyntheticApplicationSignatureStatus(packageApp.id, {
+            document_key: documentKey,
+            signature_status: signatureStatus,
+            review_note:
+              signatureStatus === "signed_manual_verified"
+                ? signatureReviewNote.trim()
+                : undefined,
+          })
+        : await setApplicationPackageSignatureStatus(packageApp.id, {
+            document_key: documentKey,
+            signature_status: signatureStatus,
+            review_note:
+              signatureStatus === "signed_manual_verified"
+                ? signatureReviewNote.trim()
+                : undefined,
+          });
       const updatedDocument = parsePackageDocuments(
         result.application.package_documents,
       ).find((document) => document.key === documentKey);
@@ -6277,9 +6287,13 @@ export function ApplicationPrepSection({
       void onRefreshDetail().catch(() => {
         toast.warning("Signature saved; package refresh can be retried independently.");
       });
-      toast.success(`Synthetic signature status: ${signatureStatus}`);
+      toast.success(
+        signatureStatus === "signed_manual_verified"
+          ? "Signature marked signed"
+          : `Signature status set to ${signatureStatus}`,
+      );
     } catch (e: unknown) {
-      toast.error(formatUciUserError(e, "Synthetic signature update failed"));
+      toast.error(formatUciUserError(e, "Signature update failed"));
     } finally {
       setSignatureBusyAction(null);
     }

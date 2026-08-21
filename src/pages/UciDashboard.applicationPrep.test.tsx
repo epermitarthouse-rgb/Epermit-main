@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -327,5 +330,19 @@ describe("ApplicationPrepSection render regression", () => {
     assert.doesNotMatch(html, /Approve synthetic checklist/);
     assert.doesNotMatch(html, /Snapshot locked/);
     assert.match(html, /Reopen review/);
+  });
+
+  it("routes production package signature updates through the generic API", () => {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "UciDashboard.tsx"),
+      "utf8",
+    );
+    const start = source.indexOf("const handleSignatureStatus = async");
+    assert.ok(start >= 0);
+    const block = source.slice(start, start + 1800);
+    assert.doesNotMatch(block, /if \(!packageApp \|\| !isDominionSynthetic\) return;/);
+    assert.match(block, /setApplicationPackageSignatureStatus/);
+    assert.match(block, /isDominionSynthetic/);
+    assert.match(block, /setSyntheticApplicationSignatureStatus/);
   });
 });
