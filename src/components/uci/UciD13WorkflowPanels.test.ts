@@ -19,6 +19,10 @@ describe("Stage 6 COS operator copy", () => {
     assert.match(panelsSource, /toggleComparisonInclusion/);
     assert.match(panelsSource, /included_in_comparison/);
   });
+
+  it("formats submitted comparison values via COS presentation helper", () => {
+    assert.match(panelsSource, /formatCosComparisonCellValue/);
+  });
 });
 
 describe("PortfolioSummarySection render safety", () => {

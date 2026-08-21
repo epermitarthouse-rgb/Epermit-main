@@ -28,6 +28,7 @@ import {
   getCommunicationActionPlan,
   type CommunicationActionPlan,
 } from "@/lib/uciCommunicationPresentation";
+import { formatCosComparisonCellValue } from "@/lib/uciCosComparisonPresentation";
 import type {
   CoordinationCommunication,
   CoordinationCost,
@@ -825,7 +826,7 @@ export function CosAnalysisPanel({
     return 0;
   })();
 
-  const formatCell = (value: unknown) => (value != null && value !== "" ? String(value) : "—");
+  const formatCell = formatCosComparisonCellValue;
 
   const statusLabel = (row: Record<string, unknown>) => {
     if (row.utility_conflict === true || row.result === "document_conflict") return "Conflict";
