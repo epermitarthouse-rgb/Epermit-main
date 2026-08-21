@@ -171,20 +171,34 @@ function extractProposedMeasures(text: string): ProposedMeasure[] {
     /proposed alternative[\s\S]*?(?:flood hazard|supporting narrative|for official use|$)/i,
   );
   const block = section?.[0] ?? text;
-  const lines = block.split(/\n+/);
   const measures: ProposedMeasure[] = [];
-  for (const line of lines) {
-    const item = line.match(/^\s*(?:\d+[.)]|[-*•])\s+(.+)$/);
-    const description = usableFieldValue(item?.[1] ?? null);
-    if (!description) continue;
+
+  const pushMeasure = (raw: string | null | undefined) => {
+    const description = usableFieldValue(raw);
+    if (!description) return;
     if (/proposed alternative|compensating measures|flood hazard/i.test(description)) {
-      continue;
+      return;
     }
     measures.push({
       id: `measure-${measures.length + 1}`,
       description,
     });
+  };
+
+  for (const line of block.split(/\n+/)) {
+    const item = line.match(/^\s*(?:\d+[.)]|[-*•])\s+(.+)$/);
+    pushMeasure(item?.[1]);
   }
+  if (measures.length > 0) return measures;
+
+  // pdf.js extraction joins text items with spaces, so numbered lists often
+  // appear on one line: "1. Sprinkler ... 2. Stair ... 3. Alarm ..."
+  for (const match of block.matchAll(
+    /\b(\d+[.)])\s+(.+?)(?=\s\d+[.)]\s|\sFlood Hazard|\sSupporting narrative|\sFOR OFFICIAL USE|$)/gi,
+  )) {
+    pushMeasure(match[2]);
+  }
+
   return measures;
 }
 

@@ -71,6 +71,29 @@ describe("heuristicExtractModificationRequest", () => {
     assert.doesNotMatch(blob, /Conditions of Approval/);
     assert.equal(extracted.requestedModification.includes("________________"), false);
   });
+
+  it("extracts numbered measures from PDF-flattened single-line page text", () => {
+    const pdfFlattenedPage2 = {
+      pageNumber: 2,
+      text:
+        "PROPOSED ALTERNATIVE / COMPENSATING MEASURES: 1. Automatic sprinkler system designed and installed in accordance with NFPA 13 2. 2-hour fire-rated stair enclosure 3. Fire alarm system throughout the building 4. Occupant load signage at assembly spaces 5. Egress lighting and exit signage Flood Hazard Applicable: No",
+    };
+    const extracted = heuristicExtractModificationRequest([
+      SAMPLE_DC_CODE_MODIFICATION_PAGES[0],
+      pdfFlattenedPage2,
+      SAMPLE_DC_CODE_MODIFICATION_PAGES[2],
+    ]);
+    assert.equal(extracted.proposedMeasures.length, 5);
+    const joined = extracted.proposedMeasures.map((m) => m.description).join(" | ");
+    assert.match(joined, /NFPA 13/i);
+    assert.match(joined, /2-hour fire-rated stair/i);
+    assert.match(joined, /fire alarm/i);
+    assert.equal(extracted.floodHazardApplicable, false);
+    assert.equal(
+      extracted.extractionWarnings.some((w) => /No proposed alternative measures/i.test(w)),
+      false,
+    );
+  });
 });
 
 describe("mergeExtractedRequests / pagesAreSparse", () => {
