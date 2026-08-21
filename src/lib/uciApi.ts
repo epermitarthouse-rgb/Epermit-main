@@ -2702,6 +2702,26 @@ export async function updateCoordinationSiteContact(
   );
 }
 
+export async function updateCoordinationUtilityContact(
+  coordinationId: string,
+  payload: {
+    utility_contact_name?: string;
+    utility_project_manager?: string;
+    utility_contact_email?: string;
+    utility_contact_phone?: string;
+  },
+): Promise<Record<string, unknown>> {
+  return uciFetchJson(
+    `/api/uci/coordination/${encodeURIComponent(coordinationId)}/utility-contact`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to save utility contact",
+  );
+}
+
 export async function requestMeterSetDate(
   coordinationId: string,
 ): Promise<Record<string, unknown>> {

@@ -16,7 +16,11 @@ import {
 } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CheckCircle2, ChevronRight, Eye, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  deriveUtilityContactBlocker,
+  resolveUtilityContact,
+  utilityContactBlockerLabel,
+} from "@/lib/uciUtilityContact";
 import {
   UCI_COMMUNICATION_CATEGORIES,
   formatCommunicationClassification,
@@ -29,6 +33,8 @@ import {
   type CommunicationActionPlan,
 } from "@/lib/uciCommunicationPresentation";
 import {
+  deriveCosApprovalAction,
+  deriveCosComparisonRowAction,
   formatCosComparisonCellValue,
   isBlockingCosComparisonRow,
   isRequiredForCosAcceptance,
@@ -727,18 +733,11 @@ export function CosAnalysisPanel({
     Boolean(current?.id) ||
     Boolean(analysis?.cos_design_record_id);
   const isApproved = reviewStatus === "approved";
-  const canEditAccepted =
-    Boolean(onUpdateAcceptedFields) &&
-    !isApproved &&
-    evidenceStatus !== "ADVISORY" &&
-    reviewStatus !== "rejected" &&
-    reviewStatus !== "superseded";
-  const canEditInclusion =
-    Boolean(onUpdateComparisonInclusion) &&
-    !isApproved &&
-    evidenceStatus !== "ADVISORY" &&
-    reviewStatus !== "rejected" &&
-    reviewStatus !== "superseded";
+  const cosReviewClosed =
+    isApproved ||
+    evidenceStatus === "ADVISORY" ||
+    reviewStatus === "rejected" ||
+    reviewStatus === "superseded";
 
   const COS_CORE_COMPARE_FIELDS = new Set([
     "service_amperage",
@@ -776,6 +775,25 @@ export function CosAnalysisPanel({
         (reviewSummary as Record<string, unknown>).auto_completed,
     ) ||
     (isApproved && !hasMaterial && evidenceStatus !== "DISCREPANCY");
+
+  const cosApproval = deriveCosApprovalAction({
+    reviewStatus,
+    evidenceStatus,
+    autoCompleted,
+    hasMaterial,
+    busy,
+    hasEvidence,
+  });
+  const rowActions = (row: Record<string, unknown>) =>
+    deriveCosComparisonRowAction({
+      row,
+      reviewStatus,
+      evidenceStatus,
+      busy,
+      hasUpdateHandlers: Boolean(onUpdateAcceptedFields || onUpdateComparisonInclusion),
+    });
+  const canEditAccepted = Boolean(onUpdateAcceptedFields) && !cosReviewClosed;
+  const canEditInclusion = Boolean(onUpdateComparisonInclusion) && !cosReviewClosed;
 
   const summaryHeadline =
     reviewSummary && typeof reviewSummary === "object"
@@ -925,19 +943,19 @@ export function CosAnalysisPanel({
                 Analyze
               </Button>
             ) : null}
-            {onApprove && !autoCompleted && !isApproved ? (
+            {onApprove && cosApproval.status === "actionable" ? (
               <Button
                 type="button"
                 size="sm"
-                disabled={busy || evidenceStatus === "ADVISORY"}
+                disabled={cosApproval.disabled}
                 onClick={handleApproveClick}
               >
-                Approve COS
+                {cosApproval.label}
               </Button>
             ) : null}
-            {autoCompleted || (isApproved && !hasMaterial) ? (
+            {cosApproval.status === "approved" ? (
               <Badge variant="secondary" className="text-[10px] font-medium">
-                COS matched · Stage 6 completed automatically
+                {cosApproval.label}
               </Badge>
             ) : null}
           </div>
@@ -1097,6 +1115,7 @@ export function CosAnalysisPanel({
                 {comparisonRows.map((row) => {
                   const field = String(row.field || "");
                   const included = isRowIncluded(row);
+                  const rowAction = rowActions(row);
                   const utilityDisplay =
                     row.utility_issued_display != null
                       ? String(row.utility_issued_display)
@@ -1120,7 +1139,7 @@ export function CosAnalysisPanel({
                         <label className="flex items-start gap-1.5">
                           <Checkbox
                             checked={included}
-                            disabled={busy || !canEditInclusion}
+                            disabled={busy || !rowAction.canEditInclusion}
                             onCheckedChange={(checked) => {
                               void toggleComparisonInclusion(field, checked === true);
                             }}
@@ -1226,7 +1245,7 @@ export function CosAnalysisPanel({
                       <td className="px-2 py-1.5 align-top">
                         <div className="space-y-1">
                           <div className={mutedClass}>{String(row.required_action || "—")}</div>
-                          {canEditAccepted && !isEditing ? (
+                          {rowAction.showEdit && !isEditing ? (
                             <div className="flex flex-wrap gap-1">
                               <Button
                                 type="button"
@@ -1247,7 +1266,7 @@ export function CosAnalysisPanel({
                               >
                                 Edit
                               </Button>
-                              {row.operator_override === true || row.utility_conflict === true ? (
+                              {rowAction.showResetToUtility ? (
                                 <Button
                                   type="button"
                                   size="sm"
@@ -1667,7 +1686,6 @@ export function CostsEquipmentWorkflowPanel({
             stage={7}
             guardCanComplete={lifecycleStatus?.guards?.can_complete_stage_7}
             busy={busy}
-            onComplete={onCompleteStage7}
             mutedClass={mutedClass}
             toolbarOutlineButtonClass={toolbarOutlineButtonClass}
           />
@@ -1772,7 +1790,6 @@ export function CostsEquipmentWorkflowPanel({
             stage={8}
             guardCanComplete={lifecycleStatus?.guards?.can_complete_stage_8}
             busy={busy}
-            onComplete={onCompleteStage8}
             mutedClass={mutedClass}
             toolbarOutlineButtonClass={toolbarOutlineButtonClass}
           />
@@ -2491,6 +2508,7 @@ export function MeterSetCloseoutPanel({
   error,
   onRecordInspectionRelease,
   onStartStage9,
+  onSaveUtilityContact,
   onSaveSiteContact,
   onRequestMeterSet,
   onConfirmMeterSetDate,
@@ -2519,6 +2537,12 @@ export function MeterSetCloseoutPanel({
   error: string | null;
   onRecordInspectionRelease: () => void;
   onStartStage9: () => void;
+  onSaveUtilityContact: (payload: {
+    utility_contact_name?: string;
+    utility_project_manager?: string;
+    utility_contact_email?: string;
+    utility_contact_phone?: string;
+  }) => void;
   onSaveSiteContact: (payload: {
     site_contact_name?: string;
     site_contact_email?: string;
@@ -2546,12 +2570,26 @@ export function MeterSetCloseoutPanel({
 }) {
   const [scheduledDate, setScheduledDate] = useState("");
   const [energizeDate, setEnergizeDate] = useState("");
+  const [utilityName, setUtilityName] = useState(record?.utility_project_manager || record?.utility_contact_name || "");
+  const [utilityEmail, setUtilityEmail] = useState(record?.utility_contact_email || "");
+  const [utilityPhone, setUtilityPhone] = useState(record?.utility_contact_phone || "");
   const [siteName, setSiteName] = useState(record?.site_contact_name || "");
   const [siteEmail, setSiteEmail] = useState(record?.site_contact_email || "");
   const [sitePhone, setSitePhone] = useState(record?.site_contact_phone || "");
   const meter = lifecycleStatus?.meter_set;
   const closeout = lifecycleStatus?.closeout;
   const rollup = lifecycleStatus?.project_rollup;
+  const resolvedUtilityContact =
+    meter?.utility_contact ??
+    resolveUtilityContact({ record, communications });
+  const utilityBlocker =
+    meter?.utility_contact_blocker ??
+    resolvedUtilityContact.blockerReason ??
+    deriveUtilityContactBlocker(resolvedUtilityContact).reason;
+  const utilityBlockerMessage =
+    meter?.utility_contact_blocker_message ??
+    resolvedUtilityContact.blockerMessage ??
+    utilityContactBlockerLabel(utilityBlocker);
   const actionState = deriveMeterSetCloseoutActionState({
     record,
     milestones,
@@ -2561,6 +2599,17 @@ export function MeterSetCloseoutPanel({
   const allowDateReconfirm = actionState.noShowRecorded;
   const meterSetScheduledAt = actionState.meterSetScheduledAt;
   const siteReadinessConfirmedAt = actionState.siteReadinessConfirmedAt;
+
+  useEffect(() => {
+    setUtilityName(record?.utility_project_manager || record?.utility_contact_name || "");
+    setUtilityEmail(record?.utility_contact_email || "");
+    setUtilityPhone(record?.utility_contact_phone || "");
+  }, [
+    record?.utility_project_manager,
+    record?.utility_contact_name,
+    record?.utility_contact_email,
+    record?.utility_contact_phone,
+  ]);
 
   useEffect(() => {
     setSiteName(record?.site_contact_name || "");
@@ -2619,7 +2668,7 @@ export function MeterSetCloseoutPanel({
         <CardContent className="space-y-2 text-xs">
           {needsStage9Entry ? (
             <div className="rounded-md border border-teal/35 bg-teal/5 px-3 py-2">
-              <p className="font-medium text-foreground">Stage 8 is complete — start Stage 9 before meter-set work</p>
+              <p className="font-medium text-foreground">Stage 8 is complete — begin pre-energization coordination</p>
               <p className={cn("mt-1", mutedClass)}>
                 Meter-set actions stay disabled until this record transitions into Stage 9 through the normal lifecycle service.
               </p>
@@ -2631,7 +2680,7 @@ export function MeterSetCloseoutPanel({
                 onClick={onStartStage9}
               >
                 {meterBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-                Start Stage 9
+                Begin pre-energization coordination
               </Button>
             </div>
           ) : null}
@@ -2654,6 +2703,59 @@ export function MeterSetCloseoutPanel({
             toolbarOutlineButtonClass={toolbarOutlineButtonClass}
             formatWhen={formatWhen}
           />
+
+          <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2">
+            <p className="font-medium text-foreground">Utility PM contact</p>
+            <p className={cn("mt-1", mutedClass)}>
+              PM assigned:{" "}
+              <span className="text-foreground">{resolvedUtilityContact.name || "Missing"}</span>
+              {" · "}
+              Email:{" "}
+              <span className="text-foreground">
+                {resolvedUtilityContact.email || "Missing"}
+              </span>
+            </p>
+            {utilityBlocker ? (
+              <p className="mt-1 text-destructive">{utilityBlockerMessage}</p>
+            ) : (
+              <p className={cn("mt-1", mutedClass)}>Ready for outbound meter-set request.</p>
+            )}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input
+              value={utilityName}
+              onChange={(e) => setUtilityName(e.target.value)}
+              placeholder="Utility PM name"
+            />
+            <Input
+              value={utilityEmail}
+              onChange={(e) => setUtilityEmail(e.target.value)}
+              placeholder="Utility PM email"
+            />
+            <Input
+              value={utilityPhone}
+              onChange={(e) => setUtilityPhone(e.target.value)}
+              placeholder="Utility PM phone"
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={toolbarOutlineButtonClass}
+            disabled={meterBusy || !stage9Active}
+            onClick={() =>
+              onSaveUtilityContact({
+                utility_contact_name: utilityName || undefined,
+                utility_project_manager: utilityName || undefined,
+                utility_contact_email: utilityEmail || undefined,
+                utility_contact_phone: utilityPhone || undefined,
+              })
+            }
+          >
+            Save utility contact
+          </Button>
 
           <div className="grid gap-2 sm:grid-cols-3">
             <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="Site contact name" />
@@ -2684,6 +2786,7 @@ export function MeterSetCloseoutPanel({
                 completedLabel="Requested ✓"
                 pendingLabel="Request meter set"
                 busy={meterBusy}
+                disabled={Boolean(utilityBlocker)}
                 onClick={onRequestMeterSet}
                 toolbarOutlineButtonClass={toolbarOutlineButtonClass}
                 formatWhen={formatWhen}

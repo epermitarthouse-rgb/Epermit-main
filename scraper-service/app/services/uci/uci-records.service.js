@@ -40,6 +40,7 @@ const DETAIL_RECORD_SELECT = `
   utility_contact_name,
   utility_contact_email,
   utility_contact_phone,
+  utility_project_manager,
   application_submitted_at,
   acknowledgment_received_at,
   class_of_service_issued_at,

@@ -1,8 +1,6 @@
 "use strict";
 
-/**
- * Stage 5 Thread Manager — match inbound messages to coordination records (A5.5–A5.8, §7.4).
- */
+const { resolveUtilityContact } = require("./uci-utility-contact.service.js");
 
 /**
  * @param {string | null | undefined} a
@@ -251,10 +249,12 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
     const recordApps = appsByRecord.get(String(record.id)) || [];
     const primaryApp = recordApps[0] || {};
 
+    const resolvedContact = resolveUtilityContact(record);
     const candidate = {
       utility_ticket_number: primaryApp.utility_ticket_number,
       utility_account_number: record.utility_account_number,
-      utility_contact_email: record.utility_contact_email,
+      utility_contact_email: resolvedContact.email || record.utility_contact_email,
+      utility_contact_name: resolvedContact.name || record.utility_contact_name,
       external_application_id: primaryApp.external_application_id,
       provider_slug: primaryApp.provider_slug || provider?.slug,
       project_address: meta.project_address || meta.site_address || meta.address,

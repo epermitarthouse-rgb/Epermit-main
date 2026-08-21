@@ -211,6 +211,7 @@ const { enterStage9 } = require("../services/uci/uci-stage9-entry.service.js");
 const {
   recordInspectionRelease,
   updateSiteContact,
+  updateUtilityContactOnRecord,
   requestMeterSet,
   confirmMeterSetDate,
   confirmSiteReadiness,
@@ -4248,7 +4249,7 @@ function createUciRouter(opts) {
         throw err;
       }
       await requireProjectAccess({ supabase, userId: user.id, projectId: String(record.project_id) });
-      const [costs, equipment, milestones] = await Promise.all([
+      const [costs, equipment, milestones, communications] = await Promise.all([
         listCostsByCoordination(supabase, coordinationId, String(record.project_id)),
         listEquipmentByCoordination(supabase, coordinationId, String(record.project_id)),
         supabase
@@ -4257,13 +4258,19 @@ function createUciRouter(opts) {
           .eq("coordination_record_id", coordinationId)
           .eq("project_id", record.project_id)
           .then((r) => (Array.isArray(r.data) ? r.data : [])),
+        supabase
+          .from("coordination_communications")
+          .select("id, direction, sender, raw_body, agent_processed_metadata, message_timestamp")
+          .eq("coordination_record_id", coordinationId)
+          .order("message_timestamp", { ascending: true })
+          .then((r) => (Array.isArray(r.data) ? r.data : [])),
       ]);
       const guards = evaluateLifecycleGuards(record, { costs, equipment, milestones });
       const rollup = await maybeMarkProjectComplete(supabase, String(record.project_id));
       res.json({
         coordination_record_id: coordinationId,
         guards,
-        meter_set: meterSetStatus(record, milestones),
+        meter_set: meterSetStatus(record, milestones, { communications }),
         closeout: closeoutStatus(record, costs),
         record_attention: listRecordNeedsAttention(record, { costs, equipment, milestones }),
         project_rollup: rollup,
@@ -4538,6 +4545,70 @@ function createUciRouter(opts) {
         siteContactName: body.site_contact_name,
         siteContactEmail: body.site_contact_email,
         siteContactPhone: body.site_contact_phone,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/utility-contact", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateUtilityContactOnRecord(supabase, {
+        coordinationRecordId: coordinationId,
+        utilityContactName: body.utility_contact_name,
+        utilityContactEmail: body.utility_contact_email,
+        utilityContactPhone: body.utility_contact_phone,
+        utilityProjectManager: body.utility_project_manager,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.patch("/coordination/:id/utility-contact", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await updateUtilityContactOnRecord(supabase, {
+        coordinationRecordId: coordinationId,
+        utilityContactName: body.utility_contact_name,
+        utilityContactEmail: body.utility_contact_email,
+        utilityContactPhone: body.utility_contact_phone,
+        utilityProjectManager: body.utility_project_manager,
       });
       res.json(result);
     } catch (err) {

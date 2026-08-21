@@ -11,6 +11,7 @@ const { recordSystemTransition } = require("./uci-transitions.service.js");
 const { canEnterStage8, canCompleteStage8 } = require("./uci-lifecycle-guards.service.js");
 const { raiseUciAlert } = require("./uci-alerts.service.js");
 const { sendUciOutboundEmail } = require("./uci-outbound-email.service.js");
+const { resolveUtilityContact } = require("./uci-utility-contact.service.js");
 const {
   EQUIPMENT_CHECKIN_CADENCE_DAYS,
   EQUIPMENT_NO_RESPONSE_DAYS,
@@ -232,11 +233,17 @@ async function appendEquipmentEta(supabase, params) {
     }
   }
 
+  const stage8 = await maybeTryAutoCompleteStage8(
+    supabase,
+    String(existing.coordination_record_id),
+  ).catch(() => null);
+
   return {
     equipment: data,
     slip_increased: increased,
     slip_alert: increased,
     total_weeks_of_slip: weeksOfSlip,
+    stage_8: stage8,
   };
 }
 
@@ -264,7 +271,8 @@ async function sendEquipmentCheckIn(supabase, params) {
   let emailResult = null;
   const shouldEmail = portalResult.ok !== true;
   if (shouldEmail) {
-    const toEmail = record?.utility_contact_email || deps.toEmail;
+    const utilityContact = resolveUtilityContact(record, { communications: deps.communications || [] });
+    const toEmail = utilityContact.email || deps.toEmail;
     emailResult = await sendUciOutboundEmail(supabase, {
       coordinationRecordId: String(equipment.coordination_record_id),
       projectId: String(equipment.project_id),
@@ -277,7 +285,7 @@ async function sendEquipmentCheckIn(supabase, params) {
         equipment_type: equipment.equipment_type,
         equipment_size: equipment.equipment_size,
         current_eta: equipment.current_eta,
-        utility_contact_name: record?.utility_contact_name,
+        utility_contact_name: utilityContact.name || record?.utility_contact_name,
       },
       sendMailFn: deps.sendMailFn,
       getTokenFn: deps.getTokenFn,
@@ -419,14 +427,44 @@ async function maybeCompleteStage8(supabase, params) {
   });
 }
 
+async function maybeTryAutoCompleteStage8(supabase, coordinationRecordId, userId = null) {
+  const record = await loadRecord(supabase, coordinationRecordId);
+  if (!record) return { completed: false, reason: "record_not_found" };
+
+  const { data: equipment } = await supabase
+    .from("coordination_equipment")
+    .select("*")
+    .eq("coordination_record_id", coordinationRecordId)
+    .eq("project_id", record.project_id);
+  const items = Array.isArray(equipment) ? equipment : [];
+
+  const stage = Number(record.current_stage);
+  const state = String(record.current_stage_state || "");
+
+  if (stage > 8) {
+    return { completed: false, reason: "already_past_stage_8" };
+  }
+  if (stage === 8 && state === "COMPLETED") {
+    return { completed: false, already_completed: true, record };
+  }
+  if (stage !== 8 || state === "COMPLETED") {
+    return { completed: false, reason: "stage_8_not_active" };
+  }
+  if (!canCompleteStage8(record, items)) {
+    return { completed: false, reason: "stage_8_incomplete" };
+  }
+  return maybeCompleteStage8(supabase, { coordinationRecordId, userId });
+}
+
 async function maybeEnterStage8(supabase, record, costs) {
   if (!canEnterStage8(record, costs)) return { entered: false };
-  return recordSystemTransition(supabase, {
+  const transition = await recordSystemTransition(supabase, {
     coordinationRecordId: String(record.id),
     toStage: 8,
     toState: "IN_PROGRESS",
     reason: "Stage 7 complete — long-lead equipment tracking",
   });
+  return { entered: true, ...transition };
 }
 
 module.exports = {
@@ -438,6 +476,7 @@ module.exports = {
   sendEquipmentCheckIn,
   runDueEquipmentCheckIns,
   maybeCompleteStage8,
+  maybeTryAutoCompleteStage8,
   maybeEnterStage8,
   noResponseDays,
 };

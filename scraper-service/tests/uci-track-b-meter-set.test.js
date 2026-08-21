@@ -76,6 +76,8 @@ describe("Track B Agent 11 meter set", () => {
           current_stage: 9,
           current_stage_state: "IN_PROGRESS",
           inspection_release_received_at: "2026-08-20T00:00:00.000Z",
+          utility_project_manager: "Utility PM",
+          utility_contact_name: "Utility PM",
           utility_contact_email: "pm@utility.test",
         }),
       ],

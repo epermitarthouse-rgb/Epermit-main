@@ -9,6 +9,7 @@ import {
   formatCommunicationClassification,
 } from "@/lib/uciCommunicationClassifier";
 import type { CoordinationCommunication, CoordinationRecord } from "@/types/uci";
+import { resolveUtilityContact } from "@/lib/uciUtilityContact";
 
 const UAT_INTERNAL_ID_RE = /\b(?:s5uat|s5neg)-[a-z0-9-]+\b/gi;
 const NOPM_TOKEN_RE = /\bnopm\b/gi;
@@ -465,8 +466,16 @@ function resolveEffectivePm(
 ): string | null {
   const fields = resolveEffectiveExtractedFields(comm, ctx);
   if (hasRealPm(fields.utility_project_manager)) return str(fields.utility_project_manager);
+  if (hasRealPm(ctx.record?.utility_project_manager)) return str(ctx.record!.utility_project_manager!);
   if (hasRealPm(ctx.record?.utility_contact_name)) return str(ctx.record!.utility_contact_name);
   return null;
+}
+
+export function resolveRecordUtilityContact(
+  record?: CoordinationRecord | null,
+  communications?: CoordinationCommunication[],
+) {
+  return resolveUtilityContact({ record, communications });
 }
 
 function designReviewNeedsOperatorAction(comm: CoordinationCommunication): boolean {
@@ -944,6 +953,9 @@ export function getNeedsAttentionReasons(
   }
   if (incomplete === "missing_acknowledgment_date") {
     reasons.push("Missing acknowledgment date");
+  }
+  if (incomplete === "missing_utility_contact_email") {
+    reasons.push("Utility contact email required for outbound meter-set request");
   }
 
   const match = asRecord(meta.match);

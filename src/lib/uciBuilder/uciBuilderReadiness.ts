@@ -18,6 +18,7 @@ import {
   type UciVerifiedLoadValue,
 } from "@/lib/uciLoadProfile";
 import type { CoordinationApplication, CoordinationRecord, UtilityProvider } from "@/types/uci";
+import { resolveUtilityContact } from "@/lib/uciUtilityContact";
 
 export const UCI_BUILDER_SECTIONS = [
   { id: "service", label: "Service requested" },
@@ -202,10 +203,11 @@ export function resolveServiceFieldValues(params: {
     formatScalar(phase.value, null),
   ].filter(Boolean);
 
+  const resolvedContact = resolveUtilityContact({ record });
   const contactParts = [
-    record?.utility_contact_name,
-    record?.utility_contact_email,
-    record?.utility_contact_phone,
+    resolvedContact.name,
+    resolvedContact.email,
+    resolvedContact.phone,
   ].filter((v): v is string => Boolean(v && String(v).trim()));
 
   return {

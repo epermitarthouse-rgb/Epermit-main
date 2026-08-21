@@ -49,6 +49,7 @@ export interface CoordinationRecord {
   utility_contact_name: string | null;
   utility_contact_email: string | null;
   utility_contact_phone: string | null;
+  utility_project_manager?: string | null;
   application_submitted_at: string | null;
   acknowledgment_received_at: string | null;
   class_of_service_issued_at: string | null;
@@ -221,7 +222,21 @@ export interface UciLifecycleStatus {
     stage_9_reasons?: string[];
     stage_10_reasons?: string[];
   };
-  meter_set?: { status?: string; reason?: string | null; actions?: string[] };
+  meter_set?: {
+    status?: string;
+    reason?: string | null;
+    actions?: string[];
+    utility_contact?: {
+      name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      completeForOutbound?: boolean;
+      blockerReason?: string | null;
+      blockerMessage?: string | null;
+    };
+    utility_contact_blocker?: string | null;
+    utility_contact_blocker_message?: string | null;
+  };
   closeout?: { status?: string; missing?: string[]; actions?: string[] };
   project_rollup?: { completed_count?: number; total?: number; banner?: string; complete?: boolean };
   predicted?: {

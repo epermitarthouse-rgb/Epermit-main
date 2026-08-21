@@ -10,6 +10,7 @@ const { recordSystemTransition, recordUserTransition } = require("./uci-transiti
 const { startAcknowledgmentSla, stopAcknowledgmentSla } = require("./uci-ack-sla.service.js");
 const { canEnterStage6 } = require("./uci-stage5-entry.service.js");
 const { LOW_CONFIDENCE_THRESHOLD } = require("./uci-communication-categories.js");
+const { resolveTrustedEmailFromCommunication } = require("./uci-utility-contact-resolve.util.js");
 const { emitUciEvent } = require("./uci-events.service.js");
 
 async function withPredictionRecompute(supabase, record) {
@@ -447,11 +448,17 @@ async function completeStage5Acknowledgment(supabase, params) {
     String(record.current_stage_state) === "COMPLETED" &&
     record.acknowledgment_received_at
   ) {
+    const stage6 = await advanceToStage6AfterStage5Complete(supabase, {
+      coordinationRecordId,
+      communicationId,
+      userId,
+    });
     return {
       completed: false,
       already_completed: true,
       coordination_record: record,
-      stage_6_started: false,
+      stage_6_started: Boolean(stage6?.entered),
+      stage_6: stage6,
       can_enter_stage_6: canEnterStage6(record),
     };
   }
@@ -469,36 +476,56 @@ async function completeStage5Acknowledgment(supabase, params) {
       ? /** @type {Record<string, unknown>} */ (record.metadata)
       : {};
 
+  let trustedContactEmail = null;
+  if (communicationId) {
+    const { data: ackComm } = await supabase
+      .from("coordination_communications")
+      .select("id, direction, sender, raw_body, agent_processed_metadata")
+      .eq("id", communicationId)
+      .maybeSingle();
+    trustedContactEmail = resolveTrustedEmailFromCommunication(ackComm);
+  }
+
+  const stage5Meta = {
+    completed_at: new Date().toISOString(),
+    communication_id: communicationId,
+    utility_ticket_number: fields.ticket,
+    utility_project_manager: fields.pm,
+    acknowledgment_date: ackAt,
+    next_required_action: fields.nextAction,
+    source,
+  };
+  if (trustedContactEmail) {
+    stage5Meta.utility_contact_email = trustedContactEmail;
+  }
+
+  const recordUpdate = {
+    acknowledgment_received_at: ackAt,
+    utility_account_number: fields.account || record.utility_account_number,
+    utility_project_manager: fields.pm,
+    utility_contact_name: fields.pm || record.utility_contact_name,
+    next_required_action: fields.nextAction || record.next_required_action,
+    metadata: {
+      ...prevMeta,
+      stage_5_acknowledgment: stage5Meta,
+      // Clear pending evidence once fully completed
+      stage_5_acknowledgment_evidence: {
+        ...(prevMeta.stage_5_acknowledgment_evidence &&
+        typeof prevMeta.stage_5_acknowledgment_evidence === "object"
+          ? prevMeta.stage_5_acknowledgment_evidence
+          : {}),
+        resolved_at: new Date().toISOString(),
+        resolved: true,
+      },
+    },
+  };
+  if (trustedContactEmail && !record.utility_contact_email) {
+    recordUpdate.utility_contact_email = trustedContactEmail;
+  }
+
   const { data: updatedFields, error: fieldErr } = await supabase
     .from("coordination_records")
-    .update({
-      acknowledgment_received_at: ackAt,
-      utility_account_number: fields.account || record.utility_account_number,
-      utility_project_manager: fields.pm,
-      utility_contact_name: fields.pm || record.utility_contact_name,
-      next_required_action: fields.nextAction || record.next_required_action,
-      metadata: {
-        ...prevMeta,
-        stage_5_acknowledgment: {
-          completed_at: new Date().toISOString(),
-          communication_id: communicationId,
-          utility_ticket_number: fields.ticket,
-          utility_project_manager: fields.pm,
-          acknowledgment_date: ackAt,
-          next_required_action: fields.nextAction,
-          source,
-        },
-        // Clear pending evidence once fully completed
-        stage_5_acknowledgment_evidence: {
-          ...(prevMeta.stage_5_acknowledgment_evidence &&
-          typeof prevMeta.stage_5_acknowledgment_evidence === "object"
-            ? prevMeta.stage_5_acknowledgment_evidence
-            : {}),
-          resolved_at: new Date().toISOString(),
-          resolved: true,
-        },
-      },
-    })
+    .update(recordUpdate)
     .eq("id", coordinationRecordId)
     .select("*")
     .single();
@@ -561,6 +588,14 @@ async function completeStage5Acknowledgment(supabase, params) {
     .eq("id", coordinationRecordId)
     .maybeSingle();
 
+  const stage6 = await advanceToStage6AfterStage5Complete(supabase, {
+    coordinationRecordId,
+    communicationId,
+    userId,
+  });
+
+  const resolvedRecord = stage6?.coordination_record || finalRecord || completedRecord || updatedFields;
+
   emitUciEvent(
     "uci.stage5.acknowledgment.completed",
     {
@@ -568,8 +603,8 @@ async function completeStage5Acknowledgment(supabase, params) {
       project_id: record.project_id,
       communication_id: communicationId,
       source,
-      stage_6_started: false,
-      can_enter_stage_6: canEnterStage6(finalRecord || completedRecord),
+      stage_6_started: Boolean(stage6?.entered),
+      can_enter_stage_6: canEnterStage6(resolvedRecord),
     },
     { supabase },
   );
@@ -577,10 +612,11 @@ async function completeStage5Acknowledgment(supabase, params) {
   return {
     completed: true,
     already_completed: false,
-    coordination_record: finalRecord || completedRecord || updatedFields,
+    coordination_record: resolvedRecord,
     transition,
-    stage_6_started: false,
-    can_enter_stage_6: canEnterStage6(finalRecord || completedRecord),
+    stage_6_started: Boolean(stage6?.entered),
+    stage_6: stage6,
+    can_enter_stage_6: canEnterStage6(resolvedRecord),
   };
 }
 

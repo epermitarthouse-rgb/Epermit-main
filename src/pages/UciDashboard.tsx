@@ -119,6 +119,7 @@ import {
   enterCoordinationStage9,
   recordInspectionRelease,
   updateCoordinationSiteContact,
+  updateCoordinationUtilityContact,
   requestMeterSetDate,
   confirmMeterSetDate,
   confirmMeterSetSiteReadiness,
@@ -5069,6 +5070,14 @@ export default function UciDashboard() {
                         },
                         "Stage 9 started",
                         "Stage 9 cannot start until Stage 8 is complete",
+                        "meter",
+                      )
+                    }
+                    onSaveUtilityContact={(payload) =>
+                      void runLifecycleAction(
+                        () => updateCoordinationUtilityContact(detailId!, payload),
+                        "Utility contact saved",
+                        "Failed to save utility contact",
                         "meter",
                       )
                     }

@@ -21,6 +21,11 @@ const {
   UCI_LIFECYCLE_EVENTS,
   EMAIL_TEMPLATES,
 } = require("./uci-lifecycle-constants.js");
+const {
+  resolveUtilityContact,
+  deriveUtilityContactBlocker,
+  updateUtilityContact,
+} = require("./uci-utility-contact.service.js");
 
 const CHECKLIST_48H = Object.freeze([
   "gates_open_or_access_arranged",
@@ -121,6 +126,10 @@ async function updateSiteContact(supabase, params) {
   });
 }
 
+async function updateUtilityContactOnRecord(supabase, params) {
+  return updateUtilityContact(supabase, params);
+}
+
 /**
  * Step 1 — templated request to utility PM. No-op if choreography blocked.
  */
@@ -137,8 +146,16 @@ async function requestMeterSet(supabase, params) {
   if (gate.blocked) {
     return { started: false, ...gate };
   }
-  if (!record.utility_contact_email) {
-    return { started: false, reason: "missing_utility_pm", needs_fields: ["utility_contact_email"] };
+  const utilityContact = resolveUtilityContact(record, { communications: deps.communications || [] });
+  const outboundBlocker = deriveUtilityContactBlocker(utilityContact);
+  if (!utilityContact.completeForOutbound) {
+    return {
+      started: false,
+      reason: outboundBlocker.reason || "missing_utility_contact_email",
+      message: outboundBlocker.message,
+      needs_fields: ["utility_contact_email"],
+      utility_contact: utilityContact,
+    };
   }
   const project = await loadProject(supabase, String(record.project_id));
   const sent = await sendUciOutboundEmail(supabase, {
@@ -147,10 +164,10 @@ async function requestMeterSet(supabase, params) {
     userId: record.user_id || deps.userId || null,
     templateId: EMAIL_TEMPLATES.METER_SET_REQUEST,
     idempotencyKey: `meter_set_request:${coordinationRecordId}`,
-    toEmail: record.utility_contact_email,
+    toEmail: utilityContact.email,
     vars: {
       project_name: project.name || project.permit_number,
-      utility_contact_name: record.utility_contact_name,
+      utility_contact_name: utilityContact.name || record.utility_contact_name,
       site_contact_name: record.site_contact_name,
       site_contact_email: record.site_contact_email,
       site_contact_phone: record.site_contact_phone,
@@ -460,20 +477,30 @@ async function completeStage9IfReady(supabase, params) {
   });
 }
 
-function meterSetStatus(record, milestones = []) {
+function meterSetStatus(record, milestones = [], ctx = {}) {
+  const utilityContact = resolveUtilityContact(record, { communications: ctx.communications || [] });
+  const outboundBlocker = deriveUtilityContactBlocker(utilityContact);
   const gate = choreographyBlocked(record);
   if (gate.blocked) {
     return {
       status: gate.reason === "inspection_release_missing" ? "waiting_on_inspection_release" : "not_in_stage_9",
       reason: gate.reason,
       actions: gate.reason === "inspection_release_missing" ? ["record_inspection_release"] : [],
+      utility_contact: utilityContact,
+      utility_contact_blocker: outboundBlocker.reason,
+      utility_contact_blocker_message: outboundBlocker.message,
     };
   }
   if (!resolveMeterSetScheduledAt(record, milestones)) {
     return {
       status: "request_or_confirm_date",
       reason: "meter_set_unscheduled",
-      actions: record.utility_contact_email ? ["request_meter_set", "confirm_date"] : ["add_utility_pm"],
+      actions: utilityContact.completeForOutbound
+        ? ["request_meter_set", "confirm_date"]
+        : ["add_utility_pm"],
+      utility_contact: utilityContact,
+      utility_contact_blocker: outboundBlocker.reason,
+      utility_contact_blocker_message: outboundBlocker.message,
     };
   }
   if (!resolveSiteReadinessConfirmedAt(record)) {
@@ -495,6 +522,7 @@ module.exports = {
   choreographyBlocked,
   recordInspectionRelease,
   updateSiteContact,
+  updateUtilityContactOnRecord,
   requestMeterSet,
   confirmMeterSetDate,
   send48hChecklist,
