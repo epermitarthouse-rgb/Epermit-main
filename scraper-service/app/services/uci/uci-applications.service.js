@@ -34,6 +34,22 @@ const DETAIL_APPLICATION_BASE_SELECT = `
   metadata
 `;
 
+async function persistHydratedPackageRows(supabase, rows, loadSummary = null) {
+  const { persistHydratedVerifiedFields } = require("./uci-application-builder.service.js");
+  const next = [];
+  for (const row of rows) {
+    if (
+      String(row.record_source ?? "") !== "agent_draft" ||
+      String(row.idempotency_key ?? "") !== "agent_3_application_package:d3-v1"
+    ) {
+      next.push(row);
+      continue;
+    }
+    next.push(await persistHydratedVerifiedFields(supabase, row, loadSummary ?? row.load_summary));
+  }
+  return next;
+}
+
 /**
  * Attach the canonical, computed review gate to Agent 3 API rows. This value is
  * intentionally derived at read time so mapping or signature changes cannot
@@ -42,9 +58,10 @@ const DETAIL_APPLICATION_BASE_SELECT = `
  * @param {Array<Record<string, unknown>>} rows
  * @returns {Array<Record<string, unknown>>}
  */
-function withPackageReviewSummaries(rows) {
+function withPackageReviewSummaries(rows, loadSummaryByPackage = null) {
   // Lazy require avoids the builder -> records -> applications dependency cycle.
   const { summarizePackageReview } = require("./uci-package-review.service.js");
+  const { hydrateApplicationVerifiedFields } = require("./uci-application-builder.service.js");
   return rows.map((row) => {
     if (
       String(row.record_source ?? "") !== "agent_draft" ||
@@ -52,9 +69,13 @@ function withPackageReviewSummaries(rows) {
     ) {
       return row;
     }
+    const loadSummary =
+      loadSummaryByPackage ??
+      (row.load_summary && typeof row.load_summary === "object" ? row.load_summary : null);
+    const hydrated = hydrateApplicationVerifiedFields(row, loadSummary).application;
     return {
-      ...row,
-      package_review_summary: summarizePackageReview(row),
+      ...hydrated,
+      package_review_summary: summarizePackageReview(hydrated),
     };
   });
 }
@@ -90,7 +111,8 @@ async function listApplicationsByCoordination(
 
   const rows = Array.isArray(data) ? data : [];
   const sanitized = opts.sanitize === false ? rows : sanitizeApplicationRowsForApi(rows);
-  return withPackageReviewSummaries(sanitized);
+  const hydrated = await persistHydratedPackageRows(supabase, sanitized);
+  return withPackageReviewSummaries(hydrated);
 }
 
 /**
@@ -151,12 +173,16 @@ async function listApplicationsForCoordinationDetail(
   const summariesById = new Map(
     (loadSummaryResult.data ?? []).map((row) => [String(row.id), row.load_summary ?? {}]),
   );
-  return withPackageReviewSummaries(sanitizeApplicationRowsForApi(
+  const liveLoadSummary = (loadSummaryResult.data ?? []).find((row) => row.load_summary)?.load_summary
+    ?? null;
+  const sanitized = sanitizeApplicationRowsForApi(
     (baseResult.data ?? []).map((row) => ({
       ...row,
       load_summary: summariesById.get(String(row.id)) ?? {},
     })),
-  ));
+  );
+  const hydrated = await persistHydratedPackageRows(supabase, sanitized, liveLoadSummary);
+  return withPackageReviewSummaries(hydrated, liveLoadSummary);
 }
 
 module.exports = {

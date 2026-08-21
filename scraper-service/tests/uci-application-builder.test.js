@@ -9,6 +9,8 @@ const {
   matchRequiredDocuments,
   evaluateRequiredFields,
   resolvePackageStatus,
+  hydratePersistedVerifiedFieldResults,
+  hydrateApplicationVerifiedFields,
   runApplicationPackageBuild,
   reviewApplicationPackage,
   inferSignatureStatus,
@@ -716,6 +718,42 @@ describe("UCI D3 runApplicationPackageBuild integration", () => {
         }),
       (err) => err.code === "PACKAGE_NOT_READY",
     );
+  });
+
+  it("hydrates stale service_entrance_amperage from service_amperage verified alias", () => {
+    const verified = {
+      service_amperage: { value: 1000, unit: "A", method: "user_entered_and_verified" },
+    };
+    const pkg = {
+      field_results: [
+        {
+          key: "service_entrance_amperage",
+          label: "Service amperage",
+          status: "missing",
+          value: null,
+          source: "load_summary.verified_values.service_entrance_amperage",
+        },
+      ],
+      missing_fields: ["service_entrance_amperage"],
+    };
+    const result = hydratePersistedVerifiedFieldResults(pkg, verified);
+    assert.equal(result.changed, true);
+    assert.equal(result.pkg.field_results[0].status, "present");
+    assert.equal(result.pkg.field_results[0].value.value, 1000);
+    assert.equal(
+      result.pkg.field_results[0].source,
+      "load_summary.verified_values.service_amperage",
+    );
+    assert.deepEqual(result.pkg.missing_fields, []);
+
+    const app = hydrateApplicationVerifiedFields(
+      {
+        agent_draft_metadata: { application_package: pkg },
+      },
+      { verified_values: verified },
+    ).application;
+    const hydratedField = app.agent_draft_metadata.application_package.field_results[0];
+    assert.equal(hydratedField.status, "present");
   });
 
   it("rejects review on portal_sync application rows", async () => {
