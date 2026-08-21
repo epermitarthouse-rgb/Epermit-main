@@ -172,3 +172,48 @@ describe("designCheckSummary helpers", () => {
     });
   });
 });
+
+describe("DesignCheck current-run filtering", () => {
+  it("excludes stale/historical findings from the active summary", async () => {
+    const { filterAnnotationsForActiveAnalysis } = await import("../codeAnalyzer/model.ts");
+    const rows = [
+      {
+        id: "stale",
+        document_id: "doc-1",
+        analysis_run_id: "run-old",
+        data: { compliance_issue: true, title: "old", severity: "critical", category: "Egress" },
+      },
+    ];
+    const active = filterAnnotationsForActiveAnalysis(rows, {
+      currentRunId: null,
+      hasAnalyzerRuns: true,
+    });
+    assert.equal(buildDesignCheckSummary(active, [{ id: "doc-1", file_name: "a.pdf" }]), null);
+  });
+
+  it("keeps only the current run findings", async () => {
+    const { filterAnnotationsForActiveAnalysis } = await import("../codeAnalyzer/model.ts");
+    const rows = [
+      {
+        id: "stale",
+        document_id: "doc-1",
+        analysis_run_id: "run-old",
+        data: { compliance_issue: true, title: "old", severity: "critical", category: "Egress" },
+      },
+      {
+        id: "cur",
+        document_id: "doc-2",
+        analysis_run_id: "run-new",
+        data: { compliance_issue: true, title: "new", severity: "warning", category: "Accessibility" },
+      },
+    ];
+    const active = filterAnnotationsForActiveAnalysis(rows, {
+      currentRunId: "run-new",
+      hasAnalyzerRuns: true,
+    });
+    const summary = buildDesignCheckSummary(active, [{ id: "doc-2", file_name: "b.pdf" }]);
+    assert.ok(summary);
+    assert.equal(summary!.findings.length, 1);
+    assert.equal(summary!.findings[0]?.title, "new");
+  });
+});
