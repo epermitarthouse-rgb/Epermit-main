@@ -1,6 +1,7 @@
 "use strict";
 
 const { resolveUtilityContact } = require("./uci-utility-contact.service.js");
+const { isMessageBeforeCleanSlate } = require("./uci-clean-slate-run-boundary.util.js");
 
 /**
  * @param {string | null | undefined} a
@@ -238,11 +239,17 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
   /** @type {Array<{ coordination_record_id: string, project_id: string, score: number, reasons: string[] }>} */
   const scored = [];
 
+  const inboundTimestamp =
+    inbound.message_timestamp || inbound.received_at || inbound.created_at || null;
+
   for (const record of rows) {
     const meta =
       record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
         ? /** @type {Record<string, unknown>} */ (record.metadata)
         : {};
+    if (isMessageBeforeCleanSlate(meta, inboundTimestamp)) {
+      continue;
+    }
     const provider = record.utility_provider_id
       ? providerById.get(String(record.utility_provider_id))
       : null;

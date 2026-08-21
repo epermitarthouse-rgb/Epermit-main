@@ -122,6 +122,9 @@ const {
   exportSyntheticChecklistPackage,
 } = require("../services/uci/uci-synthetic-checklist.service.js");
 const {
+  executeCleanSlateReset,
+} = require("../services/uci/uci-clean-slate-reset.service.js");
+const {
   loadPackageExportContext,
   buildStructuredPackageExport,
   renderPackageSummaryPdf,
@@ -5009,6 +5012,45 @@ function createUciRouter(opts) {
       const projectId = String(req.params.projectId || "").trim();
       await requireProjectAccess({ supabase, userId: user.id, projectId });
       const result = await getProjectPortfolioView(supabase, projectId);
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/projects/:projectId/reset-clean-slate", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const projectId = String(req.params.projectId || "").trim();
+      await requireProjectAccess({ supabase, userId: user.id, projectId, write: true });
+      const coordinationId = String(
+        req.query.coordination_id ?? req.body?.coordination_id ?? "",
+      ).trim();
+      if (!coordinationId) {
+        const err = new Error("coordination_id is required");
+        err.statusCode = 400;
+        err.code = "COORDINATION_ID_REQUIRED";
+        throw err;
+      }
+      await assertCoordinationBelongsToProject(supabase, {
+        projectId,
+        coordinationRecordId: coordinationId,
+      });
+      const dryRun =
+        req.query.dry_run !== "false" &&
+        req.query.dry_run !== "0" &&
+        req.body?.dry_run !== false;
+      const result = await executeCleanSlateReset(supabase, {
+        projectId,
+        coordinationId,
+        dryRun,
+        supabaseUrl: process.env.SUPABASE_URL,
+        allowProductionApply: req.body?.allow_production === true,
+        reason: req.body?.reason || "api_clean_slate_reset",
+        runId: req.body?.run_id || undefined,
+        idempotencyKey: req.body?.idempotency_key || req.body?.run_id || undefined,
+      });
       res.json(result);
     } catch (err) {
       const s = sanitizeUciError(err);
