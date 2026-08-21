@@ -31,6 +31,8 @@ describe("CostsEquipmentWorkflowPanel Stage 7 zero-cost regression", () => {
 
   it("surfaces QuickBooks retry controls and invoice failure context on cost rows", () => {
     assert.match(panelSource, /function canRetryClientInvoice/);
+    assert.match(panelSource, /StageCompletionActionButton/);
+    assert.match(panelSource, /deriveStageCompletionAction/);
     assert.match(panelSource, /status === "failed" \|\| status === "retry" \|\| status === "uncertain"/);
     assert.match(panelSource, /Retry client invoice/);
     assert.match(panelSource, /cost\.qb_last_error/);

@@ -15,6 +15,7 @@ const {
   assertStage7to10Transition,
   stage9CompletedForCloseout,
   canGenerateCloseoutPdf,
+  evaluateLifecycleGuards,
 } = require("../app/services/uci/uci-lifecycle-guards.service.js");
 
 const settledCost = {
@@ -217,5 +218,19 @@ describe("Track B guards", () => {
         ),
       /Cannot skip/,
     );
+  });
+
+  it("evaluateLifecycleGuards hides complete actions after the record advances past the stage", () => {
+    const onStage7 = evaluateLifecycleGuards(
+      { current_stage: 7, current_stage_state: "IN_PROGRESS" },
+      { costs: [settledCost] },
+    );
+    assert.equal(onStage7.can_complete_stage_7, true);
+
+    const afterStage7 = evaluateLifecycleGuards(
+      { current_stage: 8, current_stage_state: "IN_PROGRESS" },
+      { costs: [settledCost] },
+    );
+    assert.equal(afterStage7.can_complete_stage_7, false);
   });
 });

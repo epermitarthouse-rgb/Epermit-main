@@ -435,19 +435,31 @@ function stage10BlockReasons(record, costs = []) {
   return [...new Set(reasons)];
 }
 
+function stageCompletionActionAvailable(record, stage, predicate) {
+  return stageOf(record) === stage && !isCompleted(record) && predicate(record);
+}
+
 function evaluateLifecycleGuards(record, ctx = {}) {
   const costs = ctx.costs || [];
   const equipment = ctx.equipment || [];
   const milestones = ctx.milestones || [];
   return {
     can_enter_stage_7: canEnterStage7(record),
-    can_complete_stage_7: canCompleteStage7(record, costs),
+    can_complete_stage_7: stageCompletionActionAvailable(record, 7, () =>
+      canCompleteStage7(record, costs),
+    ),
     can_enter_stage_8: canEnterStage8(record, costs),
-    can_complete_stage_8: canCompleteStage8(record, equipment),
+    can_complete_stage_8: stageCompletionActionAvailable(record, 8, () =>
+      canCompleteStage8(record, equipment),
+    ),
     can_enter_stage_9: canEnterStage9(record, equipment),
-    can_complete_stage_9: canCompleteStage9(record, milestones),
+    can_complete_stage_9: stageCompletionActionAvailable(record, 9, () =>
+      canCompleteStage9(record, milestones),
+    ),
     can_enter_stage_10: canEnterStage10(record, milestones),
-    can_complete_stage_10: canCompleteStage10(record, costs),
+    can_complete_stage_10: stageCompletionActionAvailable(record, 10, () =>
+      canCompleteStage10(record, costs),
+    ),
     can_generate_closeout_pdf: canGenerateCloseoutPdf(record),
     stage_9_completed_for_closeout: stage9CompletedForCloseout(record),
     stage_7_reasons: stage7BlockReasons(costs),

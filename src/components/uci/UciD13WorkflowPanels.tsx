@@ -33,6 +33,7 @@ import {
   isBlockingCosComparisonRow,
   isRequiredForCosAcceptance,
 } from "@/lib/uciCosComparisonPresentation";
+import { deriveStageCompletionAction } from "@/lib/uciActionPresentation";
 import type {
   CoordinationCommunication,
   CoordinationCost,
@@ -1418,9 +1419,55 @@ function etaSourceLabel(entry: Record<string, unknown>): string {
   return source.replace(/_/g, " ");
 }
 
+function StageCompletionActionButton({
+  record,
+  stage,
+  guardCanComplete,
+  busy,
+  onComplete,
+  mutedClass,
+  toolbarOutlineButtonClass,
+  blockedHint,
+}: {
+  record?: CoordinationRecord | null;
+  stage: 7 | 8 | 9 | 10;
+  guardCanComplete?: boolean;
+  busy?: boolean;
+  onComplete?: () => void;
+  mutedClass: string;
+  toolbarOutlineButtonClass: string;
+  blockedHint?: string;
+}) {
+  const action = deriveStageCompletionAction(record, stage, guardCanComplete, blockedHint);
+  if (action.status === "completed") {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className={cn(toolbarOutlineButtonClass, "pointer-events-none border-teal/40 text-teal opacity-100")}
+        disabled
+      >
+        <CheckCircle2 className="mr-1 h-3 w-3 shrink-0" />
+        {action.label}
+      </Button>
+    );
+  }
+  if (action.status === "actionable" && onComplete) {
+    return (
+      <Button type="button" size="sm" disabled={busy} onClick={onComplete}>
+        {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+        {action.label}
+      </Button>
+    );
+  }
+  return <p className={mutedClass}>{action.hint}</p>;
+}
+
 export function CostsEquipmentWorkflowPanel({
   costs,
   equipment,
+  record,
   busy,
   error,
   lifecycleStatus,
@@ -1440,6 +1487,7 @@ export function CostsEquipmentWorkflowPanel({
 }: PanelCommonProps & {
   costs: CoordinationCost[];
   equipment: CoordinationEquipment[];
+  record?: CoordinationRecord | null;
   busy: boolean;
   error: string | null;
   lifecycleStatus?: UciLifecycleStatus | null;
@@ -1614,15 +1662,15 @@ export function CostsEquipmentWorkflowPanel({
           >
             Add cost
           </Button>
-          {lifecycleStatus?.guards?.can_complete_stage_7 && onCompleteStage7 ? (
-            <Button type="button" size="sm" disabled={busy} onClick={onCompleteStage7}>
-              Mark Stage 7 complete
-            </Button>
-          ) : (
-            <p className={mutedClass}>
-              Stage 7 completes when every known cost is approved, paid, and billed to the client. QuickBooks sync is optional.
-            </p>
-          )}
+          <StageCompletionActionButton
+            record={record}
+            stage={7}
+            guardCanComplete={lifecycleStatus?.guards?.can_complete_stage_7}
+            busy={busy}
+            onComplete={onCompleteStage7}
+            mutedClass={mutedClass}
+            toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+          />
         </CardContent>
       </Card>
 
@@ -1719,13 +1767,15 @@ export function CostsEquipmentWorkflowPanel({
           >
             Add equipment
           </Button>
-          {lifecycleStatus?.guards?.can_complete_stage_8 && onCompleteStage8 ? (
-            <Button type="button" size="sm" disabled={busy} onClick={onCompleteStage8}>
-              Mark Stage 8 complete
-            </Button>
-          ) : (
-            <p className={mutedClass}>Stage 8 completes when every in-scope item has a current ETA.</p>
-          )}
+          <StageCompletionActionButton
+            record={record}
+            stage={8}
+            guardCanComplete={lifecycleStatus?.guards?.can_complete_stage_8}
+            busy={busy}
+            onComplete={onCompleteStage8}
+            mutedClass={mutedClass}
+            toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+          />
         </CardContent>
       </Card>
     </div>
@@ -2693,15 +2743,15 @@ export function MeterSetCloseoutPanel({
             <p className={mutedClass}>Choreography does not start until inspection release is recorded in this record.</p>
           ) : null}
 
-          {lifecycleStatus?.guards?.can_complete_stage_9 ? (
-            <Button type="button" size="sm" disabled={meterBusy || !stage9Active} onClick={onCompleteStage9}>
-              Mark Stage 9 complete
-            </Button>
-          ) : (
-            <p className={mutedClass}>
-              Stage 9 is marked complete only after release, scheduled meter set, milestone, and site readiness.
-            </p>
-          )}
+          <StageCompletionActionButton
+            record={record}
+            stage={9}
+            guardCanComplete={lifecycleStatus?.guards?.can_complete_stage_9}
+            busy={meterBusy}
+            onComplete={stage9Active ? onCompleteStage9 : undefined}
+            mutedClass={mutedClass}
+            toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+          />
         </CardContent>
       </Card>
 
@@ -2818,11 +2868,15 @@ export function MeterSetCloseoutPanel({
               toolbarOutlineButtonClass={toolbarOutlineButtonClass}
               formatWhen={formatWhen}
             />
-            {lifecycleStatus?.guards?.can_complete_stage_10 ? (
-              <Button type="button" size="sm" disabled={closeoutBusy} onClick={onCompleteStage10}>
-                Mark Stage 10 complete
-              </Button>
-            ) : null}
+            <StageCompletionActionButton
+              record={record}
+              stage={10}
+              guardCanComplete={lifecycleStatus?.guards?.can_complete_stage_10}
+              busy={closeoutBusy}
+              onComplete={onCompleteStage10}
+              mutedClass={mutedClass}
+              toolbarOutlineButtonClass={toolbarOutlineButtonClass}
+            />
           </div>
           {closeout?.missing?.length ? (
             <p className={mutedClass}>Still needed: {closeout.missing.join(", ").replace(/_/g, " ")}</p>

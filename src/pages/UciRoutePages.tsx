@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { AlertBanner, PageHeader, Panel } from "@/components/design/ProductPrimitives";
@@ -17,6 +18,7 @@ import {
   parseApplicationPackageMetadata,
   preparationBlocksNewPrepare,
 } from "@/lib/uciApplicationPrep";
+import { deriveSubmissionTrackerTransmissionState } from "@/lib/uciActionPresentation";
 import { supabase } from "@/lib/supabase";
 import {
   formatUciUserError,
@@ -190,6 +192,11 @@ function recordHref(record: CoordinationRecord, tab?: string): string {
 
 function useOperationalCommunicationActions(reload: () => void | Promise<unknown>) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const invalidateOperationalViews = () => {
+    void queryClient.invalidateQueries({ queryKey: ["uci-operational-snapshot"] });
+  };
 
   const handleConfirm = async (communicationId: string, classification: string) => {
     setBusyId(communicationId);
@@ -199,6 +206,7 @@ function useOperationalCommunicationActions(reload: () => void | Promise<unknown
         apply_lifecycle: true,
       });
       toast.success("Communication confirmed");
+      invalidateOperationalViews();
       await reload();
     } catch (error: unknown) {
       toast.error(formatUciUserError(error, "Confirm review failed"));
@@ -214,6 +222,7 @@ function useOperationalCommunicationActions(reload: () => void | Promise<unknown
         note: "Flagged for human review from operational queue",
       });
       toast.success("Flagged for human review — auto-lifecycle blocked");
+      invalidateOperationalViews();
       await reload();
     } catch (error: unknown) {
       toast.error(formatUciUserError(error, "Flag for review failed"));
@@ -789,7 +798,6 @@ export function UciSubmissionsPage() {
   const anyBusy = Boolean(prepBusyId || confirmBusyId || transmitBusyId);
   const mailSendOk = emailReadiness?.mail_send_permission_configured === true;
   const liveFlagOn = emailReadiness?.live_email_flag_enabled === true;
-  const readyToSend = emailReadiness?.ready_to_send === true || (mailSendOk && liveFlagOn);
 
   return (
     <RouteFrame
@@ -865,7 +873,6 @@ export function UciSubmissionsPage() {
                       ?.checklist_mode || "",
                   ) === "synthetic_test";
                 const confirmed = preparationBlocksNewPrepare(prep);
-                const packageReady = prep?.ready_to_send === true || readyToSend;
                 const prepSent = Boolean(
                   transmissionForPrep && isTransmissionSent(transmissionForPrep),
                 );
@@ -877,24 +884,23 @@ export function UciSubmissionsPage() {
                   isTransmissionSent(transmission) &&
                   !prepSent &&
                   !transmissionMatchesPrep(transmission, prep);
+                const transmissionState = deriveSubmissionTrackerTransmissionState({
+                  prep,
+                  transmissionMatchesPrep: Boolean(transmissionForPrep),
+                  transmissionSent: prepSent,
+                  transmissionUncertain: prepUncertain,
+                  providerSubmitted,
+                  priorSent,
+                  prepConfirmed: confirmed,
+                  anyBusy,
+                  isReviewed,
+                });
+                const packageReady = transmissionState.packageReady;
+                const transmissionLabel = transmissionState.label;
                 const attachmentCount = Array.isArray(prep?.attachments)
                   ? prep.attachments.length
                   : transmission?.attachment_count ?? 0;
                 const toEditable = Boolean(prep && !prepSent && !prepUncertain && !providerSubmitted);
-                const transmissionLabel =
-                  prepSent || providerSubmitted
-                    ? "Sent"
-                    : prepUncertain
-                      ? "Send outcome uncertain"
-                      : priorSent
-                        ? "Sent (prior)"
-                        : confirmed
-                          ? packageReady
-                            ? "Ready to send"
-                            : "Prepared"
-                          : prep
-                            ? "Prepared"
-                            : "Not prepared";
                 const providerConfirmation = providerSubmitted
                   ? "Submitted"
                   : "Not submitted";
@@ -1109,7 +1115,7 @@ export function UciSubmissionsPage() {
                           >
                             Update preview
                           </Button>
-                          {packageReady && !prepUncertain ? (
+                          {transmissionState.showSendButton ? (
                             <Button
                               size="sm"
                               disabled={anyBusy}

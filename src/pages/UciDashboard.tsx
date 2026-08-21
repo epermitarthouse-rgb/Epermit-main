@@ -1417,6 +1417,7 @@ export default function UciDashboard() {
       { replace: true },
     );
     setDetailLoading(true);
+    setLifecycleStatus(null);
     setReason("");
     setPepcoDiscoveryMsg(null);
     setPepcoDashboardMsg(null);
@@ -1434,8 +1435,12 @@ export default function UciDashboard() {
     clearPendingAppDetailRunOptions();
     setPepcoLastNormalizedSync(null);
     try {
-      const d = await getCoordinationDetail(id);
+      const [d, status] = await Promise.all([
+        getCoordinationDetail(id),
+        getCoordinationLifecycleStatus(id).catch(() => null),
+      ]);
       applyCoordinationDetail(d);
+      setLifecycleStatus(status);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to load detail";
       toast.error(message);
@@ -4477,6 +4482,7 @@ export default function UciDashboard() {
 
                       <PepcoSystemDataSection
                         project={selectedPepcoProject}
+                        record={detail.record}
                         applications={(detail.applications ?? []) as CoordinationApplication[]}
                         communications={(detail.communications_recent ?? []) as CoordinationCommunication[]}
                         milestones={(detail.milestones ?? []) as CoordinationMilestone[]}
@@ -4966,6 +4972,7 @@ export default function UciDashboard() {
                   <CostsEquipmentWorkflowPanel
                     costs={(detail.costs ?? []) as import("@/types/uci").CoordinationCost[]}
                     equipment={(detail.equipment ?? []) as import("@/types/uci").CoordinationEquipment[]}
+                    record={detail.record}
                     busy={agentOpsBusy}
                     error={agentOpsError}
                     lifecycleStatus={lifecycleStatus}
@@ -5436,15 +5443,19 @@ const COMMUNICATION_PREVIEW_LIMIT = 160;
 /** Communication row with a truncated body preview and an expand toggle for long text. */
 function CommunicationPreviewRow({
   comm,
+  record,
+  allCommunications,
   formatWhen,
   mutedClass,
 }: {
   comm: CoordinationCommunication;
+  record?: CoordinationRecord | null;
+  allCommunications?: CoordinationCommunication[];
   formatWhen: (iso: string | null | undefined) => string;
   mutedClass: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const model = buildCommunicationCardModel(comm);
+  const model = buildCommunicationCardModel(comm, { record, allCommunications });
   const body = comm.raw_body?.trim() || null;
   const isLong = Boolean(body && body.length > COMMUNICATION_PREVIEW_LIMIT);
 
@@ -5483,6 +5494,7 @@ function CommunicationPreviewRow({
 /** Normalized rows filtered to the selected PEPCO project only; collapsed by default. */
 function PepcoSystemDataSection({
   project,
+  record,
   applications,
   communications,
   milestones,
@@ -5491,6 +5503,7 @@ function PepcoSystemDataSection({
   toolbarOutlineButtonClass,
 }: {
   project: PepcoMergedProject | null;
+  record?: CoordinationRecord | null;
   applications: CoordinationApplication[];
   communications: CoordinationCommunication[];
   milestones: CoordinationMilestone[];
@@ -5578,6 +5591,8 @@ function PepcoSystemDataSection({
                       <CommunicationPreviewRow
                         key={comm.id}
                         comm={comm}
+                        record={record}
+                        allCommunications={communications}
                         formatWhen={formatWhen}
                         mutedClass={mutedClass}
                       />
