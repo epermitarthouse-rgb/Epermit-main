@@ -186,15 +186,16 @@ function extractProposedMeasures(text: string): ProposedMeasure[] {
   };
 
   for (const line of block.split(/\n+/)) {
-    const item = line.match(/^\s*(?:\d+[.)]|[-*•])\s+(.+)$/);
+    const item = line.match(/^\s*(?:\d+\s*[.)]|[-*•])\s+(.+)$/);
     pushMeasure(item?.[1]);
   }
   if (measures.length > 0) return measures;
 
   // pdf.js extraction joins text items with spaces, so numbered lists often
   // appear on one line: "1. Sprinkler ... 2. Stair ... 3. Alarm ..."
+  // Digits and punctuation may be split: "1 . Sprinkler ... 2 . Stair ..."
   for (const match of block.matchAll(
-    /\b(\d+[.)])\s+(.+?)(?=\s\d+[.)]\s|\sFlood Hazard|\sSupporting narrative|\sFOR OFFICIAL USE|$)/gi,
+    /\b(\d+)\s*[.)]\s+(.+?)(?=\s\d+\s*[.)]\s|\sFlood Hazard|\sSupporting narrative|\sFOR OFFICIAL USE|$)/gi,
   )) {
     pushMeasure(match[2]);
   }

@@ -94,6 +94,20 @@ describe("heuristicExtractModificationRequest", () => {
       false,
     );
   });
+
+  it("extracts numbered measures when pdf.js splits list markers", () => {
+    const splitMarkersPage2 = {
+      pageNumber: 2,
+      text:
+        "PROPOSED ALTERNATIVE / COMPENSATING MEASURES: 1 . Automatic sprinkler system designed and installed in accordance with NFPA 13 2 . 2-hour fire-rated stair enclosure 3 . Fire alarm system throughout the building 4 . Occupant load signage at assembly spaces 5 . Egress lighting and exit signage Flood Hazard Applicable: No",
+    };
+    const extracted = heuristicExtractModificationRequest([
+      SAMPLE_DC_CODE_MODIFICATION_PAGES[0],
+      splitMarkersPage2,
+      SAMPLE_DC_CODE_MODIFICATION_PAGES[2],
+    ]);
+    assert.equal(extracted.proposedMeasures.length, 5);
+  });
 });
 
 describe("mergeExtractedRequests / pagesAreSparse", () => {
