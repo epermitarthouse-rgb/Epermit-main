@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
-import { PanelLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, PanelLeft } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -206,6 +206,7 @@ const Sidebar = React.forwardRef<
         >
           {children}
         </div>
+        {collapsible === "icon" ? <SidebarEdgeToggle /> : null}
       </div>
     </div>
   );
@@ -236,6 +237,51 @@ const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.C
   },
 );
 SidebarTrigger.displayName = "SidebarTrigger";
+
+const SidebarEdgeToggle = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentProps<typeof Button>
+>(({ className, ...props }, ref) => {
+  const { toggleSidebar, state, isMobile } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  if (isMobile) return null;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          ref={ref}
+          type="button"
+          data-sidebar="edge-toggle"
+          variant="outline"
+          size="icon"
+          className={cn(
+            "absolute top-[4.5rem] z-20 hidden h-7 w-7 rounded-full border-border bg-background shadow-sm transition-colors hover:bg-muted md:flex",
+            "right-0 translate-x-1/2",
+            className,
+          )}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          {...props}
+          onClick={(event) => {
+            props.onClick?.(event);
+            toggleSidebar();
+          }}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+SidebarEdgeToggle.displayName = "SidebarEdgeToggle";
 
 const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<"button">>(
   ({ className, ...props }, ref) => {
@@ -608,6 +654,7 @@ SidebarMenuSubButton.displayName = "SidebarMenuSubButton";
 export {
   Sidebar,
   SidebarContent,
+  SidebarEdgeToggle,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,

@@ -1,32 +1,31 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { SelectedProjectProvider } from "@/contexts/SelectedProjectContext";
 import { ScrapeProvider, useScrapeOptional } from "@/contexts/ScrapeContext";
 import { CommandPalette } from "@/components/navigation/CommandPalette";
 import { FloatingHelpWidget } from "@/components/help/FloatingHelpWidget";
 import { MobileBottomNav } from "./MobileBottomNav";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ActiveProjectControl } from "@/components/layout/ActiveProjectControl";
 import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
+import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
+import { AccountMenu } from "@/components/layout/AccountMenu";
+import { HeaderOverflowMenu } from "@/components/layout/HeaderOverflowMenu";
 import { useAuth } from "@/hooks/useAuth";
 import { resolvePageTitle } from "@/components/layout/hybridNav";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   ArrowLeft,
   ChevronRight,
   Eye,
   Home,
   Loader2,
-  LogIn,
-  LogOut,
   Plus,
+  Rocket,
   Search,
   Sparkles,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +43,7 @@ function ScrapeHeaderIndicator() {
   return (
     <button
       type="button"
-      className="flex max-w-[140px] shrink cursor-pointer items-center gap-2 rounded-md border border-warning/35 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning transition-colors hover:bg-warning/18 sm:max-w-[180px] dark:border-primary/35 dark:bg-primary/12 dark:text-primary dark:hover:bg-primary/18"
+      className="flex max-w-[120px] shrink-0 cursor-pointer items-center gap-2 rounded-md border border-warning/35 bg-warning/10 px-2 py-1.5 text-xs font-medium text-warning transition-colors hover:bg-warning/18 sm:max-w-[160px] dark:border-primary/35 dark:bg-primary/12 dark:text-primary dark:hover:bg-primary/18"
       onClick={() => setScrapeMinimized(false)}
       data-testid="header-scrape-indicator"
     >
@@ -65,25 +64,23 @@ function AppHeader({
 }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const title = resolvePageTitle(pathname);
   const isHome = pathname === "/dashboard";
-  const initials =
-    user?.email?.slice(0, 2).toUpperCase() ??
-    "PP";
 
   return (
-    <header className="sticky top-0 z-30 min-w-0 overflow-hidden border-b border-border bg-background/90 backdrop-blur-xl">
-      <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 lg:px-8">
-        <SidebarTrigger className="h-9 w-9 shrink-0 border border-border bg-card text-foreground" />
-
-        <div className="flex shrink-0 items-center gap-1.5">
+    <header
+      className="sticky top-0 z-40 min-w-0 shrink-0 border-b border-border bg-background shadow-sm"
+      data-testid="app-header"
+    >
+      <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-5 lg:px-6">
+        {/* Left: Back, Home, Breadcrumb */}
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => navigate(-1)}
             aria-label="Go back"
             title="Back"
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -93,87 +90,77 @@ function AppHeader({
             title="Home"
             aria-current={isHome ? "page" : undefined}
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card transition-colors hover:text-foreground",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-card transition-colors hover:text-foreground",
               isHome ? "text-primary" : "text-muted-foreground",
             )}
           >
             <Home className="h-4 w-4" />
           </AuthGatedLink>
+
+          <div className="hidden min-w-0 max-w-[8rem] items-center gap-1.5 text-sm text-muted-foreground lg:flex xl:max-w-[12rem] 2xl:max-w-[16rem]">
+            <span className="shrink-0">PermitPilot</span>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate font-medium text-foreground">{title}</span>
+          </div>
         </div>
 
-        <div className="hidden min-w-0 max-w-[9rem] items-center gap-2 text-sm text-muted-foreground lg:flex xl:max-w-[14rem]">
-          <span className="shrink-0">PermitPilot</span>
-          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate font-medium text-foreground">{title}</span>
-        </div>
-
-        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1.5 overflow-hidden sm:gap-2">
-          <ScrapeHeaderIndicator />
-          <ActiveProjectControl />
-
+        {/* Center: Search */}
+        <div className="flex min-w-0 flex-1 justify-center px-1 sm:px-2 md:px-3">
           <button
             type="button"
             onClick={onOpenCommand}
-            className="hidden min-w-0 max-w-[11rem] shrink items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left xl:flex"
+            className="flex h-9 w-full min-w-[10rem] max-w-xl flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 text-left sm:min-w-[17.5rem]"
             aria-label="Open command palette"
+            data-testid="header-search"
           >
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
               Search navigation…
             </span>
-            <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium text-muted-foreground 2xl:flex">
+            <kbd className="pointer-events-none hidden h-5 shrink-0 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-medium text-muted-foreground lg:flex">
               ⌘K
             </kbd>
           </button>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 lg:gap-2">
+          <ScrapeHeaderIndicator />
+          <ActiveProjectControl />
+
+          <AuthGatedLink
+            to="/projects/new"
+            className="pilot-button-primary hidden shrink-0 lg:inline-flex"
+            aria-label="New Project"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden 2xl:inline">New Project</span>
+          </AuthGatedLink>
 
           <AuthGatedLink
             to="/permit-wizard-filing"
-            className="pilot-button-primary hidden shrink-0 lg:inline-flex"
-            aria-label="New workflow"
+            className="pilot-button-ghost hidden shrink-0 border border-border lg:inline-flex"
+            aria-label="Start Permit Filing"
           >
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="hidden xl:inline">New workflow</span>
+            <Rocket className="h-4 w-4 shrink-0" />
+            <span className="hidden 2xl:inline">Start Permit Filing</span>
+            <span className="hidden lg:inline 2xl:hidden">Start Filing</span>
           </AuthGatedLink>
 
           <Link
             to="/demo/mcdonalds"
-            className="pilot-button-primary inline-flex shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
+            className="pilot-button-primary hidden shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 sm:inline-flex"
             aria-label="Request Demo"
           >
             <Sparkles className="h-4 w-4 shrink-0" />
             <span className="hidden xl:inline">Request Demo</span>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <ThemeToggle />
-            <NotificationBell />
+          <ThemeToggle />
 
-            <Avatar className="hidden h-9 w-9 border border-border xl:flex">
-              <AvatarFallback className="bg-primary font-tight text-xs font-bold text-primary-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+          <HeaderOverflowMenu onOpenCommand={onOpenCommand} />
 
-            {user ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onSignOut}
-                className="shrink-0 gap-2 border-border"
-                aria-label="Sign out"
-              >
-                <LogOut className="h-4 w-4 shrink-0" />
-                <span className="hidden xl:inline">Sign Out</span>
-              </Button>
-            ) : (
-              <Button asChild variant="default" size="sm" className="shrink-0 gap-2">
-                <Link to="/auth" aria-label="Sign in">
-                  <LogIn className="h-4 w-4 shrink-0" />
-                  <span className="hidden xl:inline">Sign In</span>
-                </Link>
-              </Button>
-            )}
-          </div>
+          <AccountMenu onSignOut={onSignOut} />
         </div>
       </div>
     </header>
@@ -186,6 +173,18 @@ function DashboardContent({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const scrape = useScrapeOptional();
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleSignOut = async () => {
     scrape?.resetScrapeUi();
     await signOut();
@@ -195,16 +194,18 @@ function DashboardContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <AppHeader
-          onOpenCommand={() => setCommandOpen(true)}
-          onSignOut={handleSignOut}
-        />
+      <NotificationsProvider>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+          <AppHeader
+            onOpenCommand={() => setCommandOpen(true)}
+            onSignOut={handleSignOut}
+          />
 
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-20 text-foreground md:px-6 md:pb-5 lg:px-8">
-          <div className="min-h-full min-w-0 max-w-full">{children}</div>
-        </main>
-      </div>
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-20 text-foreground md:px-6 md:pb-5 lg:px-8">
+            <div className="min-h-full min-w-0 max-w-full">{children}</div>
+          </main>
+        </div>
+      </NotificationsProvider>
 
       <CommandPalette
         open={commandOpen}
