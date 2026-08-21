@@ -339,6 +339,9 @@ function createInitMockSupabase(tables) {
           }
           return Promise.resolve({ data: row ?? null, error: null });
         },
+        maybeSingle() {
+          return api.single();
+        },
         then(resolve, reject) {
           if (state.mode === "update") {
             const row = store.find((r) =>
@@ -497,7 +500,10 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
           id: "coord-existing",
           project_id: "proj-1",
           utility_provider_id: "prov-1",
+          utility_type: "electric",
           scope_description: "",
+          current_stage: 1,
+          current_stage_state: "COMPLETED",
           metadata: {},
         },
       ],
@@ -534,5 +540,64 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
       ["gas"],
     );
     assert.equal(tables.coordination_stage_transitions.length, 0);
+  });
+
+  it("initializes existing Stage 1 NOT_STARTED records without creating duplicates", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-clean-slate",
+          project_id: "proj-1",
+          utility_provider_id: "prov-1",
+          utility_type: "electric",
+          scope_description: "",
+          current_stage: 1,
+          current_stage_state: "NOT_STARTED",
+          metadata: { uci_provider_resolution: { status: "confirmed" } },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+    const supabase = createInitMockSupabase(tables);
+    const mappingMetadata = {
+      method: PROVIDER_SETUP_METHOD,
+      confirmed: true,
+      confirmed_by_user_id: "user-1",
+      confirmed_at: "2026-08-21T12:00:00.000Z",
+      address_source: "structured",
+      address_source_acknowledged: "structured",
+      selected_provider_slugs: ["dominion"],
+      unresolved_utility_types: [],
+      territory_matching_available: false,
+    };
+
+    const result = await initCoordinationForProviders(supabase, {
+      projectId: "proj-1",
+      userId: "user-1",
+      resolvedProviders: [{ id: "prov-1", slug: "dominion", utility_type: "electric" }],
+      providerSetupMetadata: mappingMetadata,
+    });
+
+    assert.equal(tables.coordination_records.length, 1);
+    assert.equal(result.created.length, 1);
+    assert.equal(result.already_existed.length, 0);
+    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.equal(tables.coordination_stage_transitions.length, 1);
+    assert.equal(tables.coordination_stage_transitions[0].to_stage, 1);
+    assert.equal(tables.coordination_stage_transitions[0].to_state, "COMPLETED");
+    assert.equal(
+      tables.coordination_records[0].metadata.uci_provider_mapping.confirmed_at,
+      "2026-08-21T12:00:00.000Z",
+    );
+
+    const repeat = await initCoordinationForProviders(supabase, {
+      projectId: "proj-1",
+      userId: "user-1",
+      resolvedProviders: [{ id: "prov-1", slug: "dominion", utility_type: "electric" }],
+      providerSetupMetadata: mappingMetadata,
+    });
+    assert.equal(repeat.created.length, 0);
+    assert.equal(repeat.already_existed.length, 1);
+    assert.equal(tables.coordination_stage_transitions.length, 1);
   });
 });

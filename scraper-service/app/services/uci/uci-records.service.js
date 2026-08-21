@@ -396,6 +396,55 @@ function mergeProviderMappingMetadata(existingMetadata, mappingMetadata, provide
   };
 }
 
+function normalizeLifecycleStage(value) {
+  const stage = Number(value);
+  return Number.isInteger(stage) && stage >= 1 && stage <= 10 ? stage : null;
+}
+
+function normalizeLifecycleState(value) {
+  return String(value ?? "").trim().toUpperCase() || "NOT_STARTED";
+}
+
+/** Stage 1 with provider assigned but setup not completed — eligible for Initialize. */
+function coordinationNeedsStage1Init(record) {
+  if (!record?.utility_provider_id) return false;
+  const stage = normalizeLifecycleStage(record.current_stage);
+  if (stage !== 1) return false;
+  const state = normalizeLifecycleState(record.current_stage_state);
+  return state === "NOT_STARTED" || state === "BLOCKED";
+}
+
+/** Stage 1 completed or Stage 2+ — Initialize must not re-run lifecycle transitions. */
+function coordinationAlreadyInitialized(record) {
+  const stage = normalizeLifecycleStage(record.current_stage);
+  if (stage == null) return false;
+  if (stage > 1) return true;
+  return normalizeLifecycleState(record.current_stage_state) === "COMPLETED";
+}
+
+/**
+ * Complete Stage 1 after human provider confirmation.
+ * Clean-slate reset keeps the primary coordination row at Stage 1 NOT_STARTED;
+ * Initialize reuses that row and transitions it forward instead of inserting a duplicate.
+ */
+async function completeStage1FromProviderInit(supabase, params) {
+  const { record, userId, providerSetupMetadata } = params;
+  const { recordSystemTransition } = require("./uci-transitions.service.js");
+  const transitionMetadata = providerSetupMetadata
+    ? { uci_provider_mapping: providerSetupMetadata }
+    : {};
+  const { record: updated } = await recordSystemTransition(supabase, {
+    coordinationRecordId: String(record.id),
+    toStage: 1,
+    toState: "COMPLETED",
+    reason: "Human confirmed utility provider mapping",
+    triggeredByType: "user",
+    triggeredById: userId,
+    metadata: transitionMetadata,
+  });
+  return updated;
+}
+
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} p
@@ -465,6 +514,12 @@ async function initCoordinationForProviders(supabase, p) {
       .filter((r) => String(r.utility_type ?? "").trim())
       .map((r) => [String(r.utility_type).trim().toLowerCase(), r]),
   );
+  const existingByProviderType = new Map(
+    (Array.isArray(existingRows) ? existingRows : []).map((r) => [
+      recordKey(r.utility_provider_id, r.utility_type),
+      r,
+    ]),
+  );
 
   /** @type {Array<Record<string, unknown>>} */
   const created = [];
@@ -477,6 +532,21 @@ async function initCoordinationForProviders(supabase, p) {
       existingProviderTypes.has(providerTypeKey) ||
       legacyExistingProviderIds.has(String(pid))
     ) {
+      const existingMatch =
+        existingByProviderType.get(providerTypeKey) ||
+        (Array.isArray(existingRows) ? existingRows : []).find(
+          (row) => String(row.utility_provider_id) === String(pid),
+        );
+      if (existingMatch && coordinationNeedsStage1Init(existingMatch)) {
+        const initialized = await completeStage1FromProviderInit(supabase, {
+          record: existingMatch,
+          userId,
+          providerSetupMetadata,
+        });
+        created.push(initialized);
+        existingByProviderType.set(providerTypeKey, initialized);
+        existingByType.set(utilityType, initialized);
+      }
       continue;
     }
 
@@ -535,6 +605,16 @@ async function initCoordinationForProviders(supabase, p) {
       continue;
     }
     if (typeRow && typeRow.utility_provider_id) {
+      if (coordinationNeedsStage1Init(typeRow)) {
+        const initialized = await completeStage1FromProviderInit(supabase, {
+          record: typeRow,
+          userId,
+          providerSetupMetadata,
+        });
+        created.push(initialized);
+        existingByProviderType.set(providerTypeKey, initialized);
+        existingByType.set(utilityType, initialized);
+      }
       continue;
     }
 
@@ -649,9 +729,15 @@ async function initCoordinationForProviders(supabase, p) {
   for (const row of created) {
     try {
       const { maybeRunAgent2 } = require("./uci-provider-intake.service.js");
+      const stage = normalizeLifecycleStage(row.current_stage);
+      const state = normalizeLifecycleState(row.current_stage_state);
       await maybeRunAgent2(
         supabase,
-        { ...row, current_stage: 1, current_stage_state: "COMPLETED" },
+        {
+          ...row,
+          current_stage: stage ?? 1,
+          current_stage_state: state === "NOT_STARTED" ? "COMPLETED" : state,
+        },
         userId,
       );
     } catch {
@@ -659,10 +745,13 @@ async function initCoordinationForProviders(supabase, p) {
     }
   }
 
+  const finalRecords = await listCoordinationRecordsByProject(supabase, projectId);
+  const finalImpacted = finalRecords.filter((r) => requestedSet.has(String(r.utility_provider_id)));
+
   return {
-    created: impacted.filter((r) => createdIdSet.has(String(r.id))),
-    already_existed: impacted.filter((r) => !createdIdSet.has(String(r.id))),
-    records,
+    created: finalImpacted.filter((r) => createdIdSet.has(String(r.id))),
+    already_existed: finalImpacted.filter((r) => !createdIdSet.has(String(r.id))),
+    records: finalRecords,
   };
 }
 
@@ -673,4 +762,6 @@ module.exports = {
   getCoordinationDetailBundle,
   initCoordinationForProviders,
   mergeProviderMappingMetadata,
+  coordinationNeedsStage1Init,
+  coordinationAlreadyInitialized,
 };

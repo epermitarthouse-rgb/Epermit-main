@@ -2621,11 +2621,25 @@ export default function UciDashboard() {
         unresolved_utility_types: unresolvedUtilityTypes,
       });
       toast.success(
-        `Created ${out.created?.length ?? 0} record(s); ${out.already_existed?.length ?? 0} already existed`,
+        (() => {
+          const initialized = out.created?.length ?? 0;
+          const skipped = out.already_existed?.length ?? 0;
+          if (initialized > 0 && skipped > 0) {
+            return `Initialized ${initialized} coordination record(s); ${skipped} already up to date`;
+          }
+          if (initialized > 0) {
+            return `Initialized ${initialized} coordination record(s)`;
+          }
+          if (skipped > 0) {
+            return `${skipped} coordination record(s) already initialized`;
+          }
+          return "Coordination initialized";
+        })(),
       );
       setRecords(out.records ?? []);
       setSetupSectionExpanded(false);
       await loadProviderSetup();
+      await refreshCoordination();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Initialize failed");
     } finally {
