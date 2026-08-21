@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const {
   stampCleanSlateMetadata,
   readCleanSlateBoundary,
+  listStaleRunMetadataKeys,
 } = require("./uci-clean-slate-run-boundary.util.js");
 const {
   ACTIVE_APPLICATION_TEMPLATE_META_KEY,
@@ -468,6 +469,7 @@ async function auditCleanSlateReset(supabase, params) {
       provider_requirements_total: 0,
       active_application_template: null,
       [`metadata.${ACTIVE_APPLICATION_TEMPLATE_META_KEY}`]: null,
+      stale_metadata_key_count: 0,
     },
     contamination_risk: contamination,
     scope_mapping: RESET_SCOPE,
@@ -489,6 +491,7 @@ async function assessContaminationRisk(supabase, params) {
     meta,
     String(coordination.utility_type ?? "electric"),
   );
+  const staleMetadataKeys = listStaleRunMetadataKeys(meta);
   const { count: unmatchedCount } = await countRows(supabase, "uci_unmatched_inbound_messages", (q) =>
     q.eq("project_id", String(coordination.project_id)),
   );
@@ -509,6 +512,11 @@ async function assessContaminationRisk(supabase, params) {
       "Coordination has active_application_template — will be cleared on reset so operator must re-upload for demo",
     );
   }
+  if (staleMetadataKeys.length > 0) {
+    risks.push(
+      `Prior-run metadata caches remain (${staleMetadataKeys.slice(0, 5).join(", ")}${staleMetadataKeys.length > 5 ? ", …" : ""}) and may surface stale UI until scrubbed`,
+    );
+  }
   if ((unmatchedCount ?? 0) > 0) {
     risks.push("Unmatched inbound queue rows could be manually reprocessed into a new run");
   }
@@ -526,15 +534,17 @@ async function assessContaminationRisk(supabase, params) {
     document_registry_count: registryCount,
     unmatched_inbound_count: unmatchedCount,
     coordination_communications_count: commCount,
+    stale_metadata_keys: staleMetadataKeys,
+    stale_metadata_key_count: staleMetadataKeys.length,
     pre_reset_risks: risks,
     mitigations: [
       "Delete all coordination_communications and project-scoped uci_unmatched_inbound_messages",
-      "Scrub LC/ticket keys and active_application_template from coordination metadata; stamp clean_slate_at boundary",
+      "Scrub all run-scoped coordination metadata; preserve provider/site setup only; stamp clean_slate_at boundary",
       "Preserve microsoft_mailbox_connections (Graph idempotency prevents re-ingest of old mail)",
       "Preserve utility_providers global template library; coordination-scoped activation drives requirements",
       "Matcher skips records when inbound message_timestamp < clean_slate_at",
     ],
-    safe_after_reset: true,
+    safe_after_reset: risks.length === 0,
   };
 }
 
@@ -636,8 +646,6 @@ async function executeCleanSlateReset(supabase, params) {
     coordination.metadata && typeof coordination.metadata === "object"
       ? /** @type {Record<string, unknown>} */ (coordination.metadata)
       : {};
-  const preservedResolution = existingMeta.uci_provider_resolution;
-  const preservedSetup = existingMeta.provider_setup || existingMeta.uci_provider_setup;
 
   /** @type {Record<string, unknown>} */
   let nextMeta = stampCleanSlateMetadata(existingMeta, {
@@ -646,8 +654,6 @@ async function executeCleanSlateReset(supabase, params) {
     reason: params.reason || "operator_clean_slate_reset",
     priorRunId: priorBoundary?.run_id || null,
   });
-  if (preservedResolution) nextMeta.uci_provider_resolution = preservedResolution;
-  if (preservedSetup) nextMeta.provider_setup = preservedSetup;
 
   const { error: coordUpdateErr } = await supabase
     .from("coordination_records")

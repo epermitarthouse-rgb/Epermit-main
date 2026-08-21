@@ -12,6 +12,8 @@ const {
   stampCleanSlateMetadata,
   isMessageBeforeCleanSlate,
   readCleanSlateBoundary,
+  scrubCoordinationMetadataForCleanSlate,
+  listStaleRunMetadataKeys,
 } = require("../app/services/uci/uci-clean-slate-run-boundary.util.js");
 const { matchInboundToCoordination } = require("../app/services/uci/uci-communication-matcher.service.js");
 
@@ -282,6 +284,34 @@ describe("UCI clean-slate reset", () => {
     assert.equal(match.matched, false);
   });
 
+  it("scrubs prior-run metadata caches but preserves provider setup", () => {
+    const scrubbed = scrubCoordinationMetadataForCleanSlate({
+      uci_provider_resolution: { status: "confirmed" },
+      uci_provider_mapping: { provider_slug: "dominion" },
+      uci_site_address: { formatted: "100 Main St" },
+      provider_setup: { confirmed: true },
+      uci_document_processing: { applications: { x: { findings: [1, 2, 3] } } },
+      stage2_readiness: { ready: true },
+      stage_5_acknowledgment: { utility_pm: "Alex Morgan" },
+      uci_cos_analysis: { status: "approved" },
+      uci_meter_set: { scheduled_date: "2026-09-15" },
+      closeout_artifacts: { utility_confirmation: {} },
+      uci_closeout_package: { generated_at: "2026-01-01" },
+      lc_number: "451554",
+      active_application_template: { "electric:new_service": {} },
+    });
+    assert.equal(scrubbed.uci_provider_resolution.status, "confirmed");
+    assert.equal(scrubbed.uci_provider_mapping.provider_slug, "dominion");
+    assert.equal(scrubbed.uci_site_address.formatted, "100 Main St");
+    assert.equal(scrubbed.provider_setup.confirmed, true);
+    assert.equal(scrubbed.uci_document_processing, undefined);
+    assert.equal(scrubbed.stage2_readiness, undefined);
+    assert.equal(scrubbed.stage_5_acknowledgment, undefined);
+    assert.equal(scrubbed.uci_cos_analysis, undefined);
+    assert.equal(scrubbed.lc_number, undefined);
+    assert.equal(listStaleRunMetadataKeys(scrubbed).length, 0);
+  });
+
   it("apply deletes workflow rows and resets coordination in place", async () => {
     const projectId = "proj-1";
     const coordinationId = "coord-1";
@@ -297,6 +327,8 @@ describe("UCI clean-slate reset", () => {
           metadata: {
             lc_number: "451554",
             uci_provider_resolution: { status: "confirmed" },
+            uci_document_processing: { applications: { a: { findings: [1] } } },
+            stage_5_acknowledgment: { utility_pm: "Alex Morgan" },
             active_application_template: {
               "electric:new_service": {
                 manifest: { version: "dominion-electric-full-demo-v2", required_documents: [{}, {}, {}, {}, {}, {}, {}, {}] },
@@ -350,7 +382,10 @@ describe("UCI clean-slate reset", () => {
     assert.equal(tables.coordination_records[0].current_stage_state, "NOT_STARTED");
     assert.equal(tables.coordination_records[0].metadata.lc_number, undefined);
     assert.equal(tables.coordination_records[0].metadata.active_application_template, undefined);
+    assert.equal(tables.coordination_records[0].metadata.uci_document_processing, undefined);
+    assert.equal(tables.coordination_records[0].metadata.stage_5_acknowledgment, undefined);
     assert.equal(tables.coordination_records[0].metadata.uci_provider_resolution.status, "confirmed");
+    assert.ok(tables.coordination_records[0].metadata.uci_clean_slate);
     assert.equal(tables.projects[0].utility_coordination_completed_at, null);
     assert.equal(tables.microsoft_mailbox_connections.length, 1);
   });

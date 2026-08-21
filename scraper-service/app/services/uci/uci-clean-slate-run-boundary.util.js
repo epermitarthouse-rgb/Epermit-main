@@ -38,36 +38,75 @@ function isMessageBeforeCleanSlate(metadata, messageTimestamp) {
   return msgMs < boundaryMs;
 }
 
+/** Metadata retained across clean-slate resets (provider/site setup only). */
+const PRESERVED_COORDINATION_METADATA_KEYS = new Set([
+  "uci_provider_mapping",
+  "uci_provider_resolution",
+  "provider_setup",
+  "uci_provider_setup",
+  "uci_site_address",
+  "uci_provider_reassignment_history",
+]);
+
+/** Run-scoped caches that must not survive reset (used for contamination audit). */
+const RUN_SCOPED_COORDINATION_METADATA_KEYS = [
+  "uci_document_processing",
+  "stage2_readiness",
+  "stage_5_acknowledgment",
+  "stage_5_acknowledgment_history",
+  "stage_5_acknowledgment_evidence",
+  "uci_cos_analysis",
+  "uci_meter_set",
+  "closeout_artifacts",
+  "uci_closeout_package",
+  "uci_lifecycle_proposals",
+  "uci_last_portal_sync_summary",
+  "uci_last_portal_sync_at",
+  "active_application_template",
+  "application_package",
+  "lc_number",
+  "load_control_number",
+  "LC",
+  "job_id",
+  "utility_ticket_number",
+  "external_application_id",
+  "dom_demo_ref",
+  "ack_reconciled_at",
+  "stage5_reconciled_at",
+  "package_review_reset_at",
+  "uci_legacy_type_scope_duplicate",
+  "original_scope_description",
+];
+
 /**
- * Strip workflow keys that would let stale inbound mail match a fresh run.
+ * Keep only provider/site setup metadata; drop all prior-run workflow caches.
  *
  * @param {Record<string, unknown>} metadata
  * @returns {Record<string, unknown>}
  */
 function scrubCoordinationMetadataForCleanSlate(metadata) {
-  const next = { ...metadata };
-  const keysToRemove = [
-    "lc_number",
-    "load_control_number",
-    "LC",
-    "job_id",
-    "utility_ticket_number",
-    "external_application_id",
-    "dom_demo_ref",
-    "ack_reconciled_at",
-    "stage5_reconciled_at",
-    "package_review_reset_at",
-    "uci_legacy_type_scope_duplicate",
-    "original_scope_description",
-    "active_application_template",
-  ];
-  for (const key of keysToRemove) {
-    delete next[key];
-  }
-  if (next.application_package && typeof next.application_package === "object") {
-    delete next.application_package;
+  const next = {};
+  for (const key of PRESERVED_COORDINATION_METADATA_KEYS) {
+    if (metadata[key] !== undefined) {
+      next[key] = metadata[key];
+    }
   }
   return next;
+}
+
+/**
+ * @param {Record<string, unknown>} metadata
+ * @returns {string[]}
+ */
+function listStaleRunMetadataKeys(metadata) {
+  /** @type {string[]} */
+  const stale = [];
+  for (const key of Object.keys(metadata)) {
+    if (key === "uci_clean_slate") continue;
+    if (PRESERVED_COORDINATION_METADATA_KEYS.has(key)) continue;
+    stale.push(key);
+  }
+  return stale;
 }
 
 /**
@@ -89,8 +128,11 @@ function stampCleanSlateMetadata(metadata, params) {
 
 module.exports = {
   CLEAN_SLATE_META_KEY,
+  PRESERVED_COORDINATION_METADATA_KEYS,
+  RUN_SCOPED_COORDINATION_METADATA_KEYS,
   readCleanSlateBoundary,
   isMessageBeforeCleanSlate,
   scrubCoordinationMetadataForCleanSlate,
+  listStaleRunMetadataKeys,
   stampCleanSlateMetadata,
 };
