@@ -17,6 +17,7 @@ const { emitUciEvent } = require("./uci-events.service.js");
 const { getCommunicationById } = require("./uci-communications.service.js");
 const {
   maybeAutoCompleteFromCommunication,
+  reconcileStage5FromCoordinationEvidence,
   isFlaggedForReview,
 } = require("./uci-ack-acceptance.service.js");
 const { maybeEnterStage6FromCommunication } = require("./uci-stage6-entry.service.js");
@@ -165,6 +166,13 @@ async function classifyCoordinationCommunications(supabase, params) {
     const auto = await maybeAutoCompleteFromCommunication(supabase, {
       communication: updated,
     });
+    const reconcile =
+      updated.coordination_record_id && !auto.completed
+        ? await reconcileStage5FromCoordinationEvidence(supabase, {
+            coordinationRecordId: String(updated.coordination_record_id),
+            triggerCommunicationId: String(updated.id),
+          })
+        : null;
     const stage6 = await maybeEnterStage6FromCommunication(supabase, {
       communication: updated,
       deps,
@@ -185,6 +193,7 @@ async function classifyCoordinationCommunications(supabase, params) {
     lifecycleResults.push({
       communication_id: updated.id,
       ...auto,
+      stage_5_reconcile: reconcile,
       stage_6: stage6,
       track_b: dispatch,
     });
@@ -253,6 +262,13 @@ async function classifySingleCommunication(supabase, params) {
   const lifecycle = await maybeAutoCompleteFromCommunication(supabase, {
     communication: updated,
   });
+  const reconcile =
+    updated.coordination_record_id && !lifecycle.completed
+      ? await reconcileStage5FromCoordinationEvidence(supabase, {
+          coordinationRecordId: String(updated.coordination_record_id),
+          triggerCommunicationId: String(updated.id),
+        })
+      : null;
   const stage6 = await maybeEnterStage6FromCommunication(supabase, {
     communication: updated,
     deps,
@@ -271,7 +287,14 @@ async function classifySingleCommunication(supabase, params) {
     };
   }
 
-  return { communication: updated, skipped: false, lifecycle, stage_6: stage6, track_b: dispatch };
+  return {
+    communication: updated,
+    skipped: false,
+    lifecycle,
+    stage_5_reconcile: reconcile,
+    stage_6: stage6,
+    track_b: dispatch,
+  };
 }
 
 /**

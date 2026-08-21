@@ -553,8 +553,10 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
       },
       note: "Reviewer assigned current PM",
     });
-    assert.equal(confirmed.lifecycle?.completed, true);
-    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.equal(confirmed.lifecycle?.reconciled ?? confirmed.lifecycle?.completed, true);
+    assert.equal(tables.coordination_records[0].current_stage, 6);
+    assert.equal(tables.coordination_records[0].current_stage_state, "IN_PROGRESS");
+    assert.ok(tables.coordination_records[0].acknowledgment_received_at);
     assert.equal(tables.coordination_records[0].utility_project_manager, "Casey Brooks");
     assert.ok(tables.coordination_records[0].ack_sla_stopped_at);
     const originalPm =
@@ -747,8 +749,10 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
       extractedFields: { utility_project_manager: "Sam Rivera" },
       note: "PM assigned by reviewer",
     });
-    assert.equal(complete.lifecycle?.completed, true);
-    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.equal(complete.lifecycle?.reconciled ?? complete.lifecycle?.completed, true);
+    assert.equal(tables.coordination_records[0].current_stage, 6);
+    assert.equal(tables.coordination_records[0].current_stage_state, "IN_PROGRESS");
+    assert.ok(tables.coordination_records[0].acknowledgment_received_at);
     assert.equal(tables.coordination_records[0].utility_project_manager, "Sam Rivera");
     assert.ok(tables.coordination_records[0].ack_sla_stopped_at);
     assert.equal(
@@ -801,6 +805,159 @@ describe("Stage 5 ack acceptance + lifecycle safety", () => {
     assert.equal(result.reason, "flagged_for_review");
     assert.equal(tables.coordination_records[0].current_stage_state, "AWAITING_UTILITY");
     assert.equal(tables.coordination_records[0].ack_sla_stopped_at, null);
+  });
+
+  it("supplemental PM from later design review completes Stage 5 via reconcile", async () => {
+    const {
+      reconcileStage5FromCoordinationEvidence,
+      loadCoordinationSupplementalFields,
+    } = require("../app/services/uci/uci-ack-acceptance.service.js");
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "AWAITING_UTILITY",
+          acknowledgment_received_at: null,
+          metadata: {},
+          ack_sla_started_at: new Date().toISOString(),
+          ack_sla_due_at: new Date(Date.now() + 86400000).toISOString(),
+          ack_sla_stopped_at: null,
+        },
+      ],
+      coordination_applications: [
+        { id: "app-1", coordination_record_id: "coord-1", utility_ticket_number: null },
+      ],
+      coordination_communications: [
+        {
+          id: "comm-ack",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          direction: "inbound",
+          classification: "acknowledgment",
+          classification_confidence: 1,
+          message_timestamp: "2026-08-20T20:56:40+00:00",
+          thread_id: "thread-root-AQA-ack",
+          needs_human_attention: true,
+          agent_processed_metadata: {
+            human_confirmed: true,
+            extracted_fields: { utility_ticket_number: "DOM-DEMO-451554" },
+            review_decision: { action: "confirm" },
+          },
+        },
+        {
+          id: "comm-design",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          direction: "inbound",
+          classification: "design_review_response",
+          classification_confidence: 0.95,
+          message_timestamp: "2026-08-21T01:00:00+00:00",
+          thread_id: "thread-root-AQA-design",
+          needs_human_attention: false,
+          agent_processed_metadata: {
+            extracted_fields: {
+              utility_ticket_number: "DOM-DEMO-451554",
+              utility_project_manager: "Alex Morgan",
+            },
+          },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+    const supabase = createTableMock(tables);
+    const supplemental = await loadCoordinationSupplementalFields(supabase, {
+      coordinationRecordId: "coord-1",
+      anchorCommunicationId: "comm-ack",
+      anchorTimestamp: "2026-08-20T20:56:40+00:00",
+      threadId: "thread-root-AQA-ack",
+    });
+    assert.equal(supplemental.utility_project_manager, "Alex Morgan");
+    assert.equal(supplemental.pm_source_communication_id, "comm-design");
+
+    const result = await reconcileStage5FromCoordinationEvidence(supabase, {
+      coordinationRecordId: "coord-1",
+      triggerCommunicationId: "comm-design",
+      userId: "user-1",
+      source: "user",
+      advanceStage6: false,
+    });
+    assert.equal(result.reconciled, true);
+    assert.equal(result.completed, true);
+    assert.equal(tables.coordination_records[0].current_stage_state, "COMPLETED");
+    assert.equal(tables.coordination_records[0].utility_project_manager, "Alex Morgan");
+    assert.ok(tables.coordination_records[0].ack_sla_stopped_at);
+    assert.equal(tables.coordination_communications[0].needs_human_attention, false);
+  });
+
+  it("confirm design_review_response reconciles Stage 5 when ack already confirmed", async () => {
+    const tables = {
+      coordination_records: [
+        {
+          id: "coord-1",
+          project_id: "proj-1",
+          current_stage: 5,
+          current_stage_state: "AWAITING_UTILITY",
+          acknowledgment_received_at: null,
+          metadata: {},
+          ack_sla_started_at: new Date().toISOString(),
+          ack_sla_due_at: new Date(Date.now() + 86400000).toISOString(),
+          ack_sla_stopped_at: null,
+        },
+      ],
+      coordination_applications: [
+        { id: "app-1", coordination_record_id: "coord-1", utility_ticket_number: null },
+      ],
+      coordination_communications: [
+        {
+          id: "comm-ack",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          direction: "inbound",
+          classification: "acknowledgment",
+          classification_confidence: 1,
+          message_timestamp: "2026-08-20T20:56:40+00:00",
+          thread_id: "thread-a",
+          needs_human_attention: true,
+          agent_processed_metadata: {
+            human_confirmed: true,
+            extracted_fields: { utility_ticket_number: "DOM-DEMO-451554" },
+            review_decision: { action: "confirm" },
+          },
+        },
+        {
+          id: "comm-design",
+          coordination_record_id: "coord-1",
+          project_id: "proj-1",
+          direction: "inbound",
+          classification: "design_review_response",
+          classification_confidence: 0.95,
+          message_timestamp: "2026-08-21T01:00:00+00:00",
+          thread_id: "thread-b",
+          needs_human_attention: false,
+          agent_processed_metadata: {
+            extracted_fields: {
+              utility_ticket_number: "DOM-DEMO-451554",
+              utility_project_manager: "Alex Morgan",
+            },
+          },
+        },
+      ],
+      coordination_stage_transitions: [],
+    };
+    const supabase = createTableMock(tables);
+    const confirmed = await confirmCommunicationReview(supabase, {
+      communicationId: "comm-design",
+      userId: "user-1",
+      classification: "design_review_response",
+      note: "Accept design review",
+    });
+    assert.equal(confirmed.lifecycle?.reconciled, true);
+    assert.equal(tables.coordination_records[0].current_stage, 6);
+    assert.equal(tables.coordination_records[0].current_stage_state, "IN_PROGRESS");
+    assert.ok(tables.coordination_records[0].acknowledgment_received_at);
+    assert.equal(tables.coordination_records[0].utility_project_manager, "Alex Morgan");
   });
 
   it("refuses duplicate Stage 5 complete", async () => {

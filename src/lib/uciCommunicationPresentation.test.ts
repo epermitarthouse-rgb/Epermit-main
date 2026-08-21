@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildInboxConversationCardModel,
+  getCommunicationActionPlan,
   getNeedsAttentionReasons,
   groupInboxItemsByThread,
   partitionOperatorInboxFeed,
@@ -177,5 +178,45 @@ describe("needs attention reasons", () => {
     ]);
     assert.equal(primary.length, 0);
     assert.equal(auditHistory.length, 1);
+  });
+});
+
+describe("communication action plan", () => {
+  it("shows Confirmed (not Confirm) for human-confirmed ack awaiting thread PM", () => {
+    const plan = getCommunicationActionPlan(
+      comm({
+        id: "ack-confirmed",
+        needs_human_attention: true,
+        reviewed_at: "2026-08-21T00:34:37.238Z",
+        agent_processed_metadata: {
+          human_confirmed: true,
+          stage_5_incomplete: { reason: "missing_utility_pm" },
+          review_decision: { action: "confirm" },
+        },
+      }),
+      record,
+    );
+    assert.equal(plan.showConfirm, false);
+    assert.equal(plan.showConfirmed, true);
+    assert.equal(plan.needsAttention, false);
+  });
+
+  it("shows Confirm for design review while Stage 5 is open", () => {
+    const plan = getCommunicationActionPlan(
+      comm({
+        id: "design",
+        classification: "design_review_response",
+        classification_confidence: 0.95,
+        agent_processed_metadata: {
+          extracted_fields: {
+            utility_project_manager: "Alex Morgan",
+            utility_ticket_number: "DOM-DEMO-451554",
+          },
+        },
+      }),
+      { ...record, current_stage_state: "AWAITING_UTILITY" } as CoordinationRecord,
+    );
+    assert.equal(plan.showConfirm, true);
+    assert.equal(plan.needsAttention, true);
   });
 });

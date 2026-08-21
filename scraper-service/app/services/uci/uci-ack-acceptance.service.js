@@ -59,26 +59,146 @@ function isFlaggedForReview(meta) {
 }
 
 /**
+ * @param {Record<string, unknown>} meta
+ */
+function extractCommunicationFields(meta) {
+  const base =
+    meta?.extracted_fields && typeof meta.extracted_fields === "object"
+      ? /** @type {Record<string, unknown>} */ (meta.extracted_fields)
+      : {};
+  const review =
+    meta?.review_decision && typeof meta.review_decision === "object"
+      ? /** @type {Record<string, unknown>} */ (meta.review_decision)
+      : {};
+  const merged = asRecord(review.merged_extracted_fields);
+  const reviewer = asRecord(review.reviewer_extracted_fields);
+  return { ...base, ...reviewer, ...merged };
+}
+
+/**
+ * @param {unknown} value
+ */
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? /** @type {Record<string, unknown>} */ (value)
+    : {};
+}
+
+/**
+ * Graph thread ids share a mailbox conversation prefix before the final segment.
+ * @param {unknown} threadId
+ */
+function normalizeGraphThreadRoot(threadId) {
+  const s = String(threadId ?? "").trim();
+  if (!s) return null;
+  const idx = s.lastIndexOf("AQA");
+  if (idx > 0) return s.slice(0, idx);
+  return s;
+}
+
+/**
+ * PM and related fields from later inbound messages on the same coordination record.
+ * Prefers same Graph thread root; falls back to any later inbound on the record.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function loadCoordinationSupplementalFields(supabase, params) {
+  const {
+    coordinationRecordId,
+    anchorCommunicationId = null,
+    anchorTimestamp = null,
+    threadId = null,
+  } = params;
+
+  const anchorMs = anchorTimestamp ? new Date(String(anchorTimestamp)).getTime() : 0;
+  const threadRoot = normalizeGraphThreadRoot(threadId);
+
+  const { data: rows, error } = await supabase
+    .from("coordination_communications")
+    .select(
+      "id, message_timestamp, thread_id, classification, direction, needs_human_attention, agent_processed_metadata",
+    )
+    .eq("coordination_record_id", coordinationRecordId)
+    .order("message_timestamp", { ascending: true });
+
+  if (error || !Array.isArray(rows)) {
+    return {};
+  }
+
+  /** @type {Record<string, unknown>} */
+  const supplemental = {};
+
+  for (const row of rows) {
+    if (String(row.direction || "inbound").toLowerCase() === "outbound") continue;
+    if (anchorCommunicationId && String(row.id) === String(anchorCommunicationId)) continue;
+    const meta = asRecord(row.agent_processed_metadata);
+    if (meta.rejected_irrelevant === true) continue;
+
+    const rowMs = row.message_timestamp ? new Date(String(row.message_timestamp)).getTime() : 0;
+    const sameThread =
+      threadRoot != null &&
+      normalizeGraphThreadRoot(row.thread_id) != null &&
+      normalizeGraphThreadRoot(row.thread_id) === threadRoot;
+    const isLater = !anchorMs || !Number.isFinite(rowMs) || rowMs >= anchorMs - 60_000;
+    if (!sameThread && anchorMs && Number.isFinite(rowMs) && rowMs < anchorMs - 60_000) {
+      continue;
+    }
+    if (!sameThread && !isLater) continue;
+
+    const extracted = extractCommunicationFields(meta);
+    if (!supplemental.utility_project_manager && isRealUtilityPm(extracted.utility_project_manager)) {
+      supplemental.utility_project_manager = normalizeUtilityPm(extracted.utility_project_manager);
+      supplemental.pm_source_communication_id = row.id;
+      supplemental.pm_source_classification = row.classification ?? null;
+      supplemental.pm_same_thread = sameThread;
+    }
+    if (
+      !supplemental.utility_ticket_number &&
+      extracted.utility_ticket_number &&
+      String(extracted.utility_ticket_number).trim()
+    ) {
+      supplemental.utility_ticket_number = String(extracted.utility_ticket_number).trim();
+    }
+    if (
+      !supplemental.utility_account_number &&
+      extracted.utility_account_number &&
+      String(extracted.utility_account_number).trim()
+    ) {
+      supplemental.utility_account_number = String(extracted.utility_account_number).trim();
+    }
+  }
+
+  return supplemental;
+}
+
+/**
  * Resolve fields for Stage 5 completion.
- * PM/coordinator must come from **current** acknowledgment evidence or reviewer
- * extracted fields — never from stale coordination-level `utility_project_manager`
- * / `utility_contact_name` left behind by a prior completed acknowledgment.
+ * PM/coordinator must come from **current** acknowledgment evidence, reviewer
+ * extracted fields, or supplemental thread/coordination evidence — never from stale
+ * coordination-level `utility_project_manager` / `utility_contact_name`.
  *
  * @param {Record<string, unknown>} extracted
  * @param {Record<string, unknown>} record
  * @param {Record<string, unknown> | null} application
+ * @param {Record<string, unknown>} [supplementalExtracted]
  */
-function resolveCompletionFields(extracted, record, application) {
+function resolveCompletionFields(extracted, record, application, supplementalExtracted = {}) {
   const ticket =
     (extracted.utility_ticket_number && String(extracted.utility_ticket_number).trim()) ||
+    (supplementalExtracted.utility_ticket_number &&
+      String(supplementalExtracted.utility_ticket_number).trim()) ||
     (application?.utility_ticket_number && String(application.utility_ticket_number).trim()) ||
     null;
   const account =
     (extracted.utility_account_number && String(extracted.utility_account_number).trim()) ||
+    (supplementalExtracted.utility_account_number &&
+      String(supplementalExtracted.utility_account_number).trim()) ||
     (record.utility_account_number && String(record.utility_account_number).trim()) ||
     null;
-  // Current-evidence PM only (classifier / reviewer on this communication).
-  const pm = normalizeUtilityPm(extracted.utility_project_manager);
+  const pm =
+    normalizeUtilityPm(extracted.utility_project_manager) ||
+    normalizeUtilityPm(supplementalExtracted.utility_project_manager);
   const nextAction =
     (extracted.next_required_action && String(extracted.next_required_action).trim()) ||
     (record.next_required_action && String(record.next_required_action).trim()) ||
@@ -101,6 +221,7 @@ function evaluateAutoAckEligibility(params) {
     matched,
     flagged,
     extracted,
+    supplementalExtracted = {},
     record,
     application,
     skipConfidenceCheck = false,
@@ -122,7 +243,12 @@ function evaluateAutoAckEligibility(params) {
     }
   }
 
-  const fields = resolveCompletionFields(extracted || {}, record || {}, application || null);
+  const fields = resolveCompletionFields(
+    extracted || {},
+    record || {},
+    application || null,
+    supplementalExtracted || {},
+  );
   const resolvedAckDate =
     fields.ackDate ||
     (params.messageTimestamp != null ? String(params.messageTimestamp) : null) ||
@@ -509,12 +635,20 @@ async function maybeAutoCompleteFromCommunication(supabase, params) {
       ? /** @type {Record<string, unknown>} */ (meta.extracted_fields)
       : {};
 
+  const supplemental = await loadCoordinationSupplementalFields(supabase, {
+    coordinationRecordId: String(communication.coordination_record_id),
+    anchorCommunicationId: String(communication.id),
+    anchorTimestamp: communication.message_timestamp,
+    threadId: communication.thread_id,
+  });
+
   const eligibility = evaluateAutoAckEligibility({
     classification: communication.classification,
     confidence: communication.classification_confidence,
     matched: true,
     flagged: false,
     extracted,
+    supplementalExtracted: supplemental,
     record,
     application,
     messageTimestamp: communication.message_timestamp,
@@ -748,15 +882,263 @@ async function reopenStage5Acknowledgment(supabase, params) {
   };
 }
 
+/**
+ * Clear Needs Attention on communications resolved by Stage 5 completion.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string[]} communicationIds
+ */
+async function clearStage5ResolvedCommunications(supabase, communicationIds) {
+  const ids = [...new Set(communicationIds.map((id) => String(id || "").trim()).filter(Boolean))];
+  for (const id of ids) {
+    const { data: row } = await supabase
+      .from("coordination_communications")
+      .select("agent_processed_metadata")
+      .eq("id", id)
+      .maybeSingle();
+    if (!row) continue;
+    const existing = asRecord(row.agent_processed_metadata);
+    await supabase
+      .from("coordination_communications")
+      .update({
+        needs_human_attention: false,
+        agent_processed_metadata: {
+          ...existing,
+          stage_5_incomplete: null,
+          stage_5_resolved: {
+            at: new Date().toISOString(),
+            via: "stage_5_reconcile",
+          },
+        },
+      })
+      .eq("id", id);
+  }
+}
+
+/**
+ * Enter Stage 6 IN_PROGRESS after Stage 5 completion when eligible.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function advanceToStage6AfterStage5Complete(supabase, params) {
+  const {
+    coordinationRecordId,
+    communicationId = null,
+    userId = null,
+    reason = "Stage 5 acknowledgment completed — Class of Service / Design Review",
+  } = params;
+
+  const { enterStage6 } = require("./uci-stage6-entry.service.js");
+  try {
+    return await enterStage6(supabase, {
+      coordinationRecordId,
+      reason,
+      triggeredByType: userId ? "user" : "system",
+      triggeredById: communicationId,
+      initialState: "IN_PROGRESS",
+      metadata: {
+        stage_5_completion_communication_id: communicationId,
+      },
+    });
+  } catch (err) {
+    if (err && /** @type {{ code?: string }} */ (err).code === "STAGE_6_NOT_ELIGIBLE") {
+      return { entered: false, reason: "stage_6_not_eligible", error: err.message };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Reconcile Stage 5 completion using acknowledgment anchor + supplemental thread evidence.
+ * Idempotent when Stage 5 already completed; still attempts Stage 6 entry when eligible.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function reconcileStage5FromCoordinationEvidence(supabase, params) {
+  const {
+    coordinationRecordId,
+    triggerCommunicationId = null,
+    userId = null,
+    source = "system",
+    advanceStage6 = true,
+  } = params;
+
+  const { data: record, error } = await supabase
+    .from("coordination_records")
+    .select("*")
+    .eq("id", coordinationRecordId)
+    .maybeSingle();
+
+  if (error || !record) {
+    return { reconciled: false, reason: error?.message || "record_not_found" };
+  }
+
+  if (Number(record.current_stage) !== 5) {
+    return { reconciled: false, reason: "stage_5_not_active", coordination_record: record };
+  }
+
+  if (
+    String(record.current_stage_state) === "COMPLETED" &&
+    record.acknowledgment_received_at
+  ) {
+    const stage6 = advanceStage6
+      ? await advanceToStage6AfterStage5Complete(supabase, {
+          coordinationRecordId,
+          communicationId: triggerCommunicationId,
+          userId,
+        })
+      : null;
+    return {
+      reconciled: false,
+      already_completed: true,
+      completed: false,
+      coordination_record: record,
+      stage_6: stage6,
+      can_enter_stage_6: canEnterStage6(record),
+    };
+  }
+
+  const { data: comms } = await supabase
+    .from("coordination_communications")
+    .select("*")
+    .eq("coordination_record_id", coordinationRecordId)
+    .order("message_timestamp", { ascending: false });
+
+  /** @type {Record<string, unknown> | null} */
+  let anchor = null;
+  for (const row of Array.isArray(comms) ? comms : []) {
+    if (String(row.direction || "inbound").toLowerCase() === "outbound") continue;
+    const meta = asRecord(row.agent_processed_metadata);
+    if (String(row.classification) === "acknowledgment" && meta.human_confirmed === true) {
+      anchor = row;
+      break;
+    }
+  }
+  if (!anchor) {
+    for (const row of Array.isArray(comms) ? comms : []) {
+      if (String(row.classification) === "acknowledgment") {
+        anchor = row;
+        break;
+      }
+    }
+  }
+  if (!anchor) {
+    return { reconciled: false, reason: "no_acknowledgment_anchor", coordination_record: record };
+  }
+
+  const anchorMeta = asRecord(anchor.agent_processed_metadata);
+  const anchorExtracted = extractCommunicationFields(anchorMeta);
+  const supplemental = await loadCoordinationSupplementalFields(supabase, {
+    coordinationRecordId,
+    anchorCommunicationId: String(anchor.id),
+    anchorTimestamp: anchor.message_timestamp,
+    threadId: anchor.thread_id,
+  });
+
+  const { data: application } = await supabase
+    .from("coordination_applications")
+    .select("id, utility_ticket_number")
+    .eq("coordination_record_id", coordinationRecordId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const eligibility = evaluateAutoAckEligibility({
+    classification: "acknowledgment",
+    confidence: anchor.classification_confidence,
+    matched: true,
+    flagged: isFlaggedForReview(anchorMeta),
+    extracted: anchorExtracted,
+    supplementalExtracted: supplemental,
+    record,
+    application,
+    messageTimestamp: anchor.message_timestamp,
+    skipConfidenceCheck: anchorMeta.human_confirmed === true,
+  });
+
+  if (!eligibility.eligible) {
+    return {
+      reconciled: false,
+      reason: eligibility.reason,
+      fields: eligibility.fields,
+      supplemental,
+      coordination_record: record,
+      anchor_communication_id: anchor.id,
+    };
+  }
+
+  const completion = await completeStage5Acknowledgment(supabase, {
+    coordinationRecordId,
+    userId,
+    source: userId ? "user" : source,
+    communicationId: String(anchor.id),
+    fields: eligibility.fields,
+    reason: triggerCommunicationId
+      ? "Stage 5 reconciled after supplemental thread evidence"
+      : "Stage 5 reconciled from coordination thread evidence",
+  });
+
+  const resolvedIds = [
+    String(anchor.id),
+    triggerCommunicationId ? String(triggerCommunicationId) : null,
+    supplemental.pm_source_communication_id
+      ? String(supplemental.pm_source_communication_id)
+      : null,
+  ].filter(Boolean);
+
+  await clearStage5ResolvedCommunications(supabase, resolvedIds);
+
+  const stage6 =
+    advanceStage6 && (completion.completed || completion.already_completed)
+      ? await advanceToStage6AfterStage5Complete(supabase, {
+          coordinationRecordId,
+          communicationId: triggerCommunicationId || String(anchor.id),
+          userId,
+        })
+      : null;
+
+  emitUciEvent(
+    "uci.stage5.reconciled",
+    {
+      coordination_record_id: coordinationRecordId,
+      anchor_communication_id: anchor.id,
+      trigger_communication_id: triggerCommunicationId,
+      pm_source_communication_id: supplemental.pm_source_communication_id ?? null,
+      stage_6_entered: Boolean(stage6?.entered || stage6?.already_in_stage_6),
+    },
+    { supabase },
+  );
+
+  return {
+    reconciled: true,
+    completed: completion.completed,
+    already_completed: completion.already_completed,
+    coordination_record: completion.coordination_record,
+    fields: eligibility.fields,
+    supplemental,
+    anchor_communication_id: anchor.id,
+    stage_6: stage6,
+    can_enter_stage_6: canEnterStage6(completion.coordination_record),
+  };
+}
+
 module.exports = {
   isFlaggedForReview,
   isRealUtilityPm,
   normalizeUtilityPm,
+  extractCommunicationFields,
+  normalizeGraphThreadRoot,
+  loadCoordinationSupplementalFields,
   resolveCompletionFields,
   evaluateAutoAckEligibility,
   persistPartialAcknowledgmentEvidence,
   completeStage5Acknowledgment,
   maybeAutoCompleteFromCommunication,
   reopenStage5Acknowledgment,
+  clearStage5ResolvedCommunications,
+  advanceToStage6AfterStage5Complete,
+  reconcileStage5FromCoordinationEvidence,
   PM_PLACEHOLDER_PATTERNS,
 };

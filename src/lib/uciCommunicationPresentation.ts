@@ -313,6 +313,7 @@ export function buildInboxAuditHistoryModel(
 export type CommunicationActionPlan = {
   showReclassify: boolean;
   showConfirm: boolean;
+  showConfirmed: boolean;
   showFlag: boolean;
   showReject: boolean;
   showViewHistory: boolean;
@@ -408,6 +409,32 @@ function extractedFields(comm: CoordinationCommunication): Record<string, unknow
 function incompleteReason(comm: CoordinationCommunication): string | null {
   const incomplete = asRecord(asMeta(comm).stage_5_incomplete);
   return str(incomplete.reason);
+}
+
+function isHumanConfirmed(comm: CoordinationCommunication): boolean {
+  return asMeta(comm).human_confirmed === true;
+}
+
+function needsStage5CosAcceptance(
+  comm: CoordinationCommunication,
+  record?: CoordinationRecord | null,
+): boolean {
+  if (!record || Number(record.current_stage) !== 5) return false;
+  if (String(record.current_stage_state || "").toUpperCase() === "COMPLETED") return false;
+  const classification = String(comm.classification || "").trim();
+  if (classification !== "design_review_response" && classification !== "class_of_service") {
+    return false;
+  }
+  if (isHumanConfirmed(comm)) return false;
+  if (isRejected(comm)) return false;
+  const conf = Number(comm.classification_confidence);
+  return Number.isFinite(conf) && conf >= LOW_CONFIDENCE_THRESHOLD;
+}
+
+function isAckPendingThreadPm(comm: CoordinationCommunication): boolean {
+  if (String(comm.classification || "") !== "acknowledgment") return false;
+  if (!isHumanConfirmed(comm)) return false;
+  return incompleteReason(comm) === "missing_utility_pm";
 }
 
 function isRejected(comm: CoordinationCommunication): boolean {
@@ -799,7 +826,10 @@ export function getNeedsAttentionReasons(
   }
 
   if (incomplete === "missing_utility_pm" || (classification === "acknowledgment" && !hasRealPm(fields.utility_project_manager))) {
-    if (classification === "acknowledgment" || incomplete === "missing_utility_pm") {
+    if (
+      (classification === "acknowledgment" || incomplete === "missing_utility_pm") &&
+      !(isHumanConfirmed(comm) && incomplete === "missing_utility_pm")
+    ) {
       reasons.push("Utility project manager/coordinator not assigned");
     }
   }
@@ -932,49 +962,62 @@ export function getCommunicationActionPlan(
   opts?: { surface?: CommunicationActionSurface },
 ): CommunicationActionPlan {
   const hideFlag = opts?.surface === "needs-attention";
+  const emptyActions = (overrides: Partial<CommunicationActionPlan>): CommunicationActionPlan => ({
+    showReclassify: false,
+    showConfirm: false,
+    showConfirmed: false,
+    showFlag: false,
+    showReject: false,
+    showViewHistory: true,
+    showViewMessage: true,
+    resolved: false,
+    rejected: false,
+    needsAttention: false,
+    ...overrides,
+  });
+
   // Outbound transmissions / package echoes are history, not operator attention.
   if (isOwnOutboundPackageEcho(comm) || isOutboundDirection(comm)) {
-    return {
-      showReclassify: false,
-      showConfirm: false,
-      showFlag: false,
-      showReject: false,
-      showViewHistory: true,
-      showViewMessage: true,
-      resolved: true,
-      rejected: false,
-      needsAttention: false,
-    };
+    return emptyActions({ resolved: true });
   }
 
   const rejected = isRejected(comm);
   if (rejected) {
-    return {
+    return emptyActions({
       showReclassify: true,
-      showConfirm: false,
-      showFlag: false,
-      showReject: false,
-      showViewHistory: true,
-      showViewMessage: true,
       resolved: true,
       rejected: true,
-      needsAttention: false,
-    };
+    });
   }
 
   // Resolved synthetic UAT → audit history posture (preserve rejected handling above).
   if (isSyntheticHistoryNotActionable(comm)) {
-    return {
-      showReclassify: false,
-      showConfirm: false,
-      showFlag: false,
-      showReject: false,
-      showViewHistory: true,
-      showViewMessage: true,
-      resolved: true,
-      rejected: false,
+    return emptyActions({ resolved: true });
+  }
+
+  const cosAcceptance = needsStage5CosAcceptance(comm, record);
+  const ackPendingThreadPm = isAckPendingThreadPm(comm);
+
+  if (cosAcceptance) {
+    return emptyActions({
+      showReclassify: true,
+      showConfirm: true,
+      showReject: true,
+      showViewHistory: Boolean(comm.reviewed_at || asMeta(comm).review_decision),
+      resolved: false,
+      needsAttention: true,
+    });
+  }
+
+  if (ackPendingThreadPm) {
+    return emptyActions({
+      showReclassify: true,
+      showConfirmed: true,
+      showFlag: hideFlag ? false : true,
+      showViewHistory: Boolean(comm.reviewed_at || asMeta(comm).review_decision),
+      resolved: false,
       needsAttention: false,
-    };
+    });
   }
 
   const flagged = asMeta(comm).flagged_for_review === true;
@@ -999,61 +1042,43 @@ export function getCommunicationActionPlan(
     (flagged || attentionReasons.length > 0 || classificationAttention || incomplete || unmatched);
   const manuallyResolved = isManuallyResolved(comm);
   const resolved = autoCompleted || stage6Closed || (manuallyResolved && !needsAttention && !flagged);
+  const humanConfirmed = isHumanConfirmed(comm);
 
   if (autoCompleted || stage6Closed || (resolved && !needsAttention)) {
-    return {
-      showReclassify: false,
-      showConfirm: false,
+    return emptyActions({
       showFlag: hideFlag ? false : true,
-      showReject: false,
-      showViewHistory: true,
-      showViewMessage: true,
       resolved: true,
-      rejected: false,
-      needsAttention: false,
-    };
+    });
   }
 
   if (needsAttention || flagged) {
-    return {
+    return emptyActions({
       showReclassify: true,
-      showConfirm: true,
+      showConfirm: !humanConfirmed,
+      showConfirmed: humanConfirmed,
       showFlag: hideFlag ? false : !flagged,
-      showReject: true,
+      showReject: !humanConfirmed,
       showViewHistory: Boolean(comm.reviewed_at || asMeta(comm).review_decision),
-      showViewMessage: true,
       resolved: false,
-      rejected: false,
       needsAttention: true,
-    };
+    });
   }
 
   if (manuallyResolved) {
-    return {
+    return emptyActions({
       showReclassify: true,
-      showConfirm: false,
+      showConfirmed: humanConfirmed,
       showFlag: hideFlag ? false : true,
-      showReject: false,
-      showViewHistory: true,
-      showViewMessage: true,
       resolved: true,
-      rejected: false,
-      needsAttention: false,
-    };
+    });
   }
 
   // Default quiet state (classified outbound / routine inbound)
-  return {
+  return emptyActions({
     showReclassify: true,
-    showConfirm: false,
     showFlag: hideFlag ? false : true,
-    showReject: false,
     showViewHistory: false,
-    showViewMessage: true,
-    resolved: false,
-    rejected: false,
-    needsAttention: false,
-  };
+  });
 }
 
 function stage5StatusLabel(

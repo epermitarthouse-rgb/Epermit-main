@@ -293,6 +293,17 @@ export function CommunicationReclassifyRow({
             Confirm
           </Button>
         ) : null}
+        {plan.showConfirmed ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={toolbarOutlineButtonClass}
+            disabled
+          >
+            Confirmed
+          </Button>
+        ) : null}
         {plan.showFlag && onFlagForReview ? (
           <Button
             type="button"
@@ -454,6 +465,17 @@ export function CommunicationQuickActions({
         >
           {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
           {needsAttentionQueue ? "Resolve" : "Confirm"}
+        </Button>
+      ) : null}
+      {plan.showConfirmed ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={toolbarOutlineButtonClass}
+          disabled
+        >
+          Confirmed
         </Button>
       ) : null}
       {showFlag ? (

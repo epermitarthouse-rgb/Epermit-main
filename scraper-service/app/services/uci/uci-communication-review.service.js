@@ -6,13 +6,16 @@
 
 const { isValidCategory, UCI_COMMUNICATION_CATEGORIES } = require("./uci-communication-categories.js");
 const {
-  completeStage5Acknowledgment,
   resolveCompletionFields,
   evaluateAutoAckEligibility,
   persistPartialAcknowledgmentEvidence,
   isFlaggedForReview,
   isRealUtilityPm,
+  loadCoordinationSupplementalFields,
+  reconcileStage5FromCoordinationEvidence,
 } = require("./uci-ack-acceptance.service.js");
+const { maybeEnterStage6FromCommunication } = require("./uci-stage6-entry.service.js");
+const { COS_TRIGGER_CLASSIFICATIONS } = require("./uci-cos-constants.js");
 const { matchInboundToCoordination } = require("./uci-communication-matcher.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
 const { getCommunicationById } = require("./uci-communications.service.js");
@@ -310,12 +313,46 @@ async function confirmCommunicationReview(supabase, params) {
       : {};
   const mergedExtracted = { ...priorExtracted, ...reviewerExtracted };
   const reviewedAt = new Date().toISOString();
+  const hasNewReviewerFields = Object.keys(reviewerExtracted).length > 0;
+
+  const nextClassNormalized = classification
+    ? String(classification).trim().toLowerCase()
+    : String(row.classification || "").trim().toLowerCase();
+
+  // Idempotent re-confirm with no new fields: re-run reconcile only.
+  if (
+    !hasNewReviewerFields &&
+    existing.human_confirmed === true &&
+    String(existing.review_decision?.action || "") === "confirm" &&
+    nextClassNormalized === String(row.classification || "").trim().toLowerCase() &&
+    row.coordination_record_id
+  ) {
+    const reconcileOnly = await reconcileStage5FromCoordinationEvidence(supabase, {
+      coordinationRecordId: String(row.coordination_record_id),
+      triggerCommunicationId: communicationId,
+      userId,
+      source: "user",
+    });
+    /** @type {Record<string, unknown> | null} */
+    let stage6 = null;
+    if (COS_TRIGGER_CLASSIFICATIONS.includes(nextClassNormalized)) {
+      stage6 = await maybeEnterStage6FromCommunication(supabase, {
+        communication: row,
+      });
+    }
+    return {
+      communication: row,
+      lifecycle: reconcileOnly,
+      stage_6: stage6,
+      idempotent: true,
+    };
+  }
 
   /** Whether this confirm can clear attention before lifecycle (may be re-set if incomplete). */
   let needsAttention =
-    nextClass === "unclassified" ||
-    nextClass === "escalation_or_problem" ||
-    nextClass === "request_for_information";
+    nextClassNormalized === "unclassified" ||
+    nextClassNormalized === "escalation_or_problem" ||
+    nextClassNormalized === "request_for_information";
 
   const { data: updated, error } = await supabase
     .from("coordination_communications")
@@ -374,12 +411,20 @@ async function confirmCommunicationReview(supabase, params) {
       .limit(1)
       .maybeSingle();
 
+    const supplemental = await loadCoordinationSupplementalFields(supabase, {
+      coordinationRecordId: String(updated.coordination_record_id),
+      anchorCommunicationId: communicationId,
+      anchorTimestamp: updated.message_timestamp,
+      threadId: updated.thread_id,
+    });
+
     const eligibility = evaluateAutoAckEligibility({
       classification: "acknowledgment",
       confidence: 1,
       matched: true,
       flagged: false,
       extracted: mergedExtracted,
+      supplementalExtracted: supplemental,
       record: record || {},
       application,
       messageTimestamp: updated.message_timestamp,
@@ -387,20 +432,20 @@ async function confirmCommunicationReview(supabase, params) {
     });
 
     if (eligibility.eligible) {
-      lifecycle = await completeStage5Acknowledgment(supabase, {
+      lifecycle = await reconcileStage5FromCoordinationEvidence(supabase, {
         coordinationRecordId: String(updated.coordination_record_id),
+        triggerCommunicationId: communicationId,
         userId,
         source: "user",
-        communicationId,
-        fields: eligibility.fields,
-        reason: note || "Human confirmed acknowledgment",
       });
       needsAttention = false;
     } else {
       const evidence = await persistPartialAcknowledgmentEvidence(supabase, {
         coordinationRecordId: String(updated.coordination_record_id),
         communicationId,
-        fields: eligibility.fields || resolveCompletionFields(mergedExtracted, record || {}, application),
+        fields:
+          eligibility.fields ||
+          resolveCompletionFields(mergedExtracted, record || {}, application, supplemental),
         reason: eligibility.reason || "incomplete_acknowledgment",
         source: "user",
       });
@@ -412,7 +457,18 @@ async function confirmCommunicationReview(supabase, params) {
         stage_state: "AWAITING_UTILITY",
         sla_stopped: false,
         fields: eligibility.fields || null,
+        supplemental,
       };
+      const reconcile = await reconcileStage5FromCoordinationEvidence(supabase, {
+        coordinationRecordId: String(updated.coordination_record_id),
+        triggerCommunicationId: communicationId,
+        userId,
+        source: "user",
+      });
+      if (reconcile.reconciled || reconcile.already_completed) {
+        lifecycle = reconcile;
+        needsAttention = false;
+      }
     }
 
     if (needsAttention !== updated.needs_human_attention) {
@@ -434,6 +490,48 @@ async function confirmCommunicationReview(supabase, params) {
               ...metaOf(updated).review_decision,
               lifecycle_completed: Boolean(lifecycle?.completed),
               lifecycle_reason: lifecycle?.reason || null,
+            },
+          },
+        })
+        .eq("id", communicationId)
+        .select("*")
+        .single();
+      if (attentionUpdated) {
+        Object.assign(updated, attentionUpdated);
+      }
+    }
+  } else if (
+    applyLifecycle &&
+    COS_TRIGGER_CLASSIFICATIONS.includes(nextClass) &&
+    updated.coordination_record_id
+  ) {
+    const reconcile = await reconcileStage5FromCoordinationEvidence(supabase, {
+      coordinationRecordId: String(updated.coordination_record_id),
+      triggerCommunicationId: communicationId,
+      userId,
+      source: "user",
+    });
+    const stage6 = await maybeEnterStage6FromCommunication(supabase, {
+      communication: updated,
+    });
+    lifecycle = {
+      ...reconcile,
+      stage_6: stage6,
+    };
+    if (reconcile.reconciled || reconcile.already_completed) {
+      needsAttention = false;
+      const { data: attentionUpdated } = await supabase
+        .from("coordination_communications")
+        .update({
+          needs_human_attention: false,
+          agent_processed_metadata: {
+            ...metaOf(updated),
+            extracted_fields: mergedExtracted,
+            stage_5_incomplete: null,
+            review_decision: {
+              ...metaOf(updated).review_decision,
+              lifecycle_completed: Boolean(reconcile.completed || reconcile.already_completed),
+              lifecycle_reason: reconcile.reason || null,
             },
           },
         })
