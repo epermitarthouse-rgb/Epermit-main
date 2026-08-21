@@ -103,8 +103,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { DocumentDiscipline, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from "@/types/document";
 import type { ProjectDocument } from "@/types/document";
 import {
+  ANALYSIS_TYPE_DC_MODIFICATION,
+  ANALYSIS_TYPE_STANDARD,
   computeSheetFingerprint,
   filterAnnotationsForActiveAnalysis,
+  isStandardComplianceRun,
   shouldMarkAnalysisStale,
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
@@ -125,6 +128,19 @@ import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending
 import { replaceComplianceFindingsForSheet } from "@/lib/codeAnalyzer/findings";
 import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnalyzer/deleteDrawings";
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
+import { CodeModificationReviewResults } from "@/components/compliance/CodeModificationReviewResults";
+import {
+  computeFormFingerprint,
+  computeModificationSourceFingerprint,
+  shouldMarkModificationReviewStale,
+  type CodeModificationReview,
+} from "@/lib/codeModification/model";
+import {
+  fetchModificationForms,
+  fetchModificationReviewForRun,
+} from "@/lib/codeModification/persistence";
+import { runDcCodeModificationReview } from "@/lib/codeModification/runReview";
+import { isDcJurisdiction } from "@/lib/codeModification/workflow";
 
 interface ComplianceIssue {
   id: string;
@@ -270,6 +286,11 @@ export function AIComplianceAnalyzer() {
   const [persistedSheets, setPersistedSheets] = useState<CodeAnalyzerSheet[]>([]);
   const [displayRun, setDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  const [modificationDisplayRun, setModificationDisplayRun] = useState<CodeAnalyzerRun | null>(null);
+  const [modificationCurrentRun, setModificationCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  const [modificationForm, setModificationForm] = useState<ProjectDocument | null>(null);
+  const [pendingFormFile, setPendingFormFile] = useState<File | null>(null);
+  const [modificationReview, setModificationReview] = useState<CodeModificationReview | null>(null);
   const [hasAnalyzerRuns, setHasAnalyzerRuns] = useState(false);
   const [sheetDocuments, setSheetDocuments] = useState<ProjectDocument[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -329,12 +350,15 @@ export function AIComplianceAnalyzer() {
   const [jurisdiction, setJurisdiction] = useState("general");
   const [projectType, setProjectType] = useState("commercial");
   const [codeYear, setCodeYear] = useState("2021");
+  const [analysisKind, setAnalysisKind] = useState<"standard" | "dc_code_modification">("standard");
 
   // Dual code analysis options
   const [analysisMode, setAnalysisMode] = useState<"both" | "ibc" | "local">("both");
   const [activeResultTab, setActiveResultTab] = useState<"ibc" | "local">("ibc");
 
   const hasLocalAmendments = JURISDICTIONS_WITH_AMENDMENTS.includes(jurisdiction);
+  const isModificationMode =
+    analysisKind === "dc_code_modification" && isDcJurisdiction(jurisdiction);
 
   // Documents that have compliance annotations (for "Load existing")
   const [documentsWithAnalysis, setDocumentsWithAnalysis] = useState<ProjectDocument[]>([]);
@@ -347,21 +371,48 @@ export function AIComplianceAnalyzer() {
   const selectedProjectIdRef = useRef(selectedProjectId);
   selectedProjectIdRef.current = selectedProjectId;
 
+  useEffect(() => {
+    setPendingFormFile(null);
+  }, [selectedProjectId]);
+
+  const pendingDrawingCount = files.filter((f) => f.status === "pending").length;
   const analysisStale = shouldMarkAnalysisStale({
     runStatus: displayRun?.status ?? currentRun?.status,
     runFingerprint: displayRun?.source_fingerprint ?? currentRun?.source_fingerprint,
     currentFingerprint: computeSheetFingerprint(persistedSheets),
-    pendingSourceCount: files.filter((f) => f.status === "pending").length,
+    pendingSourceCount: pendingDrawingCount,
+  });
+  const modificationFormFingerprint = modificationForm
+    ? computeFormFingerprint({
+        formDocumentId: modificationForm.id,
+        updatedAt: modificationForm.updated_at,
+      })
+    : "";
+  const modificationStale = shouldMarkModificationReviewStale({
+    runStatus: modificationDisplayRun?.status ?? modificationCurrentRun?.status,
+    runFingerprint:
+      modificationDisplayRun?.source_fingerprint ?? modificationCurrentRun?.source_fingerprint,
+    currentFingerprint: computeModificationSourceFingerprint(
+      modificationFormFingerprint,
+      computeSheetFingerprint(persistedSheets),
+    ),
+    formChanged: Boolean(pendingFormFile),
+    pendingSourceCount: pendingDrawingCount,
   });
 
   const reloadAnalyzerDataset = useCallback(async (projectId: string) => {
     const runs = await fetchAnalyzerRuns(projectId);
     const sheets = await fetchAnalyzerSheets(projectId);
-    const display = displayRunFromList(runs);
-    const current = currentRunFromList(runs);
-    setHasAnalyzerRuns(runs.length > 0);
+    const display = displayRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+    const current = currentRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+    const modificationDisplay = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+    const modificationCurrent = currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+    const hasStandardRuns = runs.some(isStandardComplianceRun);
+    setHasAnalyzerRuns(hasStandardRuns);
     setDisplayRun(display);
     setCurrentRun(current);
+    setModificationDisplayRun(modificationDisplay);
+    setModificationCurrentRun(modificationCurrent);
     setPersistedSheets(sheets);
     const ids = [
       ...new Set(
@@ -369,7 +420,22 @@ export function AIComplianceAnalyzer() {
       ),
     ];
     setSheetDocuments(await fetchDocumentsByIds(ids));
-    return { runs, sheets, display, current };
+    try {
+      const forms = await fetchModificationForms(projectId);
+      setModificationForm(forms[0] ?? null);
+    } catch (err) {
+      console.error("Error loading code modification forms:", err);
+      setModificationForm(null);
+    }
+    try {
+      setModificationReview(
+        modificationDisplay ? await fetchModificationReviewForRun(modificationDisplay.id) : null,
+      );
+    } catch (err) {
+      console.error("Error loading code modification review:", err);
+      setModificationReview(null);
+    }
+    return { runs, sheets, display, current, hasAnalyzerRuns: hasStandardRuns };
   }, []);
 
   // Fetch documents that have compliance annotations when project changes or after save
@@ -401,7 +467,7 @@ export function AIComplianceAnalyzer() {
 
         const activeAnnotations = filterAnnotationsForActiveAnalysis(annotations ?? [], {
           currentRunId: dataset.display?.id ?? null,
-          hasAnalyzerRuns: dataset.runs.length > 0,
+          hasAnalyzerRuns: dataset.hasAnalyzerRuns,
         });
 
         const complianceDocIds = new Set<string>();
@@ -828,6 +894,9 @@ export function AIComplianceAnalyzer() {
     (value: string) => {
       setJurisdiction(value);
       addRecentJurisdiction(value);
+      if (!isDcJurisdiction(value)) {
+        setAnalysisKind("standard");
+      }
       // Auto-set mode to both if jurisdiction has amendments
       if (JURISDICTIONS_WITH_AMENDMENTS.includes(value)) {
         setAnalysisMode("both");
@@ -1101,6 +1170,15 @@ export function AIComplianceAnalyzer() {
     }
   }, []);
 
+  const markAllCurrentRunsStaleInUi = useCallback(() => {
+    setDisplayRun((prev) => (prev && prev.status === "current" ? { ...prev, status: "stale" } : prev));
+    setCurrentRun(null);
+    setModificationDisplayRun((prev) =>
+      prev && prev.status === "current" ? { ...prev, status: "stale" } : prev,
+    );
+    setModificationCurrentRun(null);
+  }, []);
+
   const appendBatchFile = useCallback((file: File, preview: string | null) => {
     setFiles((prev) => [
       ...prev,
@@ -1112,13 +1190,27 @@ export function AIComplianceAnalyzer() {
         status: "pending",
       },
     ]);
-    if (selectedProjectId && (currentRun || displayRun || persistedSheets.length > 0)) {
+    if (
+      selectedProjectId &&
+      (currentRun ||
+        displayRun ||
+        modificationCurrentRun ||
+        modificationDisplayRun ||
+        persistedSheets.length > 0)
+    ) {
       void markCurrentRunStale(selectedProjectId).then(() => {
-        setDisplayRun((prev) => (prev && prev.status === "current" ? { ...prev, status: "stale" } : prev));
-        setCurrentRun(null);
+        markAllCurrentRunsStaleInUi();
       });
     }
-  }, [selectedProjectId, currentRun, displayRun, persistedSheets.length]);
+  }, [
+    selectedProjectId,
+    currentRun,
+    displayRun,
+    modificationCurrentRun,
+    modificationDisplayRun,
+    persistedSheets.length,
+    markAllCurrentRunsStaleInUi,
+  ]);
 
   const processFiles = useCallback(
     (fileList: FileList | File[]) => {
@@ -1527,7 +1619,107 @@ export function AIComplianceAnalyzer() {
     ],
   );
 
-  const analyzeDrawings = () => runBatchAnalysis(false);
+  const runModificationReview = useCallback(async () => {
+    if (!selectedProjectId || !user) {
+      toast.error("Select a project and log in to run Code Modification Review");
+      return;
+    }
+    if (!isDcJurisdiction(jurisdiction)) {
+      toast.error("DC Code Modification Review is only available for Washington, D.C.");
+      return;
+    }
+    if (!modificationForm && !pendingFormFile) {
+      toast.error("Upload a DC Code Modification application first");
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const persistUpload = async (opts: {
+        file: File;
+        document_type: string;
+        description: string;
+        parent_document_id?: string;
+      }) => {
+        const doc = await uploadDocument({
+          file: opts.file,
+          document_type: opts.document_type as ProjectDocument["document_type"],
+          description: opts.description,
+          parent_document_id: opts.parent_document_id,
+        });
+        if (doc) await fetchDocuments();
+        return doc;
+      };
+
+      const { review, form } = await runDcCodeModificationReview({
+        projectId: selectedProjectId,
+        userId: user.id,
+        jurisdiction,
+        projectType,
+        codeYear,
+        persistedSheets,
+        pendingDrawingFiles: files
+          .filter((f) => f.status === "pending")
+          .map((f) => ({ id: f.id, file: f.file, discipline: "general" as const })),
+        sheetDocuments,
+        modificationForm,
+        pendingFormFile,
+        getDownloadUrl,
+        persistUpload,
+      });
+      setModificationReview(review);
+      setModificationForm(form);
+      setPendingFormFile(null);
+      setFiles((prev) => prev.filter((f) => f.status === "failed"));
+      await reloadAnalyzerDataset(selectedProjectId);
+      toast.success("Code Modification Review complete");
+    } catch (err) {
+      console.error("Code modification review error:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to run Code Modification Review");
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [
+    codeYear,
+    fetchDocuments,
+    files,
+    getDownloadUrl,
+    jurisdiction,
+    modificationForm,
+    pendingFormFile,
+    persistedSheets,
+    projectType,
+    reloadAnalyzerDataset,
+    selectedProjectId,
+    sheetDocuments,
+    uploadDocument,
+    user,
+  ]);
+
+  const handleModificationFormChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      if (!file) return;
+      setPendingFormFile(file);
+      if (selectedProjectId && (modificationCurrentRun || modificationDisplayRun)) {
+        void markCurrentRunStale(selectedProjectId, ANALYSIS_TYPE_DC_MODIFICATION).then(() => {
+          setModificationDisplayRun((prev) =>
+            prev && prev.status === "current" ? { ...prev, status: "stale" } : prev,
+          );
+          setModificationCurrentRun(null);
+        });
+      }
+    },
+    [selectedProjectId, modificationCurrentRun, modificationDisplayRun],
+  );
+
+  const analyzeDrawings = () => {
+    if (isModificationMode) {
+      void runModificationReview();
+      return;
+    }
+    void runBatchAnalysis(false);
+  };
   const retryFailedFiles = () => runBatchAnalysis(true);
 
   const issueResponseKey = (fileId: string, issueId: string) => `${fileId}:${issueId}`;
@@ -2298,8 +2490,50 @@ export function AIComplianceAnalyzer() {
               )}
           </div>
 
+          {isDcJurisdiction(jurisdiction) && (
+            <div className="space-y-2">
+              <Label className="text-foreground">Analysis Type</Label>
+              <Select
+                value={analysisKind}
+                onValueChange={(value) =>
+                  setAnalysisKind(value === "dc_code_modification" ? "dc_code_modification" : "standard")
+                }
+              >
+                <SelectTrigger className="w-full md:w-[320px]" data-testid="select-analysis-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Standard Code Compliance</SelectItem>
+                  <SelectItem value="dc_code_modification">DC Code Modification Review</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {isModificationMode && (
+            <div className="space-y-2">
+              <Label htmlFor="code-modification-form-input" className="text-foreground">
+                Code Modification application
+              </Label>
+              <Input
+                id="code-modification-form-input"
+                type="file"
+                accept="application/pdf,.pdf"
+                data-testid="code-modification-form-input"
+                onChange={handleModificationFormChange}
+              />
+              {(pendingFormFile || modificationForm) && (
+                <p className="text-xs text-muted-foreground">
+                  {pendingFormFile
+                    ? `Selected: ${pendingFormFile.name}`
+                    : `Stored: ${modificationForm?.file_name}`}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* View / filter previously analyzed documents */}
-          {(documentFilterOptions.length > 0 || hasAnyResults) && (
+          {!isModificationMode && (documentFilterOptions.length > 0 || hasAnyResults) && (
             <Card className={cn("pilot-card border-border bg-card", "bg-background/80")}>
               <CardContent className="pt-4">
                 <div className="space-y-3">
@@ -2404,7 +2638,7 @@ export function AIComplianceAnalyzer() {
           </div>
 
           {/* Analysis Mode Toggle - only show for jurisdictions with amendments */}
-          {hasLocalAmendments && (
+          {hasLocalAmendments && !isModificationMode && (
             <Card className={cn("pilot-card border-border bg-card", "border-teal/20 shadow-sm")}>
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between">
@@ -2482,8 +2716,9 @@ export function AIComplianceAnalyzer() {
                   status: f.status,
                   error: f.error,
                 }))}
-                displayRun={displayRun}
-                analysisStale={analysisStale}
+                displayRun={isModificationMode ? modificationDisplayRun : displayRun}
+                analysisStale={isModificationMode ? modificationStale : analysisStale}
+                staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
                 analyzing={analyzing}
                 isLegacy={hasAnalyzerRuns === false && persistedSheets.length === 0 && documentsWithAnalysis.length > 0}
                 onAddClick={() => document.getElementById("drawing-upload")?.click()}
@@ -2526,29 +2761,37 @@ export function AIComplianceAnalyzer() {
               onClick={analyzeDrawings}
               disabled={
                 analyzing ||
-                (
-                  files.filter((f) => f.status === "pending").length === 0 &&
-                  persistedSheets.filter((s) => !s.excluded).length === 0 &&
-                  files.filter((f) => f.status === "failed").length === 0
-                )
+                (isModificationMode
+                  ? !modificationForm && !pendingFormFile
+                  : (
+                    files.filter((f) => f.status === "pending").length === 0 &&
+                    persistedSheets.filter((s) => !s.excluded).length === 0 &&
+                    files.filter((f) => f.status === "failed").length === 0
+                  ))
               }
               className="px-8"
             >
               {analyzing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {batchProgressLabel || "Analyzing..."}
+                  {isModificationMode
+                    ? "Running review..."
+                    : batchProgressLabel || "Analyzing..."}
                 </>
               ) : (
                 <>
                   <Shield className="h-4 w-4 mr-2" />
-                  {persistedSheets.length > 0 || displayRun
-                    ? "Update Analysis"
-                    : "Analyze for Compliance"}
+                  {isModificationMode
+                    ? modificationDisplayRun || modificationReview
+                      ? "Update Review"
+                      : "Run Code Modification Review"
+                    : persistedSheets.length > 0 || displayRun
+                      ? "Update Analysis"
+                      : "Analyze for Compliance"}
                 </>
               )}
             </Button>
-            {failedFileCount > 0 && !analyzing && (
+            {failedFileCount > 0 && !analyzing && !isModificationMode && (
               <Button variant="outlineGold" size="lg" onClick={retryFailedFiles}>
                 Retry failed sheets ({failedFileCount})
               </Button>
@@ -2576,8 +2819,11 @@ export function AIComplianceAnalyzer() {
       </Card>
 
       {/* Results — visible on All land/hydrate so prior analyses are never a silent blank */}
+      {isModificationMode && modificationReview && (
+        <CodeModificationReviewResults review={modificationReview} stale={modificationStale} />
+      )}
       <AnimatePresence>
-        {showResultsPanel && (
+        {!isModificationMode && showResultsPanel && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -2788,7 +3034,11 @@ export function AIComplianceAnalyzer() {
                   }
                   await markCurrentRunStale(selectedProjectId);
                   setAnalysisSavedAt(Date.now());
-                  toast.success("Drawing set updated — run Update Analysis to refresh findings");
+                  toast.success(
+                    isModificationMode
+                      ? "Drawing set updated — run Update Review to refresh findings"
+                      : "Drawing set updated — run Update Analysis to refresh findings",
+                  );
                   setDeleteTarget(null);
                 } catch (err) {
                   console.error(err);

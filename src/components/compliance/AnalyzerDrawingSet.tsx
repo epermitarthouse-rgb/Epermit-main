@@ -25,6 +25,7 @@ interface AnalyzerDrawingSetProps {
   pendingFiles: AnalyzerPendingFile[];
   displayRun: CodeAnalyzerRun | null;
   analysisStale: boolean;
+  staleActionLabel?: string;
   analyzing: boolean;
   isLegacy: boolean;
   onAddClick: () => void;
@@ -48,6 +49,7 @@ export function AnalyzerDrawingSet({
   pendingFiles,
   displayRun,
   analysisStale,
+  staleActionLabel = "Update Analysis",
   analyzing,
   isLegacy,
   onAddClick,
@@ -72,7 +74,7 @@ export function AnalyzerDrawingSet({
         <Alert>
           <AlertDescription>
             Drawing set changed since the last analysis. Current findings are out of date until you
-            run <span className="font-medium">Update Analysis</span>.
+            run <span className="font-medium">{staleActionLabel}</span>.
           </AlertDescription>
         </Alert>
       )}
