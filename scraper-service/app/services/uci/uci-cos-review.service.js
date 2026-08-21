@@ -12,6 +12,7 @@ const { stopCosSla } = require("./uci-cos-sla.service.js");
 const { getCurrentCosDesignRecord } = require("./uci-cos-analyst.service.js");
 const { canEnterStage7 } = require("./uci-stage6-entry.service.js");
 const { emitUciEvent } = require("./uci-events.service.js");
+const { isBlockingComparisonRow } = require("./uci-cos-constants.js");
 const {
   buildAcceptedFieldUpdate,
   buildApprovedSnapshot,
@@ -835,17 +836,12 @@ async function approveCosDesign(supabase, params) {
       cos.discrepancy_report.discrepancies.some(
         (d) =>
           d &&
+          d.blocking !== false &&
           (d.severity === "high" || d.material === true) &&
           (d.field == null ||
             includedRows.some((r) => String(r.field) === String(d.field))),
       )) ||
-    includedRows.some(
-      (r) =>
-        r.material === true &&
-        r.result &&
-        r.result !== "match" &&
-        r.result !== "insufficient_data",
-    );
+    includedRows.some((r) => isBlockingComparisonRow(r));
 
   if (hasMaterial && !acceptMaterialDeviation) {
     const err = new Error(

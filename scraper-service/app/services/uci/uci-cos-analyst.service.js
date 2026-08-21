@@ -28,6 +28,10 @@ const {
 const { canEnterStage6, enterStage6, canEnterStage7 } = require("./uci-stage6-entry.service.js");
 const { upsertCostRecord } = require("./uci-costs.service.js");
 const {
+  mergeSupplementalExtractedFields,
+  shouldReconcileSupplementalCosEvidence,
+} = require("./uci-cos-supplemental-merge.service.js");
+const {
   resolveCommunicationAttachmentBuffers,
   resolveProjectDocumentBuffers,
 } = require("./uci-graph-attachment-persist.service.js");
@@ -224,7 +228,10 @@ function isCleanHighConfidenceAutoCompletable(params) {
   if (report?.clean_match !== true) return false;
   if (report?.requires_human_review !== false) return false;
   if (report?.has_material_discrepancy || report?.revision_required) return false;
-  if (Array.isArray(report?.discrepancies) && report.discrepancies.length > 0) return false;
+  const blockingDiscrepancies = (Array.isArray(report?.discrepancies) ? report.discrepancies : []).filter(
+    (d) => d && d.blocking !== false && d.severity !== "informational",
+  );
+  if (blockingDiscrepancies.length > 0) return false;
   if (parseMeta?.uncertain === true) return false;
   if (extraction?.uncertain === true) return false;
   const extractionConfidence = Number(extraction?.extraction_confidence);
@@ -462,13 +469,78 @@ async function runCosDesignAnalysis(supabase, params) {
     report.has_material_discrepancy !== true &&
     report.review_status === "ready_for_approval" &&
     Array.isArray(report.discrepancies) &&
-    report.discrepancies.length === 0 &&
+    report.discrepancies.filter(
+      (d) => d && d.blocking !== false && d.severity !== "informational",
+    ).length === 0 &&
     Array.isArray(report.comparison_rows) &&
     report.comparison_rows.length > 0;
   report.requires_human_review = !report.clean_match;
 
+  const prior = await getCurrentCosDesignRecord(supabase, coordinationRecordId);
+
+  /** @type {boolean} */
+  let reconcileInPlace = false;
+  if (
+    shouldReconcileSupplementalCosEvidence({
+      priorRecord: prior,
+      primaryCommunication: primary,
+      forceNewVersion: deps.forceNewVersion === true,
+    })
+  ) {
+    const mergedExtracted = mergeSupplementalExtractedFields(
+      /** @type {Record<string, unknown>} */ (prior?.extracted_fields || {}),
+      mergedFields,
+    );
+    Object.assign(mergedFields, mergedExtracted);
+    reconcileInPlace = true;
+
+    const supplementalReport = buildCosDiscrepancyReport({
+      baselineFields: baseline.baseline_fields,
+      extractedFields: mergedFields,
+    });
+    supplementalReport.comparison_rows = annotateComparisonRowsWithConflicts(
+      supplementalReport.comparison_rows,
+      mergedFields,
+      mergedDocs.conflicts || [],
+    );
+    supplementalReport.comparison_rows = supplementalReport.comparison_rows.map((row) => {
+      if (row.utility_conflict === true) {
+        return { ...row, accepted: null, operator_override: false };
+      }
+      return row;
+    });
+    supplementalReport.discrepancies = [...structural, ...supplementalReport.discrepancies];
+    if (
+      structural.some((d) => d.severity === "high") ||
+      supplementalReport.has_material_discrepancy ||
+      (mergedDocs.conflicts || []).length > 0
+    ) {
+      supplementalReport.has_material_discrepancy = true;
+      supplementalReport.analysis_status = supplementalReport.revision_required
+        ? "revision_required"
+        : "needs_attention";
+      supplementalReport.review_status = supplementalReport.revision_required
+        ? "revision_required"
+        : "needs_attention";
+      if (supplementalReport.has_material_discrepancy && supplementalReport.evidence_status !== "ADVISORY") {
+        supplementalReport.evidence_status = "DISCREPANCY";
+      }
+    }
+    supplementalReport.clean_match =
+      supplementalReport.revision_required !== true &&
+      supplementalReport.has_material_discrepancy !== true &&
+      supplementalReport.review_status === "ready_for_approval" &&
+      Array.isArray(supplementalReport.discrepancies) &&
+      supplementalReport.discrepancies.filter(
+        (d) => d && d.blocking !== false && d.severity !== "informational",
+      ).length === 0 &&
+      Array.isArray(supplementalReport.comparison_rows) &&
+      supplementalReport.comparison_rows.length > 0;
+    supplementalReport.requires_human_review = !supplementalReport.clean_match;
+    Object.assign(report, supplementalReport);
+  }
+
   // Provenance: advisory predictions never become UTILITY_ISSUED.
-  // Uploaded/selected project documents count as utility evidence (not advisory).
   const hasDocumentEvidence = resolvedAttachments.length > 0;
   let evidenceStatus = advisoryOnly ? "ADVISORY" : report.evidence_status;
   if (advisoryOnly) {
@@ -481,7 +553,7 @@ async function runCosDesignAnalysis(supabase, params) {
     evidenceStatus = "UTILITY_ISSUED";
   }
 
-  const eligibleAutoComplete = isCleanHighConfidenceAutoCompletable({
+  let eligibleAutoComplete = isCleanHighConfidenceAutoCompletable({
     report,
     evidenceStatus,
     parseMeta: parseResult.parse_meta,
@@ -489,12 +561,10 @@ async function runCosDesignAnalysis(supabase, params) {
     advisoryOnly,
     communication: primary,
   });
-  // Advisory / non-utility evidence cannot auto-complete
   if (evidenceStatus !== "UTILITY_ISSUED") {
     report.clean_match = false;
     report.requires_human_review = true;
   } else if (!eligibleAutoComplete && report.clean_match) {
-    // Parse/OCR/extraction uncertainty or flagged review blocks auto-complete
     report.clean_match = false;
     report.requires_human_review = true;
     report.analysis_status = "needs_attention";
@@ -503,20 +573,23 @@ async function runCosDesignAnalysis(supabase, params) {
       report.discrepancies.push({
         code: "AUTO_COMPLETE_GATED",
         severity: "high",
+        blocking: true,
         message:
           "Clean field match was gated (low confidence, OCR/uncertain parse, or flagged review) — human review required",
       });
     }
+    eligibleAutoComplete = false;
   }
 
-  const attentionReasons = report.discrepancies.map((d) => d.code || d.message).filter(Boolean);
+  const attentionReasons = report.discrepancies
+    .filter((d) => d && d.blocking !== false)
+    .map((d) => d.code || d.message)
+    .filter(Boolean);
   const needsAttention =
     !eligibleAutoComplete &&
     (evidenceStatus !== "UTILITY_ISSUED" ||
       report.review_status !== "ready_for_approval" ||
       report.requires_human_review === true);
-
-  const prior = await getCurrentCosDesignRecord(supabase, coordinationRecordId);
 
   // Duplicate poll / re-classify: same communication + same attachment hashes → no new version
   const attachmentFingerprint = (resolvedAttachments || [])
@@ -548,8 +621,8 @@ async function runCosDesignAnalysis(supabase, params) {
     };
   }
 
-  const nextVersion = prior ? Number(prior.version || 1) + 1 : 1;
-  if (prior) {
+  const nextVersion = reconcileInPlace && prior ? Number(prior.version || 1) : prior ? Number(prior.version || 1) + 1 : 1;
+  if (prior && !reconcileInPlace) {
     await supersedeCurrentCosRecord(supabase, { coordinationRecordId, projectId });
   }
 
@@ -606,7 +679,9 @@ async function runCosDesignAnalysis(supabase, params) {
     superseded_by: null,
     evidence_status: evidenceStatus,
     review_status: report.review_status,
-    source_communication_id: primary?.id ?? null,
+    source_communication_id: reconcileInPlace && prior?.source_communication_id
+      ? prior.source_communication_id
+      : primary?.id ?? null,
     document_refs: parseResult.document_refs,
     source_text_excerpt: String(parseResult.text || "").slice(0, 4000),
     parse_meta: {
@@ -643,27 +718,73 @@ async function runCosDesignAnalysis(supabase, params) {
       field_sources: mergedDocs.field_sources || {},
       clean_match: report.clean_match === true,
       eligible_auto_complete: eligibleAutoComplete,
+      supplemental_reconciled: reconcileInPlace === true,
+      supplemental_communication_ids: reconcileInPlace
+        ? [
+            ...(Array.isArray(prior?.agent_metadata?.supplemental_communication_ids)
+              ? prior.agent_metadata.supplemental_communication_ids
+              : []),
+            primary?.id ? String(primary.id) : null,
+          ].filter(Boolean)
+        : [],
       // Prior approved/history remains on superseded row (prior.id); never silent overwrite
-      prior_cos_design_record_id: prior?.id || null,
+      prior_cos_design_record_id: reconcileInPlace ? prior?.agent_metadata?.prior_cos_design_record_id || null : prior?.id || null,
       prior_approved_snapshot_preserved: Boolean(prior?.approved_snapshot),
     },
   };
 
-  const { data: cosRecord, error: insertErr } = await supabase
-    .from("coordination_cos_design_records")
-    .insert(cosRow)
-    .select("*")
-    .single();
+  let cosRecord;
+  if (reconcileInPlace && prior?.id) {
+    const priorMeta =
+      prior.agent_metadata && typeof prior.agent_metadata === "object" && !Array.isArray(prior.agent_metadata)
+        ? /** @type {Record<string, unknown>} */ (prior.agent_metadata)
+        : {};
+    const mergedDocumentRefs = [
+      ...(Array.isArray(prior.document_refs) ? prior.document_refs : []),
+      ...(Array.isArray(parseResult.document_refs) ? parseResult.document_refs : []),
+    ];
+    const { data: updated, error: updateErr } = await supabase
+      .from("coordination_cos_design_records")
+      .update({
+        ...cosRow,
+        document_refs: mergedDocumentRefs,
+        accepted_fields: seedAcceptedFields(report.comparison_rows, prior.accepted_fields || {}),
+        field_overrides: Array.isArray(prior.field_overrides) ? prior.field_overrides : [],
+        review_version: Number(prior.review_version || 1) + 1,
+        agent_metadata: {
+          ...priorMeta,
+          ...cosRow.agent_metadata,
+        },
+      })
+      .eq("id", prior.id)
+      .select("*")
+      .single();
+    if (updateErr) {
+      throw Object.assign(new Error(updateErr.message || "Failed to reconcile supplemental COS record"), {
+        cause: updateErr,
+        statusCode: 500,
+        code: "COS_RECORD_RECONCILE_FAILED",
+      });
+    }
+    cosRecord = updated;
+  } else {
+    const { data: inserted, error: insertErr } = await supabase
+      .from("coordination_cos_design_records")
+      .insert(cosRow)
+      .select("*")
+      .single();
 
-  if (insertErr) {
-    throw Object.assign(new Error(insertErr.message || "Failed to store COS design record"), {
-      cause: insertErr,
-      statusCode: 500,
-      code: "COS_RECORD_INSERT_FAILED",
-    });
+    if (insertErr) {
+      throw Object.assign(new Error(insertErr.message || "Failed to store COS design record"), {
+        cause: insertErr,
+        statusCode: 500,
+        code: "COS_RECORD_INSERT_FAILED",
+      });
+    }
+    cosRecord = inserted;
   }
 
-  if (prior?.id && cosRecord?.id) {
+  if (prior?.id && cosRecord?.id && !reconcileInPlace) {
     await supabase
       .from("coordination_cos_design_records")
       .update({ superseded_by: cosRecord.id })

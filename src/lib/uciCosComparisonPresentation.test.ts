@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { formatCosComparisonCellValue } from "./uciCosComparisonPresentation.js";
+import {
+  formatCosComparisonCellValue,
+  isBlockingCosComparisonRow,
+  isRequiredForCosAcceptance,
+} from "./uciCosComparisonPresentation.js";
 
 describe("formatCosComparisonCellValue", () => {
   it("renders nullish and empty as em dash", () => {
@@ -40,5 +44,34 @@ describe("formatCosComparisonCellValue", () => {
       const rendered = formatCosComparisonCellValue(sample);
       assert.notEqual(rendered, "[object Object]");
     }
+  });
+});
+
+describe("Stage 6 partial COS comparison predicates", () => {
+  it("treats demand basis and meter qty as optional for acceptance", () => {
+    assert.equal(isRequiredForCosAcceptance("demand_load_kw"), false);
+    assert.equal(isRequiredForCosAcceptance("meter_count"), false);
+    assert.equal(isRequiredForCosAcceptance("service_amperage"), true);
+  });
+
+  it("does not block on utility_not_provided optional rows", () => {
+    assert.equal(
+      isBlockingCosComparisonRow({
+        field: "demand_load_kw",
+        result: "utility_not_provided",
+        submitted: 180,
+        utility_issued: null,
+      }),
+      false,
+    );
+    assert.equal(
+      isBlockingCosComparisonRow({
+        field: "service_amperage",
+        result: "utility_value_missing",
+        submitted: 1000,
+        utility_issued: null,
+      }),
+      true,
+    );
   });
 });

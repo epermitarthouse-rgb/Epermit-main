@@ -205,7 +205,8 @@ function buildCosReviewSummary(params) {
       r.result !== "insufficient_data" &&
       r.result !== "document_conflict" &&
       r.result !== "baseline_missing" &&
-      r.result !== "utility_value_missing",
+      r.result !== "utility_value_missing" &&
+      r.result !== "utility_not_provided",
   ).length;
   const conflictCount =
     (Array.isArray(conflicts) ? conflicts.length : 0) ||

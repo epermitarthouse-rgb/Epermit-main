@@ -1,6 +1,32 @@
 "use strict";
 
-const { COS_COMPARE_FIELDS } = require("./uci-cos-constants.js");
+const {
+  COS_COMPARE_FIELDS,
+  isRequiredForCosAcceptance,
+} = require("./uci-cos-constants.js");
+
+/**
+ * @param {unknown} value
+ */
+function unwrapComparisonScalar(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const obj = /** @type {Record<string, unknown>} */ (value);
+    if ("value" in obj) {
+      const inner = obj.value;
+      if (
+        inner != null &&
+        typeof inner === "object" &&
+        !Array.isArray(inner) &&
+        "value" in /** @type {Record<string, unknown>} */ (inner)
+      ) {
+        return /** @type {Record<string, unknown>} */ (inner).value ?? null;
+      }
+      return inner ?? null;
+    }
+  }
+  return value;
+}
 
 /**
  * @param {unknown} value
@@ -85,14 +111,16 @@ function buildCosDiscrepancyReport(params) {
   for (const def of COS_COMPARE_FIELDS) {
     const baseline = baselineFields[def.key];
     const issuedEntry = extractedFields[def.key];
-    const submittedValue =
+    const submittedValue = unwrapComparisonScalar(
       baseline && typeof baseline === "object" && "value" in /** @type {any} */ (baseline)
         ? /** @type {any} */ (baseline).value
-        : baseline ?? null;
-    const issuedValue =
+        : baseline ?? null,
+    );
+    const issuedValue = unwrapComparisonScalar(
       issuedEntry && typeof issuedEntry === "object" && "value" in /** @type {any} */ (issuedEntry)
         ? /** @type {any} */ (issuedEntry).value
-        : issuedEntry ?? null;
+        : issuedEntry ?? null,
+    );
 
     if (submittedValue == null && issuedValue == null) continue;
 
@@ -101,17 +129,23 @@ function buildCosDiscrepancyReport(params) {
     let requiredAction = "Review";
 
     if (submittedValue != null && issuedValue == null) {
-      result = "utility_value_missing";
-      requiredAction = "Needs Attention — utility value not extracted";
-      if (def.material) {
+      const requiredForAcceptance = isRequiredForCosAcceptance(def.key);
+      if (requiredForAcceptance) {
+        result = "utility_value_missing";
+        requiredAction = "Needs Attention — utility value not extracted";
         discrepancies.push({
           code: `${def.key.toUpperCase()}_MISSING_UTILITY`,
           field: def.key,
           severity: "high",
+          material: true,
+          blocking: true,
           message: `Utility-issued ${def.label} not found in COS/design document`,
           submitted: submittedValue,
           utility_issued: null,
         });
+      } else {
+        result = "utility_not_provided";
+        requiredAction = "Not provided by utility — informational";
       }
     } else if (submittedValue == null && issuedValue != null) {
       result = "baseline_missing";
@@ -157,6 +191,8 @@ function buildCosDiscrepancyReport(params) {
       result,
       required_action: requiredAction,
       material: def.material,
+      required_for_acceptance: isRequiredForCosAcceptance(def.key),
+      blocking: isRequiredForCosAcceptance(def.key) && result === "utility_value_missing",
       baseline_provenance:
         baseline && typeof baseline === "object"
           ? /** @type {any} */ (baseline).provenance ||
@@ -190,7 +226,10 @@ function buildCosDiscrepancyReport(params) {
   }
 
   const materialDiscrepancies = discrepancies.filter(
-    (d) => d.severity === "high" || d.material === true || d.code === "REVISION_REQUIRED",
+    (d) =>
+      d &&
+      d.blocking !== false &&
+      (d.severity === "high" || d.material === true || d.code === "REVISION_REQUIRED"),
   );
 
   let analysis_status = "ready_for_approval";
@@ -215,16 +254,19 @@ function buildCosDiscrepancyReport(params) {
       message: "Insufficient extracted or baseline fields for COS comparison",
     });
   } else if (discrepancies.length > 0) {
-    // Non-material discrepancies (e.g. new utility conditions) still need humans —
-    // Agent 6 only auto-completes when the discrepancy list is empty.
-    analysis_status = "needs_attention";
-    evidence_status = "DISCREPANCY";
-    review_status = "needs_attention";
+    const blockingDiscrepancies = discrepancies.filter(
+      (d) => d && d.blocking !== false && d.severity !== "informational",
+    );
+    if (blockingDiscrepancies.length > 0) {
+      analysis_status = "needs_attention";
+      evidence_status = "DISCREPANCY";
+      review_status = "needs_attention";
+    }
   }
 
   const cleanMatch =
     !revisionRequired &&
-    discrepancies.length === 0 &&
+    materialDiscrepancies.length === 0 &&
     comparison_rows.length > 0 &&
     review_status === "ready_for_approval";
 
@@ -247,4 +289,5 @@ module.exports = {
   buildCosDiscrepancyReport,
   valuesMatch,
   normalizeComparable,
+  unwrapComparisonScalar,
 };

@@ -6,7 +6,7 @@
  * keeping utility evidence immutable on each row.
  */
 
-const { COS_COMPARE_FIELDS } = require("./uci-cos-constants.js");
+const { COS_COMPARE_FIELDS, isRequiredForCosAcceptance, isBlockingComparisonRow } = require("./uci-cos-constants.js");
 
 /** Core COS fields — require explicit confirmation before exclusion. */
 const COS_CORE_COMPARE_FIELD_KEYS = Object.freeze([
@@ -14,7 +14,6 @@ const COS_CORE_COMPARE_FIELD_KEYS = Object.freeze([
   "service_voltage",
   "phase",
   "wire_configuration",
-  "meter_count",
 ]);
 
 const STRUCTURAL_DISCREPANCY_CODES = Object.freeze([
@@ -63,13 +62,16 @@ function deriveDiscrepancyFromComparisonRow(row) {
 
   if (result === "match" || result === "insufficient_data") return null;
 
+  if (result === "utility_not_provided") return null;
+
   if (result === "utility_value_missing") {
-    if (!def?.material) return null;
+    if (!isRequiredForCosAcceptance(field)) return null;
     return {
       code: `${field.toUpperCase()}_MISSING_UTILITY`,
       field,
       severity: "high",
       material: true,
+      blocking: true,
       message: `Utility-issued ${label} not found in COS/design document`,
       submitted,
       utility_issued: null,
@@ -102,8 +104,7 @@ function deriveDiscrepancyFromComparisonRow(row) {
   if (
     result === "mismatch" ||
     result === "undersized" ||
-    result === "oversized" ||
-    result === "utility_value_missing"
+    result === "oversized"
   ) {
     return {
       code: `${field.toUpperCase()}_${result.toUpperCase()}`,
@@ -185,7 +186,10 @@ function recomputeCosReviewFromComparisonRows(params) {
   const discrepancies = [...structural, ...rowDiscrepancies];
 
   const materialDiscrepancies = discrepancies.filter(
-    (d) => d && (d.severity === "high" || d.material === true || d.code === "REVISION_REQUIRED"),
+    (d) =>
+      d &&
+      d.blocking !== false &&
+      (d.severity === "high" || d.material === true || d.code === "REVISION_REQUIRED"),
   );
 
   let analysis_status = "ready_for_approval";
@@ -210,9 +214,14 @@ function recomputeCosReviewFromComparisonRows(params) {
       message: "No comparison rows included — include at least one field or upload COS evidence",
     });
   } else if (discrepancies.length > 0) {
-    analysis_status = "needs_attention";
-    evidence_status = "DISCREPANCY";
-    review_status = "needs_attention";
+    const blockingDiscrepancies = discrepancies.filter(
+      (d) => d && d.blocking !== false && d.severity !== "informational",
+    );
+    if (blockingDiscrepancies.length > 0) {
+      analysis_status = "needs_attention";
+      evidence_status = "DISCREPANCY";
+      review_status = "needs_attention";
+    }
   }
 
   const cleanMatch =
@@ -312,14 +321,7 @@ function filterIncludedComparisonRows(comparisonRows) {
  */
 function includedRowsHaveBlockers(comparisonRows) {
   const included = filterIncludedComparisonRows(comparisonRows);
-  return included.some((row) => {
-    const result = String(row.result || "");
-    if (result === "match" || result === "insufficient_data") return false;
-    if (row.utility_conflict === true || result === "document_conflict") {
-      return row.accepted == null || row.accepted === "";
-    }
-    return true;
-  });
+  return included.some((row) => isBlockingComparisonRow(row));
 }
 
 module.exports = {

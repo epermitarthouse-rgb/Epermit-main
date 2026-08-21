@@ -301,6 +301,51 @@ describe("Stage 6 extraction + discrepancy", () => {
     assert.equal(report.discrepancies.length, 0);
   });
 
+  it("Portsmouth-style partial utility COS: optional omissions are informational only", () => {
+    const report = buildCosDiscrepancyReport({
+      baselineFields: {
+        service_amperage: { value: 1000, provenance: "verified_project_input" },
+        service_voltage: { value: "120/208V", provenance: "verified_project_input" },
+        phase: { value: "3", provenance: "verified_project_input" },
+        wire_configuration: { value: "4-wire", provenance: "verified_project_input" },
+        demand_load_kw: { value: { value: 180, unit: "kW" }, provenance: "verified_project_input" },
+        meter_count: { value: 2, provenance: "verified_project_input" },
+      },
+      extractedFields: {
+        service_amperage: { value: 1000, provenance: "utility_document" },
+        service_voltage: { value: "120/208V", provenance: "utility_document" },
+        phase: { value: "3", provenance: "utility_document" },
+        wire_configuration: { value: "4-wire", provenance: "utility_document" },
+      },
+    });
+
+    const demandRow = report.comparison_rows.find((r) => r.field === "demand_load_kw");
+    const meterRow = report.comparison_rows.find((r) => r.field === "meter_count");
+    assert.equal(demandRow?.result, "utility_not_provided");
+    assert.equal(meterRow?.result, "utility_not_provided");
+    assert.equal(demandRow?.required_action, "Not provided by utility — informational");
+    assert.ok(!report.discrepancies.some((d) => String(d.field) === "demand_load_kw"));
+    assert.ok(!report.discrepancies.some((d) => String(d.field) === "meter_count"));
+    assert.equal(report.clean_match, true);
+    assert.equal(report.requires_human_review, false);
+    assert.equal(report.review_status, "ready_for_approval");
+  });
+
+  it("required core field missing from utility response still blocks", () => {
+    const report = buildCosDiscrepancyReport({
+      baselineFields: {
+        service_amperage: { value: 1000, provenance: "verified_project_input" },
+        service_voltage: { value: "120/208V", provenance: "verified_project_input" },
+      },
+      extractedFields: {
+        service_voltage: { value: "120/208V", provenance: "utility_document" },
+      },
+    });
+    assert.equal(report.clean_match, false);
+    assert.equal(report.requires_human_review, true);
+    assert.ok(report.discrepancies.some((d) => d.code === "SERVICE_AMPERAGE_MISSING_UTILITY"));
+  });
+
   it("marks revision-required design responses", () => {
     const extracted = extractCosDesignFields(REVISION_COS_BODY);
     const report = buildCosDiscrepancyReport({
@@ -1126,6 +1171,51 @@ describe("Stage 6 accepted values + multi-doc + snapshot", () => {
           { userId: "u1", approvedAt: new Date().toISOString() },
         ),
       /requires a reason/,
+    );
+  });
+});
+
+describe("Stage 6 supplemental COS merge", () => {
+  const {
+    mergeSupplementalExtractedFields,
+    shouldReconcileSupplementalCosEvidence,
+  } = require("../app/services/uci/uci-cos-supplemental-merge.service.js");
+
+  it("fills null utility fields without overwriting existing extraction", () => {
+    const merged = mergeSupplementalExtractedFields(
+      {
+        service_amperage: { value: 1000, provenance: "utility_document" },
+        service_voltage: { value: "120/208V", provenance: "utility_document" },
+      },
+      {
+        meter_count: { value: 2, provenance: "utility_document" },
+        service_amperage: { value: 800, provenance: "utility_document" },
+      },
+    );
+    assert.equal(merged.service_amperage.value, 1000);
+    assert.equal(merged.meter_count.value, 2);
+  });
+
+  it("reconciles in-place for in-progress records from a new communication", () => {
+    assert.equal(
+      shouldReconcileSupplementalCosEvidence({
+        priorRecord: {
+          review_status: "ready_for_approval",
+          source_communication_id: "comm-a",
+        },
+        primaryCommunication: { id: "comm-b" },
+      }),
+      true,
+    );
+    assert.equal(
+      shouldReconcileSupplementalCosEvidence({
+        priorRecord: {
+          review_status: "approved",
+          source_communication_id: "comm-a",
+        },
+        primaryCommunication: { id: "comm-b" },
+      }),
+      false,
     );
   });
 });
