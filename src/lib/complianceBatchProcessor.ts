@@ -44,6 +44,9 @@ export interface ComplianceBatchFile {
   preparedImageFile?: File;
   ibcResult?: ComplianceBatchAnalysisResult | null;
   localResult?: ComplianceBatchAnalysisResult | null;
+  sheetId?: string;
+  pageNumber?: number;
+  sourceDocumentId?: string;
 }
 
 export interface ComplianceBatchProgress {
@@ -86,13 +89,15 @@ export interface ProcessComplianceBatchOptions {
   projectId: string | null;
   canPersist: boolean;
   uploadDocument: UploadDocumentFn;
-  pdfFirstPageToImageFile: (file: File) => Promise<File>;
+  /** @deprecated PDFs must be expanded to page images before analysis. */
+  pdfFirstPageToImageFile?: (file: File) => Promise<File>;
   requestAnalysis: RequestAnalysisFn;
   readFileAsBase64?: (file: File) => Promise<string>;
   saveAnalysisToDb: (
     result: ComplianceBatchAnalysisResult,
     documentId: string,
     projectId: string,
+    sheet?: { sheetId?: string; pageNumber?: number; sourceDocumentId?: string },
   ) => Promise<void>;
   onFileUpdate: (id: string, patch: Partial<ComplianceBatchFile>) => void;
   onProgress: (progress: ComplianceBatchProgress) => void;
@@ -208,12 +213,19 @@ export async function processComplianceBatch(
     try {
       if (!working.preparedImageFile) {
         options.onFileUpdate(working.id, { status: "preparing", error: undefined });
-        const prepared =
-          working.file.type === "application/pdf"
-            ? await options.pdfFirstPageToImageFile(working.file)
-            : working.file;
-        working = { ...working, preparedImageFile: prepared };
-        options.onFileUpdate(working.id, { preparedImageFile: prepared, status: "preparing" });
+        const isPdf =
+          working.file.type === "application/pdf" ||
+          working.file.name.toLowerCase().endsWith(".pdf");
+        if (isPdf) {
+          throw new Error(
+            "PDF must be expanded into individual page images before analysis. Page 1 is not used as a stand-in for the full drawing set.",
+          );
+        }
+        working = { ...working, preparedImageFile: working.file };
+        options.onFileUpdate(working.id, {
+          preparedImageFile: working.file,
+          status: "preparing",
+        });
       }
 
       if (!working.documentId && options.canPersist && options.projectId) {
@@ -280,8 +292,17 @@ export async function processComplianceBatch(
       }
 
       if (working.documentId && options.projectId && options.canPersist) {
-        if (ibcResult) await options.saveAnalysisToDb(ibcResult, working.documentId, options.projectId);
-        if (localResult) await options.saveAnalysisToDb(localResult, working.documentId, options.projectId);
+        const sheetMeta = {
+          sheetId: working.sheetId,
+          pageNumber: working.pageNumber,
+          sourceDocumentId: working.sourceDocumentId,
+        };
+        if (ibcResult) {
+          await options.saveAnalysisToDb(ibcResult, working.documentId, options.projectId, sheetMeta);
+        }
+        if (localResult) {
+          await options.saveAnalysisToDb(localResult, working.documentId, options.projectId, sheetMeta);
+        }
       }
 
       options.onFileUpdate(working.id, {

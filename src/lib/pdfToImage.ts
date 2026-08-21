@@ -1,12 +1,12 @@
 /**
- * Renders the first page of a PDF to a PNG image (base64).
- * Used for AI compliance analysis so the Vision API receives an image.
+ * PDF rasterization for AI Code Analyzer and plan viewers.
  * Creates a Worker with the worker URL per call so we never assign to
  * GlobalWorkerOptions (which is read-only in the ESM module).
  */
 import * as pdfjsLib from "pdfjs-dist";
 // Resolve worker from node_modules so we never touch GlobalWorkerOptions
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { COMPLIANCE_MAX_PAGES_PER_PDF, planPdfPageNumbers } from "@/lib/codeAnalyzer/model";
 
 export async function pdfFirstPageToImageBase64(
   file: File
@@ -88,4 +88,58 @@ export async function loadPdfDocument(
   };
 
   return { numPages: doc.numPages, renderPage, destroy };
+}
+
+export interface PdfPageImageFile {
+  pageNumber: number;
+  file: File;
+}
+
+/**
+ * Rasterize each PDF page to a PNG File (up to maxPages).
+ * Callers must not assume page 1 is the only page.
+ */
+export async function pdfPagesToImageFiles(
+  pdfFile: File,
+  options?: { maxPages?: number; scale?: number },
+): Promise<{
+  pages: PdfPageImageFile[];
+  truncated: boolean;
+  totalPages: number;
+}> {
+  const arrayBuffer = await pdfFile.arrayBuffer();
+  const handle = await loadPdfDocument(arrayBuffer);
+  try {
+    const planned = planPdfPageNumbers(
+      handle.numPages,
+      options?.maxPages ?? COMPLIANCE_MAX_PAGES_PER_PDF,
+    );
+    const scale = options?.scale ?? 2;
+    const pages: PdfPageImageFile[] = [];
+    const baseName = pdfFile.name.replace(/\.pdf$/i, "") || "document";
+
+    for (const pageNumber of planned.pageNumbers) {
+      const canvas = document.createElement("canvas");
+      await handle.renderPage(pageNumber, canvas, scale);
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
+          "image/png",
+          1,
+        );
+      });
+      pages.push({
+        pageNumber,
+        file: new File([blob], `${baseName}-page${pageNumber}.png`, { type: "image/png" }),
+      });
+    }
+
+    return {
+      pages,
+      truncated: planned.truncated,
+      totalPages: planned.totalPages,
+    };
+  } finally {
+    handle.destroy();
+  }
 }
