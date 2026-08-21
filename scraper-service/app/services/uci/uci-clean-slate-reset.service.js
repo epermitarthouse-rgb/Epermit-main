@@ -470,6 +470,7 @@ async function auditCleanSlateReset(supabase, params) {
       active_application_template: null,
       [`metadata.${ACTIVE_APPLICATION_TEMPLATE_META_KEY}`]: null,
       stale_metadata_key_count: 0,
+      utility_provider_id: null,
     },
     contamination_risk: contamination,
     scope_mapping: RESET_SCOPE,
@@ -504,7 +505,13 @@ async function assessContaminationRisk(supabase, params) {
 
   /** @type {string[]} */
   const risks = [];
-  if (lcInMeta) {
+  if (coordination.utility_provider_id) {
+    risks.push("utility_provider_id is set — reset clears it so Stage 1 provider mapping starts fresh");
+  }
+  if (meta.uci_provider_mapping || meta.uci_provider_resolution || meta.uci_site_address) {
+    risks.push("Provider mapping/resolution or site address metadata remains and will be scrubbed on reset");
+  }
+    if (lcInMeta) {
     risks.push("LC number still in coordination metadata would allow stale DOM-DEMO matching");
   }
   if (activeTemplate) {
@@ -539,7 +546,7 @@ async function assessContaminationRisk(supabase, params) {
     pre_reset_risks: risks,
     mitigations: [
       "Delete all coordination_communications and project-scoped uci_unmatched_inbound_messages",
-      "Scrub all run-scoped coordination metadata; preserve provider/site setup only; stamp clean_slate_at boundary",
+      "Scrub all run-scoped coordination metadata including provider mapping; stamp clean_slate_at boundary",
       "Preserve microsoft_mailbox_connections (Graph idempotency prevents re-ingest of old mail)",
       "Preserve utility_providers global template library; coordination-scoped activation drives requirements",
       "Matcher skips records when inbound message_timestamp < clean_slate_at",
@@ -693,6 +700,7 @@ async function executeCleanSlateReset(supabase, params) {
       prediction_reason: {},
       last_error: null,
       agent_monitored: true,
+      utility_provider_id: null,
       metadata: nextMeta,
       updated_at: resetAt,
     })

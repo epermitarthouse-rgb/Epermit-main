@@ -164,7 +164,7 @@ describe("UCI clean-slate reset", () => {
     );
     assert.equal(meta.lc_number, undefined);
     assert.equal(meta.active_application_template, undefined);
-    assert.equal(meta.uci_provider_resolution.status, "confirmed");
+    assert.equal(meta.uci_provider_resolution, undefined);
     const boundary = readCleanSlateBoundary(meta);
     assert.equal(boundary?.run_id, "run-1");
     assert.equal(
@@ -284,7 +284,7 @@ describe("UCI clean-slate reset", () => {
     assert.equal(match.matched, false);
   });
 
-  it("scrubs prior-run metadata caches but preserves provider setup", () => {
+  it("scrubs provider mapping and prior-run metadata caches", () => {
     const scrubbed = scrubCoordinationMetadataForCleanSlate({
       uci_provider_resolution: { status: "confirmed" },
       uci_provider_mapping: { provider_slug: "dominion" },
@@ -300,9 +300,9 @@ describe("UCI clean-slate reset", () => {
       lc_number: "451554",
       active_application_template: { "electric:new_service": {} },
     });
-    assert.equal(scrubbed.uci_provider_resolution.status, "confirmed");
-    assert.equal(scrubbed.uci_provider_mapping.provider_slug, "dominion");
-    assert.equal(scrubbed.uci_site_address.formatted, "100 Main St");
+    assert.equal(scrubbed.uci_provider_resolution, undefined);
+    assert.equal(scrubbed.uci_provider_mapping, undefined);
+    assert.equal(scrubbed.uci_site_address, undefined);
     assert.equal(scrubbed.provider_setup.confirmed, true);
     assert.equal(scrubbed.uci_document_processing, undefined);
     assert.equal(scrubbed.stage2_readiness, undefined);
@@ -384,7 +384,8 @@ describe("UCI clean-slate reset", () => {
     assert.equal(tables.coordination_records[0].metadata.active_application_template, undefined);
     assert.equal(tables.coordination_records[0].metadata.uci_document_processing, undefined);
     assert.equal(tables.coordination_records[0].metadata.stage_5_acknowledgment, undefined);
-    assert.equal(tables.coordination_records[0].metadata.uci_provider_resolution.status, "confirmed");
+    assert.equal(tables.coordination_records[0].metadata.uci_provider_resolution, undefined);
+    assert.equal(tables.coordination_records[0].utility_provider_id, null);
     assert.ok(tables.coordination_records[0].metadata.uci_clean_slate);
     assert.equal(tables.projects[0].utility_coordination_completed_at, null);
     assert.equal(tables.microsoft_mailbox_connections.length, 1);

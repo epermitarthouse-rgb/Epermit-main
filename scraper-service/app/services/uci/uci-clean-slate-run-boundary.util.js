@@ -38,19 +38,19 @@ function isMessageBeforeCleanSlate(metadata, messageTimestamp) {
   return msgMs < boundaryMs;
 }
 
-/** Metadata retained across clean-slate resets (provider/site setup only). */
+/** Metadata retained across clean-slate resets (optional setup hints; no provider mapping). */
 const PRESERVED_COORDINATION_METADATA_KEYS = new Set([
-  "uci_provider_mapping",
-  "uci_provider_resolution",
   "provider_setup",
   "uci_provider_setup",
-  "uci_site_address",
-  "uci_provider_reassignment_history",
 ]);
 
 /** Run-scoped caches that must not survive reset (used for contamination audit). */
 const RUN_SCOPED_COORDINATION_METADATA_KEYS = [
   "uci_document_processing",
+  "uci_provider_mapping",
+  "uci_provider_resolution",
+  "uci_site_address",
+  "uci_provider_reassignment_history",
   "stage2_readiness",
   "stage_5_acknowledgment",
   "stage_5_acknowledgment_history",
@@ -79,7 +79,7 @@ const RUN_SCOPED_COORDINATION_METADATA_KEYS = [
 ];
 
 /**
- * Keep only provider/site setup metadata; drop all prior-run workflow caches.
+ * Keep only optional setup hints; drop provider mapping and all prior-run workflow caches.
  *
  * @param {Record<string, unknown>} metadata
  * @returns {Record<string, unknown>}
