@@ -364,11 +364,11 @@ describe("complianceBatchProcessor", () => {
     assert.equal(countFailedBatchFiles(files), 1);
   });
 
-  it("allows removing only pending files before processing", () => {
+  it("allows removing pending or failed files before a new run", () => {
     assert.equal(canRemoveBatchFile("pending"), true);
     assert.equal(canRemoveBatchFile("analyzing"), false);
     assert.equal(canRemoveBatchFile("completed"), false);
-    assert.equal(canRemoveBatchFile("failed"), false);
+    assert.equal(canRemoveBatchFile("failed"), true);
   });
 
   it("forces overallScore 100 when issues are empty (ignores AI-echoed 85)", () => {

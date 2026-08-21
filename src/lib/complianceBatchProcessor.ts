@@ -339,7 +339,7 @@ export async function processComplianceBatch(
 }
 
 export function canRemoveBatchFile(status: ComplianceBatchFileStatus): boolean {
-  return status === "pending";
+  return status === "pending" || status === "failed";
 }
 
 export function countFailedBatchFiles(files: ComplianceBatchFile[]): number {
