@@ -125,6 +125,14 @@ const {
   executeCleanSlateReset,
 } = require("../services/uci/uci-clean-slate-reset.service.js");
 const {
+  listDocumentRegistry,
+  syncRegistryForCoordination,
+  registerProjectDocument,
+  overrideDocumentRole,
+  getProviderRequirementsStatus,
+} = require("../services/uci/uci-document-registry.service.js");
+const { setPackageDocumentSignatureStatus } = require("../services/uci/uci-package-signature.service.js");
+const {
   loadPackageExportContext,
   buildStructuredPackageExport,
   renderPackageSummaryPdf,
@@ -1488,6 +1496,154 @@ function createUciRouter(opts) {
     }
   });
 
+  router.get("/coordination/:id/document-registry", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+      });
+      const result = await listDocumentRegistry(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/document-registry/sync", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const entries = await syncRegistryForCoordination(supabase, {
+        coordinationRecordId: coordinationId,
+        record,
+        userId: user.id,
+      });
+      res.json({ coordination_record_id: coordinationId, entries, total_count: entries.length });
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/document-registry/:documentId/role", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const projectDocumentId = String(req.params.documentId || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await overrideDocumentRole(supabase, {
+        coordinationRecordId: coordinationId,
+        projectDocumentId,
+        manualRole: body.manual_role,
+        note: body.note,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/coordination/:id/document-registry/register", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+        write: true,
+      });
+      const result = await registerProjectDocument(supabase, {
+        coordinationRecordId: coordinationId,
+        projectDocumentId: String(body.project_document_id ?? ""),
+        provenance: body.provenance != null ? String(body.provenance) : "manual_upload",
+        hintRole: body.hint_role != null ? String(body.hint_role) : null,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.get("/coordination/:id/document-registry/provider-requirements", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const coordinationId = String(req.params.id || "").trim();
+      const record = await getCoordinationRecordById(supabase, coordinationId);
+      if (!record) {
+        const err = new Error("Coordination record not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(record.project_id),
+      });
+      const result = await getProviderRequirementsStatus(supabase, {
+        coordinationRecordId: coordinationId,
+        userId: user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
   router.get("/coordination/:id/document-processing/manifest", async (req, res) => {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
@@ -2074,6 +2230,39 @@ function createUciRouter(opts) {
         userId: user.id,
         approverDisplay: user.user_metadata?.full_name || user.email || null,
         note: body.note,
+      });
+      res.json(result);
+    } catch (err) {
+      const s = sanitizeUciError(err);
+      res.status(s.httpStatus).json(s.body);
+    }
+  });
+
+  router.post("/applications/:id/package-documents/signature", async (req, res) => {
+    try {
+      const user = await requireAuthenticatedUser(req, supabase);
+      const applicationId = String(req.params.id || "").trim();
+      const appRow = await getPackageReviewApplicationById(supabase, applicationId);
+      if (!appRow) {
+        const err = new Error("Application not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      await requireProjectAccess({
+        supabase,
+        userId: user.id,
+        projectId: String(appRow.project_id),
+        write: true,
+      });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await setPackageDocumentSignatureStatus(supabase, {
+        applicationId,
+        application: appRow,
+        userId: user.id,
+        documentKey: body.document_key,
+        signatureStatus: body.signature_status,
+        reviewNote: body.review_note,
       });
       res.json(result);
     } catch (err) {
