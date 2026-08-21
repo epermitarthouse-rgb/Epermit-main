@@ -18,6 +18,9 @@
 
     --radius: 0.5rem;
 
+    /** Authenticated app shell — shared by header, content offset, sidebar edge toggle */
+    --app-header-height: 4rem;
+
     --shadow-offset-x: 0px;
     --shadow-offset-y: 4px;
     --shadow-blur: 6px;

@@ -14,10 +14,8 @@ import { NotificationsProvider } from "@/components/notifications/NotificationsP
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { HeaderOverflowMenu } from "@/components/layout/HeaderOverflowMenu";
 import { useAuth } from "@/hooks/useAuth";
-import { resolvePageTitle } from "@/components/layout/hybridNav";
 import {
   ArrowLeft,
-  ChevronRight,
   Eye,
   Home,
   Loader2,
@@ -64,17 +62,17 @@ function AppHeader({
 }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const title = resolvePageTitle(pathname);
   const isHome = pathname === "/dashboard";
 
   return (
     <header
-      className="sticky top-0 z-40 min-w-0 shrink-0 border-b border-border bg-background shadow-sm"
+      className="z-40 min-w-0 shrink-0 border-b border-border bg-background shadow-sm"
+      style={{ height: "var(--app-header-height)" }}
       data-testid="app-header"
     >
-      <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-5 lg:px-6">
-        {/* Left: Back, Home, Breadcrumb */}
-        <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+      <div className="flex h-full min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-5 lg:px-6">
+        {/* Left: Back, Home */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -96,12 +94,6 @@ function AppHeader({
           >
             <Home className="h-4 w-4" />
           </AuthGatedLink>
-
-          <div className="hidden min-w-0 max-w-[8rem] items-center gap-1.5 text-sm text-muted-foreground lg:flex xl:max-w-[12rem] 2xl:max-w-[16rem]">
-            <span className="shrink-0">PermitPilot</span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate font-medium text-foreground">{title}</span>
-          </div>
         </div>
 
         {/* Center: Search */}
@@ -195,7 +187,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
   return (
     <>
       <NotificationsProvider>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <AppHeader
             onOpenCommand={() => setCommandOpen(true)}
             onSignOut={handleSignOut}
@@ -223,8 +215,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <SelectedProjectProvider>
       <ScrapeProvider>
         <SidebarProvider>
-          <div className="signal-grid flex min-h-screen w-full overflow-x-hidden bg-background text-foreground">
-            <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden">
+          <div className="signal-grid flex h-svh min-h-0 w-full overflow-hidden bg-background text-foreground">
+            <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
               <AppSidebar />
               <DashboardContent>{children}</DashboardContent>
             </div>

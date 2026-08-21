@@ -257,8 +257,9 @@ const SidebarEdgeToggle = React.forwardRef<
           variant="outline"
           size="icon"
           className={cn(
-            "absolute top-[4.5rem] z-20 hidden h-7 w-7 rounded-full border-border bg-background shadow-sm transition-colors hover:bg-muted md:flex",
+            "absolute z-20 hidden h-7 w-7 rounded-full border-border bg-background shadow-sm transition-colors hover:bg-muted md:flex",
             "right-0 translate-x-1/2",
+            "top-[calc(var(--app-header-height)+0.5rem)]",
             className,
           )}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
