@@ -56,6 +56,7 @@ export type DesignCheckProjectSummary = {
 export type DesignCheckAnnotationData = {
   compliance_issue?: boolean;
   compliance_metadata?: boolean;
+  analysis_run_id?: string;
   codeType?: DesignCheckCodeType;
   id?: string;
   category?: string;
