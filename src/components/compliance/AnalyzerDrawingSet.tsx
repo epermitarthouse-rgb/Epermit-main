@@ -156,12 +156,13 @@ export function AnalyzerDrawingSet({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendingFiles.map((f) => (
               <div key={f.id} className="relative rounded-lg border border-dashed border-teal/50 bg-card p-3">
-                {f.status === "pending" && (
+                {(f.status === "pending" || f.status === "failed") && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground"
                     onClick={() => onRemovePending(f.id)}
+                    aria-label={`Remove ${f.name}`}
                   >
                     <X className="h-3 w-3" />
                   </Button>
