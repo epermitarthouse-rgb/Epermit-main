@@ -19,8 +19,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
 import { formatUciUserError } from "@/lib/uciApi";
+import { executeProjectDocumentUpload } from "@/lib/projectDocumentUpload";
 import {
   classificationReviewTone,
   confidenceTone,
@@ -110,30 +110,19 @@ export function UciDocumentsWorkspace({
     setUploadBusy(true);
     try {
       for (const file of fileArray) {
-        const storagePath = `${projectId}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
-        const { error: uploadError } = await supabase.storage
-          .from("project-documents")
-          .upload(storagePath, file, { upsert: false });
-        if (uploadError) throw uploadError;
-
-        const { data: docRow, error: insertError } = await supabase
-          .from("project_documents")
-          .insert({
-            project_id: projectId,
-            user_id: userId,
-            file_name: file.name,
-            file_path: storagePath,
-            file_size: file.size,
-            file_type: file.type || "application/octet-stream",
-            document_type: "other",
-            description: `Documents workspace upload · coordination ${coordinationId}`,
-          })
-          .select("id")
-          .single();
-        if (insertError || !docRow?.id) throw insertError ?? new Error("Insert failed");
+        const upload = await executeProjectDocumentUpload({
+          userId,
+          projectId,
+          file,
+          document_type: "other",
+          description: `Documents workspace upload · coordination ${coordinationId}`,
+        });
+        if (!upload.document) {
+          throw new Error(upload.error || "Upload failed");
+        }
 
         await registerCoordinationDocument(coordinationId, {
-          project_document_id: docRow.id,
+          project_document_id: upload.document.id,
           provenance: "manual_upload",
         });
       }
