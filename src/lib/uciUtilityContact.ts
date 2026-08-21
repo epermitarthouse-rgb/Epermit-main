@@ -2,6 +2,11 @@ import type { CoordinationCommunication, CoordinationRecord } from "@/types/uci"
 
 export type UtilityContactBlockerReason = "missing_utility_pm" | "missing_utility_contact_email" | null;
 
+/** DOM anchor for Stage 9 Utility PM contact section (scroll/focus from blocker messages). */
+export const UTILITY_PM_CONTACT_SECTION_ID = "uci-utility-pm-contact-section";
+
+export const UTILITY_PM_EMAIL_INPUT_SELECTOR = '[data-utility-pm-email-input="true"]';
+
 export interface ResolvedUtilityContact {
   name: string | null;
   pmName: string | null;
@@ -252,4 +257,24 @@ export function utilityContactBlockerLabel(reason: UtilityContactBlockerReason):
     return "Utility contact email required for outbound meter-set request";
   }
   return null;
+}
+
+/** True when PM is assigned but outbound utility email is still missing (Stage 9 gate UI). */
+export function shouldHighlightUtilityPmEmailField(
+  blockerReason: UtilityContactBlockerReason,
+): boolean {
+  return blockerReason === "missing_utility_contact_email";
+}
+
+export function focusUtilityPmContactSection(options?: { focusEmail?: boolean }): void {
+  if (typeof document === "undefined") return;
+  const section = document.getElementById(UTILITY_PM_CONTACT_SECTION_ID);
+  section?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (options?.focusEmail) {
+    window.setTimeout(() => {
+      section
+        ?.querySelector<HTMLInputElement>(UTILITY_PM_EMAIL_INPUT_SELECTOR)
+        ?.focus({ preventScroll: true });
+    }, 300);
+  }
 }

@@ -18,7 +18,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { CheckCircle2, ChevronRight, Eye, Loader2 } from "lucide-react";
 import {
   deriveUtilityContactBlocker,
+  focusUtilityPmContactSection,
   resolveUtilityContact,
+  shouldHighlightUtilityPmEmailField,
+  UTILITY_PM_CONTACT_SECTION_ID,
   utilityContactBlockerLabel,
 } from "@/lib/uciUtilityContact";
 import {
@@ -2542,7 +2545,7 @@ export function MeterSetCloseoutPanel({
     utility_project_manager?: string;
     utility_contact_email?: string;
     utility_contact_phone?: string;
-  }) => void;
+  }) => void | Promise<boolean>;
   onSaveSiteContact: (payload: {
     site_contact_name?: string;
     site_contact_email?: string;
@@ -2576,6 +2579,8 @@ export function MeterSetCloseoutPanel({
   const [siteName, setSiteName] = useState(record?.site_contact_name || "");
   const [siteEmail, setSiteEmail] = useState(record?.site_contact_email || "");
   const [sitePhone, setSitePhone] = useState(record?.site_contact_phone || "");
+  const [utilityContactSaved, setUtilityContactSaved] = useState(false);
+  const [utilityContactSaving, setUtilityContactSaving] = useState(false);
   const meter = lifecycleStatus?.meter_set;
   const closeout = lifecycleStatus?.closeout;
   const rollup = lifecycleStatus?.project_rollup;
@@ -2590,6 +2595,7 @@ export function MeterSetCloseoutPanel({
     meter?.utility_contact_blocker_message ??
     resolvedUtilityContact.blockerMessage ??
     utilityContactBlockerLabel(utilityBlocker);
+  const highlightUtilityPmEmail = shouldHighlightUtilityPmEmailField(utilityBlocker);
   const actionState = deriveMeterSetCloseoutActionState({
     record,
     milestones,
@@ -2604,6 +2610,15 @@ export function MeterSetCloseoutPanel({
     setUtilityName(record?.utility_project_manager || record?.utility_contact_name || "");
     setUtilityEmail(record?.utility_contact_email || "");
     setUtilityPhone(record?.utility_contact_phone || "");
+  }, [
+    record?.utility_project_manager,
+    record?.utility_contact_name,
+    record?.utility_contact_email,
+    record?.utility_contact_phone,
+  ]);
+
+  useEffect(() => {
+    setUtilityContactSaved(false);
   }, [
     record?.utility_project_manager,
     record?.utility_contact_name,
@@ -2704,80 +2719,191 @@ export function MeterSetCloseoutPanel({
             formatWhen={formatWhen}
           />
 
-          <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2">
-            <p className="font-medium text-foreground">Utility PM contact</p>
-            <p className={cn("mt-1", mutedClass)}>
-              PM assigned:{" "}
-              <span className="text-foreground">{resolvedUtilityContact.name || "Missing"}</span>
-              {" · "}
-              Email:{" "}
-              <span className="text-foreground">
-                {resolvedUtilityContact.email || "Missing"}
-              </span>
-            </p>
-            {utilityBlocker ? (
-              <p className="mt-1 text-destructive">{utilityBlockerMessage}</p>
-            ) : (
-              <p className={cn("mt-1", mutedClass)}>Ready for outbound meter-set request.</p>
-            )}
+          <div
+            id={UTILITY_PM_CONTACT_SECTION_ID}
+            className="mt-3 space-y-2 rounded-md border-2 border-teal/40 bg-teal/5 px-3 py-3"
+          >
+            <div>
+              <p className="font-semibold text-foreground">Utility PM contact</p>
+              <p className={cn("mt-1", mutedClass)}>
+                Used for the outbound meter-set request email to the utility project manager. This is
+                separate from the on-site construction contact below.
+              </p>
+            </div>
+            <div className="rounded-md border border-border/60 bg-background/70 px-2.5 py-2">
+              <p className={mutedClass}>
+                PM assigned:{" "}
+                <span className="text-foreground">{resolvedUtilityContact.name || "Missing"}</span>
+                {" · "}
+                Email:{" "}
+                <span className="text-foreground">{resolvedUtilityContact.email || "Missing"}</span>
+              </p>
+              {utilityBlocker === "missing_utility_contact_email" ? (
+                <button
+                  type="button"
+                  className="mt-1 text-left text-xs text-destructive underline-offset-2 hover:underline"
+                  onClick={() => focusUtilityPmContactSection({ focusEmail: true })}
+                >
+                  {utilityBlockerMessage}
+                  <span className="sr-only"> — jump to Utility PM email field</span>
+                </button>
+              ) : utilityBlocker ? (
+                <p className="mt-1 text-destructive">{utilityBlockerMessage}</p>
+              ) : (
+                <p className={cn("mt-1", mutedClass)}>Ready for outbound meter-set request.</p>
+              )}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label htmlFor="utility-pm-name" className="text-[10px] text-muted-foreground">
+                  Utility PM name
+                </Label>
+                <Input
+                  id="utility-pm-name"
+                  value={utilityName}
+                  onChange={(e) => setUtilityName(e.target.value)}
+                  placeholder="Utility PM name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="utility-pm-email" className="text-[10px] text-muted-foreground">
+                  Utility PM email
+                </Label>
+                <Input
+                  id="utility-pm-email"
+                  data-utility-pm-email-input="true"
+                  value={utilityEmail}
+                  onChange={(e) => setUtilityEmail(e.target.value)}
+                  placeholder="Utility PM email"
+                  aria-invalid={highlightUtilityPmEmail}
+                  className={
+                    highlightUtilityPmEmail
+                      ? "border-amber-500/70 ring-2 ring-amber-500/35 focus-visible:border-amber-500 focus-visible:ring-amber-500/30"
+                      : undefined
+                  }
+                />
+                {highlightUtilityPmEmail ? (
+                  <p className="text-[10px] text-amber-800 dark:text-amber-200">
+                    Utility PM email is required before requesting meter set. Use the utility PM address,
+                    not the site construction contact.
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="utility-pm-phone" className="text-[10px] text-muted-foreground">
+                  Utility PM phone
+                </Label>
+                <Input
+                  id="utility-pm-phone"
+                  value={utilityPhone}
+                  onChange={(e) => setUtilityPhone(e.target.value)}
+                  placeholder="Utility PM phone"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={toolbarOutlineButtonClass}
+                disabled={meterBusy || utilityContactSaving || !stage9Active}
+                onClick={() => {
+                  void (async () => {
+                    setUtilityContactSaved(false);
+                    setUtilityContactSaving(true);
+                    try {
+                      const result = await onSaveUtilityContact({
+                        utility_contact_name: utilityName || undefined,
+                        utility_project_manager: utilityName || undefined,
+                        utility_contact_email: utilityEmail || undefined,
+                        utility_contact_phone: utilityPhone || undefined,
+                      });
+                      if (result !== false) {
+                        setUtilityContactSaved(true);
+                      }
+                    } finally {
+                      setUtilityContactSaving(false);
+                    }
+                  })();
+                }}
+              >
+                {utilityContactSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Save utility PM contact
+              </Button>
+              {utilityContactSaved ? (
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-medium text-teal-800 dark:text-teal-200"
+                  role="status"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                  Utility PM contact saved
+                </span>
+              ) : null}
+            </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3">
-            <Input
-              value={utilityName}
-              onChange={(e) => setUtilityName(e.target.value)}
-              placeholder="Utility PM name"
-            />
-            <Input
-              value={utilityEmail}
-              onChange={(e) => setUtilityEmail(e.target.value)}
-              placeholder="Utility PM email"
-            />
-            <Input
-              value={utilityPhone}
-              onChange={(e) => setUtilityPhone(e.target.value)}
-              placeholder="Utility PM phone"
-            />
+          <div className="mt-4 space-y-2 rounded-md border border-border/80 bg-muted/25 px-3 py-3">
+            <div>
+              <p className="font-semibold text-foreground">Site contact</p>
+              <p className={cn("mt-1", mutedClass)}>
+                On-site construction contact for meter-set coordination. Not used for outbound utility PM
+                email — enter that in the Utility PM contact section above.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label htmlFor="site-contact-name" className="text-[10px] text-muted-foreground">
+                  Site contact name
+                </Label>
+                <Input
+                  id="site-contact-name"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  placeholder="Site contact name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="site-contact-email" className="text-[10px] text-muted-foreground">
+                  Site contact email
+                </Label>
+                <Input
+                  id="site-contact-email"
+                  value={siteEmail}
+                  onChange={(e) => setSiteEmail(e.target.value)}
+                  placeholder="Site contact email"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="site-contact-phone" className="text-[10px] text-muted-foreground">
+                  Site contact phone
+                </Label>
+                <Input
+                  id="site-contact-phone"
+                  value={sitePhone}
+                  onChange={(e) => setSitePhone(e.target.value)}
+                  placeholder="Site contact phone"
+                />
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={toolbarOutlineButtonClass}
+              disabled={meterBusy || !stage9Active}
+              onClick={() =>
+                onSaveSiteContact({
+                  site_contact_name: siteName || undefined,
+                  site_contact_email: siteEmail || undefined,
+                  site_contact_phone: sitePhone || undefined,
+                })
+              }
+            >
+              Save site contact
+            </Button>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={toolbarOutlineButtonClass}
-            disabled={meterBusy || !stage9Active}
-            onClick={() =>
-              onSaveUtilityContact({
-                utility_contact_name: utilityName || undefined,
-                utility_project_manager: utilityName || undefined,
-                utility_contact_email: utilityEmail || undefined,
-                utility_contact_phone: utilityPhone || undefined,
-              })
-            }
-          >
-            Save utility contact
-          </Button>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="Site contact name" />
-            <Input value={siteEmail} onChange={(e) => setSiteEmail(e.target.value)} placeholder="Site contact email" />
-            <Input value={sitePhone} onChange={(e) => setSitePhone(e.target.value)} placeholder="Site contact phone" />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={toolbarOutlineButtonClass}
-            disabled={meterBusy || !stage9Active}
-            onClick={() =>
-              onSaveSiteContact({
-                site_contact_name: siteName || undefined,
-                site_contact_email: siteEmail || undefined,
-                site_contact_phone: sitePhone || undefined,
-              })
-            }
-          >
-            Save site contact
-          </Button>
 
           {stage9Active && record?.inspection_release_received_at ? (
             <div className="flex flex-wrap items-end gap-2">

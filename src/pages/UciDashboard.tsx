@@ -2484,8 +2484,8 @@ export default function UciDashboard() {
     success: string,
     failure: string,
     kind: "costs" | "meter" | "closeout" = "costs",
-  ) => {
-    if (!detailId) return;
+  ): Promise<boolean> => {
+    if (!detailId) return false;
     if (kind === "meter") setMeterSetBusy(true);
     else if (kind === "closeout") setCloseoutBusy(true);
     else setAgentOpsBusy(true);
@@ -2494,10 +2494,12 @@ export default function UciDashboard() {
       await action();
       toast.success(success);
       await reloadDetail();
+      return true;
     } catch (e: unknown) {
       const msg = formatUciUserError(e, failure);
       setAgentOpsError(msg);
       toast.error(msg);
+      return false;
     } finally {
       setAgentOpsBusy(false);
       setMeterSetBusy(false);
@@ -5060,9 +5062,9 @@ export default function UciDashboard() {
                       )
                     }
                     onSaveUtilityContact={(payload) =>
-                      void runLifecycleAction(
+                      runLifecycleAction(
                         () => updateCoordinationUtilityContact(detailId!, payload),
-                        "Utility contact saved",
+                        "Utility PM contact saved",
                         "Failed to save utility contact",
                         "meter",
                       )

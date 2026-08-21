@@ -82,6 +82,25 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.match(panelSource, /disabled=\{!closeoutUnlocked\}/);
     assert.match(panelSource, /Finish meter-set coordination first/);
   });
+
+  it("visually separates Utility PM contact from Site contact with distinct styling", () => {
+    assert.match(panelSource, /UTILITY_PM_CONTACT_SECTION_ID/);
+    assert.match(panelSource, /border-2 border-teal\/40 bg-teal\/5/);
+    assert.match(panelSource, /Site contact/);
+    assert.match(panelSource, /border border-border\/80 bg-muted\/25/);
+    assert.match(panelSource, /outbound meter-set request email to the utility project manager/);
+    assert.match(panelSource, /On-site construction contact for meter-set coordination/);
+  });
+
+  it("highlights Utility PM email and links blocker message to the contact section", () => {
+    assert.match(panelSource, /shouldHighlightUtilityPmEmailField/);
+    assert.match(panelSource, /missing_utility_contact_email/);
+    assert.match(panelSource, /focusUtilityPmContactSection/);
+    assert.match(panelSource, /border-amber-500\/70 ring-2 ring-amber-500\/35/);
+    assert.match(panelSource, /Utility PM contact saved/);
+    assert.match(panelSource, /Save utility PM contact/);
+    assert.match(dashboardSource, /Utility PM contact saved/);
+  });
 });
 
 describe("deriveMeterSetCloseoutActionState", () => {
