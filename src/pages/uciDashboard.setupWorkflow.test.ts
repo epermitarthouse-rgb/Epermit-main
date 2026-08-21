@@ -86,8 +86,18 @@ describe("UciDashboard guided setup workflow regression", () => {
     assert.match(dashboardSource, /await loadProviderSetup\(\)/);
   });
 
+  it("routes Stage 1 NOT_STARTED/BLOCKED rows to provider setup", () => {
+    assert.match(dashboardSource, /needsStage1ProviderSetup/);
+    assert.match(dashboardSource, /openStage1ProviderSetup/);
+    assert.match(dashboardSource, /openRecordOrStage1Setup/);
+  });
+
   it("shows persistent UCI project context above setup and workflow sections", () => {
     assert.match(dashboardSource, /UciProjectContextBar/);
     assert.match(dashboardSource, /handleChangeProjectRequest/);
+  });
+
+  it("uses canonical provider mapping across workspace surfaces", () => {
+    assert.match(dashboardSource, /buildCanonicalProviderMappingSummary/);
   });
 });

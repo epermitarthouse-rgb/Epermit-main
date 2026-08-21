@@ -58,8 +58,10 @@ import type {
   UciPortalSyncRun,
   UciPortfolioViewResponse,
   UciProviderMappingMetadata,
+  UtilityProvider,
 } from "@/types/uci";
 import { UCI_COST_TYPES } from "@/types/uci";
+import { providerDisplayLabel } from "@/lib/uciSetupWorkflow";
 
 type PanelCommonProps = {
   mutedClass: string;
@@ -72,12 +74,22 @@ export function ProviderMappingBanner({
   mapping,
   mutedClass,
   onChangeProvider,
+  providers = [],
 }: {
   mapping: UciProviderMappingMetadata | null;
   mutedClass: string;
   onChangeProvider?: () => void;
+  providers?: UtilityProvider[];
 }) {
   if (!mapping) return null;
+  const providerLabels = mapping.selected_provider_slugs.map((slug) => {
+    const match =
+      providers.find((provider) => provider.slug === slug) ??
+      providers.find(
+        (provider) => String(provider.slug ?? "").toLowerCase() === String(slug).toLowerCase(),
+      );
+    return match ? providerDisplayLabel(match) : slug;
+  });
   return (
     <div className="rounded-md border border-teal/30 bg-cream-raised/40 px-3 py-2 text-xs dark:bg-obsidian/35">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -100,7 +112,7 @@ export function ProviderMappingBanner({
         {mapping.address_snapshot?.formatted ? ` · ${mapping.address_snapshot.formatted}` : ""}
       </p>
       <p className={cn("mt-0.5", mutedClass)}>
-        Providers: {mapping.selected_provider_slugs.join(", ") || "—"}
+        Providers: {providerLabels.join(", ") || "—"}
         {mapping.unresolved_utility_types.length
           ? ` · Unresolved types: ${mapping.unresolved_utility_types.join(", ")}`
           : ""}

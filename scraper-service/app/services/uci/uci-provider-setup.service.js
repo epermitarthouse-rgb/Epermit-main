@@ -497,7 +497,13 @@ function buildProviderSetupContext(params) {
       : embedded && typeof embedded === "object"
         ? String(/** @type {{ slug?: unknown }} */ (embedded).slug ?? "").toLowerCase()
         : "";
-    if (slug) initializedSlugSet.add(slug);
+    if (!slug) continue;
+    const stage = Number(record.current_stage);
+    const stageState = String(record.current_stage_state ?? "").trim().toUpperCase();
+    // Stage 1 NOT_STARTED/BLOCKED rows are setup-in-progress — keep selectable in Step 3.
+    if (stage > 1 || (stage === 1 && stageState === "COMPLETED")) {
+      initializedSlugSet.add(slug);
+    }
   }
 
   const utilityTypes = [...UCI_SUPPORTED_UTILITY_TYPES];

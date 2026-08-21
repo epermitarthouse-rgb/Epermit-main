@@ -606,12 +606,6 @@ function createUciRouter(opts) {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.params.projectId || "").trim();
       await requireProjectAccess({ supabase, userId: user.id, projectId });
-      try {
-        const { mapProjectUtilities } = require("../services/uci/uci-provider-intake.service.js");
-        await mapProjectUtilities(supabase, { projectId, userId: user.id });
-      } catch {
-        /* mapping is best-effort; list still returns whatever exists */
-      }
       const records = await listCoordinationRecordsByProject(supabase, projectId);
       res.json({ records });
     } catch (err) {
@@ -624,12 +618,6 @@ function createUciRouter(opts) {
     try {
       const user = await requireAuthenticatedUser(req, supabase);
       const projectId = String(req.params.projectId || "").trim();
-      try {
-        const { mapProjectUtilities } = require("../services/uci/uci-provider-intake.service.js");
-        await mapProjectUtilities(supabase, { projectId, userId: user.id });
-      } catch {
-        /* coverage rows are best-effort */
-      }
       const setup = await getProviderSetupForProject(supabase, {
         projectId,
         userId: user.id,

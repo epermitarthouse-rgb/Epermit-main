@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildStageStateMatrix } from "./uciLifecycleMatrix.js";
+import { buildStageStateMatrix, needsStage1ProviderSetup } from "./uciLifecycleMatrix.js";
 import { getWorkflowGroupProgress } from "./uciWorkspaceGuidance.js";
 
 describe("uciLifecycleMatrix current-stage distribution", () => {
@@ -56,5 +56,40 @@ describe("uciLifecycleMatrix current-stage distribution", () => {
     }
     assert.equal(getWorkflowGroupProgress([9, 9], currentStage), "current");
     assert.equal(getWorkflowGroupProgress([10, 10], currentStage), "upcoming");
+  });
+
+  it("routes Stage 1 NOT_STARTED/BLOCKED and unassigned rows to provider setup", () => {
+    assert.equal(
+      needsStage1ProviderSetup({
+        current_stage: 1,
+        current_stage_state: "NOT_STARTED",
+        utility_provider_id: "dom-id",
+      }),
+      true,
+    );
+    assert.equal(
+      needsStage1ProviderSetup({
+        current_stage: 1,
+        current_stage_state: "BLOCKED",
+        utility_provider_id: "dom-id",
+      }),
+      true,
+    );
+    assert.equal(
+      needsStage1ProviderSetup({
+        current_stage: 1,
+        current_stage_state: "COMPLETED",
+        utility_provider_id: "dom-id",
+      }),
+      false,
+    );
+    assert.equal(
+      needsStage1ProviderSetup({
+        current_stage: 2,
+        current_stage_state: "NOT_STARTED",
+        utility_provider_id: "dom-id",
+      }),
+      false,
+    );
   });
 });

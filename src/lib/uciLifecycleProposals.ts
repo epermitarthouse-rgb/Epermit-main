@@ -1,4 +1,6 @@
-import type { LifecycleState, UciLifecycleProposalRow, UciLifecycleProposalsPayload, UciProviderMappingMetadata } from "@/types/uci";
+import type { LifecycleState, UciLifecycleProposalRow, UciLifecycleProposalsPayload, UciProviderMappingMetadata, UciProviderResolutionResult, UciProviderSetupAddressSource, UciProviderSetupResponse, UtilityProvider } from "@/types/uci";
+import { isResolutionConfirmed, resolveProviderFromResolution } from "@/lib/uciProviderResolution";
+import { deriveAddressPresentation } from "@/lib/uciSetupWorkflow";
 
 const LIFECYCLE_STATES = new Set<LifecycleState>([
   "NOT_STARTED",
@@ -112,5 +114,68 @@ export function getProviderMappingFromMetadata(
       : [],
     territory_matching_available: false,
     provider_slug: rec.provider_slug != null ? String(rec.provider_slug) : undefined,
+  };
+}
+
+/** Merge persisted record mapping with project-level Step 2b confirmations. */
+export function buildCanonicalProviderMappingSummary(params: {
+  recordMetadata: Record<string, unknown> | null | undefined;
+  resolutions: Record<string, UciProviderResolutionResult> | null | undefined;
+  providers: UtilityProvider[];
+  addressSourceAcknowledged?: UciProviderSetupAddressSource | null;
+  providerSetup?: UciProviderSetupResponse | null;
+}): UciProviderMappingMetadata | null {
+  const fromRecord = getProviderMappingFromMetadata(params.recordMetadata);
+  if (fromRecord?.confirmed_at && fromRecord.selected_provider_slugs.length > 0) {
+    return fromRecord;
+  }
+
+  const confirmedSlugs = new Set<string>(fromRecord?.selected_provider_slugs ?? []);
+  let latestConfirmedAt = fromRecord?.confirmed_at?.trim() || "";
+  let confirmedBy = fromRecord?.confirmed_by_user_id?.trim() || "";
+
+  for (const resolution of Object.values(params.resolutions ?? {})) {
+    if (!isResolutionConfirmed(resolution)) continue;
+    const provider = resolveProviderFromResolution(params.providers, resolution);
+    if (provider?.slug) confirmedSlugs.add(provider.slug);
+    if (resolution.confirmed_at && resolution.confirmed_at > latestConfirmedAt) {
+      latestConfirmedAt = resolution.confirmed_at;
+    }
+    if (resolution.confirmed_by) confirmedBy = resolution.confirmed_by;
+  }
+
+  if (confirmedSlugs.size === 0) return fromRecord;
+
+  const addressPresentation = params.providerSetup
+    ? deriveAddressPresentation(
+        params.providerSetup,
+        false,
+        params.addressSourceAcknowledged ?? null,
+      )
+    : null;
+  const addressSource =
+    params.addressSourceAcknowledged ??
+    fromRecord?.address_source ??
+    params.providerSetup?.recommended_address_source ??
+    "none";
+
+  return {
+    method: "human_assisted",
+    confirmed_by_user_id: confirmedBy,
+    confirmed_at: latestConfirmedAt,
+    address_source: addressSource,
+    address_snapshot:
+      fromRecord?.address_snapshot ??
+      (addressPresentation?.activeFormatted
+        ? {
+            formatted: addressPresentation.activeFormatted,
+            complete: true,
+            fallback_used: false,
+            parts: null,
+          }
+        : null),
+    selected_provider_slugs: [...confirmedSlugs],
+    unresolved_utility_types: fromRecord?.unresolved_utility_types ?? [],
+    territory_matching_available: false,
   };
 }

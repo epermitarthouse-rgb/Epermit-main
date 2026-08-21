@@ -57,6 +57,17 @@ export function isUnassignedRequiredProvider(record: LifecycleRecordLike): boole
   return record.utility_provider_id == null || String(record.utility_provider_id).trim() === "";
 }
 
+/** Stage 1 rows still in setup — route operators to provider setup instead of workspace. */
+export function needsStage1ProviderSetup(record: LifecycleRecordLike): boolean {
+  const stage = normalizeLifecycleStage(record.current_stage);
+  if (stage !== 1) return false;
+  if (isUnassignedRequiredProvider(record)) return true;
+  const state = String(record.current_stage_state ?? "")
+    .trim()
+    .toUpperCase();
+  return state === "NOT_STARTED" || state === "BLOCKED";
+}
+
 export function providerNeedsConfirmationReason(utilityType: string | null | undefined): string {
   const type = String(utilityType || "utility").trim().toLowerCase() || "utility";
   const label = type.charAt(0).toUpperCase() + type.slice(1);

@@ -219,6 +219,7 @@ import {
   selectDisplayLifecycleProposal,
   computeLifecycleProposalChecksum,
   getProviderMappingFromMetadata,
+  buildCanonicalProviderMappingSummary,
 } from "@/lib/uciLifecycleProposals";
 import {
   CommunicationOperatorCard,
@@ -289,6 +290,7 @@ import {
   buildStageStateMatrix,
   CURRENT_STAGE_DISTRIBUTION_HELPER,
   isUnassignedRequiredProvider,
+  needsStage1ProviderSetup,
   providerNeedsConfirmationReason,
   stageStateEntries,
 } from "@/lib/uciLifecycleMatrix";
@@ -2782,8 +2784,21 @@ export default function UciDashboard() {
   );
 
   const providerMappingMetadata = useMemo(
-    () => getProviderMappingFromMetadata(detailRecord?.metadata ?? null),
-    [detailRecord?.metadata],
+    () =>
+      buildCanonicalProviderMappingSummary({
+        recordMetadata: detailRecord?.metadata ?? null,
+        resolutions: providerResolution?.resolutions,
+        providers,
+        addressSourceAcknowledged,
+        providerSetup,
+      }),
+    [
+      detailRecord?.metadata,
+      providerResolution?.resolutions,
+      providers,
+      addressSourceAcknowledged,
+      providerSetup,
+    ],
   );
 
   const syncRunPollFn = useCallback(async (coordinationId: string) => {
@@ -3500,10 +3515,43 @@ export default function UciDashboard() {
     }
     return summary;
   }, [uciStageStateMatrix]);
-  const openAssignProvider = useCallback(() => {
+  const openStage1ProviderSetup = useCallback(() => {
     setSetupSectionExpanded(true);
-    document.getElementById("uci-setup-workflow")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+    if (detailOpen) {
+      suppressCoordinationHydrationRef.current = true;
+      setDetailOpen(false);
+      setDetailId(null);
+      setDetail(null);
+      setSearchParams(
+        (prev) => {
+          if (!prev.get("coordination") && !prev.get("tab")) return prev;
+          const next = new URLSearchParams(prev);
+          next.delete("coordination");
+          next.delete("tab");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+    requestAnimationFrame(() => {
+      document.getElementById("uci-setup-workflow")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [detailOpen, setSearchParams]);
+  const openAssignProvider = openStage1ProviderSetup;
+  const openRecordOrStage1Setup = useCallback(
+    (record: CoordinationRecord) => {
+      if (needsStage1ProviderSetup(record)) {
+        openStage1ProviderSetup();
+        return;
+      }
+      if (isRecordWorkspace) {
+        navigate(`/uci/records/${encodeURIComponent(record.id)}`);
+        return;
+      }
+      void openDetail(record.id);
+    },
+    [isRecordWorkspace, navigate, openDetail, openStage1ProviderSetup],
+  );
   const uciCompletedRecordCount = useMemo(
     () => records.filter((record) => record.current_stage_state === "COMPLETED").length,
     [records],
@@ -4067,7 +4115,7 @@ export default function UciDashboard() {
                                 variant="outline"
                                 size="sm"
                                 className={uciViewRowButtonClass}
-                                onClick={() => void openDetail(r.id)}
+                                onClick={() => openRecordOrStage1Setup(r)}
                               >
                                 <Eye className="mr-1 h-4 w-4" />
                                 Preview
@@ -4075,9 +4123,9 @@ export default function UciDashboard() {
                               <Button
                                 variant="default"
                                 size="sm"
-                                onClick={() => navigate(`/uci/records/${encodeURIComponent(r.id)}`)}
+                                onClick={() => openRecordOrStage1Setup(r)}
                               >
-                                Workspace
+                                {needsStage1ProviderSetup(r) ? "Setup" : "Workspace"}
                               </Button>
                             </div>
                           </TableCell>
@@ -4123,11 +4171,18 @@ export default function UciDashboard() {
                           variant="outline"
                           size="sm"
                           className="shrink-0"
-                          onClick={() =>
-                            "unassigned" in r && r.unassigned
-                              ? openAssignProvider()
-                              : void openDetail(r.id)
-                          }
+                          onClick={() => {
+                            if ("unassigned" in r && r.unassigned) {
+                              openStage1ProviderSetup();
+                              return;
+                            }
+                            const fullRecord = records.find((record) => record.id === r.id);
+                            if (fullRecord) {
+                              openRecordOrStage1Setup(fullRecord);
+                              return;
+                            }
+                            void openDetail(r.id);
+                          }}
                         >
                           {"unassigned" in r && r.unassigned ? (
                             "Assign provider"
@@ -4380,6 +4435,7 @@ export default function UciDashboard() {
                       mapping={providerMappingMetadata}
                       mutedClass={uciMutedClass}
                       onChangeProvider={openAssignProvider}
+                      providers={providers}
                     />
                   ) : null}
                   {displayLifecycleProposal ? (

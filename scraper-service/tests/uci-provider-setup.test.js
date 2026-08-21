@@ -221,11 +221,33 @@ describe("UCI D2.0 human-assisted provider setup", () => {
     const context = buildProviderSetupContext({
       project: { address: "100 Test Ave" },
       providers: [{ id: "prov-1", slug: "pepco", name: "PEPCO", utility_type: "electric" }],
-      existingRecords: [{ utility_providers: { slug: "pepco" } }],
+      existingRecords: [
+        {
+          utility_providers: { slug: "pepco" },
+          current_stage: 1,
+          current_stage_state: "COMPLETED",
+        },
+      ],
     });
 
     assert.equal(context.providers[0].already_initialized, true);
     assert.equal(context.providers[0].suggested, false);
+  });
+
+  it("keeps Stage 1 NOT_STARTED providers selectable in setup", () => {
+    const context = buildProviderSetupContext({
+      project: { address: "100 Test Ave" },
+      providers: [{ id: "prov-1", slug: "dominion", name: "Dominion", utility_type: "electric" }],
+      existingRecords: [
+        {
+          utility_providers: { slug: "dominion" },
+          current_stage: 1,
+          current_stage_state: "NOT_STARTED",
+        },
+      ],
+    });
+
+    assert.equal(context.providers[0].already_initialized, false);
   });
 
   it("normalizes unresolved utility types", () => {
@@ -403,6 +425,33 @@ describe("UCI D2.0 initCoordinationForProviders metadata", () => {
 
     const transition = tables.coordination_stage_transitions[0];
     assert.equal(transition.metadata.uci_provider_mapping.method, PROVIDER_SETUP_METHOD);
+  });
+
+  it("creates exactly one record for a single selected electric provider", async () => {
+    const tables = {
+      coordination_records: [],
+      coordination_stage_transitions: [],
+    };
+    const supabase = createInitMockSupabase(tables);
+    const result = await initCoordinationForProviders(supabase, {
+      projectId: "proj-portsmouth",
+      userId: "user-1",
+      resolvedProviders: [{ id: "dom-id", slug: "dominion-energy-virginia", utility_type: "electric" }],
+      providerSetupMetadata: {
+        method: PROVIDER_SETUP_METHOD,
+        confirmed: true,
+        confirmed_by_user_id: "user-1",
+        confirmed_at: "2026-08-21T12:00:00.000Z",
+        address_source: "structured",
+        address_source_acknowledged: "structured",
+        selected_provider_slugs: ["dominion-energy-virginia"],
+        unresolved_utility_types: [],
+        territory_matching_available: false,
+      },
+    });
+    assert.equal(result.created.length, 1);
+    assert.equal(tables.coordination_records.length, 1);
+    assert.equal(tables.coordination_records[0].utility_type, "electric");
   });
 
   it("initializes separate provider/type records across all supported utility types", async () => {
