@@ -17,9 +17,33 @@ import { cn } from "@/lib/utils";
 type WorkflowStageNavigatorProps = {
   activeTab: UciDrawerTab;
   currentStage: number;
+  currentStageState?: string;
   isPepcoCoordination: boolean;
   className?: string;
 };
+
+function milestoneStatusBadge(
+  progress: WorkflowGroupProgress,
+  groupHasActiveTab: boolean,
+  currentStageState?: string,
+): { label: string; className: string } | null {
+  const state = String(currentStageState || "").toUpperCase();
+  if ((progress === "current" || groupHasActiveTab) && state === "AWAITING_UTILITY") {
+    return {
+      label: "Awaiting utility",
+      className:
+        "rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300",
+    };
+  }
+  if ((progress === "current" || groupHasActiveTab) && (state === "BLOCKED" || state === "ESCALATED")) {
+    return {
+      label: state === "ESCALATED" ? "Needs attention" : "Blocked",
+      className:
+        "rounded-md bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-destructive",
+    };
+  }
+  return null;
+}
 
 function progressStyles(progress: WorkflowGroupProgress, groupHasActiveTab: boolean) {
   if (groupHasActiveTab || progress === "current") {
@@ -57,6 +81,7 @@ function progressStyles(progress: WorkflowGroupProgress, groupHasActiveTab: bool
 export function WorkflowStageNavigator({
   activeTab,
   currentStage,
+  currentStageState,
   isPepcoCoordination,
   className,
 }: WorkflowStageNavigatorProps) {
@@ -83,6 +108,10 @@ export function WorkflowStageNavigator({
           const progress = getWorkflowGroupProgress(group.stageRange, currentStage);
           const groupHasActiveTab = tabs.some((tab) => tab.id === activeTab);
           const styles = progressStyles(progress, groupHasActiveTab);
+          const statusBadge =
+            progress === "current" || groupHasActiveTab
+              ? milestoneStatusBadge(progress, groupHasActiveTab, currentStageState)
+              : null;
           const isLast = groupIndex === visibleGroups.length - 1;
 
           return (
@@ -130,8 +159,11 @@ export function WorkflowStageNavigator({
                       ) : null}
                       {progress === "current" || groupHasActiveTab ? (
                         <span className="rounded-md bg-teal/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
-                          Current
+                          Active
                         </span>
+                      ) : null}
+                      {statusBadge ? (
+                        <span className={statusBadge.className}>{statusBadge.label}</span>
                       ) : null}
                       {progress === "completed" && !groupHasActiveTab ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-success">
@@ -140,7 +172,7 @@ export function WorkflowStageNavigator({
                       ) : null}
                       {progress === "upcoming" ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Upcoming
+                          Locked
                         </span>
                       ) : null}
                       {progress === "support" ? (

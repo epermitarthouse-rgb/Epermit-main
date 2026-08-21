@@ -219,6 +219,12 @@ function renderApplicationPackage(options?: {
   return renderToStaticMarkup(
     createElement(ApplicationPrepSection, {
       coordinationId,
+      coordinationRecord: {
+        id: coordinationId,
+        project_id: "project-test",
+        current_stage: 3,
+        current_stage_state: "IN_PROGRESS",
+      } as import("@/types/uci").CoordinationRecord,
       selectedPepcoApplicationId: null,
       selectedPepcoApplicationTitle: null,
       applications: [loadProfile, renderedPackage],

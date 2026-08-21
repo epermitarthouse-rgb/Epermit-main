@@ -14,5 +14,7 @@ describe("WorkflowStageNavigator downstream navigation", () => {
     assert.match(navigatorSource, /getStageWorkspaceLinksForRange\(group\.stageRange\)/);
     assert.match(navigatorSource, /Open \{link\.label\}/);
     assert.match(navigatorSource, /progress === "upcoming"/);
+    assert.match(navigatorSource, /Locked/);
+    assert.match(navigatorSource, /Awaiting utility/);
   });
 });

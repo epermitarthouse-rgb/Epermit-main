@@ -279,13 +279,11 @@ import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator"
 import { NextStepNotice } from "@/components/uci/NextStepNotice";
 import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
-  canShowCompleteStage2ReviewButton,
-  canShowEnterStage3HandoffButton,
-  canShowEnterStage4HandoffButton,
-  canShowStage3StatusPanel,
-  canShowStage4StatusPanel,
-  getStage3HandoffButtonLabel,
-} from "@/lib/uciStageHandoff";
+  derivePackageBuildAction,
+  derivePackageReviewAction,
+  deriveStage2HandoffAction,
+  deriveStage3ReviewAction,
+} from "@/lib/uciActionPresentation";
 import {
   buildStageStateMatrix,
   isUnassignedRequiredProvider,
@@ -4241,6 +4239,7 @@ export default function UciDashboard() {
                     <WorkflowStageNavigator
                       activeTab={drawerTab}
                       currentStage={Number(detailRecord.current_stage)}
+                      currentStageState={detailRecord.current_stage_state}
                       isPepcoCoordination={isPepcoCoordination}
                     />
                     <NextStepNotice
@@ -4830,6 +4829,7 @@ export default function UciDashboard() {
                   ) : null}
                   <ApplicationPrepSection
                     coordinationId={detailId ?? ""}
+                    coordinationRecord={detailRecord}
                     selectedPepcoApplicationId={selectedPepcoProject?.applicationId ?? null}
                     selectedPepcoApplicationTitle={selectedPepcoProject?.title ?? null}
                     applications={(detail.applications ?? []) as CoordinationApplication[]}
@@ -5006,20 +5006,6 @@ export default function UciDashboard() {
                         () => retryCoordinationCostInvoice(detailId!, costId),
                         "Client invoice retry submitted",
                         "Failed to retry client invoice",
-                      )
-                    }
-                    onCompleteStage7={() =>
-                      void runLifecycleAction(
-                        () => completeCoordinationStage(detailId!, 7),
-                        "Stage 7 completed",
-                        "Stage 7 is not ready to complete",
-                      )
-                    }
-                    onCompleteStage8={() =>
-                      void runLifecycleAction(
-                        () => completeCoordinationStage(detailId!, 8),
-                        "Stage 8 completed",
-                        "Stage 8 is not ready to complete",
                       )
                     }
                     mutedClass={uciMutedClass}
@@ -5665,6 +5651,7 @@ function PepcoSystemDataSection({
  */
 export function ApplicationPrepSection({
   coordinationId,
+  coordinationRecord,
   selectedPepcoApplicationId,
   selectedPepcoApplicationTitle,
   applications,
@@ -5698,6 +5685,7 @@ export function ApplicationPrepSection({
   initialFocus = null,
 }: {
   coordinationId: string;
+  coordinationRecord: CoordinationRecord | null;
   selectedPepcoApplicationId: string | null;
   selectedPepcoApplicationTitle?: string | null;
   applications: CoordinationApplication[];
@@ -5841,6 +5829,34 @@ export function ApplicationPrepSection({
   }));
   const effectiveReviewItems = [...effectiveReviewFields, ...effectiveReviewDocuments];
   const effectiveAllConfirmed = canonicalPackageReview?.ready_for_final_review === true;
+  const reviewPersisted = applicationReviewPersisted(packageApp);
+  const stage2Handoff = deriveStage2HandoffAction(coordinationRecord, {
+    currentStage,
+    currentStageState,
+    packageReady: effectiveAllConfirmed,
+    packageReviewed: isReviewed,
+  });
+  const stage3Review = deriveStage3ReviewAction(coordinationRecord, {
+    currentStage,
+    currentStageState,
+    packageReviewed: isReviewed,
+    readyForFinalReview: effectiveAllConfirmed,
+  });
+  const packageReviewAction = derivePackageReviewAction({
+    reviewPersisted,
+    readyForFinalReview: effectiveAllConfirmed,
+    reviewBusy,
+  });
+  const packageBuildAction = derivePackageBuildAction({
+    hasLoadProfile: Boolean(loadProfileDraft),
+    hasPackage: Boolean(packageApp),
+    reviewPersisted,
+    repairEligible: repairEligibility.ok,
+    prepBusy,
+    repairBusy,
+    pepcoRequiresApplication: isPepco,
+    hasSelectedPepcoApplication: Boolean(selectedPepcoApplicationId),
+  });
   const effectiveReviewStatus =
     canonicalPackageReview?.status ??
     (isReviewed
@@ -6164,33 +6180,29 @@ export function ApplicationPrepSection({
               slot. Filename suggestions are not verified attachments.
             </CardDescription>
           </div>
-          {!isReviewed && !repairEligibility.ok ? (
+          {packageBuildAction.status === "build" ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className={toolbarOutlineButtonClass}
-              disabled={
-                prepBusy ||
-                !loadProfileDraft ||
-                (isPepco && !selectedPepcoApplicationId)
-              }
+              disabled={packageBuildAction.disabled}
               onClick={() => onBuild(selectedPepcoApplicationId)}
             >
               {prepBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {packageApp ? "Rebuild package" : "Prepare application draft"}
+              {packageBuildAction.label}
             </Button>
-          ) : repairEligibility.ok ? (
+          ) : packageBuildAction.status === "repair" ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className={toolbarOutlineButtonClass}
-              disabled={repairBusy}
+              disabled={packageBuildAction.disabled}
               onClick={() => onRepair()}
             >
               {repairBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Repair package
+              {packageBuildAction.label}
             </Button>
           ) : null}
         </div>
@@ -6262,15 +6274,14 @@ export function ApplicationPrepSection({
               </div>
             ) : null}
 
-            {canShowCompleteStage2ReviewButton(currentStage, currentStageState) ? (
+            {stage2Handoff.status === "actionable" ? (
               <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
                 <p className="text-sm font-medium text-foreground">
-                  Stage 2 engineering review is {formatLifecycleState(currentStageState).toLowerCase()}.
+                  {stage2Handoff.kind === "complete_stage2_review"
+                    ? `Stage 2 engineering review is ${formatLifecycleState(currentStageState).toLowerCase()}.`
+                    : "Stage 2 engineering review is completed."}
                 </p>
-                <p className={cn("text-xs", mutedClass)}>
-                  A human must complete Stage 2. This action enters Stage 3; if this package is
-                  already reviewed and ready, Stage 3 is completed and becomes ready for Stage 4.
-                </p>
+                <p className={cn("text-xs", mutedClass)}>{stage2Handoff.description}</p>
                 <Button
                   type="button"
                   size="sm"
@@ -6280,62 +6291,28 @@ export function ApplicationPrepSection({
                   {stage2CompletionBusy ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : null}
-                  Complete Stage 2 review
+                  {stage2Handoff.label}
                 </Button>
               </div>
             ) : null}
 
-            {canShowEnterStage3HandoffButton(currentStage, currentStageState) ? (
-              <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
-                <p className="text-sm font-medium text-foreground">
-                  Stage 2 engineering review is completed.
-                </p>
-                <p className={cn("text-xs", mutedClass)}>
-                  {effectiveAllConfirmed
-                    ? "Application package is ready. Enter Stage 3 to begin application preparation or complete Stage 3 when the package is already reviewed."
-                    : "Engineering review is complete. Enter Stage 3 to begin application preparation."}
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={stage2CompletionBusy}
-                  onClick={onCompleteStage2}
-                >
-                  {stage2CompletionBusy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  {getStage3HandoffButtonLabel({
-                    packageReady: effectiveAllConfirmed,
-                    packageReviewed: isReviewed,
-                  })}
-                </Button>
-              </div>
-            ) : null}
-
-            {canShowStage3StatusPanel(currentStage) ? (
+            {stage3Review.showStatusPanel ? (
               <div className="space-y-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
                 <p className="text-sm font-medium text-foreground">
                   Stage 3 application preparation is{" "}
                   {formatLifecycleState(currentStageState).toLowerCase()}.
                 </p>
-                <p className={cn("text-xs", mutedClass)}>
-                  {currentStageState === "COMPLETED"
-                    ? "Stage 3 is complete — this coordination is ready for Stage 4 submission."
-                    : effectiveAllConfirmed
-                      ? "All required items are confirmed. Mark the package reviewed to complete Stage 3."
-                      : "Confirm every required field and document, then mark the package reviewed."}
-                </p>
+                <p className={cn("text-xs", mutedClass)}>{stage3Review.statusHint}</p>
               </div>
             ) : null}
 
-            {canShowEnterStage4HandoffButton(currentStage, currentStageState, isReviewed) ? (
+            {stage3Review.stage4Handoff.status === "actionable" ? (
               <div className="space-y-2 rounded-md border border-teal-500/30 bg-teal-500/5 p-3">
                 <p className="text-sm font-medium text-foreground">
                   Stage 3 is complete and the package is reviewed.
                 </p>
                 <p className={cn("text-xs", mutedClass)}>
-                  Enter Stage 4 to open the submission workflow — prepare, preview, and transmit the
-                  reviewed package.
+                  {stage3Review.stage4Handoff.description}
                 </p>
                 <Button
                   type="button"
@@ -6346,31 +6323,29 @@ export function ApplicationPrepSection({
                   {stage3CompletionBusy ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : null}
-                  Enter Stage 4 submission
+                  {stage3Review.stage4Handoff.label}
                 </Button>
               </div>
             ) : null}
 
-            {canShowStage4StatusPanel(currentStage) ? (
+            {stage3Review.showStage4StatusPanel ? (
               <div className="space-y-2 rounded-md border border-teal-500/30 bg-teal-500/5 p-3">
                 <p className="text-sm font-medium text-foreground">
                   Stage 4 submission is{" "}
                   {formatLifecycleState(currentStageState).toLowerCase()}.
                 </p>
-                <p className={cn("text-xs", mutedClass)}>
-                  {isReviewed
-                    ? "Submission controls are enabled on the Submission Tracker — prepare and send the reviewed package."
-                    : "Complete package review before preparing submission."}
-                </p>
-                <Button asChild size="sm" variant="outline" className={toolbarOutlineButtonClass}>
-                  <Link
-                    to={`/uci/submissions?coordinationId=${encodeURIComponent(coordinationId)}${
-                      packageApp ? `&applicationId=${encodeURIComponent(packageApp.id)}` : ""
-                    }`}
-                  >
-                    Open Submission Tracker
-                  </Link>
-                </Button>
+                <p className={cn("text-xs", mutedClass)}>{stage3Review.stage4StatusHint}</p>
+                {stage3Review.showSubmissionTrackerLink ? (
+                  <Button asChild size="sm" variant="outline" className={toolbarOutlineButtonClass}>
+                    <Link
+                      to={`/uci/submissions?coordinationId=${encodeURIComponent(coordinationId)}${
+                        packageApp ? `&applicationId=${encodeURIComponent(packageApp.id)}` : ""
+                      }`}
+                    >
+                      Open Submission Tracker
+                    </Link>
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 
@@ -7340,7 +7315,7 @@ export function ApplicationPrepSection({
             ) : null}
 
             <div className="space-y-2 rounded-md border border-border/60 p-3">
-              {isReviewed ? (
+              {packageReviewAction.status === "reviewed" ? (
                 <>
                   <Label htmlFor="application-review-notes" className="text-xs">
                     Why are you reopening this review?
@@ -7356,19 +7331,22 @@ export function ApplicationPrepSection({
                 </>
               ) : null}
               <div className="flex flex-wrap gap-2">
-                {!isReviewed ? (
+                {packageReviewAction.status === "actionable" ||
+                packageReviewAction.status === "blocked" ? (
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
-                    disabled={reviewBusy || !effectiveAllConfirmed}
+                    disabled={
+                      packageReviewAction.status === "blocked" || packageReviewAction.disabled
+                    }
                     onClick={() => onReview("reviewed")}
                   >
                     {reviewBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Mark package reviewed
+                    {packageReviewAction.label}
                   </Button>
                 ) : null}
-                {isReviewed ? (
+                {packageReviewAction.status === "reviewed" ? (
                   <Button
                     type="button"
                     size="sm"
@@ -7406,9 +7384,11 @@ export function ApplicationPrepSection({
                 </p>
               ) : !submitReady ? (
                 <p className={cn("text-xs", mutedClass)}>
-                  {effectiveAllConfirmed
+                  {packageReviewAction.status === "actionable"
                     ? "All required mappings are confirmed. Mark the package reviewed to lock the snapshot."
-                    : "Confirm every required field and document before final review."}
+                    : packageReviewAction.status === "blocked"
+                      ? packageReviewAction.hint
+                      : "Confirm every required field and document before final review."}
                 </p>
               ) : packageApp.draft_status === "submitted" ? (
                 <p className={cn("text-xs text-emerald-800 dark:text-emerald-200", mutedClass)}>

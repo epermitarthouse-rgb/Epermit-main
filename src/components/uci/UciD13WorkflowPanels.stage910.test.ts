@@ -68,8 +68,8 @@ describe("MeterSetCloseoutPanel Stage 9/10 action-state feedback", () => {
     assert.doesNotMatch(dashboardSource, /createSignedUrl\(filePath/);
   });
 
-  it("requires explicit Start Stage 9 before meter-set mutations", () => {
-    assert.match(panelSource, /Start Stage 9/);
+  it("requires explicit Begin pre-energization before meter-set mutations", () => {
+    assert.match(panelSource, /Begin pre-energization coordination/);
     assert.match(panelSource, /onStartStage9/);
     assert.match(panelSource, /needsStage9Entry/);
     assert.match(panelSource, /disabled=\{!stage9Active\}/);

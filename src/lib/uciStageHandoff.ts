@@ -34,17 +34,11 @@ export function canShowStage3StatusPanel(stage: number): boolean {
   return stage >= 3;
 }
 
-export function getStage3HandoffButtonLabel(options: {
+export function getStage3HandoffButtonLabel(_options: {
   packageReady: boolean;
   packageReviewed: boolean;
 }): string {
-  if (options.packageReviewed && options.packageReady) {
-    return "Complete Stage 3";
-  }
-  if (options.packageReady) {
-    return "Start Stage 3";
-  }
-  return "Enter Stage 3";
+  return "Open application preparation";
 }
 
 /** Stage 3 application preparation finished; Stage 4 submission entry is pending. */
@@ -56,12 +50,13 @@ export function isStage3CompletedAwaitingStage4Handoff(
   return stage === 3 && state === "COMPLETED" && packageReviewed;
 }
 
+/** Package review auto-handoffs to Stage 4 — no redundant Enter Stage 4 CTA. */
 export function canShowEnterStage4HandoffButton(
-  stage: number,
-  state: LifecycleState | string | undefined,
-  packageReviewed: boolean,
+  _stage: number,
+  _state: LifecycleState | string | undefined,
+  _packageReviewed: boolean,
 ): boolean {
-  return isStage3CompletedAwaitingStage4Handoff(stage, state, packageReviewed);
+  return false;
 }
 
 export function canShowStage4StatusPanel(stage: number): boolean {

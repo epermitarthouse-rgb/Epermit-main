@@ -8,6 +8,7 @@
 const { emitUciEvent } = require("./uci-events.service.js");
 const { recordSystemTransition } = require("./uci-transitions.service.js");
 const { canEnterStage7, canCompleteStage7 } = require("./uci-lifecycle-guards.service.js");
+const { maybeEnterStage8 } = require("./uci-equipment-tracker.service.js");
 const { raiseUciAlert } = require("./uci-alerts.service.js");
 const {
   createUciPassthroughInvoice,
@@ -242,7 +243,11 @@ async function handleCostLifecycleEvent(supabase, params) {
       .eq("id", nextCost.id);
   }
 
-  return { cost: nextCost, variance: variance.gates, record };
+  const autoStage7 = record
+    ? await maybeTryAutoCompleteStage7(supabase, String(cost.coordination_record_id)).catch(() => null)
+    : null;
+
+  return { cost: nextCost, variance: variance.gates, record, stage_7: autoStage7 };
 }
 
 /**
@@ -442,7 +447,7 @@ async function maybeCompleteStage7(supabase, params) {
     err.code = "STAGE_7_INCOMPLETE";
     throw err;
   }
-  return recordSystemTransition(supabase, {
+  const transition = await recordSystemTransition(supabase, {
     coordinationRecordId,
     toStage: 7,
     toState: "COMPLETED",
@@ -450,6 +455,33 @@ async function maybeCompleteStage7(supabase, params) {
     triggeredByType: userId ? "user" : "system",
     triggeredById: userId,
   });
+  const completedRecord = transition.record || record;
+  const stage8 = await maybeEnterStage8(supabase, completedRecord, costs);
+  return { ...transition, stage_8: stage8 };
+}
+
+async function maybeTryAutoCompleteStage7(supabase, coordinationRecordId, userId = null) {
+  const record = await loadRecord(supabase, coordinationRecordId);
+  if (!record) return { completed: false, reason: "record_not_found" };
+
+  const costs = await listCosts(supabase, coordinationRecordId, String(record.project_id));
+  const stage = Number(record.current_stage);
+  const state = String(record.current_stage_state || "");
+
+  if (stage > 7) {
+    return { completed: false, reason: "already_past_stage_7" };
+  }
+  if (stage === 7 && state === "COMPLETED") {
+    const stage8 = await maybeEnterStage8(supabase, record, costs);
+    return { completed: false, already_completed: true, record, stage_8: stage8 };
+  }
+  if (stage !== 7 || state === "COMPLETED") {
+    return { completed: false, reason: "stage_7_not_active" };
+  }
+  if (!canCompleteStage7(record, costs)) {
+    return { completed: false, reason: "stage_7_incomplete" };
+  }
+  return maybeCompleteStage7(supabase, { coordinationRecordId, userId });
 }
 
 async function retryCoordinationCostInvoice(supabase, params) {
@@ -497,5 +529,6 @@ module.exports = {
   retryCoordinationCostInvoice,
   evaluateCiacSla,
   maybeCompleteStage7,
+  maybeTryAutoCompleteStage7,
   maybeEnterStage7OnEstimate,
 };
