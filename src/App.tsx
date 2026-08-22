@@ -71,6 +71,7 @@ import ResponseMatrix from "./pages/ResponseMatrix";
 import PortalDataViewer from "./pages/PortalDataViewer";
 import ClassifiedComments from "./pages/ClassifiedComments";
 import PermitWizardFiling from "./pages/PermitWizardFiling";
+import PermitWizardFilingReview from "./pages/PermitWizardFilingReview";
 import OperationsBoard from "./pages/OperationsBoard";
 import BaltimorePortalHome from "./pages/baltimore/BaltimorePortalHome";
 import BaltimorePermitsPage from "./pages/baltimore/BaltimorePermitsPage";
@@ -257,6 +258,7 @@ const App = () => (
                   <Route path="/classified-comments" element={<ClassifiedComments />} />
                   <Route path="/portal-data" element={<PortalDataViewer />} />
                   <Route path="/operations" element={<OperationsBoard />} />
+                  <Route path="/permit-wizard-filing/review/:filingId" element={<PermitWizardFilingReview />} />
                   <Route path="/permit-wizard-filing" element={<PermitWizardFiling />} />
                   {/* Baltimore Accela portal clone (UI only, mock data) */}
                   <Route path="/baltimore" element={<BaltimorePortalHome />} />

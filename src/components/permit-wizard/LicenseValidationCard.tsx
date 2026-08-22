@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { formatLicenseWarning } from '@/lib/approvalPackage';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -108,7 +109,7 @@ export function LicenseValidationCard({ data, error, validationSourceLabel }: Li
             {data.warnings!.map((warning, i) => (
               <div key={i} className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300" data-testid={`text-license-warning-${i}`}>
                 <AlertTriangle className="h-3 w-3 shrink-0" />
-                {warning}
+                {formatLicenseWarning(warning)}
               </div>
             ))}
           </div>

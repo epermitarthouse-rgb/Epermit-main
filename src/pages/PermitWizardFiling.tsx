@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,14 +45,14 @@ import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
 import { formatPermitFilingError, isMissingRelationError } from "@/lib/permitFilingErrors";
 import { toast } from "sonner";
-import { FilingReviewPanel } from "@/components/permit-wizard/FilingReviewPanel";
 import { StartFilingDialog } from "@/components/permit-wizard/StartFilingDialog";
 import { AgentRunDetail } from "@/components/permit-wizard/AgentRunDetail";
 import {
-  PERMIT_FILING_WIP,
-  PERMIT_FILING_WIP_ACTION_TOOLTIP,
-  PERMIT_FILING_WIP_LABEL,
-  PERMIT_FILING_WIP_NOTE,
+  PERMIT_FILING_BETA_LABEL,
+  PERMIT_FILING_BETA_NOTE,
+  PERMIT_FILING_EXECUTION_ENABLED,
+  PERMIT_FILING_EXECUTION_TOOLTIP,
+  PERMIT_FILING_PREFLIGHT_ENABLED,
 } from "@/components/permit-wizard/permitFilingWip";
 
 interface Municipality {
@@ -259,6 +259,15 @@ export default function PermitWizardFiling() {
   const { selectedProjectId, setSelectedProjectId } = useSelectedProject();
   const { projects } = useProjects();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const filingIdParam = searchParams.get("filingId");
+
+  const openFilingReview = useCallback(
+    (filingId: string) => {
+      navigate(`/permit-wizard-filing/review/${filingId}`);
+    },
+    [navigate],
+  );
 
   const [filings, setFilings] = useState<Filing[]>([]);
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
@@ -266,7 +275,6 @@ export default function PermitWizardFiling() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
-  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedAgentRun, setSelectedAgentRun] = useState<AgentRun | null>(null);
   const [agentDetailOpen, setAgentDetailOpen] = useState(false);
   const [screenshots, setScreenshots] = useState<Array<{ id: string; filing_id: string; agent_name: string; step_name: string; screenshot_url: string; field_audit?: Record<string, unknown> | null; created_at: string }>>([]);
@@ -314,8 +322,9 @@ export default function PermitWizardFiling() {
     ? filings
     : filings.filter((f) => f.municipality === municipalityFilter);
 
-  const fetchFilings = useCallback(async () => {
+  const fetchFilings = useCallback(async (preferredFilingId?: string, projectIdOverride?: string) => {
     if (!user) return;
+    const projectFilter = projectIdOverride ?? selectedProjectId;
     try {
       let query = supabase
         .from("permit_filings")
@@ -323,8 +332,8 @@ export default function PermitWizardFiling() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (selectedProjectId) {
-        query = query.eq("project_id", selectedProjectId);
+      if (projectFilter) {
+        query = query.eq("project_id", projectFilter);
       }
 
       const { data, error } = await query;
@@ -332,9 +341,11 @@ export default function PermitWizardFiling() {
       setFilings(data || []);
 
       if (data && data.length > 0) {
-        const current = selectedFiling
-          ? data.find((f) => f.id === selectedFiling.id) || data[0]
-          : data[0];
+        const current = preferredFilingId
+          ? data.find((f) => f.id === preferredFilingId) || data[0]
+          : selectedFiling
+            ? data.find((f) => f.id === selectedFiling.id) || data[0]
+            : data[0];
         setSelectedFiling(current);
 
         const { data: runs, error: runsError } = await supabase
@@ -361,7 +372,7 @@ export default function PermitWizardFiling() {
         { id: isMissingRelationError(err) ? "permit-filings-missing" : undefined }
       );
     }
-  }, [user, selectedProjectId, selectedFiling]);
+  }, [user, selectedProjectId, selectedFiling?.id]);
 
   const getPreflightProgressLabel = useCallback(
     (filingId: string) => {
@@ -415,9 +426,9 @@ export default function PermitWizardFiling() {
   useEffect(() => {
     if (user) {
       setLoading(true);
-      fetchFilings().finally(() => setLoading(false));
+      fetchFilings(filingIdParam ?? undefined).finally(() => setLoading(false));
     }
-  }, [user, selectedProjectId]);
+  }, [user, selectedProjectId, filingIdParam]);
 
   const fetchScreenshots = useCallback(async () => {
     if (!selectedFiling) {
@@ -463,12 +474,28 @@ export default function PermitWizardFiling() {
     setRefreshing(false);
   };
 
-  const handleFilingStarted = (filingId: string) => {
-    fetchFilings().then(() => {
-      const found = filings.find((f) => f.id === filingId);
-      if (found) setSelectedFiling(found);
-    });
-  };
+  const handleFilingStarted = useCallback(async (filingId: string) => {
+    if (!user) return;
+
+    let projectIdOverride: string | undefined;
+    try {
+      const { data: filingRow } = await supabase
+        .from("permit_filings")
+        .select("project_id")
+        .eq("id", filingId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (filingRow?.project_id) {
+        projectIdOverride = filingRow.project_id;
+        setSelectedProjectId(filingRow.project_id);
+      }
+    } catch (err) {
+      console.warn("Could not resolve filing project for refresh:", err);
+    }
+
+    await fetchFilings(filingId, projectIdOverride);
+  }, [user, fetchFilings, setSelectedProjectId]);
 
   const getRunForAgent = (agentName: string) => {
     return agentRuns.find((r) => r.agent_name === agentName);
@@ -531,10 +558,13 @@ export default function PermitWizardFiling() {
     }
     if (selectedFiling.filing_status === "awaiting_approval") {
       return {
-        text: PERMIT_FILING_WIP
-          ? `${selectedFiling.property_address || "This filing"} shows an awaiting-approval state. Open Review to inspect the package — approval and execution are disabled while work is in progress.`
-          : `${selectedFiling.property_address || "This filing"} has cleared automated pre-flight checks and needs a human approval decision to continue to submission.`,
-        action: { label: PERMIT_FILING_WIP ? "Open Review" : "Review & Decide", onClick: () => setReviewDialogOpen(true) },
+        text: PERMIT_FILING_EXECUTION_ENABLED
+          ? `${selectedFiling.property_address || "This filing"} has cleared automated pre-flight checks and needs a human approval decision to continue to submission.`
+          : `${selectedFiling.property_address || "This filing"} has completed Pre-Flight analysis. Open Review to inspect the package — approval and portal submission are not yet available.`,
+        action: {
+          label: PERMIT_FILING_EXECUTION_ENABLED ? "Review & Decide" : "Open Review",
+          onClick: () => openFilingReview(selectedFiling.id),
+        },
       };
     }
     if (blockedRun) {
@@ -545,15 +575,15 @@ export default function PermitWizardFiling() {
     }
     if (selectedFiling.filing_status === "submitted") {
       return {
-        text: PERMIT_FILING_WIP
-          ? "This filing is marked submitted in data, but live status monitoring is still work in progress."
-          : "This filing has been submitted to the portal. Status monitoring will keep watching for jurisdiction updates.",
+        text: PERMIT_FILING_EXECUTION_ENABLED
+          ? "This filing has been submitted to the portal. Status monitoring will keep watching for jurisdiction updates."
+          : "This filing shows a submitted status in records. Live status monitoring is still being completed.",
         action: null,
       };
     }
     return {
-      text: PERMIT_FILING_WIP
-        ? "Pipeline UI is available for review. Pre-flight, execution, submission, and monitoring are not production-ready — treat agent status as incomplete."
+      text: PERMIT_FILING_PREFLIGHT_ENABLED
+        ? "Pre-Flight analysis is running or complete for this filing. Approve from Review to continue when portal credentials are configured."
         : "Pipeline is progressing automatically. No action is needed right now — new steps will appear here as agents complete.",
       action: null,
     };
@@ -574,22 +604,18 @@ export default function PermitWizardFiling() {
         title={
           <span className="inline-flex flex-wrap items-center gap-3">
             Phase · Filing workflow
-            {PERMIT_FILING_WIP && (
+            {PERMIT_FILING_PREFLIGHT_ENABLED && (
               <Badge
                 variant="outline"
-                className="align-middle text-sm font-semibold border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
-                data-testid="badge-permit-filing-wip"
+                className="align-middle text-sm font-semibold border-primary/40 bg-primary/10 text-primary"
+                data-testid="badge-permit-filing-beta"
               >
-                {PERMIT_FILING_WIP_LABEL}
+                {PERMIT_FILING_BETA_LABEL}
               </Badge>
             )}
           </span>
         }
-        body={
-          PERMIT_FILING_WIP
-            ? "Multi-municipality filing UI for review. Pre-flight, human approval, portal submission, and status monitoring are still being completed — not a production-ready workflow."
-            : "Multi-municipality autonomous filing pipeline. Start, monitor, and review real filing statuses with utility coordination dependencies surfaced in the same flow."
-        }
+        body="Run Pre-Flight analysis on new or existing projects. Automated filing/submission capabilities are still being completed."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <ServicePill kind="permit">Permit expediting</ServicePill>
@@ -617,11 +643,11 @@ export default function PermitWizardFiling() {
         }
       />
       <div className="space-y-6">
-        {PERMIT_FILING_WIP && (
+        {PERMIT_FILING_PREFLIGHT_ENABLED && (
           <AlertBanner
-            tone="warn"
-            title={PERMIT_FILING_WIP_LABEL}
-            detail={PERMIT_FILING_WIP_NOTE}
+            tone="info"
+            title={PERMIT_FILING_BETA_LABEL}
+            detail={PERMIT_FILING_BETA_NOTE}
           />
         )}
 
@@ -637,12 +663,10 @@ export default function PermitWizardFiling() {
             value={awaitingApprovalCount}
             icon={UserCheck}
             detail={
-              PERMIT_FILING_WIP
-                ? awaitingApprovalCount > 0
-                  ? "Review UI available · decisions gated"
-                  : "Nothing pending review"
-                : awaitingApprovalCount > 0
-                ? "Needs a review decision"
+              awaitingApprovalCount > 0
+                ? PERMIT_FILING_EXECUTION_ENABLED
+                  ? "Needs a review decision"
+                  : "Pre-Flight complete · review package available"
                 : "Nothing pending review"
             }
           />
@@ -665,9 +689,9 @@ export default function PermitWizardFiling() {
             tone="warn"
             title="A filing is awaiting review"
             detail={
-              PERMIT_FILING_WIP
-                ? `${selectedFiling.property_address || "This filing"} can be opened for package review. Final approval and execution remain disabled while work is in progress.`
-                : `${selectedFiling.property_address || "This filing"} is ready for an approval decision. Open Review & Decide to continue the pipeline.`
+              PERMIT_FILING_EXECUTION_ENABLED
+                ? `${selectedFiling.property_address || "This filing"} is ready for an approval decision. Open Review & Decide to continue the pipeline.`
+                : `${selectedFiling.property_address || "This filing"} completed Pre-Flight. Open Review to approve or reject and continue portal filing when credentials are configured.`
             }
           />
         )}
@@ -701,13 +725,9 @@ export default function PermitWizardFiling() {
               {selectedProjectId ? "No Filings Yet" : "Get Started with Permit Filing"}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {PERMIT_FILING_WIP
-                ? selectedProjectId
-                  ? "No filings for this project yet. You can open Start New Filing to review the creation UI (pre-flight start is currently disabled)."
-                  : "Open Start New Filing to review the creation UI, or select a project from the sidebar. Pre-flight start is disabled while this workflow is work in progress."
-                : selectedProjectId
-                ? "Start a new filing to initiate the autonomous permit filing pipeline."
-                : "Start a new filing to create a project and initiate the autonomous permit filing pipeline, or select an existing project from the sidebar."}
+              {selectedProjectId
+                ? "Start a new filing to run Pre-Flight analysis for this project."
+                : "Start a new filing to create a project and run Pre-Flight, or select an existing project from the sidebar."}
             </p>
             <Button
               onClick={() => setStartDialogOpen(true)}
@@ -823,8 +843,7 @@ export default function PermitWizardFiling() {
                                   className="h-7 text-xs pilot-button-primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedFiling(filing);
-                                    setReviewDialogOpen(true);
+                                    openFilingReview(filing.id);
                                   }}
                                   data-testid={`button-review-filing-${filing.id}`}
                                 >
@@ -894,12 +913,12 @@ export default function PermitWizardFiling() {
                       selectedFiling.filing_status === "awaiting_approval" && (
                         <Button
                           size="sm"
-                          onClick={() => setReviewDialogOpen(true)}
+                          onClick={() => selectedFiling && openFilingReview(selectedFiling.id)}
                           data-testid="button-open-review"
                           className="pilot-button-primary"
                         >
                           <UserCheck className="h-4 w-4 mr-1" />
-                          {PERMIT_FILING_WIP ? "Open Review" : "Review & Decide"}
+                          {PERMIT_FILING_EXECUTION_ENABLED ? "Review & Decide" : "Open Review"}
                         </Button>
                       )
                     }
@@ -996,12 +1015,16 @@ export default function PermitWizardFiling() {
 
                   {selectedFiling.filing_status === "submitted" && (
                     <AlertBanner
-                      tone={PERMIT_FILING_WIP ? "warn" : "good"}
-                      title={PERMIT_FILING_WIP ? "Marked submitted · monitoring WIP" : "Filing submitted successfully"}
+                      tone={PERMIT_FILING_EXECUTION_ENABLED ? "good" : "warn"}
+                      title={
+                        PERMIT_FILING_EXECUTION_ENABLED
+                          ? "Filing submitted successfully"
+                          : "Marked submitted · monitoring incomplete"
+                      }
                       detail={
                         <div className="space-y-0.5">
-                          {PERMIT_FILING_WIP && (
-                            <p>{PERMIT_FILING_WIP_ACTION_TOOLTIP}</p>
+                          {!PERMIT_FILING_EXECUTION_ENABLED && (
+                            <p>{PERMIT_FILING_EXECUTION_TOOLTIP}</p>
                           )}
                           {selectedFiling.application_id && (
                             <p data-testid="text-application-id">Application ID: {selectedFiling.application_id}</p>
@@ -1060,18 +1083,6 @@ export default function PermitWizardFiling() {
           onProjectCreated={(newProject) => {
             setSelectedProjectId(newProject.id);
           }}
-        />
-
-        <FilingReviewPanel
-          filing={selectedFiling}
-          isLoading={false}
-          onDecisionMade={() => {
-            fetchFilings();
-            setReviewDialogOpen(false);
-          }}
-          asDialog
-          dialogOpen={reviewDialogOpen}
-          onDialogClose={() => setReviewDialogOpen(false)}
         />
 
         <AgentRunDetail

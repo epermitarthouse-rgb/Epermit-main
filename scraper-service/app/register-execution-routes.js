@@ -12509,57 +12509,93 @@ app.post("/api/permitwizard/file", async (req, res) => {
     `\n🏛️ [PermitWizard File] Starting form filing for: ${resolvedFilingData.property_address}`,
   );
 
-  res.json({
-    success: true,
-    message: "Form filing started",
-    filing_id: resolvedFilingId,
-    steps: WIZARD_STEPS,
-  });
+  try {
+    const result = await permitWizardFile(
+      sessionToken,
+      resolvedFilingData,
+      supabase,
+    );
 
-  permitWizardFile(sessionToken, resolvedFilingData, supabase)
-    .then(async (result) => {
+    console.log(
+      `  [PermitWizard File] Filing complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+    );
+
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: result.success ? "completed" : "failed",
+          output_data: {
+            steps: result.steps,
+            stopped_before_submit: result.stopped_before_submit,
+            field_audits: result.field_audits,
+            screenshots_count: (result.screenshots || []).length,
+          },
+          error_message: result.success ? null : result.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "form_filing")
+        .eq("status", "running");
+    } catch (err) {
       console.log(
-        `  [PermitWizard File] Filing complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+        `  [PermitWizard File] Could not update agent_run: ${err.message}`,
       );
+    }
 
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: result.success ? "completed" : "failed",
-            output_data: {
-              steps: result.steps,
-              stopped_before_submit: result.stopped_before_submit,
-              field_audits: result.field_audits,
-              screenshots_count: (result.screenshots || []).length,
-            },
-            error_message: result.success ? null : result.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "form_filing")
-          .eq("status", "running");
-      } catch (err) {
-        console.log(
-          `  [PermitWizard File] Could not update agent_run: ${err.message}`,
-        );
-      }
-    })
-    .catch(async (err) => {
-      console.error(`  [PermitWizard File] Fatal error: ${err.message}`);
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: "failed",
-            error_message: err.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "form_filing")
-          .eq("status", "running");
-      } catch (_) {}
+    if (!result.success) {
+      const httpStatus =
+        result.requiresReauth || result.error === "session_expired" ? 401 : 500;
+      return res.status(httpStatus).json({
+        success: false,
+        error: result.error || "filing_error",
+        message: result.message || "Form filing failed",
+        filing_id: resolvedFilingId,
+        requiresReauth: result.requiresReauth === true,
+        steps: result.steps,
+        stopped_before_submit: result.stopped_before_submit,
+      });
+    }
+
+    const completedSteps = Array.isArray(result.steps)
+      ? result.steps.filter((step) => step.success !== false).length
+      : 0;
+
+    return res.json({
+      success: true,
+      message:
+        result.message ||
+        "All wizard steps completed. Stopped at Review & Submit page — awaiting finalization.",
+      filing_id: resolvedFilingId,
+      steps: result.steps,
+      steps_completed: completedSteps,
+      total_steps: Array.isArray(result.steps) ? result.steps.length : WIZARD_STEPS.length,
+      stopped_before_submit: result.stopped_before_submit,
+      field_audits: result.field_audits,
+      screenshots: result.screenshots,
     });
+  } catch (err) {
+    console.error(`  [PermitWizard File] Fatal error: ${err.message}`);
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: "failed",
+          error_message: err.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "form_filing")
+        .eq("status", "running");
+    } catch (_) {}
+
+    return res.status(500).json({
+      success: false,
+      error: "filing_error",
+      message: err.message,
+      filing_id: resolvedFilingId,
+    });
+  }
 });
 
 // ─ ��─ PermitWizard Submission Finalization (Agent 08) ─────────────────────────
@@ -12654,44 +12690,44 @@ app.post("/api/permitwizard/submit", async (req, res) => {
     `\n🏛️ [PermitWizard Submit] Starting submission finalization for filing: ${resolvedFilingId}`,
   );
 
-  res.json({
-    success: true,
-    message: "Submission finalization started",
-    filing_id: resolvedFilingId,
-  });
+  try {
+    const result = await permitWizardSubmit(
+      sessionToken,
+      resolvedFilingData,
+      supabase,
+    );
 
-  permitWizardSubmit(sessionToken, resolvedFilingData, supabase)
-    .then(async (result) => {
+    console.log(
+      `  [PermitWizard Submit] Finalization complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+    );
+
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: result.success ? "completed" : "failed",
+          output_data: {
+            application_id: result.application_id || null,
+            confirmation_number: result.confirmation_number || null,
+            confirmation_message: result.confirmation_message || null,
+            validation: result.validation || null,
+            screenshots_count: (result.screenshots || []).length,
+            submitted_at: result.submitted_at || null,
+          },
+          error_message: result.success ? null : result.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "submission_finalization")
+        .eq("status", "running");
+    } catch (err) {
       console.log(
-        `  [PermitWizard Submit] Finalization complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+        `  [PermitWizard Submit] Could not update agent_run: ${err.message}`,
       );
+    }
 
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: result.success ? "completed" : "failed",
-            output_data: {
-              application_id: result.application_id || null,
-              confirmation_number: result.confirmation_number || null,
-              confirmation_message: result.confirmation_message || null,
-              validation: result.validation || null,
-              screenshots_count: (result.screenshots || []).length,
-              submitted_at: result.submitted_at || null,
-            },
-            error_message: result.success ? null : result.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "submission_finalization")
-          .eq("status", "running");
-      } catch (err) {
-        console.log(
-          `  [PermitWizard Submit] Could not update agent_run: ${err.message}`,
-        );
-      }
-
-      if (!result.success && result.error !== "validation_failed") {
+    if (!result.success) {
+      if (result.error !== "validation_failed") {
         try {
           await supabase
             .from("permit_filings")
@@ -12702,30 +12738,64 @@ app.post("/api/permitwizard/submit", async (req, res) => {
             .eq("id", resolvedFilingId);
         } catch (_) {}
       }
-    })
-    .catch(async (err) => {
-      console.error(`  [PermitWizard Submit] Fatal error: ${err.message}`);
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: "failed",
-            error_message: err.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "submission_finalization")
-          .eq("status", "running");
 
-        await supabase
-          .from("permit_filings")
-          .update({
-            filing_status: "failed",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", resolvedFilingId);
-      } catch (_) {}
+      const httpStatus =
+        result.error === "validation_failed"
+          ? 422
+          : result.requiresReauth || result.error === "session_expired"
+            ? 401
+            : 500;
+
+      return res.status(httpStatus).json({
+        success: false,
+        error: result.error || "submit_error",
+        message: result.message || "Submission finalization failed",
+        filing_id: resolvedFilingId,
+        requiresReauth: result.requiresReauth === true,
+        validation: result.validation || null,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: result.confirmation_message || "Submission finalization completed",
+      filing_id: resolvedFilingId,
+      application_id: result.application_id || null,
+      confirmation_number: result.confirmation_number || null,
+      confirmation_message: result.confirmation_message || null,
+      submitted_at: result.submitted_at || null,
+      validation: result.validation || null,
     });
+  } catch (err) {
+    console.error(`  [PermitWizard Submit] Fatal error: ${err.message}`);
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: "failed",
+          error_message: err.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "submission_finalization")
+        .eq("status", "running");
+
+      await supabase
+        .from("permit_filings")
+        .update({
+          filing_status: "failed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", resolvedFilingId);
+    } catch (_) {}
+
+    return res.status(500).json({
+      success: false,
+      error: "submit_error",
+      message: err.message,
+      filing_id: resolvedFilingId,
+    });
+  }
 });
 
 // ─── Multi-Municipality Filing Endpoints ─────────────────────────────────────
@@ -13056,15 +13126,8 @@ app.post("/api/filing/file", async (req, res) => {
     `\n[Filing File] Starting ${portal_type} form filing for: ${resolvedFilingData.property_address}`,
   );
 
-  res.json({
-    success: true,
-    message: "Form filing started",
-    filing_id: resolvedFilingId,
-    portal_type,
-  });
-
-  let filePromise;
   const config = portal_config || {};
+  let filePromise;
 
   switch (portal_type) {
     case "accela":
@@ -13094,54 +13157,103 @@ app.post("/api/filing/file", async (req, res) => {
         supabase,
       );
       break;
+    default:
+      return res.status(400).json({
+        success: false,
+        error: "invalid_portal_type",
+        message: `Unsupported portal_type: ${portal_type}`,
+      });
   }
 
-  filePromise
-    .then(async (result) => {
+  try {
+    const result = await filePromise;
+
+    console.log(
+      `  [Filing File] (${portal_type}) Filing complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+    );
+
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: result.success ? "completed" : "failed",
+          output_data: {
+            portal_type,
+            steps: result.steps,
+            stopped_before_submit: result.stopped_before_submit,
+            field_audits: result.field_audits,
+            screenshots_count: (result.screenshots || []).length,
+          },
+          error_message: result.success ? null : result.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "form_filing")
+        .eq("status", "running");
+    } catch (err) {
       console.log(
-        `  [Filing File] (${portal_type}) Filing complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+        `  [Filing File] Could not update agent_run: ${err.message}`,
       );
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: result.success ? "completed" : "failed",
-            output_data: {
-              portal_type,
-              steps: result.steps,
-              stopped_before_submit: result.stopped_before_submit,
-              field_audits: result.field_audits,
-              screenshots_count: (result.screenshots || []).length,
-            },
-            error_message: result.success ? null : result.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "form_filing")
-          .eq("status", "running");
-      } catch (err) {
-        console.log(
-          `  [Filing File] Could not update agent_run: ${err.message}`,
-        );
-      }
-    })
-    .catch(async (err) => {
-      console.error(
-        `  [Filing File] (${portal_type}) Fatal error: ${err.message}`,
-      );
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: "failed",
-            error_message: err.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "form_filing")
-          .eq("status", "running");
-      } catch (_) {}
+    }
+
+    if (!result.success) {
+      const httpStatus =
+        result.requiresReauth || result.error === "session_expired" ? 401 : 500;
+      return res.status(httpStatus).json({
+        success: false,
+        error: result.error || "filing_error",
+        message: result.message || "Form filing failed",
+        filing_id: resolvedFilingId,
+        portal_type,
+        requiresReauth: result.requiresReauth === true,
+        steps: result.steps,
+        stopped_before_submit: result.stopped_before_submit,
+      });
+    }
+
+    const completedSteps = Array.isArray(result.steps)
+      ? result.steps.filter((step) => step.success !== false).length
+      : 0;
+
+    return res.json({
+      success: true,
+      message:
+        result.message ||
+        "All wizard steps completed. Stopped at Review & Submit page — awaiting finalization.",
+      filing_id: resolvedFilingId,
+      portal_type,
+      steps: result.steps,
+      steps_completed: completedSteps,
+      total_steps: Array.isArray(result.steps) ? result.steps.length : undefined,
+      stopped_before_submit: result.stopped_before_submit,
+      field_audits: result.field_audits,
+      screenshots: result.screenshots,
     });
+  } catch (err) {
+    console.error(
+      `  [Filing File] (${portal_type}) Fatal error: ${err.message}`,
+    );
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: "failed",
+          error_message: err.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "form_filing")
+        .eq("status", "running");
+    } catch (_) {}
+
+    return res.status(500).json({
+      success: false,
+      error: "filing_error",
+      message: err.message,
+      filing_id: resolvedFilingId,
+      portal_type,
+    });
+  }
 });
 
 app.post("/api/filing/submit", async (req, res) => {
@@ -13258,15 +13370,8 @@ app.post("/api/filing/submit", async (req, res) => {
     `\n[Filing Submit] Starting ${portal_type} submission for filing: ${resolvedFilingId}`,
   );
 
-  res.json({
-    success: true,
-    message: "Submission finalization started",
-    filing_id: resolvedFilingId,
-    portal_type,
-  });
-
-  let submitPromise;
   const config = portal_config || {};
+  let submitPromise;
 
   switch (portal_type) {
     case "accela":
@@ -13299,40 +13404,49 @@ app.post("/api/filing/submit", async (req, res) => {
         supabase,
       );
       break;
+    default:
+      return res.status(400).json({
+        success: false,
+        error: "invalid_portal_type",
+        message: `Unsupported portal_type: ${portal_type}`,
+      });
   }
 
-  submitPromise
-    .then(async (result) => {
-      console.log(
-        `  [Filing Submit] (${portal_type}) Finalization complete: ${result.success ? "SUCCESS" : "FAILED"}`,
-      );
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: result.success ? "completed" : "failed",
-            output_data: {
-              portal_type,
-              application_id: result.application_id || null,
-              confirmation_number: result.confirmation_number || null,
-              confirmation_message: result.confirmation_message || null,
-              validation: result.validation || null,
-              screenshots_count: (result.screenshots || []).length,
-              submitted_at: result.submitted_at || null,
-            },
-            error_message: result.success ? null : result.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "submission_finalization")
-          .eq("status", "running");
-      } catch (err) {
-        console.log(
-          `  [Filing Submit] Could not update agent_run: ${err.message}`,
-        );
-      }
+  try {
+    const result = await submitPromise;
 
-      if (!result.success && result.error !== "validation_failed") {
+    console.log(
+      `  [Filing Submit] (${portal_type}) Finalization complete: ${result.success ? "SUCCESS" : "FAILED"}`,
+    );
+
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: result.success ? "completed" : "failed",
+          output_data: {
+            portal_type,
+            application_id: result.application_id || null,
+            confirmation_number: result.confirmation_number || null,
+            confirmation_message: result.confirmation_message || null,
+            validation: result.validation || null,
+            screenshots_count: (result.screenshots || []).length,
+            submitted_at: result.submitted_at || null,
+          },
+          error_message: result.success ? null : result.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "submission_finalization")
+        .eq("status", "running");
+    } catch (err) {
+      console.log(
+        `  [Filing Submit] Could not update agent_run: ${err.message}`,
+      );
+    }
+
+    if (!result.success) {
+      if (result.error !== "validation_failed") {
         try {
           await supabase
             .from("permit_filings")
@@ -13343,32 +13457,69 @@ app.post("/api/filing/submit", async (req, res) => {
             .eq("id", resolvedFilingId);
         } catch (_) {}
       }
-    })
-    .catch(async (err) => {
-      console.error(
-        `  [Filing Submit] (${portal_type}) Fatal error: ${err.message}`,
-      );
-      try {
-        await supabase
-          .from("agent_runs")
-          .update({
-            status: "failed",
-            error_message: err.message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("filing_id", resolvedFilingId)
-          .eq("agent_name", "submission_finalization")
-          .eq("status", "running");
 
-        await supabase
-          .from("permit_filings")
-          .update({
-            filing_status: "failed",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", resolvedFilingId);
-      } catch (_) {}
+      const httpStatus =
+        result.error === "validation_failed"
+          ? 422
+          : result.requiresReauth || result.error === "session_expired"
+            ? 401
+            : 500;
+
+      return res.status(httpStatus).json({
+        success: false,
+        error: result.error || "submit_error",
+        message: result.message || "Submission finalization failed",
+        filing_id: resolvedFilingId,
+        portal_type,
+        requiresReauth: result.requiresReauth === true,
+        validation: result.validation || null,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: result.confirmation_message || "Submission finalization completed",
+      filing_id: resolvedFilingId,
+      portal_type,
+      application_id: result.application_id || null,
+      confirmation_number: result.confirmation_number || null,
+      confirmation_message: result.confirmation_message || null,
+      submitted_at: result.submitted_at || null,
+      validation: result.validation || null,
     });
+  } catch (err) {
+    console.error(
+      `  [Filing Submit] (${portal_type}) Fatal error: ${err.message}`,
+    );
+    try {
+      await supabase
+        .from("agent_runs")
+        .update({
+          status: "failed",
+          error_message: err.message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("filing_id", resolvedFilingId)
+        .eq("agent_name", "submission_finalization")
+        .eq("status", "running");
+
+      await supabase
+        .from("permit_filings")
+        .update({
+          filing_status: "failed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", resolvedFilingId);
+    } catch (_) {}
+
+    return res.status(500).json({
+      success: false,
+      error: "submit_error",
+      message: err.message,
+      filing_id: resolvedFilingId,
+      portal_type,
+    });
+  }
 });
 
 app.post("/api/filing/logout", async (req, res) => {

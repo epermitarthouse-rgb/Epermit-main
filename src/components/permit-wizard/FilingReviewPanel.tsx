@@ -1,10 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -32,42 +31,22 @@ import { LicenseValidationCard } from './LicenseValidationCard';
 import { DocumentChecklistCard } from './DocumentChecklistCard';
 import { PermitClassificationCard } from './PermitClassificationCard';
 import {
-  PERMIT_FILING_WIP,
-  PERMIT_FILING_WIP_ACTION_TOOLTIP,
-  PERMIT_FILING_WIP_LABEL,
-  PERMIT_FILING_WIP_NOTE,
+  PERMIT_FILING_CREDENTIALS_REQUIRED_MESSAGE,
+  PERMIT_FILING_EXECUTION_ENABLED,
+  PERMIT_FILING_EXECUTION_TOOLTIP,
 } from './permitFilingWip';
+import {
+  describeExecutionOutcome,
+  hasPortalCredentialsForFiling,
+  parseExecutionInvokeResult,
+} from '@/lib/permitFilingExecution';
+import {
+  getPropertyIntelligenceError,
+  normalizeApprovalPackage,
+  type NormalizedApprovalPackage,
+} from '@/lib/approvalPackage';
 
-interface ApprovalPackage {
-  assembled_at?: string;
-  property_intelligence?: Record<string, unknown> | null;
-  license_validation?: {
-    all_active?: boolean;
-    hard_stop?: boolean;
-    hard_stop_reason?: string;
-    warnings?: string[];
-    results?: Array<Record<string, unknown>>;
-    error?: string;
-  };
-  document_preparation?: {
-    total_documents?: number;
-    valid_count?: number;
-    invalid_count?: number;
-    missing_count?: number;
-    deficiencies?: string[];
-    checklist_results?: Array<Record<string, unknown>>;
-    eif_status?: string;
-    documents?: Array<Record<string, unknown>>;
-    error?: string;
-  };
-  permit_classification?: Record<string, unknown> & { error?: string };
-  agent_summary?: Array<{ agent_name: string; status: string; error?: string | null; duration_ms: number }>;
-  escalation_required?: boolean;
-  hard_stop?: boolean;
-  all_agents_succeeded?: boolean;
-}
-
-interface Filing {
+export interface ReviewFiling {
   id: string;
   project_id?: string;
   user_id?: string;
@@ -84,7 +63,7 @@ interface Filing {
   confirmation_number?: string;
   municipality?: string | null;
   credential_id?: string | null;
-  approval_package?: ApprovalPackage | null;
+  approval_package?: NormalizedApprovalPackage | Record<string, unknown> | null;
   approval_decision?: string | null;
   approved_by?: string | null;
   approved_at?: string | null;
@@ -108,9 +87,10 @@ const MUNICIPALITY_META: Record<string, { displayName: string; state: string; pr
 };
 
 interface FilingReviewPanelProps {
-  filing: Filing | null;
+  filing: ReviewFiling | null;
   isLoading?: boolean;
   onDecisionMade?: () => void;
+  onBack?: () => void;
   asDialog?: boolean;
   dialogOpen?: boolean;
   onDialogClose?: () => void;
@@ -126,21 +106,56 @@ const STATUS_CONFIG: Record<string, { label: string; badgeClass: string }> = {
   cancelled: { label: 'Cancelled', badgeClass: '' },
 };
 
-function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing | null; isLoading?: boolean; onDecisionMade?: () => void }) {
+function ReviewContent({
+  filing,
+  isLoading,
+  onDecisionMade,
+  onBack,
+}: {
+  filing: ReviewFiling | null;
+  isLoading?: boolean;
+  onDecisionMade?: () => void;
+  onBack?: () => void;
+}) {
   const { user } = useAuth();
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [hasPortalCredentials, setHasPortalCredentials] = useState<boolean | null>(null);
+  const [executionFeedback, setExecutionFeedback] = useState<{
+    tone: 'success' | 'warning' | 'error';
+    title: string;
+    detail: string;
+  } | null>(null);
 
-  const pkg = filing?.approval_package;
+  const pkg = normalizeApprovalPackage(filing?.approval_package);
   const canReview = filing?.filing_status === 'awaiting_approval' && !filing.approval_decision;
   const hasHardStop = pkg?.hard_stop === true;
   const hasEscalation = pkg?.escalation_required === true;
-  const allSucceeded = pkg?.all_agents_succeeded === true;
   const muniMeta = filing?.municipality ? MUNICIPALITY_META[filing.municipality] ?? null : null;
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!user || !canReview) {
+      setHasPortalCredentials(null);
+      return;
+    }
+
+    hasPortalCredentialsForFiling(user.id, filing?.credential_id)
+      .then((found) => {
+        if (!cancelled) setHasPortalCredentials(found);
+      })
+      .catch(() => {
+        if (!cancelled) setHasPortalCredentials(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, canReview, filing?.credential_id]);
+
   const handleDecision = useCallback(async (decision: 'approved' | 'rejected') => {
-    if (PERMIT_FILING_WIP) {
-      toast.info(PERMIT_FILING_WIP_ACTION_TOOLTIP);
+    if (!PERMIT_FILING_EXECUTION_ENABLED) {
+      toast.info(PERMIT_FILING_EXECUTION_TOOLTIP);
       return;
     }
     if (!filing || !user) return;
@@ -149,7 +164,17 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
       return;
     }
 
+    if (decision === 'approved') {
+      const credentialsReady = await hasPortalCredentialsForFiling(user.id, filing.credential_id);
+      if (!credentialsReady) {
+        setHasPortalCredentials(false);
+        toast.error(PERMIT_FILING_CREDENTIALS_REQUIRED_MESSAGE);
+        return;
+      }
+    }
+
     setSubmitting(true);
+    setExecutionFeedback(null);
     try {
       const now = new Date().toISOString();
       const updateData: Record<string, unknown> = {
@@ -195,18 +220,33 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
       }
 
       if (decision === 'approved') {
-        toast.success('Filing approved. Starting execution pipeline...');
         try {
-          const { error: execError } = await supabase.functions.invoke('permitwizard-execute', {
+          const { data: execData, error: execError } = await supabase.functions.invoke('permitwizard-execute', {
             body: { filing_id: filing.id },
           });
+
           if (execError) {
             console.warn('Execution pipeline invocation failed:', execError);
-            toast.warning('Filing approved but execution pipeline failed to start. You can retry from the dashboard.');
+            const outcome = describeExecutionOutcome(null);
+            setExecutionFeedback(outcome);
+            toast.error(formatPermitFilingError(execError, 'Execution pipeline failed to start.'));
+          } else {
+            const parsed = parseExecutionInvokeResult(execData);
+            const outcome = describeExecutionOutcome(parsed);
+            setExecutionFeedback(outcome);
+            if (outcome.tone === 'success') {
+              toast.success(outcome.detail);
+            } else if (outcome.tone === 'warning') {
+              toast.warning(outcome.detail);
+            } else {
+              toast.error(outcome.detail);
+            }
           }
         } catch (execErr) {
           console.warn('Failed to invoke execution pipeline:', execErr);
-          toast.warning('Filing approved but execution pipeline could not be started automatically.');
+          const outcome = describeExecutionOutcome(null);
+          setExecutionFeedback(outcome);
+          toast.error(formatPermitFilingError(execErr, 'Execution pipeline could not be started.'));
         }
       } else {
         toast.success('Filing rejected. No portal actions will be taken.');
@@ -253,25 +293,35 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
             Pre-Submission Review
           </h2>
           <div className="flex items-center gap-2 flex-wrap">
-            {PERMIT_FILING_WIP && (
-              <Badge
-                variant="outline"
-                className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
-                data-testid="badge-filing-review-wip"
-              >
-                {PERMIT_FILING_WIP_LABEL}
-              </Badge>
+            {onBack && (
+              <Button variant="outline" size="sm" onClick={onBack} data-testid="button-review-back-inline">
+                Back to Permit Filing
+              </Button>
             )}
             <Badge className={statusConfig.badgeClass} data-testid="badge-filing-status">
               {statusConfig.label}
             </Badge>
           </div>
         </div>
-        {PERMIT_FILING_WIP && (
+        {canReview && !PERMIT_FILING_EXECUTION_ENABLED && (
+          <AlertBanner
+            tone="info"
+            title="Review only"
+            detail={PERMIT_FILING_EXECUTION_TOOLTIP}
+          />
+        )}
+        {canReview && PERMIT_FILING_EXECUTION_ENABLED && hasPortalCredentials === false && (
           <AlertBanner
             tone="warn"
-            title={PERMIT_FILING_WIP_LABEL}
-            detail={PERMIT_FILING_WIP_NOTE}
+            title="Portal credentials required"
+            detail={PERMIT_FILING_CREDENTIALS_REQUIRED_MESSAGE}
+          />
+        )}
+        {executionFeedback && (
+          <AlertBanner
+            tone={executionFeedback.tone === 'error' ? 'bad' : executionFeedback.tone === 'success' ? 'good' : 'warn'}
+            title={executionFeedback.title}
+            detail={executionFeedback.detail}
           />
         )}
         {muniMeta && (
@@ -341,7 +391,7 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
 
       <PropertyIntelligenceCard
         data={pkg?.property_intelligence as Record<string, unknown> | null | undefined}
-        error={typeof (pkg?.property_intelligence as Record<string, unknown>)?.error === 'string' ? (pkg?.property_intelligence as Record<string, unknown>).error as string : null}
+        error={getPropertyIntelligenceError(pkg?.property_intelligence ?? null)}
         dataSourceLabel={muniMeta?.propertySource ?? null}
       />
 
@@ -390,9 +440,9 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Review Decision</CardTitle>
             <CardDescription>
-              {PERMIT_FILING_WIP
-                ? 'Review package is visible for UI evaluation. Final approval and execution are gated while this workflow is work in progress.'
-                : 'Review the package above and approve or reject the filing. Notes are required.'}
+              {PERMIT_FILING_EXECUTION_ENABLED
+                ? 'Review the package above and approve or reject the filing. Notes are required. Approval starts portal authentication and filing when credentials are configured.'
+                : 'Review the Pre-Flight package above. Approve and portal submission remain unavailable until automated filing is production-ready.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -403,7 +453,7 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
               className="resize-none"
               rows={3}
               data-testid="input-review-notes"
-              disabled={PERMIT_FILING_WIP}
+              disabled={!PERMIT_FILING_EXECUTION_ENABLED}
             />
             <div className="flex items-center gap-2 flex-wrap">
               <Tooltip>
@@ -411,7 +461,12 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
                   <span className="inline-flex" tabIndex={0}>
                     <Button
                       onClick={() => handleDecision('approved')}
-                      disabled={PERMIT_FILING_WIP || submitting || !notes.trim()}
+                      disabled={
+                        !PERMIT_FILING_EXECUTION_ENABLED
+                        || submitting
+                        || !notes.trim()
+                        || hasPortalCredentials === false
+                      }
                       data-testid="button-approve-filing"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
@@ -419,8 +474,8 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {PERMIT_FILING_WIP && (
-                  <TooltipContent className="max-w-xs">{PERMIT_FILING_WIP_ACTION_TOOLTIP}</TooltipContent>
+                {!PERMIT_FILING_EXECUTION_ENABLED && (
+                  <TooltipContent className="max-w-xs">{PERMIT_FILING_EXECUTION_TOOLTIP}</TooltipContent>
                 )}
               </Tooltip>
               <Tooltip>
@@ -429,7 +484,7 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
                     <Button
                       variant="destructive"
                       onClick={() => handleDecision('rejected')}
-                      disabled={PERMIT_FILING_WIP || submitting || !notes.trim()}
+                      disabled={!PERMIT_FILING_EXECUTION_ENABLED || submitting || !notes.trim()}
                       data-testid="button-reject-filing"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <XCircle className="h-4 w-4 mr-2" />}
@@ -437,12 +492,12 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {PERMIT_FILING_WIP && (
-                  <TooltipContent className="max-w-xs">{PERMIT_FILING_WIP_ACTION_TOOLTIP}</TooltipContent>
+                {!PERMIT_FILING_EXECUTION_ENABLED && (
+                  <TooltipContent className="max-w-xs">{PERMIT_FILING_EXECUTION_TOOLTIP}</TooltipContent>
                 )}
               </Tooltip>
             </div>
-            {hasHardStop && !PERMIT_FILING_WIP && (
+            {hasHardStop && PERMIT_FILING_EXECUTION_ENABLED && (
               <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 Warning: A hard stop was detected. Approving will override this.
@@ -455,45 +510,41 @@ function ReviewContent({ filing, isLoading, onDecisionMade }: { filing: Filing |
   );
 }
 
-export function FilingReviewPanel({ filing, isLoading, onDecisionMade, asDialog, dialogOpen, onDialogClose }: FilingReviewPanelProps) {
+export function FilingReviewPanel({
+  filing,
+  isLoading,
+  onDecisionMade,
+  onBack,
+  asDialog,
+  dialogOpen,
+  onDialogClose,
+}: FilingReviewPanelProps) {
   if (asDialog) {
     return (
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) onDialogClose?.(); }}>
-        <DialogContent className="max-w-3xl max-h-[90vh]">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               Filing Review
-              {PERMIT_FILING_WIP && (
-                <Badge
-                  variant="outline"
-                  className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
-                  data-testid="badge-filing-review-dialog-wip"
-                >
-                  {PERMIT_FILING_WIP_LABEL}
-                </Badge>
-              )}
             </DialogTitle>
             <DialogDescription>
-              {PERMIT_FILING_WIP
-                ? 'Review the pre-submission package for evaluation. Approval, execution, submission, and monitoring remain disabled while work is in progress.'
-                : 'Review the pre-submission package and make an approval decision.'}
+              Review the Pre-Flight package and agent results. Approve and portal submission remain gated until automated filing is production-ready.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[70vh]">
-            <div className="pr-4">
-              <ReviewContent filing={filing} isLoading={isLoading} onDecisionMade={onDecisionMade} />
-            </div>
-          </ScrollArea>
+          <ReviewContent
+            filing={filing}
+            isLoading={isLoading}
+            onDecisionMade={onDecisionMade}
+            onBack={onBack ?? onDialogClose}
+          />
         </DialogContent>
       </Dialog>
     );
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-4">
-        <ReviewContent filing={filing} isLoading={isLoading} onDecisionMade={onDecisionMade} />
-      </div>
-    </ScrollArea>
+    <div className="max-w-4xl">
+      <ReviewContent filing={filing} isLoading={isLoading} onDecisionMade={onDecisionMade} onBack={onBack} />
+    </div>
   );
 }

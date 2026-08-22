@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,9 +23,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Rocket,
   Loader2,
@@ -55,10 +53,9 @@ import type { Project } from '@/types/project';
 import { PROJECT_TYPE_LABELS, coerceProjectTypeForDb } from '@/types/project';
 import { AlertBanner } from '@/components/design/ProductPrimitives';
 import {
-  PERMIT_FILING_WIP,
-  PERMIT_FILING_WIP_LABEL,
-  PERMIT_FILING_WIP_NOTE,
-  PERMIT_FILING_WIP_PREFLIGHT_TOOLTIP,
+  PERMIT_FILING_BETA_LABEL,
+  PERMIT_FILING_BETA_NOTE,
+  PERMIT_FILING_PREFLIGHT_ENABLED,
 } from './permitFilingWip';
 
 interface Professional {
@@ -344,6 +341,16 @@ export function StartFilingDialog({
   const [ownerEmail, setOwnerEmail] = useState('');
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
   const [selectedMunicipalityKey, setSelectedMunicipalityKey] = useState<string>('');
+  const formBodyRef = useRef<HTMLDivElement>(null);
+
+  const handleFormFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.matches('input, textarea, select, [role="combobox"], button')) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }, []);
 
   useEffect(() => {
     if (open && user) {
@@ -553,8 +560,8 @@ export function StartFilingDialog({
   const [documents, setDocuments] = useState<DocumentFile[]>([]);
 
   async function handleStartPreflight() {
-    if (PERMIT_FILING_WIP) {
-      toast.info(PERMIT_FILING_WIP_PREFLIGHT_TOOLTIP);
+    if (!PERMIT_FILING_PREFLIGHT_ENABLED) {
+      toast.info('Pre-Flight start is currently disabled.');
       return;
     }
 
@@ -708,19 +715,49 @@ export function StartFilingDialog({
         }
       }
 
-      try {
-        await supabase.functions.invoke('permitwizard-preflight', {
+      const { data: preflightResult, error: preflightError } = await supabase.functions.invoke(
+        'permitwizard-preflight',
+        {
           body: {
             filing_id: filingId,
             municipality_key: selectedMunicipalityKey,
             credential_id: selectedCredentialId || null,
           },
-        });
-      } catch (preflightErr) {
-        console.warn('Pre-flight invocation sent (may run async):', preflightErr);
+        }
+      );
+
+      if (preflightError) {
+        console.error('Pre-flight invocation failed:', preflightError);
+        toast.error(
+          formatPermitFilingError(
+            preflightError,
+            'Project and filing were created, but Pre-Flight failed to start.'
+          )
+        );
+        onFilingStarted?.(filingId);
+        onOpenChange(false);
+        return;
       }
 
-      toast.success('Filing created! Pre-flight pipeline started.');
+      const preflightBody = preflightResult as Record<string, unknown> | null;
+      if (
+        preflightBody &&
+        (preflightBody.error ||
+          (typeof preflightBody.code === 'number' && preflightBody.code >= 400) ||
+          preflightBody.success === false)
+      ) {
+        const detail =
+          (typeof preflightBody.message === 'string' && preflightBody.message) ||
+          (typeof preflightBody.error === 'string' && preflightBody.error) ||
+          'Pre-Flight returned an error.';
+        console.error('Pre-flight returned error payload:', preflightBody);
+        toast.error(`Project and filing were created, but Pre-Flight failed: ${detail}`);
+        onFilingStarted?.(filingId);
+        onOpenChange(false);
+        return;
+      }
+
+      toast.success('Filing created! Pre-Flight pipeline started.');
       onFilingStarted?.(filingId);
       onOpenChange(false);
     } catch (err: unknown) {
@@ -745,30 +782,32 @@ export function StartFilingDialog({
           <DialogTitle className="flex items-center gap-2 flex-wrap" data-testid="text-dialog-title">
             <Rocket className="h-5 w-5" />
             Start Permit Filing
-            {PERMIT_FILING_WIP && (
+            {PERMIT_FILING_PREFLIGHT_ENABLED && (
               <Badge
                 variant="outline"
-                className="border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200"
-                data-testid="badge-start-filing-wip"
+                className="border-primary/40 bg-primary/10 text-primary"
+                data-testid="badge-start-filing-beta"
               >
-                {PERMIT_FILING_WIP_LABEL}
+                {PERMIT_FILING_BETA_LABEL}
               </Badge>
             )}
           </DialogTitle>
           <DialogDescription>
-            {PERMIT_FILING_WIP
-              ? 'Browse the filing creation form for UI review. Starting pre-flight is disabled while this workflow is work in progress.'
-              : 'Select a municipality and provide project details to initiate the 9-agent autonomous filing pipeline.'}
+            Select a municipality and provide project details to run Pre-Flight analysis (agents 01–04).
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 max-h-[60vh] pr-4">
+        <div
+          ref={formBodyRef}
+          className="flex-1 min-h-0 overflow-y-auto pr-4"
+          onFocusCapture={handleFormFocus}
+        >
           <div className="space-y-6">
-            {PERMIT_FILING_WIP && (
+            {PERMIT_FILING_PREFLIGHT_ENABLED && (
               <AlertBanner
-                tone="warn"
-                title={PERMIT_FILING_WIP_LABEL}
-                detail={PERMIT_FILING_WIP_NOTE}
+                tone="info"
+                title={PERMIT_FILING_BETA_LABEL}
+                detail={PERMIT_FILING_BETA_NOTE}
               />
             )}
             {createMode ? (
@@ -1283,7 +1322,7 @@ export function StartFilingDialog({
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="shrink-0">
           <Button
@@ -1293,23 +1332,14 @@ export function StartFilingDialog({
           >
             Cancel
           </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex" tabIndex={0}>
-                <Button
-                  onClick={handleStartPreflight}
-                  disabled={PERMIT_FILING_WIP || submitting || !isValid}
-                  data-testid="button-start-preflight"
-                >
-                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {createMode ? 'Create Project & Start Pre-Flight' : 'Start Pre-Flight'}
-                </Button>
-              </span>
-            </TooltipTrigger>
-            {PERMIT_FILING_WIP && (
-              <TooltipContent className="max-w-xs">{PERMIT_FILING_WIP_PREFLIGHT_TOOLTIP}</TooltipContent>
-            )}
-          </Tooltip>
+          <Button
+            onClick={handleStartPreflight}
+            disabled={!PERMIT_FILING_PREFLIGHT_ENABLED || submitting || !isValid}
+            data-testid="button-start-preflight"
+          >
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {createMode ? 'Create Project & Start Pre-Flight' : 'Start Pre-Flight'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
