@@ -135,6 +135,25 @@ The following notes were provided by staff to guide this review. They are NOT su
 ${text}`;
 }
 
+function formatSpecContextBlock(specChunks) {
+  if (!Array.isArray(specChunks) || specChunks.length === 0) return "";
+  const lines = specChunks.slice(0, 8).map((chunk, i) => {
+    const header = [
+      chunk.sectionNumber ? `Section ${chunk.sectionNumber}` : null,
+      chunk.sectionTitle || null,
+      chunk.pageStart ? `pp. ${chunk.pageStart}${chunk.pageEnd && chunk.pageEnd !== chunk.pageStart ? `–${chunk.pageEnd}` : ""}` : null,
+    ].filter(Boolean).join(" — ");
+    return `[Spec ${i + 1}] ${header}\n${String(chunk.text || "").slice(0, 1200)}`;
+  });
+  return `
+
+PROJECT SPECIFICATION CONTEXT (NOT DRAWING EVIDENCE):
+Spec excerpts describe project requirements — NOT proof of drawing content.
+If spec requires X but drawing does not confirm it, report verification/advisory or spec-drawing mismatch.
+
+${lines.join("\n\n")}`;
+}
+
 /**
  * @param {{
  *   jurisdiction?: string | null;
@@ -142,6 +161,9 @@ ${text}`;
  *   codeYear?: string;
  *   codeType?: string;
  *   analysisInstructions?: string | null;
+ *   specChunks?: Array<{ sectionNumber?: string; sectionTitle?: string; pageStart?: number; pageEnd?: number; text?: string }> | null;
+ *   sheetTitle?: string | null;
+ *   discipline?: string | null;
  * }} params
  */
 function buildPrompts(params) {
@@ -151,6 +173,9 @@ function buildPrompts(params) {
     codeYear = "2021",
     codeType = "ibc",
     analysisInstructions = null,
+    specChunks = null,
+    sheetTitle = null,
+    discipline = null,
   } = params;
   const jurisdictionKey = normalizeJurisdictionKey(jurisdiction);
   const jurisdictionContext = JURISDICTION_AMENDMENTS[jurisdictionKey] || "";
@@ -166,7 +191,9 @@ function buildPrompts(params) {
       "codeReference": "Specific code section reference",
       "codeYear": "${codeYear}",
       "location": "Location in the drawing",
-      "suggestedFix": "Recommended fix for the issue"
+      "suggestedFix": "Recommended fix for the issue",
+      "evidenceTier": "drawing|specification|code|verification",
+      "specReferences": [{"sectionNumber": "02 41 19", "sectionTitle": "Selective Demolition", "pageStart": 12, "pageEnd": 14}]
     }`;
 
   let analysisFocus = "";
@@ -219,8 +246,10 @@ For each issue found, provide category, title, description, severity, code refer
 Consider jurisdiction: ${jurisdiction || "General IBC"} and project type: ${projectType}.
 Use code year: ${codeYear}.
 Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
+When project specification context is provided, note spec-drawing mismatches but NEVER treat spec text as proof the drawing shows something.
 Scoring: overallScore is 0-100. If issues is an empty array, overallScore MUST be 100. Do not invent a partial score when there are no findings.
-${formatStaffGuidanceBlock(analysisInstructions)}
+${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
+${sheetTitle ? `\nSheet under review: ${sheetTitle}` : ""}${discipline ? `\nDiscipline: ${discipline}` : ""}
 
 You MUST respond with a valid JSON object in exactly this format:
 ${jsonFormat}`;
@@ -455,6 +484,9 @@ function formatBothResult(analysisData, codeYear) {
  *   codeYear?: string;
  *   codeType?: string;
  *   analysisInstructions?: string | null;
+ *   specChunks?: Array<{ sectionNumber?: string; sectionTitle?: string; pageStart?: number; pageEnd?: number; text?: string }> | null;
+ *   sheetTitle?: string | null;
+ *   discipline?: string | null;
  *   logInfo?: (msg: string, extra?: string) => void;
  *   logError?: (msg: string, extra?: string) => void;
  *   downscaleFn?: typeof downscaleImageBase64;
@@ -470,6 +502,9 @@ async function analyzeDrawingWithOpenAI(params) {
     codeYear = "2021",
     codeType = "ibc",
     analysisInstructions = null,
+    specChunks = null,
+    sheetTitle = null,
+    discipline = null,
     logInfo = console.log,
     logError = console.error,
     downscaleFn = downscaleImageBase64,
@@ -481,6 +516,9 @@ async function analyzeDrawingWithOpenAI(params) {
     codeYear,
     codeType,
     analysisInstructions,
+    specChunks,
+    sheetTitle,
+    discipline,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
