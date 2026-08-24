@@ -26,6 +26,13 @@ const APPLICANT_MARKERS = [
 
 const BLANK_VALUE = /^(?:_{2,}|\.{3,}|[-–—]+|n\/a|tbd)?$/i;
 
+const HEURISTIC_FIELD_WARNINGS = {
+  requestedModification:
+    "Could not extract a requested modification from applicant pages.",
+  citedSections: "No applicant-cited code sections were found.",
+  proposedMeasures: "No proposed alternative measures were found.",
+};
+
 const APPROVAL_CLAIM =
   /\b(?:dob|department of buildings)\s+(?:has\s+)?(?:approved|rejected)\b|\b(?:officially|formally)\s+approved\b|\bapproval\s+(?:granted|issued|probability)\b|\bdob approved\b|\bdob rejected\b/gi;
 
@@ -257,16 +264,41 @@ function heuristicExtractModificationRequest(pages) {
     extractionWarnings: warnings,
   };
   if (!requestedModification) {
-    warnings.push("Could not extract a requested modification from applicant pages.");
+    warnings.push(HEURISTIC_FIELD_WARNINGS.requestedModification);
   }
   if (citedSections.length === 0) {
-    warnings.push("No applicant-cited code sections were found.");
+    warnings.push(HEURISTIC_FIELD_WARNINGS.citedSections);
   }
   if (proposedMeasures.length === 0) {
-    warnings.push("No proposed alternative measures were found.");
+    warnings.push(HEURISTIC_FIELD_WARNINGS.proposedMeasures);
   }
   extracted.extractionWarnings = warnings;
   return extracted;
+}
+
+function reconcileExtractionWarnings(extracted) {
+  const warnings = [...(extracted.extractionWarnings || [])];
+  return warnings.filter((warning) => {
+    if (
+      warning === HEURISTIC_FIELD_WARNINGS.requestedModification &&
+      usableFieldValue(extracted.requestedModification)
+    ) {
+      return false;
+    }
+    if (
+      warning === HEURISTIC_FIELD_WARNINGS.citedSections &&
+      (extracted.citedSections || []).length > 0
+    ) {
+      return false;
+    }
+    if (
+      warning === HEURISTIC_FIELD_WARNINGS.proposedMeasures &&
+      (extracted.proposedMeasures || []).length > 0
+    ) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function mergeExtractedRequests(primary, secondary) {
@@ -288,7 +320,7 @@ function mergeExtractedRequests(primary, secondary) {
     ...(primary.extractionWarnings || []),
     ...(secondary.extractionWarnings || []),
   ].filter((w, i, arr) => arr.indexOf(w) === i);
-  return {
+  const merged = {
     projectAddress: pick(primary.projectAddress, secondary.projectAddress),
     requestedModification:
       pick(primary.requestedModification, secondary.requestedModification) || "",
@@ -309,6 +341,8 @@ function mergeExtractedRequests(primary, secondary) {
     supportingNarrative: pick(primary.supportingNarrative, secondary.supportingNarrative),
     extractionWarnings: warnings,
   };
+  merged.extractionWarnings = reconcileExtractionWarnings(merged);
+  return merged;
 }
 
 function pagesAreSparse(pages) {
@@ -597,7 +631,7 @@ function normalizeExtracted(raw) {
         }))
         .filter((m) => m.description)
     : [];
-  return {
+  const normalized = {
     projectAddress: usableFieldValue(raw.projectAddress),
     requestedModification: usableFieldValue(raw.requestedModification) || "",
     citedSections: uniqueCitations(cited.filter((c) => c.citation)),
@@ -610,6 +644,8 @@ function normalizeExtracted(raw) {
     supportingNarrative: usableFieldValue(raw.supportingNarrative),
     extractionWarnings: Array.isArray(raw.extractionWarnings) ? raw.extractionWarnings : [],
   };
+  normalized.extractionWarnings = reconcileExtractionWarnings(normalized);
+  return normalized;
 }
 
 async function optionalLlmExtract(openai, pages, formImages, logError) {
@@ -856,4 +892,6 @@ module.exports = {
   isDcJurisdiction,
   emptyExtractedRequest,
   PROMPT_CONSTRAINTS,
+  HEURISTIC_FIELD_WARNINGS,
+  reconcileExtractionWarnings,
 };
