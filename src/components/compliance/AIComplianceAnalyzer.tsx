@@ -156,6 +156,10 @@ import {
   currentRunFromList,
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
+import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
+import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
+import { createAsyncAnalyzerRun, retryFailedSheetJobs } from "@/lib/codeAnalyzer/asyncRun";
+import { CodeAnalyzerV2StatusPanel } from "@/components/compliance/CodeAnalyzerV2StatusPanel";
 import {
   formatPdfProcessingDetail,
   formatUploadCompletionToast,
@@ -1690,15 +1694,25 @@ export function AIComplianceAnalyzer() {
             phase: "uploading",
           });
 
-          const persisted = await persistPendingAnalyzerSources({
-            projectId: selectedProjectId,
-            pendingFiles,
-            existingSheets: sheets,
-            existingSources: existingAnalyzerSourceRefs(sheets, sheetDocuments),
-            uploadDocument: persistUpload,
-            renderPdfPages: pdfPagesToImageFiles,
-            onUploadProgress: setDrawingUploadProgress,
-          });
+          const useAsyncV2 = isCodeAnalyzerAsyncV2Enabled();
+
+          const persisted = useAsyncV2
+            ? await persistPendingAnalyzerSourcesAsyncV2({
+                projectId: selectedProjectId,
+                userId: user.id,
+                pendingFiles,
+                uploadDocument: persistUpload,
+                onUploadProgress: setDrawingUploadProgress,
+              })
+            : await persistPendingAnalyzerSources({
+                projectId: selectedProjectId,
+                pendingFiles,
+                existingSheets: sheets,
+                existingSources: existingAnalyzerSourceRefs(sheets, sheetDocuments),
+                uploadDocument: persistUpload,
+                renderPdfPages: pdfPagesToImageFiles,
+                onUploadProgress: setDrawingUploadProgress,
+              });
           for (const warning of persisted.warnings) toast.warning(warning);
 
           const uploadSucceeded = pendingFiles.length - persisted.failedSources.length;
@@ -1736,6 +1750,12 @@ export function AIComplianceAnalyzer() {
           }
 
           sheets = [...sheets, ...persisted.sheets];
+          if (useAsyncV2 && "ingestionJobs" in persisted && persisted.ingestionJobs.length > 0) {
+            toast.info(
+              `${persisted.ingestionJobs.length} document(s) queued for server-side processing.`,
+            );
+            sheets = await fetchAnalyzerSheets(selectedProjectId);
+          }
           setPersistedSheets(sheets);
           setFiles((prev) =>
             prev
@@ -1836,6 +1856,39 @@ export function AIComplianceAnalyzer() {
 
         if (batchFiles.length === 0) {
           toast.info("No included sheets to analyze");
+          return;
+        }
+
+        if (onlyFailed && canPersist && selectedProjectId && user && isCodeAnalyzerAsyncV2Enabled() && displayRun?.id) {
+          const retried = await retryFailedSheetJobs(displayRun.id, user.id);
+          toast.success(retried > 0 ? `Retrying ${retried} failed sheet job(s)` : "No failed sheet jobs to retry");
+          setAnalyzing(false);
+          return;
+        }
+
+        if (canPersist && selectedProjectId && user && !onlyFailed && isCodeAnalyzerAsyncV2Enabled()) {
+          const run = await createAsyncAnalyzerRun({
+            projectId: selectedProjectId,
+            userId: user.id,
+            analysisType: ANALYSIS_TYPE_STANDARD,
+            jurisdiction,
+            projectType,
+            codeYear,
+            analysisMode,
+            sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
+            sheetIds: included.map((s) => s.id),
+            analysisModes:
+              analysisMode === "both" ? ["ibc", "local"] : analysisMode === "local" ? ["local"] : ["ibc"],
+            analysisInstructions,
+            indexCompleteness: indexCompleteness ?? undefined,
+          });
+          analysisRunIdRef.current = run.run.id;
+          setDisplayRun(run.run);
+          setCurrentRun(null);
+          toast.success(
+            `Analysis queued (${run.jobsCreated} sheet job${run.jobsCreated === 1 ? "" : "s"}). You can close this tab.`,
+          );
+          setAnalyzing(false);
           return;
         }
 
@@ -3382,6 +3435,21 @@ export function AIComplianceAnalyzer() {
               result={indexCompleteness}
               loading={indexPrescreenLoading}
               recheckError={indexPrescreenError}
+            />
+          )}
+
+          {selectedProjectId && user && isCodeAnalyzerAsyncV2Enabled() && (
+            <CodeAnalyzerV2StatusPanel
+              projectId={selectedProjectId}
+              userId={user.id}
+              activeRun={displayRun}
+              onRefresh={() => {
+                void fetchAnalyzerRuns(selectedProjectId).then((runs) => {
+                  setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+                  setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+                });
+                void fetchAnalyzerSheets(selectedProjectId).then(setPersistedSheets);
+              }}
             />
           )}
 
