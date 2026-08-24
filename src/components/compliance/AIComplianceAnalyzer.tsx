@@ -124,6 +124,13 @@ import {
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
+  analyzerSheetFingerprint,
+  indexPrescreenEffectKey,
+  serializeIndexCompleteness,
+  sheetDocumentIdsKey,
+  shouldRunIndexPrescreen,
+} from "@/lib/codeAnalyzer/analyzerUiStability";
+import {
   completeAnalyzerRun,
   createAnalyzerRun,
   deleteAnalyzerSheetRow,
@@ -136,6 +143,10 @@ import {
   currentRunFromList,
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
+import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
+import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
+import { createAsyncAnalyzerRun, retryFailedSheetJobs } from "@/lib/codeAnalyzer/asyncRun";
+import { CodeAnalyzerV2StatusPanel } from "@/components/compliance/CodeAnalyzerV2StatusPanel";
 import {
   formatPdfProcessingDetail,
   formatUploadCompletionToast,
@@ -418,13 +429,52 @@ export function AIComplianceAnalyzer() {
     modificationDisplayRun?.analysis_instructions,
   ]);
 
+  const sheetFingerprint = useMemo(
+    () => analyzerSheetFingerprint(persistedSheets),
+    [persistedSheets],
+  );
+  const sheetDocIdsKey = useMemo(
+    () => sheetDocumentIdsKey(sheetDocuments.map((d) => d.id)),
+    [sheetDocuments],
+  );
+  const activePrescreenRunId = isModificationMode ? modificationDisplayRun?.id : displayRun?.id;
+  const activePrescreenIndexCompletenessJson = useMemo(
+    () =>
+      serializeIndexCompleteness(
+        isModificationMode
+          ? modificationDisplayRun?.index_completeness
+          : displayRun?.index_completeness,
+      ),
+    [
+      isModificationMode,
+      displayRun?.id,
+      displayRun?.index_completeness,
+      modificationDisplayRun?.id,
+      modificationDisplayRun?.index_completeness,
+    ],
+  );
+  const indexPrescreenKeyRef = useRef("");
+
   // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
   useEffect(() => {
     const activeRun = isModificationMode ? modificationDisplayRun : displayRun;
     if (persistedSheets.filter((s) => !s.excluded).length === 0) {
       setIndexCompleteness(null);
+      indexPrescreenKeyRef.current = "";
       return;
     }
+
+    const prescreenKey = indexPrescreenEffectKey({
+      sheetFingerprint,
+      sheetDocIdsKey,
+      isModificationMode,
+      activeRunId: activePrescreenRunId,
+      activeRunIndexCompletenessJson: activePrescreenIndexCompletenessJson,
+    });
+    if (!shouldRunIndexPrescreen(indexPrescreenKeyRef.current, prescreenKey)) {
+      return;
+    }
+    indexPrescreenKeyRef.current = prescreenKey;
 
     let cancelled = false;
     setIndexPrescreenLoading(true);
@@ -454,12 +504,14 @@ export function AIComplianceAnalyzer() {
       cancelled = true;
     };
   }, [
-    persistedSheets,
-    sheetDocuments,
+    sheetFingerprint,
+    sheetDocIdsKey,
     getDownloadUrl,
     isModificationMode,
-    displayRun?.index_completeness,
-    modificationDisplayRun?.index_completeness,
+    activePrescreenRunId,
+    activePrescreenIndexCompletenessJson,
+    persistedSheets,
+    sheetDocuments,
   ]);
 
   const pendingDrawingCount = files.filter((f) => f.status === "pending").length;
@@ -537,6 +589,12 @@ export function AIComplianceAnalyzer() {
     return { runs, sheets, display, current, hasAnalyzerRuns: hasStandardRuns };
   }, []);
 
+  // Load runs/sheets once when the active project changes (or user becomes available).
+  useEffect(() => {
+    if (!selectedProjectId || !user) return;
+    void reloadAnalyzerDataset(selectedProjectId);
+  }, [selectedProjectId, user, reloadAnalyzerDataset]);
+
   // Fetch documents that have compliance annotations when project changes or after save
   useEffect(() => {
     if (!selectedProjectId || !user) {
@@ -550,7 +608,7 @@ export function AIComplianceAnalyzer() {
     const fetchDocsWithAnalysis = async () => {
       setLoadingDocsWithAnalysis(true);
       try {
-        const dataset = await reloadAnalyzerDataset(projectId);
+        const runs = await fetchAnalyzerRuns(projectId);
         if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
         if (selectedProjectIdRef.current !== projectId) return;
 
@@ -564,7 +622,8 @@ export function AIComplianceAnalyzer() {
         if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
         if (selectedProjectIdRef.current !== projectId) return;
 
-        const standardRuns = dataset.runs.filter(isStandardComplianceRun);
+        const hasStandardRuns = runs.some(isStandardComplianceRun);
+        const standardRuns = runs.filter(isStandardComplianceRun);
         const runIdsWithFindings = collectRunIdsWithComplianceFindings(annotations ?? []);
         const hydrateResolution = resolveHydrateRun(
           standardRuns,
@@ -576,7 +635,7 @@ export function AIComplianceAnalyzer() {
 
         const complianceDocIds = complianceDocumentIdsFromAnnotations(annotations ?? [], {
           hydrateRunId: hydrateResolution.runId,
-          hasAnalyzerRuns: dataset.hasAnalyzerRuns,
+          hasAnalyzerRuns: hasStandardRuns,
         });
         const docIds = Array.from(complianceDocIds);
         if (docIds.length === 0) {
@@ -607,7 +666,7 @@ export function AIComplianceAnalyzer() {
       }
     };
     void fetchDocsWithAnalysis();
-  }, [selectedProjectId, user, analysisSavedAt, reloadAnalyzerDataset]);
+  }, [selectedProjectId, user, analysisSavedAt]);
 
   const buildResultsFromAnnotations = useCallback(
     (complianceAnnotations: Array<{ id: string; data: unknown }>) => {
@@ -832,6 +891,10 @@ export function AIComplianceAnalyzer() {
   // Keyed by document-id set so mid-batch re-renders do not wipe/refetch unnecessarily.
   // Only mark the key after a successful hydrate so failures can retry.
   const lastAllHydrateKeyRef = useRef<string>("");
+  const documentsWithAnalysisHydrateKey = useMemo(
+    () => complianceDocsHydrateKey(documentsWithAnalysis.map((d) => d.id)),
+    [documentsWithAnalysis],
+  );
 
   // Reset analyzer results when Active Project / ?projectId= changes (header or DesignCheck link).
   const previousProjectIdRef = useRef<string | null | undefined>(undefined);
@@ -873,7 +936,7 @@ export function AIComplianceAnalyzer() {
     if (resultsDocumentFilter !== COMPLIANCE_RESULTS_FILTER_ALL) return;
     // Wait for the analyzed-doc list before deciding All is empty (avoids mount race).
     if (loadingDocsWithAnalysis) return;
-    const hydrateKey = complianceDocsHydrateKey(documentsWithAnalysis.map((d) => d.id));
+    const hydrateKey = documentsWithAnalysisHydrateKey;
     if (!hydrateKey) {
       setLoadedExistingResults([]);
       setHydrateLoadFailed(false);
@@ -889,7 +952,7 @@ export function AIComplianceAnalyzer() {
   }, [
     selectedProjectId,
     user,
-    documentsWithAnalysis,
+    documentsWithAnalysisHydrateKey,
     resultsDocumentFilter,
     loadingDocsWithAnalysis,
     hydrateExistingAnalyses,
@@ -1551,14 +1614,24 @@ export function AIComplianceAnalyzer() {
             phase: "uploading",
           });
 
-          const persisted = await persistPendingAnalyzerSources({
-            projectId: selectedProjectId,
-            pendingFiles,
-            existingSheets: sheets,
-            uploadDocument: persistUpload,
-            renderPdfPages: pdfPagesToImageFiles,
-            onUploadProgress: setDrawingUploadProgress,
-          });
+          const useAsyncV2 = isCodeAnalyzerAsyncV2Enabled();
+
+          const persisted = useAsyncV2
+            ? await persistPendingAnalyzerSourcesAsyncV2({
+                projectId: selectedProjectId,
+                userId: user.id,
+                pendingFiles,
+                uploadDocument: persistUpload,
+                onUploadProgress: setDrawingUploadProgress,
+              })
+            : await persistPendingAnalyzerSources({
+                projectId: selectedProjectId,
+                pendingFiles,
+                existingSheets: sheets,
+                uploadDocument: persistUpload,
+                renderPdfPages: pdfPagesToImageFiles,
+                onUploadProgress: setDrawingUploadProgress,
+              });
           for (const warning of persisted.warnings) toast.warning(warning);
 
           const uploadSucceeded = pendingFiles.length - persisted.failedSources.length;
@@ -1596,6 +1669,12 @@ export function AIComplianceAnalyzer() {
           }
 
           sheets = [...sheets, ...persisted.sheets];
+          if (useAsyncV2 && "ingestionJobs" in persisted && persisted.ingestionJobs.length > 0) {
+            toast.info(
+              `${persisted.ingestionJobs.length} document(s) queued for server-side processing.`,
+            );
+            sheets = await fetchAnalyzerSheets(selectedProjectId);
+          }
           setPersistedSheets(sheets);
           setFiles((prev) =>
             prev
@@ -1681,6 +1760,39 @@ export function AIComplianceAnalyzer() {
 
         if (batchFiles.length === 0) {
           toast.info("No included sheets to analyze");
+          return;
+        }
+
+        if (onlyFailed && canPersist && selectedProjectId && user && isCodeAnalyzerAsyncV2Enabled() && displayRun?.id) {
+          const retried = await retryFailedSheetJobs(displayRun.id, user.id);
+          toast.success(retried > 0 ? `Retrying ${retried} failed sheet job(s)` : "No failed sheet jobs to retry");
+          setAnalyzing(false);
+          return;
+        }
+
+        if (canPersist && selectedProjectId && user && !onlyFailed && isCodeAnalyzerAsyncV2Enabled()) {
+          const run = await createAsyncAnalyzerRun({
+            projectId: selectedProjectId,
+            userId: user.id,
+            analysisType: ANALYSIS_TYPE_STANDARD,
+            jurisdiction,
+            projectType,
+            codeYear,
+            analysisMode,
+            sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
+            sheetIds: included.map((s) => s.id),
+            analysisModes:
+              analysisMode === "both" ? ["ibc", "local"] : analysisMode === "local" ? ["local"] : ["ibc"],
+            analysisInstructions,
+            indexCompleteness: indexCompleteness ?? undefined,
+          });
+          analysisRunIdRef.current = run.run.id;
+          setDisplayRun(run.run);
+          setCurrentRun(null);
+          toast.success(
+            `Analysis queued (${run.jobsCreated} sheet job${run.jobsCreated === 1 ? "" : "s"}). You can close this tab.`,
+          );
+          setAnalyzing(false);
           return;
         }
 
@@ -3007,6 +3119,21 @@ export function AIComplianceAnalyzer() {
             <IndexCompletenessPanel result={indexCompleteness} loading={indexPrescreenLoading} />
           )}
 
+          {selectedProjectId && user && isCodeAnalyzerAsyncV2Enabled() && (
+            <CodeAnalyzerV2StatusPanel
+              projectId={selectedProjectId}
+              userId={user.id}
+              activeRun={displayRun}
+              onRefresh={() => {
+                void fetchAnalyzerRuns(selectedProjectId).then((runs) => {
+                  setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+                  setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+                });
+                void fetchAnalyzerSheets(selectedProjectId).then(setPersistedSheets);
+              }}
+            />
+          )}
+
           {/* Upload Area */}
           <div
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
@@ -3397,6 +3524,7 @@ export function AIComplianceAnalyzer() {
                     if (!ok) return;
                   }
                   await markCurrentRunStale(selectedProjectId);
+                  await reloadAnalyzerDataset(selectedProjectId);
                   setAnalysisSavedAt(Date.now());
                   toast.success(
                     isModificationMode
