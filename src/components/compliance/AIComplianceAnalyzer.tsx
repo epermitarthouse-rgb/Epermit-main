@@ -113,6 +113,8 @@ import {
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
 } from "@/lib/codeAnalyzer/model";
+import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
+import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   completeAnalyzerRun,
   createAnalyzerRun,
@@ -129,6 +131,7 @@ import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending
 import { replaceComplianceFindingsForSheet } from "@/lib/codeAnalyzer/findings";
 import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnalyzer/deleteDrawings";
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
+import { IndexCompletenessPanel } from "@/components/compliance/IndexCompletenessPanel";
 import { CodeModificationReviewResults } from "@/components/compliance/CodeModificationReviewResults";
 import {
   computeFormsFingerprint,
@@ -357,6 +360,8 @@ export function AIComplianceAnalyzer() {
   // Dual code analysis options
   const [analysisMode, setAnalysisMode] = useState<"both" | "ibc" | "local">("both");
   const [analysisInstructions, setAnalysisInstructions] = useState("");
+  const [indexCompleteness, setIndexCompleteness] = useState<IndexCompletenessResult | null>(null);
+  const [indexPrescreenLoading, setIndexPrescreenLoading] = useState(false);
   const [activeResultTab, setActiveResultTab] = useState<"ibc" | "local">("ibc");
 
   const hasLocalAmendments = JURISDICTIONS_WITH_AMENDMENTS.includes(jurisdiction);
@@ -389,6 +394,50 @@ export function AIComplianceAnalyzer() {
     displayRun?.analysis_instructions,
     modificationDisplayRun?.id,
     modificationDisplayRun?.analysis_instructions,
+  ]);
+
+  // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
+  useEffect(() => {
+    const activeRun = isModificationMode ? modificationDisplayRun : displayRun;
+    if (persistedSheets.filter((s) => !s.excluded).length === 0) {
+      setIndexCompleteness(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIndexPrescreenLoading(true);
+    void (async () => {
+      try {
+        const result = await runDrawingIndexPrescreen({
+          sheets: persistedSheets,
+          getDownloadUrl: async (documentId) => {
+            const doc = sheetDocuments.find((d) => d.id === documentId);
+            if (doc) return getDownloadUrl(doc);
+            const fetched = await fetchDocumentsByIds([documentId]);
+            return fetched[0] ? getDownloadUrl(fetched[0]) : null;
+          },
+        });
+        if (!cancelled) setIndexCompleteness(result);
+      } catch (err) {
+        console.error("Index prescreen failed:", err);
+        if (!cancelled && activeRun?.index_completeness) {
+          setIndexCompleteness(activeRun.index_completeness);
+        }
+      } finally {
+        if (!cancelled) setIndexPrescreenLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    persistedSheets,
+    sheetDocuments,
+    getDownloadUrl,
+    isModificationMode,
+    displayRun?.index_completeness,
+    modificationDisplayRun?.index_completeness,
   ]);
 
   const pendingDrawingCount = files.filter((f) => f.status === "pending").length;
@@ -1575,6 +1624,7 @@ export function AIComplianceAnalyzer() {
             analysisMode,
             sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
             analysisInstructions,
+            indexCompleteness: indexCompleteness ?? undefined,
           });
           analysisRunIdRef.current = run.id;
           setDisplayRun(run);
@@ -1635,6 +1685,7 @@ export function AIComplianceAnalyzer() {
     [
       analysisMode,
       analysisInstructions,
+      indexCompleteness,
       codeYear,
       displayRun?.id,
       documentsWithAnalysis,
@@ -2805,6 +2856,10 @@ export function AIComplianceAnalyzer() {
               Saved with each run. Changing instructions marks the current analysis stale until you re-run.
             </p>
           </div>
+
+          {(persistedSheets.length > 0 || indexCompleteness) && (
+            <IndexCompletenessPanel result={indexCompleteness} loading={indexPrescreenLoading} />
+          )}
 
           {/* Upload Area */}
           <div

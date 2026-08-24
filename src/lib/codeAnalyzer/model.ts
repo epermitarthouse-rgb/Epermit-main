@@ -3,6 +3,9 @@
  * Pure helpers so fingerprint / stale / legacy hydrate behavior can be unit-tested.
  */
 import type { DocumentDiscipline } from "@/types/document";
+import type { IndexCompletenessResult } from "./indexCompleteness";
+
+export type IndexCompletenessSnapshot = IndexCompletenessResult;
 
 export const CODE_ANALYZER_RUN_STATUSES = [
   "running",
@@ -34,6 +37,8 @@ export interface CodeAnalyzerRun {
   form_document_id?: string | null;
   /** Staff guidance captured at run time; historical runs retain the text used. */
   analysis_instructions?: string | null;
+  /** Deterministic drawing index prescreen snapshot for this run. */
+  index_completeness?: IndexCompletenessSnapshot | null;
   source_fingerprint: string;
   created_at: string;
   updated_at: string;
@@ -58,6 +63,7 @@ export interface CodeAnalyzerSheet {
   page_number: number;
   file_name: string | null;
   discipline?: DocumentDiscipline | null;
+  sheet_label?: string | null;
   excluded: boolean;
   created_at: string;
   updated_at?: string;

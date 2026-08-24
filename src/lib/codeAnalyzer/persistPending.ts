@@ -10,6 +10,7 @@ import {
   sheetFingerprintKey,
   type CodeAnalyzerSheet,
 } from "./model";
+import { inferSheetNumberFromLabel } from "./indexCompleteness";
 import { insertAnalyzerSheet } from "./persistence";
 import type { PdfPageImageFile } from "@/lib/pdfToImage";
 
@@ -136,6 +137,7 @@ export async function persistPendingAnalyzerSources(params: {
         page_number: page.pageNumber,
         file_name: source.fileName,
         discipline: source.discipline,
+        sheet_label: inferSheetNumberFromLabel(source.fileName) ?? null,
         excluded,
       });
       created.push(sheet);

@@ -47,6 +47,7 @@ export async function insertAnalyzerSheet(row: {
   page_number: number;
   file_name: string | null;
   discipline?: DocumentDiscipline;
+  sheet_label?: string | null;
   excluded: boolean;
 }): Promise<CodeAnalyzerSheet> {
   const { data, error } = await supabase
@@ -109,6 +110,7 @@ export async function createAnalyzerRun(params: {
   analysisType?: string;
   formDocumentId?: string | null;
   analysisInstructions?: string | null;
+  indexCompleteness?: Record<string, unknown> | null;
 }): Promise<CodeAnalyzerRun> {
   const analysisType = params.analysisType || ANALYSIS_TYPE_STANDARD;
   await supersedeOpenRuns(params.projectId, analysisType);
@@ -129,6 +131,9 @@ export async function createAnalyzerRun(params: {
   const instructions = params.analysisInstructions?.trim();
   if (instructions) {
     insert.analysis_instructions = instructions;
+  }
+  if (params.indexCompleteness) {
+    insert.index_completeness = params.indexCompleteness;
   }
   const { data, error } = await supabase
     .from("code_analyzer_runs")

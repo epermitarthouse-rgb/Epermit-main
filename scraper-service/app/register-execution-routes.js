@@ -988,6 +988,55 @@ app.post("/api/analyze-drawing", async (req, res) => {
   }
 });
 
+// ─── Extract Drawing Index (Code Analyzer prescreen) ─────────────────────────
+const { extractDrawingIndexWithOpenAI } = require("./services/compliance/index-extract.service.js");
+
+app.post("/api/extract-drawing-index", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const token = authHeader.split(" ")[1];
+    if (supabase) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return res.status(401).json({ error: "Invalid or expired authentication token" });
+      }
+    }
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key not configured. Add OPENAI_API_KEY to your environment secrets." });
+    }
+
+    const OpenAI = require("openai").default || require("openai");
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    const { imageBase64, imageType = "image/png", pageText } = req.body || {};
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Image data is required" });
+    }
+
+    const outcome = await extractDrawingIndexWithOpenAI({
+      openai,
+      imageBase64,
+      imageType,
+      pageText,
+      logError: console.error,
+    });
+
+    if (!outcome.ok) {
+      return res.status(outcome.status).json({ error: outcome.error });
+    }
+
+    res.status(outcome.status).json({ entries: outcome.entries });
+  } catch (err) {
+    console.error("[extract-drawing-index] Error:", err.message);
+    res.status(500).json({ error: "Index extraction failed" });
+  }
+});
+
 // ─── Analyze Code Modification (DC evidence review) ────────────────────────
 const { analyzeCodeModification, isDcJurisdiction } = require("./services/compliance/code-modification.service.js");
 
