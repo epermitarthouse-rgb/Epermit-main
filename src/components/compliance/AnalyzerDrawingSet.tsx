@@ -11,9 +11,11 @@ import {
 } from "@/lib/codeAnalyzer/model";
 import {
   computeAnalyzerDatasetMetrics,
+  computeRunAnalysisMetrics,
   formatAnalysisProgressSummary,
   formatAnalyzerDatasetSummary,
   type RunAnalysisMetrics,
+  type RunAnalysisMetricsInput,
 } from "@/lib/codeAnalyzer/sheetState";
 import {
   deriveDocumentCardStatus,
@@ -51,6 +53,8 @@ interface AnalyzerDrawingSetProps {
   analyzing: boolean;
   /** Canonical run metrics from parent — keeps counters aligned with KPI strip. */
   runMetrics?: RunAnalysisMetrics;
+  /** Shared inputs for per-document computeRunAnalysisMetrics (same source as KPI strip). */
+  runAnalysisContext?: Omit<RunAnalysisMetricsInput, "sheets">;
   completedSheetIds?: Set<string>;
   analysisPendingCount?: number;
   currentAnalyzingSheetName?: string | null;
@@ -142,6 +146,7 @@ export function AnalyzerDrawingSet({
   staleActionLabel = "Update Analysis",
   analyzing,
   runMetrics,
+  runAnalysisContext,
   completedSheetIds,
   analysisPendingCount,
   currentAnalyzingSheetName,
@@ -165,7 +170,8 @@ export function AnalyzerDrawingSet({
     return { sourceId, pages, isPdf, fileName: first?.file_name ?? "Drawing" };
   });
 
-  const failedSheetIds = new Set(failedSheetFiles.map((f) => f.id));
+  const failedSheetIds =
+    runMetrics?.failedSheetIds ?? new Set(failedSheetFiles.map((f) => f.id));
   const canonicalMetrics =
     runMetrics ??
     (() => {
@@ -181,6 +187,7 @@ export function AnalyzerDrawingSet({
       return {
         ...datasetMetrics,
         completedSheetIds: completedIds,
+        failedSheetIds,
       };
     })();
   const analyzedCompletedCount = canonicalMetrics.analyzedCompletedCount;
@@ -262,10 +269,19 @@ export function AnalyzerDrawingSet({
           >
             {grouped.map((group) => {
               const includedPages = group.pages.filter((s) => !s.excluded);
+              const docRunMetrics = runAnalysisContext
+                ? computeRunAnalysisMetrics({
+                    sheets: group.pages,
+                    ...runAnalysisContext,
+                  })
+                : null;
+              const docCompletedSheetIds =
+                docRunMetrics?.completedSheetIds ?? canonicalMetrics.completedSheetIds;
+              const docFailedSheetIds = docRunMetrics?.failedSheetIds ?? failedSheetIds;
               const cardStatus = deriveDocumentCardStatus({
                 includedSheets: group.pages,
-                completedSheetIds: canonicalMetrics.completedSheetIds,
-                failedSheetIds,
+                completedSheetIds: docCompletedSheetIds,
+                failedSheetIds: docFailedSheetIds,
                 analyzing,
                 currentAnalyzingSheetId,
                 analysisStale,
@@ -312,8 +328,8 @@ export function AnalyzerDrawingSet({
                       sourceIsPdf: group.isPdf,
                     });
                     const chipStatus = deriveSheetChipStatus(sheet, {
-                      completedSheetIds: canonicalMetrics.completedSheetIds,
-                      failedSheetIds,
+                      completedSheetIds: docCompletedSheetIds,
+                      failedSheetIds: docFailedSheetIds,
                       analyzing,
                       currentAnalyzingSheetId,
                     });
@@ -333,6 +349,7 @@ export function AnalyzerDrawingSet({
                         <span>{group.isPdf ? `p.${sheet.page_number}` : label}</span>
                         {chipStatus === "failed" && <Badge variant="destructive">Failed</Badge>}
                         {chipStatus === "completed" && <Badge variant="success">Done</Badge>}
+                        {chipStatus === "analyzing" && <Badge variant="brand">Analyzing</Badge>}
                         {chipStatus === "pending" && analyzing && (
                           <Badge variant="outline">Pending</Badge>
                         )}

@@ -124,18 +124,9 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
     };
   }
 
-  if (input.analyzing && counts.total > 0 && counts.completed + counts.failed < counts.total) {
-    return {
-      status: "analyzing",
-      counts,
-      badgeLabel: "Analyzing",
-      progressLabel: `${counts.completed} of ${counts.total} sheet${counts.total === 1 ? "" : "s"} analyzed`,
-      borderClass: "border-gold/45 bg-gold/[0.05]",
-      badgeVariant: "brand",
-    };
-  }
+  const { total, completed, failed, pending, analyzing: analyzingCount } = counts;
 
-  if (counts.total === 0) {
+  if (total === 0) {
     return {
       status: "ready",
       counts,
@@ -146,40 +137,57 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
     };
   }
 
-  if (counts.failed === counts.total) {
+  const runInProgress =
+    input.analyzing &&
+    (analyzingCount > 0 ||
+      pending > 0 ||
+      completed + failed < total);
+
+  if (runInProgress) {
+    return {
+      status: "analyzing",
+      counts,
+      badgeLabel: "Analyzing",
+      progressLabel: `${completed} of ${total} sheet${total === 1 ? "" : "s"} analyzed`,
+      borderClass: "border-gold/45 bg-gold/[0.05]",
+      badgeVariant: "brand",
+    };
+  }
+
+  if (failed === total) {
     return {
       status: "failed",
       counts,
       badgeLabel: "Failed",
-      progressLabel: `${counts.failed} of ${counts.total} failed`,
+      progressLabel: `${failed} of ${total} failed`,
       borderClass: "border-destructive/40 bg-destructive/[0.04]",
       badgeVariant: "destructive",
     };
   }
 
-  if (counts.completed === counts.total && counts.failed === 0) {
+  if (completed === total && failed === 0) {
     return {
       status: "completed",
       counts,
       badgeLabel: "Completed",
-      progressLabel: `${counts.total} of ${counts.total} completed`,
+      progressLabel: `${total} of ${total} completed`,
       borderClass: "border-success/35 bg-success/[0.03]",
       badgeVariant: "success",
     };
   }
 
-  if (counts.completed > 0 && counts.failed > 0 && counts.pending === 0 && !input.analyzing) {
+  if (completed > 0 && failed > 0) {
     return {
       status: "partial",
       counts,
       badgeLabel: "Partial",
-      progressLabel: `${counts.completed} completed · ${counts.failed} failed`,
+      progressLabel: `${completed} completed · ${failed} failed`,
       borderClass: "border-warning/40 bg-warning/[0.04]",
       badgeVariant: "warning",
     };
   }
 
-  if (counts.completed === 0 && counts.failed === 0) {
+  if (completed === 0 && failed === 0) {
     return {
       status: "ready",
       counts,
@@ -190,12 +198,23 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
     };
   }
 
-  if (counts.failed > 0) {
+  if (completed > 0 && pending > 0) {
+    return {
+      status: "analyzing",
+      counts,
+      badgeLabel: "Analyzing",
+      progressLabel: `${completed} of ${total} sheet${total === 1 ? "" : "s"} analyzed`,
+      borderClass: "border-gold/45 bg-gold/[0.05]",
+      badgeVariant: "brand",
+    };
+  }
+
+  if (failed > 0) {
     return {
       status: "partial",
       counts,
       badgeLabel: "Partial",
-      progressLabel: `${counts.completed} completed · ${counts.failed} failed`,
+      progressLabel: `${completed} completed · ${failed} failed`,
       borderClass: "border-warning/40 bg-warning/[0.04]",
       badgeVariant: "warning",
     };

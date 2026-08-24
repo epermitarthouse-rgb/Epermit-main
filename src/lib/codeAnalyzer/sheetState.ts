@@ -130,6 +130,7 @@ export interface RunAnalysisMetricsInput {
 
 export interface RunAnalysisMetrics extends AnalyzerDatasetMetrics {
   completedSheetIds: Set<string>;
+  failedSheetIds: Set<string>;
 }
 
 /**
@@ -168,6 +169,7 @@ export function computeRunAnalysisMetrics(input: RunAnalysisMetricsInput): RunAn
     analyzedFailedCount: failedSheetIds.size,
     analysisTotalCount,
     completedSheetIds,
+    failedSheetIds,
   };
 }
 

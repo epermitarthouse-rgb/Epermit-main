@@ -2207,6 +2207,21 @@ export function AIComplianceAnalyzer() {
     return { critical, warnings, advisory, sheetsWithResults };
   }, [displayedResultGroups]);
 
+  const runAnalysisContext = useMemo(() => {
+    const failedIds = new Set(failedBatchFiles.map((f) => f.id));
+    const sessionCompletedIds = new Set(completedBatchFiles.map((f) => f.id));
+    const hydratedImageDocumentIds = new Set(loadedExistingResults.map((r) => r.documentId));
+    return {
+      failedSheetIds: failedIds,
+      sessionCompletedSheetIds:
+        sessionCompletedIds.size > 0 ? sessionCompletedIds : undefined,
+      hydratedImageDocumentIds:
+        sessionCompletedIds.size > 0 || isolateCurrentRun
+          ? undefined
+          : hydratedImageDocumentIds,
+    };
+  }, [completedBatchFiles, failedBatchFiles, loadedExistingResults, isolateCurrentRun]);
+
   const analyzerMetrics = useMemo(() => {
     const sheetsForMetrics =
       persistedSheets.length > 0
@@ -2221,27 +2236,11 @@ export function AIComplianceAnalyzer() {
             excluded: false,
             created_at: d.created_at,
           }));
-    const failedIds = new Set(failedBatchFiles.map((f) => f.id));
-    const sessionCompletedIds = new Set(completedBatchFiles.map((f) => f.id));
-    const hydratedImageDocumentIds = new Set(loadedExistingResults.map((r) => r.documentId));
     return computeRunAnalysisMetrics({
       sheets: sheetsForMetrics,
-      failedSheetIds: failedIds,
-      sessionCompletedSheetIds:
-        sessionCompletedIds.size > 0 ? sessionCompletedIds : undefined,
-      hydratedImageDocumentIds:
-        sessionCompletedIds.size > 0 || isolateCurrentRun
-          ? undefined
-          : hydratedImageDocumentIds,
+      ...runAnalysisContext,
     });
-  }, [
-    persistedSheets,
-    documentsWithAnalysis,
-    completedBatchFiles,
-    failedBatchFiles,
-    loadedExistingResults,
-    isolateCurrentRun,
-  ]);
+  }, [persistedSheets, documentsWithAnalysis, runAnalysisContext]);
 
   const completedSheetIdsForDrawingSet = analyzerMetrics.completedSheetIds;
 
@@ -3313,6 +3312,7 @@ export function AIComplianceAnalyzer() {
                 }))}
                 newSinceLastAnalysisCount={newSinceLastAnalysis.length}
                 runMetrics={analyzerMetrics}
+                runAnalysisContext={runAnalysisContext}
                 completedSheetIds={completedSheetIdsForDrawingSet}
                 analysisPendingCount={
                   batchProgress
