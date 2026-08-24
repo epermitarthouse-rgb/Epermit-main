@@ -2,6 +2,7 @@
  * Durable Code Analyzer drawing-set + analysis-run model (Phase 1).
  * Pure helpers so fingerprint / stale / legacy hydrate behavior can be unit-tested.
  */
+import type { DocumentDiscipline } from "@/types/document";
 
 export const CODE_ANALYZER_RUN_STATUSES = [
   "running",
@@ -54,6 +55,7 @@ export interface CodeAnalyzerSheet {
   image_document_id: string | null;
   page_number: number;
   file_name: string | null;
+  discipline?: DocumentDiscipline | null;
   excluded: boolean;
   created_at: string;
   updated_at?: string;

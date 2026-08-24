@@ -23,7 +23,8 @@ export type DocumentDiscipline =
   | 'civil'
   | 'stormwater'
   | 'utilities'
-  | 'structural';
+  | 'structural'
+  | 'demolition';
 
 export interface ProjectDocument {
   id: string;
@@ -164,6 +165,7 @@ export const DISCIPLINE_LABELS: Record<DocumentDiscipline, string> = {
   stormwater: 'DOEE Stormwater Management',
   utilities: 'Utilities',
   structural: 'Structural',
+  demolition: 'Demolition',
 };
 
 export const DISCIPLINE_OPTIONS: { value: DocumentDiscipline; label: string }[] = [
@@ -179,7 +181,20 @@ export const DISCIPLINE_OPTIONS: { value: DocumentDiscipline; label: string }[] 
   { value: 'stormwater', label: 'DOEE Stormwater Management' },
   { value: 'utilities', label: 'Utilities' },
   { value: 'structural', label: 'Structural' },
+  { value: 'demolition', label: 'Demolition' },
 ];
+
+const DOCUMENT_DISCIPLINE_VALUES = new Set<string>(
+  DISCIPLINE_OPTIONS.map((option) => option.value),
+);
+
+/** Preserve stored analyzer disciplines; only unknown values fall back to General. */
+export function coerceDocumentDiscipline(value: unknown): DocumentDiscipline {
+  if (typeof value === 'string' && DOCUMENT_DISCIPLINE_VALUES.has(value)) {
+    return value as DocumentDiscipline;
+  }
+  return 'general';
+}
 
 // Max file size for project document uploads (plan sets, submittals, etc.)
 export const MAX_FILE_SIZE_MB = 250;

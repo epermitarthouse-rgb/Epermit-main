@@ -50,6 +50,33 @@ describe("persistPendingAnalyzerSources", () => {
     assert.ok(sheets.every((s) => s.source_document_id === "pdf-1"));
     assert.deepEqual(sheets.map((s) => s.image_document_id), ["img-1", "img-2", "img-3"]);
     assert.equal(warnings.length, 0);
+    assert.ok(sheets.every((s) => s.discipline === "architectural"));
+  });
+
+  it("persists demolition discipline on inserted sheets", async () => {
+    const { sheets } = await persistPendingAnalyzerSources({
+      projectId: "proj",
+      existingSheets: [],
+      pendingFiles: [
+        {
+          id: "p1",
+          file: { name: "demo-plan.png", type: "image/png", size: 10 } as File,
+          discipline: "demolition",
+        },
+      ],
+      uploadDocument: async ({ file }) => ({ id: "img-src", file_name: file.name }),
+      renderPdfPages: async () => {
+        throw new Error("should not rasterize a PNG");
+      },
+      insertSheet: async (row) =>
+        ({
+          id: "sheet-1",
+          created_at: "2026-08-21T00:00:00Z",
+          ...row,
+        }) as CodeAnalyzerSheet,
+    });
+    assert.equal(sheets.length, 1);
+    assert.equal(sheets[0].discipline, "demolition");
   });
 
   it("treats a raster image as a single sheet using the source document as the image", async () => {
