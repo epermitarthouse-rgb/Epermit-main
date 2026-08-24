@@ -245,6 +245,9 @@ const SCANNED_SPARSE_PAGES = [
 const COMBINED_MEASURE_PARAGRAPH =
   "Provide a two-hour fire rated enclosed stairway serving all occupied levels, provide a fully automatic sprinkler system throughout the building, provide a fully monitored fire alarm and emergency notification system, maintain an occupant load below 49 people per floor. Incorporate DOB recommendations from June 9, 2026 PDRM include a standpipe, maintain a common path of travel distance of less than 75'-0\", provide permanent signage identifying and limiting the maximum occupant load of the rooftop amenity area.";
 
+const COMBINED_MEASURE_WITH_BOILERPLATE =
+  "In lieu of providing a second means of egress stairs, the following life safety measures are proposed: Provide a two-hour fire rated enclosed stairway serving all occupied levels, provide a fully automatic sprinkler system throughout the building, provide a fully monitored fire alarm and emergency notification system, maintain an occupant load below 49 people per floor. Incorporated DOB recommendations from June 9, 2026 PDRM include a standpipe, maintain a common path of travel distance of less than 75'-0\", provide permanent signage identifying and limiting the maximum occupant load of the rooftop amenity area.";
+
 describe("mergeExtractedRequests warning reconciliation", () => {
   it("drops stale heuristic warnings when vision fills extracted fields", () => {
     const heuristic = heuristicExtractModificationRequest(SCANNED_SPARSE_PAGES);
@@ -589,5 +592,64 @@ describe("splitMeasureDescription embedded include clauses", () => {
       split.some((part) => /occupant load below 49/i.test(part) && /standpipe/i.test(part)),
       false,
     );
+  });
+});
+
+describe("splitMeasureDescription boilerplate and carryover cleanup", () => {
+  it("strips introductory boilerplate from the first measure", () => {
+    const measures = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: COMBINED_MEASURE_WITH_BOILERPLATE,
+        sourcePageNumber: 2,
+        sourceContext: "Proposed alternative / compensating measures",
+      },
+    ]);
+    assert.equal(
+      measures[0].description,
+      "Provide a two-hour fire rated enclosed stairway serving all occupied levels",
+    );
+    assert.doesNotMatch(measures[0].description, /in lieu of/i);
+    assert.doesNotMatch(measures[0].description, /following life safety measures/i);
+  });
+
+  it("keeps occupant load clean without PDRM narrative carryover", () => {
+    const measures = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: COMBINED_MEASURE_WITH_BOILERPLATE,
+        sourcePageNumber: 2,
+      },
+    ]);
+    const occupantLoad = measures.find((measure) =>
+      /occupant load below 49/i.test(measure.description),
+    );
+    assert.ok(occupantLoad);
+    assert.equal(occupantLoad.description, "Maintain an occupant load below 49 people per floor");
+    assert.doesNotMatch(occupantLoad.description, /PDRM/i);
+    assert.doesNotMatch(occupantLoad.description, /Incorporated/i);
+  });
+
+  it("preserves standpipe and PDRM as separate measures in the 1513 pattern", () => {
+    const measures = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: COMBINED_MEASURE_WITH_BOILERPLATE,
+        sourcePageNumber: 2,
+      },
+    ]);
+    assert.equal(
+      measures.some((measure) => /standpipe/i.test(measure.description)),
+      true,
+    );
+    assert.equal(
+      measures.some(
+        (measure) =>
+          /PDRM/i.test(measure.description) && !/occupant load below 49/i.test(measure.description),
+      ),
+      true,
+    );
+    assert.equal(measures.every((measure) => measure.sourcePageNumber === 2), true);
+    assert.equal(measures.length, 8);
   });
 });

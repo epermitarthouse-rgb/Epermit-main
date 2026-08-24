@@ -197,3 +197,28 @@ describe("mergeExtractedRequests / pagesAreSparse", () => {
     assert.equal(normalized.every((m) => m.sourcePageNumber === 2), true);
   });
 });
+
+describe("splitMeasureDescription boilerplate cleanup", () => {
+  const combinedWithBoilerplate =
+    "In lieu of providing a second means of egress stairs, the following life safety measures are proposed: Provide a two-hour fire rated enclosed stairway serving all occupied levels, provide a fully automatic sprinkler system throughout the building, provide a fully monitored fire alarm and emergency notification system, maintain an occupant load below 49 people per floor. Incorporated DOB recommendations from June 9, 2026 PDRM include a standpipe, maintain a common path of travel distance of less than 75'-0\", provide permanent signage identifying and limiting the maximum occupant load of the rooftop amenity area.";
+
+  it("strips introductory boilerplate and removes occupant-load carryover", () => {
+    const measures = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: combinedWithBoilerplate,
+        sourcePageNumber: 2,
+        sourceContext: "Proposed alternative / compensating measures",
+      },
+    ]);
+    assert.equal(
+      measures[0].description,
+      "Provide a two-hour fire rated enclosed stairway serving all occupied levels",
+    );
+    const occupantLoad = measures.find((measure) =>
+      /occupant load below 49/i.test(measure.description),
+    );
+    assert.equal(occupantLoad?.description, "Maintain an occupant load below 49 people per floor");
+    assert.equal(measures.some((measure) => /standpipe/i.test(measure.description)), true);
+  });
+});
