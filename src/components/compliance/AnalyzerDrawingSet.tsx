@@ -57,6 +57,10 @@ interface AnalyzerDrawingSetProps {
   canAddMore: boolean;
 }
 
+/** Responsive grid for persisted source-document cards (Current drawings). */
+export const CURRENT_DRAWINGS_GRID_CLASS =
+  "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4";
+
 const statusLabel: Record<ComplianceBatchFileStatus, string> = {
   pending: "Pending",
   preparing: "Preparing",
@@ -242,65 +246,74 @@ export function AnalyzerDrawingSet({
       {grouped.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-medium text-foreground">Current drawings</p>
-          {grouped.map((group) => (
-            <div key={group.sourceId} className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{group.fileName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {group.pages.length} sheet{group.pages.length === 1 ? "" : "s"}
-                    {group.isPdf ? " from PDF" : ""}
-                  </p>
+          <div
+            className={CURRENT_DRAWINGS_GRID_CLASS}
+            data-testid="analyzer-current-drawings-grid"
+          >
+            {grouped.map((group) => (
+              <div
+                key={group.sourceId}
+                className="rounded-lg border border-border bg-card p-3"
+                data-testid="analyzer-current-drawing-card"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{group.fileName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {group.pages.length} sheet{group.pages.length === 1 ? "" : "s"}
+                      {group.isPdf ? " from PDF" : ""}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-destructive"
+                    disabled={analyzing}
+                    onClick={() => onRequestRemoveSource(group.sourceId, group.fileName)}
+                    aria-label={`Remove ${group.fileName}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-destructive"
-                  disabled={analyzing}
-                  onClick={() => onRequestRemoveSource(group.sourceId, group.fileName)}
-                  aria-label={`Remove ${group.fileName}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {group.pages.map((sheet) => {
+                    const label = sheetDisplayName({
+                      file_name: sheet.file_name,
+                      page_number: sheet.page_number,
+                      sourceIsPdf: group.isPdf,
+                    });
+                    const sheetFailed = failedSheetIds.has(sheet.id);
+                    return (
+                      <div
+                        key={sheet.id}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
+                          sheet.excluded ? "opacity-60" : "border-border bg-muted/40",
+                          sheetFailed && "border-destructive/50 bg-destructive/5",
+                        )}
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span>{group.isPdf ? `p.${sheet.page_number}` : label}</span>
+                        {sheetFailed && <Badge variant="destructive">Failed</Badge>}
+                        {sheet.excluded && <Badge variant="outline">Excluded</Badge>}
+                        {group.isPdf && (
+                          <button
+                            type="button"
+                            className="ml-1 text-muted-foreground hover:text-destructive"
+                            disabled={analyzing}
+                            onClick={() => onRequestRemoveSheet(sheet, label)}
+                            aria-label={`Remove ${label} from analysis`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {group.pages.map((sheet) => {
-                  const label = sheetDisplayName({
-                    file_name: sheet.file_name,
-                    page_number: sheet.page_number,
-                    sourceIsPdf: group.isPdf,
-                  });
-                  const sheetFailed = failedSheetIds.has(sheet.id);
-                  return (
-                    <div
-                      key={sheet.id}
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
-                        sheet.excluded ? "opacity-60" : "border-border bg-muted/40",
-                        sheetFailed && "border-destructive/50 bg-destructive/5",
-                      )}
-                    >
-                      <FileText className="h-3 w-3" />
-                      <span>{group.isPdf ? `p.${sheet.page_number}` : label}</span>
-                      {sheetFailed && <Badge variant="destructive">Failed</Badge>}
-                      {sheet.excluded && <Badge variant="outline">Excluded</Badge>}
-                      {group.isPdf && (
-                        <button
-                          type="button"
-                          className="ml-1 text-muted-foreground hover:text-destructive"
-                          disabled={analyzing}
-                          onClick={() => onRequestRemoveSheet(sheet, label)}
-                          aria-label={`Remove ${label} from analysis`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
