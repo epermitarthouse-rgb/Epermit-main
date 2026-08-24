@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 import { persistPendingAnalyzerSources } from "./persistPending.ts";
 import { COMPLIANCE_MAX_INCLUDED_SHEETS } from "./model.ts";
 import type { CodeAnalyzerSheet } from "./model.ts";
+import {
+  formatUploadCompletionToast,
+  shouldShowUploadProgress,
+  type DrawingUploadProgress,
+} from "./uploadBatchProgress.ts";
 
 describe("persistPendingAnalyzerSources", () => {
   it("stores the original PDF and a sheet per page, not page 1 only", async () => {
@@ -266,5 +271,114 @@ describe("persistPendingAnalyzerSources", () => {
 
     assert.equal(uploadCalls, 5);
     assert.equal(progressCompleteCount, 1);
+  });
+
+  it("suppresses per-document success toasts for 4-file Code Mod drawing batch", async () => {
+    let successToastCount = 0;
+    const progressSnapshots: DrawingUploadProgress[] = [];
+    const pendingFiles = ["A1.png", "A2.png", "A3.png", "A4.png"].map((name, i) => ({
+      id: `p${i}`,
+      file: { name, type: "image/png", size: 10 } as File,
+      discipline: "general" as const,
+    }));
+
+    const persistUpload = async (opts: {
+      file: File;
+      document_type: string;
+      description: string;
+      parent_document_id?: string;
+      suppressToasts?: boolean;
+    }) => {
+      if (!opts.suppressToasts) successToastCount += 1;
+      return { id: `doc-${opts.file.name}`, file_name: opts.file.name };
+    };
+
+    const { failedSources } = await persistPendingAnalyzerSources({
+      projectId: "proj",
+      existingSheets: [],
+      pendingFiles,
+      uploadDocument: (opts) => persistUpload({ ...opts, suppressToasts: true }),
+      renderPdfPages: async () => {
+        throw new Error("png only");
+      },
+      insertSheet: async (row) =>
+        ({
+          id: `sheet-${row.source_document_id}`,
+          created_at: "2026-08-21T00:00:00Z",
+          ...row,
+        }) as CodeAnalyzerSheet,
+      onUploadProgress: (progress) => progressSnapshots.push({ ...progress }),
+    });
+
+    assert.equal(successToastCount, 0);
+    assert.equal(failedSources.length, 0);
+    assert.equal(Math.max(...progressSnapshots.map((p) => p.total)), 4);
+    assert.equal(
+      formatUploadCompletionToast({ total: 4, succeeded: 4, failed: 0 })?.message,
+      "All 4 documents uploaded successfully",
+    );
+    assert.equal(shouldShowUploadProgress(progressSnapshots.at(-1)), false);
+  });
+
+  it("would emit one success toast per upload without suppressToasts", async () => {
+    let successToastCount = 0;
+    const pendingFiles = ["A1.png", "A2.png", "A3.png", "A4.png"].map((name, i) => ({
+      id: `p${i}`,
+      file: { name, type: "image/png", size: 10 } as File,
+      discipline: "general" as const,
+    }));
+
+    await persistPendingAnalyzerSources({
+      projectId: "proj",
+      existingSheets: [],
+      pendingFiles,
+      uploadDocument: async () => {
+        successToastCount += 1;
+        return { id: "doc", file_name: "x.png" };
+      },
+      renderPdfPages: async () => {
+        throw new Error("png only");
+      },
+      insertSheet: async (row) =>
+        ({
+          id: `sheet-${row.source_document_id}`,
+          created_at: "2026-08-21T00:00:00Z",
+          ...row,
+        }) as CodeAnalyzerSheet,
+    });
+
+    assert.equal(successToastCount, 4);
+  });
+
+  it("returns partial failure summary for mixed upload results", async () => {
+    const { failedSources } = await persistPendingAnalyzerSources({
+      projectId: "proj",
+      existingSheets: [],
+      pendingFiles: [
+        { id: "a", file: { name: "ok.png", type: "image/png", size: 10 } as File, discipline: "general" },
+        { id: "b", file: { name: "bad.png", type: "image/png", size: 10 } as File, discipline: "general" },
+        { id: "c", file: { name: "ok2.png", type: "image/png", size: 10 } as File, discipline: "general" },
+        { id: "d", file: { name: "bad2.png", type: "image/png", size: 10 } as File, discipline: "general" },
+      ],
+      uploadDocument: async ({ file }) => {
+        if (file.name === "bad.png") return null;
+        return { id: `doc-${file.name}`, file_name: file.name };
+      },
+      renderPdfPages: async () => {
+        throw new Error("png only");
+      },
+      insertSheet: async (row) =>
+        ({
+          id: `sheet-${row.source_document_id}`,
+          created_at: "2026-08-21T00:00:00Z",
+          ...row,
+        }) as CodeAnalyzerSheet,
+    });
+
+    assert.equal(failedSources.length, 1);
+    assert.deepEqual(formatUploadCompletionToast({ total: 4, succeeded: 3, failed: 1 }), {
+      type: "warning",
+      message: "3 of 4 documents uploaded — 1 failed",
+    });
   });
 });

@@ -1939,6 +1939,10 @@ export function AIComplianceAnalyzer() {
 
     setAnalyzing(true);
     try {
+      const pendingDrawingFiles = files
+        .filter((f) => f.status === "pending")
+        .map((f) => ({ id: f.id, file: f.file, discipline: f.discipline }));
+
       const persistUpload = async (opts: {
         file: File;
         document_type: string;
@@ -1950,27 +1954,76 @@ export function AIComplianceAnalyzer() {
           document_type: opts.document_type as ProjectDocument["document_type"],
           description: opts.description,
           parent_document_id: opts.parent_document_id,
+          suppressToasts: true,
         });
         if (doc) await fetchDocuments();
         return doc;
       };
 
-      const { review, forms } = await runDcCodeModificationReview({
+      if (pendingDrawingFiles.length > 0) {
+        setDrawingUploadProgress({
+          total: pendingDrawingFiles.length,
+          completed: 0,
+          currentIndex: 1,
+          currentFileName: pendingDrawingFiles[0]?.file.name,
+          phase: "uploading",
+        });
+      }
+
+      const { review, forms, drawingUpload } = await runDcCodeModificationReview({
         projectId: selectedProjectId,
         userId: user.id,
         jurisdiction,
         projectType,
         codeYear,
         persistedSheets,
-        pendingDrawingFiles: files
-          .filter((f) => f.status === "pending")
-          .map((f) => ({ id: f.id, file: f.file, discipline: f.discipline })),
+        pendingDrawingFiles,
         sheetDocuments,
         modificationForms,
         analysisInstructions,
         getDownloadUrl,
         persistUpload,
+        onUploadProgress: setDrawingUploadProgress,
       });
+
+      if (drawingUpload) {
+        const uploadSucceeded = drawingUpload.total - drawingUpload.failed;
+        const uploadToast = formatUploadCompletionToast({
+          total: drawingUpload.total,
+          succeeded: uploadSucceeded,
+          failed: drawingUpload.failed,
+          singleFileName:
+            drawingUpload.total === 1 ? pendingDrawingFiles[0]?.file.name : undefined,
+        });
+        if (uploadToast) {
+          if (uploadToast.type === "success") toast.success(uploadToast.message);
+          else if (uploadToast.type === "warning") toast.warning(uploadToast.message);
+          else toast.error(uploadToast.message);
+        }
+
+        if (
+          shouldClearUploadProgress({
+            total: drawingUpload.total,
+            completed: drawingUpload.total,
+            currentIndex: drawingUpload.total,
+            phase: "complete",
+          })
+        ) {
+          setDrawingUploadProgress(null);
+        }
+
+        if (drawingUpload.failed > 0) {
+          setFiles((prev) =>
+            prev
+              .map((f) =>
+                drawingUpload!.failedSourceIds.includes(f.id)
+                  ? { ...f, status: "failed" as const, error: "Upload failed" }
+                  : f,
+              )
+              .filter((f) => f.status === "failed"),
+          );
+        }
+      }
       setModificationReview(review);
       setModificationForms(forms);
       setFiles((prev) => prev.filter((f) => f.status === "failed"));
@@ -1979,6 +2032,7 @@ export function AIComplianceAnalyzer() {
     } catch (err) {
       console.error("Code modification review error:", err);
       toast.error(err instanceof Error ? err.message : "Failed to run Code Modification Review");
+      setDrawingUploadProgress(null);
     } finally {
       setAnalyzing(false);
     }
@@ -3382,7 +3436,9 @@ export function AIComplianceAnalyzer() {
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {isModificationMode
-                    ? "Running review..."
+                    ? showDrawingUploadProgress
+                      ? drawingUploadProgressLabel || "Uploading documents..."
+                      : "Running review..."
                     : showDrawingUploadProgress
                       ? drawingUploadProgressLabel || "Uploading documents..."
                       : batchProgressLabel || "Analyzing..."}
