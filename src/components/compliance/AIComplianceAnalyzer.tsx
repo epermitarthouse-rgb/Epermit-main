@@ -2270,6 +2270,22 @@ export function AIComplianceAnalyzer() {
     () => newSincePreviousRun(includedPersistedSheets, previousRunFingerprint),
     [includedPersistedSheets, previousRunFingerprint],
   );
+  const newSinceLastAnalysisSheetIds = useMemo(
+    () => new Set(newSinceLastAnalysis.map((s) => s.id)),
+    [newSinceLastAnalysis],
+  );
+  const currentAnalyzingSheetId = useMemo(() => {
+    if (!analyzing) return null;
+    const active = files.find((f) => f.status === "analyzing");
+    if (active) return active.id;
+    if (batchProgress?.currentFileName) {
+      const match = files.find(
+        (f) => batchFileDisplayName(f) === batchProgress.currentFileName,
+      );
+      return match?.id ?? null;
+    }
+    return null;
+  }, [analyzing, files, batchProgress]);
 
   const historicalAnalysisRuns = useMemo(
     () =>
@@ -3304,6 +3320,8 @@ export function AIComplianceAnalyzer() {
                     : undefined
                 }
                 currentAnalyzingSheetName={batchProgress?.currentFileName ?? null}
+                currentAnalyzingSheetId={currentAnalyzingSheetId}
+                newSinceLastAnalysisSheetIds={newSinceLastAnalysisSheetIds}
                 displayRun={isModificationMode ? modificationDisplayRun : displayRun}
                 analysisStale={isModificationMode ? modificationStale : analysisStale}
                 staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}

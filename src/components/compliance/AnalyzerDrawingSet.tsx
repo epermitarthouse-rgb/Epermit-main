@@ -15,6 +15,12 @@ import {
   formatAnalyzerDatasetSummary,
   type RunAnalysisMetrics,
 } from "@/lib/codeAnalyzer/sheetState";
+import {
+  deriveDocumentCardStatus,
+  deriveSheetChipStatus,
+  deriveUploadQueueCardStatus,
+  sheetChipClassName,
+} from "@/lib/codeAnalyzer/documentCardStatus";
 import { formatPendingUploadCapacityLabel } from "@/lib/codeAnalyzer/uploadBatchProgress";
 import { COMPLIANCE_MAX_BATCH_FILES } from "@/lib/complianceUploadLimits";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
@@ -48,6 +54,9 @@ interface AnalyzerDrawingSetProps {
   completedSheetIds?: Set<string>;
   analysisPendingCount?: number;
   currentAnalyzingSheetName?: string | null;
+  currentAnalyzingSheetId?: string | null;
+  /** Sheet ids added since the last completed run (for per-document stale badges). */
+  newSinceLastAnalysisSheetIds?: Set<string>;
   isLegacy: boolean;
   onAddClick: () => void;
   onRemovePending: (id: string) => void;
@@ -61,23 +70,19 @@ interface AnalyzerDrawingSetProps {
 export const CURRENT_DRAWINGS_GRID_CLASS =
   "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4";
 
-const statusLabel: Record<ComplianceBatchFileStatus, string> = {
-  pending: "Pending",
-  preparing: "Preparing",
-  uploading: "Uploading",
-  analyzing: "Analyzing",
-  completed: "Completed",
-  failed: "Failed",
-};
-
 function renderSessionFileCard(
   f: AnalyzerPendingFile,
   onRemove: (id: string) => void,
   onDisciplineChange: (id: string, discipline: DocumentDiscipline) => void,
-  borderClass: string,
 ) {
+  const presentation = deriveUploadQueueCardStatus(f.status);
   return (
-    <div key={f.id} className={cn("relative rounded-lg border bg-card p-3", borderClass)}>
+    <div
+      key={f.id}
+      className={cn("relative rounded-lg border bg-card p-3", presentation.borderClass)}
+      data-testid="analyzer-upload-card"
+      data-document-status={presentation.status}
+    >
       {(f.status === "pending" || f.status === "failed") && (
         <Button
           variant="ghost"
@@ -98,9 +103,12 @@ function renderSessionFileCard(
       )}
       <p className="text-xs font-medium truncate">{f.name}</p>
       <p className="text-xs text-muted-foreground">{f.sizeLabel}</p>
-      <Badge className="mt-2 text-[10px]">
-        {f.status === "analyzing" && <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />}
-        {statusLabel[f.status]}
+      <p className="text-[10px] text-muted-foreground mt-1">{presentation.progressLabel}</p>
+      <Badge variant={presentation.badgeVariant} className="mt-2 text-[10px]">
+        {(f.status === "analyzing" || f.status === "uploading") && (
+          <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
+        )}
+        {presentation.badgeLabel}
       </Badge>
       {f.error && <p className="text-[10px] text-destructive mt-1">{f.error}</p>}
       {f.status === "pending" && (
@@ -137,6 +145,8 @@ export function AnalyzerDrawingSet({
   completedSheetIds,
   analysisPendingCount,
   currentAnalyzingSheetName,
+  currentAnalyzingSheetId,
+  newSinceLastAnalysisSheetIds,
   isLegacy,
   onAddClick,
   onRemovePending,
@@ -250,19 +260,38 @@ export function AnalyzerDrawingSet({
             className={CURRENT_DRAWINGS_GRID_CLASS}
             data-testid="analyzer-current-drawings-grid"
           >
-            {grouped.map((group) => (
+            {grouped.map((group) => {
+              const includedPages = group.pages.filter((s) => !s.excluded);
+              const cardStatus = deriveDocumentCardStatus({
+                includedSheets: group.pages,
+                completedSheetIds: canonicalMetrics.completedSheetIds,
+                failedSheetIds,
+                analyzing,
+                currentAnalyzingSheetId,
+                analysisStale,
+                newSheetIds: newSinceLastAnalysisSheetIds,
+              });
+              return (
               <div
                 key={group.sourceId}
-                className="rounded-lg border border-border bg-card p-3"
+                className={cn("rounded-lg border p-3", cardStatus.borderClass)}
                 data-testid="analyzer-current-drawing-card"
+                data-document-status={cardStatus.status}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{group.fileName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {group.pages.length} sheet{group.pages.length === 1 ? "" : "s"}
+                      {includedPages.length} sheet{includedPages.length === 1 ? "" : "s"}
                       {group.isPdf ? " from PDF" : ""}
                     </p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{cardStatus.progressLabel}</p>
+                    <Badge variant={cardStatus.badgeVariant} className="mt-1.5 text-[10px]">
+                      {cardStatus.status === "analyzing" && (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />
+                      )}
+                      {cardStatus.badgeLabel}
+                    </Badge>
                   </div>
                   <Button
                     variant="ghost"
@@ -282,19 +311,31 @@ export function AnalyzerDrawingSet({
                       page_number: sheet.page_number,
                       sourceIsPdf: group.isPdf,
                     });
-                    const sheetFailed = failedSheetIds.has(sheet.id);
+                    const chipStatus = deriveSheetChipStatus(sheet, {
+                      completedSheetIds: canonicalMetrics.completedSheetIds,
+                      failedSheetIds,
+                      analyzing,
+                      currentAnalyzingSheetId,
+                    });
                     return (
                       <div
                         key={sheet.id}
                         className={cn(
                           "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
-                          sheet.excluded ? "opacity-60" : "border-border bg-muted/40",
-                          sheetFailed && "border-destructive/50 bg-destructive/5",
+                          sheetChipClassName(chipStatus),
                         )}
+                        data-sheet-status={chipStatus}
                       >
-                        <FileText className="h-3 w-3" />
+                        {chipStatus === "analyzing" && (
+                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                        )}
+                        {chipStatus !== "analyzing" && <FileText className="h-3 w-3 shrink-0" />}
                         <span>{group.isPdf ? `p.${sheet.page_number}` : label}</span>
-                        {sheetFailed && <Badge variant="destructive">Failed</Badge>}
+                        {chipStatus === "failed" && <Badge variant="destructive">Failed</Badge>}
+                        {chipStatus === "completed" && <Badge variant="success">Done</Badge>}
+                        {chipStatus === "pending" && analyzing && (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
                         {sheet.excluded && <Badge variant="outline">Excluded</Badge>}
                         {group.isPdf && (
                           <button
@@ -312,7 +353,8 @@ export function AnalyzerDrawingSet({
                   })}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}
@@ -329,12 +371,7 @@ export function AnalyzerDrawingSet({
           <p className="text-sm font-medium text-foreground">New uploads (not yet analyzed)</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {uploadQueueFiles.map((f) =>
-              renderSessionFileCard(
-                f,
-                onRemovePending,
-                onPendingDisciplineChange,
-                "border-dashed border-teal/50",
-              ),
+              renderSessionFileCard(f, onRemovePending, onPendingDisciplineChange),
             )}
           </div>
         </div>
