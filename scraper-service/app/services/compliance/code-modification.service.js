@@ -265,6 +265,14 @@ function splitMeasureDescription(description) {
       final.push(...subParts);
       continue;
     }
+    const embedded = part.match(
+      /^(.{25,}?\b(?:incorporate|recommendations|pdrm)\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
+    );
+    if (embedded) {
+      final.push(normalizeMeasureClause(embedded[1]));
+      final.push(normalizeMeasureClause(`Include ${embedded[2]}`));
+      continue;
+    }
     final.push(normalizeMeasureClause(part));
   }
 
@@ -657,6 +665,7 @@ function buildSheetReviewPrompt(extracted, sheet) {
 ${PROMPT_CONSTRAINTS}
 
 This is an evidence review, not a DOB approval. Do not invent missing systems.
+The Code Modification application states applicant claims only. Never treat the application or its pages as drawing evidence.
 
 Respond with JSON:
 {
@@ -814,6 +823,44 @@ async function optionalLlmExtract(openai, pages, formImages, logError) {
   }
 }
 
+function normalizeEvidenceFileName(fileName) {
+  return String(fileName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function buildExcludedEvidenceDocumentIds(formDocument, excludedEvidenceDocumentIds) {
+  const excluded = new Set(excludedEvidenceDocumentIds || []);
+  if (formDocument?.id) excluded.add(formDocument.id);
+  return excluded;
+}
+
+function sheetUsesExcludedEvidenceDocument(sheet, excludedDocumentIds, formDocument) {
+  const ids = [
+    sheet.documentId,
+    sheet.sourceDocumentId,
+    sheet.source_document_id,
+    sheet.imageDocumentId,
+    sheet.image_document_id,
+  ].filter(Boolean);
+  if (ids.some((id) => excludedDocumentIds.has(id))) return true;
+
+  const formFileName = normalizeEvidenceFileName(formDocument?.fileName || formDocument?.file_name);
+  if (!formFileName) return false;
+  const sheetFileName = normalizeEvidenceFileName(
+    sheet.fileName || sheet.sheetLabel || sheet.file_name,
+  );
+  return Boolean(sheetFileName && sheetFileName === formFileName);
+}
+
+function filterDrawingEvidenceSheetsForReview(sheets, formDocument, excludedEvidenceDocumentIds) {
+  const excluded = buildExcludedEvidenceDocumentIds(formDocument, excludedEvidenceDocumentIds);
+  return (sheets || []).filter(
+    (sheet) => !sheetUsesExcludedEvidenceDocument(sheet, excluded, formDocument),
+  );
+}
+
 function allowedRefsFromSheets(sheets) {
   return (sheets || []).map((sheet) => ({
     documentId: sheet.documentId || sheet.sourceDocumentId || null,
@@ -910,6 +957,7 @@ async function reviewSheetWithVision(openai, extracted, sheet, logError) {
  *   formImages?: Array<{ pageNumber?: number; imageBase64: string; imageType?: string }>;
  *   sheets?: Array<Record<string, unknown>>;
  *   formDocument?: { id?: string; fileName?: string; updatedAt?: string };
+ *   excludedEvidenceDocumentIds?: string[];
  *   jurisdiction?: string;
  *   projectType?: string;
  *   codeYear?: string;
@@ -925,6 +973,7 @@ async function analyzeCodeModification(params) {
     formImages = [],
     sheets = [],
     formDocument,
+    excludedEvidenceDocumentIds = [],
     logInfo = console.log,
     logError = console.error,
   } = params;
@@ -952,11 +1001,18 @@ async function analyzeCodeModification(params) {
     }
   }
 
-  const allowed = allowedRefsFromSheets(sheets);
+  const evidenceSheets = filterDrawingEvidenceSheetsForReview(
+    sheets,
+    formDocument,
+    excludedEvidenceDocumentIds,
+  );
+  const excludedFormSheetCount = (sheets || []).length - evidenceSheets.length;
+
+  const allowed = allowedRefsFromSheets(evidenceSheets);
   let findings = findingsFromExtracted(extracted);
   const sheetWarnings = [];
 
-  const reviewable = (sheets || []).filter((sheet) => sheet.imageBase64 || sheet.text);
+  const reviewable = evidenceSheets.filter((sheet) => sheet.imageBase64 || sheet.text);
   if (openai && reviewable.length > 0) {
     for (const sheet of reviewable) {
       try {
@@ -970,6 +1026,11 @@ async function analyzeCodeModification(params) {
       }
     }
   } else if (reviewable.length === 0) {
+    if (excludedFormSheetCount > 0 && (sheets || []).length > 0) {
+      sheetWarnings.push(
+        "Code Modification application pages were excluded from drawing evidence review.",
+      );
+    }
     sheetWarnings.push("No drawing sheets were provided for evidence review.");
   }
 
@@ -1023,4 +1084,7 @@ module.exports = {
   reconcileExtractionWarnings,
   splitMeasureDescription,
   normalizeProposedMeasures,
+  filterDrawingEvidenceSheetsForReview,
+  sheetUsesExcludedEvidenceDocument,
+  buildExcludedEvidenceDocumentIds,
 };

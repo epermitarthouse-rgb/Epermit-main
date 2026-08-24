@@ -17,7 +17,11 @@ import {
   type CodeModificationReview,
 } from "@/lib/codeModification/model";
 import { pagesAreSparse } from "@/lib/codeModification/extractForm";
-import { replaceModificationReview } from "@/lib/codeModification/persistence";
+import { fetchModificationForms, replaceModificationReview } from "@/lib/codeModification/persistence";
+import {
+  buildFormExclusionDocumentIds,
+  filterDrawingEvidenceSheets,
+} from "@/lib/codeModification/evidenceSources";
 import { fileToBase64, requestCodeModificationReview } from "@/lib/codeModification/reviewClient";
 import { analyzerWorkflowFor } from "@/lib/codeModification/workflow";
 import { pdfPagesToImageFiles } from "@/lib/pdfToImage";
@@ -115,8 +119,19 @@ export async function runDcCodeModificationReview(params: {
     for (const doc of fetched) docsById.set(doc.id, doc);
   }
 
+  const modificationForms = await fetchModificationForms(params.projectId);
+  const exclusionDocs = [
+    ...Array.from(docsById.values()),
+    ...modificationForms,
+    formDoc,
+  ].filter(
+    (doc, index, arr) => arr.findIndex((other) => other.id === doc.id) === index,
+  );
+  const excludedEvidenceDocumentIds = buildFormExclusionDocumentIds(exclusionDocs, formDoc);
+  const evidenceSheets = filterDrawingEvidenceSheets(included, excludedEvidenceDocumentIds);
+
   const sheetPayload = [];
-  for (const sheet of included) {
+  for (const sheet of evidenceSheets) {
     const imageDoc =
       (sheet.image_document_id && docsById.get(sheet.image_document_id)) ||
       docsById.get(sheet.source_document_id);
@@ -169,6 +184,7 @@ export async function runDcCodeModificationReview(params: {
       formImages: formImages.length ? formImages : undefined,
       sheets: sheetPayload,
       formDocument: { id: formDoc.id, fileName: formDoc.file_name },
+      excludedEvidenceDocumentIds: Array.from(excludedEvidenceDocumentIds),
     });
     await replaceModificationReview({
       run_id: run.id,

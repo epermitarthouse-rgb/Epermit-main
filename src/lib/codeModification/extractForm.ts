@@ -222,6 +222,14 @@ export function splitMeasureDescription(description: string): string[] {
       final.push(...subParts);
       continue;
     }
+    const embedded = part.match(
+      /^(.{25,}?\b(?:incorporate|recommendations|pdrm)\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
+    );
+    if (embedded) {
+      final.push(normalizeMeasureClause(embedded[1]));
+      final.push(normalizeMeasureClause(`Include ${embedded[2]}`));
+      continue;
+    }
     final.push(normalizeMeasureClause(part));
   }
 
