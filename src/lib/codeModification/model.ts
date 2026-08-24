@@ -68,6 +68,10 @@ export interface ProposedMeasure {
   id: string;
   description: string;
   category?: string | null;
+  /** Applicant form page the measure was extracted from, when known. */
+  sourcePageNumber?: number | null;
+  /** Short source snippet (section label or original blob prefix). */
+  sourceContext?: string | null;
 }
 
 export interface ExtractedModificationRequest {
