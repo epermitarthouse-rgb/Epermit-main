@@ -5,8 +5,8 @@ export interface DrawingUploadProgress {
   /** 1-based index of the source file currently uploading. */
   currentIndex: number;
   currentFileName?: string;
-  /** Optional secondary line while rasterizing a multi-page PDF. */
-  pdfProcessing?: { fileName: string; pageCount: number };
+  /** Optional secondary line while rasterizing or server-side processing a PDF. */
+  pdfProcessing?: { fileName: string; pageCount?: number; serverSide?: boolean };
   phase: "uploading" | "complete";
 }
 
@@ -34,8 +34,14 @@ export function formatUploadProgressLabel(progress: DrawingUploadProgress): stri
 
 export function formatPdfProcessingDetail(progress: DrawingUploadProgress): string | null {
   if (!progress.pdfProcessing) return null;
-  const { fileName, pageCount } = progress.pdfProcessing;
-  return `Processing ${pageCount} page${pageCount === 1 ? "" : "s"} from ${fileName}`;
+  const { fileName, pageCount, serverSide } = progress.pdfProcessing;
+  if (serverSide) {
+    return `Queued ${fileName} for server-side processing`;
+  }
+  if (pageCount != null) {
+    return `Processing ${pageCount} page${pageCount === 1 ? "" : "s"} from ${fileName}`;
+  }
+  return `Processing ${fileName}`;
 }
 
 export function formatUploadCompletionToast(params: {

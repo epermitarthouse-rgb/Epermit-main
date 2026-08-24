@@ -17,6 +17,8 @@
     "preview": "vite preview",
     "dev:ingestion-worker": "cd document-ingestion-worker && npm install && node dev.js",
     "dev:ingestion-worker:safe": "cd document-ingestion-worker && node dev.js",
+    "dev:code-analyzer-worker": "cd code-analyzer-worker && npm install && node dev.js",
+    "dev:code-analyzer-worker:safe": "cd code-analyzer-worker && node dev.js",
     "tunnel": "npx ngrok http 3000",
     "demo": "npm run dev & sleep 5 && npx ngrok http 3000"
   },
