@@ -180,12 +180,17 @@ export function shouldMarkAnalysisStale(input: {
 }
 
 type RunPickFields = {
+  id?: string;
   status: string;
   analysis_type?: string | null;
   completed_at?: string | null;
   updated_at?: string;
   created_at?: string;
 };
+
+function runCompletedAtTime(run: RunPickFields): string {
+  return run.completed_at || run.updated_at || run.created_at || "";
+}
 
 /** Prefer the current run; otherwise the most recently completed stale run (last results). */
 export function pickDisplayRun<T extends RunPickFields>(
@@ -197,12 +202,87 @@ export function pickDisplayRun<T extends RunPickFields>(
   if (current) return current;
   const stale = scoped
     .filter((r) => r.status === "stale")
-    .sort((a, b) => {
-      const aTime = a.completed_at || a.updated_at || a.created_at || "";
-      const bTime = b.completed_at || b.updated_at || b.created_at || "";
-      return bTime.localeCompare(aTime);
-    });
+    .sort((a, b) => runCompletedAtTime(b).localeCompare(runCompletedAtTime(a)));
   return stale[0] ?? null;
+}
+
+/** Completed/superseded runs may surface historical Code Analyzer results; failed/running may not. */
+export function isHistoricalResultRunStatus(status: string): boolean {
+  return status === "superseded";
+}
+
+export function collectRunIdsWithComplianceFindings(annotations: AnalyzerAnnotationRef[]): Set<string> {
+  const ids = new Set<string>();
+  for (const ann of annotations) {
+    if (!isComplianceAnnotationData(ann.data)) continue;
+    const runId = annotationRunId(ann);
+    if (runId) ids.add(runId);
+  }
+  return ids;
+}
+
+/**
+ * Latest completed superseded run that still has persisted compliance findings.
+ * Used only for Code Analyzer viewing — not DesignCheck.
+ */
+export function pickLatestHistoricalRunWithFindings<T extends RunPickFields & { id: string }>(
+  runs: T[],
+  analysisType: string,
+  runIdsWithFindings: Set<string>,
+): T | null {
+  if (runIdsWithFindings.size === 0) return null;
+  const candidates = runs
+    .filter(
+      (r) =>
+        runAnalysisType(r) === analysisType &&
+        isHistoricalResultRunStatus(r.status) &&
+        Boolean(r.completed_at) &&
+        runIdsWithFindings.has(r.id),
+    )
+    .sort((a, b) => runCompletedAtTime(b).localeCompare(runCompletedAtTime(a)));
+  return candidates[0] ?? null;
+}
+
+export type HydrateRunResolution<T extends RunPickFields & { id: string }> = {
+  run: T | null;
+  runId: string | null;
+  isHistorical: boolean;
+};
+
+/**
+ * Resolve which run's annotations to hydrate in Code Analyzer.
+ * Preference: current > stale > latest completed superseded run with findings.
+ */
+export function resolveHydrateRun<T extends RunPickFields & { id: string }>(
+  runs: T[],
+  analysisType: string,
+  runIdsWithFindings: Set<string>,
+): HydrateRunResolution<T> {
+  const display = pickDisplayRun(runs, analysisType);
+  if (display?.id) {
+    return { run: display, runId: display.id, isHistorical: false };
+  }
+  const historical = pickLatestHistoricalRunWithFindings(runs, analysisType, runIdsWithFindings);
+  if (historical) {
+    return { run: historical, runId: historical.id, isHistorical: true };
+  }
+  return { run: null, runId: null, isHistorical: false };
+}
+
+export function complianceDocumentIdsFromAnnotations(
+  annotations: Array<{ document_id?: string | null; data?: unknown; analysis_run_id?: string | null }>,
+  opts: { hydrateRunId: string | null; hasAnalyzerRuns: boolean },
+): Set<string> {
+  const filtered = filterAnnotationsForActiveAnalysis(annotations, {
+    currentRunId: opts.hydrateRunId,
+    hasAnalyzerRuns: opts.hasAnalyzerRuns,
+  });
+  const ids = new Set<string>();
+  for (const ann of filtered) {
+    const docId = ann.document_id;
+    if (typeof docId === "string" && docId.length > 0) ids.add(docId);
+  }
+  return ids;
 }
 
 export function pickCurrentRun<T extends { status: string; analysis_type?: string | null }>(

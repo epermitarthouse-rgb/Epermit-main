@@ -83,10 +83,13 @@ import {
 } from "@/lib/complianceResultFilter";
 import {
   complianceDocsHydrateKey,
+  complianceHistoricalResultsMessage,
   complianceResultsEmptyMessage,
   createGenerationGuard,
   mergeLoadedExistingAnalyses,
+  resolveComplianceHydrateSource,
   resolveComplianceResultsEmptyKind,
+  shouldShowComplianceKpiStrip,
 } from "@/lib/complianceAnalysisHydrate";
 import {
   buildAggregatedComplianceExport,
@@ -105,11 +108,14 @@ import type { ProjectDocument } from "@/types/document";
 import {
   ANALYSIS_TYPE_DC_MODIFICATION,
   ANALYSIS_TYPE_STANDARD,
+  collectRunIdsWithComplianceFindings,
+  complianceDocumentIdsFromAnnotations,
   computeSheetFingerprint,
   COMPLIANCE_MAX_INCLUDED_SHEETS,
   computeStandardRunFingerprint,
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
+  resolveHydrateRun,
   shouldMarkAnalysisStale,
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
@@ -129,6 +135,14 @@ import {
   currentRunFromList,
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
+import {
+  formatPdfProcessingDetail,
+  formatUploadCompletionToast,
+  formatUploadProgressLabel,
+  shouldClearUploadProgress,
+  uploadProgressPercent,
+  type DrawingUploadProgress,
+} from "@/lib/codeAnalyzer/uploadBatchProgress";
 import { replaceComplianceFindingsForSheet } from "@/lib/codeAnalyzer/findings";
 import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnalyzer/deleteDrawings";
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
@@ -289,6 +303,9 @@ export function AIComplianceAnalyzer() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<ComplianceBatchProgress | null>(null);
+  const [drawingUploadProgress, setDrawingUploadProgress] = useState<DrawingUploadProgress | null>(
+    null,
+  );
   const [persistedSheets, setPersistedSheets] = useState<CodeAnalyzerSheet[]>([]);
   const [displayRun, setDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
@@ -375,6 +392,9 @@ export function AIComplianceAnalyzer() {
   const [analysisSavedAt, setAnalysisSavedAt] = useState<number>(0);
   /** True when All/per-doc hydrate failed after analyzed docs were found. */
   const [hydrateLoadFailed, setHydrateLoadFailed] = useState(false);
+  /** Run id whose compliance annotations are shown (display or historical fallback). */
+  const [hydrateRunId, setHydrateRunId] = useState<string | null>(null);
+  const [resultsFromHistoricalRun, setResultsFromHistoricalRun] = useState(false);
   const docsFetchGuardRef = useRef(createGenerationGuard());
   const hydrateGuardRef = useRef(createGenerationGuard());
   const selectedProjectIdRef = useRef(selectedProjectId);
@@ -543,19 +563,20 @@ export function AIComplianceAnalyzer() {
         if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
         if (selectedProjectIdRef.current !== projectId) return;
 
-        const activeAnnotations = filterAnnotationsForActiveAnalysis(annotations ?? [], {
-          currentRunId: dataset.display?.id ?? null,
+        const standardRuns = dataset.runs.filter(isStandardComplianceRun);
+        const runIdsWithFindings = collectRunIdsWithComplianceFindings(annotations ?? []);
+        const hydrateResolution = resolveHydrateRun(
+          standardRuns,
+          ANALYSIS_TYPE_STANDARD,
+          runIdsWithFindings,
+        );
+        setHydrateRunId(hydrateResolution.runId);
+        setResultsFromHistoricalRun(hydrateResolution.isHistorical);
+
+        const complianceDocIds = complianceDocumentIdsFromAnnotations(annotations ?? [], {
+          hydrateRunId: hydrateResolution.runId,
           hasAnalyzerRuns: dataset.hasAnalyzerRuns,
         });
-
-        const complianceDocIds = new Set<string>();
-        for (const a of activeAnnotations) {
-          if (a?.document_id) complianceDocIds.add(a.document_id);
-        }
-        for (const sheet of dataset.sheets) {
-          if (sheet.image_document_id) complianceDocIds.add(sheet.image_document_id);
-          complianceDocIds.add(sheet.source_document_id);
-        }
         const docIds = Array.from(complianceDocIds);
         if (docIds.length === 0) {
           setDocumentsWithAnalysis([]);
@@ -719,7 +740,7 @@ export function AIComplianceAnalyzer() {
         if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
         if (selectedProjectIdRef.current !== projectId) return false;
 
-        const displayRunId = displayRun?.id ?? null;
+        const displayRunId = hydrateRunId;
         const filtered = filterAnnotationsForActiveAnalysis(
           (annotations || []).map((ann) => ({
             id: ann.id,
@@ -803,7 +824,7 @@ export function AIComplianceAnalyzer() {
         }
       }
     },
-    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations, displayRun?.id, hasAnalyzerRuns],
+    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations, hydrateRunId, hasAnalyzerRuns],
   );
 
   // When landing on / switching to All, hydrate every saved analysis for the project.
@@ -834,6 +855,8 @@ export function AIComplianceAnalyzer() {
     setHasAnalyzerRuns(false);
     setFiles([]);
     setHydrateLoadFailed(false);
+    setHydrateRunId(null);
+    setResultsFromHistoricalRun(false);
     lastAllHydrateKeyRef.current = "";
     setActiveResultFileId(null);
   }, [selectedProjectId]);
@@ -921,6 +944,7 @@ export function AIComplianceAnalyzer() {
   const clearBatchForNewRound = useCallback(() => {
     setFiles([]);
     setBatchProgress(null);
+    setDrawingUploadProgress(null);
     setActiveResultFileId(null);
     setResponses({});
     setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
@@ -1512,10 +1536,19 @@ export function AIComplianceAnalyzer() {
               document_type: opts.document_type as ProjectDocument["document_type"],
               description: opts.description,
               parent_document_id: opts.parent_document_id,
+              suppressToasts: true,
             });
             if (doc) await fetchDocuments();
             return doc;
           };
+
+          setDrawingUploadProgress({
+            total: pendingFiles.length,
+            completed: 0,
+            currentIndex: 1,
+            currentFileName: pendingFiles[0]?.file.name,
+            phase: "uploading",
+          });
 
           const persisted = await persistPendingAnalyzerSources({
             projectId: selectedProjectId,
@@ -1523,11 +1556,55 @@ export function AIComplianceAnalyzer() {
             existingSheets: sheets,
             uploadDocument: persistUpload,
             renderPdfPages: pdfPagesToImageFiles,
+            onUploadProgress: setDrawingUploadProgress,
           });
           for (const warning of persisted.warnings) toast.warning(warning);
+
+          const uploadSucceeded = pendingFiles.length - persisted.failedSources.length;
+          const uploadToast = formatUploadCompletionToast({
+            total: pendingFiles.length,
+            succeeded: uploadSucceeded,
+            failed: persisted.failedSources.length,
+            singleFileName:
+              pendingFiles.length === 1 ? pendingFiles[0]?.file.name : undefined,
+          });
+          if (uploadToast) {
+            if (uploadToast.type === "success") toast.success(uploadToast.message);
+            else if (uploadToast.type === "warning") toast.warning(uploadToast.message);
+            else toast.error(uploadToast.message);
+          }
+
+          if (shouldClearUploadProgress({
+            total: pendingFiles.length,
+            completed: pendingFiles.length,
+            currentIndex: pendingFiles.length,
+            phase: "complete",
+          })) {
+            setDrawingUploadProgress(null);
+          }
+
+          if (uploadSucceeded === 0) {
+            setFiles((prev) =>
+              prev.map((f) => {
+                const failed = persisted.failedSources.find((fs) => fs.id === f.id);
+                if (failed) return { ...f, status: "failed" as const, error: failed.error };
+                return f;
+              }),
+            );
+            return;
+          }
+
           sheets = [...sheets, ...persisted.sheets];
           setPersistedSheets(sheets);
-          setFiles((prev) => prev.filter((f) => f.status === "failed"));
+          setFiles((prev) =>
+            prev
+              .map((f) => {
+                const failed = persisted.failedSources.find((fs) => fs.id === f.id);
+                if (failed) return { ...f, status: "failed" as const, error: failed.error };
+                return f;
+              })
+              .filter((f) => f.status === "failed"),
+          );
         }
 
         const included = sheets.filter((s) => !s.excluded);
@@ -1676,11 +1753,13 @@ export function AIComplianceAnalyzer() {
       } catch (err) {
         console.error("Batch analysis error:", err);
         toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
+        setDrawingUploadProgress(null);
         if (analysisRunIdRef.current && selectedProjectId) {
           await completeAnalyzerRun(analysisRunIdRef.current, "failed").catch(() => undefined);
         }
       } finally {
         setAnalyzing(false);
+        setDrawingUploadProgress(null);
       }
     },
     [
@@ -2243,6 +2322,16 @@ export function AIComplianceAnalyzer() {
   const failedFileCount = countFailedBatchFiles(files);
   const batchProgressValue = batchProgress ? batchProgressPercent(batchProgress) : 0;
   const batchProgressLabel = batchProgress ? formatBatchProgressLabel(batchProgress) : "";
+  const drawingUploadProgressValue = drawingUploadProgress
+    ? uploadProgressPercent(drawingUploadProgress)
+    : 0;
+  const drawingUploadProgressLabel = drawingUploadProgress
+    ? formatUploadProgressLabel(drawingUploadProgress)
+    : "";
+  const drawingUploadPdfDetail = drawingUploadProgress
+    ? formatPdfProcessingDetail(drawingUploadProgress)
+    : null;
+  const showDrawingUploadProgress = Boolean(drawingUploadProgress);
   const hasAnyResults =
     completedBatchFiles.length > 0 ||
     failedBatchFiles.length > 0 ||
@@ -2274,6 +2363,18 @@ export function AIComplianceAnalyzer() {
     resultsEmptyKind,
     documentsWithAnalysis.length,
   );
+  const complianceHydrateSource = resolveComplianceHydrateSource(
+    hasAnalyzerRuns,
+    displayRun?.status,
+    resultsFromHistoricalRun,
+  );
+  const showComplianceKpiStrip = shouldShowComplianceKpiStrip({
+    loading: loadingExisting || loadingDocsWithAnalysis || awaitingAllHydrate,
+    loadFailed: hydrateLoadFailed,
+    displayedGroupCount: displayedResultGroups.length,
+    analyzedDocCount: documentsWithAnalysis.length,
+    hydratedGroupCount: loadedExistingResults.length + completedBatchFiles.length,
+  });
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -2967,7 +3068,9 @@ export function AIComplianceAnalyzer() {
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {isModificationMode
                     ? "Running review..."
-                    : batchProgressLabel || "Analyzing..."}
+                    : showDrawingUploadProgress
+                      ? drawingUploadProgressLabel || "Uploading drawings..."
+                      : batchProgressLabel || "Analyzing..."}
                 </>
               ) : (
                 <>
@@ -2991,7 +3094,24 @@ export function AIComplianceAnalyzer() {
 
           {/* Progress Bar */}
           <AnimatePresence>
-            {analyzing && batchProgress && (
+            {showDrawingUploadProgress && drawingUploadProgress && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2"
+                data-testid="drawing-upload-progress"
+              >
+                <Progress value={drawingUploadProgressValue} className="h-2" />
+                <p className="text-sm text-center text-muted-foreground">
+                  {drawingUploadProgressLabel}
+                </p>
+                {drawingUploadPdfDetail ? (
+                  <p className="text-xs text-center text-muted-foreground">{drawingUploadPdfDetail}</p>
+                ) : null}
+              </motion.div>
+            )}
+            {analyzing && batchProgress && !showDrawingUploadProgress && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
@@ -3023,6 +3143,7 @@ export function AIComplianceAnalyzer() {
             data-testid="compliance-results-panel"
           >
             {/* Findings KPI strip — aggregated across every analyzed file's real results */}
+            {showComplianceKpiStrip ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <MetricCard
                 label="Critical"
@@ -3049,6 +3170,14 @@ export function AIComplianceAnalyzer() {
                 detail={`${completedBatchFiles.length} in this batch session`}
               />
             </div>
+            ) : null}
+
+            {complianceHydrateSource === "historical" && displayedResultGroups.length > 0 && (
+              <Alert data-testid="compliance-historical-results-banner">
+                <Info className="h-4 w-4" />
+                <AlertDescription>{complianceHistoricalResultsMessage()}</AlertDescription>
+              </Alert>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
