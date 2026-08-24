@@ -82,3 +82,21 @@ export function formatUploadCompletionToast(params: {
 export function shouldClearUploadProgress(progress: DrawingUploadProgress): boolean {
   return progress.phase === "complete" && progress.completed >= progress.total;
 }
+
+/** True when upload progress UI should render (active upload or brief complete state). */
+export function shouldShowUploadProgress(
+  progress: DrawingUploadProgress | null | undefined,
+): boolean {
+  if (!progress || progress.total <= 0) return false;
+  return !shouldClearUploadProgress(progress);
+}
+
+/** Pending upload queue capacity line — null when no files are queued (never "0 of N"). */
+export function formatPendingUploadCapacityLabel(
+  queuedCount: number,
+  maxBatch: number,
+): string | null {
+  if (queuedCount <= 0) return null;
+  const unit = queuedCount === 1 ? "document" : "documents";
+  return `${queuedCount} of ${maxBatch} source ${unit} in this upload`;
+}

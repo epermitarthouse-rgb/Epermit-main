@@ -123,7 +123,6 @@ import {
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
   resolveHydrateRun,
-  sheetFingerprintKey,
   shouldMarkAnalysisStale,
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
@@ -140,8 +139,6 @@ import {
   computeAnalyzerDatasetMetrics,
   formatAnalysisProgressSummary,
   newSincePreviousRun,
-  removedSincePreviousRun,
-  sheetKeysFromRunFingerprint,
 } from "@/lib/codeAnalyzer/sheetState";
 import {
   completeAnalyzerRun,
@@ -161,6 +158,7 @@ import {
   formatUploadCompletionToast,
   formatUploadProgressLabel,
   shouldClearUploadProgress,
+  shouldShowUploadProgress,
   uploadProgressPercent,
   type DrawingUploadProgress,
 } from "@/lib/codeAnalyzer/uploadBatchProgress";
@@ -2230,18 +2228,6 @@ export function AIComplianceAnalyzer() {
     () => newSincePreviousRun(includedPersistedSheets, previousRunFingerprint),
     [includedPersistedSheets, previousRunFingerprint],
   );
-  const changedStaleSheets = useMemo(() => {
-    if (!analysisStale || !previousRunFingerprint) return [];
-    const prevKeys = sheetKeysFromRunFingerprint(previousRunFingerprint);
-    const newKeys = new Set(newSinceLastAnalysis.map(sheetFingerprintKey));
-    return includedPersistedSheets.filter(
-      (s) => prevKeys.has(sheetFingerprintKey(s)) && !newKeys.has(sheetFingerprintKey(s)),
-    );
-  }, [analysisStale, previousRunFingerprint, includedPersistedSheets, newSinceLastAnalysis]);
-  const removedSinceLastAnalysis = useMemo(
-    () => removedSincePreviousRun(includedPersistedSheets, previousRunFingerprint),
-    [includedPersistedSheets, previousRunFingerprint],
-  );
 
   const historicalAnalysisRuns = useMemo(
     () =>
@@ -2571,7 +2557,7 @@ export function AIComplianceAnalyzer() {
   const drawingUploadPdfDetail = drawingUploadProgress
     ? formatPdfProcessingDetail(drawingUploadProgress)
     : null;
-  const showDrawingUploadProgress = Boolean(drawingUploadProgress);
+  const showDrawingUploadProgress = shouldShowUploadProgress(drawingUploadProgress);
   const hasAnyResults =
     completedBatchFiles.length > 0 ||
     failedBatchFiles.length > 0 ||
@@ -3260,9 +3246,7 @@ export function AIComplianceAnalyzer() {
                   status: f.status,
                   error: f.error,
                 }))}
-                newSinceLastAnalysis={newSinceLastAnalysis}
-                changedStaleSheets={changedStaleSheets}
-                removedSinceLastAnalysis={removedSinceLastAnalysis}
+                newSinceLastAnalysisCount={newSinceLastAnalysis.length}
                 completedSheetIds={completedSheetIdsForDrawingSet}
                 analysisPendingCount={
                   batchProgress

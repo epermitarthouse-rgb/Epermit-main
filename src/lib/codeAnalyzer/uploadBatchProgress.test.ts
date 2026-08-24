@@ -4,7 +4,9 @@ import {
   formatPdfProcessingDetail,
   formatUploadCompletionToast,
   formatUploadProgressLabel,
+  formatPendingUploadCapacityLabel,
   shouldClearUploadProgress,
+  shouldShowUploadProgress,
   uploadProgressPercent,
   type DrawingUploadProgress,
 } from "./uploadBatchProgress.ts";
@@ -144,5 +146,42 @@ describe("uploadBatchProgress helpers", () => {
       }),
       false,
     );
+  });
+
+  it("does not show upload progress when inactive", () => {
+    assert.equal(shouldShowUploadProgress(null), false);
+    assert.equal(shouldShowUploadProgress(undefined), false);
+    assert.equal(
+      shouldShowUploadProgress({
+        total: 16,
+        completed: 16,
+        currentIndex: 16,
+        phase: "complete",
+      }),
+      false,
+    );
+  });
+
+  it("shows upload progress while upload is active", () => {
+    assert.equal(
+      shouldShowUploadProgress({
+        total: 16,
+        completed: 6,
+        currentIndex: 7,
+        currentFileName: "A006-WATERPROOFING DETAILS.pdf",
+        phase: "uploading",
+      }),
+      true,
+    );
+  });
+
+  it("does not render pending upload capacity when queue is empty", () => {
+    assert.equal(formatPendingUploadCapacityLabel(0, 16), null);
+    assert.equal(formatPendingUploadCapacityLabel(-1, 16), null);
+  });
+
+  it("renders pending upload capacity only when files are queued", () => {
+    assert.equal(formatPendingUploadCapacityLabel(7, 16), "7 of 16 source documents in this upload");
+    assert.equal(formatPendingUploadCapacityLabel(1, 16), "1 of 16 source document in this upload");
   });
 });
